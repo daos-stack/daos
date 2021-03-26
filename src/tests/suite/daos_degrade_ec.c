@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is for simple tests of degraded EC object.
@@ -47,7 +30,7 @@ degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
 	if (!test_runable(arg, 6))
 		return;
 
-	oid = dts_oid_gen(OC_EC_4P2G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	if (write_type == PARTIAL_UPDATE)
@@ -125,6 +108,12 @@ static void
 degrade_full_partial_fail_2data(void **state)
 {
 	int shards[2];
+
+	/*
+	 * Skipping test because of DAOS-6755, which seems to be related to EC
+	 * aggregation
+	 */
+	skip();
 
 	shards[0] = 0;
 	shards[1] = 3;
@@ -396,7 +385,7 @@ run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 		sub_tests_size = ARRAY_SIZE(degrade_tests);
 		sub_tests = NULL;
 	}
-	run_daos_sub_tests_only("DAOS degrade ec tests", degrade_tests,
+	run_daos_sub_tests_only("DAOS_Degrade_EC", degrade_tests,
 				ARRAY_SIZE(degrade_tests), sub_tests,
 				sub_tests_size);
 

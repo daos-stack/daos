@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos_sr
@@ -39,8 +22,10 @@
 #include <daos/btree_class.h>
 #include <daos/dtx.h>
 #include <daos/object.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/dtx_srv.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #include "obj_rpc.h"
 #include "obj_ec.h"
@@ -216,11 +201,6 @@ struct migrate_pool_tls {
 	daos_handle_t		mpt_migrated_root_hdl;
 	struct btr_root		mpt_migrated_root;
 
-	/* Hash table to store the container uuids which have already been
-	 * deleted (used by reintegration)
-	 */
-	struct d_hash_table	mpt_cont_dest_tab;
-
 	/* Service rank list for migrate fetch RPC */
 	d_rank_list_t		mpt_svc_list;
 
@@ -248,21 +228,65 @@ struct migrate_pool_tls {
 
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
+
+	/* The current inflight iod, mainly used for controlling
+	 * rebuild inflight rate to avoid the DMA buffer overflow.
+	 */
+	uint64_t		mpt_inflight_size;
+	uint64_t		mpt_inflight_max_size;
+	ABT_cond		mpt_inflight_cond;
+	ABT_mutex		mpt_inflight_mutex;
+	int			mpt_inflight_max_ult;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
-	/* Indicates whether containers should be cleared of all contents
-	 * before any data is migrated to them (via destroy & recreate)
+	/* Indicates whether objects on the migration destination should be
+	 * removed prior to migrating new data here. This is primarily useful
+	 * for reintegration to ensure that any data that has adequate replica
+	 * data to reconstruct will prefer the remote data over possibly stale
+	 * existing data. Objects that don't have remote replica data will not
+	 * be removed.
 	 */
-				mpt_clear_conts:1,
+				mpt_del_local_objs:1,
 				mpt_fini:1;
 };
 
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
+/*
+ * Report latency on a per-I/O size.
+ * Buckets starts at [0; 256B[ and are increased by power of 2
+ * (i.e. [256B; 512B[, [512B; 1KB[) up to [4MB; infinity[
+ * Since 4MB = 2^22 and 256B = 2^8, this means
+ * (22 - 8 + 1) = 15 buckets plus the 4MB+ bucket, so
+ * 16 buckets in total.
+ */
+#define NR_LATENCY_BUCKETS 16
+
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
+
+	/** Measure per-operation latency in us (type = gauge) */
+	struct d_tm_node_t	*ot_op_lat[OBJ_PROTO_CLI_COUNT];
+	/** Count number of per-opcode active requests (type = gauge) */
+	struct d_tm_node_t	*ot_op_active[OBJ_PROTO_CLI_COUNT];
+	/** Count number of total per-opcode requests (type = counter) */
+	struct d_tm_node_t	*ot_op_total[OBJ_PROTO_CLI_COUNT];
+
+	/** Measure update/fetch latency based on I/O size (type = gauge) */
+	struct d_tm_node_t	*ot_update_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_lat[NR_LATENCY_BUCKETS];
+
+	/** Total number of bytes fetched (type = counter) */
+	struct d_tm_node_t	*ot_fetch_bytes;
+	/** Total number of bytes updated (type = counter) */
+	struct d_tm_node_t	*ot_update_bytes;
+
+	/** Total number of silently restarted updates (type = counter) */
+	struct d_tm_node_t	*ot_update_restart;
+	/** Total number of resent update operations (type = counter) */
+	struct d_tm_node_t	*ot_update_resent;
 };
 
 struct obj_ec_parity {
@@ -426,6 +450,11 @@ struct dc_obj_verify_args {
 	struct dc_obj_verify_cursor	 cursor;
 };
 
+int
+dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
+	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
+	      daos_oclass_id_t *oc_id_);
+
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
 void dc_obj_shard_close(struct dc_obj_shard *shard);
@@ -574,6 +603,9 @@ struct obj_io_context {
 	struct ds_cont_child	*ioc_coc;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_map_ver;
+	uint32_t		 ioc_opc;
+	uint64_t		 ioc_start_time;
+	uint64_t		 ioc_io_size;
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
 				 ioc_lost_reply:1;
@@ -778,6 +810,14 @@ daos_iom_dump(daos_iom_t *iom)
 	D_PRINT("\n");
 }
 
+static inline bool
+obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
+{
+	return rc == -DER_INPROGRESS && dth->dth_share_tbd_count > 0;
+}
+
+int  obj_class_init(void);
+void obj_class_fini(void);
 int  obj_utils_init(void);
 void obj_utils_fini(void);
 

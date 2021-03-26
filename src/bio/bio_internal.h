@@ -1,30 +1,13 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __BIO_INTERNAL_H__
 #define __BIO_INTERNAL_H__
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include <spdk/bdev.h>
 
@@ -285,7 +268,8 @@ struct media_error_msg {
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 extern uint64_t		io_stat_period;
-void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
+int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
+		       uint64_t timeout);
 void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 		       void *event_ctx);
 struct spdk_thread *init_thread(void);
@@ -328,5 +312,13 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 
 /* bio_device.c */
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
+
+/*
+ * FIXME copied from spdk_internal/event.h, should be removed once they are
+ * exported by SPDK.
+ */
+typedef void (*spdk_subsystem_init_fn)(int rc, void *ctx);
+void spdk_subsystem_init(spdk_subsystem_init_fn cb_fn, void *cb_arg);
+void spdk_subsystem_fini(spdk_msg_fn cb_fn, void *cb_arg);
 
 #endif /* __BIO_INTERNAL_H__ */

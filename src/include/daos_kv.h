@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -47,6 +30,7 @@ extern "C" {
 
 /**
  * Open a KV object. This is a local operation (no RPC involved).
+ * The feat bits in the oid must set DAOS_OF_KV_FLAT.
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
@@ -101,10 +85,9 @@ int
 daos_kv_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
 
 /**
- * Insert or update a single object KV pair. The key specified will be mapped to
- * a dkey in DAOS. The object akey will be the same as the dkey. If a value
- * existed before it will be overwritten (punched first if not previously an
- * atomic value) with the new atomic value described by the sgl.
+ * Insert or update a single object KV pair. If a value existed before it will
+ * be overwritten (punched first if not previously an atomic value) with the new
+ * atomic value described by the sgl.
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Transaction handle.

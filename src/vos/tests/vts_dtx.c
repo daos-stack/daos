@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of vos/tests/
@@ -82,6 +65,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_dist = 0;
 	dth->dth_for_migration = 0;
 	dth->dth_ignore_uncommitted = 0;
+	dth->dth_force_refresh = 0;
 
 	dth->dth_dti_cos_count = 0;
 	dth->dth_dti_cos = NULL;
@@ -100,7 +84,6 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count = 0;
-	dth->dth_share_tbd_scanned = 0;
 	dth->dth_shares_inited = 1;
 
 	vos_dtx_rsrvd_init(dth);
@@ -130,7 +113,6 @@ vts_dtx_end(struct dtx_handle *dth)
 			D_FREE(dsp);
 
 		dth->dth_share_tbd_count = 0;
-		dth->dth_share_tbd_scanned = 0;
 	}
 
 	vos_dtx_rsrvd_fini(dth);
@@ -216,7 +198,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	vts_dtx_begin(&args->oid, args->ctx.tc_co_hdl, epoch, dkey_hash, &dth);
 
 	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	xid = dth->dth_xid;
 
@@ -228,14 +210,14 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Data record with update DTX is invisible before commit. */
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Commit the update DTX. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
-	assert_int_equal(rc, 1);
+	assert_rc_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -243,7 +225,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* Fetch again. */
 	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Data record with update DTX is readable after commit. */
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
@@ -258,7 +240,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	else
 		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, epoch,
 				   1, 0, &dkey, 1, &akey, dth);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	xid = dth->dth_xid;
 
@@ -271,13 +253,13 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	rc = io_test_obj_fetch(args, ++epoch, 0, &dkey, &iod, &sgl, true);
 	/* Punch is not yet visible */
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Commit the punch DTX. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
-	assert_int_equal(rc, 1);
+	assert_rc_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -285,7 +267,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* Fetch again. */
 	rc = io_test_obj_fetch(args, ++epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Data record with punch DTX is invisible after commit. */
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
@@ -347,7 +329,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* initial update. */
 	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	dts_buf_render(update_buf2, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, update_buf2, UPDATE_BUF_SIZE);
@@ -357,7 +339,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 		      &dth);
 
 	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	xid = dth->dth_xid;
 
@@ -366,14 +348,14 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* Aborted the update DTX. */
 	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
-	assert_int_equal(rc, 1);
+	assert_rc_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	assert_memory_not_equal(update_buf2, fetch_buf, UPDATE_BUF_SIZE);
 	/* The fetched result is the data written via the initial update. */
@@ -389,7 +371,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	else
 		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, epoch,
 				   1, 0, &dkey, 1, &akey, dth);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	xid = dth->dth_xid;
 
@@ -398,14 +380,14 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* Aborted the punch DTX. */
 	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
-	assert_int_equal(rc, 1);
+	assert_rc_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = io_test_obj_fetch(args, ++epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* The fetched result is the data written via the initial update. */
 	assert_memory_equal(update_buf1, fetch_buf, UPDATE_BUF_SIZE);
@@ -470,7 +452,7 @@ dtx_14(void **state)
 	vts_dtx_begin(&args->oid, args->ctx.tc_co_hdl, epoch, dkey_hash, &dth);
 
 	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	xid = dth->dth_xid;
 
@@ -479,7 +461,7 @@ dtx_14(void **state)
 
 	/* Commit the DTX. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
-	assert_int_equal(rc, 1);
+	assert_rc_equal(rc, 1);
 
 	/* Double commit the DTX is harmless. */
 	vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, NULL);
@@ -489,7 +471,7 @@ dtx_14(void **state)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Data record is not affected by double commit. */
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
@@ -503,7 +485,7 @@ dtx_14(void **state)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Data record is not affected by failed abort. */
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
@@ -539,7 +521,7 @@ dtx_15(void **state)
 
 	/* initial update. */
 	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	dts_buf_render(update_buf2, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, update_buf2, UPDATE_BUF_SIZE);
@@ -549,7 +531,7 @@ dtx_15(void **state)
 		      &dth);
 
 	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	xid = dth->dth_xid;
 
@@ -558,7 +540,7 @@ dtx_15(void **state)
 
 	/* Aborted the update DTX. */
 	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
-	assert_int_equal(rc, 1);
+	assert_rc_equal(rc, 1);
 
 	/* Double aborted the DTX is harmless. */
 	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
@@ -569,7 +551,7 @@ dtx_15(void **state)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	assert_memory_not_equal(update_buf2, fetch_buf, UPDATE_BUF_SIZE);
 	/* The fetched result is the data written via the initial update. */
@@ -583,7 +565,7 @@ dtx_15(void **state)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	assert_memory_not_equal(update_buf2, fetch_buf, UPDATE_BUF_SIZE);
 	/* The fetched result is the data written via the initial update. */
@@ -622,7 +604,7 @@ dtx_16(void **state)
 	vts_dtx_begin(&args->oid, args->ctx.tc_co_hdl, epoch, dkey_hash, &dth);
 
 	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	daos_fail_loc_set(DAOS_VOS_NON_LEADER | DAOS_FAIL_ALWAYS);
 
@@ -633,12 +615,12 @@ dtx_16(void **state)
 	rc = vos_fetch_begin(args->ctx.tc_co_hdl, args->oid, epoch,
 			     &dkey_iov, 1, &iod, 0, NULL, &ioh, NULL);
 	/* The former DTX is not committed, so need to retry with leader. */
-	assert_int_equal(rc, -DER_INPROGRESS);
+	assert_rc_equal(rc, -DER_INPROGRESS);
 
 	daos_fail_loc_reset();
 
 	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Former DTX is not committed, so nothing can be fetched. */
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
@@ -648,14 +630,14 @@ dtx_16(void **state)
 
 	/* Fetch again. */
 	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* The DTX in CoS cache will make related data record as readable. */
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Commit the DTX. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &dth->dth_xid, 1, NULL);
-	assert_int_equal(rc, 1);
+	assert_rc_equal(rc, 1);
 
 	vts_dtx_end(dth);
 }
@@ -737,7 +719,7 @@ dtx_17(void **state)
 
 		rc = io_test_obj_update(args, epoch[i], 0, &dkey, &iod, &sgl,
 					dth, true);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		xid[i] = dth->dth_xid;
 
@@ -746,7 +728,7 @@ dtx_17(void **state)
 
 	/* Commit the first 4 DTXs. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, xid, 4, NULL);
-	assert_int_equal(rc, 4);
+	assert_rc_equal(rc, 4);
 
 	param.ip_hdl = args->ctx.tc_co_hdl;
 	param.ip_ih = DAOS_HDL_INVAL;
@@ -764,7 +746,7 @@ dtx_17(void **state)
 
 	rc = vos_iterate(&param, VOS_ITER_DKEY, false, &anchors,
 			 vts_dtx_iter_cb, NULL, &vdid, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 4; i++) {
 		assert_true(found[i]);
@@ -773,14 +755,14 @@ dtx_17(void **state)
 
 	/* Commit the others. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid[4], 6, NULL);
-	assert_int_equal(rc, 6);
+	assert_rc_equal(rc, 6);
 
 	memset(&anchors, 0, sizeof(anchors));
 	vdid.count = 10;
 
 	rc = vos_iterate(&param, VOS_ITER_DKEY, false, &anchors,
 			 vts_dtx_iter_cb, NULL, &vdid, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 10; i++) {
 		assert_true(found[i]);
@@ -824,7 +806,7 @@ dtx_18(void **state)
 
 		rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl,
 					dth, true);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		xid[i] = dth->dth_xid;
 
@@ -833,24 +815,24 @@ dtx_18(void **state)
 
 	/* Commit all DTXs. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, xid, 10, NULL);
-	assert_int_equal(rc, 10);
+	assert_rc_equal(rc, 10);
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i],
 				   NULL, NULL, NULL, false);
-		assert_int_equal(rc, DTX_ST_COMMITTED);
+		assert_rc_equal(rc, DTX_ST_COMMITTED);
 	}
 
 	sleep(3);
 
 	/* Aggregate the DTXs. */
 	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i],
 				   NULL, NULL, NULL, false);
-		assert_int_equal(rc, -DER_NONEXIST);
+		assert_rc_equal(rc, -DER_NONEXIST);
 	}
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -858,7 +840,7 @@ dtx_18(void **state)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Related data record is still readable after DTX aggregation. */
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);

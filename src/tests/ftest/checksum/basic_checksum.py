@@ -1,31 +1,15 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2019-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import ctypes
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj)
 from apricot import TestWithServers
+from general_utils import create_string_buffer
 
 
 class ChecksumContainerValidation(TestWithServers):
@@ -37,9 +21,10 @@ class ChecksumContainerValidation(TestWithServers):
     test for enabling checksum testing.
     :avocado: recursive
     """
+
     # pylint: disable=too-many-instance-attributes
     def setUp(self):
-        super(ChecksumContainerValidation, self).setUp()
+        super().setUp()
         self.agent_sessions = None
         self.pool = None
         self.container = None
@@ -86,9 +71,9 @@ class ChecksumContainerValidation(TestWithServers):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0])
                           * self.record_length[record_index])
-                c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
-                c_value = ctypes.create_string_buffer(indata)
+                c_dkey = create_string_buffer("dkey {0}".format(dkey))
+                c_akey = create_string_buffer("akey {0}".format(akey))
+                c_value = create_string_buffer(indata)
                 c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
 
                 self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
@@ -102,21 +87,18 @@ class ChecksumContainerValidation(TestWithServers):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0]) *
                           self.record_length[record_index])
-                c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
+                c_dkey = create_string_buffer("dkey {0}".format(dkey))
+                c_akey = create_string_buffer("akey {0}".format(akey))
                 val = self.ioreq.single_fetch(c_dkey,
                                               c_akey,
                                               len(indata)+1)
-                if indata != (repr(val.value)[1:-1]):
-                    self.d_log.error("ERROR:Data mismatch for "
-                                     "dkey = {0}, "
-                                     "akey = {1}".format(
-                                         "dkey {0}".format(dkey),
-                                         "akey {0}".format(akey)))
-                    self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}"
-                              .format("dkey {0}".format(dkey),
-                                      "akey {0}".format(akey)))
-
+                if indata != val.value.decode('utf-8'):
+                    message = (
+                        "ERROR:Data mismatch for dkey={}, akey={}: indata={}, "
+                        "val={}".format(
+                            dkey, akey, indata, val.value.decode('utf-8')))
+                    self.d_log.error(message)
+                    self.fail(message)
                 record_index = record_index + 1
                 if record_index == len(self.record_length):
                     record_index = 0

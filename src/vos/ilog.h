@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * VOS Object/Key incarnation log
@@ -207,7 +190,8 @@ struct ilog_entries {
  *				that are provably not needed.  If discard is
  *				set, it will remove everything in the epoch
  *				range.
- *  \param	punched[in]	Max punch of parent incarnation log
+ *  \param	punch_major[in]	Max major epoch punch of parent incarnation log
+ *  \param	punch_major[in]	Max minor epoch punch of parent incarnation log
  *  \param	entries[in]	Used for efficiency since aggregation is used
  *				by vos_iterator
  *
@@ -218,7 +202,7 @@ struct ilog_entries {
 int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
-	       bool discard, daos_epoch_t punched,
+	       bool discard, daos_epoch_t punch_major, uint16_t punch_minor,
 	       struct ilog_entries *entries);
 
 /** Initialize an ilog_entries struct for fetch

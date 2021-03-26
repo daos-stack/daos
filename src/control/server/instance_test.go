@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -32,13 +15,13 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func getTestIOServerInstance(logger logging.Logger) *IOServerInstance {
-	runner := ioserver.NewRunner(logger, &ioserver.Config{})
-	return NewIOServerInstance(logger, nil, nil, nil, runner)
+func getTestEngineInstance(logger logging.Logger) *EngineInstance {
+	runner := engine.NewRunner(logger, &engine.Config{})
+	return NewEngineInstance(logger, nil, nil, nil, runner)
 }
 
 func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {
@@ -56,7 +39,7 @@ func TestServer_Instance_BioError(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	instance := getTestIOServerInstance(log)
+	instance := getTestEngineInstance(log)
 
 	req := getTestBioErrorReq(t, "/tmp/instance_test.sock", 0, 0, false, false, true)
 
@@ -69,7 +52,7 @@ func TestServer_Instance_BioError(t *testing.T) {
 }
 
 func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
-	instance := &IOServerInstance{}
+	instance := &EngineInstance{}
 	fd, err := system.NewFaultDomainFromString("/one/two")
 	if err != nil {
 		t.Fatalf("couldn't create fault domain: %s", err)

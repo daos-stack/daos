@@ -1,24 +1,8 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
 
 package drpc
 
@@ -41,7 +25,7 @@ import (
 // buffer to put all of the information in. Corresponding C definition is
 // found in include/daos/drpc.h
 //
-const MaxMsgSize = 16384
+const MaxMsgSize = 1 << 17
 
 // DomainSocketServer is the object that listens for incoming dRPC connections,
 // maintains the connections for sessions, and manages the message processing.
@@ -118,7 +102,7 @@ func (d *DomainSocketServer) Start() error {
 	d.listener = lis
 
 	// TODO: Should we set more granular permissions? The only writer should
-	// be the IO server and we should know which user is running it.
+	// be the I/O Engine and we should know which user is running it.
 	if err := os.Chmod(d.sockFile, 0777); err != nil {
 		return errors.Wrapf(err, "Unable to set permissions on %s", d.sockFile)
 	}

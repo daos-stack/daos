@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * dtx: DTX RPC
@@ -33,22 +16,24 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/container.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "dtx_internal.h"
 
 CRT_RPC_DEFINE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
-#define X_RPC(a, b, c, d, e)	\
+#define X(a, b, c, d, e, f)	\
 {				\
 	.prf_flags   = b,	\
 	.prf_req_fmt = c,	\
 	.prf_hdlr    = NULL,	\
 	.prf_co_ops  = NULL,	\
-}
+},
 
 static struct crt_proto_rpc_format dtx_proto_rpc_fmt[] = {
-	DTX_PROTO_SRV_RPC_LIST(X_RPC)
+	DTX_PROTO_SRV_RPC_LIST
 };
+
+#undef X
 
 struct crt_proto_format dtx_proto_fmt = {
 	.cpf_name  = "dtx-proto",
@@ -241,8 +226,6 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 
 		rc = crt_req_send(req, dtx_req_cb, drr);
-		if (rc != 0)
-			crt_req_decref(req);
 	}
 
 	D_DEBUG(DB_TRACE, "DTX req for opc %x to %d/%d (req %p future %p) sent "
@@ -309,7 +292,8 @@ dtx_req_list_cb(void **args)
 		}
 
 		drr = args[0];
-		D_CDEBUG(dra->dra_result < 0, DLOG_ERR, DB_TRACE,
+		D_CDEBUG(dra->dra_result < 0 &&
+			 dra->dra_result != -DER_NONEXIST, DLOG_ERR, DB_TRACE,
 			 "DTX req for opc %x ("DF_DTI") %s, count %d: %d.\n",
 			 dra->dra_opc, DP_DTI(drr->drr_dti),
 			 dra->dra_result < 0 ? "failed" : "succeed",
@@ -398,10 +382,10 @@ dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	if (drr == NULL)
 		return -DER_NOMEM;
 
-	dcrb = (struct dtx_cf_rec_bundle *)val_iov->iov_buf;
+	dcrb = val_iov->iov_buf;
 	D_ALLOC_ARRAY(drr->drr_dti, dcrb->dcrb_count);
 	if (drr->drr_dti == NULL) {
-		D_FREE_PTR(drr);
+		D_FREE(drr);
 		return -DER_NOMEM;
 	}
 
@@ -644,7 +628,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 out:
 	D_CDEBUG(rc < 0 || rc1 < 0 || rc2 < 0, DLOG_ERR, DB_IO,
 		 "Commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
-		 DP_DTI(&dti[0]), count, rc, rc1, rc2);
+		 DP_DTI(&dtes[0]->dte_xid), count, rc, rc1, rc2);
 
 	D_FREE(dti);
 
@@ -822,6 +806,9 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 	int			 len = 0;
 	int			 rc = 0;
 
+	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
+		return -DER_IO;
+
 	D_INIT_LIST_HEAD(&head);
 
 	d_list_for_each_entry(dsp, &dth->dth_share_tbd_list, dsp_link) {
@@ -829,7 +816,7 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 
 again:
 			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid,
-						      dsp->dsp_ver);
+						      dth->dth_ver);
 			if (rc < 0) {
 				D_ERROR("Failed to find DTX leader for "DF_DTI
 					": "DF_RC"\n",

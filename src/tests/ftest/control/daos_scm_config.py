@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import avocado
@@ -37,7 +20,7 @@ class SCMConfigTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a SCMConfigTest object."""
-        super(SCMConfigTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.obj = None
 
     @avocado.fail_on(DaosApiError)
@@ -45,13 +28,13 @@ class SCMConfigTest(TestWithServers):
         """Write data obj to a container.
 
         Args:
-            data (str): string of data to be written.
+            data (bytes): data to be written.
         """
         # create an object and write some data into it
         self.obj = self.container.container.write_an_obj(data,
                                                          len(data) + 1,
-                                                         "dkey",
-                                                         "akey",
+                                                         b"dkey",
+                                                         b"akey",
                                                          obj_cls="OC_S1")
         self.obj.close()
         self.log.info("==>    Wrote an object to the container")
@@ -71,7 +54,7 @@ class SCMConfigTest(TestWithServers):
 
         # now open the container and write some data
         self.container.open()
-        data_w = "Ehrm... Testing... Testing"
+        data_w = b"Ehrm... Testing... Testing"
         self.write_data(data_w)
 
         # Run storage prepare
@@ -89,7 +72,7 @@ class SCMConfigTest(TestWithServers):
         try:
             self.obj.open()
             data_r = self.container.container.read_an_obj(
-                len(data_w) + 1, "dkey", "akey", self.obj)
+                len(data_w) + 1, b"dkey", b"akey", self.obj)
         except DaosApiError as error:
             self.fail(
                 "Error retrieving the container data:\n{0}".format(error))
@@ -99,5 +82,5 @@ class SCMConfigTest(TestWithServers):
         self.assertEqual(data_w, data_r.value, msg)
 
         # Lets make sure we can still write data after preparing.
-        data_w2 = "Almost done testing... just this last thing."
+        data_w2 = b"Almost done testing... just this last thing."
         self.write_data(data_w2)

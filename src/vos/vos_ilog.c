@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -283,6 +266,7 @@ init:
 	if (punched != NULL)
 		punch = *punched;
 	if (parent != NULL) {
+		info->ii_prior_any_punch = parent->ii_prior_any_punch;
 		punch = parent->ii_prior_punch;
 		info->ii_uncommitted = parent->ii_uncommitted;
 	}
@@ -523,20 +507,23 @@ punch_log:
 int
 vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 		   const daos_epoch_range_t *epr,
-		   bool discard, daos_epoch_t punched,
+		   bool discard, const struct vos_punch_record *parent_punch,
 		   struct vos_ilog_info *info)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct umem_instance	*umm = vos_cont2umm(cont);
 	struct ilog_desc_cbs	 cbs;
-	struct vos_punch_record	 punch_rec = {punched, 0};
+	struct vos_punch_record	 punch_rec = {0, 0};
 	int			 rc;
+
+	if (parent_punch)
+		punch_rec = *parent_punch;
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
 	D_DEBUG(DB_TRACE, "log="DF_X64"\n", umem_ptr2off(umm, ilog));
 
-	rc = ilog_aggregate(umm, ilog, &cbs, epr, discard, punched,
-			    &info->ii_entries);
+	rc = ilog_aggregate(umm, ilog, &cbs, epr, discard, punch_rec.pr_epc,
+			    punch_rec.pr_minor_epc, &info->ii_entries);
 
 	if (rc != 0)
 		return rc;

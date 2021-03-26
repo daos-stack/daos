@@ -15,7 +15,7 @@ try:
 except NameError:
     pass
 
-sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
+sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
 import daos_build
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
@@ -57,8 +57,11 @@ def get_version():
     with open("VERSION", "r") as version_file:
         return version_file.read().rstrip()
 
-DAOS_VERSION = get_version()
-API_VERSION = "0.9.0"
+API_VERSION_MAJOR = "1"
+API_VERSION_MINOR = "2"
+API_VERSION_FIX = "0"
+API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
+                                API_VERSION_FIX)
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
@@ -118,7 +121,7 @@ def is_platform_arm():
         return True
     return False
 
-def set_defaults(env):
+def set_defaults(env, daos_version):
     """set compiler defaults"""
     AddOption('--preprocess',
               dest='preprocess',
@@ -131,9 +134,13 @@ def set_defaults(env):
               default=False,
               help='Disable rpath')
 
+    env.Append(API_VERSION_MAJOR=API_VERSION_MAJOR)
+    env.Append(API_VERSION_MINOR=API_VERSION_MINOR)
+    env.Append(API_VERSION_FIX=API_VERSION_FIX)
+
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
-    env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + daos_version + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
     if env.get('BUILD_TYPE') == 'debug':
@@ -264,9 +271,7 @@ def scons(): # pylint: disable=too-many-locals
                   "to clean it up manually.")
             exit(1)
 
-        print("Updating the API_VERSION, VERSION and TAG files...")
-        with open("API_VERSION", "w") as version_file:
-            version_file.write(API_VERSION + '\n')
+        print("Updating the VERSION and TAG files...")
         with open("VERSION", "w") as version_file:
             version_file.write(version + '\n')
         with open("TAG", "w") as version_file:
@@ -286,7 +291,6 @@ def scons(): # pylint: disable=too-many-locals
                                                   repo.default_signature.email)
         # pylint: enable=no-member
         index.add("utils/rpms/daos.spec")
-        index.add("API_VERSION")
         index.add("VERSION")
         index.add("TAG")
         index.write()
@@ -359,13 +363,9 @@ def scons(): # pylint: disable=too-many-locals
 
         exit(0)
 
-    sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
     from prereq_tools import PreReqComponent
 
-    env = Environment(TOOLS=['extra', 'default'])
-
-    if os.path.exists("daos_m.conf"):
-        os.rename("daos_m.conf", "daos.conf")
+    env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
@@ -381,24 +381,36 @@ def scons(): # pylint: disable=too-many-locals
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
 
+    AddOption('--deps-only',
+              dest='deps_only',
+              action='store_true',
+              default=False,
+              help='Download and build dependencies only, do not build daos')
+
     run_checks(env)
+
+    res = GetOption('deps_only')
+    if res:
+        print('Exiting because deps-only was set')
+        Exit(0)
 
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
-    CONF_DIR = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
+    conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
+    daos_version = get_version()
     # Export() is handled specially by pylint so do not merge these two lines.
-    Export('DAOS_VERSION', 'API_VERSION', 'env', 'prereqs')
-    Export('platform_arm', 'CONF_DIR')
+    Export('daos_version', 'API_VERSION', 'env', 'prereqs')
+    Export('platform_arm', 'conf_dir')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
         env.Replace(SHLIBSUFFIX='.so')
 
-    set_defaults(env)
+    set_defaults(env, daos_version)
 
     build_prefix = prereqs.get_src_build_dir()
 
@@ -412,13 +424,16 @@ def scons(): # pylint: disable=too-many-locals
     # also install to $PREFIX/lib to work with existing avocado test code
     daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
     env.Install("$PREFIX/lib64/daos", "VERSION")
-    env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
-    env.Install('$PREFIX/etc/bash_completion.d', ['utils/completion/daos.bash'])
+    env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
                 ['utils/sl/env_modules.py'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/',
                 ['ftest.sh'])
+    api_version = env.Command("%s/API_VERSION" % build_prefix,
+                              "%s/SConstruct" % build_prefix,
+                              "echo %s > $TARGET" % (API_VERSION))
+    env.Install("$PREFIX/lib64/daos", api_version)
 
     # install the configuration files
     SConscript('utils/config/SConscript')

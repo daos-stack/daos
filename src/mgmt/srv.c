@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of the DAOS server. It implements the DAOS storage
@@ -34,7 +17,7 @@
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <signal.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
 #include <daos/drpc_modules.h>
 #include <daos_mgmt.h>
@@ -47,6 +30,7 @@ const int max_svc_nreplicas = 13;
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_aggregate	= ds_mgmt_tgt_create_aggregator,
 	.co_pre_forward	= NULL,
+	.co_post_reply = ds_mgmt_tgt_create_post_reply,
 };
 
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
@@ -284,8 +268,8 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 out:
-	out = crt_reply_get(rpc);
 	D_DEBUG(DB_MGMT, "profile hdlr: rc "DF_RC"\n", DP_RC(rc));
+	out = crt_reply_get(rpc);
 	out->p_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -332,8 +316,8 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 out:
-	out = crt_reply_get(rpc);
 	D_DEBUG(DB_MGMT, "mark hdlr: rc "DF_RC"\n", DP_RC(rc));
+	out = crt_reply_get(rpc);
 	out->m_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -357,6 +341,7 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	 * fi_cq_readerr got err: 5(Input/output error) ..
 	 */
 	int i;
+
 	for (i = 0; i < 200; i++) {
 		ABT_thread_yield();
 		usleep(10);
@@ -387,15 +372,18 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 
 	out = crt_reply_get(rpc);
 
-	rc =  get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
-	if (rc != 0)
-		D_ERROR(DF_UUID ": get_pool_svc_ranks() upcall failed, "
-			DF_RC "\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+	rc =  ds_get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
+	if (rc == -DER_NONEXIST) /* not an error */
+		D_DEBUG(DB_MGMT, DF_UUID": get_pool_svc_ranks() upcall failed, "
+			DF_RC"\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+	else if (rc != 0)
+		D_ERROR(DF_UUID": get_pool_svc_ranks() upcall failed, "
+			DF_RC"\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
 	out->gsr_rc = rc;
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR(DF_UUID ": crt_reply_send() failed, " DF_RC "\n",
+		D_ERROR(DF_UUID": crt_reply_send() failed, "DF_RC"\n",
 			DP_UUID(in->gsr_puuid), DP_RC(rc));
 
 	d_rank_list_free(out->gsr_ranks);

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main interfaces to mercury.
@@ -456,6 +439,7 @@ int
 crt_hg_init(void)
 {
 	int	rc = 0;
+	char	*env;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -463,6 +447,15 @@ crt_hg_init(void)
 	}
 
 	#define EXT_FAC DD_FAC(external)
+
+	/* If mercury log level is not set, set it to warning by default */
+	env = getenv("HG_LOG_LEVEL");
+	if (!env)
+		HG_Set_log_level("warning");
+
+	env = getenv("HG_NA_LOG_LEVEL");
+	if (!env)
+		NA_Set_log_level("warning");
 
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
@@ -530,6 +523,7 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	else
 		init_info.na_init_info.max_contexts = 1;
 
+	init_info.request_post_incr = 0;
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
@@ -714,14 +708,13 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	struct crt_rpc_priv	 rpc_tmp = {0};
 
 	hg_info = HG_Get_info(hg_hdl);
-	if (hg_info == NULL) {
+	if (unlikely(hg_info == NULL)) {
 		D_ERROR("HG_Get_info failed.\n");
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
 
-	crt_ctx = (struct crt_context *)HG_Context_get_data(
-			hg_info->context);
-	if (crt_ctx == NULL) {
+	crt_ctx = HG_Context_get_data(hg_info->context);
+	if (unlikely(crt_ctx == NULL)) {
 		D_ERROR("HG_Context_get_data failed.\n");
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
@@ -734,7 +727,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_tmp.crp_pub.cr_ctx = crt_ctx;
 
 	rc = crt_hg_unpack_header(hg_hdl, &rpc_tmp, &proc);
-	if (rc != 0) {
+	if (unlikely(rc != 0)) {
 		D_ERROR("crt_hg_unpack_header failed, rc: %d.\n", rc);
 		crt_hg_reply_error_send(&rpc_tmp, -DER_MISC);
 		/** safe to return here because relevant portion of rpc_tmp is
@@ -752,7 +745,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_tmp.crp_pub.cr_opc = opc;
 
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
-	if (opc_info == NULL) {
+	if (unlikely(opc_info == NULL)) {
 		D_ERROR("opc: %#x, lookup failed.\n", opc);
 		/*
 		 * The RPC is not registered on the server, we don't know how to
@@ -761,14 +754,13 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		 */
 		crt_hg_reply_error_send(&rpc_tmp, -DER_UNREG);
 		crt_hg_unpack_cleanup(proc);
-
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 	D_ASSERT(opc_info->coi_opc == opc);
 
 	D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
-	if (rpc_priv == NULL) {
+	if (unlikely(rpc_priv == NULL)) {
 		crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
 		crt_hg_unpack_cleanup(proc);
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
@@ -794,10 +786,12 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		  &rpc_priv->crp_pub);
 
 	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
-	if (rc != 0) {
+	if (unlikely(rc != 0)) {
 		D_ERROR("crt_rpc_priv_init rc=%d, opc=%#x\n", rc, opc);
-		crt_hg_reply_error_send(rpc_priv, -DER_MISC);
+		crt_hg_reply_error_send(&rpc_tmp, -DER_MISC);
+		crt_hg_unpack_cleanup(proc);
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
+		D_FREE(rpc_priv);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 
@@ -822,13 +816,13 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		crt_hg_unpack_cleanup(proc);
 	}
 
-	if (opc_info->coi_rpc_cb == NULL) {
+	if (unlikely(opc_info->coi_rpc_cb == NULL)) {
 		D_ERROR("NULL crp_hg_hdl, opc: %#x.\n", opc);
 		crt_hg_reply_error_send(rpc_priv, -DER_UNREG);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
-	if (rpc_priv->crp_fail_hlc) {
+	if (unlikely(rpc_priv->crp_fail_hlc)) {
 		crt_hg_reply_error_send(rpc_priv, -DER_HLC_SYNC);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
@@ -837,19 +831,16 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		rc = crt_rpc_common_hdlr(rpc_priv);
 	else
 		rc = crt_corpc_common_hdlr(rpc_priv);
-	if (rc != 0) {
+	if (unlikely(rc != 0)) {
 		RPC_ERROR(rpc_priv,
 			  "failed to invoke RPC handler, rc: %d, opc: %#x\n",
 			  rc, opc);
 		crt_hg_reply_error_send(rpc_priv, rc);
+		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
 decref:
-	/* If rpc call back is customized, then it might be handled
-	 * asynchronously, Let's hold the RPC, and the real handler
-	 * (crt_handle_rpc())will release it
-	 */
-	if (rc != 0 || !crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub))
+	if (rc != 0)
 		RPC_DECREF(rpc_priv);
 out:
 	return hg_ret;
@@ -884,7 +875,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Create failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	} else {
 		rpc_priv->crp_hg_hdl = rpc_priv->crp_hdl_reuse->chh_hdl;
@@ -895,7 +886,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Reset failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	}
 
@@ -908,10 +899,10 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Set_target_id failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	}
-
+out:
 	return rc;
 }
 
@@ -1078,11 +1069,6 @@ out:
 	return hg_ret;
 }
 
-static bool crt_hg_network_error(hg_return_t hg_ret)
-{
-	return (hg_ret == HG_NA_ERROR || hg_ret == HG_PROTOCOL_ERROR);
-}
-
 int
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
@@ -1110,18 +1096,8 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_tgt_uri);
 	}
 
-	/* HG_Forward can return 2 types of errors - network errors and generic
-	 * ones, such as out of memory, bad parameters passed, invalid handle
-	 * etc...
-	 *
-	 * For network errors, we do not want to return error back to the caller
-	 * of crt_req_send(), but instead we want to invoke completion callback
-	 * manually with 'node unreachable' (DER_UNREACH) error.
-	 *
-	 * HG_NA_ERROR and HG_PROTOCOL_ERROR are both network-level errors
-	 * that can be raised by mercury.
-	 */
-	if (crt_hg_network_error(hg_ret)) {
+	/* For any error to be reported via completion callback */
+	if (hg_ret != HG_SUCCESS) {
 		if (!crt_req_timedout(rpc_priv)) {
 			/* error will be reported to the completion callback in
 			 * crt_req_timeout_hdlr()
@@ -1129,8 +1105,6 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			crt_req_force_timeout(rpc_priv);
 		}
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
-	} else if (hg_ret != HG_SUCCESS) {
-		rc = -DER_HG;
 	} else {
 		rpc_priv->crp_on_wire = 1;
 	}

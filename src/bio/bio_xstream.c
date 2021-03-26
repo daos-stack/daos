@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
 
@@ -35,7 +18,6 @@
 #include <spdk/io_channel.h>
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
-#include <spdk/copy_engine.h>
 #include <spdk/conf.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
@@ -46,9 +28,9 @@
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
 #define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
 /* DMA buffer parameters */
-#define DAOS_DMA_CHUNK_MB	32		/* 32MB DMA chunks */
-#define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
-#define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
+#define DAOS_DMA_CHUNK_MB	8		/* 8MB DMA chunks */
+#define DAOS_DMA_CHUNK_CNT_INIT	32		/* Per-xstream init chunks */
+#define DAOS_DMA_CHUNK_CNT_MAX	128		/* Per-xstream max chunks */
 #define DAOS_NVME_MAX_CTRLRS	1024		/* Max read from nvme_conf */
 
 /* Max inflight blob IOs per io channel */
@@ -228,8 +210,11 @@ populate_whitelist(struct spdk_env_opts *opts)
 	 * Optionally VMD devices will be used, and will require a different
 	 * transport id to pass to whitelist for DPDK.
 	 */
-	if (spdk_conf_find_section(NULL, "Vmd") != NULL)
-		vmd_enabled = true;
+	sp = spdk_conf_find_section(NULL, "Vmd");
+	if (sp != NULL) {
+		if (spdk_conf_section_get_boolval(sp, "Enable", false))
+			vmd_enabled = true;
+	}
 
 	sp = spdk_conf_find_section(NULL, "Nvme");
 	if (sp == NULL) {
@@ -337,26 +322,6 @@ bio_spdk_env_init(void)
 		return rc;
 	}
 
-	if (spdk_conf_find_section(NULL, "Vmd") != NULL) {
-		/**
-		 * Enumerate VMD devices and hook them into the SPDK PCI
-		 * subsystem.
-		 */
-		rc = spdk_vmd_init();
-		if (rc != 0) {
-			rc = -DER_INVAL; /* spdk_vmd_init() returns -1 */
-			D_ERROR("Failed to initialize VMD env, "DF_RC"\n",
-				DP_RC(rc));
-			return rc;
-		}
-
-		/**
-		 * TODO spdk_vmd_hotplug_monitor() will need to be called
-		 * periodically on 'init' xstream to monitor VMD hotremove/
-		 * hotplug events.
-		 */
-	}
-
 	spdk_unaffinitize_thread();
 
 	rc = spdk_thread_lib_init(NULL, 0);
@@ -371,8 +336,8 @@ bio_spdk_env_init(void)
 }
 
 int
-bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
-	      int mem_size)
+bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
+	      struct sys_db *db)
 {
 	char		*env;
 	int		rc, fd;
@@ -409,7 +374,7 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 	}
 	close(fd);
 
-	rc = smd_init(storage_path);
+	rc = smd_init(db);
 	if (rc != 0) {
 		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -566,6 +531,12 @@ common_init_cb(void *arg, int rc)
 }
 
 static void
+subsys_init_cb(int rc, void *arg)
+{
+	common_init_cb(arg, rc);
+}
+
+static void
 common_fini_cb(void *arg)
 {
 	struct common_cp_arg *cp_arg = arg;
@@ -587,19 +558,41 @@ common_bs_cb(void *arg, struct spdk_blob_store *bs, int rc)
 	cp_arg->cca_bs = bs;
 }
 
-void
-xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights)
+int
+xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
+		   uint64_t timeout)
 {
+	uint64_t	start_time, cur_time;
+
 	D_ASSERT(inflights != NULL);
 	D_ASSERT(ctxt != NULL);
-	/* Wait for the completion callback done */
+
+	if (timeout != 0)
+		start_time = daos_getmtime_coarse();
+
+	/* Wait for the completion callback done or timeout */
 	while (*inflights != 0) {
 		spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
 		/* Called by standalone VOS */
 		if (ctxt->bxc_tgt_id == -1)
 			bio_xs_io_stat(ctxt, d_timeus_secdiff(0));
+
+		/* Completion is executed */
+		if (*inflights == 0)
+			return 0;
+
+		/* Timeout */
+		if (timeout != 0) {
+			cur_time = daos_getmtime_coarse();
+
+			D_ASSERT(cur_time >= start_time);
+			if (cur_time - start_time > timeout)
+				return -DER_TIMEDOUT;
+		}
 	}
+
+	return 0;
 }
 
 struct spdk_blob_store *
@@ -662,7 +655,8 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 		spdk_bs_init(bs_dev, &bs_opts, common_bs_cb, &cp_arg);
 	else
 		spdk_bs_load(bs_dev, &bs_opts, common_bs_cb, &cp_arg);
-	xs_poll_completion(ctxt, &cp_arg.cca_inflights);
+	rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights, 0);
+	D_ASSERT(rc == 0);
 
 	if (cp_arg.cca_rc != 0) {
 		D_CDEBUG(bs_uuid == NULL, DB_IO, DLOG_ERR,
@@ -678,11 +672,13 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 int
 unload_blobstore(struct bio_xs_context *ctxt, struct spdk_blob_store *bs)
 {
-	struct common_cp_arg cp_arg;
+	struct common_cp_arg	cp_arg;
+	int			rc;
 
 	common_prep_arg(&cp_arg);
 	spdk_bs_unload(bs, common_init_cb, &cp_arg);
-	xs_poll_completion(ctxt, &cp_arg.cca_inflights);
+	rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights, 0);
+	D_ASSERT(rc == 0);
 
 	if (cp_arg.cca_rc != 0)
 		D_ERROR("failed to unload blobstore %d\n", cp_arg.cca_rc);
@@ -1004,7 +1000,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	if (rc == 0) {
 		D_ASSERT(dev_info->sdi_tgt_cnt != 0);
 		d_bdev->bb_tgt_cnt = dev_info->sdi_tgt_cnt;
-		smd_free_dev_info(dev_info);
+		smd_dev_free_info(dev_info);
 		/*
 		 * Something went wrong in hotplug case: device ID is in SMD
 		 * but bio_bdev wasn't created on server start.
@@ -1069,7 +1065,7 @@ put_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 	d_list_for_each_entry_safe(ioc, tmp, &ctxt->bxc_io_ctxts, bic_link) {
 		d_list_del_init(&ioc->bic_link);
 		if (ioc->bic_blob != NULL)
-			D_WARN("Pool isn't closed. xs:%p\n", ctxt);
+			D_WARN("Pool isn't closed. tgt:%d\n", ctxt->bxc_tgt_id);
 	}
 
 	ABT_mutex_lock(bb->bb_mutex);
@@ -1209,7 +1205,7 @@ assign_device(int tgt_id)
 	}
 
 	/* Update mapping for this target in NVMe device table */
-	rc = smd_dev_assign(chosen_bdev->bb_uuid, tgt_id);
+	rc = smd_dev_add_tgt(chosen_bdev->bb_uuid, tgt_id);
 	if (rc) {
 		D_ERROR("Failed to map dev "DF_UUID" to tgt %d. "DF_RC"\n",
 			DP_UUID(chosen_bdev->bb_uuid), tgt_id, DP_RC(rc));
@@ -1370,7 +1366,7 @@ retry:
 
 out:
 	D_ASSERT(dev_info != NULL);
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 	return rc;
 }
 
@@ -1384,6 +1380,8 @@ out:
 void
 bio_xsctxt_free(struct bio_xs_context *ctxt)
 {
+	int	rc = 0;
+
 	/* NVMe context setup was skipped */
 	if (ctxt == NULL)
 		return;
@@ -1418,19 +1416,27 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			 * The xstream initialized SPDK env will have to
 			 * wait for all other xstreams finalized first.
 			 */
-			if (nvme_glb.bd_xstream_cnt != 0)
+			if (nvme_glb.bd_xstream_cnt != 0) {
+				D_DEBUG(DB_MGMT, "Init xs waits\n");
 				ABT_cond_wait(nvme_glb.bd_barrier,
 					      nvme_glb.bd_mutex);
+			}
 
 			fini_bio_bdevs(ctxt);
 
 			common_prep_arg(&cp_arg);
-			spdk_copy_engine_finish(common_fini_cb, &cp_arg);
-			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
-
-			common_prep_arg(&cp_arg);
-			spdk_bdev_finish(common_fini_cb, &cp_arg);
-			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
+			D_DEBUG(DB_MGMT, "Finalizing SPDK subsystems\n");
+			spdk_subsystem_fini(common_fini_cb, &cp_arg);
+			/*
+			 * spdk_subsystem_fini() won't run to completion if
+			 * any bdev is held by open blobs, set a timeout as
+			 * temporary workaround.
+			 */
+			rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
+						3000 /*ms*/);
+			D_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR,
+				 "SPDK subsystems finalized. "DF_RC"\n",
+				 DP_RC(rc));
 
 			nvme_glb.bd_init_thread = NULL;
 
@@ -1445,7 +1451,8 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		D_DEBUG(DB_MGMT, "Finalizing SPDK thread, tgt_id:%d",
 			ctxt->bxc_tgt_id);
 
-		while (!spdk_thread_is_idle(ctxt->bxc_thread))
+		/* Don't drain events if spdk_subsystem_fini() timeout */
+		while (rc == 0 && !spdk_thread_is_idle(ctxt->bxc_thread))
 			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
 		D_DEBUG(DB_MGMT, "SPDK thread finalized, tgt_id:%d",
@@ -1493,7 +1500,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	/*
 	 * Register SPDK thread beforehand, it could be used for poll device
 	 * admin commands completions and hotplugged events in following
-	 * spdk_bdev_initialize() call, it also could be used for blobstore
+	 * spdk_subsystem_init() call, it also could be used for blobstore
 	 * metadata io channel in following init_bio_bdevs() call.
 	 */
 	snprintf(th_name, sizeof(th_name), "daos_spdk_%d", tgt_id);
@@ -1515,24 +1522,15 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		D_ASSERTF(nvme_glb.bd_xstream_cnt == 1, "%d",
 			  nvme_glb.bd_xstream_cnt);
 
-		/* The SPDK 'Malloc' device relies on copy engine. */
-		rc = spdk_copy_engine_initialize();
-		if (rc != 0) {
-			D_ERROR("failed to init SPDK copy engine, rc:%d\n", rc);
-			goto out;
-		}
-
-		/* Initialize all types of devices */
+		/* Initialize all registered subsystems: bdev, vmd, copy. */
 		common_prep_arg(&cp_arg);
-		spdk_bdev_initialize(common_init_cb, &cp_arg);
-		xs_poll_completion(ctxt, &cp_arg.cca_inflights);
+		spdk_subsystem_init(subsys_init_cb, &cp_arg);
+		rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights, 0);
+		D_ASSERT(rc == 0);
 
 		if (cp_arg.cca_rc != 0) {
 			rc = cp_arg.cca_rc;
 			D_ERROR("failed to init bdevs, rc:%d\n", rc);
-			common_prep_arg(&cp_arg);
-			spdk_copy_engine_finish(common_fini_cb, &cp_arg);
-			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 			goto out;
 		}
 
@@ -1623,7 +1621,7 @@ setup_bio_bdev(void *arg)
 	rc = bio_bs_state_set(bbs, BIO_BS_STATE_SETUP);
 	D_ASSERT(rc == 0);
 out:
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 }
 
 /*

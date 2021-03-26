@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS client erasure-coded object IO handling.
@@ -81,8 +64,8 @@ obj_ec_recxs_fini(struct obj_ec_recx_array *recxs)
 {
 	if (recxs == NULL)
 		return;
-	if (recxs->oer_recxs != NULL)
-		D_FREE(recxs->oer_recxs);
+
+	D_FREE(recxs->oer_recxs);
 	recxs->oer_nr = 0;
 	recxs->oer_stripe_total = 0;
 	obj_ec_pbuf_fini(recxs);
@@ -150,6 +133,9 @@ obj_ec_seg_sorter_init(struct obj_ec_seg_sorter *sorter, uint32_t tgt_nr,
 void
 obj_ec_seg_sorter_fini(struct obj_ec_seg_sorter *sorter)
 {
+	if (sorter == NULL)
+		return;
+
 	D_FREE(sorter->ess_tgts);
 }
 
@@ -1875,7 +1861,7 @@ obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 static void
 obj_ec_recov_codec_free(struct obj_reasb_req *reasb_req)
 {
-	if (reasb_req->orr_fail && reasb_req->orr_fail->efi_recov_codec)
+	if (reasb_req->orr_fail)
 		D_FREE(reasb_req->orr_fail->efi_recov_codec);
 }
 

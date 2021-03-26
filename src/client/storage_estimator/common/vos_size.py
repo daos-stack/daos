@@ -1,29 +1,9 @@
 #!/usr/bin/env python
 '''
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2019-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
-from __future__ import division
-import yaml
 import random
 import math
 
@@ -54,7 +34,7 @@ def check_key_type(spec):
         raise RuntimeError("Size required for hashed key %s" % spec)
 
 
-class Stats(object):
+class Stats():
     """Class for calculating and storing stats"""
 
     def __init__(self):
@@ -137,7 +117,7 @@ class Stats(object):
 # pylint: disable=too-many-instance-attributes
 
 
-class MetaOverhead(object):
+class MetaOverhead():
     """Class for calculating overheads"""
 
     def __init__(self, args, num_pools, meta_yaml):
@@ -152,9 +132,10 @@ class MetaOverhead(object):
         self.next_cont = 1
         self.next_object = 1
         self._scm_cutoff = meta_yaml.get("scm_cutoff", 4096)
-        csummers = meta_yaml.get("csummers", {})
+        self.csum_size = 0
 
     def set_scm_cutoff(self, scm_cutoff):
+        """Set SCM threshold"""
         self._scm_cutoff = scm_cutoff
 
     def init_container(self, cont_spec):
@@ -320,7 +301,7 @@ class MetaOverhead(object):
             overhead = leafs * leaf_size + ints * int_size + rec_overhead
         else:
             overhead = tree_nodes * leaf_size + rec_overhead
-        if key == "akey" or key == "single_value" or key == "array":
+        if key in ("akey", "single_value", "array"):
             # key refers to child tree
             if tree["overhead"] == "user":
                 tree_stats.add_user_meta(num_values * tree["size"])
@@ -328,7 +309,7 @@ class MetaOverhead(object):
                 tree_stats.add_meta(key, num_values * tree["size"])
             overhead += self.csum_size * num_values
         tree_stats.add_meta(key, overhead)
-        if key == "array" or key == "single_value":
+        if key in ("array", "single_value"):
             tree_stats.add_user_value(tree)
             tree_stats.add_meta(key, tree["meta_size"])
             stats.merge(tree_stats)
@@ -343,6 +324,7 @@ class MetaOverhead(object):
 
         for pool in range(0, self.num_pools):
             stats.add_meta("pool", int(self.meta.get("root")))
+            stats.add_meta("container", int(self.meta.get("container")))
             self.calc_tree(stats, self.pools[pool])
 
         stats.pretty_print()

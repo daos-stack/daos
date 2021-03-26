@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_cont: Client Server Internal Declarations
@@ -29,7 +12,7 @@
 
 #include <daos/lru.h>
 #include <daos_security.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/container.h>
@@ -115,7 +98,7 @@ struct oid_iv_range {
 
 /* Container IV structure */
 struct cont_iv_snapshot {
-	int snap_cnt;
+	uint64_t snap_cnt;
 	uint64_t snaps[0];
 };
 
@@ -136,13 +119,16 @@ struct cont_iv_prop {
 	uint64_t	cip_csum_server_verify;
 	uint64_t	cip_dedup;
 	uint64_t	cip_dedup_size;
+	uint64_t	cip_alloced_oid;
 	uint64_t	cip_redun_fac;
 	uint64_t	cip_redun_lvl;
 	uint64_t	cip_snap_max;
 	uint64_t	cip_compress;
 	uint64_t	cip_encrypt;
-
-	struct daos_acl	cip_acl;
+	struct daos_prop_co_roots	cip_roots;
+	struct daos_co_status		cip_co_status;
+	/* MUST be the last member */
+	struct daos_acl			cip_acl;
 };
 
 struct cont_iv_agg_eph {
@@ -167,6 +153,7 @@ struct cont_iv_key {
 	uuid_t		cont_uuid;
 	/* IV class id, to differentiate SNAP/CAPA/PROP IV */
 	uint32_t	class_id;
+	uint32_t	entry_size;
 };
 
 /*

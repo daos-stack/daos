@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main collective RPC routines.
@@ -125,9 +108,13 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 		if (grp_priv != NULL) {
 			grp_ref_taken = true;
 		} else {
-			D_ERROR("crt_grp_lookup_grpid: %s failed.\n",
-				co_hdr->coh_grpid);
-			D_GOTO(out, rc = -DER_INVAL);
+			/* the local SG does not match others SG, so let's
+			 * return GRPVER to retry until pool map is updated
+			 * or the pool is stopped.
+			 */
+			D_ERROR("crt_grp_lookup_grpid: %s failed: %d\n",
+				co_hdr->coh_grpid, -DER_GRPVER);
+			D_GOTO(out, rc = -DER_GRPVER);
 		}
 	}
 
@@ -519,14 +506,14 @@ corpc_del_child_rpc_locked(struct crt_rpc_priv *parent_rpc_priv,
 static inline void
 crt_corpc_fail_parent_rpc(struct crt_rpc_priv *parent_rpc_priv, int failed_rc)
 {
-	d_rank_t	 myrank;
-
-	crt_group_rank(NULL, &myrank);
-
 	parent_rpc_priv->crp_reply_hdr.cch_rc = failed_rc;
 	parent_rpc_priv->crp_corpc_info->co_rc = failed_rc;
-	D_ERROR("myrank %d, set parent rpc (opc %#x) as failed, rc: %d.\n",
-		myrank, parent_rpc_priv->crp_pub.cr_opc, failed_rc);
+	if (failed_rc != -DER_GRPVER)
+		RPC_ERROR(parent_rpc_priv,
+			  "Failing CORPC with rc=%d\n", failed_rc);
+	else
+		RPC_TRACE(DB_NET, parent_rpc_priv,
+			  "Failing CORPC with rc=%d\n", failed_rc);
 }
 
 static inline void
@@ -649,7 +636,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 	/* propagate failure rc to parent */
 	if (child_rpc_priv->crp_reply_hdr.cch_rc != 0)
 		crt_corpc_fail_parent_rpc(parent_rpc_priv,
-			child_rpc_priv->crp_reply_hdr.cch_rc);
+					  child_rpc_priv->crp_reply_hdr.cch_rc);
 
 	co_ops = opc_info->coi_co_ops;
 	if (co_ops == NULL) {
@@ -742,10 +729,14 @@ aggregate_done:
 	D_SPIN_UNLOCK(&parent_rpc_priv->crp_lock);
 
 	if (req_done) {
+		bool am_root;
+
 		RPC_ADDREF(parent_rpc_priv);
 		crt_corpc_complete(parent_rpc_priv);
 
-		if (co_ops && co_ops->co_post_reply)
+		am_root = (co_info->co_grp_priv->gp_self ==
+			   co_info->co_root);
+		if (co_ops && co_ops->co_post_reply && !am_root)
 			co_ops->co_post_reply(&parent_rpc_priv->crp_pub,
 					co_info->co_priv);
 		RPC_DECREF(parent_rpc_priv);
@@ -927,7 +918,6 @@ forward_done:
 
 		rc = 0;
 	}
-
 
 out:
 	if (children_rank_list != NULL)

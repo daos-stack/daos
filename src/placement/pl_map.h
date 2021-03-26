@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos_sr
@@ -43,6 +26,8 @@ struct pl_map_ops {
 			struct pl_map **mapp);
 	/** destroy a placement map */
 	void (*o_destroy)(struct pl_map *map);
+	/** query placement map attributes */
+	int (*o_query)(struct pl_map *map, struct pl_map_attr *attr);
 	/** print debug information of a placement map */
 	void (*o_print)(struct pl_map *map);
 
@@ -74,7 +59,6 @@ struct pl_map_ops {
 				  uint32_t *tgt_rank,
 				  uint32_t *shard_id,
 				  unsigned int array_size);
-
 };
 
 unsigned int pl_obj_shard2grp_head(struct daos_obj_shard_md *shard_md,
@@ -96,6 +80,10 @@ struct failed_shard {
 	uint32_t        fs_tgt_id;
 	uint8_t         fs_status;
 };
+
+#define	DF_FAILEDSHARD "shard_idx: %d, fseq: %d, tgt_id: %d, status: %d"
+#define	DP_FAILEDSHARD(x) (x).fs_shard_idx, (x).fs_fseq, \
+			(x).fs_tgt_id, (x).fs_status
 
 void
 remap_add_one(d_list_t *remap_list, struct failed_shard *f_new);
@@ -131,9 +119,9 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		       bool spare_avail, d_list_t **current,
-		       d_list_t *remap_list, bool for_reint,
+		       d_list_t *remap_list, uint32_t allow_status,
 		       struct failed_shard *f_shard,
-		       struct pl_obj_shard *l_shard);
+		       struct pl_obj_shard *l_shard, bool *extending);
 
 int
 spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,

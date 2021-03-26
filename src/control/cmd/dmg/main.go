@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -38,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -60,13 +44,14 @@ type (
 	}
 
 	jsonOutputter interface {
-		enableJsonOutput(bool, io.Writer)
+		enableJsonOutput(bool, io.Writer, *atm.Bool)
 		jsonOutputEnabled() bool
 		outputJSON(interface{}, error) error
 		errorJSON(error) error
 	}
 
 	jsonOutputCmd struct {
+		wroteJSON      *atm.Bool
 		writer         io.Writer
 		shouldEmitJSON bool
 	}
@@ -80,16 +65,17 @@ func (cmd *hostListCmd) setHostList(hl []string) {
 	cmd.hostlist = hl
 }
 
-func (cmd *jsonOutputCmd) enableJsonOutput(emitJson bool, w io.Writer) {
+func (cmd *jsonOutputCmd) enableJsonOutput(emitJson bool, w io.Writer, wj *atm.Bool) {
 	cmd.shouldEmitJSON = emitJson
 	cmd.writer = w
+	cmd.wroteJSON = wj
 }
 
 func (cmd *jsonOutputCmd) jsonOutputEnabled() bool {
 	return cmd.shouldEmitJSON
 }
 
-func (cmd *jsonOutputCmd) outputJSON(in interface{}, cmdErr error) error {
+func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 	status := 0
 	var errStr *string
 	if cmdErr != nil {
@@ -111,11 +97,23 @@ func (cmd *jsonOutputCmd) outputJSON(in interface{}, cmdErr error) error {
 		return err
 	}
 
-	if _, err = cmd.writer.Write(append(data, []byte("\n")...)); err != nil {
+	if _, err = out.Write(append(data, []byte("\n")...)); err != nil {
 		return err
 	}
 
 	return cmdErr
+}
+
+func (cmd *jsonOutputCmd) outputJSON(in interface{}, cmdErr error) error {
+	if cmd.wroteJSON.IsTrue() {
+		return cmdErr
+	}
+	cmd.wroteJSON.SetTrue()
+	return outputJSON(cmd.writer, in, cmdErr)
+}
+
+func errorJSON(err error) error {
+	return outputJSON(os.Stdout, nil, err)
 }
 
 func (cmd *jsonOutputCmd) errorJSON(err error) error {
@@ -166,6 +164,7 @@ type cliOptions struct {
 	Pool           PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
 	Cont           ContCmd    `command:"cont" alias:"c" description:"Perform tasks related to DAOS containers"`
 	Version        versionCmd `command:"version" description:"Print dmg version"`
+	Telemetry      telemCmd   `command:"telemetry" description:"Perform telemetry operations"`
 	firmwareOption            // build with tag "firmware" to enable
 }
 
@@ -201,6 +200,7 @@ and access control settings, along with system wide operations.`
 }
 
 func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *logging.LeveledLogger) error {
+	var wroteJSON atm.Bool
 	p := flags.NewParser(opts, flags.Default)
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
@@ -222,10 +222,10 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 		}
 
 		if jsonCmd, ok := cmd.(jsonOutputter); ok {
-			jsonCmd.enableJsonOutput(opts.JSON, os.Stdout)
+			jsonCmd.enableJsonOutput(opts.JSON, os.Stdout, &wroteJSON)
 			if opts.JSON {
 				// disable output on stdout other than JSON
-				log.SetLevel(logging.LogLevelError)
+				log.ClearLevel(logging.LogLevelInfo)
 			}
 		}
 
@@ -240,8 +240,8 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			}
 			ctlCfg = control.DefaultConfig()
 		}
-		if opts.ConfigPath != "" {
-			log.Debugf("control config loaded from %s", opts.ConfigPath)
+		if ctlCfg.Path != "" {
+			log.Debugf("control config loaded from %s", ctlCfg.Path)
 		}
 
 		if opts.Insecure {
@@ -256,7 +256,9 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			ctlCmd.setInvoker(invoker)
 			if opts.HostList != "" {
 				if hlCmd, ok := cmd.(hostListSetter); ok {
-					hlCmd.setHostList(strings.Split(opts.HostList, ","))
+					hl := strings.Split(opts.HostList, ",")
+					hlCmd.setHostList(hl)
+					ctlCfg.HostList = hl
 				} else {
 					return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
 						control.UserConfigPath(), control.SystemConfigPath())
@@ -276,6 +278,9 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 	}
 
 	_, err := p.ParseArgs(args)
+	if opts.JSON && wroteJSON.IsFalse() {
+		return errorJSON(err)
+	}
 	return err
 }
 

@@ -1,27 +1,10 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import os
 import random
@@ -34,6 +17,7 @@ import security_test_base as secTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
 DENY_ACCESS = "-1001"
+
 
 class PoolSecurityTestBase(TestWithServers):
     # pylint: disable=no-member
@@ -49,12 +33,12 @@ class PoolSecurityTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a PoolSecurityTestBase object."""
-        super(PoolSecurityTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg = None
 
     def setUp(self):
         """Set up each test case."""
-        super(PoolSecurityTestBase, self).setUp()
+        super().setUp()
 
         # Setup the dmg command object - requires a server to be started
         self.dmg = self.get_dmg_command()
@@ -100,7 +84,7 @@ class PoolSecurityTestBase(TestWithServers):
         result = self.dmg.pool_get_acl(uuid)
 
         pool_permission_list = []
-        for line in result.stdout.splitlines():
+        for line in result.stdout_text.splitlines():
             if not line.startswith("A:"):
                 continue
             elif line.startswith("A::"):
@@ -148,16 +132,17 @@ class PoolSecurityTestBase(TestWithServers):
 
         """
         if expect.lower() == 'pass':
-            if result.exit_status != 0 or result.stderr != "":
+            if result.exit_status != 0 or result.stderr_text != "":
                 self.fail(
                     "##Test Fail on verify_daos_pool {}, expected Pass, but "
                     "Failed.".format(action))
             else:
                 self.log.info(
                     " =Test Passed on verify_daos_pool %s, Succeed.\n", action)
-        # Remove "and err_code not in result.stdout" on the next statement elif
-        # after DAOS-5635 resolved.
-        elif err_code not in result.stderr and err_code not in result.stdout:
+        # Remove "and err_code not in result.stdout_text" on the next statement
+        # elif after DAOS-5635 resolved.
+        elif (err_code not in result.stderr_text and
+                err_code not in result.stdout_text):
             self.fail(
                 "##Test Fail on verify_daos_pool {}, expected Failure of {}, "
                 "but Passed.".format(action, expect))
@@ -320,27 +305,27 @@ class PoolSecurityTestBase(TestWithServers):
 
         """
         permission = "none"
-        if perm_type is "attribute":
+        if perm_type == "attribute":
             permission = perm_action
-        elif perm_type is "property":
+        elif perm_type == "property":
             permission = perm_action.replace("r", "t")
             permission = permission.replace("w", "T")
-        elif perm_type is "acl":
+        elif perm_type == "acl":
             permission = perm_action.replace("r", "a")
             permission = permission.replace("w", "A")
-        elif perm_type is "ownership":
+        elif perm_type == "ownership":
             permission = perm_action.replace("w", "to")
             permission = permission.replace("r", "rwdTAa")
         else:
             self.fail(
                 "##In setup_container_acl_and_permission, unsupported "
-                "perm_type %s", perm_type)
+                "perm_type {}".format(perm_type))
         self.log.info(
             "At setup_container_acl_and_permission, setup %s, %s, %s, with %s",
             user_type, user_name, perm_type, permission)
         result = self.update_container_acl(
             secTestBase.acl_entry(user_type, user_name, permission))
-        if result.stderr is not "":
+        if result.stderr_text:
             self.fail(
                 "##setup_container_acl_and_permission, fail on "
                 "update_container_acl, expected Pass, but Failed.")
@@ -555,7 +540,7 @@ class PoolSecurityTestBase(TestWithServers):
 
         # (4)Verify the pool create status
         self.log.info("  (4)dmg.run() result=\n%s", self.dmg.result)
-        if "ERR" in self.dmg.result.stderr:
+        if "ERR" in self.dmg.result.stderr_text:
             self.fail("##(4)Unable to parse pool uuid and svc.")
 
         # (5)Get the pool's acl list

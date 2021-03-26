@@ -1,24 +1,8 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
 
 package main
 
@@ -82,7 +66,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
-			case "version":
+			case "version", "telemetry config", "telemetry run":
 				return
 			case "storage prepare":
 				testArgs = append(testArgs, "--force")
@@ -112,6 +96,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "--rank", "0"}...)
 			case "cont set-owner":
 				testArgs = append(testArgs, []string{"--user", "foo", "--pool", common.MockUUID(), "--cont", common.MockUUID()}...)
+			case "telemetry metrics list", "telemetry metrics query":
+				return // These commands query via http directly
 			}
 
 			// replace os.Stdout so that we can verify the generated output

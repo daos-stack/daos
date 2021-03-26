@@ -1,24 +1,7 @@
 /*
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_mgmt: Internal Declarations
@@ -34,7 +17,7 @@
 #include <daos/common.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/smd.h>
@@ -82,7 +65,8 @@ int ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in);
 int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 			d_rank_list_t *targets, size_t scm_size,
 			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
-			d_rank_list_t **svcp);
+			d_rank_list_t **svcp, int domains_nr,
+			uint32_t *domains);
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			 const char *group, uint32_t force);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
@@ -96,7 +80,8 @@ int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			     struct pool_target_id_list *reint_list);
 int ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			d_rank_list_t *rank_list, char *tgt_dev,
-			size_t scm_size, size_t nvme_size);
+			size_t scm_size, size_t nvme_size,
+			size_t domains_nr, uint32_t *domains);
 int ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			  daos_prop_t *prop, daos_prop_t **result);
 int ds_mgmt_pool_get_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
@@ -143,6 +128,7 @@ void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv);
+int ds_mgmt_tgt_create_post_reply(crt_rpc_t *rpc, void *priv);
 void ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc);
 int ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg);
 void ds_mgmt_hdlr_tgt_map_update(crt_rpc_t *rpc);

@@ -1,28 +1,11 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=pylint-too-many-lines
-from __future__ import print_function
+
 
 import ctypes
 import threading
@@ -45,15 +28,15 @@ else:
 
 DaosObjClass = enum.Enum(
     "DaosObjClass",
-    {key: value for key, value in pydaos_shim.__dict__.items()
+    {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("OC_")})
 
 DaosContPropEnum = enum.Enum(
     "DaosContPropEnum",
-    {key: value for key, value in pydaos_shim.__dict__.items()
+    {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("DAOS_PROP_")})
 
-class DaosPool(object):
+class DaosPool():
     """A python object representing a DAOS pool."""
 
     def __init__(self, context):
@@ -92,14 +75,10 @@ class DaosPool(object):
         c_info.pi_bits = ctypes.c_ulong(-1)
         func = self.context.get_function('connect-pool')
 
-        # phasing out the pool service rank list argument
-        # libdaos will query MS for up-to-date replica list
-        no_svcl = daos_cref.RankList(None, 0)
-
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
-            ret = func(self.uuid, self.group, ctypes.byref(no_svcl), c_flags,
+            ret = func(self.uuid, self.group, c_flags,
                        ctypes.byref(self.handle), ctypes.byref(c_info), None)
 
             if ret != 0:
@@ -110,7 +89,7 @@ class DaosPool(object):
                 self.connected = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(no_svcl), c_flags,
+            params = [self.uuid, self.group, c_flags,
                       ctypes.byref(self.handle), ctypes.byref(c_info), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
@@ -168,7 +147,7 @@ class DaosPool(object):
         c_glob = daos_cref.IOV()
         c_glob.iov_len = iov_len
         c_glob.iov_buf_len = buf_len
-        c_buf = ctypes.create_string_buffer(str(buf))
+        c_buf = ctypes.create_string_buffer(bytes(buf))
         c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
 
         local_handle = ctypes.c_uint64(0)
@@ -197,19 +176,14 @@ class DaosPool(object):
 
         func = self.context.get_function('exclude-target')
 
-        # phasing out the pool service rank list argument
-        no_svcl = daos_cref.RankList(None, 0)
-
         if cb_func is None:
-            ret = func(self.uuid, self.group, ctypes.byref(no_svcl), c_tgts,
-                       None)
+            ret = func(self.uuid, self.group, c_tgts, None)
             if ret != 0:
                 raise DaosApiError("Pool exclude returned non-zero. RC: {0}"
                                    .format(ret))
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(no_svcl),
-                      ctypes.byref(c_tgts), event]
+            params = [self.uuid, self.group, ctypes.byref(c_tgts), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,
@@ -239,19 +213,14 @@ class DaosPool(object):
             daos_cref.DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
         func = self.context.get_function("reint-target")
 
-        # phasing out the pool service rank list argument
-        no_svcl = daos_cref.RankList(None, 0)
-
         if cb_func is None:
-            ret = func(self.uuid, self.group, ctypes.byref(no_svcl),
-                       ctypes.byref(c_tgts), None)
+            ret = func(self.uuid, self.group, ctypes.byref(c_tgts), None)
             if ret != 0:
                 raise DaosApiError("Pool tgt_reint returned non-zero. RC: {0}"
                                    .format(ret))
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(no_svcl),
-                      ctypes.byref(c_tgts), event]
+            params = [self.uuid, self.group, ctypes.byref(c_tgts), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,
@@ -276,20 +245,15 @@ class DaosPool(object):
         c_tgts = ctypes.pointer(
             daos_cref.DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
 
-        # phasing out the pool service rank list argument
-        no_svcl = daos_cref.RankList(None, 0)
-
         func = self.context.get_function('kill-target')
         if cb_func is None:
-            ret = func(self.uuid, self.group, ctypes.byref(no_svcl),
-                       ctypes.byref(c_tgts), None)
+            ret = func(self.uuid, self.group, ctypes.byref(c_tgts), None)
             if ret != 0:
                 raise DaosApiError(
                     "Pool exclude_out returned non-zero. RC: {0}".format(ret))
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(no_svcl),
-                      ctypes.byref(c_tgts), event]
+            params = [self.uuid, self.group, ctypes.byref(c_tgts), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,
@@ -455,7 +419,7 @@ class DaosPool(object):
         values = ctypes.cast(att_values, ctypes.POINTER(ctypes.c_char_p))
 
         size_of_att_val = []
-        for key in data.keys():
+        for key in list(data.keys()):
             if data[key] is not None:
                 size_of_att_val.append(len(data[key]))
             else:
@@ -629,7 +593,7 @@ def get_object_class(item):
                 item, type(item)))
 
 
-class DaosObj(object):
+class DaosObj():
     """A class representing an object stored in a DAOS container."""
 
     def __init__(self, context, container, c_oid=None):
@@ -673,8 +637,12 @@ class DaosObj(object):
         else:
             obj_cls_int = get_object_class(objcls).value
 
-        func.restype = daos_cref.DaosObjId
-        self.c_oid = func(obj_cls_int, 0, 0)
+        self.c_oid = daos_cref.DaosObjId()
+        ret = func(self.container.coh, ctypes.byref(self.c_oid), 0, obj_cls_int,
+                   0, 0)
+        if ret != 0:
+            raise DaosApiError("Object generate oid returned non-zero. RC: {0} "
+                               .format(ret))
 
         if rank is not None:
             self.c_oid.hi |= rank << 24
@@ -743,7 +711,7 @@ class DaosObj(object):
             del self.tgt_rank_list[:]
             for i in range(0, shards):
                 self.tgt_rank_list.append(
-                    obj_layout_ptr[0].ol_shards[0][0].os_shard_data[i].sd_rank)
+                    obj_layout_ptr[0].ol_shards[0][0].os_shard_loc[i].sd_rank)
         else:
             raise DaosApiError("get_layout returned. RC: {0}".format(ret))
 
@@ -887,7 +855,7 @@ class DaosObj(object):
             thread.start()
 
 
-class IORequest(object):
+class IORequest():
     """Python object that centralizes details about an I/O type.
 
     Type is either 1 (single) or 2 (array)
@@ -1311,14 +1279,14 @@ class DaosContProperties(ctypes.Structure):
         # input variables which is used
         # to set appropriate
         # container properties.
-        super(DaosContProperties, self).__init__()
-        self.type = "Unknown"
+        super().__init__()
+        self.type = bytes("Unknown", "utf-8")
         self.enable_chksum = False
         self.srv_verify = False
         self.chksum_type = ctypes.c_uint64(100)
         self.chunk_size = ctypes.c_uint64(0)
 
-class DaosInputParams(object):
+class DaosInputParams():
     # pylint: disable=too-few-public-methods
     """ This is a helper python method
     which can be used to pack input
@@ -1326,7 +1294,7 @@ class DaosInputParams(object):
     (eg: container or pool (future)).
     """
     def __init__(self):
-        super(DaosInputParams, self).__init__()
+        super().__init__()
         # Get the input params for setting
         # container properties for
         # create method.
@@ -1343,7 +1311,8 @@ class DaosInputParams(object):
         """
         return self.co_prop
 
-class DaosContainer(object):
+class DaosContainer():
+    # pylint: disable=too-many-public-methods
     """A python object representing a DAOS container."""
 
     def __init__(self, context):
@@ -1697,7 +1666,7 @@ class DaosContainer(object):
         # strings as the data)
         c_values = []
         for item in datalist:
-            c_values.append((ctypes.create_string_buffer(item), len(item)+1))
+            c_values.append((ctypes.create_string_buffer(item), len(item) + 1))
         c_dkey = ctypes.create_string_buffer(dkey)
         c_akey = ctypes.create_string_buffer(akey)
 
@@ -1876,7 +1845,7 @@ class DaosContainer(object):
         c_glob = daos_cref.IOV()
         c_glob.iov_len = iov_len
         c_glob.iov_buf_len = buf_len
-        c_buf = ctypes.create_string_buffer(str(buf))
+        c_buf = ctypes.create_string_buffer(bytes(buf))
         c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
 
         local_handle = ctypes.c_uint64(0)
@@ -1958,7 +1927,7 @@ class DaosContainer(object):
         values = ctypes.cast(att_values, ctypes.POINTER(ctypes.c_char_p))
 
         size_of_att_val = []
-        for key in data.keys():
+        for key in list(data.keys()):
             if data[key] is not None:
                 size_of_att_val.append(len(data[key]))
             else:
@@ -2072,7 +2041,7 @@ class DaosContainer(object):
             thread.start()
 
 
-class DaosSnapshot(object):
+class DaosSnapshot():
     """A python object that can represent a DAOS snapshot.
 
     We do not save the coh in the snapshot since it is different each time the
@@ -2170,7 +2139,7 @@ class DaosSnapshot(object):
             raise Exception("Failed to destroy the snapshot. RC: {0}"
                             .format(retcode))
 
-class DaosContext(object):
+class DaosContext():
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
 
@@ -2213,7 +2182,7 @@ class DaosContext(object):
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'exclude-target':  self.libdaos.daos_pool_tgt_exclude,
             'fetch-obj':       self.libdaos.daos_obj_fetch,
-            'generate-oid':    self.libtest.dts_oid_gen,
+            'generate-oid':    self.libdaos.daos_obj_generate_oid,
             'get-cont-attr':   self.libdaos.daos_cont_get_attr,
             'get-pool-attr':   self.libdaos.daos_pool_get_attr,
             'get-layout':      self.libdaos.daos_obj_layout_get,
@@ -2285,10 +2254,10 @@ class DaosLog:
         caller_func = sys._getframe(1).f_back.f_code.co_name
         filename = os.path.basename(caller.filename)
 
-        c_filename = ctypes.create_string_buffer(filename)
+        c_filename = ctypes.create_string_buffer(filename.encode('utf-8'))
         c_line = ctypes.c_int(caller.lineno)
-        c_msg = ctypes.create_string_buffer(msg)
-        c_caller_func = ctypes.create_string_buffer(caller_func)
+        c_msg = ctypes.create_string_buffer(msg.encode('utf-8'))
+        c_caller_func = ctypes.create_string_buffer(caller_func.encode('utf-8'))
         c_level = ctypes.c_uint64(level)
 
         func(c_msg, c_filename, c_caller_func, c_line, c_level)

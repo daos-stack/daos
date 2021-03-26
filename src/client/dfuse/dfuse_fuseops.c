@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <fuse3/fuse_lowlevel.h>
@@ -85,7 +68,8 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
 
-	DFUSE_TRA_INFO(fs_handle, "Capability supported %#x", conn->capable);
+	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x",
+		       conn->capable);
 
 	dfuse_show_flags(fs_handle, conn->capable);
 
@@ -93,6 +77,9 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	if (fs_handle->dpi_info->di_caching)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+
+	conn->want |= FUSE_CAP_READDIRPLUS;
+	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
 
 	dfuse_show_flags(fs_handle, conn->want);
 
@@ -385,41 +372,38 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
-/*
- * Implement readdir without a opendir/closedir pair.  This works perfectly
- * well, but adding (open|close)dir would allow us to cache the inode_entry
- * between calls which would help performance, and may be necessary later on
- * to support directories which require multiple calls to readdir() to return
- * all entries.
+/* Handle readdir and readdirplus slightly differently, the presence of the
+ * opendir callback will mean fi->fh is set for dfs files but not containers
+ * or pools to use this fact to avoid a hash table lookup on the inode.
  */
 static void
 df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	      struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*inode;
-	d_list_t			*rlink;
-	int				rc;
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx", ino);
-		D_GOTO(err, rc = ENOENT);
+	if (oh == NULL) {
+		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
+		return;
 	}
 
-	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	dfuse_cb_readdir(req, oh, size, offset, false);
+}
 
-	if (!inode->ie_dfs->dfs_ops->readdir)
-		D_GOTO(decref, rc = ENOTSUP);
+static void
+df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
+		  struct fuse_file_info *fi)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 
-	inode->ie_dfs->dfs_ops->readdir(req, inode, size, offset, fi);
+	if (oh == NULL) {
+		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
+		return;
+	}
 
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	return;
-decref:
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	dfuse_cb_readdir(req, oh, size, offset, true);
 }
 
 void
@@ -460,6 +444,12 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	struct dfuse_inode_entry	*inode;
 	d_list_t			*rlink;
 	int				rc;
+
+	/* Don't allow setting of uid/gid extended attribute */
+	if (strncmp(name, DFUSE_XATTR_PREFIX,
+		    sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
+		D_GOTO(err, rc = EPERM);
+	}
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -518,6 +508,15 @@ df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 	struct dfuse_inode_entry	*inode;
 	d_list_t			*rlink;
 	int				rc;
+
+	/* Don't allow removing of dfuse extended attribute.  This will return
+	 * regardless of it the attribute exists or not, but the alternative
+	 * is a round-trip to check, so this seems like the best option here.
+	 */
+	if (strncmp(name, DFUSE_XATTR_PREFIX,
+		    sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
+		D_GOTO(err, rc = EPERM);
+	}
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -665,7 +664,6 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.releasedir	= dfuse_cb_releasedir,
 	.getattr	= dfuse_cb_getattr,
 	.unlink		= dfuse_cb_unlink,
-	.readdir	= dfuse_cb_readdir,
 	.create		= dfuse_cb_create,
 	.rename		= dfuse_cb_rename,
 	.symlink	= dfuse_cb_symlink,
@@ -707,6 +705,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->unlink	= df_ll_unlink;
 	fuse_ops->rmdir		= df_ll_unlink;
 	fuse_ops->readdir	= df_ll_readdir;
+	fuse_ops->readdirplus	= df_ll_readdirplus;
 	fuse_ops->create	= df_ll_create;
 	fuse_ops->mknod		= df_ll_mknod;
 	fuse_ops->rename	= df_ll_rename;

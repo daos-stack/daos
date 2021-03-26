@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -128,7 +111,7 @@ dc_pool_hdl_link(struct dc_pool *pool)
 	daos_hhash_link_insert(&pool->dp_hlink, DAOS_HTYPE_POOL);
 }
 
-static void
+void
 dc_pool_hdl_unlink(struct dc_pool *pool)
 {
 	daos_hhash_link_delete(&pool->dp_hlink);
@@ -185,7 +168,7 @@ failed:
 }
 
 /* Choose a pool service replica rank. If the rsvc module indicates
- * DER_NOTREPLICA, attempt to refresh the list by querying the MS.
+ * DER_NOTREPLICA, (clients only) try to refresh the list by querying the MS.
  */
 int
 dc_pool_choose_svc_rank(const uuid_t puuid, struct rsvc_client *cli,
@@ -199,7 +182,7 @@ dc_pool_choose_svc_rank(const uuid_t puuid, struct rsvc_client *cli,
 		D_MUTEX_LOCK(cli_lock);
 choose:
 	rc = rsvc_client_choose(cli, ep);
-	if (rc == -DER_NOTREPLICA) {
+	if ((rc == -DER_NOTREPLICA) && !sys->sy_server) {
 		d_rank_list_t	*new_ranklist = NULL;
 
 		/* Query MS for replica ranks. Not under client lock. */
@@ -207,8 +190,8 @@ choose:
 			D_MUTEX_UNLOCK(cli_lock);
 		rc = dc_mgmt_get_pool_svc_ranks(sys, puuid, &new_ranklist);
 		if (rc) {
-			D_ERROR(DF_UUID ": dc_mgmt_get_pool_svc_ranks() "
-				"failed, " DF_RC "\n", DP_UUID(puuid),
+			D_ERROR(DF_UUID": dc_mgmt_get_pool_svc_ranks() "
+				"failed, "DF_RC"\n", DP_UUID(puuid),
 				DP_RC(rc));
 			return rc;
 		}
@@ -430,8 +413,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 	}
 
 	/* add pool to hhash */
-	dc_pool_hdl_link(pool);
-	dc_pool2hdl(pool, arg->hdlp);
+	dc_pool_hdl_link(pool); /* +1 ref */
+	dc_pool2hdl(pool, arg->hdlp); /* +1 ref */
 
 	D_DEBUG(DF_DSMC, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID
 		" master\n", DP_UUID(pool->dp_pool), arg->hdlp->cookie,
@@ -440,6 +423,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
+	/* Ensure credential memory is wiped clean */
+	explicit_bzero(pci->pci_cred.iov_buf, pci->pci_cred.iov_buf_len);
 	daos_iov_free(&pci->pci_cred);
 	if (put_pool)
 		dc_pool_put(pool);
@@ -508,7 +493,7 @@ dc_pool_connect(tse_task_t *task)
 		/** sy_info.crt_ctx_share_addr */
 		/** sy_info.crt_timeout */
 
-		rc = rsvc_client_init(&pool->dp_client, args->svc);
+		rc = rsvc_client_init(&pool->dp_client, NULL);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 
@@ -567,16 +552,13 @@ dc_pool_connect(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
 
-	/** send the request */
-	rc = daos_rpc_send(rpc, task);
-	if (rc != 0)
-		D_GOTO(out_bulk, rc);
-
-	return rc;
+	return daos_rpc_send(rpc, task);
 
 out_bulk:
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
 out_cred:
+	/* Ensure credential memory is wiped clean */
+	explicit_bzero(pci->pci_cred.iov_buf, pci->pci_cred.iov_buf_len);
 	daos_iov_free(&pci->pci_cred);
 out_req:
 	crt_req_decref(rpc);
@@ -722,12 +704,7 @@ dc_pool_disconnect(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	/** send the request */
-	rc = daos_rpc_send(rpc, task);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	return rc;
+	return daos_rpc_send(rpc, task);
 
 out_rpc:
 	crt_req_decref(rpc);
@@ -967,8 +944,8 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 		D_GOTO(out, rc);
 
 	/* add pool to hash */
-	dc_pool_hdl_link(pool);
-	dc_pool2hdl(pool, poh);
+	dc_pool_hdl_link(pool); /* +1 ref */
+	dc_pool2hdl(pool, poh); /* +1 ref */
 
 	D_DEBUG(DF_DSMC, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID
 		" slave\n", DP_UUID(pool->dp_pool), poh->cookie,
@@ -1113,7 +1090,8 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 				DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
 		}
-		rc = rsvc_client_init(&state->client, args->svc);
+		rc = rsvc_client_init(&state->client,
+				      state->sys->sy_server ? args->svc : NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
 				DP_UUID(args->uuid), rc);
@@ -1144,8 +1122,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	if (rc) {
 		D_ERROR(DF_UUID": pool_target_addr_list_alloc failed, rc %d.\n",
 			DP_UUID(args->uuid), rc);
-		crt_req_decref(rpc);
-		D_GOTO(out_client, rc);
+		D_GOTO(out_rpc, rc);
 	}
 
 	for (i = 0; i < args->tgts->tl_nr; i++) {
@@ -1160,19 +1137,14 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	rc = tse_task_register_comp_cb(task, pool_tgt_update_cp, &rpc,
 				       sizeof(rpc));
 	if (rc != 0)
-		D_GOTO(out_rpc, rc);
+		D_GOTO(out_list, rc);
 
-	/** send the request */
-	rc = daos_rpc_send(rpc, task);
+	return daos_rpc_send(rpc, task);
 
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	return rc;
-
-out_rpc:
+out_list:
 	pool_target_addr_list_free(&list);
 	crt_req_decref(rpc);
+out_rpc:
 	crt_req_decref(rpc);
 out_client:
 	rsvc_client_fini(&state->client);
@@ -1370,12 +1342,7 @@ dc_pool_query(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
 
-	/** send the request */
-	rc = daos_rpc_send(rpc, task);
-	if (rc != 0)
-		D_GOTO(out_bulk, rc);
-
-	return rc;
+	return daos_rpc_send(rpc, task);
 
 out_bulk:
 	map_bulk_destroy(in->pqi_map_bulk, map_buf);
@@ -1473,7 +1440,7 @@ dc_pool_list_cont(tse_task_t *task)
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_LIST_CONT, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool list cont rpc: "
-			DF_RC "\n",
+			DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
 		D_GOTO(out_pool, rc);
 	}
@@ -1517,12 +1484,8 @@ dc_pool_list_cont(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
 
-	/** send the request */
-	rc = daos_rpc_send(rpc, task);
-	if (rc != 0)
-		D_GOTO(out_bulk, rc);
+	return daos_rpc_send(rpc, task);
 
-	return rc;
 out_bulk:
 	if (in->plci_ncont > 0)
 		list_cont_bulk_destroy(in->plci_cont_bulk);
@@ -1648,7 +1611,7 @@ dc_pool_query_target(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool tgt info rpc: %d\n",
 			DP_UUID(pool->dp_pool), rc);
-		D_GOTO(out_pool, rc);
+		 goto out_pool;
 	}
 
 	in = crt_req_get(rpc);
@@ -1671,12 +1634,7 @@ dc_pool_query_target(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	/** send the request */
-	rc = daos_rpc_send(rpc, task);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	return rc;
+	return daos_rpc_send(rpc, task);
 
 out_rpc:
 	crt_req_decref(rpc);
@@ -1686,7 +1644,6 @@ out_pool:
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
-
 }
 
 struct pool_req_arg {
@@ -1861,13 +1818,8 @@ dc_pool_list_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.pra_rpc);
-	rc = daos_rpc_send(cb_args.pra_rpc, task);
-	if (rc != 0) {
-		pool_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	return daos_rpc_send(cb_args.pra_rpc, task);
 
-	return rc;
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to list pool attributes: "DF_RC"\n",
@@ -2018,13 +1970,8 @@ dc_pool_get_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.pra_rpc);
-	rc = daos_rpc_send(cb_args.pra_rpc, task);
-	if (rc != 0) {
-		pool_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	return daos_rpc_send(cb_args.pra_rpc, task);
 
-	return rc;
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to get pool attributes: "DF_RC"\n", DP_RC(rc));
@@ -2075,13 +2022,8 @@ dc_pool_set_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.pra_rpc);
-	rc = daos_rpc_send(cb_args.pra_rpc, task);
-	if (rc != 0) {
-		pool_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	return daos_rpc_send(cb_args.pra_rpc, task);
 
-	return rc;
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to set pool attributes: "DF_RC"\n", DP_RC(rc));
@@ -2116,23 +2058,22 @@ dc_pool_del_attr(tse_task_t *task)
 	in->padi_count = args->n;
 	rc = attr_bulk_create(args->n, (char **)args->names, NULL, NULL,
 			      daos_task2ctx(task), CRT_BULK_RO, &in->padi_bulk);
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_RPC, &cb_args);
+		D_GOTO(out, rc);
+	}
 
 	cb_args.pra_bulk = in->padi_bulk;
 	rc = tse_task_register_comp_cb(task, pool_req_complete,
 				       &cb_args, sizeof(cb_args));
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	if (rc != 0) {
+		pool_req_cleanup(CLEANUP_BULK, &cb_args);
+		D_GOTO(out, rc);
+	}
 
 	crt_req_addref(cb_args.pra_rpc);
-	rc = daos_rpc_send(cb_args.pra_rpc, task);
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	return daos_rpc_send(cb_args.pra_rpc, task);
 
-	return rc;
-cleanup:
-	pool_req_cleanup(CLEANUP_BULK, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to del pool attributes: "DF_RC"\n", DP_RC(rc));
@@ -2201,11 +2142,12 @@ dc_pool_stop_svc(tse_task_t *task)
 			DP_UUID(pool->dp_pool), DP_RC(rc));
 		goto out_pool;
 	}
+
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_SVC_STOP, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create POOL_SVC_STOP RPC: %d\n",
 			DP_UUID(pool->dp_pool), rc);
-		D_GOTO(out_pool, rc);
+		goto out_pool;
 	}
 
 	in = crt_req_get(rpc);
@@ -2221,11 +2163,7 @@ dc_pool_stop_svc(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	rc = daos_rpc_send(rpc, task);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	return rc;
+	return daos_rpc_send(rpc, task);
 
 out_rpc:
 	crt_req_decref(rpc);

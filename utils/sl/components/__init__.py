@@ -178,7 +178,7 @@ def define_mercury(reqs):
                           '-DMERCURY_USE_SELF_FORWARD=ON '
                           '-DMERCURY_ENABLE_VERBOSE_ERROR=ON '
                           + MERCURY_DEBUG +
-                          '-DBUILD_TESTING=ON '
+                          '-DBUILD_TESTING=OFF '
                           '-DNA_USE_OFI=ON '
                           '-DBUILD_DOCUMENTATION=OFF '
                           '-DBUILD_SHARED_LIBS=ON ../mercury '
@@ -209,9 +209,6 @@ def define_common(reqs):
     reqs.define('python34_devel', headers=['python3.4m/Python.h'],
                 package='python34-devel')
 
-    reqs.define('python27_devel', headers=['python2.7/Python.h'],
-                package='python-devel')
-
     reqs.define('libelf', headers=['libelf.h'], package='elfutils-libelf-devel')
 
     reqs.define('tbbmalloc', libs=['tbbmalloc_proxy'], package='tbb-devel')
@@ -219,7 +216,7 @@ def define_common(reqs):
     reqs.define('jemalloc', libs=['jemalloc'], package='jemalloc-devel')
 
     reqs.define('boost', headers=['boost/preprocessor.hpp'],
-                package='boost-devel')
+                package='boost-python36-devel')
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
@@ -287,7 +284,8 @@ def define_components(reqs):
                 commands=['git clean -dxf',
                           './autogen.sh',
                           './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
-                          ' --enable-valgrind',
+                          ' --enable-valgrind'
+                          ' --enable-stack-unwind',
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],
                 requires=['valgrind_devel'],
@@ -300,11 +298,14 @@ def define_components(reqs):
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['./configure --prefix="$SPDK_PREFIX"' \
-                          ' --disable-tests --without-vhost --without-crypto' \
-                          ' --without-pmdk --without-vpp --without-rbd' \
-                          ' --with-rdma --with-shared' \
-                          ' --without-iscsi-initiator --without-isal' \
+                commands=['cd dpdk; '                            \
+                          'git fetch; '                          \
+                          'git checkout origin/spdk-19.11.6',    \
+                          './configure --prefix="$SPDK_PREFIX"'                \
+                          ' --disable-tests --without-vhost --without-crypto'  \
+                          ' --without-pmdk --without-vpp --without-rbd'        \
+                          ' --with-rdma --with-shared'                         \
+                          ' --without-iscsi-initiator --without-isal'          \
                           ' --without-vtune', 'make $JOBS_OPT', 'make install',
                           'cp dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
@@ -312,8 +313,8 @@ def define_components(reqs):
                 libs=['rte_bus_pci'], patch_rpath=['lib'])
 
     url = 'https://github.com/protobuf-c/protobuf-c/releases/download/' \
-        'v1.3.0/protobuf-c-1.3.0.tar.gz'
-    web_retriever = WebRetriever(url, "08804f8bdbb3d6d44c2ec9e71e47ef6f")
+        'v1.3.3/protobuf-c-1.3.3.tar.gz'
+    web_retriever = WebRetriever(url, "dabc05a5f11c21b96d8d6db4153f5343")
     reqs.define('protobufc',
                 retriever=web_retriever,
                 commands=['./configure --prefix=$PROTOBUFC_PREFIX '

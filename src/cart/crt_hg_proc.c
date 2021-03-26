@@ -1,24 +1,7 @@
 /*
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main input/output
@@ -27,8 +10,6 @@
 #define D_LOGFAC	DD_FAC(hg)
 
 #include "crt_internal.h"
-#include <gurt/mem.h>
-
 
 #define CRT_PROC_NULL (NULL)
 #define CRT_PROC_TYPE_FUNC(type)				\
@@ -36,12 +17,12 @@
 	{							\
 		crt_proc_op_t	 proc_op;			\
 		type		*buf;				\
-		int		 rc = 0;			\
+		int		 rc;				\
 		rc = crt_proc_get_op(proc, &proc_op);		\
 		if (unlikely(rc))				\
-			return -DER_HG;				\
-		if (proc_op == CRT_PROC_FREE)			\
 			return rc;				\
+		if (proc_op == CRT_PROC_FREE)			\
+			return 0;				\
 		buf = hg_proc_save_ptr(proc, sizeof(*buf));	\
 		switch (proc_op) {				\
 		case CRT_PROC_ENCODE:				\
@@ -66,6 +47,7 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 		D_ERROR("Proc is not initilalized.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
 	if (unlikely(proc_op == NULL)) {
 		D_ERROR("invalid parameter - NULL proc_op.\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -96,27 +78,28 @@ crt_proc_memcpy(crt_proc_t proc, void *data, size_t data_size)
 {
 	crt_proc_op_t	 proc_op;
 	void		*buf;
-	int		 rc = 0;
+	int		 rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (unlikely(rc))
-		return -DER_HG;
+		D_GOTO(out, rc);
 
 	if (proc_op == CRT_PROC_FREE)
-		return rc;
+		D_GOTO(out, rc = 0);
 
 	buf = hg_proc_save_ptr(proc, data_size);
 	switch (proc_op) {
 	case CRT_PROC_ENCODE:
-		d_memcpy(buf, data, data_size);
+		memcpy(buf, data, data_size);
 		break;
 	case CRT_PROC_DECODE:
-		d_memcpy(data, buf, data_size);
+		memcpy(data, buf, data_size);
 		break;
 	default:
 		break;
 	}
 
+out:
 	return rc;
 }
 
@@ -173,7 +156,7 @@ crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 	crt_proc_op_t	 proc_op;
 	uint32_t	*buf;
 	uint32_t	 nr;
-	int		 rc = 0;
+	int		 rc;
 
 	if (unlikely(data == NULL)) {
 		D_ERROR("Invalid parameter data: %p.\n", data);
@@ -182,7 +165,7 @@ crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (unlikely(rc))
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc);
 
 	switch (proc_op) {
 	case CRT_PROC_ENCODE:
@@ -230,16 +213,14 @@ int
 crt_proc_d_iov_t(crt_proc_t proc, d_iov_t *div)
 {
 	crt_proc_op_t	proc_op;
-	int		rc = 0;
+	int		rc;
 
-	if (unlikely(div == NULL)) {
-		D_ERROR("invalid parameter, NULL div.\n");
+	if (unlikely(div == NULL))
 		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (unlikely(rc))
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc);
 
 	if (proc_op == CRT_PROC_FREE) {
 		div->iov_buf = NULL;
@@ -292,7 +273,7 @@ crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (unlikely(rc))
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(out, rc);
 
 	rc = crt_proc_crt_group_id_t(proc, &hdr->coh_grpid);
 	if (unlikely(rc))
@@ -639,6 +620,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 	struct crt_rpc_priv	*rpc_priv;
 	crt_proc_op_t		 proc_op;
 	int			 rc = 0;
+	int			 rc2;
 
 	if (proc == CRT_PROC_NULL)
 		D_GOTO(out, rc = -DER_INVAL);
@@ -694,10 +676,19 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 				crt_hlct_sync(hdr->cch_hlc);
 			}
 		}
-		if (rpc_priv->crp_reply_hdr.cch_rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "RPC failed to execute on target. error code: %d\n",
-				  rpc_priv->crp_reply_hdr.cch_rc);
+
+		rc2 = rpc_priv->crp_reply_hdr.cch_rc;
+		if (rc2 != 0) {
+
+			if (rpc_priv->crp_reply_hdr.cch_rc != -DER_GRPVER)
+				RPC_ERROR(rpc_priv,
+					  "RPC failed to execute on target. "
+					  "error code: "DF_RC"\n", DP_RC(rc2));
+			else
+				RPC_TRACE(DB_NET, rpc_priv,
+					  "RPC failed to execute on target. "
+					  "error code: "DF_RC"\n", DP_RC(rc2));
+
 			D_GOTO(out, rc);
 		}
 	}

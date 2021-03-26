@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
 #include <spdk/env.h>
@@ -773,8 +756,11 @@ dma_rw(struct bio_desc *biod, bool prep)
 	}
 
 	if (xs_ctxt->bxc_tgt_id == -1) {
+		int	rc;
+
 		D_DEBUG(DB_IO, "Self poll completion, blob:%p\n", blob);
-		xs_poll_completion(xs_ctxt, &biod->bd_inflights);
+		rc = xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
+		D_ASSERT(rc == 0);
 	} else {
 		biod->bd_dma_issued = 1;
 		if (biod->bd_inflights != 0)
@@ -798,6 +784,14 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		 * drain controller, however, test shows calling a persistent
 		 * copy and drain controller here is faster.
 		 */
+		if (DAOS_ON_VALGRIND && pmemobj_tx_stage() == TX_STAGE_WORK) {
+			/** Ignore the update to what is reserved block.
+			 *  Ordinarily, this wouldn't be inside a transaction
+			 *  but in MVCC tests, it can happen.
+			 */
+			umem_tx_xadd_ptr(umem, media_addr, n,
+					 POBJ_XADD_NO_SNAPSHOT);
+		}
 		pmemobj_memcpy_persist(umem->umm_pool, media_addr, addr, n);
 	} else {
 		if (biod->bd_update)
@@ -830,6 +824,12 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 			D_ERROR("Invalid iov[%d] "DF_U64"/"DF_U64" %d\n",
 				arg->ca_iov_idx, arg->ca_iov_off,
 				buf_len, biod->bd_update);
+			return -DER_INVAL;
+		}
+
+		if (iov->iov_buf == NULL) {
+			D_ERROR("Invalid iov[%d], iov_buf is NULL\n",
+				arg->ca_iov_idx);
 			return -DER_INVAL;
 		}
 

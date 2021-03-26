@@ -1,24 +1,7 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -26,8 +9,10 @@ package control
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log"
+	"log/syslog"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize/english"
@@ -42,6 +27,7 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -62,8 +48,8 @@ type sysRequest struct {
 }
 
 type sysResponse struct {
-	AbsentRanks system.RankSet
-	AbsentHosts hostlist.HostSet
+	AbsentRanks system.RankSet   `json:"-"`
+	AbsentHosts hostlist.HostSet `json:"-"`
 }
 
 func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
@@ -81,23 +67,24 @@ func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	return nil
 }
 
-func (resp *sysResponse) DisplayAbsentHostsRanks() string {
-	switch {
-	case resp.AbsentHosts.Count() > 0:
-		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(resp.AbsentHosts.Count(), "host", "hosts"),
-			resp.AbsentHosts.String())
-	case resp.AbsentRanks.Count() > 0:
-		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(resp.AbsentRanks.Count(), "rank", "ranks"),
-			resp.AbsentRanks.String())
-	default:
-		return ""
+func (resp *sysResponse) getAbsentHostsRanksErrors() error {
+	var errMsgs []string
+
+	if resp.AbsentHosts.Count() > 0 {
+		errMsgs = append(errMsgs, "non-existent hosts "+resp.AbsentHosts.String())
 	}
+	if resp.AbsentRanks.Count() > 0 {
+		errMsgs = append(errMsgs, "non-existent ranks "+resp.AbsentRanks.String())
+	}
+
+	if len(errMsgs) > 0 {
+		return errors.New(strings.Join(errMsgs, ", "))
+	}
+
+	return nil
 }
 
 // SystemJoinReq contains the inputs for the system join request.
-// TODO: Unify this with system.JoinRequest
 type SystemJoinReq struct {
 	unaryRequest
 	msRequest
@@ -173,13 +160,13 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 type SystemNotifyReq struct {
 	unaryRequest
 	msRequest
-	Event    events.Event
+	Event    *events.RASEvent
 	Sequence uint64
 }
 
-// toClusterEventReq converts the system notify request to a cluster events
+// toClusterEventReq converts the system notify request to a cluster event
 // request. Resolve control address to a hostname if possible.
-func (req *SystemNotifyReq) toClusterEventReq() (*mgmtpb.ClusterEventReq, error) {
+func (req *SystemNotifyReq) toClusterEventReq() (*sharedpb.ClusterEventReq, error) {
 	if req.Event == nil {
 		return nil, errors.New("nil event in request")
 	}
@@ -189,10 +176,7 @@ func (req *SystemNotifyReq) toClusterEventReq() (*mgmtpb.ClusterEventReq, error)
 		return nil, errors.Wrap(err, "convert event to proto")
 	}
 
-	return &mgmtpb.ClusterEventReq{
-		Sequence: req.Sequence,
-		Event:    &mgmtpb.ClusterEventReq_Ras{Ras: pbRASEvent},
-	}, nil
+	return &sharedpb.ClusterEventReq{Sequence: req.Sequence, Event: pbRASEvent}, nil
 }
 
 // SystemNotifyResp contains the request response.
@@ -211,10 +195,9 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 		return nil, errors.New("nil rpc client")
 	}
 
-	rpcClient.Debugf("DAOS system notify request: %+v, event: %+v", req, req.Event)
 	pbReq, err := req.toClusterEventReq()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "decoding system notify request")
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx, pbReq)
@@ -233,41 +216,112 @@ func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotify
 // EventForwarder implements the events.Handler interface, increments sequence
 // number for each event forwarded and distributes requests to MS access points.
 type EventForwarder struct {
-	seq       uint64
+	seq       <-chan uint64
 	client    UnaryInvoker
 	accessPts []string
 }
 
 // OnEvent implements the events.Handler interface.
-func (fwdr *EventForwarder) OnEvent(ctx context.Context, evt events.Event) {
+func (ef *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 	switch {
-	case common.InterfaceIsNil(evt):
-		fwdr.client.Debug("skip event forwarding, nil event")
+	case evt == nil:
+		ef.client.Debug("skip event forwarding, nil event")
 		return
-	case len(fwdr.accessPts) == 0:
-		fwdr.client.Debug("skip event forwarding, missing access points")
+	case len(ef.accessPts) == 0:
+		ef.client.Debug("skip event forwarding, missing access points")
+		return
+	case !evt.ShouldForward():
+		ef.client.Debugf("forwarding disabled for %s event", evt.ID)
 		return
 	}
-	fwdr.seq++
-	fwdr.client.Debugf("forwarding %s event to MS (seq: %d)", evt.GetID(), fwdr.seq)
 
 	req := &SystemNotifyReq{
-		Sequence: fwdr.seq,
+		Sequence: <-ef.seq,
 		Event:    evt,
 	}
-	req.SetHostList(fwdr.accessPts)
+	req.SetHostList(ef.accessPts)
+	ef.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
+		evt.ID, ef.accessPts, req.Sequence)
 
-	if _, err := SystemNotify(ctx, fwdr.client, req); err != nil {
-		fwdr.client.Debugf("failed to forward event to MS: %s", err)
+	if _, err := SystemNotify(ctx, ef.client, req); err != nil {
+		ef.client.Debugf("failed to forward event to MS: %s", err)
 	}
 }
 
 // NewEventForwarder returns an initialized EventForwarder.
 func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForwarder {
+	seqCh := make(chan uint64)
+	go func(ch chan<- uint64) {
+		for i := uint64(1); ; i++ {
+			ch <- i
+		}
+	}(seqCh)
+
 	return &EventForwarder{
+		seq:       seqCh,
 		client:    rpcClient,
 		accessPts: accessPts,
 	}
+}
+
+// EventLogger implements the events.Handler interface and logs RAS event to
+// INFO using supplied logging.Logger. In addition syslog is written to at the
+// priority level derived from the event severity.
+type EventLogger struct {
+	log        logging.Logger
+	sysloggers map[events.RASSeverityID]*log.Logger
+}
+
+// OnEvent implements the events.Handler interface.
+func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
+	switch {
+	case evt == nil:
+		el.log.Debug("skip event forwarding, nil event")
+		return
+	case evt.IsForwarded():
+		return // event has already been logged at source
+	}
+
+	out := evt.PrintRAS()
+	el.log.Info(out)
+	if sl := el.sysloggers[evt.Severity]; sl != nil {
+		sl.Print(out)
+	}
+}
+
+type newSysloggerFn func(syslog.Priority, int) (*log.Logger, error)
+
+// newEventLogger returns an initialized EventLogger using the provided function
+// to populate syslog endpoints which map to event severity identifiers.
+func newEventLogger(logBasic logging.Logger, newSyslogger newSysloggerFn) *EventLogger {
+	el := &EventLogger{
+		log:        logBasic,
+		sysloggers: make(map[events.RASSeverityID]*log.Logger),
+	}
+
+	for _, sev := range []events.RASSeverityID{
+		events.RASSeverityUnknown,
+		events.RASSeverityFatal,
+		events.RASSeverityError,
+		events.RASSeverityWarn,
+		events.RASSeverityInfo,
+	} {
+		sl, err := newSyslogger(sev.SyslogPriority(), log.LstdFlags)
+		if err != nil {
+			logBasic.Errorf("failed to create syslogger with priority %s: %s",
+				sev.SyslogPriority(), err)
+			continue
+		}
+		el.sysloggers[sev] = sl
+	}
+
+	return el
+}
+
+// NewEventLogger returns an initialized EventLogger capable of writing to the
+// supplied logger in addition to syslog.
+func NewEventLogger(log logging.Logger) *EventLogger {
+	return newEventLogger(log, syslog.NewLogger)
 }
 
 // SystemQueryReq contains the inputs for the system query request.
@@ -280,7 +334,7 @@ type SystemQueryReq struct {
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
 	sysResponse
-	Members system.Members
+	Members system.Members `json:"members"`
 }
 
 // UnmarshalJSON unpacks JSON message into SystemQueryResp struct.
@@ -301,6 +355,12 @@ func (resp *SystemQueryResp) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system query response.
+func (resp *SystemQueryResp) Errors() error {
+	return resp.getAbsentHostsRanksErrors()
 }
 
 // SystemQuery requests DAOS system status.
@@ -331,6 +391,23 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 
 	resp := new(SystemQueryResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+func concatSysErrs(errSys, errRes error) error {
+	var errMsgs []string
+
+	if errSys != nil {
+		errMsgs = append(errMsgs, errSys.Error())
+	}
+	if errRes != nil {
+		errMsgs = append(errMsgs, "check results for "+errRes.Error())
+	}
+
+	if len(errMsgs) > 0 {
+		return errors.New(strings.Join(errMsgs, ", "))
+	}
+
+	return nil
 }
 
 // SystemStartReq contains the inputs for the system start request.
@@ -364,6 +441,12 @@ func (resp *SystemStartResp) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system start response.
+func (resp *SystemStartResp) Errors() error {
+	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
 }
 
 // SystemStart will perform a start after a controlled shutdown of DAOS system.
@@ -430,6 +513,12 @@ func (resp *SystemStopResp) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system stop response.
+func (resp *SystemStopResp) Errors() error {
+	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
 }
 
 // SystemStop will perform a two-phase controlled shutdown of DAOS system and a
@@ -509,11 +598,11 @@ type SystemResetFormatResp struct {
 //
 // First phase trigger format reset on each rank in membership registry, if
 // successful, putting selected harness managed instances in "awaiting format"
-// state (but not proceeding to starting the io_server process runner).
+// state (but not proceeding to starting the engine process runner).
 //
 // Second phase is to perform storage format on each host which, if successful,
 // will reformat storage, un-block "awaiting format" state and start the
-// io_server process. SystemReformat() will only return when relevant io_server
+// engine process. SystemReformat() will only return when relevant io_server
 // processes are running and ready.
 //
 // This method handles request sent from management client app e.g. 'dmg'.
@@ -586,7 +675,6 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 type LeaderQueryReq struct {
 	unaryRequest
 	msRequest
-	System string
 }
 
 // LeaderQueryResp contains the status of the request and, if successful, the
@@ -601,7 +689,7 @@ type LeaderQueryResp struct {
 func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryReq) (*LeaderQueryResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).LeaderQuery(ctx, &mgmtpb.LeaderQueryReq{
-			Sys: req.System,
+			Sys: req.getSystem(),
 		})
 	})
 	rpcClient.Debugf("DAOS system leader-query request: %s", req)

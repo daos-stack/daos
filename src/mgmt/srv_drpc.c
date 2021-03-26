@@ -1,33 +1,16 @@
 /*
  * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
- * This file is part of the DAOS server. It implements the handlers to
+ * This file is part of the DAOS Engine. It implements the handlers to
  * process incoming dRPC requests for management tasks.
  */
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <signal.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/pool.h>
 #include <daos_api.h>
 #include <daos_security.h>
@@ -106,7 +89,7 @@ ds_mgmt_drpc_ping_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to ping rank %u\n", req->rank);
 
-	/* TODO: verify iosrv components are functioning as expected */
+	/* TODO: verify engine components are functioning as expected */
 
 	pack_daos_response(&resp, drpc_resp);
 	mgmt__ping_rank_req__free_unpacked(req, &alloc.alloc);
@@ -165,17 +148,17 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to update group map\n");
 
-	D_ALLOC_ARRAY(in.gui_servers, req->n_servers);
+	D_ALLOC_ARRAY(in.gui_servers, req->n_engines);
 	if (in.gui_servers == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
 	}
 
-	for (i = 0; i < req->n_servers; i++) {
-		in.gui_servers[i].se_rank = req->servers[i]->rank;
-		in.gui_servers[i].se_uri = req->servers[i]->uri;
+	for (i = 0; i < req->n_engines; i++) {
+		in.gui_servers[i].se_rank = req->engines[i]->rank;
+		in.gui_servers[i].se_uri = req->engines[i]->uri;
 	}
-	in.gui_n_servers = req->n_servers;
+	in.gui_n_servers = req->n_engines;
 	in.gui_map_version = req->map_version;
 
 	rc = ds_mgmt_group_update_handler(&in);
@@ -336,7 +319,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->scmbytes, req->nvmebytes,
-				 prop, req->numsvcreps, &svc);
+				 prop, req->numsvcreps, &svc,
+				 req->n_faultdomains, req->faultdomains);
 	if (targets != NULL)
 		d_rank_list_free(targets);
 	if (rc != 0) {
@@ -371,7 +355,6 @@ out:
 
 	daos_prop_free(prop);
 
-	/** check for '\0' which is a static allocation from protobuf */
 	D_FREE(resp.svc_reps);
 }
 
@@ -487,7 +470,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			rc = uuid_parse(req->handles[i], handles[i]);
 			if (rc != 0) {
 				D_ERROR("Unable to parse handle UUID %s: "
-				DF_RC "\n", req->uuid, DP_RC(rc));
+				DF_RC"\n", req->uuid, DP_RC(rc));
 				D_GOTO(out_free, rc = -DER_INVAL);
 			}
 		}
@@ -556,8 +539,8 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks,
 	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, rank,
 					      &target_id_list, state);
 	if (rc != 0) {
-		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", uuid,
-			DP_RC(rc));
+		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
 	}
 
 	pool_target_id_list_free(&target_id_list);
@@ -704,7 +687,8 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
 	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem",
-				 req->scmbytes, req->nvmebytes);
+				 req->scmbytes, req->nvmebytes,
+				 req->n_faultdomains, req->faultdomains);
 
 	if (rc != 0)
 		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->uuid,
@@ -1404,10 +1388,10 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Populate the response */
 	resp.uuid = req->uuid;
-	resp.totaltargets = pool_info.pi_ntargets;
-	resp.disabledtargets = pool_info.pi_ndisabled;
-	resp.activetargets = pool_info.pi_space.ps_ntargets;
-	resp.totalnodes = pool_info.pi_nnodes;
+	resp.total_targets = pool_info.pi_ntargets;
+	resp.disabled_targets = pool_info.pi_ndisabled;
+	resp.active_targets = pool_info.pi_space.ps_ntargets;
+	resp.total_nodes = pool_info.pi_nnodes;
 	resp.leader = pool_info.pi_leader;
 	resp.version = pool_info.pi_map_ver;
 
@@ -1505,8 +1489,8 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				D_FREE(resp->devices[i]->tgt_ids);
 			if (resp->devices[i]->state != NULL)
 				D_FREE(resp->devices[i]->state);
-			if (resp->devices[i]->traddr != NULL)
-				D_FREE(resp->devices[i]->traddr);
+			if (resp->devices[i]->tr_addr != NULL)
+				D_FREE(resp->devices[i]->tr_addr);
 			D_FREE(resp->devices[i]);
 		}
 	}
@@ -1674,19 +1658,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->read_only_warn = stats.read_only_warn;
 	resp->dev_reliability_warn = stats.dev_reliability_warn;
 	resp->volatile_mem_warn = stats.volatile_mem_warn;
-
-	D_STRNDUP(resp->model, stats.model, HEALTH_STAT_STR_LEN);
-	if (resp->model == NULL) {
-		D_ERROR("failed to allocate model ID buffer");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	D_STRNDUP(resp->serial, stats.serial, HEALTH_STAT_STR_LEN);
-	if (resp->serial == NULL) {
-		D_ERROR("failed to allocate serial ID buffer");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
 out:
@@ -2032,7 +2003,7 @@ ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;
 
-	D_INFO("Received request to setup server\n");
+	D_INFO("Received request to setup engine\n");
 
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
 

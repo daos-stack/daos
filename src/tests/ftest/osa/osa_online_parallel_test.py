@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 import random
@@ -27,19 +10,13 @@ import threading
 import copy
 
 from itertools import product
-from apricot import skipForTicket
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+from apricot import skipForTicket
+import queue
 
 
 class OSAOnlineParallelTest(OSAUtils):
@@ -53,7 +30,7 @@ class OSAOnlineParallelTest(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOnlineParallelTest, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
@@ -152,8 +129,8 @@ class OSAOnlineParallelTest(OSAUtils):
             pool_uuid.append(pool[val].uuid)
 
         # Exclude and reintegrate the pool_uuid, rank and targets
-        for val in range(0, num_pool):
-            self.pool = pool[val]
+        for value in range(0, num_pool):
+            self.pool = pool[value]
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
@@ -174,7 +151,7 @@ class OSAOnlineParallelTest(OSAUtils):
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
-                                                    kwargs={"pool": pool[val],
+                                                    kwargs={"pool": pool[value],
                                                             "oclass": oclass,
                                                             "api": api,
                                                             "test": test,
@@ -198,7 +175,7 @@ class OSAOnlineParallelTest(OSAUtils):
 
                 # Wait to finish the threads
                 for thrd in threads:
-                    thrd.join(timeout=20)
+                    thrd.join(timeout=100)
 
             # Check data consistency for IOR in future
             # Presently, we are running daos_racer in parallel
@@ -218,9 +195,8 @@ class OSAOnlineParallelTest(OSAUtils):
                 self.log.info("Pool Version at the End %s", pver_end)
                 self.assertTrue(pver_end == 25,
                                 "Pool Version Error:  at the end")
-                pool[val].destroy()
 
-    @skipForTicket("DAOS-6107")
+    @skipForTicket("DAOS-6664")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752

@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rebuild: Scanning the objects
@@ -37,7 +20,7 @@
 #include <daos/placement.h>
 #include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
@@ -138,7 +121,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
 				       arg->ephs, arg->shards, arg->count,
-				       /* Clear containers for reint */
+				       /* Delete local objects for reint */
 				       rpt->rt_rebuild_op == RB_OP_REINT);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
@@ -542,11 +525,19 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			D_GOTO(out, rc);
 
 		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
-						      layout, myrank, mytarget);
+						      layout, myrank, mytarget,
+						      oid.id_shard);
 		if (!still_needed) {
+			struct rebuild_pool_tls *tls;
+
+			tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
+						      rpt->rt_rebuild_ver);
+			D_ASSERT(tls != NULL);
+			tls->rebuild_pool_reclaim_obj_count++;
 			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
 				" which is not reachable on rank %u tgt %u",
 				DP_UOID(oid), myrank, mytarget);
+
 			/*
 			 * It's possible this object might still be being
 			 * accessed elsewhere - retry until until it is possible
@@ -600,24 +591,11 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		rc = pool_map_find_target(map->pl_poolmap, tgts[i], &target);
 		D_ASSERT(rc == 1);
 
-		/* During rebuild test, it will manually exclude some target to
-		 * trigger the rebuild, then later add it back, so some objects
-		 * might exist on some illegal target, so they might use its
-		 * "own" target as the spare target, let's skip these object
-		 * now. When we have better support from CART exclude/addback,
-		 * myrank should always not equal to tgt_rebuild. XXX
-		 */
-		if (myrank != target->ta_comp.co_rank) {
-			rc = rebuild_object_insert(rpt, tgts[i], shards[i],
-						   arg->co_uuid,
-						   oid, ent->ie_epoch);
-			if (rc)
-				D_GOTO(out, rc);
-		} else {
-			D_DEBUG(DB_REBUILD, "rebuild skip "DF_UOID".\n",
-				DP_UOID(oid));
-			rc = 0;
-		}
+		rc = rebuild_object_insert(rpt, tgts[i], shards[i],
+					   arg->co_uuid,
+					   oid, ent->ie_epoch);
+		if (rc)
+			D_GOTO(out, rc);
 	}
 
 out:
@@ -671,6 +649,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
+	param.ip_flags |= VOS_IT_PUNCHED;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
 			 rebuild_obj_scan_cb, NULL, arg, &dth);

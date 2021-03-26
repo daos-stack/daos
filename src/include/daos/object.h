@@ -1,24 +1,7 @@
 /**
  * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __DD_OBJ_H__
 #define __DD_OBJ_H__
@@ -61,6 +44,12 @@ daos_obj_id2ver(daos_obj_id_t oid)
 	return version;
 }
 
+static inline bool
+daos_obj_id_is_nil(daos_obj_id_t oid)
+{
+	return oid.hi == 0 && oid.lo == 0;
+}
+
 /**
  * XXX old class IDs
  *
@@ -82,7 +71,7 @@ enum {
 	DAOS_OC_R4_RW,		/* class for testing */
 	DAOS_OC_R4_MAX_RW,	/* class for testing */
 	DAOS_OC_REPL_MAX_RW,
-	DAOS_OC_ECHO_TINY_RW,	/* Echo class, tiny */
+	DAOS_OC_ECHO_R1S_RW,	/* Echo class, 1 replica single stripe */
 	DAOS_OC_ECHO_R2S_RW,	/* Echo class, 2 replica single stripe */
 	DAOS_OC_ECHO_R3S_RW,	/* Echo class, 3 replica single stripe */
 	DAOS_OC_ECHO_R4S_RW,	/* Echo class, 4 replica single stripe */
@@ -114,11 +103,15 @@ enum {
 	 *
 	 * NB: it should be smaller than OC_BACK_COMPAT (50)
 	 */
-	DAOS_OC_OIT_V1	= 45,
+	DAOS_OC_OIT_RF0	= 45,
+	DAOS_OC_OIT_RF1	= 46,
+	DAOS_OC_OIT_RF2	= 47,
+	DAOS_OC_OIT_RF3	= 48,
+	DAOS_OC_OIT_RF4	= 49,
 };
 
-/* default version of OIT object class */
-#define DAOS_OC_OIT	DAOS_OC_OIT_V1
+/* Temporarily keep it to minimize change, remove it in the future */
+#define DAOS_OC_ECHO_TINY_RW	DAOS_OC_ECHO_R1S_RW
 
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
@@ -152,6 +145,7 @@ enum daos_io_mode {
 
 #define DAOS_OBJ_GRP_MAX	(~0)
 #define DAOS_OBJ_REPL_MAX	(~0)
+#define DAOS_OBJ_RESIL_MAX	(~0)
 
 /**
  * 192-bit object ID, it can identify a unique bottom level object.
@@ -215,6 +209,7 @@ struct daos_obj_layout {
 struct daos_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
 	uint32_t		st_shard;	/* shard index */
+	uint32_t		st_shard_id;	/* shard id */
 	uint32_t		st_tgt_id;	/* target id */
 	uint16_t		st_tgt_idx;	/* target xstream index */
 	/* target idx for EC obj, only used for client */
@@ -252,10 +247,14 @@ daos_unit_obj_id_equal(daos_unit_oid_t oid1, daos_unit_oid_t oid2)
 
 struct pl_obj_layout;
 
+int  obj_class_init(void);
+void obj_class_fini(void);
 struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
+int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
+			daos_oclass_id_t *oc_id_p);
 
 /** bits for the specified rank */
 #define DAOS_OC_SR_SHIFT	24
@@ -326,13 +325,73 @@ daos_oclass_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 	return DAOS_OC_IS_EC(oca);
 }
 
-/* generate ID for Object ID Table which is just an object */
-static inline daos_obj_id_t
-daos_oit_gen_id(daos_epoch_t epoch)
+static inline void
+daos_obj_set_oid(daos_obj_id_t *oid, daos_ofeat_t ofeats,
+		 daos_oclass_id_t cid, uint32_t args)
 {
-	daos_obj_id_t	oid = {0};
+	uint64_t hdr;
 
-	daos_obj_generate_id(&oid, 0, DAOS_OC_OIT, 0);
+	/* TODO: add check at here, it should return error if user specified
+	 * bits reserved by DAOS
+	 */
+	oid->hi &= (1ULL << OID_FMT_INTR_BITS) - 1;
+	/**
+	 * | Upper bits contain
+	 * | OID_FMT_VER_BITS (version)		 |
+	 * | OID_FMT_FEAT_BITS (object features) |
+	 * | OID_FMT_CLASS_BITS (object class)	 |
+	 * | 96-bit for upper layer ...		 |
+	 */
+	hdr  = ((uint64_t)OID_FMT_VER << OID_FMT_VER_SHIFT);
+	hdr |= ((uint64_t)ofeats << OID_FMT_FEAT_SHIFT);
+	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
+	oid->hi |= hdr;
+}
+
+/* check if an object ID is OIT (Object ID Table) */
+static inline bool
+daos_oid_is_oit(daos_obj_id_t oid)
+{
+	daos_oclass_id_t	oc = daos_obj_id2class(oid);
+
+	return (oc == DAOS_OC_OIT_RF0) || (oc == DAOS_OC_OIT_RF1) ||
+	       (oc == DAOS_OC_OIT_RF2) || (oc == DAOS_OC_OIT_RF3) ||
+	       (oc == DAOS_OC_OIT_RF4);
+}
+
+/*
+ * generate ID for Object ID Table which is just an object, caller should
+ * provide valid cont_rf value (DAOS_PROP_CO_REDUN_RF0 ~ DAOS_PROP_CO_REDUN_RF4)
+ * or it possibly assert it internally
+ */
+static inline daos_obj_id_t
+daos_oit_gen_id(daos_epoch_t epoch, uint32_t cont_rf)
+{
+	daos_oclass_id_t	oc;
+	daos_obj_id_t		oid = {0};
+
+	switch (cont_rf) {
+	case DAOS_PROP_CO_REDUN_RF0:
+		oc = DAOS_OC_OIT_RF0;
+		break;
+	case DAOS_PROP_CO_REDUN_RF1:
+		oc = DAOS_OC_OIT_RF1;
+		break;
+	case DAOS_PROP_CO_REDUN_RF2:
+		oc = DAOS_OC_OIT_RF2;
+		break;
+	case DAOS_PROP_CO_REDUN_RF3:
+		oc = DAOS_OC_OIT_RF3;
+		break;
+	case DAOS_PROP_CO_REDUN_RF4:
+		oc = DAOS_OC_OIT_RF4;
+		break;
+	default:
+		D_ASSERTF(0, "bad cont_rf %d\n", cont_rf);
+		break;
+	};
+
+	daos_obj_set_oid(&oid, 0, oc, 0);
 	oid.lo = epoch;
 	return oid;
 }
@@ -450,6 +509,7 @@ enum {
 	OBJ_ITER_RECX,
 	OBJ_ITER_DKEY_EPOCH,
 	OBJ_ITER_AKEY_EPOCH,
+	OBJ_ITER_OBJ_PUNCH_EPOCH,
 };
 
 #define RECX_INLINE	(1U << 0)

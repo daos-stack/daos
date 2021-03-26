@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Implementation for pool specific functions in VOS
@@ -31,6 +14,7 @@
 
 #include <daos/common.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/ras.h>
 #include <daos_errno.h>
 #include <gurt/hash.h>
 #include <sys/stat.h>
@@ -122,11 +106,12 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_io_ctxt != NULL) {
 		rc = bio_ioctxt_close(pool->vp_io_ctxt);
 		if (rc)
-			D_ERROR("Closing VOS I/O context:%p pool:"DF_UUID"\n",
-				pool->vp_io_ctxt, DP_UUID(pool->vp_id));
+			D_ERROR("Closing VOS I/O context:%p pool:"DF_UUID" : "
+				DF_RC"\n", pool->vp_io_ctxt,
+				DP_UUID(pool->vp_id), DP_RC(rc));
 		else
 			D_DEBUG(DB_MGMT, "Closed VOS I/O context:%p pool:"
-				""DF_UUID"\n",
+				DF_UUID"\n",
 				pool->vp_io_ctxt, DP_UUID(pool->vp_id));
 	}
 
@@ -161,6 +146,7 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 
 	d_uhash_ulink_init(&pool->vp_hlink, &pool_uuid_hops);
 	D_INIT_LIST_HEAD(&pool->vp_gc_link);
+	D_INIT_LIST_HEAD(&pool->vp_gc_cont);
 	uuid_copy(pool->vp_id, uuid);
 
 	memset(&uma, 0, sizeof(uma));
@@ -212,19 +198,20 @@ vos_blob_format_cb(void *cb_data, struct umem_instance *umem)
 	/* Create a bio_io_context to get the blob */
 	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, umem, blob_hdr->bbh_pool);
 	if (rc) {
-		D_ERROR("Failed to create an ioctxt for writing blob header\n");
+		D_ERROR("Failed to create an I/O context for writing blob "
+			"header: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	/* Write the blob header info to blob offset 0 */
 	rc = bio_write_blob_hdr(ioctxt, blob_hdr);
 	if (rc)
-		D_ERROR("Failed to write header for blob:"DF_U64"\n",
-			blob_hdr->bbh_blob_id);
+		D_ERROR("Failed to write header for blob:"DF_U64" : "DF_RC"\n",
+			blob_hdr->bbh_blob_id, DP_RC(rc));
 
 	rc = bio_ioctxt_close(ioctxt);
 	if (rc)
-		D_ERROR("Failed to free ioctxt\n");
+		D_ERROR("Failed to free I/O context: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -473,6 +460,9 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 
 		fd = open(path, O_RDWR);
 		if (fd < 0) {
+			if (errno == ENOENT)
+				D_GOTO(exit, rc = 0);
+
 			D_ERROR("Failed to open %s: %d\n", path, errno);
 			D_GOTO(exit, rc = daos_errno2der(errno));
 		}
@@ -495,11 +485,13 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 		close(fd);
 	} else {
 		rc = remove(path);
-		if (rc)
+		if (rc) {
+			if (errno == ENOENT)
+				D_GOTO(exit, rc = 0);
 			D_ERROR("Failure deleting file from PMEM: %s\n",
 				strerror(errno));
+		}
 	}
-
 exit:
 	return rc;
 }
@@ -638,7 +630,7 @@ vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh)
 	if (uma->uma_pool == NULL) {
 		D_ERROR("Error in opening the pool "DF_UUID": %s\n",
 			DP_UUID(uuid), pmemobj_errormsg());
-		D_GOTO(failed, rc = -DER_NO_HDL);
+		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 
 	rc = vos_register_slabs(uma);
@@ -670,6 +662,10 @@ vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh)
 	if (pool_df->pd_version > POOL_DF_VERSION ||
 	    pool_df->pd_version < POOL_DF_VER_1) {
 		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
+		/** Send a RAS notification */
+		vos_report_layout_incompat("VOS pool", pool_df->pd_version,
+					   POOL_DF_VER_1, POOL_DF_VERSION,
+					   &ukey.uuid);
 		D_GOTO(failed, rc = -DER_DF_INCOMPT);
 	}
 

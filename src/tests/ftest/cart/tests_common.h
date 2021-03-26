@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Common functions to be shared among tests
@@ -30,18 +13,18 @@
 
 #include "crt_internal.h"
 
-#define DBG_PRINT(x...)                                                 \
-	do {                                                            \
+#define DBG_PRINT(x...)							\
+	do {								\
 		D_INFO(x);						\
-		if (opts.is_server)                                     \
+		if (opts.is_server)					\
 			fprintf(stderr, "SRV [rank=%d pid=%d]\t",       \
-			opts.self_rank,                                 \
-			opts.mypid);                                    \
-		else                                                    \
+			opts.self_rank,					\
+			opts.mypid);					\
+		else							\
 			fprintf(stderr, "CLI [rank=%d pid=%d]\t",       \
-			opts.self_rank,                                 \
-			opts.mypid);                                    \
-		fprintf(stderr, x);                                     \
+			opts.self_rank,					\
+			opts.mypid);					\
+		fprintf(stderr, x);					\
 	} while (0)
 
 struct test_options {
@@ -51,11 +34,11 @@ struct test_options {
 	int		num_attach_retries;
 	bool		is_server;
 	bool		assert_on_error;
+	volatile int	shutdown;
+	int		delay_shutdown_sec;
 };
 
 static struct test_options opts = { .is_initialized = false };
-
-int g_shutdown;
 
 void
 tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
@@ -66,14 +49,18 @@ tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	opts.mypid		= getpid();
 	opts.is_server		= is_server;
 	opts.num_attach_retries	= num_attach_retries;
-	opts.assert_on_error		= assert_on_error;
+	opts.assert_on_error	= assert_on_error;
+	opts.shutdown		= 0;
+
+	/* Use 2 second delay as a default for all tests for now */
+	opts.delay_shutdown_sec	= 2;
 }
 
 static inline int
 tc_drain_queue(crt_context_t ctx)
 {
 	int	rc;
-	int 	i;
+	int	i;
 
 	/* TODO: Need better mechanism for tests to drain all queues */
 	for (i = 0; i < 1000; i++)
@@ -98,9 +85,15 @@ tc_drain_queue(crt_context_t ctx)
 }
 
 void
+tc_set_shutdown_delay(int delay_sec)
+{
+	opts.delay_shutdown_sec = delay_sec;
+}
+
+void
 tc_progress_stop(void)
 {
-	g_shutdown = 1;
+	opts.shutdown = 1;
 }
 
 void *
@@ -118,11 +111,14 @@ tc_progress_fn(void *data)
 		assert(0);
 	}
 
-	while (g_shutdown == 0)
+	while (opts.shutdown == 0)
 		crt_progress(*p_ctx, 1000);
 
 	if (idx == 0)
 		crt_swim_fini();
+
+	if (opts.delay_shutdown_sec > 0)
+		sleep(opts.delay_shutdown_sec);
 
 	rc = tc_drain_queue(*p_ctx);
 	D_ASSERTF(rc == 0, "tc_drain_queue() failed with rc=%d\n", rc);
@@ -189,8 +185,8 @@ ctl_client_cb(const struct crt_cb_info *info)
 
 int
 tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
-		int tag, int total_ctx, double ping_timeout,
-		double total_timeout)
+		  int tag, int total_ctx, double ping_timeout,
+		  double total_timeout)
 {
 	struct wfr_status		ws;
 	struct timespec			t1, t2;
@@ -214,9 +210,7 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 	server_ep.ep_grp = grp;
 
 	for (i = 0; i < rank_list->rl_nr; i++) {
-
 		rank = rank_list->rl_ranks[i];
-
 		server_ep.ep_rank = rank;
 
 		rc = crt_req_create(ctx, &server_ep, CRT_OPC_CTL_LS, &rpc);
@@ -243,7 +237,7 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 			rc = crt_req_create(ctx, &server_ep,
 					    CRT_OPC_CTL_LS, &rpc);
 			D_ASSERTF(rc == 0,
-				   "crt_req_create failed; rc=%d\n", rc);
+				  "crt_req_create failed; rc=%d\n", rc);
 
 			in_args = crt_req_get(rpc);
 			in_args->cel_grp_id = grp->cg_grpid;
@@ -251,7 +245,7 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 
 			rc = crt_req_set_timeout(rpc, ping_timeout);
 			D_ASSERTF(rc == 0,
-				   "crt_req_set_timeout failed; rc=%d\n", rc);
+				  "crt_req_set_timeout failed; rc=%d\n", rc);
 
 			ws.rc = 0;
 			ws.num_ctx = 0;
@@ -285,9 +279,8 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 }
 
 int
-tc_load_group_from_file(const char *grp_cfg_file,
-		crt_context_t ctx, crt_group_t *grp,
-		d_rank_t my_rank, bool delete_file)
+tc_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
+			crt_group_t *grp, d_rank_t my_rank, bool delete_file)
 {
 	FILE		*f;
 	int		parsed_rank;
@@ -313,7 +306,7 @@ tc_load_group_from_file(const char *grp_cfg_file,
 			continue;
 
 		rc = crt_group_primary_rank_add(ctx, grp,
-					parsed_rank, parsed_addr);
+						parsed_rank, parsed_addr);
 
 		if (rc != 0) {
 			D_ERROR("Failed to add %d %s; rc=%d\n",
@@ -429,7 +422,7 @@ tc_cli_start_basic(char *local_group_name, char *srv_group_name,
 
 	if ((*rank_list)->rl_nr != grp_size) {
 		D_ERROR("rank_list differs in size. expected %d got %d\n",
-			 grp_size, (*rank_list)->rl_nr);
+			grp_size, (*rank_list)->rl_nr);
 		assert(0);
 	}
 
@@ -439,7 +432,7 @@ tc_cli_start_basic(char *local_group_name, char *srv_group_name,
 
 void
 tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
-		pthread_t *progress_thread, crt_group_t **grp,
+		   pthread_t *progress_thread, crt_group_t **grp,
 		   uint32_t *grp_size, crt_init_options_t *init_opt)
 {
 	char		*env_self_rank;
@@ -458,10 +451,10 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	if (init_opt) {
 		rc = crt_init_opt(srv_group_name, CRT_FLAG_BIT_SERVER |
-				CRT_FLAG_BIT_AUTO_SWIM_DISABLE, init_opt);
+				  CRT_FLAG_BIT_AUTO_SWIM_DISABLE, init_opt);
 	} else {
 		rc = crt_init(srv_group_name, CRT_FLAG_BIT_SERVER |
-				CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+			      CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	}
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
@@ -473,7 +466,7 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	rc = crt_rank_self_set(my_rank);
 	D_ASSERTF(rc == 0, "crt_rank_self_set(%d) failed; rc=%d\n",
-		   my_rank, rc);
+		  my_rank, rc);
 
 	rc = crt_context_create(crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);
@@ -488,7 +481,7 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	/* load group info from a config file and delete file upon return */
 	rc = tc_load_group_from_file(grp_cfg_file, crt_ctx[0], *grp, my_rank,
-					true);
+				     true);
 	D_ASSERTF(rc == 0, "tc_load_group_from_file() failed; rc=%d\n", rc);
 
 	D_FREE(my_uri);
@@ -498,6 +491,75 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	rc = crt_group_size(NULL, grp_size);
 	D_ASSERTF(rc == 0, "crt_group_size() failed; rc=%d\n", rc);
+}
+
+struct tc_log_msg_cb_resp {
+	sem_t	sem;
+};
+
+static void
+tc_log_msg_cb(const struct crt_cb_info *info)
+{
+	struct tc_log_msg_cb_resp	*resp;
+
+	if (info->cci_rc != 0) {
+		D_WARN("Add Log message CB failed\n");
+		D_ASSERTF(info->cci_rc == 0,
+			  "Send Log RPC did not respond\n");
+	}
+	resp = (struct tc_log_msg_cb_resp *)info->cci_arg;
+	sem_post(&resp->sem);
+}
+
+int
+tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
+	   char *msg) {
+	int32_t				 rc = 0;
+	struct crt_ctl_log_add_msg_in	*send_args;
+	crt_rpc_t			*rpc_req = NULL;
+	crt_endpoint_t			 ep;
+	crt_opcode_t			 opcode = CRT_OPC_CTL_LOG_ADD_MSG;
+	struct tc_log_msg_cb_resp	 resp;
+
+	/* Initialize response structure */
+	rc = sem_init(&resp.sem, 0, 0);
+	D_ASSERTF(rc == 0, "sem_init() failed\n");
+
+	/* Fill in the endpoint info */
+	ep.ep_grp = grp;
+	ep.ep_rank = rank;
+	ep.ep_tag = 0;
+
+	rc = crt_req_create(ctx, &ep, opcode, &rpc_req);
+	if (rc != 0) {
+		D_ERROR("crt_req_create() failed. rc %d.\n", rc);
+		D_GOTO(exit, rc);
+	}
+
+	crt_req_addref(rpc_req);
+	send_args =  crt_req_get(rpc_req);
+	send_args->log_msg = msg;
+
+	/* send the request */
+	rc = crt_req_send(rpc_req, tc_log_msg_cb, &resp);
+	if (rc < 0) {
+		D_WARN("rpc failed, message: \"%s \"not sent\n", msg);
+		goto cleanup;
+	}
+
+	/* Wait for response */
+	rc = tc_sem_timedwait(&resp.sem, 30, __LINE__);
+	if (rc < 0) {
+		D_WARN("Messaage logged timed out: %s\n", msg);
+		crt_req_abort(rpc_req);
+		goto cleanup;
+	}
+
+	/* Decrement reference */
+cleanup:
+	crt_req_decref(rpc_req);
+exit:
+	return rc;
 }
 
 #endif /* __TESTS_COMMON_H__ */

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -34,7 +17,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpcetTViADKCoRvSXbOzZUdrNb"
+#define TESTS "mpcetTViADKCoRvSXbOzZUdrNbB"
 
 /**
  * These tests will only be run if explicitly specified. They don't get
@@ -84,6 +67,7 @@ print_usage(int rank)
 	print_message("daos_test -S|--rebuild_ec\n");
 	print_message("daos_test -X|--degrade_ec\n");
 	print_message("daos_test -b|--drain_simple\n");
+	print_message("daos_test -B|--extend_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
@@ -130,7 +114,9 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS container tests..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_cont_test(rank, size);
+			nr_failed += run_daos_cont_test(rank, size,
+							   sub_tests,
+							   sub_tests_size);
 			break;
 		case 'C':
 			daos_test_print(rank, "\n\n=================");
@@ -271,6 +257,13 @@ run_specified_tests(const char *tests, int rank, int size,
 			nr_failed += run_daos_drain_simple_test(rank, size,
 						sub_tests, sub_tests_size);
 			break;
+		case 'B':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS extend simple tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_extend_simple_test(rank, size,
+						sub_tests, sub_tests_size);
+			break;
 		case 'S':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS rebuild ec tests..");
@@ -382,7 +375,7 @@ main(int argc, char **argv)
 
 	while ((opt =
 		getopt_long(argc, argv,
-			    "ampcCdtTVizUZxADKeoROg:n:s:u:E:f:w:W:hrNvbSXl:",
+			    "ampcCdtTVizUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:",
 			     long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;

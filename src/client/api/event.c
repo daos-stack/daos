@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * This file is part of client DAOS library.
@@ -327,6 +310,14 @@ daos_event_complete_cb(struct daos_event_private *evx, int rc)
 	return ret;
 }
 
+void
+daos_event_errno_rc(struct daos_event *ev)
+{
+	struct daos_event_private *evx = daos_ev2evx(ev);
+
+	evx->is_errno = 1;
+}
+
 static int
 daos_event_complete_locked(struct daos_eq_private *eqx,
 			   struct daos_event_private *evx, int rc)
@@ -340,7 +331,10 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 
 	evx->evx_status = DAOS_EVS_COMPLETED;
 	rc = daos_event_complete_cb(evx, rc);
-	ev->ev_error = rc;
+	if (evx->is_errno)
+		ev->ev_error = daos_der2errno(rc);
+	else
+		ev->ev_error = rc;
 
 	if (parent_evx != NULL) {
 		daos_event_t *parent_ev = daos_evx2ev(parent_evx);
@@ -1108,7 +1102,7 @@ daos_event_fini(struct daos_event *ev)
 		if (rc < 0) {
 			D_ERROR("Failed to finalize child event "DF_RC"\n",
 				DP_RC(rc));
-			goto out;
+			goto out_unlocked;
 		}
 
 		if (eqx != NULL)
@@ -1154,6 +1148,7 @@ daos_event_fini(struct daos_event *ev)
 out:
 	if (eqx != NULL)
 		D_MUTEX_UNLOCK(&eqx->eqx_lock);
+out_unlocked:
 	if (eq != NULL)
 		daos_eq_putref(eqx);
 	return rc;
@@ -1234,6 +1229,7 @@ daos_event_priv_get(daos_event_t **ev)
 	if (evx->evx_status != DAOS_EVS_READY) {
 		D_CRIT("private event is inuse, status=%d\n",
 		       evx->evx_status);
+		return -DER_BUSY;
 	}
 	*ev = &ev_thpriv;
 	return 0;
@@ -1259,12 +1255,30 @@ daos_event_priv_wait()
 
 	/* Wait on the event to complete */
 	while (evx->evx_status != DAOS_EVS_READY) {
-		rc = crt_progress_cond(evx->evx_ctx, 0, ev_progress_cb, &epa);
-		if (rc == 0)
-			rc = ev_thpriv.ev_error;
+		int rc2;
 
-		if (rc && rc != -DER_TIMEDOUT)
-			break;
+		rc = crt_progress_cond(evx->evx_ctx, 0, ev_progress_cb, &epa);
+
+		/** progress succeeded, loop can exit if event completed */
+		if (rc == 0) {
+			rc = ev_thpriv.ev_error;
+			if (rc)
+				break;
+			continue;
+		}
+
+		/** progress timeout, try calling progress again */
+		if (rc == -DER_TIMEDOUT)
+			continue;
+
+		/*
+		 * other progress failure; op should fail with that err. reset
+		 * the private event first so it can be resused.
+		 */
+		rc2 = daos_event_priv_reset();
+		D_ASSERT(rc2 == 0);
+		ev_thpriv_is_init = true;
+		break;
 	}
 	return rc;
 }

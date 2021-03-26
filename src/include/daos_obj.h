@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __DAOS_OBJ_H__
 #define __DAOS_OBJ_H__
@@ -31,15 +14,7 @@ extern "C" {
 #include <daos_event.h>
 #include <daos_obj_class.h>
 
-/**
- * ID of an object, 128 bits
- * The high 32-bit of daos_obj_id_t::hi are reserved for DAOS, the rest is
- * provided by the user and assumed to be unique inside a container.
- */
-typedef struct {
-	uint64_t	lo;
-	uint64_t	hi;
-} daos_obj_id_t;
+#define DAOS_OBJ_NIL		((daos_obj_id_t){0})
 
 /** the current OID version */
 #define OID_FMT_VER		1
@@ -203,7 +178,7 @@ typedef struct {
 typedef enum {
 	/** is a dkey */
 	DAOS_IOD_NONE		= 0,
-	/** one indivisble value update atomically */
+	/** one indivisible value update atomically */
 	DAOS_IOD_SINGLE		= 1,
 	/** an array of records where each record is update atomically */
 	DAOS_IOD_ARRAY		= 2,
@@ -345,11 +320,11 @@ typedef struct {
  *			the container. [out]: Fully populated DAOS object
  *			identifier with the the low 96 bits untouched and the
  *			DAOS private bits (the high 32 bits) encoded.
- * \param[in]	ofeat	Feature bits specific to object
+ * \param[in]	ofeats	Feature bits specific to object
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
-static inline void
+static inline void  __attribute__ ((deprecated))
 daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 		     daos_oclass_id_t cid, uint32_t args)
 {
@@ -371,6 +346,62 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
 	oid->hi |= hdr;
 }
+
+#define DAOS_OCH_RDD_BITS	4
+#define DAOS_OCH_SHD_BITS	6
+#define DAOS_OCH_RDD_SHIFT	0
+#define DAOS_OCH_SHD_SHIFT	DAOS_OCH_RDD_BITS
+#define DAOS_OCH_RDD_MAX_VAL	((1ULL << DAOS_OCH_RDD_BITS) - 1)
+#define DAOS_OCH_SHD_MAX_VAL	((1ULL << DAOS_OCH_SHD_BITS) - 1)
+#define DAOS_OCH_RDD_MASK	(DAOS_OCH_RDD_MAX_VAL << DAOS_OCH_RDD_SHIFT)
+#define DAOS_OCH_SHD_MASK	(DAOS_OCH_SHD_MAX_VAL << DAOS_OCH_SHD_SHIFT)
+
+/** Flags for oclass hints */
+enum {
+	/** Flags to control OC Redundancy */
+	DAOS_OCH_RDD_DEF	= (1 << 0),	/** Default - use RF prop */
+	DAOS_OCH_RDD_NO		= (1 << 1),	/** No redundancy */
+	DAOS_OCH_RDD_RP		= (1 << 2),	/** Replication */
+	DAOS_OCH_RDD_EC		= (1 << 3),	/** Erasure Code */
+	/** Flags to control OC Sharding */
+	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default - use 1 grp */
+	DAOS_OCH_SHD_TINY	= (1 << 5),	/** <= 4 grps */
+	DAOS_OCH_SHD_REG	= (1 << 6),	/** max(128, 25%) */
+	DAOS_OCH_SHD_HI		= (1 << 7),	/** max(256, 50%) */
+	DAOS_OCH_SHD_EXT	= (1 << 8),	/** max(1024, 80%) */
+	DAOS_OCH_SHD_MAX	= (1 << 9),	/** 100% */
+};
+
+/**
+ * Generate a DAOS object ID by encoding the private DAOS bits of the object
+ * address space. This allows the user to either select an object class
+ * manually, or ask DAOS to generate one based on some hints provided.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in,out]
+ *		oid	[in]: Object ID with low 96 bits set and unique inside
+ *			the container.
+ *			[out]: Fully populated DAOS object identifier with the
+ *			the low 96 bits untouched and the DAOS private bits
+ *			(the high 32 bits) encoded.
+ * \param[in]	ofeats	Feature bits specific to object
+ * \param[in]	cid	Class Identifier. This setting is for advanced users who
+ *			are knowledgeable on the specific oclass being set and
+ *			what that means for the object in the current system and
+ *			the container it's in.
+ *			Setting this to 0 (unknown) will check if there are any
+ *			hints specified and use an oclass accordingly. If there
+ *			are no hints specified we use the container properties
+ *			to select the object class.
+ * \param[in]   hints	Optional hints to select oclass with redundancy type
+ *			and sharding. This will be ignored if cid is not
+ *			OC_UNKNOWN (0).
+ * \param[in]	args	Reserved.
+ */
+int
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
+		      daos_ofeat_t ofeats, daos_oclass_id_t cid,
+		      daos_oclass_hints_t hints, uint32_t args);
 
 /**
  * Open an DAOS object.
@@ -882,8 +913,8 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors);
 
 /**
  * Set an anchor with an index based on split done with daos_obj_anchor_split.
- * The anchor passed will be re-intialized and set to start and finish iteration
- * based on the specified index.
+ * The anchor passed will be re-initialized and set to start and finish
+ * iteration based on the specified index.
  *
  * \param[in]   oh	Open object handle.
  * \param[in]	index	Index of set this anchor for iteration.

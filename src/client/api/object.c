@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(client)
 
@@ -163,7 +146,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	int		 rc;
 
 	rc = dc_obj_fetch_task_create(oh, th, flags, dkey, nr, 0, iods,
-				      sgls, maps, NULL, ev, NULL, &task);
+				      sgls, maps, NULL, NULL, ev, NULL, &task);
 	if (rc)
 		return rc;
 
@@ -337,9 +320,17 @@ daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 {
 	tse_task_t	*task;
 	daos_obj_id_t	 oid;
+	int		 cont_rf;
 	int		 rc;
 
-	oid = daos_oit_gen_id(epoch);
+	cont_rf = dc_cont_hdl2redunfac(coh);
+	if (cont_rf < 0) {
+		D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n",
+			DP_RC(cont_rf));
+		return cont_rf;
+	}
+
+	oid = daos_oit_gen_id(epoch, cont_rf);
 	rc = dc_obj_open_task_create(coh, oid, DAOS_OO_RO, oh, ev, NULL, &task);
 	if (rc)
 		return rc;

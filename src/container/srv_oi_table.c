@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Enumerate all object IDs and store them as KVs in a special object
@@ -33,7 +16,7 @@
 #include <daos/container.h>
 #include <daos/pool.h>
 #include <daos_srv/container.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
 #include "srv_internal.h"
@@ -122,7 +105,7 @@ cont_iter_obj_cb(daos_handle_t ch, vos_iter_entry_t *ent, vos_iter_type_t type,
 	int			 rc;
 
 	oid = ent->ie_oid.id_pub;
-	if (daos_obj_id2class(oid) == DAOS_OC_OIT)
+	if (daos_oid_is_oit(oid))
 		return 0; /* ignore IOT object */
 
 	D_DEBUG(DB_TRACE, "enumerate OID="DF_OID"\n", DP_OID(oid));
@@ -174,7 +157,7 @@ cont_child_gather_oids(struct ds_cont_child *coc, uuid_t coh_uuid,
 	if (rc)
 		D_GOTO(out, rc);
 
-	oa->oa_oit_id = daos_oit_gen_id(epoch);
+	oa->oa_oit_id = daos_oit_gen_id(epoch, coc->sc_props.dcp_redun_fac);
 	D_DEBUG(DB_IO, "OIT="DF_OID"\n", DP_OID(oa->oa_oit_id));
 
 	uuid_generate(uuid);

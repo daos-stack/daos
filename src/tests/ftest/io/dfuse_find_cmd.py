@@ -2,24 +2,7 @@
 """
   (C) Copyright 2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import sys
@@ -31,6 +14,7 @@ from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
 from command_utils import CommandFailure
 from io_utilities import DirTree
+from apricot import skipForTicket
 
 
 class FindCmd(DfuseTestBase):
@@ -47,22 +31,63 @@ class FindCmd(DfuseTestBase):
             The purpose of this test is to create some number of POSIX
             containers using dfuse and link them together such that they form
             a tree with a common root directory. Then, run the find(1) command
-            to locate specific files in various parts of the tree. If the
-            parameter challenger_path is provided, the test will run on it
-            and compare the performance of the provided file system against
-            DAOS File System.
+            to locate specific files in various parts of the tree.
+
+            The test will fail if find(1) command crashes or if the number of
+            files found is not equal to the number of files created.
 
         :avocado: tags=all,hw,daosio,medium,ib2,full_regression,findcmd
         """
+        self._test_findcmd()
+
+    @skipForTicket("DAOS-6530")
+    def test_findcmd_perf(self):
+        """Jira ID: DAOS-5563.
+
+        Test Description:
+            The purpose of this test is to benchmark the 'findcmd' test on a
+            given file system pointed by the 'challenger_path' parameter and
+            compared it against DAOS.
+
+            The test will fail if DAOS performance is lower than the
+            challenger performance.
+
+        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,findcmd_perf
+        """
+        # Number of repetitions each test will run.
+        samples = self.params.get("samples", '/run/perf/*')
+        # Challenger file system path. Ex: /mnt/lustre
+        challenger_path = self.params.get("challenger_path", '/run/perf/*')
+        self._test_findcmd(samples, challenger_path)
+
+    def _test_findcmd(self, samples=1, challenger_path=""):
+        """
+        Create some number of POSIX containers using dfuse and link them
+        together such that they form a tree with a common root directory. Then,
+        run the find(1) command to locate specific files in various parts of
+        the tree. If the parameter challenger_path is provided, the test will
+        run on it and compare the performance of the provided file system
+        against DAOS File System. The test will run sample times and will
+        maximum data points.
+
+        Parameters:
+            samples         (int): Number of repetitions each test will run.
+            challenger_path (str): Path where the challenger file system is
+                                   mounted. Example: /mnt/lustre
+        """
+        # Number of containers to be created and mounted.
         cont_count = self.params.get("cont_count", '/run/container/*')
+        # Common root directory where the containers will be mounted.
         dfs_path = self.params.get("dfs_path", '/run/find_cmd/*')
-        samples = self.params.get("samples", '/run/find_cmd/*')
+        # Height of the directory-tree.
         height = self.params.get("height", '/run/find_cmd/*')
+        # Number of sub directories per directories.
         subdirs_per_node = self.params.get(
             "subdirs_per_node", '/run/find_cmd/*')
+        # Number of files created per directory.
         files_per_node = self.params.get("files_per_node", '/run/find_cmd/*')
+        # Number of *.needle files that will be created.
         needles = self.params.get("needles", '/run/find_cmd/*')
-        challenger_path = self.params.get("challenger_path", '/run/find_cmd/*')
         temp_dfs_path = ""
 
         dfuses = list()
@@ -115,10 +140,10 @@ class FindCmd(DfuseTestBase):
             self.pool.destroy()
 
             if challenger_path:
-                self._run_cmd(u"rm -rf {0}".format(challenger_path))
+                self._run_cmd("rm -rf {0}".format(challenger_path))
 
             if temp_dfs_path:
-                self._run_cmd(u"rm -rf {0}".format(temp_dfs_path))
+                self._run_cmd("rm -rf {0}".format(temp_dfs_path))
 
         self.log.info("DAOS Stats")
         daos_stats.print_stats()
@@ -154,12 +179,12 @@ class FindCmd(DfuseTestBase):
         the number of expected files. The test fails.
         """
         profiler = general_utils.SimpleProfiler()
-        profiler.set_logger(self.log.info)
+        profiler.set_logger(self.log)
 
         def _search_needles(file_name, sample_tag, expected_res):
             self.log.info("Searching pattern: %s", file_name)
             self.log.info("Number of expecting results: %d", expected_res)
-            cmd = u"find {0} -name {1} | wc -l | grep {2}".format(test_path,
+            cmd = "find {0} -name {1} | wc -l | grep {2}".format(test_path,
                                                                   file_name,
                                                                   expected_res)
             profiler.run(self._run_cmd,
@@ -226,13 +251,13 @@ class FindCmd(DfuseTestBase):
                 path, height, subdirs, files_per_node, needles, prefix)
             dir_tree_cmd = "PYTHONPATH={} python {} {}".format(
                 remote_pythonpath, os.path.abspath(__file__), remote_args)
-            self._run_cmd(u"{0}".format(dir_tree_cmd))
+            self._run_cmd("{0}".format(dir_tree_cmd))
 
     def _run_cmd(self, cmd):
         ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=180)
         if 0 not in ret_code:
             error_hosts = NodeSet(
-                ",".join([str(v) for k, v in ret_code.items() if k != 0]))
+                ",".join([str(v) for k, v in list(ret_code.items()) if k != 0]))
             raise CommandFailure(
                 "Error running '{}' on the following hosts: {}".format(
                     cmd, error_hosts))
@@ -255,7 +280,7 @@ class FindCmd(DfuseTestBase):
         for directory in range(directories):
             dir_name = "test_dir_{:05d}".format(directory)
             dir_name = os.path.join(test_path, dir_name)
-            self._run_cmd(u"mkdir -p {0}".format(dir_name))
+            self._run_cmd("mkdir -p {0}".format(dir_name))
             challenger_dirs.append(dir_name)
 
         return challenger_dirs

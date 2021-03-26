@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2020 Intel Corporation.
+  (C) Copyright 2019-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from general_utils import pcmd
 
@@ -39,7 +22,7 @@ class FioCommand(ExecutableCommand):
             path (str, optional): path to location of command binary file.
                 Defaults to "".
         """
-        super(FioCommand, self).__init__("/run/fio/*", "fio", path)
+        super().__init__("/run/fio/*", "fio", path)
 
         # fio commandline options
         self.debug = FormattedParameter("--debug={}")
@@ -119,7 +102,7 @@ class FioCommand(ExecutableCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(FioCommand, self).get_params(test)
+        super().get_params(test)
 
         # Add jobs
         self._jobs.clear()
@@ -161,7 +144,7 @@ class FioCommand(ExecutableCommand):
             str: the command with all the defined parameters
 
         """
-        command = [super(FioCommand, self).__str__()]
+        command = [super().__str__()]
         for name in sorted(self._jobs):
             if name == "global":
                 command.insert(1, str(self._jobs[name]))
@@ -179,7 +162,7 @@ class FioCommand(ExecutableCommand):
         if self._hosts is None:
             # Run fio locally
             self.log.debug("Running: %s", self.__str__())
-            super(FioCommand, self)._run_process()
+            super()._run_process()
         else:
             # Run fio remotely
             self.log.debug("Running: %s", self.__str__())
@@ -189,7 +172,7 @@ class FioCommand(ExecutableCommand):
             if len(ret_codes) > 1 or 0 not in ret_codes:
                 failed = [
                     "{}: rc={}".format(val, key)
-                    for key, val in ret_codes.items() if key != 0
+                    for key, val in list(ret_codes.items()) if key != 0
                 ]
                 raise CommandFailure(
                     "Error running fio on the following hosts: {}".format(
@@ -211,7 +194,7 @@ class FioCommand(ExecutableCommand):
             """
             job_namespace = namespace.split("/")
             job_namespace.insert(-1, name)
-            super(FioCommand.FioJob, self).__init__(
+            super().__init__(
                 "/".join(job_namespace), "--name={}".format(name))
 
             # fio global/local job options

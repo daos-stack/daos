@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DSR: RPC Protocol Serialization Functions
@@ -174,11 +157,7 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 				  uint32_t idx, uint32_t nr)
 {
 	struct dcs_csum_info	*singv_ci;
-	int			 rc, i;
-
-	rc = proc_struct_dcs_csum_info(proc, &iod_csum->ic_akey);
-	if (unlikely(rc))
-		return rc;
+	int			 rc = 0, i;
 
 	if (ENCODING(proc_op)) {
 		if (iod_csum->ic_nr != 0) {
@@ -213,6 +192,8 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (DECODING(proc_op)) {
 		PROC(uint32_t, &iod_csum->ic_nr);
 		D_ALLOC_ARRAY(iod_csum->ic_data, iod_csum->ic_nr);
+		if (iod_csum->ic_data == NULL)
+			return -DER_NOMEM;
 		for (i = 0; i < iod_csum->ic_nr; i++) {
 			rc = proc_struct_dcs_csum_info(proc,
 				&iod_csum->ic_data[i]);
@@ -230,7 +211,15 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 			if (unlikely(rc))
 				break;
 		}
+		if (rc != 0)
+			return rc;
 		D_FREE(iod_csum->ic_data);
+	}
+
+	rc = proc_struct_dcs_csum_info(proc, &iod_csum->ic_akey);
+	if (unlikely(rc)) {
+		D_FREE(iod_csum->ic_data);
+		return rc;
 	}
 
 	return rc;

@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import ctypes
 import time
@@ -28,7 +11,7 @@ import random
 
 from pydaos.raw import (DaosContainer, IORequest, DaosObj, DaosApiError)
 from apricot import TestWithServers
-
+from general_utils import create_string_buffer
 
 class ObjectDataValidation(TestWithServers):
     """
@@ -41,7 +24,7 @@ class ObjectDataValidation(TestWithServers):
     """
     # pylint: disable=too-many-instance-attributes
     def setUp(self):
-        super(ObjectDataValidation, self).setUp()
+        super().setUp()
         self.obj = None
         self.ioreq = None
         self.no_of_dkeys = None
@@ -106,9 +89,9 @@ class ObjectDataValidation(TestWithServers):
         akey = 0
         indata = ("{0}".format(str(akey)[0])
                   * self.record_length[record_index])
-        c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
-        c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
-        c_value = ctypes.create_string_buffer(indata)
+        c_dkey = create_string_buffer("dkey {0}".format(dkey))
+        c_akey = create_string_buffer("akey {0}".format(akey))
+        c_value = create_string_buffer(indata)
         c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
         try:
             new_transaction = self.container.get_new_tx()
@@ -209,9 +192,9 @@ class ObjectDataValidation(TestWithServers):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0])
                           * self.record_length[record_index])
-                c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
-                c_value = ctypes.create_string_buffer(indata)
+                c_dkey = create_string_buffer("dkey {0}".format(dkey))
+                c_akey = create_string_buffer("akey {0}".format(akey))
+                c_value = create_string_buffer(indata)
                 c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
 
                 self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
@@ -228,8 +211,8 @@ class ObjectDataValidation(TestWithServers):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0]) *
                           self.record_length[record_index])
-                c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
+                c_dkey = create_string_buffer("dkey {0}".format(dkey))
+                c_akey = create_string_buffer("akey {0}".format(akey))
                 val = self.ioreq.single_fetch(c_dkey,
                                               c_akey,
                                               len(indata)+1)
@@ -264,10 +247,9 @@ class ObjectDataValidation(TestWithServers):
                 value = ("{0}".format(str(akey)[0])
                          * self.record_length[record_index])
                 for item in range(self.array_size):
-                    c_values.append((ctypes.create_string_buffer(value),
-                                     len(value)+1))
-                c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
+                    c_values.append((create_string_buffer(value), len(value)+1))
+                c_dkey = create_string_buffer("dkey {0}".format(dkey))
+                c_akey = create_string_buffer("akey {0}".format(akey))
 
                 self.ioreq.insert_array(c_dkey, c_akey, c_values)
 
@@ -287,8 +269,8 @@ class ObjectDataValidation(TestWithServers):
                          * self.record_length[record_index])
                 for item in range(self.array_size):
                     indata.append(value)
-                c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
-                c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
+                c_dkey = create_string_buffer("dkey {0}".format(dkey))
+                c_akey = create_string_buffer("akey {0}".format(akey))
                 c_rec_count = ctypes.c_uint(len(indata))
                 c_rec_size = ctypes.c_size_t(len(indata[0]) + 1)
 
