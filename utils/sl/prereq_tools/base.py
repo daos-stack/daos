@@ -776,6 +776,7 @@ class PreReqComponent():
         compiler_map = {'gcc': {'CC' : 'gcc', 'CXX' : 'g++'},
                         'covc' : {'CC' : '/opt/BullseyeCoverage/bin/gcc',
                                   'CXX' : '/opt/BullseyeCoverage/bin/g++',
+                                  'CVS' : '/opt/BullseyeCoverage/bin/covselect',
                                   'COV01' : '/opt/BullseyeCoverage/bin/cov01'},
                         'clang' : {'CC' : 'clang', 'CXX' : 'clang++'},
                         'icc' : {'CC' : 'icc', 'CXX' : 'icpc'},
@@ -820,7 +821,22 @@ class PreReqComponent():
             covfile = self.__top_dir + "/test.cov"
             if os.path.isfile(covfile):
                 os.remove(covfile)
-            commands = ['$COV01 -1', '$COV01 -s']
+            commands = ['$COV01 -1',
+                        '$COV01 -s',
+                        '$CVS --add \'!**/src/cart/test/utest/\'',
+                        '$CVS --add \'!**/src/common/tests/\'',
+                        '$CVS --add \'!**/src/gurt/tests/\'',
+                        '$CVS --add \'!**/src/iosrv/tests/\'',
+                        '$CVS --add \'!**/src/mgmt/tests/\'',
+                        '$CVS --add \'!**/src/object/tests/\'',
+                        '$CVS --add \'!**/src/placement/tests/\'',
+                        '$CVS --add \'!**/src/rdb/tests/\'',
+                        '$CVS --add \'!**/src/security/tests/\'',
+                        '$CVS --add \'!**/src/utils/self_test/\'',
+                        '$CVS --add \'!**/src/utils/ctl/\'',
+                        '$CVS --add \'!**/src/vea/tests/\'',
+                        '$CVS --add \'!**/src/vos/tests/\'',
+                        '$CVS --add \'!**/src/tests/\'']
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
 
