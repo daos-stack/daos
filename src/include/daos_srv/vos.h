@@ -272,8 +272,7 @@ vos_pool_destroy(const char *path, uuid_t uuid);
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
-	      daos_handle_t *poh);
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
@@ -1069,6 +1068,12 @@ enum vos_pool_opc {
 	/** Set pool tiering policy */
 	VOS_PO_CTL_SET_POLICY,
 };
+
+typedef struct {
+	enum tier_policy_t policy_index;
+	unsigned int  policy_io_size_low;
+	unsigned int  policy_io_size_high;
+} vos_ctl_set_policy_param;
 
 /**
  * control ephemeral status of pool, see \a vos_pool_opc, this function is

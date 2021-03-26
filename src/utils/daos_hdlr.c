@@ -220,6 +220,9 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 		daos_acl_dump(entry->dpe_val_ptr);
 	}
 
+
+
+
 	return rc;
 }
 
