@@ -12,6 +12,7 @@ import logging
 import cart_logparse
 import cart_logtest
 import socket
+import re
 
 from apricot import TestWithoutServers
 from general_utils import stop_processes
@@ -35,6 +36,49 @@ class CartTest(TestWithoutServers):
         super().setUp()
         self.set_other_env_vars()
         self.env = self.get_env()
+
+        # Add test binaries and daos binaries to PATH
+        test_dirs = {"TESTING": "tests", "install": "bin"}
+        found_path = False
+        path_dirname = os.path.dirname(os.path.abspath(__file__))
+
+        # Use the developer environment from which this python file was called
+        if ("DAOS_ENV" in os.environ) and (os.environ["DAOS_ENV"] == "dev"):
+
+            while True:
+                if os.path.basename(path_dirname) == "TESTING":
+                    added_path = os.path.join(path_dirname,
+                                              test_dirs["TESTING"])
+                    os.environ["PATH"] += os.pathsep + added_path
+                    self.print("\nAdding {} to PATH\n".format(added_path))
+                    found_path = True
+                elif os.path.basename(path_dirname) == "install":
+                    added_path = os.path.join(path_dirname,
+                                              test_dirs["install"])
+                    if os.path.isdir(added_path):
+                        os.environ["PATH"] += os.pathsep + added_path
+                        self.print("\nAdding {} to PATH\n".format(added_path))
+                        found_path = True
+                    else:
+                        print("ERROR: Directory does not exist: " + added_path)
+                elif re.match(r"^\s*\/+\s*$", path_dirname) is not None:
+                    if not found_path:
+                        print("ERROR: Couldn't find a directory " +
+                              "named 'TESTING' or 'install' to add " +
+                              "to your PATH.\n")
+                    break
+
+                path_dirname = os.path.dirname(path_dirname)
+
+        # Default to to testing RPM
+        else:
+
+            tests_dir = "/usr/lib/daos/TESTING/tests/"
+            if os.path.isdir(tests_dir):
+                os.environ["PATH"] += os.pathsep + tests_dir
+            else:
+                print("WARNING: I didn't find the daos tests directory. " +
+                      "No test directories have been added to your PATH..\n")
 
     def tearDown(self):
         """Tear down the test case."""
