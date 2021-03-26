@@ -165,6 +165,11 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 					svc_list->rl_nr * sizeof(d_rank_t), 8);
 			}
 			break;
+		case DAOS_PROP_PO_POLICY:
+			D_ASSERT(strlen(prop_entry->dpe_str) <=
+							DAOS_PROP_POLICY_MAX_LEN);
+			strcpy(iv_prop->pip_policy, prop_entry->dpe_str);
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -181,6 +186,7 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 	void			*owner_alloc = NULL;
 	void			*owner_grp_alloc = NULL;
 	void			*acl_alloc = NULL;
+	void			*policy_alloc = NULL;
 	d_rank_list_t		*svc_list = NULL;
 	d_rank_list_t		*dst_list;
 	int			i;
@@ -258,6 +264,16 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 				prop_entry->dpe_val_ptr = dst_list;
 			}
 			break;
+		case DAOS_PROP_PO_POLICY:
+			D_ASSERT(strlen(iv_prop->pip_label) <=
+				 DAOS_PROP_POLICY_MAX_LEN);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_label,
+				  DAOS_PROP_POLICY_MAX_LEN);
+			if (prop_entry->dpe_str)
+				policy_alloc = prop_entry->dpe_str;
+			else
+				D_GOTO(out, rc = -DER_NOMEM);
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -276,6 +292,8 @@ out:
 			D_FREE(owner_grp_alloc);
 		if (svc_list)
 			d_rank_list_free(dst_list);
+		if (policy_alloc)
+			D_FREE(policy_alloc);
 	}
 	return rc;
 }

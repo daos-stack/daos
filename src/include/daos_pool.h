@@ -49,11 +49,12 @@ typedef struct {
 	int			foo;
 } daos_target_perf_t;
 
-enum {
+typedef enum {
 	DAOS_MEDIA_SCM	= 0,
 	DAOS_MEDIA_NVME,
+	DAOS_MEDIA_OPTANE,
 	DAOS_MEDIA_MAX
-};
+} daos_media_type_t;
 
 /** Pool target space usage information */
 struct daos_space {

@@ -174,6 +174,15 @@ pool_decode_props(daos_prop_t *props)
 		daos_acl_dump(entry->dpe_val_ptr);
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_PO_POLICY);
+	if (entry == NULL || entry->dpe_str == NULL) {
+		fprintf(stderr, "policy property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("policy:\t\t%s\n", entry->dpe_str);
+	}
+
+
 	return rc;
 }
 

@@ -50,6 +50,7 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	case DAOS_PROP_CO_OWNER:
 	case DAOS_PROP_PO_OWNER_GROUP:
 	case DAOS_PROP_CO_OWNER_GROUP:
+	case DAOS_PROP_PO_POLICY:
 		if (entry->dpe_str)
 			D_FREE(entry->dpe_str);
 		break;
@@ -205,6 +206,12 @@ daos_prop_label_valid(d_string_t label)
 	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN);
 }
 
+static bool
+daos_prop_policy_valid(d_string_t policy)
+{
+	return daos_prop_str_valid(policy, "policy", DAOS_PROP_POLICY_MAX_LEN);
+}
+
 /**
  * Check if the input daos_prop_t parameter is valid
  * \a pool true for pool properties, false for container properties.
@@ -268,6 +275,12 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				prop->dpp_entries[i].dpe_str))
 				return false;
 			break;
+		case DAOS_PROP_PO_POLICY:
+			if (!daos_prop_policy_valid(
+				prop->dpp_entries[i].dpe_str))
+				return false;
+			break;
+
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
 			acl_ptr = prop->dpp_entries[i].dpe_val_ptr;
@@ -464,6 +477,14 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 			return -DER_NOMEM;
 		}
 		break;
+	case DAOS_PROP_PO_POLICY:
+		D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
+			  DAOS_PROP_POLICY_MAX_LEN);
+		if (entry_dup->dpe_str == NULL) {
+			D_ERROR("failed to dup policy.\n");
+			return -DER_NOMEM;
+		}
+		break;
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
 		acl_ptr = entry->dpe_val_ptr;
@@ -598,6 +619,7 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	bool			 group_alloc = false;
 	bool			 svc_list_alloc = false;
 	bool			 roots_alloc = false;
+	bool			 policy_alloc = false;
 	struct daos_acl		*acl;
 	d_rank_list_t		*dst_list;
 	uint32_t		 type;
@@ -674,6 +696,12 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 				D_GOTO(out, rc);
 
 			roots_alloc = true;
+		} else if (type == DAOS_PROP_PO_POLICY) {
+			D_STRNDUP(entry_req->dpe_str, entry_reply->dpe_str,
+				  DAOS_PROP_POLICY_MAX_LEN);
+			if (entry_req->dpe_str == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			policy_alloc = true;
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -707,6 +735,9 @@ out:
 
 		if (entries_alloc)
 			D_FREE(prop_req->dpp_entries);
+
+		if (policy_alloc)
+			free_str_prop_entry(prop_req, DAOS_PROP_PO_POLICY);
 	}
 	return rc;
 }

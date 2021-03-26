@@ -232,6 +232,13 @@ func (x *PoolCreateReq) GetNvmebytes() uint64 {
 	return 0
 }
 
+func (m *PoolCreateReq) GetPolicy() string {
+	if m != nil {
+		return m.Policy
+	}
+	return ""
+}
+
 // PoolCreateResp returns created pool uuid and ranks.
 type PoolCreateResp struct {
 	state         protoimpl.MessageState
@@ -310,6 +317,13 @@ func (x *PoolCreateResp) GetNvmeBytes() uint64 {
 		return x.NvmeBytes
 	}
 	return 0
+}
+
+func (m *PoolCreateResp) GetPolicy() string {
+	if m != nil {
+		return m.Policy
+	}
+	return ""
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -1752,6 +1766,13 @@ func (x *PoolQueryResp) GetLeader() uint32 {
 		return x.Leader
 	}
 	return 0
+}
+
+func (m *PoolQueryResp) GetPolicy() string {
+	if m != nil {
+		return m.Policy
+	}
+	return ""
 }
 
 // PoolSetPropReq represents a request to set a pool property.

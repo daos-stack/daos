@@ -183,11 +183,12 @@ out:
 
 static int
 create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
-		  char *label, const char **ace_list, size_t ace_nr)
+		  char *label, const char **ace_list, size_t ace_nr, const char *policy)
 {
 	char		*out_owner = NULL;
 	char		*out_owner_grp = NULL;
 	char		*out_label = NULL;
+	char 		*out_policy = NULL;
 	struct daos_acl	*out_acl = NULL;
 	daos_prop_t	*new_prop = NULL;
 	uint32_t	entries = 0;
@@ -226,6 +227,14 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		entries++;
 	}
 
+	if (policy != NULL && *policy != '\0') {
+		D_ASPRINTF(out_policy, "%s", policy);
+		if (out_policy == NULL)
+			D_GOTO(err_out, rc = -DER_NOMEM);
+
+		entries++;
+	}
+
 	if (entries == 0) {
 		D_ERROR("No prop entries provided, aborting!\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
@@ -256,6 +265,12 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 	if (out_acl != NULL) {
 		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
 		new_prop->dpp_entries[idx].dpe_val_ptr = out_acl;
+		idx++;
+	}
+
+	if (out_policy != NULL) {
+		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POLICY;
+		new_prop->dpp_entries[idx].dpe_str = out_policy;
 		idx++;
 	}
 
@@ -312,7 +327,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
 	rc = create_pool_props(&prop, req->user, req->usergroup, req->name,
-			       (const char **)req->acl, req->n_acl);
+			       (const char **)req->acl, req->n_acl, req->policy);
 	if (rc != 0)
 		goto out;
 
