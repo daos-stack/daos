@@ -12,6 +12,7 @@ import os
 import sys
 import json
 
+
 def load_conf():
     """Load the build config file"""
     file_self = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +27,7 @@ def load_conf():
 
         file_self = os.path.dirname(file_self)
     return None
+
 
 from setuptools import setup, find_packages, Extension
 
@@ -48,9 +50,9 @@ args['define_macros'] = [('__USE_PYTHON3__', 1)]
 module1 = Extension('pydaos.{}'.format(shim_name), **args)
 
 setup(
-    name = 'pydaos',
-    version = '0.2',
-    packages = find_packages(),
-    description = 'DAOS interface',
-    ext_modules = [module1]
+    name='pydaos',
+    version='0.2',
+    packages=find_packages(),
+    description='DAOS interface',
+    ext_modules=[module1]
 )

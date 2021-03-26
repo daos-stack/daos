@@ -8,12 +8,12 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 
 import sys
 import atexit
-
-DAOS_MAGIC = 0x7A89
-
 # pylint: disable=import-error
 import pydaos_shim_3 as pydaos_shim
 # pylint: enable=import-error
+
+DAOS_MAGIC = 0x7A89
+
 
 # Define the PyDError class here before doing the pydaos_core import so that
 # it's accessible from within the module.
@@ -33,6 +33,7 @@ class PyDError(Exception):
 
     def __str__(self):
         return self.message
+
 
 class DaosClient():
     # pylint: disable=too-few-public-methods
@@ -80,9 +81,11 @@ class DaosClient():
             return
         self._close()
 
+
 @atexit.register
 def _cleanup():
     DaosClient.cleanup()
+
 
 from .pydaos_core import *
 
