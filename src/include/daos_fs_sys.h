@@ -146,7 +146,8 @@ dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf,
 		int flags, int sflags);
 
 /**
- * Set atime and mtime of a path.
+ * Set atime and mtime of a path. This currently does not set
+ * nanosecond precision.
  *
  * \param[in]	dfs_sys Pointer to the mounted file system.
  * \param[in]	path	Link path of object.
@@ -304,7 +305,7 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path);
  * \param[in]	path	Link path of the object to create/open.
  * \param[in]	mode	mode_t (permissions + type).
  * \param[in]	flags	Access flags (handles: O_RDONLY, O_RDWR, O_EXCL,
- *			O_CREAT, O_TRUNC).
+ *			O_CREAT, O_TRUNC, O_NOFOLLOW).
  * \param[in]	cid	DAOS object class id (pass 0 for default MAX_RW).
  *			Valid on create only; ignored otherwise.
  * \param[in]	chunk_size

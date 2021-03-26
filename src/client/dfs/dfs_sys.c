@@ -606,7 +606,7 @@ dfs_sys_access(dfs_sys_t *dfs_sys, const char *path, int mask, int flags)
 	/* If not following symlinks then lookup the obj first
 	 * and return success for a symlink.
 	 */
-	if (sys_path.name != NULL && flags & O_NOFOLLOW) {
+	if ((sys_path.name != NULL) && (flags & O_NOFOLLOW)) {
 		lookup_flags |= O_NOFOLLOW;
 
 		/* Lookup the obj and get it's mode */
@@ -623,7 +623,7 @@ dfs_sys_access(dfs_sys_t *dfs_sys, const char *path, int mask, int flags)
 
 		/* A link itself is always accessible */
 		if (S_ISLNK(mode))
-			D_GOTO(out_free_path, rc);
+			D_GOTO(out_free_path, rc = 0);
 	}
 
 	/* Either we are following symlinks, the obj is root,
@@ -1263,6 +1263,8 @@ remove:
 
 		/* TODO - Ideally, we should return something like EBUSY
 		 * if there are still open handles to the directory.
+		 * TODO - if force=true then we need to delete any child
+		 * directories as well.
 		 */
 		deleted = d_hash_rec_delete(dfs_sys->hash, sys_path.path,
 					    sys_path.path_len);
