@@ -103,6 +103,11 @@ test_run(void)
 		if (test_g.cg_num_ranks > 0) {
 			_cg_ranks = (uint32_t *)test_g.cg_ranks;
 			_cg_num_ranks = test_g.cg_num_ranks;
+
+			/* free up rank list from tc_cli_start_basic */
+			if (rank_list != NULL){
+				d_rank_list_free(rank_list);
+			}
 			rank_list = uint32_array_to_rank_list(_cg_ranks,
 							      _cg_num_ranks);
 		}
@@ -119,7 +124,7 @@ test_run(void)
 
 	if (test_g.t_init_only) {
 		DBG_PRINT("Init only. Returning now.\n");
-		return;
+		D_GOTO(clean_up, rc = 0);
 	}
 
 	test_g.t_fault_attr_1000 = d_fault_attr_lookup(1000);
@@ -163,22 +168,30 @@ test_run(void)
 	}
 
 	if ((test_g.t_skip_shutdown) || (rank_list == NULL)) {
-		DBG_PRINT("Skipping shutdown stage.\n");
+		DBG_PRINT("Skipping shutdown stage. Rank_list %p\n",
+                             rank_list);
 	} else {
 		/* Shutdown all ranks */
+		DBG_PRINT("Shutdown all ranks\n");
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			server_ep.ep_rank = rank_list->rl_ranks[i];
 			send_rpc_shutdown(server_ep, rpc_req);
 		}
 	}
-	if (rank_list != NULL)
+
+clean_up:
+	if (rank_list != NULL){
+		/* avoid checkpatch warning */
 		d_rank_list_free(rank_list);
+	}
 	rank_list = NULL;
 
 	if (test_g.t_save_cfg) {
+		DBG_PRINT("Detatch Group %p\n", grp);
 		rc = crt_group_detach(grp);
 		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
 	} else {
+		DBG_PRINT("Destroy Group %p\n", grp);
 		rc = crt_group_view_destroy(grp);
 		D_ASSERTF(rc == 0,
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
@@ -196,7 +209,6 @@ test_run(void)
 
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
-
 	D_DEBUG(DB_TEST, "exiting.\n");
 
 	if (test_g.t_hold)
