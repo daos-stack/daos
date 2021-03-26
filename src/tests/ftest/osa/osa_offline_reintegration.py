@@ -90,7 +90,7 @@ class OSAOfflineReintegration(OSAUtils):
                     output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                            rank[val])
                     # Check the IOR data after exclude
-                    if data and (val == 0):
+                    if data:
                         self.run_ior_thread("Read", oclass, test_seq)
                 else:
                     output = self.dmg_command.system_stop(ranks=rank[val],
