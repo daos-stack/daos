@@ -6,7 +6,7 @@
 """
 
 import threading
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 
 
 class RebuildTests(TestWithServers):
@@ -31,6 +31,7 @@ class RebuildTests(TestWithServers):
             self.pool.append(self.get_pool(create=False))
             self.container.append(
                 self.get_container(self.pool[-1], create=False))
+        targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank", "/run/testparams/*")
         obj_class = self.params.get("object_class", "/run/testparams/*")
 
@@ -41,7 +42,7 @@ class RebuildTests(TestWithServers):
             self.pool[index].create()
             status &= self.pool[index].check_pool_info(
                 pi_nnodes=server_count,
-                pi_ntargets=server_count,               # DAOS-2799
+                pi_ntargets=(server_count * targets),
                 pi_ndisabled=0
             )
             status &= self.pool[index].check_rebuild_status(
@@ -105,8 +106,8 @@ class RebuildTests(TestWithServers):
         for index in range(pool_quantity):
             status &= self.pool[index].check_pool_info(
                 pi_nnodes=server_count,
-                pi_ntargets=server_count,              # DAOS-2799
-                pi_ndisabled=1
+                pi_ntargets=(server_count * targets),
+                pi_ndisabled=targets
             )
             status &= self.pool[index].check_rebuild_status(
                 rs_done=1, rs_obj_nr=rs_obj_nr[index],
