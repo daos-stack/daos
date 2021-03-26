@@ -59,7 +59,8 @@ class RebuildTests(TestWithServers):
         threads = []
         for index in range(pool_quantity):
             self.log.info(" ..construct thread # %s", index)
-            thread = threading.Thread(target=self.pool[index].wait_for_rebuild(True))
+            thread = threading.Thread(
+                target=self.pool[index].wait_for_rebuild(True))
             threads.append(thread)
 
         # Determine how many objects will need to be rebuilt
