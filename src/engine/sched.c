@@ -415,7 +415,7 @@ sched_info_init(struct dss_xstream *dx)
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 
-	info->si_cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	info->si_cur_ts = daos_getmtime_coarse();
 	info->si_stats.ss_tot_time = 0;
 	info->si_stats.ss_relax_time = 0;
 	info->si_stats.ss_busy_ts = info->si_cur_ts;
@@ -1091,7 +1091,7 @@ wakeup_all(struct dss_xstream *dx)
 	uint64_t		 cur_ts;
 
 	/* Update current ts stored in sched_info */
-	cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	cur_ts = daos_getmtime_coarse();
 	D_ASSERT(cur_ts >= info->si_cur_ts);
 	info->si_stats.ss_tot_time += (cur_ts - info->si_cur_ts);
 	info->si_cur_ts = cur_ts;
