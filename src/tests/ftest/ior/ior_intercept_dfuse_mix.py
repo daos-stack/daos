@@ -93,37 +93,35 @@ class IorInterceptDfuseMix(IorTestBase):
         wo_read_mean = float(wo_read_results[mean_mib])
 
         # Calculate the increase for the 6 values.
-        write_max_change = -1
+        # [max, min, mean]
+        write_changes = [-1, -1, -1]
         if wo_write_max > 0:
-            write_max_change = round(w_write_max / wo_write_max, 4)
-        write_min_change = -1
+            write_changes[0] = round(w_write_max / wo_write_max, 4)
         if wo_write_min > 0:
-            write_min_change = round(w_write_min / wo_write_min, 4)
-        write_mean_change = -1
+            write_changes[1] = round(w_write_min / wo_write_min, 4)
         if wo_write_mean > 0:
-            write_mean_change = round(w_write_mean / wo_write_mean, 4)
+            write_changes[2] = round(w_write_mean / wo_write_mean, 4)
 
-        read_max_change = -1
+        # [max, min, mean]
+        read_changes = [-1, -1, -1]
         if wo_read_max > 0:
-            read_max_change = round(w_read_max / wo_read_max, 4)
-        read_min_change = -1
+            read_changes[0] = round(w_read_max / wo_read_max, 4)
         if wo_read_min > 0:
-            read_min_change = round(w_read_min / wo_read_min, 4)
-        read_mean_change = -1
+            read_changes[1] = round(w_read_min / wo_read_min, 4)
         if wo_read_mean > 0:
-            read_mean_change = round(w_read_mean / wo_read_mean, 4)
+            read_changes[2] = round(w_read_mean / wo_read_mean, 4)
 
         # Print the summary of improvements.
         self.log.info(
             "--- Throughput Improvement with Interception Library ---")
         self.log.info("Clients with IL: %s", w_clients)
         self.log.info("Clients without IL: %s\n", wo_clients)
-        self.log.info("Write Max: x%f", write_max_change)
-        self.log.info("Write Min: x%f", write_min_change)
-        self.log.info("Write Mean: x%f\n", write_mean_change)
-        self.log.info("Read Max: x%f", read_max_change)
-        self.log.info("Read Min: x%f", read_min_change)
-        self.log.info("Read Mean: x%f", read_mean_change)
+        self.log.info("Write Max: x%f", write_changes[0])
+        self.log.info("Write Min: x%f", write_changes[1])
+        self.log.info("Write Mean: x%f\n", write_changes[2])
+        self.log.info("Read Max: x%f", read_changes[0])
+        self.log.info("Read Min: x%f", read_changes[1])
+        self.log.info("Read Mean: x%f", read_changes[2])
 
         # Do the threshold testing.
         write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*", 1)
@@ -150,9 +148,11 @@ class IorInterceptDfuseMix(IorTestBase):
         # if w_read_max <= read_x * wo_read_max:
         #     errors.append("Read Max with IL is less than x{}!".format(read_x))
         # if w_read_min <= read_x * wo_read_min:
-        #     errors.append("Read Min with IL is less than x{}!".format(read_x))
+        #     errors.append(
+        # "Read Min with IL is less than x{}!".format(read_x))
         # if w_read_mean <= read_x * wo_read_mean:
-        #     errors.append("Read Mean with IL is less than x{}!".format(read_x))
+        #     errors.append(
+        # "Read Mean with IL is less than x{}!".format(read_x))
 
         if errors:
             self.fail("Poor IL throughput improvement!\n{}".format(
