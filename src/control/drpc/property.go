@@ -8,6 +8,7 @@ package drpc
 import "unsafe"
 
 // #include <daos_prop.h>
+// #include <daos/policy.h>
 import "C"
 
 const (
@@ -28,6 +29,8 @@ const (
 	PoolPropertyOwnerGroup = C.DAOS_PROP_PO_OWNER_GROUP
 	// PoolPropertyECCellSize is the EC Cell size.
 	PoolPropertyECCellSize = C.DAOS_PROP_PO_EC_CELL_SZ
+	// PoolPropertyPolicy is the tiering policy set for a pool
+	PoolPropertyPolicy = C.DAOS_PROP_PO_POLICY
 )
 
 const (
@@ -58,3 +61,12 @@ func LabelIsValid(label string) bool {
 
 	return bool(C.daos_label_is_valid(cLabel))
 }
+
+type PoolPolicy uint32
+
+const (
+	// PoolPolicyDefault sets the pool's policy to io_size
+	PoolPolicyIoSize PoolPolicy = C.DAOS_MEDIA_POLICY_IO_SIZE
+	// PoolPolicyDefault sets the pool's policy to write_intensivity
+	PoolPolicyWriteIntensivity PoolPolicy = C.DAOS_MEDIA_POLICY_WRITE_INTENSIVITY
+)

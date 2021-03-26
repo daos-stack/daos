@@ -598,7 +598,7 @@ gc_prepare(void **state)
 	struct gc_test_args *args = *state;
 
 	daos_fail_loc_set(0);
-	vos_pool_ctl(args->gc_ctx.tsc_poh, VOS_PO_CTL_RESET_GC);
+	vos_pool_ctl(args->gc_ctx.tsc_poh, VOS_PO_CTL_RESET_GC, NULL);
 	memset(&gc_stat, 0, sizeof(gc_stat));
 	return 0;
 }

@@ -51,18 +51,19 @@ struct pool_iv_map {
 
 /* The structure to serialize the prop for IV */
 struct pool_iv_prop {
-	char		pip_label[DAOS_PROP_LABEL_MAX_LEN];
-	char		pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
-	char		pip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
-	uint64_t	pip_space_rb;
-	uint64_t	pip_self_heal;
-	uint64_t	pip_reclaim;
-	uint64_t	pip_ec_cell_sz;
-	struct daos_acl	*pip_acl;
-	d_rank_list_t   pip_svc_list;
-	uint32_t	pip_acl_offset;
-	uint32_t	pip_svc_list_offset;
-	char		pip_iv_buf[0];
+	char			pip_label[DAOS_PROP_LABEL_MAX_LEN];
+	char			pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
+	char			pip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
+	struct policy_desc_t	*pip_policy_desc;
+	uint64_t		pip_space_rb;
+	uint64_t		pip_self_heal;
+	uint64_t		pip_reclaim;
+	uint64_t		pip_ec_cell_sz;
+	struct daos_acl		*pip_acl;
+	d_rank_list_t		pip_svc_list;
+	uint32_t		pip_acl_offset;
+	uint32_t		pip_svc_list_offset;
+char				pip_iv_buf[0];
 };
 
 struct pool_iv_conn {

@@ -14,6 +14,7 @@
 #include <daos_srv/pool.h>
 #include <daos_api.h>
 #include <daos_security.h>
+#include <daos/policy.h>
 
 #include "svc.pb-c.h"
 #include "acl.pb-c.h"
@@ -238,41 +239,68 @@ out:
 }
 
 static int
-create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
-		  const char **ace_list, size_t ace_nr)
+create_pool_props_from_req(daos_prop_t **out_prop, const Mgmt__PoolCreateReq *req)
 {
-	char		*out_owner = NULL;
-	char		*out_owner_grp = NULL;
-	char		*out_label = NULL;
-	struct daos_acl	*out_acl = NULL;
-	daos_prop_t	*new_prop = NULL;
-	uint32_t	entries = 0;
-	uint32_t	idx = 0;
-	int		rc = 0;
+	char			*out_owner = NULL;
+	char			*out_owner_grp = NULL;
+	char			*out_label = NULL;
+	struct daos_acl		*out_acl = NULL;
+	struct policy_desc_t 	*out_policy_desc = NULL;
+	daos_prop_t		*new_prop = NULL;
+	uint32_t		entries = 0;
+	uint32_t		idx = 0;
+	int			rc = 0;
 
-	if (ace_list != NULL && ace_nr > 0) {
-		rc = daos_acl_from_strs(ace_list, ace_nr, &out_acl);
+	if (req->acl != NULL && req->n_acl > 0) {
+		rc = daos_acl_from_strs((const char **)req->acl, req->n_acl, &out_acl);
 		if (rc != 0)
 			D_GOTO(err_out, rc);
 
 		entries++;
 	}
 
-	if (owner != NULL && *owner != '\0') {
-		D_ASPRINTF(out_owner, "%s", owner);
+	if (req->user != NULL && *req->user != '\0') {
+		D_ASPRINTF(out_owner, "%s", req->user);
 		if (out_owner == NULL)
 			D_GOTO(err_out, rc = -DER_NOMEM);
 
 		entries++;
 	}
 
-	if (owner_grp != NULL && *owner_grp != '\0') {
-		D_ASPRINTF(out_owner_grp, "%s", owner_grp);
+	if (req->usergroup != NULL && *req->usergroup != '\0') {
+		D_ASPRINTF(out_owner_grp, "%s", req->usergroup);
 		if (out_owner_grp == NULL)
 			D_GOTO(err_out, rc = -DER_NOMEM);
 
 		entries++;
 	}
+
+	if (req->label != NULL && *req->label != '\0') {
+		D_ASPRINTF(out_label, "%s", req->label);
+		if (out_label == NULL)
+			D_GOTO(err_out, rc = -DER_NOMEM);
+
+		entries++;
+	}
+
+	D_ALLOC(out_policy_desc, sizeof(struct policy_desc_t));
+ 		if (out_policy_desc == NULL)
+			D_GOTO(err_out, rc = -DER_NOMEM);
+
+	if (req->policyparams != NULL)
+	{
+		if (req->n_policyparams > DAOS_MEDIA_POLICY_PARAMS_MAX)
+			D_GOTO(err_out, rc = -DER_INVAL);
+
+		for (int i = 0; i < req->n_policyparams; i++)
+			out_policy_desc->params[i] = req->policyparams[i];
+	}
+	else {
+		for (int i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
+			out_policy_desc->params[i] = 0;
+	}
+	out_policy_desc->policy = req->policy;
+	entries++;
 
 	if (entries == 0) {
 		D_ERROR("No prop entries provided, aborting!\n");
@@ -307,6 +335,11 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		idx++;
 	}
 
+	/* pool tiering policy */
+	new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POLICY;
+	new_prop->dpp_entries[idx].dpe_val_ptr = out_policy_desc;
+	// idx++;
+
 	*out_prop = new_prop;
 
 	return rc;
@@ -317,6 +350,7 @@ err_out:
 	D_FREE(out_label);
 	D_FREE(out_owner_grp);
 	D_FREE(out_owner);
+	D_FREE(out_policy_desc);
 	return rc;
 }
 
@@ -373,8 +407,12 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
+<<<<<<< HEAD
 	rc = create_pool_props(&base_props, req->user, req->usergroup,
 			       (const char **)req->acl, req->n_acl);
+=======
+	rc = create_pool_props_from_req(&prop, req);
+>>>>>>> 5c4a99d63 (Pool tiering policy)
 	if (rc != 0)
 		goto out;
 
