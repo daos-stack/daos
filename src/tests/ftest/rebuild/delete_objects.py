@@ -18,6 +18,13 @@ class RebuildDeleteObjects(RebuildTestBase):
     :avocado: recursive
     """
 
+    CANCEL_FOR_TICKET = [
+        [
+            "DAOS-6865",
+            "rank", 4
+        ],
+    ]
+
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildDeleteObjects object."""
         super().__init__(*args, **kwargs)
@@ -97,7 +104,7 @@ class RebuildDeleteObjects(RebuildTestBase):
             foo
 
         :avocado: tags=all,hw,large,full_regression
-        :avocado: tags= rebuild,rebuilddeleterecord
+        :avocado: tags=rebuild,rebuilddeleterecord
         """
         self.punch_type = "record"
         self.execute_rebuild_test()
