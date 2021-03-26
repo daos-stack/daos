@@ -5415,10 +5415,6 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	struct pl_map_attr	attr;
 	int			rc;
 
-	/** TODO - unsupported for now */
-	if (cid == OC_UNKNOWN)
-		return -DER_INVAL;
-
 	/** select the oclass */
 	poh = dc_cont_hdl2pool_hdl(coh);
 	if (daos_handle_is_inval(poh))
@@ -5434,8 +5430,13 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
 		attr.pa_domain_nr, attr.pa_target_nr);
 
-	rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr,
-				 &cid);
+	/** TODO - unsupported for now */
+	if (cid == OC_UNKNOWN)
+		rc = dc_set_oclass(coh, attr.pa_domain_nr, attr.pa_target_nr,
+				   ofeats, hints, &cid);
+	else
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
+					 attr.pa_target_nr, &cid);
 	if (rc)
 		return rc;
 
