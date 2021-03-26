@@ -1291,10 +1291,9 @@ try_reschedule:
 		 * sequence order.
 		 */
 		rgt->rgt_status.rs_done = 0;
-		dss_sleep(1000);
 		ret = ds_rebuild_schedule(pool, task->dst_map_ver,
 					  &task->dst_tgts,
-					  task->dst_rebuild_op);
+					  task->dst_rebuild_op, 5);
 		if (ret != 0)
 			D_ERROR("reschedule "DF_RC"\n", DP_RC(ret));
 		else
@@ -1376,7 +1375,13 @@ rebuild_ults(void *arg)
 			 * wait to start the next operation until the current
 			 * one completes
 			 */
-			if (pool_is_rebuilding(task->dst_pool_uuid))
+			uint64_t cur_ts = 0;
+
+			rc = daos_gettime_coarse(&cur_ts);
+			D_ASSERT(rc == 0);
+
+			if (cur_ts < task->dst_schedule_time ||
+			    pool_is_rebuilding(task->dst_pool_uuid))
 				continue;
 
 			rc = dss_ult_create(rebuild_task_ult, task,
@@ -1541,10 +1546,11 @@ rebuild_print_list_update(const uuid_t uuid, const uint32_t map_ver,
 int
 ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 		    struct pool_target_id_list *tgts,
-		    daos_rebuild_opc_t rebuild_op)
+		    daos_rebuild_opc_t rebuild_op, uint64_t delay_sec)
 {
 	struct rebuild_task	*task;
 	int			rc;
+	uint64_t		cur_ts = 0;
 
 	if (pool->sp_stopping) {
 		D_DEBUG(DB_REBUILD, DF_UUID" is stopping,"
@@ -1563,6 +1569,10 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 	if (task == NULL)
 		return -DER_NOMEM;
 
+	rc = daos_gettime_coarse(&cur_ts);
+	D_ASSERT(rc == 0);
+
+	task->dst_schedule_time = cur_ts + delay_sec;
 	task->dst_map_ver = map_ver;
 	task->dst_rebuild_op = rebuild_op;
 	uuid_copy(task->dst_pool_uuid, pool->sp_uuid);
@@ -1621,7 +1631,7 @@ regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 		id_list.pti_number = 1;
 
 		rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_fseq,
-					 &id_list, rebuild_op);
+					 &id_list, rebuild_op, 0);
 		if (rc) {
 			D_ERROR(DF_UUID" schedule op %d ver %d failed: rc %d\n",
 				DP_UUID(pool->sp_uuid), rebuild_op,

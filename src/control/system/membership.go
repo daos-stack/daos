@@ -111,6 +111,16 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		curMember, err = m.db.FindMemberByUUID(req.UUID)
 	}
 	if err == nil {
+		// Fault domain check only matters if there are other members
+		// besides the one being updated.
+		if count, err := m.db.MemberCount(); err != nil {
+			return nil, err
+		} else if count != 1 {
+			if err := m.checkReqFaultDomain(req); err != nil {
+				return nil, err
+			}
+		}
+
 		if !curMember.Rank.Equals(req.Rank) {
 			return nil, errRankChanged(req.Rank, curMember.Rank, curMember.UUID)
 
@@ -150,6 +160,10 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		return nil, err
 	}
 
+	if err := m.checkReqFaultDomain(req); err != nil {
+		return nil, err
+	}
+
 	newMember := &Member{
 		Rank:           req.Rank,
 		UUID:           req.UUID,
@@ -170,6 +184,16 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	}
 
 	return resp, nil
+}
+
+func (m *Membership) checkReqFaultDomain(req *JoinRequest) error {
+	currentDepth := m.db.FaultDomainTree().Depth()
+	newDepth := req.FaultDomain.NumLevels()
+	// currentDepth includes the rank layer, which is not included in the req
+	if currentDepth > 0 && newDepth != currentDepth-1 {
+		return FaultBadFaultDomainDepth(req.FaultDomain, currentDepth-1)
+	}
+	return nil
 }
 
 // AddOrReplace adds member to membership or replaces member if it exists.
