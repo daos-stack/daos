@@ -7,10 +7,6 @@
  * Object placement policy
  *  Type and global declarations
  *
- */
-
-#ifndef __VOS_POLICY_H__
-#define __VOS_POLICY_H__
 
 #include <daos/common.h>
 

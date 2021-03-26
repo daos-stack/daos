@@ -177,6 +177,7 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 				iv_prop->pip_policy_desc = (void *)
 							 (iv_prop->pip_iv_buf +
 							 roundup(offset, 8));
+}
 				iv_prop->pip_policy_desc_offset = offset;
 				memcpy(iv_prop->pip_policy_desc, pd,
 				       sizeof(*pd));
