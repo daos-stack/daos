@@ -313,6 +313,12 @@ pool_target_unavail(struct pool_target *tgt, bool for_reint)
 	return pool_component_unavail(&tgt->ta_comp, for_reint);
 }
 
+static inline bool
+pool_target_avail(struct pool_target *tgt, uint32_t allow_status)
+{
+	return tgt->ta_comp.co_status & allow_status;
+}
+
 /** Check if the target is in PO_COMP_ST_DOWN status */
 static inline bool
 pool_target_down(struct pool_target *tgt)
