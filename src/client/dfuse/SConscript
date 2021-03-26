@@ -174,9 +174,13 @@ def scons():
 
     dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid'])
 
-    libs = build_client_libs_shared(dfuse_env)
 
-    static_env = dfuse_env.Clone()
+    gcc_env = dfuse_env.Clone()
+
+    gcc_env['CC'] = 'gcc'
+    libs = build_client_libs_shared(gcc_env)
+
+    static_env = gcc_env.Clone()
 
     # Set this after cloning environment used for interception library.
     # Otherwise, can't define open and open64 entry points
