@@ -362,7 +362,7 @@ boolean skip_test_rpms_centos7() {
 
 boolean skip_scan_rpms_centos7() {
     return target_branch == 'weekly-testing' ||
-           skip_stage('scan-centos-rpms', true) ||
+           skip_stage('scan-centos-rpms') ||
            quick_functional()
 }
 
@@ -1516,7 +1516,7 @@ pipeline {
         } // stage ('Test Report')
     } // stages
     post {
-        always {
+         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
                                                      'centos7-gcc-unit-memcheck']
         }

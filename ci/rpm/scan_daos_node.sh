@@ -14,6 +14,18 @@ pushd "/var/tmp/${lmd_src}"
 sudo ./install.sh
   sudo ln -s /usr/local/maldetect/ /bin/maldet
 popd
+
+fc_conf="/etc/freshclam.conf"
+sudo chmod 766 "$fc_conf"
+if ! grep -q 'ScriptedUpdates no' "$fc_conf"; then
+  printf "ScriptedUpdates no\n" >> "$fc_conf"
+fi
+: "${JOB_URL:=${JENKINS_URL}job/clamav_daily_update/}"
+if ! grep -q "$JENKINS_URL" "$fc_conf"; then
+  printf "PrivateMirror %s\n" \
+         "${JOB_URL}lastSuccessfulBuild/artifact/download/clam" >> "$fc_conf"
+fi
+sudo chmod 744 "$fc_conf"
 sudo freshclam
 rm -f /var/tmp/clamscan.out
 rm "/var/tmp/${lmd_tarball}"
@@ -26,6 +38,7 @@ sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
               --exclude-dir=/sys                       \
               --exclude-dir=/proc                      \
               --exclude-dir=/dev                       \
+              --exclude-dir=/scratch                   \
               --infected / | tee /var/tmp/clamscan.out
 rm -f /var/tmp/maldetect.xml
 if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
