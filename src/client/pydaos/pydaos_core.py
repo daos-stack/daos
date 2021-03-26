@@ -12,10 +12,7 @@ import pickle
 import sys
 
 # pylint: disable=no-name-in-module
-if sys.version_info < (3, 0):
-    from . import pydaos_shim_27 as pydaos_shim
-else:
-    from . import pydaos_shim_3 as pydaos_shim
+from . import pydaos_shim_3 as pydaos_shim
 # pylint: enable=no-name-in-module
 
 from . import DAOS_MAGIC

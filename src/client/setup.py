@@ -42,11 +42,8 @@ if conf:
     args['library_dirs'] = [os.path.join(conf['PREFIX'], 'lib64')]
     args['runtime_library_dirs'] = args['library_dirs']
 
-if sys.version_info < (3, 0):
-    shim_name = 'pydaos_shim_27'
-else:
-    shim_name = 'pydaos_shim_3'
-    args['define_macros'] = [('__USE_PYTHON3__', 1)]
+shim_name = 'pydaos_shim_3'
+args['define_macros'] = [('__USE_PYTHON3__', 1)]
 
 module1 = Extension('pydaos.{}'.format(shim_name), **args)
 

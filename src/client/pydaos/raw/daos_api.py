@@ -20,10 +20,7 @@ from . import conversion
 from .. import DaosClient
 
 # pylint: disable=import-error
-if sys.version_info < (3, 0):
-    from .. import pydaos_shim_27 as pydaos_shim
-else:
-    from .. import pydaos_shim_3 as pydaos_shim
+from .. import pydaos_shim_3 as pydaos_shim
 # pylint: enable=import-error
 
 DaosObjClass = enum.Enum(

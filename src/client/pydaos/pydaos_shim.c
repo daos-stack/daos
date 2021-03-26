@@ -984,7 +984,6 @@ static PyMethodDef daosMethods[] = {
 	{NULL, NULL}
 };
 
-#if PY_MAJOR_VERSION >= 3
 struct module_struct {
 	PyObject *error;
 };
@@ -1017,18 +1016,11 @@ static struct PyModuleDef moduledef = {
 };
 
 PyMODINIT_FUNC PyInit_pydaos_shim_3(void)
-#else
-void
-initpydaos_shim_27(void)
-#endif
+
 {
 	PyObject *module;
 
-#if PY_MAJOR_VERSION >= 3
 	module = PyModule_Create(&moduledef);
-#else
-	module = Py_InitModule("pydaos_shim_27", daosMethods);
-#endif
 
 #define DEFINE_PY_RETURN_CODE(name, desc, errstr) \
 	PyModule_AddIntConstant(module, ""#name, desc);
@@ -1044,7 +1036,5 @@ initpydaos_shim_27(void)
 	/** export container properties */
 	cont_prop_define(module);
 
-#if PY_MAJOR_VERSION >= 3
 	return module;
-#endif
 }
