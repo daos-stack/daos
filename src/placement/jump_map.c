@@ -15,28 +15,10 @@
 #include <isa-l.h>
 
 
-/*
- * These ops determine whether extra information is calculated during
- * placement.
- *
- * PL_PLACE_EXTENDED calculates an extended layout for use when there
- * is a reintegration operation currently ongoing.
- *
- * PL_REINT calculates the post-reintegration layout for use during
- * reintegration, it treats the UP status targets as UP_IN.
- *
- * Currently the other OP types calculate a normal layout without extra info.
- */
-enum PL_OP_TYPE {
-	PL_PLACE,
-	PL_PLACE_EXTENDED,
-	PL_REBUILD,
-	PL_REINT,
-	PL_ADD,
-};
 
 /**
  * Contains information related to object layout size.
+ * Total layout size should be group size * group number.
  */
 struct jm_obj_placement {
 	unsigned int    jmop_grp_size;
@@ -63,15 +45,17 @@ struct pl_jump_map {
 /**
  * This functions finds the pairwise differences in the two layouts provided
  * and appends them into the d_list provided. The function appends the targets
- * from the "new" layout and not those from the "original" layout.
+ * from the "new" layout and not those from the "original" layout. It's assumed
+ * that the layouts are the same size and only the target IDs are compared.
  *
  * \param[in]	jmap		A pointer to the jump map used to retrieve a
  *				reference to the pool map target.
- * \param[in]	original	The original layout calculated not including any
- *				recent pool map changes, like reintegration.
- * \param[in]	new		The new layout that contains changes in layout
- *				that occurred due to pool status changes.
- * \param[out]	diff		The d_list that contains the differences that
+ * \param[in]	original	The original layout calculated that does not
+ *				include any recent pool map changes, like
+ *				reintegrated targets.
+ * \param[in]	new		The new layout that contains changes in the
+ *				layout that occurred due to pool status changes.
+ * \param[out]	diff		The d_list returning the differences that
  *				were calculated.
  */
 static inline void
@@ -116,10 +100,15 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 		}
 	}
 }
+
 /**
  * This is useful for jump_map placement to pseudorandomly permute input keys
  * that are similar to each other. This dramatically improves the even-ness of
  * the distribution of output placements.
+ *
+ * There is a problem with Jump Consistent Hashing when using it to index into
+ * a multi-dimensional array or structure. If you do not permute the key for
+ * multiple indices the distribution will not be even.
  */
 static inline uint64_t
 crc(uint64_t data, uint32_t init_val)
@@ -128,13 +117,13 @@ crc(uint64_t data, uint32_t init_val)
 }
 
 /**
- * This function gets the replication and size requirements and then
- * stores those requirements into a obj_placement  struct for usage during
- * layout creation.
+ * This function gets the replication and layout-size requirements and then
+ * stores those requirements into a obj_placement struct for usage during
+ * layout creation and population.
  *
  * \param[in] jmap      The placement map for jump_map Placement, used for
  *                      retrieving domain requirements for layout.
- * \param[in] md        Object metadata used for retrieve information
+ * \param[in] md        Object metadata used to retrieve information
  *                      about the object class.
  * \param[in] shard_md  Shard metadata used for determining the group number
  * \param[out] jmop     Stores layout requirements for use later in placement.
@@ -226,6 +215,19 @@ static void debug_print_allow_status(uint32_t allow_status)
 		allow_status & PO_COMP_ST_DRAIN ? " DRAIN" : "");
 }
 
+/**
+ * This function returns the number of children for a given domain. This is
+ * necessary when calculating layouts when performing the addition operation
+ * because to produce the original layouts the same number of "buckets" must
+ * be used as the arguments for Jump Consistent Hashing.
+ *
+ * \param[in]	curr_dom	A pointer to the domain who's children count
+ *				you want.
+ * \param[in]	allow_status	The component status bitmap that will be matched
+ *
+ * \return			The number of children for this domain that
+ *				match the requirements for this operation type.
+ */
 static inline uint32_t
 get_num_domains(struct pool_domain *curr_dom, uint32_t allow_status)
 {
@@ -242,6 +244,13 @@ get_num_domains(struct pool_domain *curr_dom, uint32_t allow_status)
 	if (allow_status & PO_COMP_ST_NEW)
 		return num_dom;
 
+	/* Iterate backwards to find the first non-new target */
+	/*
+	 * TODO:	This should probably be a binary search for the case of
+	 *		large children counts. However addition will be a rare
+	 *		operation so the last target should be checked first for
+	 *		efficiency.
+	 */
 	if (curr_dom->do_children != NULL) {
 		next_dom = &curr_dom->do_children[num_dom - 1];
 		status = next_dom->do_comp.co_status;
@@ -424,9 +433,20 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 	} while (!found_target);
 }
 
-uint32_t
-count_available_spares(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
-		uint32_t failed_in_layout)
+/**
+ * This function determines the available number of spares. Currently it simply
+ * counts the number of targets left not considering those already used in the
+ * layout.
+ *
+ * \param[in]	jmap	The jump_map used for placement, used to access the pool
+ *			map.
+ * \param[in]	layout	The current layout containing the initial layout that
+ *			has been calculated.
+ *
+ * \return		The number of possible spares left in the pool.
+ */
+static uint32_t
+count_available_spares(struct pl_jump_map *jmap, struct pl_obj_layout *layout)
 {
 	uint32_t unusable_tgts;
 	uint32_t num_targets;
@@ -458,7 +478,7 @@ count_available_spares(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 * \paramp[in]   remap_list      List containing shards to be remapped sorted
 *                               by failure sequence.
 * \paramp[in]   dom_used        Bookkeeping array used to keep track of which
-*                               domain components have already been used.
+*                               domain components have already been searched.
 *
 * \return       return an error code signifying whether the shards were
 *               successfully remapped properly.
@@ -468,7 +488,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		 struct pl_obj_layout *layout, struct jm_obj_placement *jmop,
 		 d_list_t *remap_list, uint32_t allow_status,
 		 uint8_t *tgts_used, uint8_t *dom_used, uint8_t *dom_occupied,
-		 uint32_t failed_in_layout, bool *is_extending)
+		 bool *is_extending)
 {
 	struct failed_shard     *f_shard;
 	struct pl_obj_shard     *l_shard;
@@ -488,8 +508,9 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	spare_tgt = NULL;
 	oid = md->omd_id;
 	key = oid.hi ^ oid.lo;
-	spares_left = count_available_spares(jmap, layout, failed_in_layout);
+	spares_left = count_available_spares(jmap, layout);
 
+	/* Get root for user elsewhere */
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
 	D_ASSERT(rc == 1);
@@ -497,6 +518,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		uint64_t rebuild_key;
 		uint32_t shard_id;
 
+		/* Get the next failed shard to consider */
 		f_shard = d_list_entry(current, struct failed_shard, fs_list);
 
 		shard_id = f_shard->fs_shard_idx;
@@ -515,7 +537,9 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		 */
 		spare_avail = spares_left > 0;
 		if (spare_avail) {
+			/* Permute input key for even distribution */
 			rebuild_key = crc(key, f_shard->fs_shard_idx);
+			/* Find target that hasn't been considered yet */
 			get_target(root, &spare_tgt, crc(key, rebuild_key),
 				   dom_used, dom_occupied, tgts_used,
 				   shard_id, allow_status);
@@ -525,6 +549,10 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 			spares_left--;
 		}
 
+		/*
+		 * Determine if the spare candidate found can actually be used
+		 * as a spare target in the layout.
+		 */
 		determine_valid_spares(spare_tgt, md, spare_avail, &current,
 				       remap_list, allow_status, f_shard,
 				       l_shard, is_extending);
@@ -533,6 +561,22 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	return 0;
 }
 
+/*
+ * This function is only used to create test layouts where the first target
+ * is predefined within the object ID. Normally when using the Jump Map you can
+ * not guarantee where shards end up. However using these specific object
+ * classes you can guarantee the FIRST shard will be located where specified.
+ *
+ * \param[in]	jmap		The jump map used for this placement.
+ * \param[in]	oid		The object ID of the object being placed.
+ * \param[out]	target		The target where the first shard will reside.
+ * \param[in]	dom_used	The bitmap used to keep track of what domains
+ *				have been used for placement.
+ * \param[in]	dom_bytes	The size of the bitmap "dom_used"
+ *
+ * \return			An error code, 0 if success, DERROR otherwise.
+ *
+ */
 static int
 jump_map_obj_spec_place_get(struct pl_jump_map *jmap, daos_obj_id_t oid,
 			    struct pool_target **target, uint8_t *dom_used,
@@ -724,7 +768,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	if (fail_tgt_cnt > 0)
 		rc = obj_remap_shards(jmap, md, layout, jmop, remap_list,
 				      allow_status, tgts_used, dom_used,
-				      dom_occupied, fail_tgt_cnt, is_extending);
+				      dom_occupied, is_extending);
 out:
 	if (rc)
 		D_ERROR("jump_map_obj_layout_fill failed, rc "DF_RC"\n",
@@ -857,6 +901,7 @@ static void
 jump_map_print(struct pl_map *map)
 {
 	/** Currently nothing to print */
+	/* Possibly print metadata */
 }
 
 static int
@@ -983,23 +1028,26 @@ out:
 }
 
 /**
+ * This function is used by the scan phase of rebuild to determine what objects
+ * need to be rebuilt and where the shard data needs to be sent during the
+ * data migration process.
  *
- * \param[in]   map             The placement map to be used to generate the
- *                              placement layouts and to calculate rebuild
- *                              targets.
- * \param[in]   md              Metadata describing the object.
- * \param[in]   shard_md        Metadata describing how the shards.
- * \param[in]   rebuild_ver     Current Rebuild version
- * \param[out]   tgt_rank       The rank of the targets that need to be rebuild
- *                              will be stored in this array to be passed out
- *                              (this is allocated by the caller)
- * \param[out]   shard_id       The shard IDs of the shards that need to be
- *                              rebuilt (This is allocated by the caller)
- * \param[in]   array_size      The max size of the passed in arrays to store
- *                              info about the shards that need to be rebuilt.
+ * \param[in]	map		The placement map to be used to generate the
+ *				placement layouts and to calculate rebuild
+ *				targets.
+ * \param[in]	md		Metadata describing the object.
+ * \param[in]	shard_md	Metadata describing how the shards.
+ * \param[in]	rebuild_ver	Current Rebuild version
+ * \param[out]	tgt_id		The rank of the targets that need to be rebuild
+ *				will be stored in this array to be passed out
+ *				(this is allocated by the caller)
+ * \param[out]	shard_idx	The shard IDs of the shards that need to be
+ *				rebuilt (This is allocated by the caller)
+ * \param[in]	array_size	The max size of the passed in arrays to store
+ *				info about the shards that need to be rebuilt.
  *
- * \return                      The number of shards that need to be rebuilt on
- *                              another target, Or 0 if none need to be rebuilt.
+ * \return			The number of shards that need to be rebuilt on
+ *				another target, Or 0 if none need to be rebuilt.
  */
 static int
 jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
@@ -1051,6 +1099,27 @@ out:
 	return rc < 0 ? rc : idx;
 }
 
+/**
+ * This function is used by the scan phase of reintegration to determine what
+ * shards need to be moved back to their original targets.
+ *
+ * \param[in]	map		The placement map to be used to generate the
+ *				placement layouts and to calculate rebuild
+ *				targets.
+ * \param[in]	md		Metadata describing the object.
+ * \param[in]	shard_md	Metadata describing how the shards.
+ * \param[in]	reint_ver	Current Rebuild version
+ * \param[out]	tgt_rank	The rank of the targets that need to be rebuild
+ *				will be stored in this array to be passed out
+ *				(this is allocated by the caller)
+ * \param[out]	shard_id	The shard IDs of the shards that need to be
+ *				rebuilt (This is allocated by the caller)
+ * \param[in]	array_size	The max size of the passed in arrays to store
+ *				info about the shards that need to be rebuilt.
+ *
+ * \return			The number of shards that need to be rebuilt on
+ *				another target, Or 0 if none need to be rebuilt.
+ */
 static int
 jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
@@ -1099,6 +1168,7 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	if (rc < 0)
 		D_GOTO(out, rc);
 
+	/* Find the targets that have changed after reintegration */
 	layout_find_diff(jmap, layout, reint_layout, &reint_list);
 
 	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
@@ -1114,6 +1184,27 @@ out:
 	return rc < 0 ? rc : idx;
 }
 
+/**
+ * This function is used by the scan phase of server addition to determine what
+ * shards need to be moved to the newly added storage targets.
+ *
+ * \param[in]	map		The placement map to be used to generate the
+ *				placement layouts and to calculate rebuild
+ *				targets.
+ * \param[in]	md		Metadata describing the object.
+ * \param[in]	shard_md	Metadata describing how the shards.
+ * \param[in]	reint_ver	Current Rebuild version
+ * \param[out]	tgt_rank	The rank of the targets that need to be rebuild
+ *				will be stored in this array to be passed out
+ *				(this is allocated by the caller)
+ * \param[out]	shard_id	The shard IDs of the shards that need to be
+ *				rebuilt (This is allocated by the caller)
+ * \param[in]	array_size	The max size of the passed in arrays to store
+ *				info about the shards that need to be rebuilt.
+ *
+ * \return			The number of shards that need to be rebuilt on
+ *				another target, Or 0 if none need to be rebuilt.
+ */
 static int
 jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 			   struct daos_obj_shard_md *shard_md,
@@ -1159,6 +1250,7 @@ jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 	if (rc)
 		D_GOTO(out, rc);
 
+	/* Find the differences between the old and new layout post-addition */
 	layout_find_diff(jmap, layout, add_layout, &add_list);
 	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
 			     array_size, &idx, add_layout, &add_list, true);
