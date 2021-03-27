@@ -217,6 +217,7 @@ def set_test_environment(args):
 
     # Update PATH
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
+    os.environ["COVFILE"] = "/usr/lib/daos/TESTING/ftest/test.cov"
 
     # Python paths required for functional testing
     set_python_environment()
@@ -976,6 +977,9 @@ def run_tests(test_files, tag_filter, args):
             if not process_the_cores(avocado_logs_dir, test_file["yaml"], args):
                 return_code |= 256
 
+    if args.jenkinslog:
+        return_code |= archive_cov_usrlib_logs(avocado_logs_dir, args)
+
     return return_code
 
 
@@ -1110,7 +1114,7 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
-        destination, hosts, "{}/*.log*".format(logs_dir), True, args)
+        destination, hosts, "{}/*.log*".format(logs_dir), True, True, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
@@ -1145,7 +1149,7 @@ def archive_cart_logs(avocado_logs_dir, test_files, args):
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
-        destination, hosts, "{}/*/*log*".format(logs_dir), True, args)
+        destination, hosts, "{}/*/*log*".format(logs_dir), True, True, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
@@ -1183,15 +1187,41 @@ def archive_config_files(avocado_logs_dir, args):
     configs_dir = get_temporary_directory(args, base_dir)
     task = archive_files(
         destination, host_list, "{}/*_*_*.yaml".format(configs_dir), False,
-        args)
+        True, args)
 
     status = 0
     if not check_remote_output(task, "archive_config_files"):
         status = 16
     return status
 
+def archive_cov_usrlib_logs(avocado_logs_dir, args):
+    """Archive daos cov files to the avocado results directory.
+    Args:
+        avocado_logs_dir (str): path to the avocado log files
+        args (argparse.Namespace): command line arguments for this program
+    Returns:
+        int: status code.
+    """
+    # Create a subdirectory in the avocado logs directory for this test
+    destination = os.path.join(avocado_logs_dir, "daos_covs_usrlib")
 
-def archive_files(destination, hosts, source_files, cart, args):
+    # Copy any DAOS covs created on all hosts
+    hosts = list(args.test_servers)
+    hosts.append(socket.gethostname().split(".")[0])
+    print("Archiving host covs from {} in {}".format(hosts, destination))
+
+    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
+    task = archive_files(destination, hosts,
+                         "/usr/lib/daos/TESTING/ftest/test.cov*",False,
+                         False, args)
+
+    # Determine if the command completed successfully across all the hosts
+    status = 0
+    if not check_remote_output(task, "archive_daos_covs command"):
+        status |= 16
+    return status
+
+def archive_files(destination, hosts, source_files, cart, compress, args):
     """Archive all of the remote files to the destination directory.
 
     Args:
@@ -1219,10 +1249,11 @@ def archive_files(destination, hosts, source_files, cart, args):
 
     command = [
         get_remote_file_command(),
-        "-z",
         "-a \"{}:{}\"".format(this_host, destination),
         "-f \"{}\"".format(source_files),
     ]
+    if compress:
+       command.append("-z")
     if cart:
         command.append("-c")
     if args.logs_threshold:

@@ -26,6 +26,9 @@ BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
+%if ("%{?compiler_args}" == "COMPILER=covc")
+BuildRequires: bullseye
+%endif
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: json-c-devel
@@ -219,7 +222,12 @@ This is the package needed to build software with the DAOS library.
       USE_INSTALLED=all      \
       CONF_DIR=%{conf_dir}   \
       PREFIX=%{buildroot}    \
-     %{?scons_args}
+      %{?scons_args}         \
+      %{?compiler_args}
+
+%if ("%{?compiler_args}" == "COMPILER=covc")
+cp -f test.cov /tmp/
+%endif
 
 %install
 %{scons_exe} %{?_smp_mflags}          \
@@ -233,6 +241,9 @@ This is the package needed to build software with the DAOS library.
       PREFIX=%{_prefix}               \
       %{?scons_args}
 
+%if ("%{?compiler_args}" == "COMPILER=covc")
+cp -f /tmp/test.cov %{buildroot}/usr/lib/daos/TESTING/ftest/
+%endif
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_unitdir}
