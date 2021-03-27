@@ -270,7 +270,7 @@ dfs_sys_test_access_chmod(void **state)
  * Verify open and stat on existing entries, with and without O_NOFOLLOW.
  */
 static void
-dfs_sys_test_open_stat(void ** state)
+dfs_sys_test_open_stat(void **state)
 {
 	test_arg_t	*arg = *state;
 	const char	*dir1 = "/dir1";
@@ -578,7 +578,7 @@ dfs_sys_test_open_readdir(void **state)
  * Verify setxattr, listxattr, getxattr.
  */
 static void
-dfs_sys_test_xattr(void ** state)
+dfs_sys_test_xattr(void **state)
 {
 	test_arg_t	*arg = *state;
 
