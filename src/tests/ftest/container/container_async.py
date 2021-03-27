@@ -26,7 +26,7 @@ class ContainerAsync(TestWithServers):
     """
 
     def __init__(self, *args, **kwargs):
-        super(ContainerAsync, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.container = []
 
     def test_createasync(self):

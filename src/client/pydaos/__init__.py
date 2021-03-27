@@ -37,7 +37,7 @@ class PyDError(Exception):
     def __str__(self):
         return self.message
 
-class DaosClient(object):
+class DaosClient():
     # pylint: disable=too-few-public-methods
     """
     DaosClient is responsible for handling DAOS init/fini.
@@ -57,7 +57,7 @@ class DaosClient(object):
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(DaosClient, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             # pylint: disable=protected-access
             cls._instance._open()
         return cls._instance

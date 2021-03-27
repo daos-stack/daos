@@ -24,6 +24,7 @@
 #include <daos_srv/vos.h>
 #include <daos_test.h>
 #include <daos/dts.h>
+#include <daos/credit.h>
 #ifdef ULT_MMAP_STACK
 #include <daos/stack_mmap.h>
 #endif
@@ -70,7 +71,7 @@ daos_obj_id_t		*ts_oids;		/* object IDs */
 daos_unit_oid_t		*ts_uoids;		/* object shard IDs (for VOS) */
 uint64_t		*ts_indices;
 
-struct dts_context	 ts_ctx;
+struct credit_context	 ts_ctx;
 bool			 ts_nest_iterator;
 
 /* test inside ULT */
@@ -331,7 +332,7 @@ do {						\
 
 static int
 _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
-		     struct dts_io_credit *cred, daos_epoch_t epoch,
+		     struct io_credit *cred, daos_epoch_t epoch,
 		     double *duration)
 {
 	uint64_t	start = 0;
@@ -397,7 +398,7 @@ end:
 }
 
 struct vos_ult_arg {
-	struct dts_io_credit	*cred;
+	struct io_credit	*cred;
 	double			*duration;
 	daos_epoch_t		 epoch;
 	enum ts_op_type		 op_type;
@@ -419,7 +420,7 @@ vos_update_or_fetch_ult(void *arg)
 
 static int
 vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
-		    struct dts_io_credit *cred, daos_epoch_t epoch,
+		    struct io_credit *cred, daos_epoch_t epoch,
 		    double *duration)
 {
 	ABT_thread		thread;
@@ -460,7 +461,7 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 
 static int
 daos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
-		     struct dts_io_credit *cred, daos_epoch_t epoch,
+		     struct io_credit *cred, daos_epoch_t epoch,
 		     bool sync, double *duration)
 {
 	daos_event_t *evp = sync ? NULL : cred->tc_evp;
@@ -490,14 +491,14 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		     char *dkey, char *akey, daos_epoch_t *epoch,
 		     int idx, struct pf_param *param)
 {
-	struct dts_io_credit *cred;
+	struct io_credit *cred;
 	daos_iod_t	     *iod;
 	d_sg_list_t	     *sgl;
 	daos_recx_t	     *recx;
 	size_t		      len;
 	int		      rc = 0;
 
-	cred = dts_credit_take(&ts_ctx);
+	cred = credit_take(&ts_ctx);
 	if (!cred) {
 		fprintf(stderr, "credit cannot be NULL for IO\n");
 		rc = -1;
@@ -561,7 +562,7 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 			op_type == TS_DO_FETCH ? "Fetch" : "Update",
 			rc, *epoch);
 		if (param->pa_rw.verify)
-			dts_credit_return(&ts_ctx, cred);
+			credit_return(&ts_ctx, cred);
 		return rc;
 	}
 
@@ -569,7 +570,7 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	if (param->pa_rw.verify) {
 		rc = stride_buf_verify(cred->tc_vbuf, param->pa_rw.offset,
 				       param->pa_rw.size);
-		dts_credit_return(&ts_ctx, cred);
+		credit_return(&ts_ctx, cred);
 		return rc;
 	}
 	return 0;
@@ -680,7 +681,7 @@ objects_update(struct pf_param *param)
 		if (rc)
 			break;
 	}
-	rc_drain = dts_credit_drain(&ts_ctx);
+	rc_drain = credit_drain(&ts_ctx);
 	if (rc == 0)
 		rc = rc_drain;
 
@@ -711,7 +712,7 @@ objects_fetch(struct pf_param *param)
 		if (rc != 0)
 			break;
 	}
-	rc_drain = dts_credit_drain(&ts_ctx);
+	rc_drain = credit_drain(&ts_ctx);
 	if (rc == 0)
 		rc = rc_drain;
 

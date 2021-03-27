@@ -33,21 +33,57 @@ RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
 # installed packages list below is updated
 # TODO: Do not clean as part of this cache layer as Zypper is used later
 # on.
-RUN zypper --non-interactive update &&					\
-    zypper --non-interactive install					\
-	boost-devel clang cmake cunit-devel curl doxygen flex		\
-	gcc gcc-c++ git graphviz gzip					\
-	libaio-devel libcmocka-devel libevent-devel libiscsi-devel	\
-	libltdl7 libnuma-devel libopenssl-devel libtool			\
-	libuuid-devel libyaml-devel python3-tabulate			\
-	make man nasm pandoc patch python2-pip				\
-	readline-devel sg3_utils which yasm				\
-	python-devel python3-devel valgrind-devel hwloc-devel		\
-	openmpi3-devel man fuse3-devel patchelf scons lua-lmod		\
-	libjson-c-devel liblz4-devel python3-distro curl		\
-	python3-pyxattr							\
-	java-1_8_0-openjdk-devel maven python3-PyYAML			\
-	libunwind-devel &&						\
+RUN zypper --non-interactive update && \
+    zypper --non-interactive install \
+    boost-devel \
+    clang \
+    cmake \
+    cunit-devel \
+    curl \
+    doxygen \
+    flex \
+    fuse3-devel \
+    gcc \
+    gcc-c++ \
+    git \
+    graphviz \
+    gzip \
+    hwloc-devel \
+    java-1_8_0-openjdk-devel \
+    libaio-devel \
+    libcmocka-devel \
+    libevent-devel \
+    libiscsi-devel \
+    libjson-c-devel \
+    libltdl7 \
+    liblz4-devel \
+    libnuma-devel \
+    libopenssl-devel \
+    libtool \
+    libunwind-devel \
+    libuuid-devel \
+    libyaml-devel \
+    lua-lmod \
+    make \
+    man \
+    maven \
+    nasm \
+    openmpi3-devel \
+    pandoc \
+    patch \
+    patchelf \
+    python3-devel \
+    python3-distro \
+    python3-pip \
+    python3-pyxattr  \
+    python3-PyYAML \
+    python3-tabulate \
+    readline-devel \
+    scons \
+    sg3_utils \
+    valgrind-devel \
+    which \
+    yasm && \
     zypper clean --all
 
 # Monkey-patch MODULEPATH

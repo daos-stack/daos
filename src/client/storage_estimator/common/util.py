@@ -1,10 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 '''
   (C) Copyright 2020-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import os
 import yaml
@@ -14,7 +14,7 @@ from storage_estimator.vos_size import MetaOverhead
 from storage_estimator.vos_structures import Containers
 
 
-class CommonBase(object):
+class CommonBase():
     def __init__(self):
         self._verbose = False
 
@@ -103,7 +103,7 @@ class CommonBase(object):
         self._check_value_type(human_number, str)
         number = human_number
         power_labels = self._get_power_labels()
-        for k, v in power_labels.items():
+        for k, v in list(power_labels.items()):
             if self._check_suffix(human_number, v, False):
                 number = self._remove_suffix(human_number, v, False)
                 number = int(number)
@@ -116,7 +116,7 @@ class CommonBase(object):
 
 class ObjectClass(CommonBase):
     def __init__(self, args):
-        super(ObjectClass, self).__init__()
+        super().__init__()
         self._dir_oclass = self._update_oclass(args, 'dir_oclass', 'S1')
         self._file_oclass = self._update_oclass(args, 'file_oclass', 'SX')
         self.set_verbose(args.verbose)
@@ -195,7 +195,7 @@ class ObjectClass(CommonBase):
             self._file_oclass, 'number_of_replicas')
 
     def get_supported_oclass(self):
-        return self._get_oclass_definitions().keys()
+        return list(self._get_oclass_definitions().keys())
 
     def _get_min_shards_required(self, oclass_type):
         parity = self._get_oclass_parameter(
@@ -350,7 +350,7 @@ class Common(CommonBase):
 
 class ProcessBase(Common):
     def __init__(self, args):
-        super(ProcessBase, self).__init__(args)
+        super().__init__(args)
         self._oclass = ObjectClass(args)
         self._process_block_values()
         self._process_checksum()
@@ -406,7 +406,7 @@ class ProcessBase(Common):
             if csum_name not in csummers:
                 raise ValueError(
                     'unknown checksum algorithm: "{0}", the supported checksum algorithms are: {1}'. format(
-                        csum_name, csummers.keys()))
+                        csum_name, list(csummers.keys())))
 
             csum_size = csummers[csum_name]
             self._debug(

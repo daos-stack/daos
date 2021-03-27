@@ -30,6 +30,7 @@ const int max_svc_nreplicas = 13;
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_aggregate	= ds_mgmt_tgt_create_aggregator,
 	.co_pre_forward	= NULL,
+	.co_post_reply = ds_mgmt_tgt_create_post_reply,
 };
 
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
@@ -372,7 +373,10 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 	out = crt_reply_get(rpc);
 
 	rc =  ds_get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
-	if (rc != 0)
+	if (rc == -DER_NONEXIST) /* not an error */
+		D_DEBUG(DB_MGMT, DF_UUID": get_pool_svc_ranks() upcall failed, "
+			DF_RC"\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+	else if (rc != 0)
 		D_ERROR(DF_UUID": get_pool_svc_ranks() upcall failed, "
 			DF_RC"\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
 	out->gsr_rc = rc;

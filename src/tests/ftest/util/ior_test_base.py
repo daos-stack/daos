@@ -33,7 +33,7 @@ class IorTestBase(DfuseTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a IorTestBase object."""
-        super(IorTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
@@ -45,7 +45,7 @@ class IorTestBase(DfuseTestBase):
         # obtain separate logs
         self.update_log_file_names()
         # Start the servers and agents
-        super(IorTestBase, self).setUp()
+        super().setUp()
 
         # Get the parameters for IOR
         self.ior_cmd = IorCommand()
@@ -99,6 +99,7 @@ class IorTestBase(DfuseTestBase):
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
                           mount_dir=None):
+        # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -255,7 +256,7 @@ class IorTestBase(DfuseTestBase):
             else:
                 report_warning = self.log.warning
 
-            for line in out.stdout.splitlines():
+            for line in out.stdout_text.splitlines():
                 if 'WARNING' in line:
                     report_warning("IOR command issued warnings.\n")
             return out
@@ -455,7 +456,9 @@ class IorTestBase(DfuseTestBase):
         result = pcmd(
             self.hostlist_clients, command, verbose=display_output, timeout=300)
         if 0 not in result and fail_on_err:
-            hosts = [str(nodes) for code, nodes in result.items() if code != 0]
+            hosts = [str(
+                nodes) for code, nodes in list(
+                    result.items()) if code != 0]
             raise CommandFailure(
                 "Error running '{}' on the following hosts: {}".format(
                     command, NodeSet(",".join(hosts))))
