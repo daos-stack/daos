@@ -199,6 +199,8 @@ configure dedup, the following container properties are used:
     checksum tree isn't persistent yet. This means that aggregation is disabled
     for a container with dedplication enabled and duplicated extents won't be
     matched after a server restart.
+    NVMe isn't supported for dedup enabled container, so please make sure not
+    using dedup on the pool with NVMe enabled.
 
 ## Compression & Encryption
 

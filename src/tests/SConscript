@@ -38,8 +38,9 @@ def scons():
                                     LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_racer)
 
+    Import('cmd_parser')
     obj_ctl = daos_build.program(denv, 'obj_ctl',
-                                 ['obj_ctl.c'],
+                                 ['obj_ctl.c', cmd_parser],
                                  LIBS=libs)
     denv.Install('$PREFIX/bin/', obj_ctl)
 

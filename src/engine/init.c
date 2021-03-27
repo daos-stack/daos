@@ -490,6 +490,8 @@ server_init(int argc, char *argv[])
 
 	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
 
+	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
+
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
@@ -589,8 +591,6 @@ server_init(int argc, char *argv[])
 			dss_storage_path);
 		D_GOTO(exit_mod_loaded, rc);
 	}
-
-	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
 	D_INFO("Service initialized\n");
 

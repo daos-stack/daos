@@ -21,8 +21,8 @@ func TestTelemetry_Basics(t *testing.T) {
 
 	runTests := func(t *testing.T, tm *testMetric, m Metric) {
 		common.AssertEqual(t, tm.name, m.Name(), "Name() failed")
-		common.AssertEqual(t, tm.short, m.ShortDesc(), "ShortDesc() failed")
-		common.AssertEqual(t, tm.long, m.LongDesc(), "LongDesc() failed")
+		common.AssertEqual(t, tm.desc, m.Desc(), "Desc() failed")
+		common.AssertEqual(t, tm.units, m.Units(), "Units() failed")
 		common.AssertEqual(t, tm.cur, m.FloatValue(), "FloatValue() failed")
 		common.AssertEqual(t, tm.str, m.String(), "String() failed")
 

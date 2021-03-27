@@ -1,0 +1,27 @@
+hosts:
+    test_servers:
+        - server-A
+    test_clients:
+        - server-B
+timeouts:
+    test_dm_obj_small_dcp: 120
+    test_dm_obj_small_cont_clone: 90
+server_config:
+    name: daos_server
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 1G
+    control_method: dmg
+container:
+    control_method: API
+dcp:
+    client_processes:
+        np: 3
+dataset:
+    num_objs: 10
+    num_dkeys_per_obj: 10
+    num_akeys_array_per_dkey: 5
+    num_akeys_single_per_dkey: 5
+    akey_sizes: [1, 512, 1024]
+    akey_extents: [32, 16, 8, 4, 2]

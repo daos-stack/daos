@@ -71,7 +71,7 @@ enum {
 	DAOS_OC_R4_RW,		/* class for testing */
 	DAOS_OC_R4_MAX_RW,	/* class for testing */
 	DAOS_OC_REPL_MAX_RW,
-	DAOS_OC_ECHO_TINY_RW,	/* Echo class, tiny */
+	DAOS_OC_ECHO_R1S_RW,	/* Echo class, 1 replica single stripe */
 	DAOS_OC_ECHO_R2S_RW,	/* Echo class, 2 replica single stripe */
 	DAOS_OC_ECHO_R3S_RW,	/* Echo class, 3 replica single stripe */
 	DAOS_OC_ECHO_R4S_RW,	/* Echo class, 4 replica single stripe */
@@ -109,6 +109,9 @@ enum {
 	DAOS_OC_OIT_RF3	= 48,
 	DAOS_OC_OIT_RF4	= 49,
 };
+
+/* Temporarily keep it to minimize change, remove it in the future */
+#define DAOS_OC_ECHO_TINY_RW	DAOS_OC_ECHO_R1S_RW
 
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
