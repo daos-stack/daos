@@ -44,7 +44,9 @@ class NvmeIoVerification(IorTestBase):
             as transfer size is > 4096.
             (4) Repeat the case(3) with maximum nvme pool size that can be
             created.
-        :avocado: tags=all,full_regression,hw,large,daosio,nvme_io_verification
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large,daosio
+        :avocado: tags=nvmeverification,nvme_io_verification
         """
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')
@@ -110,7 +112,9 @@ class NvmeIoVerification(IorTestBase):
             servers are restarted.
             (4) Repeat the case(3) with maximum nvme pool size that can be
             created.
-        :avocado: tags=all,full_regression,hw,large,daosio,nvme_server_restart
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large,daosio
+        :avocado: tags=nvmeverification,nvme_server_restart
         """
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')

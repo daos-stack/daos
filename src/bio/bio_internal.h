@@ -268,7 +268,8 @@ struct media_error_msg {
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 extern uint64_t		io_stat_period;
-void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
+int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
+		       uint64_t timeout);
 void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 		       void *event_ctx);
 struct spdk_thread *init_thread(void);
