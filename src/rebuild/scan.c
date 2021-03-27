@@ -406,10 +406,8 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 						 *tgts, *shards,
 						 max_shards);
 		} else if (rebuild_op == RB_OP_DRAIN) {
-			rc = pl_obj_find_rebuild(map, md, NULL,
-						 rebuild_ver,
-						 *tgts, *shards,
-						 max_shards);
+			rc = pl_obj_find_drain(map, md, NULL, rebuild_ver,
+					       *tgts, *shards, max_shards);
 		} else if (rebuild_op == RB_OP_REINT) {
 			rc = pl_obj_find_reint(map, md, NULL,
 					       rebuild_ver,
@@ -525,7 +523,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			D_GOTO(out, rc);
 
 		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
-						      layout, myrank, mytarget);
+						      layout, myrank, mytarget,
+						      oid.id_shard);
 		if (!still_needed) {
 			struct rebuild_pool_tls *tls;
 

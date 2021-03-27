@@ -309,7 +309,8 @@ test_duration_stats(void **state)
 	 */
 
 	rc = d_tm_add_metric(&timer, D_TM_DURATION | D_TM_CLOCK_REALTIME,
-			     NULL, NULL, "gurt/tests/telem/duration-stats");
+			     D_TM_CLOCK_REALTIME_STR, D_TM_MICROSECOND,
+			     "gurt/tests/telem/duration-stats");
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	timer->dtn_metric->dtm_data.tms[0].tv_sec = 1;
@@ -359,9 +360,8 @@ test_gauge_with_histogram_multiplier_1(void **state)
 	snprintf(path, sizeof(path), "%s", "gurt/tests/telem/test_gauge_m1");
 
 	rc = d_tm_add_metric(&gauge, D_TM_GAUGE,
-			     "A gauge with a histogram",
-			     "This histogram uses buckets with a multiplier "
-			     "of 1", path);
+			     "A gauge with a histogram multiplier 1",
+			     D_TM_GIGABYTE, path);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	num_buckets = 10;
@@ -425,10 +425,8 @@ test_gauge_with_histogram_multiplier_2(void **state)
 	snprintf(path, sizeof(path), "%s", "gurt/tests/telem/test_gauge_m2");
 
 	rc = d_tm_add_metric(&gauge, D_TM_GAUGE,
-			     NULL,
-			     "A gauge with a histogram.  This gauge has no "
-			     "short description metadata.  This histogram uses "
-			     "buckets with a multiplier of 2", path);
+			     "A gauge with a histogram multiplier 2",
+			     D_TM_TERABYTE, path);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	num_buckets = 5;
@@ -481,6 +479,23 @@ test_gauge_with_histogram_multiplier_2(void **state)
 	assert_rc_equal(rc, DER_SUCCESS);
 }
 
+static void
+test_units(void **state)
+{
+	static struct d_tm_node_t	*counter;
+	static struct d_tm_node_t	*gauge;
+	int				rc;
+
+	rc = d_tm_add_metric(&counter, D_TM_COUNTER, NULL, D_TM_KIBIBYTE,
+			     "gurt/tests/telem/kibibyte-counter");
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	rc = d_tm_add_metric(&gauge, D_TM_GAUGE, NULL, D_TM_GIGIBYTE_PER_SECOND,
+			     "gurt/tests/telem/gigibyte-per-second-gauge");
+	assert_rc_equal(rc, DER_SUCCESS);
+}
+
+
 static int
 fini_tests(void **state)
 {
@@ -506,6 +521,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_duration_stats),
 		cmocka_unit_test(test_gauge_with_histogram_multiplier_1),
 		cmocka_unit_test(test_gauge_with_histogram_multiplier_2),
+		cmocka_unit_test(test_units),
 		/**
 		 * Run this test last, because anything written after this test
 		 * is erased.

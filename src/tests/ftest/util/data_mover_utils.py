@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from command_utils_base import FormattedParameter
 from command_utils_base import BasicParameter
@@ -17,7 +17,7 @@ class DcpCommand(ExecutableCommand):
 
     def __init__(self, namespace, command):
         """Create a dcp Command object."""
-        super(DcpCommand, self).__init__(namespace, command)
+        super().__init__(namespace, command)
 
         # dcp options
 
@@ -67,7 +67,7 @@ class DcpCommand(ExecutableCommand):
     def get_param_names(self):
         """Overriding the original get_param_names."""
 
-        param_names = super(DcpCommand, self).get_param_names()
+        param_names = super().get_param_names()
 
         # move key=dst_path to the end
         param_names.sort(key='dst_path'.__eq__)
@@ -114,13 +114,13 @@ class DcpCommand(ExecutableCommand):
             self.daos_prefix.update(prefix,
                                     "daos_prefix" if display else None)
 
+
 class Dcp(DcpCommand):
     """Class defining an object of type DcpCommand."""
 
     def __init__(self, hosts, tmp, timeout=30):
         """Create a dcp object."""
-        super(Dcp, self).__init__(
-            "/run/dcp/*", "dcp")
+        super().__init__("/run/dcp/*", "dcp")
 
         # set params
         self.timeout = timeout
@@ -154,10 +154,10 @@ class Dcp(DcpCommand):
         self.exit_status_exception = False
         result = self.run(self.tmp, 1)
         self.exit_status_exception = True
-        self.has_src_pool = ("--daos-src-pool" in result.stdout)
+        self.has_src_pool = ("--daos-src-pool" in result.stdout_text)
         self.log.info("query_compatibility: has_src_pool=%s\n",
                       str(self.has_src_pool))
-        self.has_bufsize = ("--bufsize" in result.stdout)
+        self.has_bufsize = ("--bufsize" in result.stdout_text)
         self.log.info("query_compatibility: has_bufsize=%s\n",
                       str(self.has_bufsize))
 
@@ -190,17 +190,27 @@ class Dcp(DcpCommand):
             if src_pool or src_cont:
                 self.log.info(
                     "Converting --daos-src-pool to daos://pool/cont/path")
-                src_path = "daos://{}/{}/{}".format(
-                    src_pool, src_cont, src_path)
-                self.src_path.update(src_path)
+                new_path = "daos://"
+                if src_pool:
+                    new_path += str(src_pool) + "/"
+                if src_cont:
+                    new_path += str(src_cont) + "/"
+                if src_path:
+                    new_path += str(src_path).lstrip("/")
+                self.src_path.update(new_path)
                 self.daos_src_pool.update(None)
                 self.daos_src_cont.update(None)
             if dst_pool or dst_cont:
                 self.log.info(
                     "Converting --daos-dst-pool to daos://pool/cont/path")
-                dst_path = "daos://{}/{}/{}".format(
-                    dst_pool, dst_cont, dst_path)
-                self.dst_path.update(dst_path)
+                new_path = "daos://"
+                if dst_pool:
+                    new_path += str(dst_pool) + "/"
+                if dst_cont:
+                    new_path += str(dst_cont) + "/"
+                if dst_path:
+                    new_path += str(dst_path).lstrip("/")
+                self.dst_path.update(new_path)
                 self.daos_dst_pool.update(None)
                 self.daos_dst_cont.update(None)
         if self.has_bufsize:
@@ -222,12 +232,13 @@ class Dcp(DcpCommand):
 
         return out
 
+
 class DsyncCommand(ExecutableCommand):
     """Defines an object representing a dsync command."""
 
     def __init__(self, namespace, command):
         """Create a dsync Command object."""
-        super(DsyncCommand, self).__init__(namespace, command)
+        super().__init__(namespace, command)
 
         # dsync options
 
@@ -273,7 +284,7 @@ class DsyncCommand(ExecutableCommand):
     def get_param_names(self):
         """Overriding the original get_param_names."""
 
-        param_names = super(DsyncCommand, self).get_param_names()
+        param_names = super().get_param_names()
 
         # move key=dst_path to the end
         param_names.sort(key='dst_path'.__eq__)
@@ -302,13 +313,13 @@ class DsyncCommand(ExecutableCommand):
             self.daos_prefix.update(prefix,
                                     "daos_prefix" if display else None)
 
+
 class Dsync(DsyncCommand):
     """Class defining an object of type DsyncCommand."""
 
     def __init__(self, hosts, timeout=30):
         """Create a dsync object."""
-        super(Dsync, self).__init__(
-            "/run/dsync/*", "dsync")
+        super().__init__("/run/dsync/*", "dsync")
 
         # set params
         self.timeout = timeout
@@ -342,6 +353,7 @@ class Dsync(DsyncCommand):
         out = mpirun.run()
 
         return out
+
 
 class FsCopy():
     """Class defining an object of type FsCopy.
@@ -393,3 +405,52 @@ class FsCopy():
         self.log.info("Starting daos filesystem copy")
 
         return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst)
+
+class ContClone():
+    """Class defining an object of type ContClone.
+       Allows interfacing with daos container copy in a similar
+       manner to DcpCommand.
+    """
+
+    def __init__(self, daos_cmd, log):
+        """Create a ContClone object.
+
+        Args:
+            daos_cmd (DaosCommand): daos command to issue the cont clone
+                command.
+            log (TestLogger): logger to log messages
+
+        """
+        self.src = None
+        self.dst = None
+        self.daos_cmd = daos_cmd
+        self.log = log
+
+    def set_cont_clone_params(self, src=None, dst=None):
+        """Set the daos container clone params.
+
+        Args:
+            src (str, optional): the src, formatted as /<pool>/<cont>
+            dst (str, optional): the dst, formatted as /<pool>/<cont>
+
+        """
+        if src:
+            self.src = src
+        if dst:
+            self.dst = dst
+
+    def run(self):
+        # pylint: disable=arguments-differ
+        """Run the daos container clone command.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: In case daos container clone run command fails.
+
+        """
+        self.log.info("Starting daos container clone")
+
+        return self.daos_cmd.container_clone(src=self.src, dst=self.dst)

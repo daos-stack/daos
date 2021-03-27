@@ -415,7 +415,7 @@ sched_info_init(struct dss_xstream *dx)
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 
-	info->si_cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	info->si_cur_ts = daos_getmtime_coarse();
 	info->si_stats.ss_tot_time = 0;
 	info->si_stats.ss_relax_time = 0;
 	info->si_stats.ss_busy_ts = info->si_cur_ts;
@@ -1091,7 +1091,7 @@ wakeup_all(struct dss_xstream *dx)
 	uint64_t		 cur_ts;
 
 	/* Update current ts stored in sched_info */
-	cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	cur_ts = daos_getmtime_coarse();
 	D_ASSERT(cur_ts >= info->si_cur_ts);
 	info->si_stats.ss_tot_time += (cur_ts - info->si_cur_ts);
 	info->si_cur_ts = cur_ts;
@@ -1449,9 +1449,16 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 			dx->dx_xs_id, DSS_POOL_GENERIC, ret);
 		return;
 	}
-	D_ASSERTF(info->si_sleep_cnt + info->si_wait_cnt <= blocked,
-		  "sleep:%d + wait:%d > blocked:%zd\n",
-		  info->si_sleep_cnt, info->si_wait_cnt, blocked);
+
+	/*
+	 * Unlike sleeping ULTs, the ULTs blocked on sched_cond_wait() could
+	 * be woken up by other xstream (or even main thread), so that the
+	 * 'blocked' could have been decreased by waking up xstream, but the
+	 * 'si_wait_cnt' isn't decreased accordingly by current xstream yet.
+	 */
+	D_ASSERTF(info->si_sleep_cnt <= blocked,
+		  "sleep:%d > blocked:%zd, wait:%d\n",
+		  info->si_sleep_cnt, blocked, info->si_wait_cnt);
 
 	/*
 	 * Only start relaxing when all blocked ULTs are either sleeping

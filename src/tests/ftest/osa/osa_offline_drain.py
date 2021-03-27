@@ -20,7 +20,7 @@ class OSAOfflineDrain(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOfflineDrain, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get(

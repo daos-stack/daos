@@ -41,6 +41,7 @@
 #include <daos_security.h>
 #include <daos/profile.h>
 #include <daos/dtx.h>
+#include <daos/cmd_parser.h>
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -227,6 +228,12 @@ daos_getntime_coarse(void)
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
 	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
+static inline uint64_t
+daos_getmtime_coarse(void)
+{
+	return daos_getntime_coarse() / NSEC_PER_MSEC;
 }
 
 static inline uint64_t
