@@ -347,20 +347,29 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	oid->hi |= hdr;
 }
 
+#define DAOS_OCH_RDD_BITS	4
+#define DAOS_OCH_SHD_BITS	6
+#define DAOS_OCH_RDD_SHIFT	0
+#define DAOS_OCH_SHD_SHIFT	DAOS_OCH_RDD_BITS
+#define DAOS_OCH_RDD_MAX_VAL	((1ULL << DAOS_OCH_RDD_BITS) - 1)
+#define DAOS_OCH_SHD_MAX_VAL	((1ULL << DAOS_OCH_SHD_BITS) - 1)
+#define DAOS_OCH_RDD_MASK	(DAOS_OCH_RDD_MAX_VAL << DAOS_OCH_RDD_SHIFT)
+#define DAOS_OCH_SHD_MASK	(DAOS_OCH_SHD_MAX_VAL << DAOS_OCH_SHD_SHIFT)
+
 /** Flags for oclass hints */
 enum {
 	/** Flags to control OC Redundancy */
-	DAOS_OC_RDD_DEF		= (1 << 0),	/** Default - use RF prop */
-	DAOS_OC_RDD_NO		= (1 << 1),	/** No redundancy */
-	DAOS_OC_RDD_RP		= (1 << 2),	/** Replication */
-	DAOS_OC_RDD_EC		= (1 << 3),	/** Erasure Code */
+	DAOS_OCH_RDD_DEF	= (1 << 0),	/** Default - use RF prop */
+	DAOS_OCH_RDD_NO		= (1 << 1),	/** No redundancy */
+	DAOS_OCH_RDD_RP		= (1 << 2),	/** Replication */
+	DAOS_OCH_RDD_EC		= (1 << 3),	/** Erasure Code */
 	/** Flags to control OC Sharding */
-	DAOS_OC_SHD_DEF		= (1 << 4),	/** Default - use 1 grp */
-	DAOS_OC_SHD_TINY	= (1 << 5),	/** <= 4 grps */
-	DAOS_OC_SHD_REG		= (1 << 6),	/** max(128, 25%) */
-	DAOS_OC_SHD_HI		= (1 << 7),	/** max(256, 50%) */
-	DAOS_OC_SHD_EXT		= (1 << 8),	/** max(1024, 80%) */
-	DAOS_OC_SHD_MAX		= (1 << 9),	/** 100% */
+	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default - use 1 grp */
+	DAOS_OCH_SHD_TINY	= (1 << 5),	/** <= 4 grps */
+	DAOS_OCH_SHD_REG	= (1 << 6),	/** max(128, 25%) */
+	DAOS_OCH_SHD_HI		= (1 << 7),	/** max(256, 50%) */
+	DAOS_OCH_SHD_EXT	= (1 << 8),	/** max(1024, 80%) */
+	DAOS_OCH_SHD_MAX	= (1 << 9),	/** 100% */
 };
 
 /**
