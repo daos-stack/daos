@@ -65,7 +65,8 @@ class DmgStorageQuery(ControlTestBase):
         for devs in list(devs_info.values())[0]:
             targets += len(devs[2].split(" "))
         if self.targets != targets:
-            self.fail("Wrong number of targets found: {}".format(targets))
+            self.fail("Wrong number of targets found: {}, expecting {}".format(
+                targets, self.targets))
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_pools(self):

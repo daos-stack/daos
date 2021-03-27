@@ -313,7 +313,7 @@ class DaosServerYamlParameters(YamlParameters):
             #           - CRT_CTX_NUM=8
             #       nvme options:
             #           - IO_STAT_PERIOD=10
-            self.targets = BasicParameter(None, 8)
+            self.targets = BasicParameter(None, 1)
             self.first_core = BasicParameter(None, 0)
             self.nr_xs_helpers = BasicParameter(None, 16)
             self.fabric_iface = BasicParameter(None, default_interface)

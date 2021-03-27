@@ -27,6 +27,7 @@ add_repo() {
     # see if a package we know is in the repo is present
     if repo=$(dnf repoquery --qf "%{repoid}" "$1" 2>/dev/null | grep ..\*); then
         DNF_REPO_ARGS+=" --enablerepo=$repo"
+        time dnf --disablerepo=\* --enablerepo="$repo" makecache
     else
         local repo_url="${REPOSITORY_URL}${add_repo}"
         local repo_name
@@ -34,7 +35,7 @@ add_repo() {
         if ! dnf repolist | grep "$repo_name"; then
             dnf config-manager --add-repo="${repo_url}" >&2
             if ! $gpg_check; then
-                disable_gpg_check "$add_repo" >&2
+                disable_gpg_check "$repo_url" >&2
             fi
         fi
         DNF_REPO_ARGS+=" --enablerepo=$repo_name"

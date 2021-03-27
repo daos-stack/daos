@@ -637,7 +637,7 @@ def get_nvme_replacement(args):
     # Verify each server host has the same NVMe PCI addresses
     output_data = list(task.iter_buffers())
     if len(output_data) > 1:
-        print("ERROR: Non-homogeneous NVMe PCI addresses.")
+        print("ERROR: Non-homogeneous NVMe PCI addresses in:\n", output_data)
         sys.exit(1)
 
     # Get the list of NVMe PCI addresses found in the output

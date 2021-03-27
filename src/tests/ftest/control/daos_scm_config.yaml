@@ -10,7 +10,7 @@ server_config:
   name: daos_server
   servers:
     bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+    bdev_list: ["aaaa:aa:aa.a"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
   transport_config:
