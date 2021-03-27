@@ -149,6 +149,14 @@ String rpm_dist(String distro) {
         error("Don't know what the RPM %{dist} is for ${distro}")
     }
 }
+String daos_latest_version(String next_version) {
+            String v = sh(label: "Get RPM packages version",
+                          script: '''repoquery --repofrompath=daos,https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local/ \
+                                               --repoid daos --qf %{version}-%{release} --whatprovides 'daos(x86-64) < ''' + next_version + '''' |
+                                         rpmdev-sort | tail -1''',
+                          returnStdout: true).trim()
+            return v[0..<v .lastIndexOf('.')]
+}
 
 rpm_version_cache = ""
 String daos_packages_version(String distro) {
@@ -160,25 +168,15 @@ String daos_packages_version(String distro) {
         if (rpm_version_cache == "") {
             // no cached value and nobody's getting it
             rpm_version_cache = "locked"
-            rpm_version_cache = sh(label: "Get RPM packages version",
-                                   script: '''repoquery --repofrompath=daos,https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local/ \
-                                                        --repoid daos -q --qf %{version}-%{release} --show-duplicates daos | {
-                                                    ov=0
-                                                    while read v; do
-                                                        if ! rpmdev-vercmp "$v" "''' + next_version + '''" > /dev/null; then
-                                                            if [ ${PIPESTATUS[0]} -ne 12 ]; then
-                                                                echo "$ov"
-                                                                break
-                                                            fi
-                                                        fi
-                                                        ov="$v"
-                                                    done
-                                                }''',
-                                   returnStdout: true).trim()[0..-5]
+            rpm_version_cache = daos_latest_version(next_version)
         } else {
             // somebody else is getting it, wait for them
-            while (rpm_version_cache == "locked") {
-                sleep(1)
+            Integer i = 30
+            while (rpm_version_cache == "locked" && i-- > 0) {
+                sleep(10)
+            }
+            if (rpm_version_cache == "locked") {
+                rpm_version_cache = daos_latest_version(next_version)
             }
         }
         return rpm_version_cache + rpm_dist(distro)
