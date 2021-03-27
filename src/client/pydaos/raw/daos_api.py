@@ -1,7 +1,6 @@
 #!/usr/bin/python
 """
   (C) Copyright 2018-2021 Intel Corporation.
-
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=pylint-too-many-lines
@@ -13,6 +12,7 @@ import uuid
 import os
 import inspect
 import sys
+import time
 import enum
 
 from . import daos_cref
@@ -160,7 +160,6 @@ class DaosPool():
 
     def exclude(self, rank_list, tgt=-1, cb_func=None):
         """Exclude a set of storage targets from a pool.
-
         Args:
             rank_list:  server rank
             tl_tgts:    Xstream targets on rank(server)
@@ -199,7 +198,6 @@ class DaosPool():
     def tgt_reint(self, rank_list, tgt=-1, cb_func=None):
         """Reintegrate a set of storage targets to a pool that had previously
            failed.
-
         Args:
             rank_list:  server rank
             tl_tgts:    Xstream targets on rank(server)
@@ -231,7 +229,6 @@ class DaosPool():
 
     def exclude_out(self, rank_list, tgt=-1, cb_func=None):
         """Exclude completely a set of storage targets from a pool.
-
         Args:
             rank_list:  server rank
             tl_tgts:    Xstream targets on rank(server).
@@ -340,7 +337,6 @@ class DaosPool():
 
     def set_svc(self, rank):
         """Set svc.
-
         Note: support for a single rank only
         """
         svc_rank = ctypes.c_uint(rank)
@@ -349,7 +345,6 @@ class DaosPool():
 
     def list_attr(self, poh=None, cb_func=None):
         """Retrieve a list of user-defined pool attribute values.
-
         Args:
             poh [Optional]:     Pool Handler.
             cb_func[Optional]:  To run API in Asynchronous mode.
@@ -397,7 +392,6 @@ class DaosPool():
 
     def set_attr(self, data, poh=None, cb_func=None):
         """Set a list of user-defined container attributes.
-
         Args:
             data[Required]:     Dictionary of Attribute name and value.
             poh [Optional]:     Pool Handler
@@ -446,7 +440,6 @@ class DaosPool():
 
     def get_attr(self, attr_names, poh=None, cb_func=None):
         """Retrieve a list of user-defined pool attribute values.
-
         Args:
             attr_names:         list of attributes to retrieve
             poh [Optional]:     Pool Handle if you really want to override it
@@ -554,16 +547,12 @@ ConvertObjClass = {
 
 def get_object_class(item):
     """Get the DAOS object class that represents the specified item.
-
     Args:
         item (object): object enumeration class name, number, or object
-
     Raises:
         DaosApiError: if the object class name does not match
-
     Returns:
         DaosObjClass: the DaosObjClass representing the object provided.
-
     """
     if not isinstance(item, (DaosObjClassOld, DaosObjClass)):
         # Convert an integer or string into the DAOS object class with the
@@ -616,28 +605,39 @@ class DaosObj():
                                    "handle: {1}".format(ret, self.obj_handle))
             self.obj_handle = None
 
-    def create(self, rank=None, objcls=None):
-        """Create a DAOS object by generating an oid.
+    def __str__(self):
+        """Get the string representation of this class."""
+        if self.c_oid:
+            # Return the object ID if  defined
+            return "{}.{}".format(self.c_oid.hi, self.c_oid.lo)
+        else:
+            return self.__repr__()
 
+    def create(self, rank=None, objcls=None, seed=None):
+        """Create a DAOS object by generating an oid.
         Args:
             rank (int, optional): server rank. Defaults to None.
             objcls (object, optional): the DAOS class for this object specified
                 as either one of the DAOS object class enumerations or an
                 enumeration name or value. Defaults to DaosObjClass.OC_RP_XSF.
-
+            seed (ctypes.c_uint, optional): seed for the dts_oid_gen function.
+                Defaults to None which will use seconds since epoch as the seed.
         Raises:
             DaosApiError: if the object class is invalid
-
         """
-        func = self.context.get_function('generate-oid')
-
         # Convert the object class into an valid object class enumeration value
         if objcls is None:
             obj_cls_int = DaosObjClass.OC_RP_XSF.value
         else:
             obj_cls_int = get_object_class(objcls).value
 
+        func = self.context.get_function('oid_gen')
+        if seed is None:
+            seed = ctypes.c_uint(int(time.time()))
         self.c_oid = daos_cref.DaosObjId()
+        self.c_oid.hi = func(seed)
+
+        func = self.context.get_function('generate-oid')
         ret = func(self.container.coh, ctypes.byref(self.c_oid), 0, obj_cls_int,
                    0, 0)
         if ret != 0:
@@ -671,9 +671,7 @@ class DaosObj():
 
     def refresh_attr(self, txn=daos_cref.DAOS_TX_NONE):
         """Get object attributes and save internally.
-
         NOTE: THIS FUNCTION ISN'T IMPLEMENTED ON THE DAOS SIDE
-
         txn --Optional transaction handle to query at. Default DAOS_TX_NONE for
               an independent transaction
         """
@@ -692,7 +690,6 @@ class DaosObj():
 
     def get_layout(self):
         """Get object target layout info.
-
         NOTE: THIS FUNCTION ISN'T PART OF THE PUBLIC API
         """
         if self.c_oid is None:
@@ -717,7 +714,6 @@ class DaosObj():
 
     def punch(self, txn, cb_func=None):
         """Delete this object but only from the specified transaction.
-
         Function arguments:
         txn      --the tx from which keys will be deleted.
         cb_func  --an optional callback function
@@ -748,15 +744,12 @@ class DaosObj():
 
     def punch_dkeys(self, txn, dkeys, cb_func=None):
         """Delete dkeys and associated data from an object for a transaction.
-
         Args:
             txn (int): the transaction from which keys will be deleted
             dkeys (list): the keys to be deleted, None will be passed as NULL
             cb_func (object, optional): callback function. Defaults to None.
-
         Raises:
             DaosApiError: if there is an error deleting the keys.
-
         """
         if self.obj_handle is None:
             self.open()
@@ -801,16 +794,13 @@ class DaosObj():
 
     def punch_akeys(self, txn, dkey, akeys, cb_func=None):
         """Delete akeys and associated data from a dkey for a transaction.
-
         Args:
             txn (int): the transaction from which keys will be deleted.
             dkey (str): the parent dkey from which the akeys will be deleted
             akeys (list): a list of akeys (strings) which are to be deleted
             cb_func ([type], optional): callback function. Defaults to None.
-
         Raises:
             DaosApiError: if there is an error deleting the akeys.
-
         """
         if self.obj_handle is None:
             self.open()
@@ -857,14 +847,12 @@ class DaosObj():
 
 class IORequest():
     """Python object that centralizes details about an I/O type.
-
     Type is either 1 (single) or 2 (array)
     """
 
     def __init__(self, context, container, obj, rank=None, iotype=1,
                  objtype=None):
         """Initialize an IORequest object.
-
         Args:
             context (DaosContext): the daos environment and other info
             container (DaosContainer): the container storing the object
@@ -905,7 +893,6 @@ class IORequest():
 
     def insert_array(self, dkey, akey, c_data, txn=daos_cref.DAOS_TX_NONE):
         """Set up the I/O Vector and I/O descriptor for an array insertion.
-
         This function is limited to a single descriptor and a single
         scatter gather list.  The single SGL can have any number of
         entries as dictated by the c_data parameter.
@@ -954,7 +941,6 @@ class IORequest():
     def fetch_array(self, dkey, akey, rec_count, rec_size,
                     txn=daos_cref.DAOS_TX_NONE):
         """Retrieve an array data from a dkey/akey pair.
-
         dkey      --1st level key for the array value
         akey      --2nd level key for the array value
         rec_count --how many array indices (records) to retrieve
@@ -1015,7 +1001,6 @@ class IORequest():
     def single_insert(self, dkey, akey, value, size,
                       txn=daos_cref.DAOS_TX_NONE):
         """Update object with with a single value.
-
         dkey  --1st level key for the array value
         akey  --2nd level key for the array value
         value --string value to insert
@@ -1067,7 +1052,6 @@ class IORequest():
     def single_fetch(self, dkey, akey, size, test_hints=None,
                      txn=daos_cref.DAOS_TX_NONE):
         """Retrieve a single value from a dkey/akey pair.
-
         dkey --1st level key for the single value
         akey --2nd level key for the single value
         size --size of the string
@@ -1075,7 +1059,6 @@ class IORequest():
                Default is independent transaction (DAOS_TX_NONE)
         test_hints --optional set of values that allow for error injection,
             supported values 'sglnull', 'iodnull'.
-
         a string containing the value is returned
         """
         # init test_hints if necessary
@@ -1137,10 +1120,8 @@ class IORequest():
 
     def multi_akey_insert(self, dkey, data, txn):
         """Update object with with multiple values.
-
         Each value is tagged with an akey.  This is a bit of a mess but need to
         refactor all the I/O functions as a group at some point.
-
         dkey  --1st level key for the values
         data  --a list of tuples (akey, value)
         txn   --which transaction to write to.
@@ -1192,15 +1173,12 @@ class IORequest():
 
     def multi_akey_fetch(self, dkey, keys, txn):
         """Retrieve multiple akeys & associated data.
-
         This is kind of a mess but will refactor all the I/O functions at some
         point.
-
         dkey --1st level key for the array value
         keys --a list of tuples where each tuple is an (akey, size), where size
              is the size of the data for that key
         txn --which tx to read from.
-
         returns a dictionary containing the akey:value pairs
         """
         # create scatter gather list to hold the returned data also
@@ -1649,11 +1627,9 @@ class DaosContainer():
     def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
                              obj_cls=None, txn=daos_cref.DAOS_TX_NONE):
         """Write an array of data to an object.
-
         If an object is not supplied a new one is created.  The update occurs
         in its own epoch and the epoch is committed once the update is
         complete.
-
         As a simplification I'm expecting the datalist values, dkey and akey
         to be strings.  The datalist values should all be the same size.
         """
@@ -1679,7 +1655,6 @@ class DaosContainer():
     def write_an_obj(self, thedata, size, dkey, akey, obj=None, rank=None,
                      obj_cls=None, txn=daos_cref.DAOS_TX_NONE):
         """Write a single value to an object.
-
         If an object isn't supplied a new one is created.  The update occurs in
         its own epoch and the epoch is committed once the update is complete.
         The default object class specified here, 13, means replication.
@@ -1712,11 +1687,9 @@ class DaosContainer():
     def write_multi_akeys(self, dkey, data, obj=None, rank=None, obj_cls=None,
                           txn=daos_cref.DAOS_TX_NONE):
         """Write multiple values to an object, each tagged with a unique akey.
-
         If an object isn't supplied a new one is created.  The update
         occurs in its own epoch and the epoch is committed once the update is
         complete.
-
         dkey --the first level key under which all the data is stored.
         data --a list of tuples where each tuple is (akey, data)
         obj  --the object to insert the data into, if None then a new object
@@ -1750,10 +1723,8 @@ class DaosContainer():
     def read_an_array(self, rec_count, rec_size, dkey, akey, obj,
                       txn=daos_cref.DAOS_TX_NONE):
         """Read an array value from the specified object.
-
         rec_count --number of records (array indices) to read
         rec_size --each value in the array must be this size
-
         """
         # container should be  in the open state
         if self.coh == 0:
@@ -1771,14 +1742,12 @@ class DaosContainer():
 
     def read_multi_akeys(self, dkey, data, obj, txn=daos_cref.DAOS_TX_NONE):
         """Read multiple values as given by their akeys.
-
         dkey  --which dkey to read from
         obj   --which object to read from
         txn   --which tx to read from, Default is DAOS_TX_NONE
         data  --a list of tuples (akey, size) where akey is
                 the 2nd level key, size is the maximum data
                 size for the paired akey
-
         returns a dictionary of akey:data pairs
         """
         # container should be  in the open state
@@ -1859,7 +1828,6 @@ class DaosContainer():
 
     def list_attr(self, coh=None, cb_func=None):
         """Retrieve a list of user-defined container attribute values.
-
         Args:
             coh [Optional]:     Container Handler.
             cb_func[Optional]:  To run API in Asynchronous mode.
@@ -1905,7 +1873,6 @@ class DaosContainer():
 
     def set_attr(self, data, coh=None, cb_func=None):
         """Set a list of user-defined container attributes.
-
         Args:
             data[Required]:     Dictionary of Attribute name and value.
             coh [Optional]:     Container Handler
@@ -1954,7 +1921,6 @@ class DaosContainer():
 
     def get_attr(self, attr_names, coh=None, cb_func=None):
         """Retrieve a list of user-defined container attribute values.
-
         Note the presumption that no value is larger than 100 chars.
         Args:
             attr_names[Required]:     Attribute name list
@@ -2010,7 +1976,6 @@ class DaosContainer():
 
     def aggregate(self, coh, epoch, cb_func=None):
         """Aggregate the container epochs.
-
         Args:
             coh - Container handler
             epoch - Epoch to be aggregated to.
@@ -2043,14 +2008,12 @@ class DaosContainer():
 
 class DaosSnapshot():
     """A python object that can represent a DAOS snapshot.
-
     We do not save the coh in the snapshot since it is different each time the
     container is opened.
     """
 
     def __init__(self, context, name=None):
         """Initialize a DasoSnapshot object.
-
         The epoch is represented as a Python integer so when sending it to
         libdaos we know to always convert it to a ctype.
         """
@@ -2060,9 +2023,7 @@ class DaosSnapshot():
 
     def create(self, coh):
         """Send a snapshot creation request.
-
         Store the info in the DaosSnapshot object.
-
         coh     --ctype.u_long handle on an open container
         """
         func = self.context.get_function('create-snap')
@@ -2079,9 +2040,7 @@ class DaosSnapshot():
     #  DAOS-1336 Verify container snapshot info.
     def list(self, coh, epoch=None):
         """Call daos_cont_snap_list.
-
         Make sure there is a snapshot in the list.
-
         coh --ctype.u_long handle on an open container
         Returns the value of the epoch for this DaosSnapshot object.
         """
@@ -2100,7 +2059,6 @@ class DaosSnapshot():
 
     def open(self, coh, epoch=None):
         """Get a tx handle for the snapshot and return it.
-
         coh --ctype.u_long handle on an open container
         returns a handle on the snapshot represented by this DaosSnapshot
         object.
@@ -2118,11 +2076,9 @@ class DaosSnapshot():
 
     def destroy(self, coh, epoch=None, evnt=None):
         """Destroy the snapshot.
-
         The "epoch range" is a struct with the lowest epoch and the highest
         epoch to destroy. We have only one epoch for this single snapshot
         object.
-
         coh     --ctype.u_long open container handle
         evnt    --event (may be None)
         # need container handle coh, and the epoch range
@@ -2210,7 +2166,8 @@ class DaosContext():
             'set-pool-attr':   self.libdaos.daos_pool_set_attr,
             'stop-service':    self.libdaos.daos_pool_stop_svc,
             'test-event':      self.libdaos.daos_event_test,
-            'update-obj':      self.libdaos.daos_obj_update}
+            'update-obj':      self.libdaos.daos_obj_update,
+            'oid_gen':         self.libtest.dts_oid_gen}
 
     def get_function(self, function):
         """Call a function through the API."""
