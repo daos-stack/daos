@@ -1,7 +1,6 @@
 #!/usr/bin/python
 """
   (C) Copyright 2018-2021 Intel Corporation.
-
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers, skipForTicket
@@ -9,16 +8,15 @@ from apricot import TestWithServers, skipForTicket
 
 class RebuildTests(TestWithServers):
     """Test class for rebuild tests.
-
     Test Class Description:
         This class contains tests for pool rebuild.
-
     :avocado: recursive
     """
 
+    CANCEL_FOR_TICKET = [["DAOS-6865", "object_qty", 20]]
+
     def run_rebuild_test(self, pool_quantity):
         """Run the rebuild test for the specified number of pools.
-
         Args:
             pool_quantity (int): number of pools to test
         """
@@ -109,30 +107,23 @@ class RebuildTests(TestWithServers):
                     "Data verification error after rebuild")
         self.log.info("Test Passed")
 
-    @skipForTicket("DAOS-6865")
     def test_simple_rebuild(self):
         """JIRA ID: DAOS-XXXX Rebuild-001.
-
         Test Description:
             The most basic rebuild test.
-
         Use Cases:
             single pool rebuild, single client, various record/object counts
-
         :avocado: tags=all,daily_regression,large,pool,rebuild,rebuildsimple
         """
         self.run_rebuild_test(1)
 
-    @skipForTicket("DAOS-6865")
+    @skipForTicket("DAOS-7050")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
-
         Test Description:
             Expand on the basic test by rebuilding 2 pools at once.
-
         Use Cases:
             multipool rebuild, single client, various object and record counts
-
         :avocado: tags=all,daily_regression,large,pool,rebuild,rebuildmulti
         """
         self.run_rebuild_test(self.params.get("quantity", "/run/testparams/*"))
