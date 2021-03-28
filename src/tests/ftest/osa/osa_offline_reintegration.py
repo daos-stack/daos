@@ -185,7 +185,6 @@ class OSAOfflineReintegration(OSAUtils):
         """
         self.run_offline_reintegration_test(1, data=True, server_boot=True)
 
-    @skipForTicket("DAOS-7042")
     def test_osa_offline_reintegrate_during_rebuild(self):
         """Test ID: DAOS-6923
         Test Description: Reintegrate rank while rebuild
