@@ -17,6 +17,8 @@
 #include <daos_srv/daos_engine.h>
 #include "dtx_internal.h"
 
+/* Only for test. */
+
 struct dtx_batched_commit_args {
 	d_list_t		 dbca_link;
 	struct ds_cont_child	*dbca_cont;
