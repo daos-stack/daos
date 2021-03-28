@@ -130,6 +130,7 @@ cont_iv_ent_destroy(d_sg_list_t *sgl)
 
 	if (sgl->sg_iovs && sgl->sg_iovs[0].iov_buf) {
 		daos_handle_t *root_hdl = sgl->sg_iovs[0].iov_buf;
+
 		dbtree_destroy(*root_hdl, NULL);
 	}
 
@@ -237,10 +238,8 @@ cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	if (rc)
 		D_GOTO(out, rc);
 out:
-	if (iv_entry != NULL)
-		D_FREE(iv_entry);
-	if (snaps)
-		D_FREE(snaps);
+	D_FREE(iv_entry);
+	D_FREE(snaps);
 	return rc;
 }
 
@@ -370,8 +369,7 @@ cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 out:
 	if (prop != NULL)
 		daos_prop_free(prop);
-	if (iv_entry != NULL)
-		D_FREE(iv_entry);
+	D_FREE(iv_entry);
 	return rc;
 }
 
@@ -549,7 +547,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 out:
 	if (rc < 0 && rc != -DER_IVCB_FORWARD)
-		D_CDEBUG(rc == -DER_NONEXIST, DB_ANY, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER,
+			 DB_ANY, DLOG_ERR,
 			 "failed to insert: rc "DF_RC"\n", DP_RC(rc));
 
 	return rc;
@@ -748,8 +747,7 @@ retry:
 	*snap_count = iv_entry->iv_snap.snap_cnt;
 
 free:
-	if (iv_entry)
-		D_FREE(iv_entry);
+	D_FREE(iv_entry);
 	return rc;
 }
 
@@ -1112,12 +1110,9 @@ out:
 	if (rc) {
 		if (acl_alloc)
 			daos_acl_free(acl_alloc);
-		if (label_alloc)
-			D_FREE(label_alloc);
-		if (owner_alloc)
-			D_FREE(owner_alloc);
-		if (owner_grp_alloc)
-			D_FREE(owner_grp_alloc);
+		D_FREE(label_alloc);
+		D_FREE(owner_alloc);
+		D_FREE(owner_grp_alloc);
 	}
 	return rc;
 }
@@ -1198,8 +1193,7 @@ cont_iv_prop_fetch_ult(void *data)
 	}
 
 out:
-	if (iv_entry)
-		D_FREE(iv_entry);
+	D_FREE(iv_entry);
 	daos_prop_free(prop_fetch);
 	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
 }
