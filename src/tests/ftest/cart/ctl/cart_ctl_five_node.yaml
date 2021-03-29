@@ -30,13 +30,13 @@ tests: !mux
   ctl:
     name: ctl_basic
     test_servers_bin: crt_launch
-    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp_five_node"
+    test_servers_arg: "-e test_group_np_srv --name server_grp_five_node"
     test_servers_env: ""
     test_servers_ppn: "1"
     test_clients_bin:
       - cart_ctl
       - cart_ctl
-      - ../tests/test_group_np_cli
+      - test_group_np_cli
     test_clients_env: ""
     test_clients_ppn: "1"
     test_clients_arg:
