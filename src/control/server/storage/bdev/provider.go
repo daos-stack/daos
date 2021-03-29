@@ -36,13 +36,14 @@ type (
 	// PrepareRequest defines the parameters for a Prepare operation.
 	PrepareRequest struct {
 		pbin.ForwardableRequest
-		HugePageCount int
-		PCIWhitelist  string
-		PCIBlacklist  string
-		TargetUser    string
-		ResetOnly     bool
-		DisableVFIO   bool
-		DisableVMD    bool
+		HugePageCount         int
+		DisableCleanHugePages bool
+		PCIWhitelist          string
+		PCIBlacklist          string
+		TargetUser            string
+		ResetOnly             bool
+		DisableVFIO           bool
+		DisableVMD            bool
 	}
 
 	// PrepareResponse contains the results of a successful Prepare operation.
