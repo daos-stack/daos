@@ -13,7 +13,7 @@ hosts:
     - client-H
 timeout: 450
 timeouts:
-  test_daos_dfs_unit: 250
+  test_daos_dfs_unit: 500
   test_daos_dfs_parallel: 200
 pool:
   scm_size: 8G
