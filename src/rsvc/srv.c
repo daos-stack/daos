@@ -718,6 +718,8 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 
 err_db:
 	rdb_stop(svc->s_db);
+	if (create)
+		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
 err_svc:
 	svc->s_ref--;
 	fini_free(svc);

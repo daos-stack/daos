@@ -219,7 +219,7 @@ rdb_lookup(const uuid_t uuid)
 
 /*
  * If created successfully, the new DB handle will consume pool and mc, which
- * the caller therefore shall not close.
+ * the caller shall not close in this case.
  */
 static int
 rdb_start_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,

@@ -236,9 +236,6 @@ vos_blob_unmap_cb(uint64_t off, uint64_t cnt, void *data)
 static int pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		     unsigned int flags, daos_handle_t *poh);
 
-/**
- * Create a Versioning Object Storage Pool (VOSP) and its root object.
- */
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		daos_size_t nvme_sz, unsigned int flags, daos_handle_t *poh)
@@ -250,6 +247,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	struct bio_blob_hdr	 blob_hdr;
 	daos_handle_t		 hdl;
+	struct d_uuid		 ukey;
+	struct vos_pool		*pool = NULL;
 	int			 rc = 0, enabled = 1;
 
 	if (!path || uuid_is_null(uuid))
@@ -260,6 +259,16 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
+
+	uuid_copy(ukey.uuid, uuid);
+	rc = pool_lookup(&ukey, &pool);
+	if (rc == 0) {
+		D_ASSERT(pool != NULL);
+		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
+			pool->vp_opened, pool);
+		vos_pool_decref(pool);
+		return -DER_EXIST;
+	}
 
 	/* Path must be a file with a certain size when size argument is 0 */
 	if (!scm_sz && access(path, F_OK) == -1) {
@@ -466,12 +475,6 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	D_DEBUG(DB_MGMT, "delete path: %s UUID: "DF_UUID"\n",
 		path, DP_UUID(uuid));
 
-	/*
-	 * Use force == false to avoid open-unlinking the libpmemobj file,
-	 * which may cause a subsequent vos_pool_create with the same pool UUID
-	 * (a resent request?) to face an existing VOS pool handle pointing to
-	 * the old file.
-	 */
 	rc = vos_pool_kill(uuid, false);
 	if (rc)
 		return rc;
@@ -609,7 +612,10 @@ vos_register_slabs(struct umem_attr *uma)
 	return 0;
 }
 
-/* If successful, this function consumes ph, which the call shall not close. */
+/*
+ * If successful, this function consumes ph, which the caller shall not close
+ * in this case.
+ */
 static int
 pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	  unsigned int flags, daos_handle_t *poh)
