@@ -451,13 +451,13 @@ class DaosServer():
 
         error_resolutions = {
             'system_erase': (
-                ['code = 537'], ['system', 'erase', '--json'],
+                ['running system'], ['system', 'erase', '--json'],
             ),
             'system_stop': (
                 ['to be stopped'], ['system', 'stop', '--json'],
             ),
             'storage_force_format': (
-                ['code = 107', 'raft service unavailable'],
+                ['already-formatted', 'raft service unavailable'],
                 ['storage', 'format', '--force', '--json']
             )
         }
