@@ -35,7 +35,7 @@ class DaosSnapshotTest(TestWithServers):
     """
     def __init__(self, *args, **kwargs):
         """Initialize a DaosSnapshotTest object."""
-        super(DaosSnapshotTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.daos_cmd = None
 
     def create_snapshot(self, pool_uuid, cont_uuid, count):
@@ -77,13 +77,13 @@ class DaosSnapshotTest(TestWithServers):
             pool_uuid=self.pool.uuid,
             cont_uuid=self.container.uuid, count=count)
         expected_epochs.sort()
-        self.log.info("Expected Epochs = {}".format(expected_epochs))
+        self.log.info("Expected Epochs = %s", expected_epochs)
 
         # List the snapshots and verify their epochs.
         actual_epochs = self.daos_cmd.container_list_snaps(
             pool=self.pool.uuid, cont=self.container.uuid)["epochs"]
         actual_epochs.sort()
-        self.log.info("Actual Epochs = {}".format(actual_epochs))
+        self.log.info("Actual Epochs = %s", actual_epochs)
         self.assertEqual(expected_epochs, actual_epochs)
 
         return actual_epochs
@@ -104,7 +104,7 @@ class DaosSnapshotTest(TestWithServers):
         # Create snapshots.
         snapshot_count = self.params.get(
             "snapshot_count", "/run/stress_test/*/")
-        self.log.info("Creating {} snapshots".format(snapshot_count))
+        self.log.info("Creating %s snapshots", snapshot_count)
         actual_epochs = self.create_verify_snapshots(snapshot_count)
 
         # Destroy all the snapshots.
@@ -134,7 +134,7 @@ class DaosSnapshotTest(TestWithServers):
         # Create snapshots.
         snapshot_count = self.params.get(
             "snapshot_count", "/run/stress_test/*/")
-        self.log.info("Creating {} snapshots".format(snapshot_count))
+        self.log.info("Creating %s snapshots", snapshot_count)
         actual_epochs = self.create_verify_snapshots(snapshot_count)
 
         # Destroy all snapshots with --epcrange.

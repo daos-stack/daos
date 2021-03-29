@@ -48,6 +48,7 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 
 	memset(&md, 0, sizeof(md));
 	md.omd_id  = oid;
+	D_ASSERT(pl_map != NULL);
 	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
 
 	rc = pl_obj_place(pl_map, &md, NULL, layout);
@@ -356,8 +357,6 @@ plt_next_level(pool_comp_type_t current)
 		return PO_COMP_TP_TARGET;
 
 	/* these are not used by the test layout */
-	case PO_COMP_TP_BLADE:
-	case PO_COMP_TP_BOARD:
 	case PO_COMP_TP_TARGET:
 	case PO_COMP_TP_UNKNOWN:
 	default:
@@ -763,14 +762,18 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 int
 get_object_classes(daos_oclass_id_t **oclass_id_pp)
 {
-	const uint32_t str_size = 2560;
-	char oclass_names[str_size];
+	const uint32_t str_size = (16 << 10);
+	char *oclass_names;
 	char oclass[64];
 	daos_oclass_id_t *oclass_id;
 	uint32_t length = 0;
 	uint32_t num_oclass = 0;
 	uint32_t oclass_str_index = 0;
 	uint32_t i, oclass_index;
+
+	D_ALLOC(oclass_names, str_size);
+	if (!oclass_names)
+		return -1;
 
 	length = daos_oclass_names_list(str_size, oclass_names);
 
@@ -794,18 +797,19 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 			oclass_str_index++;
 		}
 	}
-
+	D_FREE(oclass_names);
 	return num_oclass;
 }
 
 int
 extend_test_pool_map(struct pool_map *map,
 		     uint32_t nnodes, uuid_t target_uuids[],
-		d_rank_list_t *rank_list, uint32_t ndomains,
-		int32_t *domains, bool *updated_p, uint32_t *map_version_p,
-		uint32_t dss_tgt_nr)
+		     d_rank_list_t *rank_list, uint32_t ndomains,
+		     uint32_t *domains, bool *updated_p,
+		     uint32_t *map_version_p,
+		     uint32_t dss_tgt_nr)
 {
-	struct pool_buf	*map_buf;
+	struct pool_buf	*map_buf = NULL;
 	uint32_t	map_version;
 	int		ntargets;
 	int		rc;
@@ -821,6 +825,11 @@ extend_test_pool_map(struct pool_map *map,
 
 	/* Extend the current pool map */
 	rc = pool_map_extend(map, map_version, map_buf);
+	if (rc != 0) {
+		if (map_buf != NULL)
+			pool_buf_free(map_buf);
+	}
+
 	assert_success(rc);
 
 	return rc;

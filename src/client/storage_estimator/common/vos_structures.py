@@ -25,7 +25,7 @@ class StrBool(Enum):
     NO = "No"
 
 
-class VosBase(object):
+class VosBase():
     def __init__(self, count):
         self._payload = dict()
         self.set_count(count)
@@ -50,7 +50,7 @@ class VosBase(object):
 
 class VosValue(VosBase):
     def __init__(self, size=None, count=1, aligned=None):
-        super(VosValue, self).__init__(count)
+        super().__init__(count)
         self._set_size(size)
         self._set_aligned(aligned)
 
@@ -80,7 +80,7 @@ class VosItems(VosBase):
             values=None,
             values_label=None,
             values_type=None):
-        super(VosItems, self).__init__(count)
+        super().__init__(count)
         self._values_label = values_label
         self._values_type = values_type
         self._payload[self._values_label] = list()
@@ -120,7 +120,7 @@ class VosKey(VosItems):
             values=None,
             values_label=None,
             values_type=None):
-        super(VosKey, self).__init__(count, values, values_label, values_type)
+        super().__init__(count, values, values_label, values_type)
         self._set_type(key, key_type)
         self._set_overhead(overhead)
 
@@ -164,9 +164,7 @@ class AKey(VosKey):
             overhead=None,
             value_type=None,
             values=[]):
-        super(
-            AKey,
-            self).__init__(
+        super().__init__(
             key=key,
             count=count,
             key_type=key_type,
@@ -196,9 +194,7 @@ class DKey(VosKey):
             key_type=None,
             overhead=None,
             akeys=[]):
-        super(
-            DKey,
-            self).__init__(
+        super().__init__(
             key,
             count,
             key_type,
@@ -210,7 +206,7 @@ class DKey(VosKey):
 
 class VosObject(VosItems):
     def __init__(self, count=1, dkeys=[], targets=0):
-        super(VosObject, self).__init__(count, dkeys, "dkeys", DKey)
+        super().__init__(count, dkeys, "dkeys", DKey)
         self.set_num_of_targets(targets)
 
     def set_num_of_targets(self, targets):
@@ -221,7 +217,7 @@ class VosObject(VosItems):
 
 class Container(VosItems):
     def __init__(self, count=1, csum_size=0, csum_gran=16384, objects=[]):
-        super(Container, self).__init__(count, objects, "objects", VosObject)
+        super().__init__(count, objects, "objects", VosObject)
         self.set_csum_size(csum_size)
         self.set_csum_gran(csum_gran)
 
@@ -238,7 +234,7 @@ class Container(VosItems):
 
 class Containers(VosItems):
     def __init__(self, num_shards=1000, containers=[]):
-        super(Containers, self).__init__(
+        super().__init__(
             count=None,
             values=containers,
             values_label="containers",
@@ -246,7 +242,7 @@ class Containers(VosItems):
         self.set_num_shards(num_shards)
 
     def dump(self):
-        containers = super(Containers, self).dump()
+        containers = super().dump()
         containers["num_shards"] = self._num_shards
         return containers
 

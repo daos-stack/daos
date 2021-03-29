@@ -15,31 +15,69 @@ ARG CB0
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
-RUN yum clean all &&							\
-    yum -y install epel-release &&					\
-    yum -y upgrade &&							\
-    yum -y install							\
-	boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
-	gcc gcc-c++ git golang graphviz lcov				\
-	libaio-devel libcmocka-devel libevent-devel libiscsi-devel	\
-	libtool libtool-ltdl-devel libuuid-devel libyaml-devel		\
-	make nasm numactl-devel openssl-devel				\
-	pandoc patch python-devel python36-devel python-magic		\
-	python-pep8 python-pygit2 python2-pygithub python-requests	\
-	readline-devel scons sg3_utils yasm pciutils			\
-	valgrind-devel python36-pylint man java-1.8.0-openjdk maven	\
-	json-c-devel python36-requests lz4-devel			\
-	python2-avocado python2-avocado-plugins-output-html		\
-	python2-avocado-plugins-varianter-yaml-to-mux			\
-	python-pathlib							\
-	ndctl ipmctl e2fsprogs						\
-	python2-clustershell python2-Cython				\
-	python36-clustershell python36-paramiko				\
-	python36-numpy Lmod						\
-	fuse3-devel libipmctl-devel python36-pyxattr			\
-	hwloc-devel patchelf python36-tabulate				\
-	java-1.8.0-openjdk python-distro python36-distro		\
-	libunwind-devel &&						\
+RUN yum clean all && \
+    yum -y install epel-release && \
+    yum -y upgrade && \
+    yum -y install \
+        boost-python36-devel \
+        clang-analyzer \
+        cmake \
+        CUnit-devel \
+        doxygen \
+        e2fsprogs \
+        file \
+        flex \
+        fuse3-devel \
+        gcc \
+        gcc-c++ \
+        git \
+        golang \
+        graphviz \
+        hwloc-devel \
+        ipmctl \
+        java-1.8.0-openjdk \
+        json-c-devel \
+        lcov \
+        libaio-devel \
+        libcmocka-devel \
+        libevent-devel \
+        libipmctl-devel \
+        libiscsi-devel \
+        libtool \
+        libtool-ltdl-devel \
+        libunwind-devel \
+        libuuid-devel \
+        libyaml-devel \
+        Lmod \
+        lz4-devel \
+        make \
+        man \
+        maven \
+        nasm \
+        ndctl \
+        numactl-devel \
+        openssl-devel \
+        pandoc \
+        patch \
+        patchelf \
+        pciutils \
+        python3-pip \
+        python36-Cython \
+        python36-devel \
+        python36-distro \
+        python36-jira \
+        python36-numpy \
+        python36-paramiko \
+        python36-pylint \
+        python36-requests \
+        python36-requests \
+        python36-tabulate \
+        python36-pyxattr \
+        python36-scons \
+        readline-devel \
+        sg3_utils \
+        valgrind-devel \
+        yasm && \
     yum clean all
 
 # Install this individually because of potential conflicts
@@ -52,6 +90,24 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
+
+# Removing PyYAML 3.10 to allow pip install to upgrade
+RUN yum -y remove python36-PyYAML
+
+RUN python3 -m pip install --upgrade pip
+
+RUN python3 -m pip --no-cache-dir install \
+    "avocado-framework<70.0" \
+    "avocado-framework-plugin-result-html<70.0" \
+    "avocado-framework-plugin-varianter-yaml-to-mux<70.0" \
+    clustershell \
+    pep8 \
+    pygit2 \
+    python-magic
+
+# Add codespell to path.
+ENV PATH=$PATH:/home/daos/.local/bin
+
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
@@ -154,7 +210,7 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
+    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
     /bin/rm -rf build *.gz; }
 
 USER root:root
@@ -180,7 +236,7 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos; }
 

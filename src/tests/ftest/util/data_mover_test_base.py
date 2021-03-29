@@ -6,9 +6,11 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from command_utils_base import CommandFailure
 from daos_utils import DaosCommand
+from test_utils_container import TestContainer
+from pydaos.raw import str_to_c_uuid, DaosContainer
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from data_mover_utils import Dcp, Dsync, FsCopy
+from data_mover_utils import Dcp, Dsync, FsCopy, ContClone
 from os.path import join
 import uuid
 
@@ -38,16 +40,17 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
     PARAM_TYPES = ("POSIX", "DAOS_UUID", "DAOS_UNS")
 
     # The valid datamover tools that can be used
-    TOOLS = ("DCP", "DSYNC", "FS_COPY")
+    TOOLS = ("DCP", "DSYNC", "FS_COPY", "CONT_CLONE")
 
     def __init__(self, *args, **kwargs):
         """Initialize a DataMoverTestBase object."""
-        super(DataMoverTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.tool = None
         self.daos_cmd = None
         self.dcp_cmd = None
         self.dsync_cmd = None
         self.fs_copy_cmd = None
+        self.cont_clone_cmd = None
         self.ior_processes = None
         self.mdtest_processes = None
         self.dcp_processes = None
@@ -56,7 +59,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.container = []
         self.uuids = []
         self.dfuse_hosts = None
-        self.num_run_datamover = 0 # Number of times run_datamover was called
+        self.num_run_datamover = 0  # Number of times run_datamover was called
 
         # List of test paths to create and remove
         self.posix_test_paths = []
@@ -72,7 +75,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(DataMoverTestBase, self).setUp()
+        super().setUp()
 
         self.dfuse_hosts = self.agent_managers[0].hosts
 
@@ -331,6 +334,33 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         return container
 
+    def get_cont(self, pool, cont_uuid):
+        """Get an existing container.
+
+        Args:
+            pool (TestPool): pool to open the container in.
+            cont_uuid (str): container uuid.
+
+        Returns:
+            TestContainer: the container object
+
+        """
+        # Open the container
+        # Create a TestContainer instance
+        container = TestContainer(pool, daos_command=self.get_daos_command())
+
+        # Create the underlying DaosContainer instance
+        container.container = DaosContainer(pool.context)
+        container.container.uuid = str_to_c_uuid(cont_uuid)
+        container.uuid = container.container.get_uuid_str()
+        container.container.poh = pool.pool.handle
+
+        # Save container and uuid
+        self.container.append(container)
+        self.uuids.append(str(container.uuid))
+
+        return container
+
     def gen_uuid(self):
         """Generate a unique uuid.
 
@@ -343,15 +373,49 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             new_uuid = str(uuid.uuid4())
         return new_uuid
 
-    def set_datamover_params(self, *args, **kwargs):
+    def set_datamover_params(self,
+                             src_type=None, src_path=None,
+                             src_pool=None, src_cont=None,
+                             dst_type=None, dst_path=None,
+                             dst_pool=None, dst_cont=None):
         """Set the params for self.tool.
-        Called by run_datamover if params are passed."""
+        Called by run_datamover if params are passed.
+
+        Args:
+            src_type (str): how to interpret the src params.
+                Must be in PARAM_TYPES.
+            src_path (str): posix-style source path.
+                For containers, this is relative to the container root.
+            src_pool (TestPool, optional): the source pool.
+                Alternatively, this can be the pool uuid.
+            src_cont (TestContainer, optional): the source container.
+                Alternatively, this can be the container uuid.
+            dst_type (str): how to interpret the dst params.
+                Must be in PARAM_TYPES.
+            dst_path (str): posix-style destination path.
+                For containers, this is relative to the container root.
+            dst_pool (TestPool, optional): the destination pool.
+                Alternatively, this can be the pool uuid.
+            dst_cont (TestContainer, optional): the destination container.
+                Alternatively, this can be the container uuid.
+
+        """
         if self.tool == "DCP":
-            self.set_dcp_params(*args, **kwargs)
+            self.set_dcp_params(src_type, src_path, src_pool, src_cont,
+                                dst_type, dst_path, dst_pool, dst_cont)
         elif self.tool == "DSYNC":
-            self.set_dsync_params(*args, **kwargs)
+            self.set_dsync_params(src_type, src_path, src_pool, src_cont,
+                                  dst_type, dst_path, dst_pool, dst_cont)
         elif self.tool == "FS_COPY":
-            self.set_fs_copy_params(*args, **kwargs)
+            self.set_fs_copy_params(src_type, src_path, src_pool, src_cont,
+                                    dst_type, dst_path, dst_pool, dst_cont)
+        elif self.tool == "CONT_CLONE":
+            assert src_type in (None, "DAOS", "DAOS_UUID")
+            assert src_path is None
+            assert dst_type in (None, "DAOS", "DAOS_UUID")
+            assert dst_path is None
+            self.set_cont_clone_params(src_pool, src_cont,
+                                       dst_pool, dst_cont)
         else:
             self.fail("Invalid tool: {}".format(str(self.tool)))
 
@@ -589,6 +653,39 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.fs_copy_cmd.set_fs_copy_params(
                 dst=path)
 
+    def set_cont_clone_params(self,
+                              src_pool=None, src_cont=None,
+                              dst_pool=None, dst_cont=None):
+        """Set the params for daos cont clone.
+
+        This only supports DAOS -> DAOS copies.
+
+        Args:
+            src_pool (TestPool, optional): the source pool.
+                Alternatively, this can the pool uuid.
+            src_cont (TestContainer, optional): the source container.
+                Alternatively, this can be the container uuid.
+            dst_pool (TestPool, optional): the destination pool.
+                Alternatively, this can the pool uuid.
+            dst_cont (TestContainer, optional): the destination container.
+                Alternatively, this can be the container uuid.
+
+        """
+        # First, initialize a new cont copy command
+        self.cont_clone_cmd = ContClone(self.daos_cmd, self.log)
+
+        # Set the source params
+        if src_pool or src_cont:
+            param = self._format_daos_path(src_pool, src_cont, None)
+            self.cont_clone_cmd.set_cont_clone_params(
+                src=param)
+
+        # Set the destination params
+        if dst_pool or dst_cont:
+            param = self._format_daos_path(dst_pool, dst_cont, None)
+            self.cont_clone_cmd.set_cont_clone_params(
+                dst = param)
+
     def set_ior_params(self, param_type, path, pool=None, cont=None,
                        path_suffix=None, flags=None, display=True):
         """Set the ior params.
@@ -621,7 +718,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         display_test_file = "test_file" if display else None
 
         # Allow cont to be either the container or the uuid
-        cont_uuid = cont.uuid if hasattr(cont, "uuid") else cont
+        cont_uuid = self._uuid_from_obj(cont)
 
         # Optionally append suffix
         if path_suffix:
@@ -658,7 +755,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.set_ior_params(param_type, path, pool, cont,
                             path_suffix, flags, display)
         self.run_ior(self.get_ior_job_manager_command(), self.ior_processes,
-                     display_space=(True if pool else False), pool=pool)
+                     display_space=(bool(pool)), pool=pool)
 
     def set_mdtest_params(self, param_type, path, pool=None, cont=None,
                           flags=None, display=True):
@@ -690,7 +787,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         display_test_dir = "test_dir" if display else None
 
         # Allow cont to be either the container or the uuid
-        cont_uuid = cont.uuid if hasattr(cont, "uuid") else cont
+        cont_uuid = self. _uuid_from_obj(cont)
 
         if param_type == "POSIX":
             self.mdtest_cmd.api.update("POSIX", display_api)
@@ -720,7 +817,24 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.set_mdtest_params(param_type, path, pool, cont, flags, display)
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.mdtest_processes,
-                        display_space=(True if pool else False), pool=pool)
+                        display_space=(bool(pool)), pool=pool)
+
+    def run_diff(self, src, dst, deref=False):
+        """Run linux diff command.
+
+        Args:
+            src (str): the source path
+            dst (str): the destination path
+            deref (bool, optional): Whether to dereference symlinks.
+                Defaults to False.
+        """
+        deref_str = ""
+        if not deref:
+            deref_str = "--no-dereference"
+
+        cmd = "diff -r {} '{}' '{}'".format(
+            deref_str, src, dst)
+        self.execute_cmd(cmd)
 
     # pylint: disable=too-many-arguments
     def run_datamover(self, test_desc=None,
@@ -794,6 +908,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 result = self.dsync_cmd.run(self.workdir, processes)
             elif self.tool == "FS_COPY":
                 result = self.fs_copy_cmd.run()
+            elif self.tool == "CONT_CLONE":
+                result = self.cont_clone_cmd.run()
             else:
                 self.fail("Invalid tool: {}".format(str(self.tool)))
         except CommandFailure as error:
@@ -809,10 +925,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # Check for expected output
         for s in expected_output:
-            if s not in result.stdout:
+            if s not in result.stdout_text:
                 self.fail("stdout expected {}: {}".format(s, test_desc))
         for s in expected_err:
-            if s not in result.stderr:
+            if s not in result.stderr_text:
                 self.fail("stderr xpected {}: {}".format(s, test_desc))
 
         return result

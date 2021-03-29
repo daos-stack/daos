@@ -81,6 +81,7 @@ const (
 
 	// DAOS system fault codes
 	SystemUnknown Code = iota + 400
+	SystemBadFaultDomainDepth
 
 	// client fault codes
 	ClientUnknown Code = iota + 500
@@ -130,6 +131,7 @@ const (
 	ServerConfigFaultCallbackFailed
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
+	ServerConfigFaultDomainTooManyLayers
 
 	// SPDK library bindings codes
 	SpdkUnknown Code = iota + 800
