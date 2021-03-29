@@ -215,11 +215,16 @@ need_aggregate(struct vos_agg_param *agg_param, vos_iter_entry_t *entry)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
 
-	D_DEBUG(DB_EPC, "check_ts:%d, hae:"DF_U64", last_update:"DF_U64"\n",
-		agg_param->ap_check_ts, cont->vc_cont_df->cd_hae,
-		entry->ie_last_update);
+	D_DEBUG(DB_EPC, "check_ts:%d, hae:"DF_U64", last_update:"DF_U64", "
+		"punched:"DF_U64"\n", agg_param->ap_check_ts,
+		cont->vc_cont_df->cd_hae, entry->ie_last_update,
+		entry->ie_punch);
 
-	if (!agg_param->ap_check_ts)
+	/*
+	 * Don't skip aggregation if the obj/dkey/akey is punched, or when
+	 * the current aggregate EPR is below HAE.
+	 */
+	if (!agg_param->ap_check_ts || entry->ie_punch != 0)
 		return true;
 
 	D_ASSERT(entry->ie_last_update != 0);
