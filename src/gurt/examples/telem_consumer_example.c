@@ -89,7 +89,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 				break;
 			}
 			d_tm_print_timestamp(&clk, name, D_TM_STANDARD, options,
-					    stdout);
+					     stdout);
 			break;
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):

@@ -423,7 +423,7 @@ d_tm_print_counter(uint64_t val, char *name, int format, char *units,
  * \param[in]	format		Output format.
  *				Choose D_TM_STANDARD for standard output.
  *				Choose D_TM_CSV for comma separated values.
-* \param[in]	opt_fields	A bitmask.  Set to D_TM_INCLUDE_TYPE to display
+ * \param[in]	opt_fields	A bitmask.  Set to D_TM_INCLUDE_TYPE to display
  *				metric type.
  * \param[in]	stream		Output stream (stdout, stderr)
  */
@@ -457,7 +457,7 @@ d_tm_print_timestamp(time_t *clk, char *name, int format, int opt_fields,
 		fprintf(stream, ",%s", temp);
 	} else {
 		if (opt_fields & D_TM_INCLUDE_TYPE)
-			fprintf(stream, "type: time timestamp, ");
+			fprintf(stream, "type: timestamp, ");
 		fprintf(stream, "%s: %s", name, temp);
 	}
 }
@@ -541,7 +541,7 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
  * \param[in]	format		Output format.
  *				Choose D_TM_STANDARD for standard output.
  *				Choose D_TM_CSV for comma separated values.
-* \param[in]	opt_fields	A bitmask.  Set to D_TM_INCLUDE_TYPE to display
+ * \param[in]	opt_fields	A bitmask.  Set to D_TM_INCLUDE_TYPE to display
  *				metric type.
  * \param[in]	stream		Output stream (stdout, stderr)
  */
@@ -692,7 +692,7 @@ d_tm_print_metadata(char *desc, char *units, int format, FILE *stream)
  *				Choose D_TM_STANDARD for standard output.
  *				Choose D_TM_CSV for comma separated values.
  * \param[in]	opt_fields	A bitmask.  Set D_TM_INCLUDE_* as desired for
- * 				the optional output fields.
+ *				the optional output fields.
  * \param[in]	stream		Direct output to this stream (stdout, stderr)
  */
 void
@@ -875,7 +875,7 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
  *				Choose D_TM_STANDARD for standard output.
  *				Choose D_TM_CSV for comma separated values.
  * \param[in]	opt_fields	A bitmask.  Set D_TM_INCLUDE_* as desired for
- * 				the optional output fields.
+ *				the optional output fields.
  * \param[in]	show_timestamp	Set to true to print the timestamp the metric
  *				was read by the consumer.
  * \param[in]	stream		Direct output to this stream (stdout, stderr)
@@ -924,7 +924,7 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
  * Prints the header for CSV output
  *
  * \param[in]	opt_fields	A bitmask.  Set D_TM_INCLUDE_* as desired for
- * 				the optional output fields.
+ *				the optional output fields.
  * \param[in]	stream		Direct output to this stream (stdout, stderr)
  */
 void
