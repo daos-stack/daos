@@ -610,7 +610,7 @@ vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc)
 		D_ASSERT(se_entry != NULL);
 		wcache = &se_entry->te_w_cache;
 
-		if (wcache->wc_ts_w[wcache->wc_w_high] == 0) {
+		if (wcache->wc_ts_w[wcache->wc_w_high] != 0) {
 			*epc = wcache->wc_ts_w[wcache->wc_w_high];
 			return;
 		}
