@@ -21,8 +21,8 @@ func TestBdevRunnerPrepare(t *testing.T) {
 	const (
 		testNrHugePages  = 42
 		testTargetUser   = "amos"
-		testPciWhitelist = "a,b,c"
-		testPciBlacklist = "x,y,z"
+		testPciAllowlist = "a,b,c"
+		testPciBlocklist = "x,y,z"
 	)
 
 	for name, tc := range map[string]struct {
@@ -57,38 +57,38 @@ func TestBdevRunnerPrepare(t *testing.T) {
 			req: PrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    testTargetUser,
-				PCIWhitelist:  testPciWhitelist,
+				PCIAllowlist:  testPciAllowlist,
 				DisableVFIO:   true,
 			},
 			expEnv: []string{
 				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 				fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 				fmt.Sprintf("%s=%s", targetUserEnv, testTargetUser),
-				fmt.Sprintf("%s=%s", pciWhiteListEnv, testPciWhitelist),
+				fmt.Sprintf("%s=%s", pciAllowListEnv, testPciAllowlist),
 				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 			},
 		},
-		"blacklist": {
+		"blocklist": {
 			req: PrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    testTargetUser,
-				PCIBlacklist:  testPciBlacklist,
+				PCIBlocklist:  testPciBlocklist,
 				DisableVFIO:   true,
 			},
 			expEnv: []string{
 				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 				fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 				fmt.Sprintf("%s=%s", targetUserEnv, testTargetUser),
-				fmt.Sprintf("%s=%s", pciBlackListEnv, testPciBlacklist),
+				fmt.Sprintf("%s=%s", pciBlockListEnv, testPciBlocklist),
 				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 			},
 		},
-		"blacklist whitelist fails": {
+		"blocklist allowlist fails": {
 			req: PrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    testTargetUser,
-				PCIBlacklist:  testPciBlacklist,
-				PCIWhitelist:  testPciWhitelist,
+				PCIBlocklist:  testPciBlocklist,
+				PCIAllowlist:  testPciAllowlist,
 				DisableVFIO:   true,
 			},
 			expErr: errors.New(

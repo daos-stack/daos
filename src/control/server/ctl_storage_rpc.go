@@ -45,7 +45,7 @@ func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) *ctlpb.
 	_, err := c.NvmePrepare(bdev.PrepareRequest{
 		HugePageCount: int(req.GetNrhugepages()),
 		TargetUser:    req.GetTargetuser(),
-		PCIWhitelist:  req.GetPciwhitelist(),
+		PCIAllowlist:  req.GetPciwhitelist(),
 		ResetOnly:     req.GetReset_(),
 	})
 

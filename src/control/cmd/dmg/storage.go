@@ -51,7 +51,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	var sReq *control.ScmPrepareReq
 	if prepNvme {
 		nReq = &control.NvmePrepareReq{
-			PCIWhiteList: cmd.PCIWhiteList,
+			PCIAllowList: cmd.PCIAllowList,
 			NrHugePages:  int32(cmd.NrHugepages),
 			TargetUser:   cmd.TargetUser,
 			Reset:        cmd.Reset,

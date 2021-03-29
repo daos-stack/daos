@@ -242,7 +242,7 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 type (
 	// NvmePrepareReq contains the parameters for a NVMe prepare request.
 	NvmePrepareReq struct {
-		PCIWhiteList string
+		PCIAllowList string
 		NrHugePages  int32
 		TargetUser   string
 		Reset        bool

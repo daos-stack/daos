@@ -37,8 +37,8 @@ type (
 	PrepareRequest struct {
 		pbin.ForwardableRequest
 		HugePageCount int
-		PCIWhitelist  string
-		PCIBlacklist  string
+		PCIAllowlist  string
+		PCIBlocklist  string
 		TargetUser    string
 		ResetOnly     bool
 		DisableVFIO   bool

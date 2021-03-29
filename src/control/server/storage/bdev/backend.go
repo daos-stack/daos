@@ -338,7 +338,7 @@ func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST
 	//
 	// TODO: ignore devices not in include list
-	vmdReq.PCIWhitelist = strings.Join(vmdDevs, " ")
+	vmdReq.PCIAllowlist = strings.Join(vmdDevs, " ")
 
 	if err := b.script.Prepare(vmdReq); err != nil {
 		return nil, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
