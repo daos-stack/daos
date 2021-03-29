@@ -341,7 +341,8 @@ sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path,
 	name_len = end_idx - slash_idx;
 	if (name_len > 0) {
 		new_path[dir_name_len] = 0;
-		strncpy(new_path + dir_name_len + 1, path + slash_idx + 1, name_len);
+		strncpy(new_path + dir_name_len + 1, path + slash_idx + 1,
+			name_len);
 		name = new_path + dir_name_len + 1;
 	}
 
@@ -359,7 +360,7 @@ sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path,
 		return rc;
 	}
 
-        return rc;
+	return rc;
 }
 
 int
