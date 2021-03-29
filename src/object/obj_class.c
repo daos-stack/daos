@@ -626,8 +626,8 @@ static struct daos_obj_class daos_obj_classes[] = {
 		.oc_private	= true,
 	},
 	{
-		.oc_name	= "OBJ_ID_TABLE",
-		.oc_id		= DAOS_OC_OIT,
+		.oc_name	= "OBJ_ID_TABLE_RF0",
+		.oc_id		= DAOS_OC_OIT_RF0,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
@@ -636,6 +636,50 @@ static struct daos_obj_class daos_obj_classes[] = {
 			 */
 			.ca_grp_nr		= 1,
 			.ca_rp_nr		= 1,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF1",
+		.oc_id		= DAOS_OC_OIT_RF1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 2,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF2",
+		.oc_id		= DAOS_OC_OIT_RF2,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 3,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF3",
+		.oc_id		= DAOS_OC_OIT_RF3,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 4,
+		},
+		.oc_private	= true,
+	},
+	{
+		.oc_name	= "OBJ_ID_TABLE_RF4",
+		.oc_id		= DAOS_OC_OIT_RF4,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.ca_rp_nr		= 5,
 		},
 		.oc_private	= true,
 	},
@@ -970,6 +1014,104 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 	D_ASSERT(domain_nr > 0);
 
 	oc = oclass_fit_max(oc_id, domain_nr, target_nr);
+	if (oc)
+		*oc_id_p = oc->oc_id;
+
+	return oc ? 0 : -DER_NONEXIST;
+}
+
+int
+dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
+	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
+	      daos_oclass_id_t *oc_id_p)
+{
+	uint64_t		rf_factor;
+	daos_oclass_id_t	cid = 0;
+	struct daos_obj_class	*oc;
+	struct daos_oclass_attr	ca;
+	uint16_t		shd, rdd;
+	int			grp_size;
+
+	rf_factor = dc_cont_hdl2redunfac(coh);
+	rdd = hints & DAOS_OCH_RDD_MASK;
+	shd = hints & DAOS_OCH_SHD_MASK;
+
+	/** first set a reasonable default based on RF & RDD hint (if set) */
+	switch (rf_factor) {
+	case DAOS_PROP_CO_REDUN_RF0:
+		if (rdd == DAOS_OCH_RDD_RP)
+			cid = OC_RP_2GX;
+		else if (rdd == DAOS_OCH_RDD_EC)
+			cid = OC_EC_2P1G1;
+		else
+			cid = OC_SX;
+		break;
+	case DAOS_PROP_CO_REDUN_RF1:
+		if (rdd == DAOS_OCH_RDD_EC)
+			cid = OC_EC_2P1G1;
+		else
+			cid = OC_RP_2GX;
+		break;
+	case DAOS_PROP_CO_REDUN_RF2:
+		if (rdd == DAOS_OCH_RDD_EC)
+			cid = OC_EC_2P2G1;
+		else
+			cid = OC_RP_3GX;
+		break;
+	case DAOS_PROP_CO_REDUN_RF3:
+	case DAOS_PROP_CO_REDUN_RF4:
+		return -DER_INVAL;
+	}
+
+	/*
+	 * If there are no sharding hints, we can return.
+	 * TODO - since all EC classes are only G1, no need to check sharding.
+	 * hint for that.
+	 */
+	if (shd == 0 || cid == OC_EC_2P2G1 || cid == OC_EC_2P1G1) {
+		oc = oclass_fit_max(cid, domain_nr, target_nr);
+		if (oc)
+			*oc_id_p = oc->oc_id;
+
+		return oc ? 0 : -DER_NONEXIST;
+	}
+
+	oc = oclass_ident2cl(cid);
+	if (!oc)
+		return -DER_INVAL;
+
+	memcpy(&ca, &oc->oc_attr, sizeof(ca));
+	grp_size = daos_oclass_grp_size(&ca);
+
+	/** adjust the group size based on the sharding hint */
+	switch (shd) {
+	case DAOS_OCH_SHD_DEF:
+	case DAOS_OCH_SHD_MAX:
+		ca.ca_grp_nr = DAOS_OBJ_GRP_MAX;
+		break;
+	case DAOS_OCH_SHD_TINY:
+		ca.ca_grp_nr = 4;
+		break;
+	case DAOS_OCH_SHD_REG:
+		ca.ca_grp_nr = max(128, target_nr * 25 / 100);
+		break;
+	case DAOS_OCH_SHD_HI:
+		ca.ca_grp_nr = max(256, target_nr * 50 / 100);
+		break;
+	case DAOS_OCH_SHD_EXT:
+		ca.ca_grp_nr = max(1024, target_nr * 80 / 100);
+		break;
+	default:
+		D_ERROR("Invalid sharding hint\n");
+		return -DER_INVAL;
+	}
+
+	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX ||
+	    ca.ca_grp_nr * grp_size > target_nr) {
+		/* search for the highest scalability in the allowed range */
+		ca.ca_grp_nr = max(1, (target_nr / grp_size));
+	}
+	oc = oclass_scale2cl(&ca);
 	if (oc)
 		*oc_id_p = oc->oc_id;
 

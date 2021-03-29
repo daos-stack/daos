@@ -33,6 +33,15 @@ enum {
 #define DTX_UMOFF_TYPES		(DTX_UMOFF_ILOG | DTX_UMOFF_SVT | DTX_UMOFF_EVT)
 #define DTX_INDEX_INVAL		(int32_t)(-1)
 
+#define dtx_evict_lid(cont, dae)					\
+	do {								\
+		D_DEBUG(DB_TRACE, "Evicting lid "DF_DTI": lid=%d\n",	\
+			DP_DTI(&DAE_XID(dae)), DAE_LID(dae));		\
+		lrua_evictx(cont->vc_dtx_array,				\
+			    DAE_LID(dae) - DTX_LID_RESERVED,		\
+			    DAE_EPOCH(dae));				\
+	} while (0)
+
 static inline void
 dtx_type2umoff_flag(umem_off_t *rec, uint32_t type)
 {
@@ -287,18 +296,21 @@ static int
 dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 		   d_iov_t *key, d_iov_t *val)
 {
+	struct vos_container	*cont = tins->ti_priv;
 	struct vos_dtx_act_ent	*dae_new = val->iov_buf;
 	struct vos_dtx_act_ent	*dae_old;
 
 	dae_old = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	if (DAE_EPOCH(dae_old) != DAE_EPOCH(dae_new)) {
-		D_ASSERTF(!dae_old->dae_prepared,
-			  "NOT allow to update act DTX entry for "DF_DTI
-			  " from epoch "DF_X64" to "DF_X64"\n",
-			  DP_DTI(&DAE_XID(dae_old)),
-			  DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
-		return -DER_INPROGRESS;
-	}
+
+	D_ASSERT(dae_old != dae_new);
+	D_ASSERTF(dae_old->dae_aborted,
+		  "NOT allow to update act DTX entry for "DF_DTI
+		  " from epoch "DF_X64" to "DF_X64"\n",
+		  DP_DTI(&DAE_XID(dae_old)),
+		  DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+
+	rec->rec_off = umem_ptr2off(&tins->ti_umm, dae_new);
+	dtx_evict_lid(cont, dae_old);
 
 	return 0;
 }
@@ -610,15 +622,6 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 
 	return rc;
 }
-
-#define dtx_evict_lid(cont, dae)					\
-	do {								\
-		D_DEBUG(DB_TRACE, "Evicting lid "DF_DTI": lid=%d\n",	\
-			DP_DTI(&DAE_XID(dae)), DAE_LID(dae));		\
-		lrua_evictx(cont->vc_dtx_array,				\
-			    DAE_LID(dae) - DTX_LID_RESERVED,		\
-			    DAE_EPOCH(dae));				\
-	} while (0)
 
 static int
 dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
@@ -1762,7 +1765,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (dae->dae_prepared || !for_resent)
 			return DTX_ST_PREPARED;
 
-		return -DER_NONEXIST;
+		return -DER_INPROGRESS;
 	}
 
 	if (rc == -DER_NONEXIST) {
