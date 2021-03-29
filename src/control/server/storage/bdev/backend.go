@@ -11,7 +11,10 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"os/user"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -302,11 +305,16 @@ func detectVMD() ([]string, error) {
 	return vmdAddrs, nil
 }
 
-// Prepare will execute SPDK setup.sh script to rebind PCI devices as selected
-// by bdev_include and bdev_exclude white and black list filters provided in the
-// server config file. This will make the devices available though SPDK.
+// Prepare will cleanup any leftover hugepages owned by the target user and then
+// execute the SPDK setup.sh script to rebind PCI devices as selected by
+// bdev_include and bdev_exclude list filters provided in the server config file.
+// This will make the devices available though SPDK.
 func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	resp := &PrepareResponse{}
+
+	if err := cleanHugePages(b.log, hugePageFilePrefix, req.TargetUser); err != nil {
+		return nil, errors.Wrapf(err, "clean huge pages")
+	}
 
 	if err := b.script.Prepare(req); err != nil {
 		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
@@ -379,6 +387,63 @@ func (b *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) er
 	if err := b.binding.Update(b.log, pciAddr, path, slot); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+const hugePageFilePrefix = "/dev/hugepages/spdk_"
+
+func userID2Name(uid uint32) (string, error) {
+	usr, err := user.LookupId(strconv.FormatUint(uint64(uid), 10))
+	if err != nil {
+		return "", err
+	}
+
+	return usr.Username, nil
+}
+
+func fileOwner(info os.FileInfo) uint32 {
+	// https://golang.org/pkg/syscall/#Stat_t
+	return info.Sys().(*syscall.Stat_t).Uid
+}
+
+// cleanHugePages removes hugepages in `/dev/hugepages/` that are owned by the
+// user running `daos_server` process and prefixed with `spdk.*`.
+func cleanHugePages(log logging.Logger, prefix, tgtUsr string) error {
+	pattern := prefix + "*"
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return errors.Wrapf(err, "files matching %q", pattern)
+	}
+
+	var nrRemoved int
+	for _, path := range matches {
+		info, err := os.Stat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return errors.Wrap(err, "file stat")
+		}
+
+		username, err := userID2Name(fileOwner(info))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return errors.Wrap(err, "uid to name")
+		}
+
+		if username != tgtUsr {
+			continue
+		}
+
+		if err := os.Remove(path); err != nil {
+			return errors.Wrap(err, "remove")
+		}
+		nrRemoved++
+	}
+	log.Debugf("removed %d hugeopages", nrRemoved)
 
 	return nil
 }
