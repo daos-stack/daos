@@ -776,8 +776,8 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	ul_out = crt_reply_get(lookup_rpc);
 
 	if (ul_out->ul_rc != 0) {
-		RPC_ERROR(chained_rpc_priv, "URI_LOOKUP returned rc=%d\n",
-			  ul_out->ul_rc);
+		RPC_ERROR(chained_rpc_priv, "URI_LOOKUP returned rc="DF_RC"\n",
+			  DP_RC(ul_out->ul_rc));
 		D_GOTO(retry, rc = ul_out->ul_rc);
 	}
 
@@ -824,7 +824,8 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	rc = crt_req_fill_tgt_uri(chained_rpc_priv, fill_uri);
 	if (rc != 0) {
 		RPC_ERROR(chained_rpc_priv,
-			  "crt_req_fill_tgt_uri() failed; rc=%d\n", rc);
+			  "crt_req_fill_tgt_uri() failed; rc="DF_RC"\n",
+			  DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1282,8 +1283,9 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			rpc_priv->crp_state = RPC_STATE_URI_LOOKUP;
 			rc = crt_req_uri_lookup(rpc_priv);
 			if (rc != 0)
-				D_ERROR("crt_req_uri_lookup() failed. rc %d, "
-					"opc: %#x.\n", rc, req->cr_opc);
+				RPC_ERROR(rpc_priv,
+					  "crt_req_uri_lookup() failed. rc "
+					  DF_RC"\n", DP_RC(rc));
 		}
 		break;
 	case RPC_STATE_URI_LOOKUP:
