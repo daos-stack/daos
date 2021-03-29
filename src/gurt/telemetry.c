@@ -1920,7 +1920,7 @@ d_tm_clock_string(int clk_id) {
 	case D_TM_CLOCK_THREAD_CPUTIME:
 		return D_TM_CLOCK_THREAD_CPUTIME_STR;
 	default:
-		return D_TM_CLOCK_REALTIME_STR;
+		break;
 	}
 	return D_TM_CLOCK_REALTIME_STR;
 }
