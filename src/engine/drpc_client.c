@@ -296,8 +296,14 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	}
 
 	if (gps_resp->status != 0) {
-		D_ERROR("failure fetching svc_ranks for "DF_UUID": "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(gps_resp->status));
+		if (gps_resp->status == -DER_NONEXIST) /* not an error */
+			D_DEBUG(DB_MGMT, "pool svc "DF_UUID" not found: "
+				DF_RC"\n",
+				DP_UUID(pool_uuid), DP_RC(gps_resp->status));
+		else
+			D_ERROR("failure fetching svc_ranks for "DF_UUID": "
+				DF_RC"\n",
+				DP_UUID(pool_uuid), DP_RC(gps_resp->status));
 		D_GOTO(out_resp, rc = gps_resp->status);
 	}
 
