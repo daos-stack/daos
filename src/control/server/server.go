@@ -431,12 +431,10 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			switch evt.ID {
 			case events.RASSwimRankDead:
 				// Mark the rank as unavailable for membership in
-				// new pools, etc.
-				if err := membership.MarkRankDead(system.Rank(evt.Rank)); err != nil {
-					log.Errorf("failed to mark rank %d as dead: %s", evt.Rank, err)
-					return
+				// new pools, etc. Do group update on success.
+				if err := membership.MarkRankDead(system.Rank(evt.Rank)); err == nil {
+					mgmtSvc.reqGroupUpdate(ctx)
 				}
-				mgmtSvc.reqGroupUpdate(ctx)
 			}
 		}))
 
