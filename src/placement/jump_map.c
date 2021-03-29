@@ -61,26 +61,6 @@ struct pl_jump_map {
 };
 
 /**
- * This functions determines whether the object layout should be extended or
- * not based on the operation performed and the target status.
- *
- * \param[in]	op	The operation being performed
- * \param[in]	status	The component status.
- *
- * \return		True if the layout should be extended,
- *			False otherwise.
- */
-static inline bool
-can_extend(enum PL_OP_TYPE op, enum pool_comp_state state)
-{
-	if (op != PL_PLACE_EXTENDED)
-		return false;
-	if (state != PO_COMP_ST_UP && state != PO_COMP_ST_DRAIN)
-		return false;
-	return true;
-}
-
-/**
  * This functions finds the pairwise differences in the two layouts provided
  * and appends them into the d_list provided. The function appends the targets
  * from the "new" layout and not those from the "original" layout.
@@ -111,7 +91,28 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 		if (reint_tgt != original_target) {
 			pool_map_find_target(jmap->jmp_map.pl_poolmap,
 					     reint_tgt, &temp_tgt);
-			remap_alloc_one(diff, index, temp_tgt, true);
+			if (pool_target_avail(temp_tgt, PO_COMP_ST_UPIN |
+							PO_COMP_ST_UP |
+							PO_COMP_ST_DRAIN |
+							PO_COMP_ST_NEW))
+				remap_alloc_one(diff, index, temp_tgt, true);
+			else
+				/* XXX: This isn't desirable - but it can happen
+				 * when a reintegration is happening when
+				 * something else fails. Placement will do a
+				 * pass to determine what failed (good), and
+				 * then do another pass to figure out where
+				 * things moved to. But that 2nd pass will
+				 * re-find failed things, and this diff function
+				 * will cause the failed targets to be re-added
+				 * to the layout as rebuilding. This should be
+				 * removed when placement is able to handle
+				 * this situation better
+				 */
+				D_DEBUG(DB_PL,
+					"skip remap %d to unavail tgt %u\n",
+					index, reint_tgt);
+
 		}
 	}
 }
@@ -176,8 +177,10 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 			grp_max = 1;
 
 		jmop->jmop_grp_nr = daos_oclass_grp_nr(oc_attr, md);
-		if (jmop->jmop_grp_nr > grp_max)
+		if (jmop->jmop_grp_nr == DAOS_OBJ_GRP_MAX)
 			jmop->jmop_grp_nr = grp_max;
+		else if (jmop->jmop_grp_nr > grp_max)
+			return -DER_INVAL;
 	} else {
 		jmop->jmop_grp_nr = 1;
 	}
@@ -211,8 +214,20 @@ pl_map2jmap(struct pl_map *map)
 	return container_of(map, struct pl_jump_map, jmp_map);
 }
 
+static void debug_print_allow_status(uint32_t allow_status)
+{
+	D_DEBUG(DB_PL, "Allow status: [%s%s%s%s%s%s%s ]\n",
+		allow_status & PO_COMP_ST_UNKNOWN ? " UNKNOWN" : "",
+		allow_status & PO_COMP_ST_NEW ? " NEW" : "",
+		allow_status & PO_COMP_ST_UP ? " UP" : "",
+		allow_status & PO_COMP_ST_UPIN ? " UPIN" : "",
+		allow_status & PO_COMP_ST_DOWN ? " DOWN" : "",
+		allow_status & PO_COMP_ST_DOWNOUT ? " DOWNOUT" : "",
+		allow_status & PO_COMP_ST_DRAIN ? " DRAIN" : "");
+}
+
 static inline uint32_t
-get_num_domains(struct pool_domain *curr_dom, enum PL_OP_TYPE op_type)
+get_num_domains(struct pool_domain *curr_dom, uint32_t allow_status)
 {
 	struct pool_domain *next_dom;
 	struct pool_target *next_target;
@@ -224,7 +239,7 @@ get_num_domains(struct pool_domain *curr_dom, enum PL_OP_TYPE op_type)
 	else
 		num_dom = curr_dom->do_child_nr;
 
-	if (op_type == PL_ADD)
+	if (allow_status & PO_COMP_ST_NEW)
 		return num_dom;
 
 	if (curr_dom->do_children != NULL) {
@@ -281,7 +296,7 @@ get_num_domains(struct pool_domain *curr_dom, enum PL_OP_TYPE op_type)
 static void
 get_target(struct pool_domain *curr_dom, struct pool_target **target,
 	   uint64_t obj_key, uint8_t *dom_used, uint8_t *dom_occupied,
-	   uint8_t *tgts_used, int shard_num, enum PL_OP_TYPE op_type)
+	   uint8_t *tgts_used, int shard_num, uint32_t allow_status)
 {
 	int                     range_set;
 	uint8_t                 found_target = 0;
@@ -296,7 +311,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 		uint32_t        num_doms;
 
 		/* Retrieve number of nodes in this domain */
-		num_doms = get_num_domains(curr_dom, op_type);
+		num_doms = get_num_domains(curr_dom, allow_status);
 
 		/* If choosing target (lowest fault domain level) */
 		if (curr_dom->do_children == NULL) {
@@ -409,7 +424,6 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 	} while (!found_target);
 }
 
-
 uint32_t
 count_available_spares(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		uint32_t failed_in_layout)
@@ -452,9 +466,9 @@ count_available_spares(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 static int
 obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		 struct pl_obj_layout *layout, struct jm_obj_placement *jmop,
-		 d_list_t *remap_list, enum PL_OP_TYPE op_type,
+		 d_list_t *remap_list, uint32_t allow_status,
 		 uint8_t *tgts_used, uint8_t *dom_used, uint8_t *dom_occupied,
-		 uint32_t failed_in_layout, d_list_t *extend_list)
+		 uint32_t failed_in_layout, bool *is_extending)
 {
 	struct failed_shard     *f_shard;
 	struct pl_obj_shard     *l_shard;
@@ -463,7 +477,6 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	d_list_t                *current;
 	daos_obj_id_t           oid;
 	bool                    spare_avail = true;
-	bool			for_reint;
 	uint64_t                key;
 	uint32_t		spares_left;
 	int                     rc;
@@ -471,7 +484,6 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 
 	remap_dump(remap_list, md, "remap:");
 
-	for_reint = (op_type == PL_REINT);
 	current = remap_list->next;
 	spare_tgt = NULL;
 	oid = md->omd_id;
@@ -491,6 +503,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 		D_DEBUG(DB_PL, "Attempting to remap failed shard: "
 			DF_FAILEDSHARD"\n", DP_FAILEDSHARD(*f_shard));
+		debug_print_allow_status(allow_status);
 
 		/*
 		 * If there are any targets left, there are potentially valid
@@ -505,23 +518,18 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 			rebuild_key = crc(key, f_shard->fs_shard_idx);
 			get_target(root, &spare_tgt, crc(key, rebuild_key),
 				   dom_used, dom_occupied, tgts_used,
-				   shard_id, op_type);
+				   shard_id, allow_status);
 			D_ASSERT(spare_tgt != NULL);
 			D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
 				DP_TARGET(spare_tgt));
 			spares_left--;
 		}
 
-		determine_valid_spares(spare_tgt, md, spare_avail,
-				&current, remap_list, for_reint, f_shard,
-				l_shard);
+		determine_valid_spares(spare_tgt, md, spare_avail, &current,
+				       remap_list, allow_status, f_shard,
+				       l_shard, is_extending);
 	}
 
-	if (op_type == PL_PLACE_EXTENDED) {
-		rc = pl_map_extend(layout, extend_list);
-		if (rc != 0)
-			return rc;
-	}
 	return 0;
 }
 
@@ -543,7 +551,6 @@ jump_map_obj_spec_place_get(struct pl_jump_map *jmap, daos_obj_id_t oid,
 		return rc;
 
 	*target = &(tgts[pos]);
-
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
@@ -589,45 +596,43 @@ jump_map_obj_spec_place_get(struct pl_jump_map *jmap, daos_obj_id_t oid,
  * \param[in]   jmap            The placement map used for this placement.
  * \param[in]   jmop            The layout group size and count.
  * \param[in]   md              Object metadata.
+ * \param[in]	allow_status	target status allowed to be in the layout.
  * \param[out]  layout          This will contain the layout for the object
- * \param[out]  remap_list      This will contain the targets that need to
+ * \param[out]  out_list	This will contain the targets that need to
  *                              be rebuilt and in the case of rebuild, may be
  *                              returned during the rebuild process.
+ * \param[out]	is_extending	if there is drain/extending/reintegrating tgts
+ *                              exists in this layout, which we might need
+ *                              insert extra shards into the layout.
  *
  * \return                      An error code determining if the function
  *                              succeeded (0) or failed.
  */
 static int
 get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
-		  struct jm_obj_placement *jmop, d_list_t *remap_list,
-		  enum PL_OP_TYPE op_type, struct daos_obj_md *md)
+		  struct jm_obj_placement *jmop, d_list_t *out_list,
+		  uint32_t allow_status, struct daos_obj_md *md,
+		  bool *is_extending)
 {
 	struct pool_target      *target;
 	struct pool_domain      *root;
 	daos_obj_id_t           oid;
-	d_list_t		extend_list;
 	uint8_t                 *dom_used = NULL;
 	uint8_t                 *dom_occupied = NULL;
 	uint8_t                 *tgts_used = NULL;
-	uint32_t                dom_used_length;
+	uint32_t                dom_size;
 	uint64_t                key;
-	uint32_t		fail_tgt_cnt;
-	bool			for_reint;
-	enum pool_comp_state	state;
-	int i, j, k, rc;
+	uint32_t		fail_tgt_cnt = 0;
+	bool			spec_oid = false;
+	d_list_t		local_list;
+	d_list_t		*remap_list;
+	int			i, j, k;
+	int			rc = 0;
 
 	/* Set the pool map version */
 	layout->ol_ver = pl_map_version(&(jmap->jmp_map));
 	D_DEBUG(DB_PL, "Building layout. map version: %d\n", layout->ol_ver);
-
-	j = 0;
-	k = 0;
-	fail_tgt_cnt = 0;
-	oid = md->omd_id;
-	key = oid.hi ^ oid.lo;
-	target = NULL;
-	for_reint = (op_type == PL_REINT);
-	D_DEBUG(DB_PL, "for_reint: %s", for_reint ? "Yes" : "No");
+	debug_print_allow_status(allow_status);
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
@@ -635,64 +640,51 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		D_ERROR("Could not find root node in pool map.");
 		return -DER_NONEXIST;
 	}
+	rc = 0;
 
-	dom_used_length = (struct pool_domain *)(root->do_targets) - (root) + 1;
+	if (out_list != NULL) {
+		remap_list = out_list;
+	} else {
+		D_INIT_LIST_HEAD(&local_list);
+		remap_list = &local_list;
+	}
 
-	D_ALLOC_ARRAY(dom_used, (dom_used_length / 8) + 1);
-	D_ALLOC_ARRAY(dom_occupied, (dom_used_length / 8) + 1);
-	D_ALLOC_ARRAY(tgts_used, (root->do_target_nr / 8) + 1);
-	D_INIT_LIST_HEAD(&extend_list);
-
+	dom_size = (struct pool_domain *)(root->do_targets) - (root) + 1;
+	D_ALLOC_ARRAY(dom_used, (dom_size / NBBY) + 1);
+	D_ALLOC_ARRAY(dom_occupied, (dom_size / NBBY) + 1);
+	D_ALLOC_ARRAY(tgts_used, (root->do_target_nr / NBBY) + 1);
 	if (dom_used == NULL || dom_occupied == NULL || tgts_used == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/**
-	 * If the object class is a special class then the first shard must be
-	 * hand picked because there is no other way to specify a starting
-	 * location.
-	 */
-	if (daos_obj_is_srank(oid)) {
-		rc = jump_map_obj_spec_place_get(jmap, oid, &target, dom_used,
-						 dom_used_length);
-		if (rc) {
-			D_ERROR("special oid "DF_OID" failed: rc %d\n",
-				DP_OID(oid), rc);
-			D_GOTO(out, rc);
-		}
+	oid = md->omd_id;
+	key = oid.hi ^ oid.lo;
+	if (daos_obj_is_srank(oid))
+		spec_oid = true;
 
-		layout->ol_shards[0].po_target = target->ta_comp.co_id;
-		layout->ol_shards[0].po_shard = 0;
-		layout->ol_shards[0].po_fseq = target->ta_comp.co_fseq;
-		setbit(tgts_used, target->ta_comp.co_id);
-
-		if (pool_target_unavail(target, for_reint)) {
-			fail_tgt_cnt++;
-			state = target->ta_comp.co_status;
-			rc = remap_alloc_one(remap_list, 0, target, false);
-			if (rc)
-				D_GOTO(out, rc);
-			if (can_extend(op_type, state)) {
-				rc = remap_alloc_one(&extend_list, k, target,
-						     true);
-				if (rc != 0)
+	for (i = 0, k = 0; i < jmop->jmop_grp_nr; i++) {
+		for (j = 0; j < jmop->jmop_grp_size; j++, k++) {
+			target = NULL;
+			if (spec_oid && i == 0 && j == 0) {
+				/**
+				 * If the object class is a special class then
+				 * the first shard must be picked specially.
+				 */
+				rc = jump_map_obj_spec_place_get(jmap, oid,
+								 &target,
+								 dom_used,
+								 dom_size);
+				if (rc) {
+					D_ERROR("special oid "DF_OID
+						" failed: rc %d\n",
+						DP_OID(oid), rc);
 					D_GOTO(out, rc);
+				}
+				setbit(tgts_used, target->ta_comp.co_id);
+			} else {
+				get_target(root, &target, key, dom_used,
+					   dom_occupied, tgts_used, k,
+					   allow_status);
 			}
-		}
-
-		/** skip the first shard because it's been
-		 * determined by Obj class
-		 */
-		j = 1;
-		k = 1;
-	}
-	for (i = 0; i < jmop->jmop_grp_nr; i++) {
-
-		for (; j < jmop->jmop_grp_size; j++, k++) {
-			uint32_t tgt_id;
-			uint32_t fseq;
-
-			get_target(root, &target, key, dom_used, dom_occupied,
-				   tgts_used, k, op_type);
 
 			if (target == NULL) {
 				D_DEBUG(DB_PL, "no targets for %d/%d/%d\n",
@@ -702,52 +694,44 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 				layout->ol_shards[k].po_fseq = 0;
 				continue;
 			}
-
-			tgt_id = target->ta_comp.co_id;
-			fseq = target->ta_comp.co_fseq;
-
-			layout->ol_shards[k].po_target = tgt_id;
+			layout->ol_shards[k].po_target =
+				target->ta_comp.co_id;
+			layout->ol_shards[k].po_fseq =
+				target->ta_comp.co_fseq;
 			layout->ol_shards[k].po_shard = k;
-			layout->ol_shards[k].po_fseq = fseq;
 
 			/** If target is failed queue it for remap*/
-			if (pool_target_unavail(target, for_reint)) {
-				D_DEBUG(DB_PL, "Target unavailable " DF_TARGET
-					". Adding to remap_list:\n",
-					DP_TARGET(target));
+			if (!pool_target_avail(target, allow_status)) {
 				fail_tgt_cnt++;
-				state = target->ta_comp.co_status;
+				D_DEBUG(DB_PL, "Target unavailable " DF_TARGET
+					". Adding to remap_list: fail cnt %d\n",
+					DP_TARGET(target), fail_tgt_cnt);
 				rc = remap_alloc_one(remap_list, k, target,
-						false);
+						     false);
 				if (rc)
 					D_GOTO(out, rc);
 
-				if (can_extend(op_type, state)) {
-					D_DEBUG(DB_PL, "Adding "DF_TARGET" to"
-						" extend_list\n",
-						DP_TARGET(target));
-					remap_alloc_one(&extend_list, k,
-							target, true);
-				}
+				if (is_extending != NULL &&
+				    (target->ta_comp.co_status ==
+				     PO_COMP_ST_UP ||
+				     target->ta_comp.co_status ==
+				     PO_COMP_ST_DRAIN))
+					*is_extending = true;
 			}
 		}
-
-		j = 0;
 	}
 
-	rc = 0;
-	D_DEBUG(DB_PL, "Fail tgt cnt: %d\n", fail_tgt_cnt);
 	if (fail_tgt_cnt > 0)
 		rc = obj_remap_shards(jmap, md, layout, jmop, remap_list,
-				      op_type, tgts_used, dom_used,
-				      dom_occupied, fail_tgt_cnt,
-				      &extend_list);
+				      allow_status, tgts_used, dom_used,
+				      dom_occupied, fail_tgt_cnt, is_extending);
 out:
-	if (rc) {
+	if (rc)
 		D_ERROR("jump_map_obj_layout_fill failed, rc "DF_RC"\n",
 			DP_RC(rc));
-		remap_list_free_all(remap_list);
-	}
+	if (remap_list == &local_list)
+		remap_list_free_all(&local_list);
+
 	if (dom_used)
 		D_FREE(dom_used);
 	if (dom_occupied)
@@ -755,6 +739,42 @@ out:
 	if (tgts_used)
 		D_FREE(tgts_used);
 
+	return rc;
+}
+
+static int
+obj_layout_alloc_and_get(struct pl_jump_map *jmap,
+			 struct jm_obj_placement *jmop, struct daos_obj_md *md,
+			 uint32_t allow_status, struct pl_obj_layout **layout_p,
+			 d_list_t *remap_list, bool *is_extending)
+{
+	int rc;
+
+	/* Allocate space to hold the layout */
+	D_ASSERT(jmop->jmop_grp_size > 0);
+	D_ASSERT(jmop->jmop_grp_nr > 0);
+	rc = pl_obj_layout_alloc(jmop->jmop_grp_size, jmop->jmop_grp_nr,
+				 layout_p);
+	if (rc) {
+		D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n",
+			DP_RC(rc));
+		return rc;
+	}
+
+	rc = get_object_layout(jmap, *layout_p, jmop, remap_list, allow_status,
+			       md, is_extending);
+	if (rc) {
+		D_ERROR("get object layout failed, rc "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+out:
+	if (rc != 0) {
+		if (*layout_p != NULL)
+			pl_obj_layout_free(*layout_p);
+		*layout_p = NULL;
+	}
 	return rc;
 }
 
@@ -873,20 +893,21 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		   struct pl_obj_layout **layout_pp)
 {
 	struct pl_jump_map	*jmap;
-	struct pl_obj_layout	*layout;
-	struct pl_obj_layout	*add_layout = NULL;
+	struct pl_obj_layout	*layout = NULL;
+	struct pl_obj_layout	*extend_layout = NULL;
 	struct jm_obj_placement	jmop;
-	struct pool_domain	*root;
-	d_list_t		remap_list;
-	d_list_t		add_list;
+	d_list_t		extend_list;
+	bool			is_extending = false;
+	bool			is_adding_new = false;
 	daos_obj_id_t		oid;
+	struct pool_domain	*root;
+	uint32_t		allow_status;
 	int			rc;
-
-	D_DEBUG(DB_PL, "Determining location for object: "DF_OID", ver: %d\n",
-		DP_OID(md->omd_id), md->omd_ver);
 
 	jmap = pl_map2jmap(map);
 	oid = md->omd_id;
+	D_DEBUG(DB_PL, "Determining location for object: "DF_OID", ver: %d\n",
+		DP_OID(oid), md->omd_ver);
 
 	rc = jm_obj_placement_get(jmap, md, shard_md, &jmop);
 	if (rc) {
@@ -894,66 +915,71 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		return rc;
 	}
 
-	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
-				 &layout);
-	if (rc) {
-		D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
-	D_INIT_LIST_HEAD(&remap_list);
-	rc = get_object_layout(jmap, layout, &jmop, &remap_list,
-				PL_PLACE_EXTENDED, md);
+	D_INIT_LIST_HEAD(&extend_list);
+	allow_status = PO_COMP_ST_UPIN;
+	rc = obj_layout_alloc_and_get(jmap, &jmop, md, allow_status, &layout,
+				      NULL, &is_extending);
 	if (rc != 0) {
 		D_ERROR("get_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
-		pl_obj_layout_free(layout);
-		return rc;
+		D_GOTO(out, rc);
 	}
-	/* Needed to check if domains are being added to pool map */
-	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
-				  PO_COMP_ID_ALL, &root);
+
+	obj_layout_dump(oid, layout);
+
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap,
+				  PO_COMP_TP_ROOT, PO_COMP_ID_ALL,
+				  &root);
 	D_ASSERT(rc == 1);
+	rc = 0;
+	if (is_pool_adding(root))
+		is_adding_new = true;
 
-	if (is_pool_adding(root)) {
-		/* Allocate space to hold the layout */
-		rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
-					 &add_layout);
-		if (rc) {
-			D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n",
-				DP_RC(rc));
-			goto out;
+	/* If the layout might being extended, i.e. so extra shards needs
+	 * to be added to the layout.
+	 */
+	if (unlikely(is_extending || is_adding_new)) {
+		/* Needed to check if domains are being added to pool map */
+		D_DEBUG(DB_PL, DF_OID"/%d is being extended.\n",
+			DP_OID(oid), md->omd_ver);
+		if (is_adding_new)
+			allow_status |= PO_COMP_ST_NEW;
+		else
+			allow_status |= PO_COMP_ST_UP | PO_COMP_ST_DRAIN;
+
+		/* Don't repeat remapping failed shards during this phase -
+		 * they have already been remapped.
+		 */
+		allow_status |= PO_COMP_ST_DOWN;
+		rc = obj_layout_alloc_and_get(jmap, &jmop, md, allow_status,
+					      &extend_layout, NULL, NULL);
+		if (rc)
+			D_GOTO(out, rc);
+
+		obj_layout_dump(oid, extend_layout);
+		layout_find_diff(jmap, layout, extend_layout, &extend_list);
+		if (!d_list_empty(&extend_list)) {
+			rc = pl_map_extend(layout, &extend_list);
+			if (rc)
+				D_GOTO(out, rc);
 		}
-
-		remap_list_free_all(&remap_list);
-		D_INIT_LIST_HEAD(&remap_list);
-
-		rc = get_object_layout(jmap, add_layout, &jmop, &remap_list,
-				       PL_ADD, md);
-		assert(rc == 0);
-		D_INIT_LIST_HEAD(&add_list);
-		layout_find_diff(jmap, layout, add_layout, &add_list);
-
-		if (!d_list_empty(&add_list))
-			rc = pl_map_extend(layout, &add_list);
+		obj_layout_dump(oid, layout);
 	}
-out:
-	remap_list_free_all(&remap_list);
 
-	if (add_layout != NULL)
-		pl_obj_layout_free(add_layout);
+	*layout_pp = layout;
+out:
+	remap_list_free_all(&extend_list);
+
+	if (extend_layout != NULL)
+		pl_obj_layout_free(extend_layout);
 
 	if (rc < 0) {
 		D_ERROR("Could not generate placement layout, rc "DF_RC"\n",
 			DP_RC(rc));
-		pl_obj_layout_free(layout);
-		return rc;
+		if (layout != NULL)
+			pl_obj_layout_free(layout);
 	}
 
-	*layout_pp = layout;
-	obj_layout_dump(oid, layout);
-
-	return DER_SUCCESS;
+	return rc;
 }
 
 /**
@@ -990,7 +1016,7 @@ jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	int idx = 0;
 
-	D_DEBUG(DB_PL, "Finding Rebuild\n");
+	D_DEBUG(DB_PL, "Finding Rebuild at version: %u\n", rebuild_ver);
 
 	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < rebuild_ver) {
@@ -1008,32 +1034,20 @@ jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		return rc;
 	}
 
-	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
-				 &layout);
-	if (rc) {
-		D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
 	D_INIT_LIST_HEAD(&remap_list);
-	rc = get_object_layout(jmap, layout, &jmop, &remap_list, PL_REBUILD,
-				md);
-
-	if (rc < 0) {
-		D_ERROR("Could not generate placement layout, rc "DF_RC"\n",
-			DP_RC(rc));
-		goto out;
-	}
+	rc = obj_layout_alloc_and_get(jmap, &jmop, md, PO_COMP_ST_UPIN, &layout,
+				      &remap_list, NULL);
+	if (rc < 0)
+		D_GOTO(out, rc);
 
 	obj_layout_dump(oid, layout);
-
 	rc = remap_list_fill(map, md, shard_md, rebuild_ver, tgt_id, shard_idx,
 			     array_size, &idx, layout, &remap_list, false);
 
 out:
 	remap_list_free_all(&remap_list);
-	pl_obj_layout_free(layout);
+	if (layout != NULL)
+		pl_obj_layout_free(layout);
 	return rc < 0 ? rc : idx;
 }
 
@@ -1044,16 +1058,16 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 			uint32_t *shard_id, unsigned int array_size)
 {
 	struct pl_jump_map              *jmap;
-	struct pl_obj_layout            *layout;
-	struct pl_obj_layout            *reint_layout;
-	d_list_t                        remap_list;
-	d_list_t                        reint_list;
+	struct pl_obj_layout            *layout = NULL;
+	struct pl_obj_layout            *reint_layout = NULL;
+	d_list_t			reint_list;
 	struct jm_obj_placement         jop;
+	uint32_t			allow_status;
 	int                             rc;
 
 	int idx = 0;
 
-	D_DEBUG(DB_PL, "Finding Rebuild\n");
+	D_DEBUG(DB_PL, "Finding Reint at version: %u\n", reint_ver);
 
 	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < reint_ver) {
@@ -1063,41 +1077,27 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	jmap = pl_map2jmap(map);
-
 	rc = jm_obj_placement_get(jmap, md, shard_md, &jop);
 	if (rc) {
 		D_ERROR("jm_obj_placement_get failed, rc %d.\n", rc);
 		return rc;
 	}
 
-	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(jop.jmop_grp_size, jop.jmop_grp_nr,
-			&layout);
-	if (rc)
-		return 0;
-
-	rc = pl_obj_layout_alloc(jop.jmop_grp_size, jop.jmop_grp_nr,
-			&reint_layout);
-	if (rc)
-		goto out;
-
-	D_INIT_LIST_HEAD(&remap_list);
+	/* Ignore DOWN and DRAIN objects here - this API is only for finding
+	 * reintegration candidates
+	 */
+	allow_status = PO_COMP_ST_UPIN | PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN;
 	D_INIT_LIST_HEAD(&reint_list);
+	rc = obj_layout_alloc_and_get(jmap, &jop, md, allow_status, &layout,
+				      NULL, NULL);
+	if (rc < 0)
+		D_GOTO(out, rc);
 
-	/* Get original placement */
-	rc = get_object_layout(jmap, layout, &jop, &remap_list, PL_PLACE, md);
-	if (rc)
-		goto out;
-
-	/* Clear list for next placement operation. */
-	remap_list_free_all(&remap_list);
-	D_INIT_LIST_HEAD(&remap_list);
-
-	/* Get placement after reintegration. */
-	rc = get_object_layout(jmap, reint_layout, &jop, &remap_list, PL_REINT,
-			       md);
-	if (rc)
-		goto out;
+	allow_status |= PO_COMP_ST_UP;
+	rc = obj_layout_alloc_and_get(jmap, &jop, md, allow_status,
+				      &reint_layout, NULL, NULL);
+	if (rc < 0)
+		D_GOTO(out, rc);
 
 	layout_find_diff(jmap, layout, reint_layout, &reint_list);
 
@@ -1106,8 +1106,6 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 			     false);
 out:
 	remap_list_free_all(&reint_list);
-	remap_list_free_all(&remap_list);
-
 	if (layout != NULL)
 		pl_obj_layout_free(layout);
 	if (reint_layout != NULL)
@@ -1123,14 +1121,13 @@ jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 			   uint32_t *shard_id, unsigned int array_size)
 {
 	struct pl_jump_map              *jmap;
-	struct pl_obj_layout            *layout;
-	struct pl_obj_layout            *add_layout;
-	d_list_t                        remap_list;
+	struct pl_obj_layout            *layout = NULL;
+	struct pl_obj_layout            *add_layout = NULL;
 	d_list_t                        add_list;
 	struct jm_obj_placement         jop;
+	uint32_t			allow_status;
+	int				idx = 0;
 	int                             rc;
-
-	int idx = 0;
 
 	D_DEBUG(DB_PL, "Finding new layout for server addition\n");
 
@@ -1149,41 +1146,24 @@ jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 		return rc;
 	}
 
-	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(jop.jmop_grp_size, jop.jmop_grp_nr, &layout);
-	if (rc)
-		return rc;
-
-	D_INIT_LIST_HEAD(&remap_list);
+	allow_status = PO_COMP_ST_UPIN;
 	D_INIT_LIST_HEAD(&add_list);
-
-	rc = pl_obj_layout_alloc(jop.jmop_grp_size, jop.jmop_grp_nr,
-				 &add_layout);
+	rc = obj_layout_alloc_and_get(jmap, &jop, md, allow_status,
+				      &layout, NULL, NULL);
 	if (rc)
-		goto out;
+		D_GOTO(out, rc);
 
-	/* Get original placement */
-	rc = get_object_layout(jmap, layout, &jop, &remap_list, PL_PLACE, md);
+	allow_status |= PO_COMP_ST_NEW;
+	rc = obj_layout_alloc_and_get(jmap, &jop, md, allow_status,
+				      &add_layout, NULL, NULL);
 	if (rc)
-		goto out;
-
-	/* Clear list for next placement operation. */
-	remap_list_free_all(&remap_list);
-	D_INIT_LIST_HEAD(&remap_list);
-
-	/* Get placement after server addition. */
-	rc = get_object_layout(jmap, add_layout, &jop, &remap_list, PL_ADD,
-			       md);
-	if (rc)
-		goto out;
+		D_GOTO(out, rc);
 
 	layout_find_diff(jmap, layout, add_layout, &add_list);
-
 	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
 			     array_size, &idx, add_layout, &add_list, true);
 out:
 	remap_list_free_all(&add_list);
-	remap_list_free_all(&remap_list);
 
 	if (layout != NULL)
 		pl_obj_layout_free(layout);

@@ -32,6 +32,7 @@
 #include "daos_uns.h"
 #include "daos_fs.h"
 #include "daos_hdlr.h"
+#include "daos_obj_ctl.h"
 #include "dfuse_ioctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
@@ -134,6 +135,16 @@ obj_op_parse(const char *str)
 		return OBJ_LIST_KEYS;
 	else if (strcmp(str, "dump") == 0)
 		return OBJ_DUMP;
+	return -1;
+}
+
+static enum sh_op
+shell_op_parse(const char *str)
+{
+	if (strcmp(str, "daos") == 0)
+		return SH_DAOS;
+	else if (strcmp(str, "vos") == 0)
+		return SH_VOS;
 	return -1;
 }
 
@@ -571,6 +582,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	ap->c_op  = -1;
 	ap->o_op  = -1;
 	ap->fs_op = -1;
+	ap->sh_op = -1;
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
 		return RC_NO_HELP;
@@ -606,6 +618,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				argv[2]);
 			return RC_PRINT_HELP;
 		}
+	} else if ((strcmp(argv[1], "shell") == 0) ||
+		   (strcmp(argv[1], "sh") == 0)) {
+		ap->sh_op = shell_op_parse(argv[2]);
 	} else {
 		/* main() may catch error. Keep this code just in case. */
 		fprintf(stderr, "resource (%s): must be "
@@ -1246,6 +1261,19 @@ out:
 	return rc;
 }
 
+static int
+shell_op_hdlr(struct cmd_args_s *ap)
+{
+	int rc;
+
+	assert(ap != NULL);
+	ARGS_VERIFY_PUUID(ap, out, rc = EINVAL);
+	rc = obj_ctl_shell(ap);
+
+out:
+	return rc;
+}
+
 #define OCLASS_NAMES_LIST_SIZE 512
 
 static void
@@ -1284,6 +1312,7 @@ do { \
 	"	  container (cont) container\n" \
 	"	  filesystem (fs)  copy to and from a POSIX filesystem\n" \
 	"	  object (obj)     object\n" \
+	"	  shell            Interactive obj ctl shell for DAOS\n" \
 	"	  version          print command version\n" \
 	"	  help             print this message and exit\n"); \
 	fprintf(stream, "\n"); \
@@ -1525,6 +1554,14 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	  <cont options>   (--cont)\n"
 		"	--oid=HI.LO        object ID\n");
 
+	} else if (strcmp(argv[2], "sh") == 0 ||
+		   strcmp(argv[2], "shell") == 0) {
+		fprintf(stream,
+			"shell commands:\n"
+		"	  daos             open shell for DAOS operations\n"
+		"shell (sh) options:\n"
+		"	  <pool options>   (--pool, --sys-name)\n");
+
 	} else {
 		FIRST_LEVEL_HELP();
 	}
@@ -1566,6 +1603,9 @@ main(int argc, char *argv[])
 	} else if ((strcmp(argv[1], "object") == 0) ||
 		 (strcmp(argv[1], "obj") == 0)) {
 		hdlr = obj_op_hdlr;
+	} else if ((strcmp(argv[1], "shell") == 0) ||
+		(strcmp(argv[1], "sh") == 0)) {
+		hdlr = shell_op_hdlr;
 	}
 
 	if (hdlr == NULL) {

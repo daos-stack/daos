@@ -41,6 +41,7 @@
 #include <daos_security.h>
 #include <daos/profile.h>
 #include <daos/dtx.h>
+#include <daos/cmd_parser.h>
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
