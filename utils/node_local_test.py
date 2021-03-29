@@ -1135,44 +1135,6 @@ class posix_tests():
         ofd.close()
 
     @needs_dfuse
-    def test_symlink_broken(self):
-        """Check that broken symlinks work"""
-
-        src_link = os.path.join(self.dfuse.dir, 'source')
-
-        os.symlink('target', src_link)
-        entry = os.listdir(self.dfuse.dir)
-        print(entry)
-        assert len(entry) == 1
-        assert entry[0] == 'source'
-        os.lstat(src_link)
-
-        try:
-            os.stat(src_link)
-            assert False
-        except FileNotFoundError:
-            pass
-
-    @needs_dfuse
-    def test_symlink_rel(self):
-        """Check that relative symlinks work"""
-
-        src_link = os.path.join(self.dfuse.dir, 'source')
-
-        os.symlink('../target', src_link)
-        entry = os.listdir(self.dfuse.dir)
-        print(entry)
-        assert len(entry) == 1
-        assert entry[0] == 'source'
-        os.lstat(src_link)
-
-        try:
-            os.stat(src_link)
-            assert False
-        except FileNotFoundError:
-            pass
-
-    @needs_dfuse
     def test_xattr(self):
         """Perform basic tests with extended attributes"""
 
