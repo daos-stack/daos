@@ -32,11 +32,12 @@ struct dfs_sys {
 
 /** struct holding parsed dirname, name, and cached parent obj */
 struct sys_path {
-	const char	*path;		/* full path */
-	char		*dir_name;	/* dirname(path) */
-	char		*name;		/* basename(path) */
+	const char	*path;		/* original, full path */
 	size_t		path_len;	/* length of path */
+	char		*alloc;		/* allocation of dir and name */
+	char		*dir_name;	/* dirname(path) */
 	size_t		dir_name_len;	/* length of dir_name */
+	char		*name;		/* basename(path) */
 	size_t		name_len;	/* length of name */
 	dfs_obj_t	*parent;	/* dir_name obj */
 	d_list_t	*rlink;		/* hash link */
@@ -52,19 +53,9 @@ struct dfs_sys_dir {
 /**
  * Hash handle for each entry.
  */
-/*
- * TODO
- * Ashley:
- *   the entry should not be first in this structure,
- *   as it turns the containerof into a noop, meaning code that should use it
- *   but doesn't will still work.
- *   For safety you should put this at a non-zero offset.
- * Dalton:
- *   Does this matter since this is only used internally in this file?
- */
 struct hash_hdl {
-	d_list_t	entry;
 	dfs_obj_t	*obj;
+	d_list_t	entry;
 	char		*name;
 	size_t		name_len;
 	ATOMIC uint	ref;
@@ -168,7 +159,7 @@ static d_hash_table_ops_t hash_hdl_ops = {
  * and store in the hash.
  * Stores the hashed obj in parent.
  */
-/* TODO future improvement.
+/* TODO
  * We could recursively cache a path instead of blindly calling
  * dfs_lookup. For exampe, consider lookup on these paths in succession:
  *   dfs_lookup("/path/to/dir1")
@@ -272,83 +263,12 @@ free_hdl:
 }
 
 /**
- * Parse path into dirname and basename.
- *
- * TODO - This function could be optimized by allocating
- * a single copy of path and writing custom parsing to
- * split the dirname and name with a null terminator,
- * and use pointers to the individual dirname and name.
- */
-static int
-parse_path(const char *path, struct sys_path *sys_path)
-{
-	char	*f1 = NULL;
-	char	*f2 = NULL;
-	char	*dir_name = NULL;
-	char	*name = NULL;
-	size_t	dir_name_len;
-	size_t	name_len;
-	int	rc = 0;
-
-	if (path == NULL)
-		return EINVAL;
-	if (path[0] != '/')
-		return EINVAL;
-
-	sys_path->path = path;
-	sys_path->path_len = strnlen(path, PATH_MAX);
-	if (sys_path->path_len > PATH_MAX - 1)
-		return ENAMETOOLONG;
-
-	if (strncmp(path, "/", sys_path->path_len) == 0) {
-		D_STRNDUP(sys_path->dir_name, "/", 2);
-		if (sys_path->dir_name == NULL)
-			return ENOMEM;
-		sys_path->dir_name_len = 1;
-		sys_path->name = NULL;
-		sys_path->name_len = 0;
-		return 0;
-	}
-
-	D_STRNDUP(f1, path, PATH_MAX);
-	if (f1 == NULL)
-		D_GOTO(out, rc = ENOMEM);
-
-	D_STRNDUP(f2, path, PATH_MAX);
-	if (f2 == NULL)
-		D_GOTO(out, rc = ENOMEM);
-
-	dir_name = dirname(f1);
-	name = basename(f2);
-
-	dir_name_len = strnlen(dir_name, PATH_MAX);
-	D_STRNDUP(sys_path->dir_name, dir_name, dir_name_len + 1);
-	if (sys_path->dir_name == NULL)
-		D_GOTO(out, rc = ENOMEM);
-	sys_path->dir_name_len = dir_name_len;
-
-	name_len = strnlen(name, PATH_MAX);
-	D_STRNDUP(sys_path->name, name, name_len + 1);
-	if (sys_path->name == NULL) {
-		D_FREE(sys_path->dir_name);
-		D_GOTO(out, rc = ENOMEM);
-	}
-	sys_path->name_len = name_len;
-
-out:
-	D_FREE(f1);
-	D_FREE(f2);
-	return rc;
-}
-
-/**
  * Free a struct sys_path.
  */
 static void
 sys_path_free(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 {
-	D_FREE(sys_path->dir_name);
-	D_FREE(sys_path->name);
+	D_FREE(sys_path->alloc);
 	if (dfs_sys->hash == NULL)
 		dfs_release(sys_path->parent);
 	else
@@ -357,18 +277,81 @@ sys_path_free(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 
 /**
  * Set up a struct sys_path.
- * Parse path into dir_name and name.
+ * Parse path into dirname and basename stored in a single
+ * allocation separated by null terminators.
  * Lookup dir_name in the hash.
  */
 static int
 sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path,
 	       const char *path)
 {
-	int rc;
+	int	rc;
+	char	*new_path = NULL;
+	char	*dir_name = NULL;
+	char	*name = NULL;
+	size_t	path_len;
+	size_t	dir_name_len = 0;
+	size_t	name_len = 0;
+	size_t	i;
+	size_t	end_idx = 0;
+	size_t	slash_idx = 0;
 
-	rc = parse_path(path, sys_path);
-	if (rc != 0)
-		return rc;
+	if (path == NULL)
+		return EINVAL;
+	if (path[0] != '/')
+		return EINVAL;
+
+	path_len = strnlen(path, PATH_MAX);
+	if (path_len > PATH_MAX - 1)
+		return ENAMETOOLONG;
+
+	/** Find end, not including trailing slashes */
+	for (i = path_len - 1; i > 0; i--) {
+		if (path[i] != '/') {
+			end_idx = i;
+			break;
+		}
+	}
+
+	/** Find last slash */
+	for (; i > 0; i--) {
+		if (path[i] == '/') {
+			slash_idx = i;
+			break;
+		}
+	}
+
+	/** Build a single path of the format:
+	 * <dir> + '\0' + <name> + '\0'
+	 */
+	D_ALLOC(new_path, end_idx + 3);
+	if (new_path == NULL) {
+		return ENOMEM;
+	}
+
+	/** Copy the dirname */
+	if (slash_idx == 0)
+		dir_name_len = 1;
+	else
+		dir_name_len = slash_idx;
+	strncpy(new_path, path, dir_name_len);
+	dir_name = new_path;
+
+	/** Copy the basename */
+	name_len = end_idx - slash_idx;
+	if (name_len > 0) {
+		new_path[dir_name_len] = 0;
+		strncpy(new_path + dir_name_len + 1, path + slash_idx + 1, name_len);
+		name = new_path + dir_name_len + 1;
+	}
+
+	sys_path->path = path;
+	sys_path->path_len = path_len;
+	sys_path->alloc = new_path;
+	sys_path->dir_name = dir_name;
+	sys_path->dir_name_len = dir_name_len;
+	sys_path->name = name;
+	sys_path->name_len = name_len;
 
 	rc = hash_lookup(dfs_sys, sys_path);
 	if (rc != 0) {
@@ -376,7 +359,7 @@ sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path,
 		return rc;
 	}
 
-	return rc;
+        return rc;
 }
 
 int
@@ -393,13 +376,11 @@ dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags,
 		return EINVAL;
 
 	if (sflags & DFS_SYS_NO_CACHE) {
-		printf("no cache\n");
 		D_DEBUG(DB_TRACE, "dfs_sys_mount(): DFS_SYS_NO_CACHE.\n");
 		no_cache = true;
 		sflags &= ~DFS_SYS_NO_CACHE;
 	}
 	if (sflags & DFS_SYS_NO_LOCK) {
-		printf("no lock\n");
 		D_DEBUG(DB_TRACE, "dfs_sys_mount(): DFS_SYS_NO_LOCK.\n");
 		no_lock = true;
 		sflags &= ~DFS_SYS_NO_LOCK;
