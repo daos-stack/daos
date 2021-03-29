@@ -143,12 +143,11 @@ class OSAOfflineReintegration(OSAUtils):
             if data:
                 self.run_ior_thread("Read", oclass, test_seq)
                 self.run_mdtest_thread()
-                if self.test_during_rebuild is True:
-                    self.container = self.pool_cont_dict[self.pool][0]
-                    kwargs = {"pool": self.pool.uuid,
-                              "cont": self.container.uuid}
-                    output = self.daos_command.container_check(**kwargs)
-                    self.log.info(output)
+                self.container = self.pool_cont_dict[self.pool][0]
+                kwargs = {"pool": self.pool.uuid,
+                          "cont": self.container.uuid}
+                output = self.daos_command.container_check(**kwargs)
+                self.log.info(output)
 
     def test_osa_offline_reintegration_without_checksum(self):
         """Test ID: DAOS-6923
