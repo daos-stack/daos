@@ -199,6 +199,17 @@ cont_aggregate_runnable(struct ds_cont_child *cont)
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct sched_request	*req = cont->sc_agg_req;
 
+	if (unlikely(pool->sp_map == NULL)) {
+		/* If it does not get the pool map from the pool leader,
+		 * see pool_iv_pre_sync(), the IV fetch from the following
+		 * ds_cont_csummer_init() will fail anyway.
+		 */
+		D_DEBUG(DB_EPC, DF_CONT": skip aggregation "
+			"No pool map yet\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		return false;
+	}
+
 	if (!cont->sc_props_fetched)
 		ds_cont_csummer_init(cont);
 
@@ -2294,6 +2305,9 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 	while (!dss_ult_exiting(pool->sp_ec_ephs_req)) {
 		struct dss_coll_ops	coll_ops = { 0 };
 		struct dss_coll_args	coll_args = { 0 };
+
+		if (pool->sp_map == NULL)
+			goto yield;
 
 		/* collective operations */
 		coll_ops.co_func = cont_ec_eph_query_one;
