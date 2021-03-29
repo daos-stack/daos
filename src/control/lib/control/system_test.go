@@ -1169,7 +1169,7 @@ func TestControl_SystemErase(t *testing.T) {
 							Rank: member1.Rank.Uint32(), Action: "system erase",
 							State:   system.MemberStateStopped.String(),
 							Addr:    member1.Addr.String(),
-							Errored: true, Msg: "didn't start",
+							Errored: true, Msg: "erase failed",
 						},
 						{
 							Rank: member2.Rank.Uint32(), Action: "system erase",
@@ -1180,8 +1180,14 @@ func TestControl_SystemErase(t *testing.T) {
 				},
 			),
 			expResp: &SystemEraseResp{
+				HostErrorsResp: MockHostErrorsResp(t,
+					&MockHostError{
+						Hosts: member1.Addr.String(),
+						Error: "1 rank failed: erase failed",
+					},
+				),
 				Results: system.MemberResults{
-					mockMemberResult(member1, "system erase", errors.New("didn't start"), system.MemberStateStopped),
+					mockMemberResult(member1, "system erase", errors.New("erase failed"), system.MemberStateStopped),
 					mockMemberResult(member2, "system erase", nil, system.MemberStateAwaitFormat),
 				},
 			},
@@ -1195,7 +1201,7 @@ func TestControl_SystemErase(t *testing.T) {
 							Rank: member1.Rank.Uint32(), Action: "system erase",
 							State:   system.MemberStateStopped.String(),
 							Addr:    member1.Addr.String(),
-							Errored: true, Msg: "didn't start",
+							Errored: true, Msg: "erase failed",
 						},
 						{
 							Rank: member2.Rank.Uint32(), Action: "system erase",
@@ -1216,7 +1222,7 @@ func TestControl_SystemErase(t *testing.T) {
 							Rank: member5.Rank.Uint32(), Action: "system erase",
 							State:   system.MemberStateStopped.String(),
 							Addr:    member5.Addr.String(),
-							Errored: true, Msg: "didn't start",
+							Errored: true, Msg: "erase failed",
 						},
 						{
 							Rank: member6.Rank.Uint32(), Action: "system erase",
@@ -1228,27 +1234,43 @@ func TestControl_SystemErase(t *testing.T) {
 							Rank: member7.Rank.Uint32(), Action: "system erase",
 							State:   system.MemberStateStopped.String(),
 							Addr:    member7.Addr.String(),
-							Errored: true, Msg: "didn't start",
+							Errored: true, Msg: "erase failed",
 						},
 						{
 							Rank: member8.Rank.Uint32(), Action: "system erase",
 							State:   system.MemberStateErrored.String(),
 							Addr:    member8.Addr.String(),
-							Errored: true, Msg: "didn't start",
+							Errored: true, Msg: "erase failed",
 						},
 					},
 				},
 			),
 			expResp: &SystemEraseResp{
+				HostErrorsResp: MockHostErrorsResp(t,
+					&MockHostError{
+						Hosts: hostlist.MustCreateSet(
+							member1.Addr.String() + "," + member5.Addr.String(),
+						).String(),
+						Error: "1 rank failed: erase failed",
+					},
+					&MockHostError{
+						Hosts: member7.Addr.String(),
+						Error: "2 ranks failed: erase failed",
+					},
+					&MockHostError{
+						Hosts: member5.Addr.String(),
+						Error: "1 rank failed: something bad",
+					},
+				),
 				Results: system.MemberResults{
-					mockMemberResult(member1, "system erase", errors.New("didn't start"), system.MemberStateStopped),
+					mockMemberResult(member1, "system erase", errors.New("erase failed"), system.MemberStateStopped),
 					mockMemberResult(member2, "system erase", nil, system.MemberStateAwaitFormat),
 					mockMemberResult(member3, "system erase", nil, system.MemberStateAwaitFormat),
 					mockMemberResult(member4, "system erase", nil, system.MemberStateAwaitFormat),
-					mockMemberResult(member5, "system erase", errors.New("didn't start"), system.MemberStateStopped),
+					mockMemberResult(member5, "system erase", errors.New("erase failed"), system.MemberStateStopped),
 					mockMemberResult(member6, "system erase", errors.New("something bad"), system.MemberStateErrored),
-					mockMemberResult(member7, "system erase", errors.New("didn't start"), system.MemberStateStopped),
-					mockMemberResult(member8, "system erase", errors.New("didn't start"), system.MemberStateErrored),
+					mockMemberResult(member7, "system erase", errors.New("erase failed"), system.MemberStateStopped),
+					mockMemberResult(member8, "system erase", errors.New("erase failed"), system.MemberStateErrored),
 				},
 			},
 		},

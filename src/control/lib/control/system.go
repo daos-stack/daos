@@ -613,6 +613,7 @@ type SystemEraseReq struct {
 
 // SystemEraseResp contains the results of a system erase request.
 type SystemEraseResp struct {
+	HostErrorsResp
 	Results system.MemberResults
 }
 
@@ -697,8 +698,6 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 	}
 
 	if len(resetRankErrors) > 0 {
-		reformatResp := new(StorageFormatResp)
-
 		// create "X ranks failed: err..." error entries for each host address
 		// a single host maybe associated with multiple error entries in HEM
 		for msg, addrs := range resetRankErrors {
@@ -709,7 +708,7 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 			for addr, occurrences := range hostOccurrences {
 				err := errors.Errorf("%s failed: %s",
 					english.Plural(occurrences, "rank", "ranks"), msg)
-				if err := reformatResp.HostErrorsResp.addHostError(addr, err); err != nil {
+				if err := resp.HostErrorsResp.addHostError(addr, err); err != nil {
 					return nil, err
 				}
 			}
