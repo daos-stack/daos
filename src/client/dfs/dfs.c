@@ -67,7 +67,7 @@
 
 /** Parameters for dkey enumeration */
 #define ENUM_DESC_NR	10
-#define ENUM_DESC_BUF	(ENUM_DESC_NR * DFS_MAX_PATH)
+#define ENUM_DESC_BUF	(ENUM_DESC_NR * DFS_MAX_NAME)
 #define ENUM_XDESC_BUF	(ENUM_DESC_NR * (DFS_MAX_XATTR_NAME + 2))
 
 /** OIDs for Superblock and Root objects */
@@ -95,7 +95,7 @@ struct dfs_obj {
 	/** DAOS object ID of the parent of the object */
 	daos_obj_id_t		parent_oid;
 	/** entry name of the object in the parent */
-	char			name[DFS_MAX_PATH + 1];
+	char			name[DFS_MAX_NAME + 1];
 	/** Symlink value if object is a symbolic link */
 	char			*value;
 };
@@ -444,15 +444,15 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	if (fetch_sym && S_ISLNK(entry->mode)) {
 		char *value;
 
-		D_ALLOC(value, PATH_MAX);
+		D_ALLOC(value, DFS_MAX_PATH);
 		if (value == NULL)
 			D_GOTO(out, rc = ENOMEM);
 
 		recx.rx_idx = sizeof(mode_t) + sizeof(time_t) * 3 +
 			sizeof(daos_obj_id_t) + sizeof(daos_size_t);
-		recx.rx_nr = PATH_MAX;
+		recx.rx_nr = DFS_MAX_PATH;
 
-		d_iov_set(&sg_iovs[0], value, PATH_MAX);
+		d_iov_set(&sg_iovs[0], value, DFS_MAX_PATH);
 		sgl->sg_nr	= 1;
 		sgl->sg_nr_out	= 0;
 		sgl->sg_iovs	= sg_iovs;
@@ -715,8 +715,8 @@ check_name(const char *name, size_t *_len)
 	if (name == NULL || strchr(name, '/'))
 		return EINVAL;
 
-	len = strnlen(name, DFS_MAX_PATH + 1);
-	if (len > DFS_MAX_PATH)
+	len = strnlen(name, DFS_MAX_NAME + 1);
+	if (len > DFS_MAX_NAME)
 		return EINVAL;
 
 	*_len = len;
@@ -986,9 +986,9 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		if (value == NULL)
 			return EINVAL;
 
-		value_len = strnlen(value, PATH_MAX);
+		value_len = strnlen(value, DFS_MAX_PATH);
 
-		if (value_len > PATH_MAX - 1)
+		if (value_len > DFS_MAX_PATH - 1)
 			return EINVAL;
 
 		rc = oid_gen(dfs, 0, false, &sym->oid);
@@ -1708,10 +1708,11 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 		return 0;
 	}
 
-	if (prefix[0] != '/' || strnlen(prefix, PATH_MAX) > PATH_MAX - 1)
+	if (prefix[0] != '/' ||
+	    strnlen(prefix, DFS_MAX_PATH) > DFS_MAX_PATH - 1)
 		return EINVAL;
 
-	D_STRNDUP(dfs->prefix, prefix, PATH_MAX - 1);
+	D_STRNDUP(dfs->prefix, prefix, DFS_MAX_PATH - 1);
 	if (dfs->prefix == NULL)
 		return ENOMEM;
 
@@ -1991,7 +1992,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 	if (daos_mode == -1)
 		return EINVAL;
 
-	D_STRNDUP(rem, path, PATH_MAX - 1);
+	D_STRNDUP(rem, path, DFS_MAX_PATH - 1);
 	if (rem == NULL)
 		return ENOMEM;
 
@@ -2005,7 +2006,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 	oid_cp(&obj->oid, root->oid);
 	oid_cp(&obj->parent_oid, root->parent_oid);
 	obj->mode = root->mode;
-	strncpy(obj->name, root->name, DFS_MAX_PATH + 1);
+	strncpy(obj->name, root->name, DFS_MAX_NAME + 1);
 
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 	if (rc)
@@ -2259,7 +2260,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		return EINVAL;
 	if (_obj == NULL)
 		return EINVAL;
-	if (path == NULL || strnlen(path, PATH_MAX) > PATH_MAX - 1)
+	if (path == NULL || strnlen(path, DFS_MAX_PATH) > DFS_MAX_PATH - 1)
 		return EINVAL;
 	if (path[0] != '/')
 		return EINVAL;
@@ -2299,7 +2300,7 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 	if (kds == NULL)
 		return ENOMEM;
 
-	D_ALLOC_ARRAY(enum_buf, *nr * DFS_MAX_PATH);
+	D_ALLOC_ARRAY(enum_buf, *nr * DFS_MAX_NAME);
 	if (enum_buf == NULL) {
 		D_FREE(kds);
 		return ENOMEM;
@@ -2311,11 +2312,11 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 		d_iov_t	iov;
 		char	*ptr;
 
-		memset(enum_buf, 0, (*nr) * DFS_MAX_PATH);
+		memset(enum_buf, 0, (*nr) * DFS_MAX_NAME);
 
 		sgl.sg_nr = 1;
 		sgl.sg_nr_out = 0;
-		d_iov_set(&iov, enum_buf, (*nr) * DFS_MAX_PATH);
+		d_iov_set(&iov, enum_buf, (*nr) * DFS_MAX_NAME);
 		sgl.sg_iovs = &iov;
 
 		rc = daos_obj_list_dkey(obj->oh, DAOS_TX_NONE, &number, kds,
@@ -2760,7 +2761,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		break;
 	}
 	case S_IFLNK:
-		D_STRNDUP(new_obj->value, obj->value, PATH_MAX - 1);
+		D_STRNDUP(new_obj->value, obj->value, DFS_MAX_PATH - 1);
 		if (new_obj->value == NULL)
 			D_GOTO(err, rc = ENOMEM);
 		break;
@@ -2769,7 +2770,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		D_GOTO(err, rc = EINVAL);
 	}
 
-	strncpy(new_obj->name, obj->name, DFS_MAX_PATH + 1);
+	strncpy(new_obj->name, obj->name, DFS_MAX_NAME + 1);
 	new_obj->mode = obj->mode;
 	new_obj->flags = flags;
 	oid_cp(&new_obj->parent_oid, obj->parent_oid);
@@ -2793,7 +2794,7 @@ struct dfs_obj_glob {
 	daos_size_t	chunk_size;
 	uuid_t		cont_uuid;
 	uuid_t		coh_uuid;
-	char		name[DFS_MAX_PATH + 1];
+	char		name[DFS_MAX_NAME + 1];
 };
 
 static inline daos_size_t
@@ -2873,7 +2874,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	oid_cp(&obj_glob->parent_oid, obj->parent_oid);
 	uuid_copy(obj_glob->coh_uuid, coh_uuid);
 	uuid_copy(obj_glob->cont_uuid, cont_uuid);
-	strncpy(obj_glob->name, obj->name, DFS_MAX_PATH + 1);
+	strncpy(obj_glob->name, obj->name, DFS_MAX_NAME + 1);
 	rc = dfs_get_chunk_size(obj, &obj_glob->chunk_size);
 	if (rc)
 		return rc;
@@ -2928,7 +2929,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 
 	oid_cp(&obj->oid, obj_glob->oid);
 	oid_cp(&obj->parent_oid, obj_glob->parent_oid);
-	strncpy(obj->name, obj_glob->name, DFS_MAX_PATH + 1);
+	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME + 1);
 	obj->mode = obj_glob->mode;
 	obj->flags = flags ? flags : obj_glob->flags;
 
@@ -3252,8 +3253,8 @@ dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name)
 
 	oid_cp(&obj->parent_oid, parent_obj->parent_oid);
 	if (name) {
-		strncpy(obj->name, name, DFS_MAX_PATH);
-		obj->name[DFS_MAX_PATH] = '\0';
+		strncpy(obj->name, name, DFS_MAX_NAME);
+		obj->name[DFS_MAX_NAME] = '\0';
 	}
 
 	return 0;
