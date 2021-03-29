@@ -1768,13 +1768,6 @@ func (x *PoolQueryResp) GetLeader() uint32 {
 	return 0
 }
 
-func (m *PoolQueryResp) GetPolicy() string {
-	if m != nil {
-		return m.Policy
-	}
-	return ""
-}
-
 // PoolSetPropReq represents a request to set a pool property.
 type PoolSetPropReq struct {
 	state         protoimpl.MessageState

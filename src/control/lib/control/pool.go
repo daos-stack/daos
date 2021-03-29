@@ -112,6 +112,10 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 
 	out.Uuid = uuid.New().String()
 
+	if in.Policy == "" {
+		out.Policy = "default"
+	}
+
 	return
 }
 
@@ -134,6 +138,7 @@ type (
 		Ranks     []system.Rank
 		ScmBytes  uint64
 		NvmeBytes uint64
+		Policy    string
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -143,6 +148,7 @@ type (
 		TgtRanks  []uint32 `json:"tgt_ranks"`
 		ScmBytes  uint64   `json:"scm_bytes"`
 		NvmeBytes uint64   `json:"nvme_bytes"`
+		Policy    string   `json:"policy"`
 	}
 )
 
@@ -196,6 +202,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 
 	pcr := new(PoolCreateResp)
 	pcr.UUID = pbReq.Uuid
+	pcr.Policy = pbReq.Policy
 	return pcr, convert.Types(pbPcr, pcr)
 }
 

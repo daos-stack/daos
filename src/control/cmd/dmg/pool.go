@@ -77,6 +77,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		UserGroup:  cmd.GroupName,
 		Name:       cmd.PoolName,
 		NumSvcReps: cmd.NumSvcReps,
+		Policy:     cmd.Policy,
 	}
 
 	if cmd.ACLFile != "" {
