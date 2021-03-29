@@ -696,7 +696,20 @@ dfs_sys_test_xattr(void **state)
 	assert_int_equal(buf_size, size);
 	assert_string_equal(buf, val2);
 
-	/** TODO removexattr */
+	/** Remove xattr on sym1->file1 */
+	rc = dfs_sys_removexattr(dfs_sys_mt, sym1, name1, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_listxattr(dfs_sys_mt, sym1, buf, &buf_size, 0);
+	assert_int_equal(rc, 0);
+	assert_int_equal(buf_size, 0);
+
+	/** Remove xattr on sym1 itself */
+	rc = dfs_sys_removexattr(dfs_sys_mt, sym1, name2, O_NOFOLLOW);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_listxattr(dfs_sys_mt, sym1, buf, &buf_size, O_NOFOLLOW);
+	assert_int_equal(rc, 0);
+	assert_int_equal(buf_size, 0);
+
 	delete_simple_tree(dir1, file1, sym1);
 }
 

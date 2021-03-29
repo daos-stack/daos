@@ -266,6 +266,22 @@ dfs_sys_setxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
 		 const void *value, daos_size_t size, int flags, int sflags);
 
 /**
+ * Remove extended attribute of a path. By default, if path is a symlink,
+ * the link itself is interogated.
+ *
+ * \param[in]	dfs_sys	Pointer to the mounted file system.
+ * \param[in]	path	Link path of object.
+ * \param[in]	name	Name of xattr to remove.
+ * \param[in]	flags	(O_NOFOLLOW)
+ *
+ * \return		0 on success, errno code on failure.
+ */
+
+int
+dfs_sys_removexattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
+		    int flags);
+
+/**
  * Retrieve Symlink value of path if it's a symlink. If the buffer size passed
  * in is not large enough, we copy up to size of the buffer, and update the
  * size to actual value size. The size returned includes the null terminator.

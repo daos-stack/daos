@@ -959,6 +959,54 @@ out_free_path:
 }
 
 int
+dfs_sys_removexattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
+		    int flags)
+{
+	int		rc;
+	struct sys_path	sys_path;
+	dfs_obj_t	*obj;
+	int		lookup_flags = O_RDWR;
+
+	if (dfs_sys == NULL)
+		return EINVAL;
+	if (path == NULL)
+		return EINVAL;
+
+	rc = sys_path_parse(dfs_sys, &sys_path, path);
+	if (rc != 0)
+		return rc;
+
+	/* No need to lookup root */
+	if (sys_path.name == NULL) {
+		obj = sys_path.parent;
+		goto removexattr;
+	}
+
+	if (flags & O_NOFOLLOW)
+		lookup_flags |= O_NOFOLLOW;
+
+	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
+			    lookup_flags, &obj, NULL, NULL);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "dfs_lookup_rel() %s failed: (%d)\n",
+			sys_path.name, rc);
+		D_GOTO(out_free_path, rc);
+	}
+
+removexattr:
+	rc = dfs_removexattr(dfs_sys->dfs, obj, name);
+	if (rc != 0)
+		D_GOTO(out_free_obj, rc);
+
+out_free_obj:
+	if (sys_path.name != NULL)
+		dfs_release(obj);
+out_free_path:
+	sys_path_free(dfs_sys, &sys_path);
+	return rc;
+}
+
+int
 dfs_sys_readlink(dfs_sys_t *dfs_sys, const char *path, char *buf,
 		 daos_size_t *size)
 {
