@@ -401,7 +401,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Mon Mar 22 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.1.4-2
+* Mon Mar 29 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.1.4-2
 - Move libdts.so to the daos-tests subpackage
 
 * Mon Mar 22 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.4-1
