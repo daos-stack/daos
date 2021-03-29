@@ -47,7 +47,7 @@ class RebuildTests(TestWithServers):
         for index in range(pool_quantity):
             self.pool[index].create()
             status &= self.pool[index].check_pool_info(
-                pi_nnodes=server_count,
+                pi_nnodes=server_count * engine_count,
                 pi_ntargets=server_count * engine_count * target_count,
                 pi_ndisabled=0
             )
@@ -101,7 +101,7 @@ class RebuildTests(TestWithServers):
         status = True
         for index in range(pool_quantity):
             status &= self.pool[index].check_pool_info(
-                pi_nnodes=server_count,
+                pi_nnodes=server_count * engine_count,
                 pi_ntargets=server_count * engine_count * target_count,
                 pi_ndisabled=target_count
             )
