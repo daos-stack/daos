@@ -78,6 +78,9 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	conn->want |= FUSE_CAP_READDIRPLUS;
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
 
+	if (fs_handle->dpi_info->di_caching)
+		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+
 	dfuse_show_flags(fs_handle, conn->want);
 
 	conn->max_background = 16;
