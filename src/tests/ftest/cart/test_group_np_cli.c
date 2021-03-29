@@ -27,7 +27,7 @@ send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 					      TEST_GROUP_VER, 1), &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL,
 		  "crt_req_create() failed. "
-			"rc: %d, rpc_req: %p\n", rc, rpc_req);
+		  "rc: %d, rpc_req: %p\n", rc, rpc_req);
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
@@ -45,11 +45,11 @@ send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 					      &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL,
 		  "crt_req_create() failed. "
-			"rc: %d, rpc_req: %p\n", rc, rpc_req);
+		  "rc: %d, rpc_req: %p\n", rc, rpc_req);
 
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
-			" rpc_req_input: %p\n", rpc_req_input);
+		  " rpc_req_input: %p\n", rpc_req_input);
 
 	/* Set rank and expected swim status based on CLI options */
 	rpc_req_input->rank = test_g.t_verify_swim_status.rank;
@@ -105,7 +105,8 @@ test_run(void)
 			_cg_num_ranks = test_g.cg_num_ranks;
 
 			/* free up rank list from tc_cli_start_basic */
-			if (rank_list != NULL){
+			if (rank_list != NULL) {
+				/* avoid checkpatch warnoing */
 				d_rank_list_free(rank_list);
 			}
 			rank_list = uint32_array_to_rank_list(_cg_ranks,
@@ -169,7 +170,7 @@ test_run(void)
 
 	if ((test_g.t_skip_shutdown) || (rank_list == NULL)) {
 		DBG_PRINT("Skipping shutdown stage. Rank_list %p\n",
-                             rank_list);
+			  rank_list);
 	} else {
 		/* Shutdown all ranks */
 		DBG_PRINT("Shutdown all ranks\n");
@@ -180,14 +181,14 @@ test_run(void)
 	}
 
 clean_up:
-	if (rank_list != NULL){
+	if (rank_list != NULL) {
 		/* avoid checkpatch warning */
 		d_rank_list_free(rank_list);
 	}
 	rank_list = NULL;
 
 	if (test_g.t_save_cfg) {
-		DBG_PRINT("Detatch Group %p\n", grp);
+		DBG_PRINT("Detach Group %p\n", grp);
 		rc = crt_group_detach(grp);
 		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
 	} else {
