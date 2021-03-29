@@ -300,7 +300,8 @@ def getuid() {
 
 String get_priority() {
     if (env.BRANCH_NAME == 'master' ||
-        env.BRANCH_NAME.startsWith("release/")) {
+        env.BRANCH_NAME.startsWith("release/") ||
+        env.CHANGE_TARGET == ("release/1.2")) {
         string p = '2'
     } else {
         string p = ''
