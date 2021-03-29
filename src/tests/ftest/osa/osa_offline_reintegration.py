@@ -155,11 +155,12 @@ class OSAOfflineReintegration(OSAUtils):
         without enabling checksum in container properties.
 
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration
+        :avocado: tags=osa,offline_reintegration_daily
         :avocado: tags=offline_reintegration_without_csum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
+        self.log.info("Offline Reintegration : Without Checksum")
         self.run_offline_reintegration_test(1, data=True)
 
     def test_osa_offline_reintegration_multiple_pools(self):
@@ -168,9 +169,10 @@ class OSAOfflineReintegration(OSAUtils):
         with multiple pools
 
         :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration
+        :avocado: tags=osa,offline_reintegration_daily
         :avocado: tags=offline_reintegration_multiple_pools
         """
+        self.log.info("Offline Reintegration : Multiple Pools")
         self.run_offline_reintegration_test(5, data=True)
 
     @skipForTicket("DAOS-6807")
@@ -179,9 +181,10 @@ class OSAOfflineReintegration(OSAUtils):
 
         Test Description: Validate Offline Reintegration with server stop
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration
+        :avocado: tags=osa,offline_reintegration_daily
         :avocado: tags=offline_reintegration_srv_stop
         """
+        self.log.info("Offline Reintegration : System Start/Stop")
         self.run_offline_reintegration_test(1, data=True, server_boot=True)
 
     def test_osa_offline_reintegrate_during_rebuild(self):
@@ -190,13 +193,14 @@ class OSAOfflineReintegration(OSAUtils):
         is happening in parallel
 
         :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration
+        :avocado: tags=osa,offline_reintegration_full
         :avocado: tags=offline_reintegrate_during_rebuild
         """
         self.loop_test_cnt = self.params.get("iterations",
                                              '/run/loop_test/*')
         self.test_during_rebuild = self.params.get("test_with_rebuild",
                                                    '/run/rebuild/*')
+        self.log.info("Offline Reintegration : Rebuild")
         self.run_offline_reintegration_test(1, data=True)
 
     def test_osa_offline_reintegration_oclass(self):
@@ -205,9 +209,10 @@ class OSAOfflineReintegration(OSAUtils):
         with different object class
 
         :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration
+        :avocado: tags=osa,offline_reintegration_full
         :avocado: tags=offline_reintegration_oclass
         """
+        self.log.info("Offline Reintegration : Object Class")
         for oclass in self.test_oclass:
             self.run_offline_reintegration_test(1, data=True,
                                                 server_boot=False,
@@ -219,9 +224,10 @@ class OSAOfflineReintegration(OSAUtils):
         is happening in parallel
 
         :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration
+        :avocado: tags=osa,offline_reintegration_full
         :avocado: tags=offline_reintegrate_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
+        self.log.info("Offline Reintegration : Aggregation")
         self.run_offline_reintegration_test(1, data=True)
