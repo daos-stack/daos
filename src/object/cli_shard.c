@@ -730,6 +730,16 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			reasb_req = rw_args->shard_args->reasb_req;
 			is_ec_obj = (reasb_req != NULL) &&
 				    DAOS_OC_IS_EC(reasb_req->orr_oca);
+
+			/* For EC obj fetch, set orr_epoch as highest server
+			 * epoch, so if need to recovery data (-DER_CSUM etc)
+			 * can use that epoch (see obj_ec_recov_task_init).
+			 */
+			if (is_ec_obj &&
+			    (reasb_req->orr_epoch.oe_value == DAOS_EPOCH_MAX ||
+			     reasb_req->orr_epoch.oe_value < orwo->orw_epoch))
+				reasb_req->orr_epoch.oe_value = orwo->orw_epoch;
+
 			if (rc == -DER_CSUM && is_ec_obj) {
 				struct shard_auxi_args	*sa;
 				uint32_t		 tgt_idx;
@@ -764,6 +774,11 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 		is_ec_obj = (reasb_req != NULL) &&
 			    DAOS_OC_IS_EC(reasb_req->orr_oca);
+
+		if (is_ec_obj &&
+		    (reasb_req->orr_epoch.oe_value == DAOS_EPOCH_MAX ||
+		     reasb_req->orr_epoch.oe_value < orwo->orw_epoch))
+			reasb_req->orr_epoch.oe_value = orwo->orw_epoch;
 
 		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
 			daos_iom_t			*reply_maps;
