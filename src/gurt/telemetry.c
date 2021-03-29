@@ -384,25 +384,32 @@ d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node)
 /**
  * Prints the counter \a val with \a name to the \a stream provided
  *
- * \param[in]	val	Counter value
- * \param[in]	name	Counter name
- * \param[in]	format	Output format.
- *			Choose D_TM_STANDARD for standard output.
- *			Choose D_TM_CSV for comma separated values.
- * \param[in]	units	The units expressed as a string
- * \param[in]	stream	Output stream (stdout, stderr)
+ * \param[in]	val		Counter value
+ * \param[in]	name		Counter name
+ * \param[in]	format		Output format.
+ *				Choose D_TM_STANDARD for standard output.
+ *				Choose D_TM_CSV for comma separated values.
+ * \param[in]	units		The units expressed as a string
+ * \param[in]	opt_fields	A bitmask.  Set to D_TM_INCLUDE_TYPE to display
+ *				metric type.
+ * \param[in]	stream		Output stream (stdout, stderr)
  */
 void
 d_tm_print_counter(uint64_t val, char *name, int format, char *units,
-		   FILE *stream)
+		   int opt_fields, FILE *stream)
 {
 	if ((stream == NULL) || (name == NULL))
 		return;
 
 	if (format == D_TM_CSV) {
-		fprintf(stream, "%s,counter,%lu", name, val);
+		fprintf(stream, "%s", name);
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, ",counter");
+		fprintf(stream, ",%lu", val);
 	} else {
-		fprintf(stream, "counter: %s = %" PRIu64, name, val);
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, "type: counter, ");
+		fprintf(stream, "%s: %" PRIu64, name, val);
 		if (units != NULL)
 			fprintf(stream, " %s", units);
 	}
@@ -411,15 +418,18 @@ d_tm_print_counter(uint64_t val, char *name, int format, char *units,
 /**
  * Prints the timestamp \a clk with \a name to the \a stream provided
  *
- * \param[in]	clk	Timestamp value
- * \param[in]	name	Timestamp name
- * \param[in]	format	Output format.
- *			Choose D_TM_STANDARD for standard output.
- *			Choose D_TM_CSV for comma separated values.
- * \param[in]	stream	Output stream (stdout, stderr)
+ * \param[in]	clk		Timestamp value
+ * \param[in]	name		Timestamp name
+ * \param[in]	format		Output format.
+ *				Choose D_TM_STANDARD for standard output.
+ *				Choose D_TM_CSV for comma separated values.
+* \param[in]	opt_fields	A bitmask.  Set to D_TM_INCLUDE_TYPE to display
+ *				metric type.
+ * \param[in]	stream		Output stream (stdout, stderr)
  */
 void
-d_tm_print_timestamp(time_t *clk, char *name, int format, FILE *stream)
+d_tm_print_timestamp(time_t *clk, char *name, int format, int opt_fields,
+		     FILE *stream)
 {
 	char	time_buff[D_TM_TIME_BUFF_LEN];
 	char	*temp;
@@ -440,26 +450,34 @@ d_tm_print_timestamp(time_t *clk, char *name, int format, FILE *stream)
 	 */
 	temp[D_TM_TIME_BUFF_LEN - 2] = 0;
 
-	if (format == D_TM_CSV)
-		fprintf(stream, "%s,timestamp,%s", name, temp);
-	else
-		fprintf(stream, "timestamp: %s: %s", name, temp);
+	if (format == D_TM_CSV) {
+		fprintf(stream, "%s", name);
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, ",timestamp");
+		fprintf(stream, ",%s", temp);
+	} else {
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, "type: time timestamp, ");
+		fprintf(stream, "%s: %s", name, temp);
+	}
 }
 
 /**
  * Prints the time snapshot \a tms with \a name to the \a stream provided
  *
- * \param[in]	tms	Timer value
- * \param[in]	name	Timer name
- * \param[in]	tm_type	Timer type
- * \param[in]	format	Output format.
- *			Choose D_TM_STANDARD for standard output.
- *			Choose D_TM_CSV for comma separated values.
- * \param[in]	stream	Output stream (stdout, stderr)
+ * \param[in]	tms		Timer value
+ * \param[in]	name		Timer name
+ * \param[in]	tm_type		Timer type
+ * \param[in]	format		Output format.
+ *				Choose D_TM_STANDARD for standard output.
+ *				Choose D_TM_CSV for comma separated values.
+ * \param[in]	opt_fields	A bitmask.  Set to D_TM_INCLUDE_TYPE to display
+ *				metric type.
+ * \param[in]	stream		Output stream (stdout, stderr)
  */
 void
 d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
-			  int format, FILE *stream)
+			  int format, int opt_fields, FILE *stream)
 {
 	uint64_t	us;
 
@@ -470,25 +488,40 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
 
 	switch (tm_type) {
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME:
-		if (format == D_TM_CSV)
-			fprintf(stream, "%s,snapshot realtime,%lu", name, us);
-		else
-			fprintf(stream, "snapshot realtime: %s = %lu us",
-				name, us);
+		if (format == D_TM_CSV) {
+			fprintf(stream, "%s", name);
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, ",snapshot realtime");
+			fprintf(stream, ",%lu", us);
+		} else {
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, "type: snapshot realtime, ");
+			fprintf(stream, "%s: %lu us", name, us);
+		}
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME:
-		if (format == D_TM_CSV)
-			fprintf(stream, "%s,snapshot process,%lu", name, us);
-		else
-			fprintf(stream, "snapshot process: %s = %lu us",
-				name, us);
+		if (format == D_TM_CSV) {
+			fprintf(stream, "%s", name);
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, ",snapshot process");
+			fprintf(stream, ",%lu", us);
+		} else {
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, "type: snapshot process, ");
+			fprintf(stream, "%s: %lu us", name, us);
+		}
 		break;
 	case D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME:
-		if (format == D_TM_CSV)
-			fprintf(stream, "%s,snapshot thread,%lu", name, us);
-		else
-			fprintf(stream, "snapshot thread: %s = %lu us",
-				name, us);
+		if (format == D_TM_CSV) {
+			fprintf(stream, "%s", name);
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, ",snapshot thread");
+			fprintf(stream, ",%lu", us);
+		} else {
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, "type: snapshot thread, ");
+			fprintf(stream, "%s: %lu us", name, us);
+		}
 		break;
 	default:
 		fprintf(stream, "Invalid timer snapshot type: 0x%x",
@@ -501,18 +534,21 @@ d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
  * Prints the duration \a tms with \a stats and \a name to the \a stream
  * provided
  *
- * \param[in]	tms	Duration timer value
- * \param[in]	stats	Optional stats
- * \param[in]	name	Duration timer name
- * \param[in]	tm_type	Duration timer type
- * \param[in]	format	Output format.
- *			Choose D_TM_STANDARD for standard output.
- *			Choose D_TM_CSV for comma separated values.
- * \param[in]	stream	Output stream (stdout, stderr)
+ * \param[in]	tms		Duration timer value
+ * \param[in]	stats		Optional stats
+ * \param[in]	name		Duration timer name
+ * \param[in]	tm_type		Duration timer type
+ * \param[in]	format		Output format.
+ *				Choose D_TM_STANDARD for standard output.
+ *				Choose D_TM_CSV for comma separated values.
+* \param[in]	opt_fields	A bitmask.  Set to D_TM_INCLUDE_TYPE to display
+ *				metric type.
+ * \param[in]	stream		Output stream (stdout, stderr)
  */
 void
 d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
-		    char *name, int tm_type, int format, FILE *stream)
+		    char *name, int tm_type, int format, int opt_fields,
+		    FILE *stream)
 {
 	uint64_t	us;
 	bool		printStats;
@@ -525,25 +561,40 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 
 	switch (tm_type) {
 	case D_TM_DURATION | D_TM_CLOCK_REALTIME:
-		if (format == D_TM_CSV)
-			fprintf(stream, "%s,duration realtime,%lu", name, us);
-		else
-			fprintf(stream, "duration realtime: %s = %lu us",
-				name, us);
+		if (format == D_TM_CSV) {
+			fprintf(stream, "%s", name);
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, ",duration realtime");
+			fprintf(stream, ",%lu", us);
+		} else {
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, "type: duration realtime, ");
+			fprintf(stream, "%s: %lu us", name, us);
+		}
 		break;
 	case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
-		if (format == D_TM_CSV)
-			fprintf(stream, "%s,duration process,%lu", name, us);
-		else
-			fprintf(stream, "duration process: %s = %lu us",
-				name, us);
+		if (format == D_TM_CSV) {
+			fprintf(stream, "%s", name);
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, ",duration process");
+			fprintf(stream, ",%lu", us);
+		} else {
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, "type: duration process, ");
+			fprintf(stream, "%s: %lu us", name, us);
+		}
 		break;
 	case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
-		if (format == D_TM_CSV)
-			fprintf(stream, "%s,duration thread,%lu", name, us);
-		else
-			fprintf(stream, "duration thread: %s = %lu us",
-				name, us);
+		if (format == D_TM_CSV) {
+			fprintf(stream, "%s", name);
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, ",duration thread");
+			fprintf(stream, ",%lu", us);
+		} else {
+			if (opt_fields & D_TM_INCLUDE_TYPE)
+				fprintf(stream, "type: duration thread, ");
+			fprintf(stream, "%s: %lu us", name, us);
+		}
 		break;
 	default:
 		fprintf(stream, "Invalid timer duration type: 0x%x",
@@ -559,26 +610,33 @@ d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 /**
  * Prints the gauge \a val and \a stats with \a name to the \a stream provided
  *
- * \param[in]	tms	Timer value
- * \param[in]	stats	Optional statistics
- * \param[in]	name	Timer name
- * \param[in]	format	Output format.
- *			Choose D_TM_STANDARD for standard output.
- *			Choose D_TM_CSV for comma separated values.
- * \param[in]	units	The units expressed as a string
- * \param[in]	stream	Output stream (stdout, stderr)
+ * \param[in]	tms		Timer value
+ * \param[in]	stats		Optional statistics
+ * \param[in]	name		Timer name
+ * \param[in]	format		Output format.
+ *				Choose D_TM_STANDARD for standard output.
+ *				Choose D_TM_CSV for comma separated values.
+ * \param[in]	units		The units expressed as a string
+ * \param[in]	opt_fields	A bitmask.  Set to D_TM_INCLUDE_TYPE to display
+ *				metric type.
+ * \param[in]	stream		Output stream (stdout, stderr)
  */
 void
 d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
-		 int format, char *units, FILE *stream)
+		 int format, char *units, int opt_fields, FILE *stream)
 {
 	if ((name == NULL) || (stream == NULL))
 		return;
 
 	if (format == D_TM_CSV) {
-		fprintf(stream, "%s,gauge,%lu", name, val);
+		fprintf(stream, "%s", name);
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, ",gauge");
+		fprintf(stream, ",%lu", val);
 	} else {
-		fprintf(stream, "gauge: %s = %lu", name, val);
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, "type: gauge, ");
+		fprintf(stream, "%s: %lu", name, val);
 		if (units != NULL)
 			fprintf(stream, " %s", units);
 	}
@@ -633,15 +691,13 @@ d_tm_print_metadata(char *desc, char *units, int format, FILE *stream)
  * \param[in]	format		Output format.
  *				Choose D_TM_STANDARD for standard output.
  *				Choose D_TM_CSV for comma separated values.
- * \param[in]	show_meta	Set to true to print the meta-data.
- * \param[in]	show_timestamp	Set to true to print the timestamp the metric
- *				was read by the consumer.
+ * \param[in]	opt_fields	A bitmask.  Set D_TM_INCLUDE_* as desired for
+ * 				the optional output fields.
  * \param[in]	stream		Direct output to this stream (stdout, stderr)
  */
 void
 d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
-		char *path, int format, bool show_meta, bool show_timestamp,
-		FILE *stream)
+		char *path, int format, int opt_fields, FILE *stream)
 {
 	struct d_tm_stats_t	stats = {0};
 	struct timespec		tms;
@@ -653,12 +709,17 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 	char			*desc = NULL;
 	char			*units = NULL;
 	bool			stats_printed = false;
+	bool			show_timestamp = false;
+	bool			show_meta = false;
 	int			i = 0;
 	int			rc;
 
 	name = d_tm_conv_ptr(shmem_root, node->dtn_name);
 	if (name == NULL)
 		return;
+
+	show_meta = opt_fields & D_TM_INCLUDE_METADATA;
+	show_timestamp = opt_fields & D_TM_INCLUDE_TIMESTAMP;
 
 	if (show_timestamp) {
 		clk = time(NULL);
@@ -696,7 +757,8 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on counter read: %d\n", rc);
 			break;
 		}
-		d_tm_print_counter(val, name, format, units, stream);
+		d_tm_print_counter(val, name, format, units, opt_fields,
+				   stream);
 		break;
 	case D_TM_TIMESTAMP:
 		rc = d_tm_get_timestamp(&clk, shmem_root, node, NULL);
@@ -704,7 +766,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on timestamp read: %d\n", rc);
 			break;
 		}
-		d_tm_print_timestamp(&clk, name, format, stream);
+		d_tm_print_timestamp(&clk, name, format, opt_fields, stream);
 		break;
 	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
 	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
@@ -716,7 +778,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			break;
 		}
 		d_tm_print_timer_snapshot(&tms, name, node->dtn_type, format,
-					  stream);
+					  opt_fields, stream);
 		break;
 	case (D_TM_DURATION | D_TM_CLOCK_REALTIME):
 	case (D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME):
@@ -727,7 +789,7 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			break;
 		}
 		d_tm_print_duration(&tms, &stats, name, node->dtn_type, format,
-				    stream);
+				    opt_fields, stream);
 		if (stats.sample_size > 0)
 			stats_printed = true;
 		break;
@@ -737,7 +799,8 @@ d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 			fprintf(stream, "Error on gauge read: %d\n", rc);
 			break;
 		}
-		d_tm_print_gauge(val, &stats, name, format, units, stream);
+		d_tm_print_gauge(val, &stats, name, format, units, opt_fields,
+				 stream);
 		if (stats.sample_size > 0)
 			stats_printed = true;
 		break;
@@ -811,7 +874,8 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
  * \param[in]	format		Output format.
  *				Choose D_TM_STANDARD for standard output.
  *				Choose D_TM_CSV for comma separated values.
- * \param[in]	show_meta	Set to true to print the metadata.
+ * \param[in]	opt_fields	A bitmask.  Set D_TM_INCLUDE_* as desired for
+ * 				the optional output fields.
  * \param[in]	show_timestamp	Set to true to print the timestamp the metric
  *				was read by the consumer.
  * \param[in]	stream		Direct output to this stream (stdout, stderr)
@@ -819,7 +883,7 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 void
 d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 		       int level, int filter, char *path, int format,
-		       bool show_meta, bool show_timestamp, FILE *stream)
+		       int opt_fields, FILE *stream)
 {
 	char	*fullpath = NULL;
 	char	*node_name = NULL;
@@ -830,7 +894,7 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 
 	if (node->dtn_type & filter)
 		d_tm_print_node(shmem_root, node, level, path, format,
-				show_meta, show_timestamp, stream);
+				opt_fields, stream);
 	parent_name = d_tm_conv_ptr(shmem_root, node->dtn_name);
 	node = node->dtn_child;
 	node = d_tm_conv_ptr(shmem_root, node);
@@ -849,8 +913,7 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 			D_ASPRINTF(fullpath, "%s/%s", path, parent_name);
 
 		d_tm_print_my_children(shmem_root, node, level + 1, filter,
-				       fullpath, format, show_meta,
-				       show_timestamp, stream);
+				       fullpath, format, opt_fields, stream);
 		D_FREE_PTR(fullpath);
 		node = node->dtn_sibling;
 		node = d_tm_conv_ptr(shmem_root, node);
@@ -860,21 +923,24 @@ d_tm_print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node,
 /**
  * Prints the header for CSV output
  *
- * \param[in]	extra_fields	A bitmask.  Use D_TM_INCLUDE_TIMESTAMP to print
- *				a header for timestamp data.  Use
- *				D_TM_INCLUDE_METADATA to print a header for
- *				the metadata.
+ * \param[in]	opt_fields	A bitmask.  Set D_TM_INCLUDE_* as desired for
+ * 				the optional output fields.
  * \param[in]	stream		Direct output to this stream (stdout, stderr)
  */
 void
-d_tm_print_field_descriptors(int extra_fields, FILE *stream)
+d_tm_print_field_descriptors(int opt_fields, FILE *stream)
 {
-	if (extra_fields & D_TM_INCLUDE_TIMESTAMP)
+	if (opt_fields & D_TM_INCLUDE_TIMESTAMP)
 		fprintf(stream, "timestamp,");
 
-	fprintf(stream, "name,type,value,min,max,mean,sample_size,std_dev");
+	fprintf(stream, "name,");
 
-	if (extra_fields & D_TM_INCLUDE_METADATA)
+	if (opt_fields & D_TM_INCLUDE_TYPE)
+		fprintf(stream, "type,");
+
+	fprintf(stream, "value,min,max,mean,sample_size,std_dev");
+
+	if (opt_fields & D_TM_INCLUDE_METADATA)
 		fprintf(stream, ",description,units");
 
 	fprintf(stream, "\n");
