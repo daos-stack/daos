@@ -1290,6 +1290,7 @@ compare_print_results(char *section_name, char *input_section_name,
 	 */
 	if (ConfigHasSection(cfg_expected, input_section_name)) {
 		int ivalue;
+
 		for (i = 0; i < status_size; i++) {
 			config_ret = ConfigReadInt(cfg_expected,
 						   input_section_name,
