@@ -327,12 +327,10 @@ func registerLeaderSubscriptions(srv *server) {
 			switch evt.ID {
 			case events.RASSwimRankDead:
 				// Mark the rank as unavailable for membership in
-				// new pools, etc.
-				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank)); err != nil {
-					srv.log.Errorf("failed to mark rank %d as dead: %s", evt.Rank, err)
-					return
+				// new pools, etc. Do group update on success.
+				if err := membership.MarkRankDead(system.Rank(evt.Rank)); err == nil {
+					srv.mgmtSvc.reqGroupUpdate(ctx)
 				}
-				srv.mgmtSvc.reqGroupUpdate(ctx)
 			}
 		}))
 }

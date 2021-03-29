@@ -3,12 +3,12 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.0.1~rc1-1%{?dist}
-%global libfabric_version 1.12.0~rc1-1
+%global libfabric_version 1.12.0
 %global __python %{__python3}
 
 Name:          daos
 Version:       1.3.0
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -401,6 +401,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Mar 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.0-4
+- Update libfabric to v1.12.0
+- Disable grdcopy/gdrapi linkage in libfabric
+
 * Thu Mar 18 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-3
 - Update to python3
 
