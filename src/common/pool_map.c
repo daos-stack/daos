@@ -105,6 +105,10 @@ static struct pool_comp_state_dict comp_state_dict[] = {
 		.sd_name	= "NEW",
 	},
 	{
+		.sd_state	= PO_COMP_ST_DRAIN,
+		.sd_name	= "DRAIN",
+	},
+	{
 		.sd_state	= PO_COMP_ST_UNKNOWN,
 		.sd_name	= "UNKNOWN",
 	},
@@ -1415,6 +1419,18 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
 		map_comp.co_nr = node.fdn_val.dom->fd_children_nr;
+
+		if (map != NULL) {
+			struct pool_domain	*current;
+			int			already_in_map;
+
+			already_in_map = pool_map_find_domain(map,
+							      PO_COMP_TP_RACK,
+							      map_comp.co_id,
+							      &current);
+			if (already_in_map > 0)
+				map_comp.co_status = current->do_comp.co_status;
+		}
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		i++;

@@ -173,7 +173,7 @@ main(int argc, char **argv)
 		d_tm_print_field_descriptors(extra_descriptors, stdout);
 
 	while ((num_iter == 0) || (iteration < num_iter)) {
-		d_tm_print_my_children(shmem_root, root, 0, filter, dirname,
+		d_tm_print_my_children(shmem_root, root, 0, filter, NULL,
 				       format, show_meta, show_timestamp,
 				       stdout);
 		iteration++;
