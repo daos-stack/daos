@@ -567,11 +567,55 @@ static void
 dfs_sys_test_open_readdir(void **state)
 {
 	test_arg_t	*arg = *state;
+	const char	*dir1 = "/dir1";
+	uint32_t	num_dirs = 25; /** one more than num_ents */
+	uint32_t	num_dirs_read = 0;
+	uint32_t	buf_size = 100;
+	uint32_t	i;
+	char		buf[buf_size];
+	DIR		*dirp;
+	struct dirent	*dirent;
+	int		rc;
 
 	if (arg->myrank != 0)
 		return;
 
-	/** TODO opendir / readdir */
+	/** Open and close root */
+	rc = dfs_sys_opendir(dfs_sys_mt, "/", 0, &dirp);
+	assert_int_equal(rc, 0);
+	assert_non_null(dirp);
+	rc = dfs_sys_closedir(dirp);
+	assert_int_equal(rc, 0);
+
+	/* Create dir1 with some entries */
+	rc = dfs_sys_mkdir(dfs_sys_mt, dir1, S_IWUSR | S_IRUSR, 0);
+	assert_int_equal(rc, 0);
+	for (i = 0; i < num_dirs; i++) {
+		rc = snprintf(buf, buf_size, "%s/sub%u", dir1, i);
+		assert_true(rc > 0);
+		rc = dfs_sys_mkdir(dfs_sys_mt, buf, S_IWUSR | S_IRUSR, 0);
+		assert_int_equal(rc, 0);
+	}
+
+	/** Open dir1 */
+	rc = dfs_sys_opendir(dfs_sys_mt, dir1, 0, &dirp);
+	assert_int_equal(rc, 0);
+	assert_non_null(dirp);
+
+	/** readdir entries */
+	while (1) {
+		rc = dfs_sys_readdir(dfs_sys_mt, dirp, &dirent);
+		assert_int_equal(rc, 0);
+		if (dirent == NULL)
+			break;
+		num_dirs_read++;
+	}
+	assert_int_equal(num_dirs_read, num_dirs);
+
+	rc = dfs_sys_closedir(dirp);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_sys_remove(dfs_sys_mt, dir1, true, NULL);
 }
 
 /**
@@ -581,13 +625,79 @@ static void
 dfs_sys_test_xattr(void **state)
 {
 	test_arg_t	*arg = *state;
+	const char      *dir1 = "/dir1";
+	const char      *file1 = "/dir1/file1";
+	const char      *sym1 = "/dir1/sym1";
+	const char	*sym1_target = "file1";
+	const char	*name1 = "xattr1";
+	const char	*name2 = "xattr2";
+	const char	*val1 = "value1";
+	const char	*val2 = "value2";
+	daos_size_t	size = 6;
+	char		*buf = NULL;
+	daos_size_t	buf_size = 0;
+	int		rc;
 
 	if (arg->myrank != 0)
 		return;
 
-	/** TODO setxattr */
-	/** TODO listxattr */
-	/** TODO getxattr */
+	create_simple_tree(dir1, file1, sym1, sym1_target);
+
+	/** Set xattr on sym1->file1 */
+	rc = dfs_sys_setxattr(dfs_sys_mt, sym1, name1, val1, size, 0, 0);
+	assert_int_equal(rc, 0);
+
+	/** Set xattr on sym1 itself */
+	rc = dfs_sys_setxattr(dfs_sys_mt, sym1, name2, val2, size, 0,
+			      O_NOFOLLOW);
+	assert_int_equal(rc, 0);
+
+	/** List xattr on NULL buf */
+	rc = dfs_sys_listxattr(dfs_sys_mt, sym1, buf, &buf_size, 0);
+	assert_int_equal(rc, ERANGE);
+	assert_int_equal(buf_size, size + 1);
+	D_ALLOC(buf, buf_size);
+	assert_non_null(buf);
+
+	/** List xattr on sym1->file1 */
+	rc = dfs_sys_listxattr(dfs_sys_mt, sym1, buf, &buf_size, 0);
+	assert_int_equal(rc, 0);
+	assert_int_equal(buf_size, size + 1);
+	assert_string_equal(buf, name1);
+
+	/** List xattr on sym1 itself */
+	rc = dfs_sys_listxattr(dfs_sys_mt, sym1, buf, &buf_size, O_NOFOLLOW);
+	assert_int_equal(rc, 0);
+	assert_int_equal(buf_size, size + 1);
+	assert_string_equal(buf, name2);
+
+	/** Reset buf */
+	D_FREE(buf);
+	buf = NULL;
+	buf_size = 0;
+
+	/** Get xattr on NULL buf */
+	rc = dfs_sys_getxattr(dfs_sys_mt, sym1, name1, buf, &buf_size, 0);
+	assert_int_equal(rc, ERANGE);
+	assert_int_equal(buf_size, size);
+	D_ALLOC(buf, buf_size);
+	assert_non_null(buf);
+
+	/** Get xattr on sym1->file1 */
+	rc = dfs_sys_getxattr(dfs_sys_mt, sym1, name1, buf, &buf_size, 0);
+	assert_int_equal(rc, 0);
+	assert_int_equal(buf_size, size);
+	assert_string_equal(buf, val1);
+
+	/** Get xattr on sym1 itself */
+	rc = dfs_sys_getxattr(dfs_sys_mt, sym1, name2, buf, &buf_size,
+			      O_NOFOLLOW);
+	assert_int_equal(rc, 0);
+	assert_int_equal(buf_size, size);
+	assert_string_equal(buf, val2);
+
+	/** TODO removexattr */
+	delete_simple_tree(dir1, file1, sym1);
 }
 
 static const struct CMUnitTest dfs_sys_unit_tests[] = {
