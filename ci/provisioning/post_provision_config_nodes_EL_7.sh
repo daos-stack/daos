@@ -108,10 +108,10 @@ post_provision_config_nodes() {
             disable_gpg_check "$repo_url"
         done
     fi
-    #if [ -n "$INST_RPMS" ]; then
-    #    # shellcheck disable=SC2086
-    #    time dnf -y erase $INST_RPMS
-    #fi
+    if [ -n "$INST_RPMS" ]; then
+        # shellcheck disable=SC2086
+        time dnf -y erase $INST_RPMS
+    fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     time dnf -y install $LSB_RELEASE
