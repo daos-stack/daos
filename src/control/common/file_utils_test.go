@@ -10,11 +10,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/user"
 	"path"
 	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 )
 
 func TestUtils_ResolvePath(t *testing.T) {
@@ -101,5 +103,64 @@ func TestUtils_FindBinaryAdjacent(t *testing.T) {
 	}
 	if binPath != testFile.Name() {
 		t.Fatalf("expected %q; got %q", testFile.Name(), binPath)
+	}
+}
+
+func TestUtils_GetFileOwner(t *testing.T) {
+	curUsr, _ := user.Current()
+
+	for name, tc := range map[string]struct {
+		createFile     bool
+		createDir      bool
+		expUsername    string
+		expErr         error
+		expErrNotExist bool
+	}{
+		"path doesnt exist": {
+			expErr:         errors.New("stat"),
+			expErrNotExist: true,
+		},
+		"path is a directory": {
+			createDir:      true,
+			expErr:         os.ErrNotExist,
+			expErrNotExist: true,
+		},
+		"success": {
+			createFile:  true,
+			expUsername: curUsr.Username,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tmpDir, cleanup := CreateTestDir(t)
+			defer cleanup()
+
+			name := "foo"
+			path := filepath.Join(tmpDir, name)
+
+			switch {
+			case tc.createFile:
+				f, err := os.Create(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := f.Close(); err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("file created %q", path)
+			case tc.createDir:
+				pathDir, err := ioutil.TempDir(tmpDir, name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("directory created %q", pathDir)
+				path = pathDir
+			}
+
+			username, err := GetFileOwner(path)
+			CmpErr(t, tc.expErr, err)
+			AssertEqual(t, tc.expErrNotExist, os.IsNotExist(errors.Cause(err)),
+				"unexpected not exist error state")
+			AssertEqual(t, tc.expUsername, username, "unexpected owner username")
+		})
 	}
 }

@@ -11,19 +11,20 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+const hugePageFilePrefix = "/dev/hugepages/spdk"
 
 type (
 	spdkWrapper struct {
@@ -305,15 +306,55 @@ func detectVMD() ([]string, error) {
 	return vmdAddrs, nil
 }
 
+// cleanHugePages removes hugepage files with pathPrefix that are owned by the
+// user with username tgtUsr.
+func cleanHugePages(pathPrefix, tgtUsr string) (int, error) {
+	pattern := pathPrefix + "*"
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return 0, errors.Wrapf(err, "files matching %q", pattern)
+	}
+
+	toRemove := make([]string, 0, len(matches))
+	for _, path := range matches {
+		username, err := common.GetFileOwner(path)
+		if err != nil {
+			if os.IsNotExist(errors.Cause(err)) {
+				continue
+			}
+			return 0, err
+		}
+		if username != tgtUsr {
+			continue
+		}
+		toRemove = append(toRemove, path)
+	}
+
+	var nrRemoved int
+	for _, path := range toRemove {
+		if err := os.Remove(path); err != nil {
+			return nrRemoved, err
+		}
+		nrRemoved++
+	}
+
+	return nrRemoved, nil
+}
+
 // Prepare will cleanup any leftover hugepages owned by the target user and then
-// execute the SPDK setup.sh script to rebind PCI devices as selected by
+// executes the SPDK setup.sh script to rebind PCI devices as selected by
 // bdev_include and bdev_exclude list filters provided in the server config file.
 // This will make the devices available though SPDK.
 func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	resp := &PrepareResponse{}
 
-	if err := cleanHugePages(b.log, hugePageFilePrefix, req.TargetUser); err != nil {
-		return nil, errors.Wrapf(err, "clean huge pages")
+	// remove hugepages matching /dev/hugepages/spdk* owned by target user
+	nrRemoved, err := cleanHugePages(hugePageFilePrefix, req.TargetUser)
+	if err != nil {
+		return nil, errors.Wrapf(err, "clean spdk hugepages")
+	}
+	if nrRemoved > 0 {
+		b.log.Debugf("removed %d spdk hugepages owned by %s", req.TargetUser)
 	}
 
 	if err := b.script.Prepare(req); err != nil {
@@ -387,63 +428,6 @@ func (b *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) er
 	if err := b.binding.Update(b.log, pciAddr, path, slot); err != nil {
 		return err
 	}
-
-	return nil
-}
-
-const hugePageFilePrefix = "/dev/hugepages/spdk_"
-
-func userID2Name(uid uint32) (string, error) {
-	usr, err := user.LookupId(strconv.FormatUint(uint64(uid), 10))
-	if err != nil {
-		return "", err
-	}
-
-	return usr.Username, nil
-}
-
-func fileOwner(info os.FileInfo) uint32 {
-	// https://golang.org/pkg/syscall/#Stat_t
-	return info.Sys().(*syscall.Stat_t).Uid
-}
-
-// cleanHugePages removes hugepages in `/dev/hugepages/` that are owned by the
-// user running `daos_server` process and prefixed with `spdk.*`.
-func cleanHugePages(log logging.Logger, prefix, tgtUsr string) error {
-	pattern := prefix + "*"
-	matches, err := filepath.Glob(pattern)
-	if err != nil {
-		return errors.Wrapf(err, "files matching %q", pattern)
-	}
-
-	var nrRemoved int
-	for _, path := range matches {
-		info, err := os.Stat(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return errors.Wrap(err, "file stat")
-		}
-
-		username, err := userID2Name(fileOwner(info))
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return errors.Wrap(err, "uid to name")
-		}
-
-		if username != tgtUsr {
-			continue
-		}
-
-		if err := os.Remove(path); err != nil {
-			return errors.Wrap(err, "remove")
-		}
-		nrRemoved++
-	}
-	log.Debugf("removed %d hugeopages", nrRemoved)
 
 	return nil
 }

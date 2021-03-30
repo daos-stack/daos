@@ -7,6 +7,11 @@ package bdev
 
 import (
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"os/user"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -57,7 +62,7 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 	}
 }
 
-func TestBdevBackendScan(t *testing.T) {
+func TestBdev_Backend_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 
 	for name, tc := range map[string]struct {
@@ -106,7 +111,7 @@ func TestBdevBackendScan(t *testing.T) {
 	}
 }
 
-func TestBdevBackendFormat(t *testing.T) {
+func TestBdev_Backend_Format(t *testing.T) {
 	pci1 := storage.MockNvmeController(1).PciAddr
 	pci2 := storage.MockNvmeController(2).PciAddr
 	pci3 := storage.MockNvmeController(3).PciAddr
@@ -358,7 +363,7 @@ func TestBdevBackendFormat(t *testing.T) {
 	}
 }
 
-func TestBdevBackendUpdate(t *testing.T) {
+func TestBdev_Backend_Update(t *testing.T) {
 	numCtrlrs := 4
 	controllers := make(storage.NvmeControllers, 0, numCtrlrs)
 	for i := 0; i < numCtrlrs; i++ {
@@ -413,6 +418,79 @@ func TestBdevBackendUpdate(t *testing.T) {
 
 			gotErr := b.UpdateFirmware(tc.pciAddr, "/some/path", 0)
 			common.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestBdev_Backend_cleanHugePages(t *testing.T) {
+	curUsr, _ := user.Current()
+
+	for name, tc := range map[string]struct {
+		owner, tgtUsr, filePrefix, lookPrefix string
+		nrPages, expNrRemoved, expNrRemain    int
+		expErr                                error
+	}{
+		"success": {
+			owner:        curUsr.Username,
+			tgtUsr:       curUsr.Username,
+			filePrefix:   "spdk_",
+			lookPrefix:   "spdk",
+			nrPages:      10,
+			expNrRemoved: 10,
+			expNrRemain:  0,
+		},
+		"different prefix": {
+			owner:        curUsr.Username,
+			tgtUsr:       curUsr.Username,
+			filePrefix:   "foo",
+			lookPrefix:   "spdk",
+			nrPages:      10,
+			expNrRemoved: 0,
+			expNrRemain:  10,
+		},
+		"different user": {
+			owner:        curUsr.Username,
+			tgtUsr:       "nobody",
+			filePrefix:   "spdk_",
+			lookPrefix:   "spdk",
+			nrPages:      10,
+			expNrRemoved: 0,
+			expNrRemain:  10,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tmpDir, cleanup := common.CreateTestDir(t)
+			defer cleanup()
+
+			for i := 0; i < tc.nrPages; i++ {
+				name := fmt.Sprintf("%s_%d", tc.filePrefix, i)
+				path := filepath.Join(tmpDir, name)
+				f, err := os.Create(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := f.Close(); err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("%s created", path)
+			}
+
+			pathPrefix := filepath.Join(tmpDir, tc.lookPrefix)
+			t.Logf("cleaning huge pages with prefix %q owned by %q",
+				pathPrefix, tc.tgtUsr)
+			nrRemoved, err := cleanHugePages(pathPrefix, tc.tgtUsr)
+			common.CmpErr(t, tc.expErr, err)
+			common.AssertEqual(t, tc.expNrRemoved, nrRemoved,
+				"unexpected number of pages removed")
+
+			files, err := ioutil.ReadDir(tmpDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// len(files) makes the assumption that test directory
+			// doesn't contain any sub-directories
+			common.AssertEqual(t, tc.expNrRemain, len(files),
+				"unexpected number of pages remaining")
 		})
 	}
 }
