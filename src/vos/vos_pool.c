@@ -384,6 +384,7 @@ end:
 			xs_ctxt, DP_UUID(uuid), DP_RC(rc));
 		/* Destroy the SPDK blob on error */
 		rc = bio_blob_delete(uuid, xs_ctxt);
+		goto close;
 	}
 
 open:
@@ -699,8 +700,8 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 
 	pool->vp_pool_df = pool_df;
 	pool->vp_opened = 1;
-	pool->vp_excl = (flags & VOS_POF_EXCL);
-	pool->vp_small = (flags & VOS_POF_SMALL);
+	pool->vp_excl = !!(flags & VOS_POF_EXCL);
+	pool->vp_small = !!(flags & VOS_POF_SMALL);
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);

@@ -135,9 +135,7 @@ db_open_create(struct sys_db *db, bool try_create)
 			 * The access checks above should ensure the file
 			 * exists.
 			 */
-			if (try_create)
-				D_CRIT("sys pool open error: "DF_RC"\n",
-				       DP_RC(rc));
+			D_CRIT("sys pool open error: "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
 	}
