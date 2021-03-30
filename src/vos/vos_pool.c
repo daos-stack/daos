@@ -739,8 +739,10 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 		D_ASSERT(pool != NULL);
 		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
 			pool->vp_opened, pool);
-		if ((flags & VOS_POF_EXCL) || pool->vp_excl)
+		if ((flags & VOS_POF_EXCL) || pool->vp_excl) {
+			vos_pool_decref(pool);
 			return -DER_BUSY;
+		}
 		pool->vp_opened++;
 		*poh = vos_pool2hdl(pool);
 		return 0;
