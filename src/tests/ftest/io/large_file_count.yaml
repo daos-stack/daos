@@ -26,8 +26,8 @@ pool:
   createset:
     setname: daos_server
   createsize:
-    scm_size: 40000000000
-    nvme_size: 400000000000 # large nvme_size for mdtest 1M file creation
+    scm_size: 40GB
+    nvme_size: 400GB # large nvme_size for mdtest 1M file creation
   createsvc:
     svcn: 3
   control_method: dmg

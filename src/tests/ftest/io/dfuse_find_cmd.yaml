@@ -13,7 +13,7 @@ server_config:
 pool:
   mode: 146
   name: daos_server
-  scm_size: 1000000000
+  scm_size: 1GB
   control_method: dmg
   pool_count: 1
 container:

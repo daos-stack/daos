@@ -15,6 +15,6 @@ timeout: 360
 server_config:
   name: daos_server
 server:
-  scm_size: 138000000
+  scm_size: 138MB
   num_of_pool: 3
   container_per_pool: 2

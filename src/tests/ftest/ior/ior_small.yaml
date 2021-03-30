@@ -28,8 +28,8 @@ dmg:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 3000000000
-    nvme_size: 9000000000
+    scm_size: 3GB
+    nvme_size: 9GB
     control_method: dmg
 container:
     type: POSIX

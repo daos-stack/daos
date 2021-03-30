@@ -15,7 +15,7 @@ server_config:
 pool:
     mode: 511
     name: daos_server
-    scm_size: 3000000000
-    nvme_size: 9000000000
+    scm_size: 3GB
+    nvme_size: 9GB
     svcn: 1
     control_method: dmg

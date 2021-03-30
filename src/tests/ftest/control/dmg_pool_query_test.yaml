@@ -47,7 +47,7 @@ exp_vals:
   scm:
     total: 32G
   nvme:
-    total: 1G
+    total: 16G
   rebuild:
     rebuild_status: 0
     state: "idle"

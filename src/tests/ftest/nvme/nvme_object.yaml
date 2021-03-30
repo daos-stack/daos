@@ -35,7 +35,7 @@ pool:
   createset:
     group: daos_server
   createsize:
-    scm_size: 4000000000
+    scm_size: 4GB
     size:
       - 20000000000
       - 100000000000
