@@ -391,7 +391,7 @@ boolean skip_bandit_check() {
 
 boolean skip_build_on_centos7_bullseye() {
     return  env.NO_CI_TESTING == 'true' ||
-            skip_stage('bullseye', false) ||
+            skip_stage('bullseye', true) ||
             quick_functional()
 }
 
@@ -1506,8 +1506,8 @@ pipeline {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
                         cloverReportPublish coverage_stashes: ['centos7-covc-unit-cov'],
-                                            coverage_healthy: [methodCoverage: 90,
-                                                               conditionalCoverage: 90,
+                                            coverage_healthy: [methodCoverage: 0,
+                                                               conditionalCoverage: 0,
                                                                statementCoverage: 0],
                                             ignore_failure: true
                     }
