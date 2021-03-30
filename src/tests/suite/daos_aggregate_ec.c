@@ -287,8 +287,8 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 		assert_int_equal(!parity[i], 0);
 	}
 
-	ec_setup_single_recx_data(ctx, EC_SPECIFIED, 0, k * len, 0, false,
-				  false, 0);
+	ec_setup_single_recx_data(ctx, EC_SPECIFIED, 0, (daos_size_t)k * len, 0,
+				  false, false, 0);
 	if (shard > 2)
 		iov_update_fill(ctx->update_sgl.sg_iovs, 1, len, true);
 

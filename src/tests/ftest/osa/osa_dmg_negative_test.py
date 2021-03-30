@@ -21,7 +21,7 @@ class OSADmgNegativeTest(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSADmgNegativeTest, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",
@@ -98,33 +98,33 @@ class OSADmgNegativeTest(OSAUtils):
                                                           scm_size,
                                                           nvme_size)
                     self.log.info(output)
-                    self.validate_results(expected_result, output.stdout)
-                if (extend is False and (rank == "4" or rank == "5")):
+                    self.validate_results(expected_result, output.stdout_text)
+                if (extend is False and rank in ["4","5"]):
                     continue
                 # Exclude a rank, target
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                        rank,
                                                        target)
                 self.log.info(output)
-                self.validate_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout_text)
                 # Now reintegrate the excluded rank.
                 output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                            rank,
                                                            target)
                 self.log.info(output)
-                self.validate_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout_text)
                 # Drain the data from a rank
                 output = self.dmg_command.pool_drain(self.pool.uuid,
                                                      rank,
                                                      target)
                 self.log.info(output)
-                self.validate_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout_text)
                 # Now reintegrate the drained rank
                 output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                            rank,
                                                            target)
                 self.log.info(output)
-                self.validate_results(expected_result, output.stdout)
+                self.validate_results(expected_result, output.stdout_text)
 
     def test_osa_dmg_cmd_without_extend(self):
         """

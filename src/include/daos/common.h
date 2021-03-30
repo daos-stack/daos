@@ -41,6 +41,7 @@
 #include <daos_security.h>
 #include <daos/profile.h>
 #include <daos/dtx.h>
+#include <daos/cmd_parser.h>
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -227,6 +228,12 @@ daos_getntime_coarse(void)
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
 	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
+static inline uint64_t
+daos_getmtime_coarse(void)
+{
+	return daos_getntime_coarse() / NSEC_PER_MSEC;
 }
 
 static inline uint64_t
@@ -734,6 +741,9 @@ enum {
 #define DAOS_VOS_NON_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x92)
 #define DAOS_VOS_AGG_BLOCKED		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x93)
 
+#define DAOS_VOS_GC_CONT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x94)
+#define DAOS_VOS_GC_CONT_NULL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x95)
+
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
@@ -877,5 +887,14 @@ daos_anchor_is_zero(daos_anchor_t *anchor)
 
 /* default debug log file */
 #define DAOS_LOG_DEFAULT	"/tmp/daos.log"
+
+#ifdef NEED_EXPLICIT_BZERO
+/* Secure memory scrub */
+static inline void
+explicit_bzero(void *s, size_t count) {
+	memset(s, 0, count);
+	asm volatile("" :  : "r"(s) : "memory");
+}
+#endif /* NEED_EXPLICIT_BZERO */
 
 #endif /* __DAOS_COMMON_H__ */

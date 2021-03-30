@@ -46,8 +46,8 @@
 enum {
 	/** minimum log file size is 1MB */
 	LOG_SIZE_MIN	= (1ULL << 20),
-	/** default log file size is 1GB */
-	LOG_SIZE_DEF	= (1ULL << 30),
+	/** default log file size is 2GB */
+	LOG_SIZE_DEF	= (1ULL << 31),
 };
 
 /**
@@ -774,6 +774,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	uint64_t	log_size = LOG_SIZE_DEF;
 	int		pri;
 
+	memset(&mst, 0, sizeof(mst));
 	mst.flush_pri = DLOG_WARN;
 
 	env = getenv(D_LOG_FLUSH_ENV);
@@ -817,7 +818,6 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		goto early_error;
 	}
 	/* init working area so we can use dlog_cleanout to bail out */
-	memset(&mst, 0, sizeof(mst));
 	mst.log_fd = -1;
 	mst.log_old_fd = -1;
 	/* start filling it in */
