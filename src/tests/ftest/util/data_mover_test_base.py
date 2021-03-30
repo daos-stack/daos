@@ -410,10 +410,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.set_fs_copy_params(src_type, src_path, src_pool, src_cont,
                                     dst_type, dst_path, dst_pool, dst_cont)
         elif self.tool == "CONT_CLONE":
-            assert src_type in (None, "DAOS", "DAOS_UUID")
-            assert src_path is None
-            assert dst_type in (None, "DAOS", "DAOS_UUID")
-            assert dst_path is None
+            assert src_type in (None, "DAOS", "DAOS_UUID") # nosec
+            assert src_path is None # nosec
+            assert dst_type in (None, "DAOS", "DAOS_UUID") # nosec
+            assert dst_path is None # nosec
             self.set_cont_clone_params(src_pool, src_cont,
                                        dst_pool, dst_cont)
         else:
