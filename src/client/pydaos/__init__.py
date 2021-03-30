@@ -8,9 +8,9 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 
 import sys
 import atexit
-# pylint: disable=import-error
+# pylint: disable=relative-beyond-top-level
 from . import pydaos_shim
-# pylint: enable=import-error
+# pylint: enable=relative-beyond-top-level
 
 DAOS_MAGIC = 0x7A89
 

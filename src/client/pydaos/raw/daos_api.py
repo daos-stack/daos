@@ -6,9 +6,9 @@
 """
 # pylint: disable=pylint-too-many-lines
 
-# pylint: disable=import-error
-from .. import pydaos_shim as pydaos_shim
-# pylint: enable=import-error
+# pylint: disable=relative-beyond-top-level
+from .. import pydaos_shim
+# pylint: enable=relative-beyond-top-level
 
 import ctypes
 import threading

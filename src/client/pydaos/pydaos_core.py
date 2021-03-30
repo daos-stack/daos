@@ -11,9 +11,9 @@ import uuid
 import pickle
 import sys
 
-# pylint: disable=no-name-in-module
+# pylint: disable=relative-beyond-top-level
 from . import pydaos_shim
-# pylint: enable=no-name-in-module
+# pylint: enable=relative-beyond-top-level
 
 from . import DAOS_MAGIC
 from . import PyDError
