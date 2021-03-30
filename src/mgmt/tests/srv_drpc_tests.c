@@ -13,6 +13,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <daos/tests_lib.h>
 #include <daos/drpc.h>
 #include <daos_pool.h>
 #include <daos_security.h>
@@ -158,7 +159,7 @@ get_valid_acl(void)
 {
 	struct daos_acl	*acl = NULL;
 
-	assert_int_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR, &acl), 0);
+	assert_rc_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR, &acl), 0);
 
 	return acl;
 }
@@ -1112,9 +1113,9 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	assert_non_null(pq_resp);
 	assert_int_equal(pq_resp->status, 0);
 	assert_string_equal(pq_resp->uuid, TEST_UUID);
-	assert_int_equal(pq_resp->totaltargets, exp_info->pi_ntargets);
-	assert_int_equal(pq_resp->disabledtargets, exp_info->pi_ndisabled);
-	assert_int_equal(pq_resp->activetargets,
+	assert_int_equal(pq_resp->total_targets, exp_info->pi_ntargets);
+	assert_int_equal(pq_resp->disabled_targets, exp_info->pi_ndisabled);
+	assert_int_equal(pq_resp->active_targets,
 			 exp_info->pi_space.ps_ntargets);
 
 	assert_non_null(pq_resp->scm);
@@ -2153,5 +2154,5 @@ main(void)
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_success),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("mgmt_srv_drpc", tests, NULL, NULL);
 }

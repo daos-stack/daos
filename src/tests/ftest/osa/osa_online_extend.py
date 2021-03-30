@@ -8,18 +8,12 @@ import time
 import threading
 
 from itertools import product
-from apricot import skipForTicket
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+from apricot import skipForTicket
+import queue
 
 
 class OSAOnlineExtend(OSAUtils):
@@ -32,7 +26,7 @@ class OSAOnlineExtend(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOnlineExtend, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
@@ -154,9 +148,8 @@ class OSAOnlineExtend(OSAUtils):
             display_string = "Pool{} space at the End".format(val)
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
-            pool[val].destroy()
 
-    @skipForTicket("DAOS-5869")
+    @skipForTicket("DAOS-6555")
     def test_osa_online_extend(self):
         """Test ID: DAOS-4751
         Test Description: Validate Online extend

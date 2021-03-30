@@ -132,6 +132,7 @@ def define_mercury(reqs):
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
                           '--disable-efa ' +
+                          '--without-gdrcopy ' +
                           OFI_DEBUG +
                           exclude(reqs, 'psm2',
                                   '--enable-psm2' +
@@ -209,9 +210,6 @@ def define_common(reqs):
     reqs.define('python34_devel', headers=['python3.4m/Python.h'],
                 package='python34-devel')
 
-    reqs.define('python27_devel', headers=['python2.7/Python.h'],
-                package='python-devel')
-
     reqs.define('libelf', headers=['libelf.h'], package='elfutils-libelf-devel')
 
     reqs.define('tbbmalloc', libs=['tbbmalloc_proxy'], package='tbb-devel')
@@ -219,7 +217,7 @@ def define_common(reqs):
     reqs.define('jemalloc', libs=['jemalloc'], package='jemalloc-devel')
 
     reqs.define('boost', headers=['boost/preprocessor.hpp'],
-                package='boost-devel')
+                package='boost-python36-devel')
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
@@ -287,7 +285,8 @@ def define_components(reqs):
                 commands=['git clean -dxf',
                           './autogen.sh',
                           './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
-                          ' --enable-valgrind',
+                          ' --enable-valgrind'
+                          ' --enable-stack-unwind',
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],
                 requires=['valgrind_devel'],
@@ -300,11 +299,14 @@ def define_components(reqs):
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['./configure --prefix="$SPDK_PREFIX"' \
-                          ' --disable-tests --without-vhost --without-crypto' \
-                          ' --without-pmdk --without-vpp --without-rbd' \
-                          ' --with-rdma --with-shared' \
-                          ' --without-iscsi-initiator --without-isal' \
+                commands=['cd dpdk; '                            \
+                          'git fetch; '                          \
+                          'git checkout origin/spdk-19.11.6',    \
+                          './configure --prefix="$SPDK_PREFIX"'                \
+                          ' --disable-tests --without-vhost --without-crypto'  \
+                          ' --without-pmdk --without-vpp --without-rbd'        \
+                          ' --with-rdma --with-shared'                         \
+                          ' --without-iscsi-initiator --without-isal'          \
                           ' --without-vtune', 'make $JOBS_OPT', 'make install',
                           'cp dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',

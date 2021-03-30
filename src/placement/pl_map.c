@@ -149,6 +149,27 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    uint32_t rebuild_ver, uint32_t *tgt_rank,
 		    uint32_t *shard_id, unsigned int array_size)
 {
+	struct daos_oclass_attr *oc_attr;
+
+	D_ASSERT(map->pl_ops != NULL);
+
+	oc_attr = daos_oclass_attr_find(md->omd_id);
+	if (daos_oclass_grp_size(oc_attr) == 1)
+		return 0;
+
+	if (!map->pl_ops->o_obj_find_rebuild)
+		return -DER_NOSYS;
+
+	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, rebuild_ver,
+					       tgt_rank, shard_id, array_size);
+}
+
+int
+pl_obj_find_drain(struct pl_map *map, struct daos_obj_md *md,
+		  struct daos_obj_shard_md *shard_md,
+		  uint32_t rebuild_ver, uint32_t *tgt_rank,
+		  uint32_t *shard_id, unsigned int array_size)
+{
 	D_ASSERT(map->pl_ops != NULL);
 
 	if (!map->pl_ops->o_obj_find_rebuild)
@@ -164,13 +185,19 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		    uint32_t reint_ver, uint32_t *tgt_rank,
 		    uint32_t *shard_id, unsigned int array_size)
 {
+	struct daos_oclass_attr *oc_attr;
+
 	D_ASSERT(map->pl_ops != NULL);
+
+	oc_attr = daos_oclass_attr_find(md->omd_id);
+	if (daos_oclass_grp_size(oc_attr) == 1)
+		return 0;
 
 	if (!map->pl_ops->o_obj_find_reint)
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_reint(map, md, shard_md, reint_ver,
-					       tgt_rank, shard_id, array_size);
+					     tgt_rank, shard_id, array_size);
 }
 
 int
@@ -199,7 +226,7 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 /* Returns whether or not a given layout contains the specified rank */
 bool
 pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
-		       uint32_t rank, uint32_t target_index)
+		       uint32_t rank, uint32_t target_index, uint32_t id_shard)
 {
 	struct pool_target *target;
 	int i;
@@ -211,7 +238,7 @@ pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
 		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
 					  &target);
 		if (rc != 0 && target->ta_comp.co_rank == rank &&
-		    target->ta_comp.co_index == target_index)
+		    target->ta_comp.co_index == target_index && i == id_shard)
 			return true; /* Found a target and rank matches */
 	}
 
@@ -314,8 +341,8 @@ static pthread_rwlock_t		pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /** hash table for placement maps */
 static struct d_hash_table	pl_htable;
 
-#define DSR_RING_DOMAIN         PO_COMP_TP_RACK
-#define DSR_JUMP_MAP_DOMAIN      PO_COMP_TP_RACK
+/** XXX should be fetched from property */
+#define PL_DEFAULT_DOMAIN	PO_COMP_TP_NODE
 
 static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
@@ -328,12 +355,12 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 
 	case PL_TYPE_RING:
 		mia->ia_type         = PL_TYPE_RING;
-		mia->ia_ring.domain  = DSR_RING_DOMAIN;
+		mia->ia_ring.domain  = PL_DEFAULT_DOMAIN;
 		mia->ia_ring.ring_nr = 1;
 		break;
 	case PL_TYPE_JUMP_MAP:
 		mia->ia_type            = PL_TYPE_JUMP_MAP;
-		mia->ia_jump_map.domain = DSR_JUMP_MAP_DOMAIN;
+		mia->ia_jump_map.domain = PL_DEFAULT_DOMAIN;
 	}
 }
 
@@ -486,7 +513,14 @@ out:
 void
 pl_map_disconnect(uuid_t uuid)
 {
-	d_list_t        *link;
+	d_list_t *link;
+
+	/*
+	 * FIXME: DAOS-6763 Check if pl_htable is already finalized.
+	 * It can be called from ds_pool_hdl_hash_fini() after pl_fini().
+	 */
+	if (pl_htable.ht_ops == NULL)
+		return;
 
 	D_RWLOCK_WRLOCK(&pl_rwlock);
 	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
@@ -610,10 +644,13 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	}
 
 	replicas = oc_attr->u.rp.r_num;
-	if (replicas == DAOS_OBJ_REPL_MAX)
-		replicas = grp_size;
+	if (replicas == DAOS_OBJ_REPL_MAX) {
+		D_ASSERT(grp_idx == 0);
 
-	if (replicas < 1)
+		replicas = grp_size;
+	}
+
+	if (replicas < 1 || replicas > grp_size)
 		return -DER_INVAL;
 
 	if (replicas == 1) {
@@ -644,7 +681,7 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	 *      to avoid leader switch.
 	 */
 	start = grp_idx * grp_size;
-	replica_idx = (oid.lo + grp_idx) % grp_size;
+	replica_idx = (oid.lo + grp_idx) % replicas;
 	for (i = 0, pos = -1; i < replicas;
 	     i++, replica_idx = (replica_idx + 1) % replicas) {
 		int off = start + replica_idx;

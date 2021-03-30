@@ -168,12 +168,17 @@ blob_cb(void *arg, int rc)
 static void
 blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 {
+	int	rc;
+
 	D_ASSERT(xs_ctxt != NULL);
 	if (xs_ctxt->bxc_tgt_id == -1) {
 		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
-		xs_poll_completion(xs_ctxt, &ba->bca_inflights);
+		rc = xs_poll_completion(xs_ctxt, &ba->bca_inflights, 0);
+		D_ASSERT(rc == 0);
 	} else {
-		ABT_eventual_wait(ba->bca_eventual, NULL);
+		rc = ABT_eventual_wait(ba->bca_eventual, NULL);
+		if (rc != ABT_SUCCESS)
+			D_ERROR("ABT eventual wait failed. %d", rc);
 	}
 }
 
@@ -315,7 +320,7 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 		D_DEBUG(DB_MGMT, "Successfully deleted blobID "DF_U64" for "
 			"pool:"DF_UUID" xs:%p\n", blob_id, DP_UUID(uuid),
 			xs_ctxt);
-		rc = smd_pool_unassign(uuid, xs_ctxt->bxc_tgt_id);
+		rc = smd_pool_del_tgt(uuid, xs_ctxt->bxc_tgt_id);
 		if (rc)
 			D_ERROR("Failed to unassign blob:"DF_U64" from pool: "
 				""DF_UUID":%d. %d\n", blob_id, DP_UUID(uuid),
@@ -396,8 +401,8 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 			ba->bca_id, xs_ctxt, DP_UUID(uuid),
 			bma.bma_opts.num_clusters);
 
-		rc = smd_pool_assign(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id,
-				     blob_sz);
+		rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id,
+				      blob_sz);
 		if (rc != 0) {
 			D_ERROR("Failed to assign pool blob:"DF_U64" to pool: "
 				""DF_UUID":%d. %d\n", ba->bca_id, DP_UUID(uuid),
@@ -748,7 +753,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	}
 
 	uuid_copy(bio_bh->bbh_blobstore, dev_info->sdi_id);
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 
 	/* Create an iov to store blob header structure */
 	d_iov_set(&iov, (void *)bio_bh, sizeof(*bio_bh));

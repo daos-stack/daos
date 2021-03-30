@@ -108,9 +108,13 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 		if (grp_priv != NULL) {
 			grp_ref_taken = true;
 		} else {
-			D_ERROR("crt_grp_lookup_grpid: %s failed.\n",
-				co_hdr->coh_grpid);
-			D_GOTO(out, rc = -DER_INVAL);
+			/* the local SG does not match others SG, so let's
+			 * return GRPVER to retry until pool map is updated
+			 * or the pool is stopped.
+			 */
+			D_ERROR("crt_grp_lookup_grpid: %s failed: %d\n",
+				co_hdr->coh_grpid, -DER_GRPVER);
+			D_GOTO(out, rc = -DER_GRPVER);
 		}
 	}
 
@@ -502,14 +506,14 @@ corpc_del_child_rpc_locked(struct crt_rpc_priv *parent_rpc_priv,
 static inline void
 crt_corpc_fail_parent_rpc(struct crt_rpc_priv *parent_rpc_priv, int failed_rc)
 {
-	d_rank_t	 myrank;
-
-	crt_group_rank(NULL, &myrank);
-
 	parent_rpc_priv->crp_reply_hdr.cch_rc = failed_rc;
 	parent_rpc_priv->crp_corpc_info->co_rc = failed_rc;
-	D_ERROR("myrank %d, set parent rpc (opc %#x) as failed, rc: %d.\n",
-		myrank, parent_rpc_priv->crp_pub.cr_opc, failed_rc);
+	if (failed_rc != -DER_GRPVER)
+		RPC_ERROR(parent_rpc_priv,
+			  "Failing CORPC with rc=%d\n", failed_rc);
+	else
+		RPC_TRACE(DB_NET, parent_rpc_priv,
+			  "Failing CORPC with rc=%d\n", failed_rc);
 }
 
 static inline void
@@ -725,10 +729,14 @@ aggregate_done:
 	D_SPIN_UNLOCK(&parent_rpc_priv->crp_lock);
 
 	if (req_done) {
+		bool am_root;
+
 		RPC_ADDREF(parent_rpc_priv);
 		crt_corpc_complete(parent_rpc_priv);
 
-		if (co_ops && co_ops->co_post_reply)
+		am_root = (co_info->co_grp_priv->gp_self ==
+			   co_info->co_root);
+		if (co_ops && co_ops->co_post_reply && !am_root)
 			co_ops->co_post_reply(&parent_rpc_priv->crp_pub,
 					co_info->co_priv);
 		RPC_DECREF(parent_rpc_priv);

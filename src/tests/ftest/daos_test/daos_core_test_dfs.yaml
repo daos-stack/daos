@@ -12,10 +12,13 @@ hosts:
     - client-G
     - client-H
 timeout: 450
+timeouts:
+  test_daos_dfs_unit: 500
+  test_daos_dfs_parallel: 200
 pool:
   scm_size: 8G
 server_config:
-  servers_per_host: 2
+  engines_per_host: 2
   name: daos_server
   servers:
     0:
@@ -49,14 +52,12 @@ dmg:
   transport_config:
     allow_insecure: True
 daos_tests:
-  Tests:
-    test_daos_dfs_unit:
-      daos_test: u
-      num_clients: 1
-      test_name: DAOS_DFS_Unit
-      test_timeout: 250
-    test_daos_dfs_parallel:
-      daos_test: p
-      num_clients: 32
-      test_name: DAOS_DFS_Parallel
-      test_timeout: 200
+  test_name:
+    test_daos_dfs_unit: DAOS_DFS_Unit
+    test_daos_dfs_parallel: DAOS_DFS_Parallel
+  daos_test:
+    test_daos_dfs_unit: u
+    test_daos_dfs_parallel: p
+  num_clients:
+    test_daos_dfs_unit: 1
+    test_daos_dfs_parallel: 32

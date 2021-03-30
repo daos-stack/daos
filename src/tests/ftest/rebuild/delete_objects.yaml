@@ -20,6 +20,7 @@ pool:
   svcn: 2
   debug: True
   control_method: dmg
+  pool_query_timeout: 30
 container:
   akey_size: 5
   dkey_size: 5
@@ -35,4 +36,4 @@ container:
   debug: True
 rebuild:
   rank: 4
-  object_class: DAOS_OC_R3_RW
+  object_class: OC_RP_3G1

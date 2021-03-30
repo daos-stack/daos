@@ -8,6 +8,8 @@
  */
 #define D_LOGFAC	DD_FAC(rpc)
 
+#include <semaphore.h>
+
 #include "crt_internal.h"
 
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
@@ -47,7 +49,7 @@ crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
 		D_ERROR("Empty log message\n");
 		rc = -DER_INVAL;
 	} else {
-		D_INFO("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
+		D_EMIT("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
 		       in_args->log_msg);
 	}
 
@@ -187,6 +189,18 @@ static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 	CRT_FI_RPCS_LIST
 };
 
+static struct crt_proto_rpc_format crt_st_rpcs[] = {
+	CRT_ST_RPCS_LIST
+};
+
+static struct crt_proto_rpc_format crt_ctl_rpcs[] = {
+	CRT_CTL_RPCS_LIST
+};
+
+static struct crt_proto_rpc_format crt_iv_rpcs[] = {
+	CRT_IV_RPCS_LIST
+};
+
 #undef X
 
 #define X(a, b, c, d, e) case a: return #a;
@@ -199,18 +213,20 @@ char
 		return "SWIM";
 
 	switch (opc) {
-	CRT_INTERNAL_RPCS_LIST
-	CRT_FI_RPCS_LIST
-	default:
-		return "DAOS";
+		CRT_INTERNAL_RPCS_LIST
+		CRT_FI_RPCS_LIST
+		CRT_IV_RPCS_LIST
+		CRT_ST_RPCS_LIST
+		CRT_CTL_RPCS_LIST
 	}
+	return "DAOS";
 }
 
 #undef X
 
 /* CRT RPC related APIs or internal functions */
 int
-crt_internal_rpc_register(void)
+crt_internal_rpc_register(bool server)
 {
 	struct crt_proto_format	cpf;
 	int			rc;
@@ -223,10 +239,29 @@ crt_internal_rpc_register(void)
 
 	rc = crt_proto_register_internal(&cpf);
 	if (rc != 0) {
-		D_ERROR("crt_proto_register_internal() failed, " DF_RC "\n",
+		D_ERROR("crt_proto_register_internal() failed, "DF_RC"\n",
 			DP_RC(rc));
 		return rc;
 	}
+
+	/* TODO: The self-test protocols should not be registered on the client
+	 * by default.
+	 */
+
+	cpf.cpf_name  = "self-test";
+	cpf.cpf_ver   = CRT_PROTO_ST_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_st_rpcs);
+	cpf.cpf_prf   = crt_st_rpcs;
+	cpf.cpf_base  = CRT_OPC_ST_BASE;
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0) {
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	if (!server)
+		return -DER_SUCCESS;
 
 	cpf.cpf_name  = "fault-injection";
 	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;
@@ -235,8 +270,133 @@ crt_internal_rpc_register(void)
 	cpf.cpf_base  = CRT_OPC_FI_BASE;
 
 	rc = crt_proto_register(&cpf);
+	if (rc != 0) {
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	cpf.cpf_name  = "ctl";
+	cpf.cpf_ver   = CRT_PROTO_CTL_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_ctl_rpcs);
+	cpf.cpf_prf   = crt_ctl_rpcs;
+	cpf.cpf_base  = CRT_OPC_CTL_BASE;
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0) {
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	cpf.cpf_name  = "incast";
+	cpf.cpf_ver   = CRT_PROTO_IV_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_iv_rpcs);
+	cpf.cpf_prf   = crt_iv_rpcs;
+	cpf.cpf_base  = CRT_OPC_IV_BASE;
+
+	rc = crt_proto_register(&cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_register() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+
+	return rc;
+}
+
+struct crt_pfi {
+	int	pfi_ver;
+	int	pfi_rc;
+	sem_t	pfi_sem;
+};
+
+static void
+crt_pfi_cb(struct crt_proto_query_cb_info *cb_info)
+{
+	struct crt_pfi *pfi = cb_info->pq_arg;
+
+	pfi->pfi_rc = cb_info->pq_rc;
+	pfi->pfi_ver = cb_info->pq_ver;
+	sem_post(&pfi->pfi_sem);
+}
+
+/* Register the FI protocol against an endpoint.
+ * This is from client code, so pass in an endpoint, and query the target for
+ * what version it supports.  The client only supports one version so abort
+ * if there is any error.
+ */
+int
+crt_register_proto_fi(crt_endpoint_t *ep)
+{
+	struct crt_proto_format cpf;
+	struct crt_pfi	pfi = {};
+	int		rc;
+
+	cpf.cpf_name  = "fault-injection";
+	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_fi_rpcs);
+	cpf.cpf_prf   = crt_fi_rpcs;
+	cpf.cpf_base  = CRT_OPC_FI_BASE;
+
+	rc = sem_init(&pfi.pfi_sem, 0, 0);
+	if (rc != 0)
+		return -DER_MISC;
+
+	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver,
+			     1, crt_pfi_cb, &pfi);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, rc);
+
+	sem_wait(&pfi.pfi_sem);
+
+	if (pfi.pfi_rc != -DER_SUCCESS)
+		D_GOTO(out, rc = pfi.pfi_rc);
+
+	if (pfi.pfi_ver != cpf.cpf_ver)
+		D_GOTO(out, rc = -DER_MISMATCH);
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0)
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+
+out:
+	sem_destroy(&pfi.pfi_sem);
+
+	return rc;
+}
+
+int
+crt_register_proto_ctl(crt_endpoint_t *ep)
+{
+	struct crt_proto_format cpf;
+	struct crt_pfi	pfi = {};
+	int		rc;
+
+	cpf.cpf_name  = "ctl";
+	cpf.cpf_ver   = CRT_PROTO_CTL_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_ctl_rpcs);
+	cpf.cpf_prf   = crt_ctl_rpcs;
+	cpf.cpf_base  = CRT_OPC_CTL_BASE;
+
+	rc = sem_init(&pfi.pfi_sem, 0, 0);
+	if (rc != 0)
+		return -DER_MISC;
+
+	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver,
+			     1, crt_pfi_cb, &pfi);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, rc);
+
+	sem_wait(&pfi.pfi_sem);
+
+	if (pfi.pfi_rc != -DER_SUCCESS)
+		D_GOTO(out, rc = pfi.pfi_rc);
+
+	if (pfi.pfi_ver != cpf.cpf_ver)
+		D_GOTO(out, rc = -DER_MISMATCH);
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0)
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+
+out:
+	sem_destroy(&pfi.pfi_sem);
 
 	return rc;
 }
@@ -642,7 +802,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	char *fill_uri = NULL;
 
 	if (ul_in->ul_tag != ul_out->ul_tag) {
-		if (crt_provider_is_contig_ep(ctx->provider) == false) {
+		if (crt_provider_is_contig_ep(ctx->cc_provider) == false) {
 			rc = crt_issue_uri_lookup(lookup_rpc->cr_ctx,
 						  lookup_rpc->cr_ep.ep_grp,
 						  ul_in->ul_rank, 0,
@@ -1416,7 +1576,9 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	rpc_priv->crp_hdl_reuse = NULL;
 	rpc_priv->crp_srv = srv_flag;
 	rpc_priv->crp_ul_retry = 0;
-	/* initialize as 1, so user can cal crt_req_decref to destroy new req */
+	/**
+	 * initialized to 1, so user can call crt_req_decref to destroy new req
+	 */
 	rpc_priv->crp_refcount = 1;
 
 	rpc_priv->crp_pub.cr_opc = opc;
@@ -1529,6 +1691,12 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 					crt_ctx->cc_rpc_cb_arg);
 	} else {
 		rpc_priv->crp_opc_info->coi_rpc_cb(&rpc_priv->crp_pub);
+		/*
+		 * Correspond to crt_rpc_handler_common -> crt_rpc_priv_init's
+		 * set refcount as 1.
+		 */
+		if (rpc_priv->crp_srv)
+			RPC_DECREF(rpc_priv);
 	}
 
 out:

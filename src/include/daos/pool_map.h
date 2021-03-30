@@ -14,6 +14,13 @@
 
 #include <daos/common.h>
 
+#define POOL_MAP_VER_1		(1)
+#define POOL_MAP_VERSION	POOL_MAP_VER_1
+
+#define DF_TARGET "Target[%d] (rank %u idx %u status %u)"
+#define DP_TARGET(t) t->ta_comp.co_id, t->ta_comp.co_rank, t->ta_comp.co_index,\
+		     t->ta_comp.co_status
+
 /**
  * pool component types
  */
@@ -21,8 +28,6 @@ typedef enum pool_comp_type {
 	PO_COMP_TP_UNKNOWN	= 0,
 	PO_COMP_TP_ROOT		= 1,
 	PO_COMP_TP_RACK		= 10,
-	PO_COMP_TP_BLADE	= 20,
-	PO_COMP_TP_BOARD	= 30,
 	PO_COMP_TP_NODE		= 40,
 	PO_COMP_TP_TARGET	= 50,
 	/* TODO: more types */
@@ -45,6 +50,15 @@ typedef enum pool_comp_state {
 	PO_COMP_ST_DRAIN	= 1 << 5,
 } pool_comp_state_t;
 
+enum pool_component_flags {
+	PO_COMPF_NONE		= 0,
+	/**
+	 * indicate when in status PO_COMP_ST_DOWNOUT, it is changed from
+	 * PO_COMP_ST_DOWN (rather than from PO_COMP_ST_DRAIN).
+	 */
+	PO_COMPF_DOWN2OUT	= 1,
+};
+
 /** parent class of all all pool components: target, domain */
 struct pool_component {
 	/** pool_comp_type_t */
@@ -64,6 +78,13 @@ struct pool_component {
 	uint32_t		co_ver;
 	/** failure sequence */
 	uint32_t		co_fseq;
+	/**
+	 * version it's been EXCLUDE_OUT (when status set to
+	 * PO_COMP_ST_DOWNOUT).
+	 */
+	uint32_t		co_out_ver;
+	/** flags, see enum pool_component_flags */
+	uint32_t		co_flags;
 	/** number of children or storage partitions */
 	uint32_t		co_nr;
 };
@@ -128,6 +149,10 @@ pool_target_id_list_free(struct pool_target_id_list *id_list);
  * or all components of a pool map.
  */
 struct pool_buf {
+	/** format version */
+	uint32_t		pb_version;
+	/** reserved, for alignment now */
+	uint32_t		pb_reserved;
 	/** checksum of components */
 	uint32_t		pb_csum;
 	/** summary of domain_nr, node_nr, target_nr, buffer size */
@@ -161,7 +186,7 @@ int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
 int gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		int map_version, int ndomains, int nnodes, int ntargets,
-		const int32_t *domains, uuid_t target_uuids[],
+		const uint32_t *domains, uuid_t target_uuids[],
 		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
 		uint32_t dss_tgt_nr);
 
@@ -288,6 +313,12 @@ pool_target_unavail(struct pool_target *tgt, bool for_reint)
 	return pool_component_unavail(&tgt->ta_comp, for_reint);
 }
 
+static inline bool
+pool_target_avail(struct pool_target *tgt, uint32_t allow_status)
+{
+	return tgt->ta_comp.co_status & allow_status;
+}
+
 /** Check if the target is in PO_COMP_ST_DOWN status */
 static inline bool
 pool_target_down(struct pool_target *tgt)
@@ -298,6 +329,7 @@ pool_target_down(struct pool_target *tgt)
 	return (status == PO_COMP_ST_DOWN);
 }
 
+int pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rf);
 pool_comp_state_t pool_comp_str2state(const char *name);
 const char *pool_comp_state2str(pool_comp_state_t state);
 

@@ -147,16 +147,19 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 		goto exit_0;
 	}
 
-	rc = vos_init();
+	rc = vos_self_init("/mnt/daos");
 	if (rc) {
 		goto exit_1;
 	}
 
 	FOREACH_TYPE(CHECK_CALL)
 
-	d_write_string_buffer(buf, "---\n# VOS tree overheads\n"
-		"root: %d\nscm_cutoff: %d\n", vos_pool_get_msize(),
-		vos_pool_get_scm_cutoff());
+	d_write_string_buffer(buf, "---\n# VOS tree overheads\n");
+	d_write_string_buffer(buf, "root: %d\n", vos_pool_get_msize());
+	d_write_string_buffer(buf, "container: %d\n",
+			      vos_container_get_msize());
+	d_write_string_buffer(buf, "scm_cutoff: %d\n",
+			      vos_pool_get_scm_cutoff());
 
 	FOREACH_TYPE(PRINT_DYNAMIC)
 	d_write_string_buffer(buf, "trees:\n");
@@ -174,7 +177,7 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 	}
 
 exit_2:
-	vos_fini();
+	vos_self_fini();
 exit_1:
 	daos_debug_fini();
 exit_0:

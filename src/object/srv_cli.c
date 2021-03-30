@@ -17,7 +17,7 @@
 #include <daos_errno.h>
 #include <daos_event.h>
 #include <daos_task.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 
 static int
 dsc_obj_retry_cb(tse_task_t *task, void *arg)
@@ -105,7 +105,7 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, DAOS_TF_RDONLY, &th);
+	rc = dc_tx_local_open(coh, epoch, 0, &th);
 	if (rc)
 		return rc;
 
@@ -127,20 +127,21 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 int
 dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	      unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
-	      daos_iom_t *maps, uint32_t extra_flag, uint32_t *extra_arg)
+	      daos_iom_t *maps, uint32_t extra_flag, uint32_t *extra_arg,
+	      d_iov_t *csum_iov)
 {
 	tse_task_t	*task;
 	daos_handle_t	coh, th;
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, DAOS_TF_RDONLY, &th);
+	rc = dc_tx_local_open(coh, epoch, 0, &th);
 	if (rc)
 		return rc;
 
 	rc = dc_obj_fetch_task_create(oh, th, 0, dkey, nr, extra_flag,
-				      iods, sgls, maps, extra_arg, NULL,
-				      dsc_scheduler(), &task);
+				      iods, sgls, maps, extra_arg, csum_iov,
+				      NULL, dsc_scheduler(), &task);
 	if (rc)
 		return rc;
 

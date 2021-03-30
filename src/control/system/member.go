@@ -10,7 +10,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
@@ -73,6 +75,31 @@ func (ms MemberState) String() string {
 	}
 }
 
+func memberStateFromString(in string) MemberState {
+	switch strings.ToLower(in) {
+	case "awaitformat":
+		return MemberStateAwaitFormat
+	case "starting":
+		return MemberStateStarting
+	case "ready":
+		return MemberStateReady
+	case "joined":
+		return MemberStateJoined
+	case "stopping":
+		return MemberStateStopping
+	case "stopped":
+		return MemberStateStopped
+	case "evicted":
+		return MemberStateEvicted
+	case "errored":
+		return MemberStateErrored
+	case "unresponsive":
+		return MemberStateUnresponsive
+	default:
+		return MemberStateUnknown
+	}
+}
+
 // isTransitionIllegal indicates if given state transitions is legal.
 //
 // Map state combinations to true (illegal) or false (legal) and return negated
@@ -84,6 +111,7 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 	if ms == to {
 		return true // identical state
 	}
+
 	return map[MemberState]map[MemberState]bool{
 		MemberStateAwaitFormat: {
 			MemberStateEvicted: true,
@@ -121,14 +149,14 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 // Member refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
-	Rank           Rank
-	UUID           uuid.UUID
-	Addr           *net.TCPAddr
-	FabricURI      string
-	FabricContexts uint32
+	Rank           Rank         `json:"rank"`
+	UUID           uuid.UUID    `json:"uuid"`
+	Addr           *net.TCPAddr `json:"addr"`
+	FabricURI      string       `json:"fabric_uri"`
+	FabricContexts uint32       `json:"fabric_contexts"`
 	state          MemberState
-	Info           string
-	FaultDomain    *FaultDomain
+	Info           string       `json:"info"`
+	FaultDomain    *FaultDomain `json:"fault_domain"`
 }
 
 // MarshalJSON marshals system.Member to JSON.
@@ -141,13 +169,13 @@ func (sm *Member) MarshalJSON() ([]byte, error) {
 	// most fields
 	type toJSON Member
 	return json.Marshal(&struct {
-		Addr        string
-		State       int
-		FaultDomain string
+		Addr        string `json:"addr"`
+		State       string `json:"state"`
+		FaultDomain string `json:"fault_domain"`
 		*toJSON
 	}{
 		Addr:        sm.Addr.String(),
-		State:       int(sm.state),
+		State:       strings.ToLower(sm.state.String()),
 		FaultDomain: sm.FaultDomain.String(),
 		toJSON:      (*toJSON)(sm),
 	})
@@ -163,9 +191,9 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	// most fields
 	type fromJSON Member
 	from := &struct {
-		Addr        string
-		State       int
-		FaultDomain string
+		Addr        string `json:"addr"`
+		State       string `json:"state"`
+		FaultDomain string `json:"fault_domain"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sm),
@@ -181,7 +209,7 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	}
 	sm.Addr = addr
 
-	sm.state = MemberState(from.State)
+	sm.state = memberStateFromString(from.State)
 
 	fd, err := NewFaultDomainFromString(from.FaultDomain)
 	if err != nil {
@@ -213,12 +241,6 @@ func (sm *Member) WithFaultDomain(fd *FaultDomain) *Member {
 	return sm
 }
 
-// RankFaultDomain generates the fault domain representing this Member rank.
-func (sm *Member) RankFaultDomain() *FaultDomain {
-	rankDomain := fmt.Sprintf("rank%d", uint32(sm.Rank))
-	return sm.FaultDomain.MustCreateChild(rankDomain) // "rankX" string can't fail
-}
-
 // NewMember returns a reference to a new member struct.
 func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
 	// FIXME: Either require a valid uuid.UUID to be supplied
@@ -238,7 +260,7 @@ type MemberResult struct {
 	Action  string
 	Errored bool
 	Msg     string
-	State   MemberState
+	State   MemberState `json:"state"`
 }
 
 // MarshalJSON marshals system.MemberResult to JSON.
@@ -247,10 +269,10 @@ func (mr *MemberResult) MarshalJSON() ([]byte, error) {
 	// most fields
 	type toJSON MemberResult
 	return json.Marshal(&struct {
-		State int
+		State string `json:"state"`
 		*toJSON
 	}{
-		State:  int(mr.State),
+		State:  strings.ToLower(mr.State.String()),
 		toJSON: (*toJSON)(mr),
 	})
 }
@@ -265,7 +287,7 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 	// most fields
 	type fromJSON MemberResult
 	from := &struct {
-		State int
+		State string `json:"state"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(mr),
@@ -275,7 +297,7 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	mr.State = MemberState(from.State)
+	mr.State = memberStateFromString(from.State)
 
 	return nil
 }
@@ -283,11 +305,14 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 // NewMemberResult returns a reference to a new member result struct.
 //
 // Host address and action fields are not always used so not populated here.
-func NewMemberResult(rank Rank, err error, state MemberState) *MemberResult {
+func NewMemberResult(rank Rank, err error, state MemberState, action ...string) *MemberResult {
 	result := MemberResult{Rank: rank, State: state}
 	if err != nil {
 		result.Errored = true
 		result.Msg = err.Error()
+	}
+	if len(action) > 0 {
+		result.Action = action[0]
 	}
 
 	return &result
@@ -296,13 +321,24 @@ func NewMemberResult(rank Rank, err error, state MemberState) *MemberResult {
 // MemberResults is a type alias for a slice of member result references.
 type MemberResults []*MemberResult
 
-// HasErrors returns true if any of the member results errored.
-func (smr MemberResults) HasErrors() bool {
-	for _, res := range smr {
-		if res.Errored {
-			return true
+// Errors returns an error indicating if and which ranks failed.
+func (mrs MemberResults) Errors() error {
+	rs, err := CreateRankSet("")
+	if err != nil {
+		return err
+	}
+
+	for _, mr := range mrs {
+		if mr.Errored {
+			rs.Add(mr.Rank)
 		}
 	}
 
-	return false
+	if rs.Count() > 0 {
+		return errors.Errorf("failed %s %s",
+			english.PluralWord(rs.Count(), "rank", "ranks"),
+			rs.String())
+	}
+
+	return nil
 }

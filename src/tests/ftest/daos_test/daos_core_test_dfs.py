@@ -8,7 +8,9 @@
 import os
 from daos_core_base import DaosCoreBase
 
+
 class DaosCoreTestDfs(DaosCoreBase):
+    # pylint: disable=too-many-ancestors
     """Runs DAOS file system (DFS) tests.
 
     :avocado: recursive
@@ -16,11 +18,11 @@ class DaosCoreTestDfs(DaosCoreBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize the DaosCoreBase object."""
-        super(DaosCoreTestDfs, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.hostfile_clients_slots = None
 
     def test_daos_dfs_unit(self):
-        """Jira ID: DAOS-5409
+        """Jira ID: DAOS-5409.
 
         Test Description:
             Run daos_test -u
@@ -30,14 +32,13 @@ class DaosCoreTestDfs(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=dfs_test
-        :avocado: tags=daos_dfs_unit
+        :avocado: tags=daos_test,daos_core_test_dfs,test_daos_dfs_unit
         """
         self.daos_test = os.path.join(self.bin, 'dfs_test')
         self.run_subtest()
 
     def test_daos_dfs_parallel(self):
-        """Jira ID: DAOS-5409
+        """Jira ID: DAOS-5409.
 
         Test Description:
             Run daos_test -p
@@ -47,8 +48,7 @@ class DaosCoreTestDfs(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=dfs_test
-        :avocado: tags=daos_dfs_parallel
+        :avocado: tags=daos_test,daos_core_test_dfs,test_daos_dfs_parallel
         """
         self.daos_test = os.path.join(self.bin, 'dfs_test')
         self.run_subtest()

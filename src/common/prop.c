@@ -32,7 +32,7 @@ daos_prop_alloc(uint32_t entries_nr)
 	if (entries_nr > 0) {
 		D_ALLOC_ARRAY(prop->dpp_entries, entries_nr);
 		if (prop->dpp_entries == NULL) {
-			D_FREE_PTR(prop);
+			D_FREE(prop);
 			return NULL;
 		}
 	}
@@ -93,10 +93,11 @@ out:
 void
 daos_prop_free(daos_prop_t *prop)
 {
-	if (prop) {
-		daos_prop_fini(prop);
-		D_FREE_PTR(prop);
-	}
+	if (prop == NULL)
+		return;
+
+	daos_prop_fini(prop);
+	D_FREE(prop);
 }
 
 daos_prop_t *
@@ -239,6 +240,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		return false;
 	}
 	for (i = 0; i < prop->dpp_nr; i++) {
+		struct daos_co_status	co_status;
+
 		type = prop->dpp_entries[i].dpe_type;
 		if (pool) {
 			if (type <= DAOS_PROP_PO_MIN ||
@@ -362,6 +365,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_CO_ALLOCED_OID:
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_REDUN_RF0 &&
@@ -412,6 +417,15 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_CO_STATUS:
+			val = prop->dpp_entries[i].dpe_val;
+			daos_prop_val_2_co_status(val, &co_status);
+			if (co_status.dcs_status != DAOS_PROP_CO_HEALTHY &&
+			    co_status.dcs_status != DAOS_PROP_CO_UNCLEAN) {
+				D_ERROR("invalid container status %d\n",
+					co_status.dcs_status);
+				return false;
+			}
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 			break;
 		case DAOS_PROP_CO_ROOTS:

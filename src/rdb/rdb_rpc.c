@@ -14,7 +14,7 @@
 #include <daos_srv/rdb.h>
 
 #include <raft.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "rdb_internal.h"
 
 static int
@@ -274,7 +274,7 @@ rdb_recvd(void *arg)
 			}
 			if (stop)
 				break;
-			ABT_cond_wait(db->d_replies_cv, db->d_mutex);
+			sched_cond_wait(db->d_replies_cv, db->d_mutex);
 		}
 		ABT_mutex_unlock(db->d_mutex);
 		if (rrpc == NULL) {

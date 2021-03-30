@@ -12,7 +12,7 @@
 #define D_LOGFAC DD_FAC(rsvc)
 
 #include <sys/stat.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
 #include "rpc.h"
 
@@ -458,6 +458,15 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 			svc->s_name, term, DP_RC(rc));
 		if (map_distd_initialized)
 			drain_map_distd(svc);
+		/*
+		 * For certain harder-to-recover errors, trigger a replica stop
+		 * to avoid reporting them too many times. (A better strategy
+		 * would be to leave the replica running without ever
+		 * campaigning again, so that it could continue serving as a
+		 * follower to other replicas.)
+		 */
+		if (rc == -DER_DF_INCOMPT)
+			rc = -DER_SHUTDOWN;
 		goto out_mutex;
 	}
 
@@ -600,7 +609,7 @@ map_distd(void *arg)
 				svc->s_map_dist = false;
 				break;
 			}
-			ABT_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+			sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
 		}
 		ABT_mutex_unlock(svc->s_mutex);
 		if (stop)
@@ -634,15 +643,32 @@ ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 }
 
 static bool
+nominated(d_rank_list_t *replicas, uuid_t db_uuid)
+{
+	int i;
+
+	/* No initial membership. */
+	if (replicas == NULL || replicas->rl_nr < 1)
+		return false;
+
+	/* Only one replica. */
+	if (replicas->rl_nr == 1)
+		return true;
+
+	/*
+	 * Nominate by hashing the DB UUID. The only requirement is that every
+	 * replica shall end up with the same nomination.
+	 */
+	i = d_hash_murmur64(db_uuid, sizeof(uuid_t), 0x2db) % replicas->rl_nr;
+
+	return (replicas->rl_ranks[i] == dss_self_rank());
+}
+
+static bool
 self_only(d_rank_list_t *replicas)
 {
-	d_rank_t	self;
-	int		rc;
-
-	rc = crt_group_rank(NULL /* grp */, &self);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	return replicas != NULL && replicas->rl_nr == 1 &&
-	       replicas->rl_ranks[0] == self;
+	return (replicas != NULL && replicas->rl_nr == 1 &&
+		replicas->rl_ranks[0] == dss_self_rank());
 }
 
 static int
@@ -667,6 +693,20 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 		       &svc->s_db);
 	if (rc != 0)
 		goto err_creation;
+
+	/*
+	 * If creating a replica with an initial membership, we are
+	 * bootstrapping the DB (via sc_bootstrap or an external mechanism). If
+	 * we are the "nominated" replica, start a campaign without waiting for
+	 * the election timeout.
+	 */
+	if (create && nominated(replicas, db_uuid)) {
+		/* Give others a chance to get ready for voting. */
+		dss_sleep(1 /* ms */);
+		rc = rdb_campaign(svc->s_db);
+		if (rc != 0)
+			goto err_db;
+	}
 
 	if (create && self_only(replicas) &&
 	    rsvc_class(class)->sc_bootstrap != NULL) {
@@ -1202,7 +1242,7 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  * XXX excluded and ranks are a bit duplicate here, since this function only
  * suppose to send RPC to @ranks list, but cart does not have such interface
  * for collective RPC, so we have to use both ranks and exclued for the moment,
- * and it should be simplied once cart can provide rank list collective RPC.
+ * and it should be simplified once cart can provide rank list collective RPC.
  *
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID

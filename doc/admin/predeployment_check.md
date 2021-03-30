@@ -217,7 +217,7 @@ $ sudo ln -s $daospath/include \
 Low ulimit for memlock can cause SPDK to fail and emit the following error:
 
 ```bash
-daos_io_server:1 EAL: cannot set up DMA remapping, error 12 (Cannot allocate
+daos_engine:1 EAL: cannot set up DMA remapping, error 12 (Cannot allocate
     memory)
 ```
 

@@ -1064,7 +1064,7 @@ cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	type = daos_oclass_name2id(obj_class);
-	eio_arg->op_oid = dts_oid_gen(type, 0, arg->myrank);
+	eio_arg->op_oid = daos_test_oid_gen(arg->coh, type, 0, 0, arg->myrank);
 	if (type == DAOS_OC_R2S_SPEC_RANK || type == DAOS_OC_R3S_SPEC_RANK ||
 	    type == DAOS_OC_R1S_SPEC_RANK) {
 		if (rank == -1) {
@@ -1244,12 +1244,14 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 				print_message("bad parameter");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
-			arg->eio_args.op_oid = dts_oid_gen(dts_ec_obj_class, 0,
-							   arg->myrank);
+			arg->eio_args.op_oid = daos_test_oid_gen(arg->coh,
+							   dts_ec_obj_class,
+							   0, 0, arg->myrank);
 		} else if (strcmp(argv[1], "replica") == 0) {
 			arg->eio_args.op_ec = 0;
-			arg->eio_args.op_oid = dts_oid_gen(dts_obj_class, 0,
-							   arg->myrank);
+			arg->eio_args.op_oid = daos_test_oid_gen(arg->coh,
+							   dts_obj_class, 0,
+							   0, arg->myrank);
 			print_message("the test is for replica object.\n");
 		} else {
 			print_message("bad obj_class %s.\n", argv[1]);
@@ -1541,7 +1543,7 @@ epoch_io_predefined(void **state)
 				      test_io_conf, rc);
 		else
 			print_message("io_conf %s succeed.\n", test_io_conf);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		return;
 	}
 
@@ -1555,7 +1557,7 @@ epoch_io_predefined(void **state)
 		else
 			print_message("io_conf %s succeed.\n",
 				     predefined_io_confs[i]);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		test_eio_arg_oplist_free(arg);
 	}
 }
@@ -1579,7 +1581,8 @@ epoch_io_setup(void **state)
 	D_INIT_LIST_HEAD(&eio_arg->op_list);
 	eio_arg->op_lvl = TEST_LVL_DAOS;
 	eio_arg->op_iod_size = 1;
-	eio_arg->op_oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	eio_arg->op_oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0,
+				      arg->myrank);
 
 	/* generate the temporary IO dir for epoch IO test */
 	if (test_io_dir == NULL) {
@@ -1650,7 +1653,7 @@ run_daos_epoch_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	int rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS epoch I/O tests",
+	rc = cmocka_run_group_tests_name("DAOS_Epoch_IO",
 			epoch_io_tests, epoch_io_setup,
 			epoch_io_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);

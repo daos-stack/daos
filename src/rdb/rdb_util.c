@@ -13,7 +13,7 @@
 
 #include <daos_types.h>
 #include <daos_api.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include "rdb_internal.h"
 
@@ -172,7 +172,7 @@ rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 	if ((oid & RDB_OID_CLASS_MASK) != RDB_OID_CLASS_GENERIC)
 		feat = DAOS_OF_AKEY_UINT64;
 
-	daos_obj_generate_id(&uoid->id_pub, feat, 0 /* cid */, 0);
+	daos_obj_set_oid(&uoid->id_pub, feat, 0 /* cid */, 0);
 }
 
 void
@@ -356,7 +356,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	rc = bio_iod_post(vos_ioh2desc(io));
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 out:
-	rc = vos_fetch_end(io, 0 /* err */);
+	rc = vos_fetch_end(io, NULL, 0 /* err */);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	return rdb_vos_fetch_check(value, &value_orig);

@@ -735,7 +735,7 @@ dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp)
 /* For a given pool UUID, contact mgmt. service for up to date list
  * of pool service replica ranks. Note: synchronous RPC with caller already
  * in a task execution context. On successful return, caller is responsible
- * for freeing the d_rank_list_t allocated here.
+ * for freeing the d_rank_list_t allocated here. Must not be called by server.
  */
 int
 dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
@@ -753,10 +753,12 @@ dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
 	bool					success = false;
 	int					rc = 0;
 
+	D_ASSERT(sys->sy_server == 0);
+
 	/* NB: ms_ranks may have multiple entries even for single MS replica,
-	 * since there may be multiple ioservers there. Some of which may have
-	 * been stopped or faulted. May need to contact multiple ioservers.
-	 * Assumed: any MS replica ioserver can be contacted, even non-leaders.
+	 * since there may be multiple engines there. Some of which may have
+	 * been stopped or faulted. May need to contact multiple engines.
+	 * Assumed: any MS replica engine can be contacted, even non-leaders.
 	 */
 	ms_ranks = sys->sy_info.ms_ranks;
 	D_ASSERT(ms_ranks->rl_nr > 0);
