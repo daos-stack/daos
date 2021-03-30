@@ -32,7 +32,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	if (ie->ie_dfs->dfs_multi_user) {
 		rc = dfuse_get_uid(ie);
 		if (rc)
-			D_GOTO(out_decref, rc);
+			D_GOTO(out_err, rc);
 	}
 
 	/* Set the caching attributes of this entry */

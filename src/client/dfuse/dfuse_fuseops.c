@@ -683,7 +683,6 @@ struct dfuse_inode_ops dfuse_login_ops = {
 	.releasedir	= dfuse_cb_releasedir,
 	.getattr	= dfuse_cb_getattr,
 	.unlink		= dfuse_cb_unlink,
-	.readdir	= dfuse_cb_readdir,
 	.rename		= dfuse_cb_rename,
 	.setxattr	= dfuse_cb_setxattr,
 	.getxattr	= dfuse_cb_getxattr,
