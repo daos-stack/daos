@@ -96,7 +96,10 @@ ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
 	daos_prop_t	*props;
 	int		 rc;
 
-	props = daos_prop_alloc(7);
+	/* The provided prop entry types should cover the types used in
+	 * daos_props_2cont_props().
+	 */
+	props = daos_prop_alloc(9);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -107,6 +110,8 @@ ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
 	props->dpp_entries[4].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
 	props->dpp_entries[5].dpe_type = DAOS_PROP_CO_COMPRESS;
 	props->dpp_entries[6].dpe_type = DAOS_PROP_CO_ENCRYPT;
+	props->dpp_entries[7].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	props->dpp_entries[8].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
 
 	rc = cont_iv_prop_fetch(pool_ns, cont_uuid, props);
 
