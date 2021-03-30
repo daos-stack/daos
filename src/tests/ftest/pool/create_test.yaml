@@ -19,7 +19,7 @@ server_config:
   servers:
     0:
       bdev_class: nvme
-      bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0

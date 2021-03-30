@@ -12,7 +12,7 @@ server_config:
       nr_xs_helpers: 1
       log_file: daos_server0.log
       bdev_class: nvme
-      bdev_list: ["0000:81:00.0"]
+      bdev_list: ["aaaa:aa:aa.a"]
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0

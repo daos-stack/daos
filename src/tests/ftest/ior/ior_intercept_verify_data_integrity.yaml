@@ -15,7 +15,7 @@ server_config:
     servers:
         log_mask: INFO
         bdev_class: nvme
-        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
         #scm_size needed for tmpfs
         #scm_size: 35
         scm_class: dcpm

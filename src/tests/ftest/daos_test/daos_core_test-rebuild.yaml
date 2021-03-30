@@ -25,7 +25,7 @@ server_config:
       log_file: daos_server0.log
       # Uncomment when DAOS-4117 is fixed
       # bdev_class: nvme
-      # bdev_list: ["0000:81:00.0"]
+      # bdev_list: ["aaaa:aa:aa.a"]
       # scm_class: dcpm
       # scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
@@ -40,7 +40,7 @@ server_config:
       log_file: daos_server1.log
       # Uncomment when DAOS-4117 is fixed
       # bdev_class: nvme
-      # bdev_list: ["0000:da:00.0"]
+      # bdev_list: ["bbbb:bb:bb.b"]
       # scm_class: dcpm
       # scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1

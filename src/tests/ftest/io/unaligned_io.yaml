@@ -14,7 +14,7 @@ server_config:
   targets: 8
   servers:
    bdev_class: nvme
-   bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+   bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
    scm_class: dcpm
    scm_list: ["/dev/pmem0"]
 pool:

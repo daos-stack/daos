@@ -16,7 +16,7 @@ server_config:
       - FI_SOCKETS_CONN_TIMEOUT=2000
       - DD_MASK=all
     bdev_class: nvme
-    bdev_list: ["0000:81:00.0"]
+    bdev_list: ["aaaa:aa:aa.a"]
 pool:
   createmode:
     mode_RW:
