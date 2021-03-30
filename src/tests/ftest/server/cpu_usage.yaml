@@ -9,6 +9,13 @@ server_config:
     # 16 targets and 16 nr_xs_helpers are the requirements.
     targets: 16
     nr_xs_helpers: 16
+    interface:
+      fabric_iface: ib0
+      bdev_class: nvme
+      bdev_list: ["0000:00:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
 ior:
   client_processes:
     np: 1
@@ -17,6 +24,7 @@ ior:
   block_size: 1G
 pool:
   scm_size: 10G
+  nvme_size: 100G
   control_method: dmg
 container:
   type: POSIX
