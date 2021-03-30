@@ -663,7 +663,8 @@ out_buf:
 }
 
 static int
-create_cont(daos_handle_t poh, struct duns_attr_t *attrp, const char * path, bool backend_dfuse)
+create_cont(daos_handle_t poh, struct duns_attr_t *attrp,
+	    const char *path, bool backend_dfuse)
 {
 	int rc;
 
@@ -677,7 +678,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, const char * path, boo
 		dfs_attr.da_chunk_size = attrp->da_chunk_size;
 		dfs_attr.da_props = attrp->da_props;
 		rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
-				backend_dfuse ? &coh : NULL, NULL);
+				     backend_dfuse ? &coh : NULL, NULL);
 		if (rc == -DER_SUCCESS && backend_dfuse) {
 			rc = duns_set_fuse_acl(path, coh);
 			daos_cont_close(coh, NULL);
