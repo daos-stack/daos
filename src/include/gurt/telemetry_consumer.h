@@ -19,7 +19,7 @@ int d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats,
 int d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 		      uint64_t *shmem_root, struct d_tm_node_t *node,
 		      char *metric);
-int d_tm_get_metadata(char **sh_desc, char **lng_desc, uint64_t *shmem_root,
+int d_tm_get_metadata(char **desc, char **units, uint64_t *shmem_root,
 		      struct d_tm_node_t *node, char *metric);
 int d_tm_get_num_buckets(struct d_tm_histogram_t *histogram,
 			 uint64_t *shmem_root, struct d_tm_node_t *node);
@@ -42,14 +42,15 @@ void d_tm_print_node(uint64_t *shmem_root, struct d_tm_node_t *node, int level,
 		     char *name, int format, bool show_meta,
 		     bool show_timestamp, FILE *stream);
 void d_tm_print_field_descriptors(int extra_fields, FILE *stream);
-void d_tm_print_counter(uint64_t val, char *name, int format, FILE *stream);
+void d_tm_print_counter(uint64_t val, char *name, int format, char *units,
+			FILE *stream);
 void d_tm_print_timestamp(time_t *clk, char *name, int format, FILE *stream);
 void d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
 			       int format, FILE *stream);
 void d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 			 char *name, int tm_type, int format, FILE *stream);
 void d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
-		      int format, FILE *stream);
-void d_tm_print_metadata(char *short_desc, char *long_desc, int format,
+		      int format, char *units, FILE *stream);
+void d_tm_print_metadata(char *desc, char *units, int format,
 			 FILE *stream);
 #endif /* __TELEMETRY_CONSUMER_H__ */

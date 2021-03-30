@@ -45,6 +45,34 @@
  */
 #define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
+#define DAOS_AGG_LAZY_RATE	1000 /* ms */
+
+static inline bool
+agg_rate_ctl(void *arg)
+{
+	struct ds_cont_child	*cont = (struct ds_cont_child *)arg;
+	struct ds_pool		*pool = cont->sc_pool->spc_pool;
+	struct sched_request	*req = cont->sc_agg_req;
+
+	if (dss_ult_exiting(req))
+		return true;
+
+	switch (pool->sp_reclaim) {
+	case DAOS_RECLAIM_DISABLED:
+		return true;
+	case DAOS_RECLAIM_LAZY:
+		if (dss_xstream_is_busy() &&
+		    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE)
+			sched_req_sleep(req, DAOS_AGG_LAZY_RATE);
+		else
+			sched_req_yield(req);
+		return false;
+	default:
+		sched_req_yield(req);
+		return false;
+	}
+}
+
 static inline int
 cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		   daos_epoch_t hae, bool is_current)
@@ -60,8 +88,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
 
-	rc = ds_obj_ec_aggregate(cont, epr, dss_ult_yield,
-				 (void *)cont->sc_agg_req, is_current);
+	rc = ds_obj_ec_aggregate(cont, epr, agg_rate_ctl, cont, is_current);
 	if (rc) {
 		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN,
 			 DB_ANY, DLOG_ERR,
@@ -76,7 +103,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	if (cont->sc_ec_agg_eph_boundry > hae && is_current) {
 		epr->epr_hi = cont->sc_ec_agg_eph_boundry;
 		rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc,
-				   dss_ult_yield, (void *)cont->sc_agg_req);
+				   agg_rate_ctl, cont);
 	} else
 		rc = 2;
 

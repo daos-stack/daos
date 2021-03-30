@@ -155,17 +155,11 @@ func metricLabelsToStr(labels control.LabelMap) string {
 		return "N/A"
 	}
 
-	var b strings.Builder
+	labelStr := make([]string, 0, len(labels))
 
-	first := true
 	for _, k := range labels.Keys() {
-		if first {
-			first = false
-		} else {
-			b.WriteString(", ")
-		}
-		fmt.Fprintf(&b, "%s=%s", k, labels[k])
+		labelStr = append(labelStr, fmt.Sprintf("%s=%s", k, labels[k]))
 	}
 
-	return fmt.Sprintf("(%s)", b.String())
+	return fmt.Sprintf("(%s)", strings.Join(labelStr, ", "))
 }
