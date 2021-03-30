@@ -6,8 +6,6 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "dfs_test.h"
-#include "dfs_internal.h"
-#include <pthread.h>
 
 /** global DFS mount used for all tests */
 static uuid_t		co_uuid;
@@ -561,7 +559,7 @@ dfs_sys_test_read_write(void **state)
 }
 
 /**
- * Verify opendir + readdir.
+ * Verify opendir + readdir + closedir.
  */
 static void
 dfs_sys_test_open_readdir(void **state)
@@ -619,7 +617,7 @@ dfs_sys_test_open_readdir(void **state)
 }
 
 /**
- * Verify setxattr, listxattr, getxattr.
+ * Verify setxattr, listxattr, getxattr with and without O_NOFOLLOW.
  */
 static void
 dfs_sys_test_xattr(void **state)

@@ -176,7 +176,7 @@ dfs_sys_utimens(dfs_sys_t *dfs_sys, const char *path,
  *
  * \param[in]	dfs_sys Pointer to the mounted file system.
  * \param[in]	path	Link path of object.
- * \param[in]	stbuf	Stat struct with the members above filled.
+ * \param[out]	stbuf	Stat struct with the members above filled.
  * \param[in]	flags	Stat flags (O_NOFOLLOW).
  *
  * \return		0 on success, errno code on failure.
@@ -423,6 +423,7 @@ dfs_sys_opunch(dfs_sys_t *dfs_sys, dfs_obj_t *obj,
  * Remove an object identified by path. If object is a directory and is
  * non-empty; this will fail unless force option is true. If object is a
  * symlink, the symlink is removed.
+ * See dfs_remove() for details.
  *
  * \param[in]	dfs_sys Pointer to the mounted file system.
  * \param[in]	path	Link path of object.
@@ -438,6 +439,7 @@ dfs_sys_remove(dfs_sys_t *dfs_sys, const char *path, bool force,
 /**
  * Similar to dfs_sys_remove but optionally enforces a type check
  * on the entry.
+ *
  * \param[in]	dfs_sys Pointer to the mounted file system.
  * \param[in]	path	Link path of object.
  * \param[in]	force	If true, remove dir even if non-empty.

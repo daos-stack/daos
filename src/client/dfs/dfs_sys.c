@@ -161,7 +161,7 @@ static d_hash_table_ops_t hash_hdl_ops = {
  */
 /* TODO
  * We could recursively cache a path instead of blindly calling
- * dfs_lookup. For exampe, consider lookup on these paths in succession:
+ * dfs_lookup. For example, consider lookup on these paths in succession:
  *   dfs_lookup("/path/to/dir1")
  *   dfs_lookup("/path/to/dir2")
  * Internally, dfs_lookup will be fetching and iterating over the same
@@ -170,9 +170,6 @@ static d_hash_table_ops_t hash_hdl_ops = {
  *   dfs_lookup_rel("/path", "to")
  *   dfs_lookup_rel("/path/to", "dir1")
  *   dfs_lookup_rel("/path/to", "dir2")
- * Coupled with a more efficient custom parse_path function,
- * we could also reduce the intermediate allocations for each
- * recursive subpath.
  */
 static int
 hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
