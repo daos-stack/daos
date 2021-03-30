@@ -128,9 +128,6 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		MemberStateStopping: {
 			MemberStateReady: true,
 		},
-		MemberStateStopped: {
-			MemberStateEvicted: true,
-		},
 		MemberStateEvicted: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
