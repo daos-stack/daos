@@ -50,14 +50,18 @@ const (
 	PrivilegedHelperNotPrivileged
 	PrivilegedHelperNotAvailable
 	PrivilegedHelperRequestFailed
+)
 
+const (
 	// generic storage fault codes
 	StorageUnknown Code = iota + 100
 	StorageAlreadyFormatted
 	StorageFilesystemAlreadyMounted
 	StorageDeviceAlreadyMounted
 	StorageTargetAlreadyMounted
+)
 
+const (
 	// SCM fault codes
 	ScmUnknown Code = iota + 200
 	ScmFormatInvalidSize
@@ -69,7 +73,9 @@ const (
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
+)
 
+const (
 	// Bdev fault codes
 	BdevUnknown Code = iota + 300
 	BdevFormatUnknownClass
@@ -78,11 +84,15 @@ const (
 	BdevPCIAddressNotFound
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
+)
 
+const (
 	// DAOS system fault codes
 	SystemUnknown Code = iota + 400
 	SystemBadFaultDomainDepth
+)
 
+const (
 	// client fault codes
 	ClientUnknown Code = iota + 500
 	ClientConfigBadControlPort
@@ -93,7 +103,9 @@ const (
 	ClientConnectionRefused
 	ClientConnectionClosed
 	ClientFormatRunningSystem
+)
 
+const (
 	// server fault codes
 	ServerUnknown Code = iota + 600
 	ServerScmUnmanaged
@@ -111,7 +123,9 @@ const (
 	ServerInstancesNotStopped
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
+)
 
+const (
 	// server config fault codes
 	ServerConfigUnknown Code = iota + 700
 	ServerBadConfig
@@ -133,13 +147,17 @@ const (
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
+)
 
+const (
 	// SPDK library bindings codes
 	SpdkUnknown Code = iota + 800
 	SpdkCtrlrNoHealth
 	SpdkBindingRetNull
 	SpdkBindingFailed
+)
 
+const (
 	// security fault codes
 	SecurityUnknown Code = iota + 900
 )
