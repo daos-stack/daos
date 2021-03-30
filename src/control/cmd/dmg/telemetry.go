@@ -9,6 +9,7 @@ package main
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,12 +27,15 @@ import (
 	"golang.org/x/sys/unix"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 type telemCmd struct {
 	Configure telemConfigCmd `command:"config" description:"Configure telemetry"`
 	Run       telemRunCmd    `command:"run" description:"Launch telemetry system"`
+	Metrics   metricsCmd     `command:"metrics" description:"Interact with metrics"`
 }
 
 type telemConfigCmd struct {
@@ -331,4 +335,88 @@ func (cmd *telemRunCmd) Execute(_ []string) error {
 	default:
 		return errors.Errorf("unsupported telemetry system: %q", cmd.System)
 	}
+}
+
+// metricsCmd includes the commands that act directly on metrics on the DAOS hosts.
+type metricsCmd struct {
+	List  metricsListCmd  `command:"list" description:"List available metrics on a DAOS storage node"`
+	Query metricsQueryCmd `command:"query" description:"Query metrics on a DAOS storage node"`
+}
+
+// metricsListCmd provides a list of metrics available from the requested DAOS servers.
+type metricsListCmd struct {
+	logCmd
+	jsonOutputCmd
+	Host string `short:"s" long:"host" default:"localhost" description:"DAOS server host to query"`
+	Port uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
+}
+
+// Execute runs the command to list metrics from the DAOS storage nodes.
+func (cmd *metricsListCmd) Execute(args []string) error {
+	req := new(control.MetricsListReq)
+	req.Port = cmd.Port
+	req.Host = cmd.Host
+
+	if !cmd.shouldEmitJSON {
+		cmd.log.Info(getConnectingMsg(req.Host, req.Port))
+	}
+
+	resp, err := control.MetricsList(context.Background(), req)
+	if err != nil {
+		return err
+	}
+
+	if cmd.shouldEmitJSON {
+		return cmd.outputJSON(resp, err)
+	}
+
+	var b strings.Builder
+	err = pretty.PrintMetricsListResp(&b, resp)
+	if err != nil {
+		return err
+	}
+	cmd.log.Info(b.String())
+	return nil
+}
+
+func getConnectingMsg(host string, port uint32) string {
+	return fmt.Sprintf("connecting to %s:%d...", host, port)
+}
+
+// metricsQueryCmd collects the requested metrics from the requested DAOS servers.
+type metricsQueryCmd struct {
+	logCmd
+	jsonOutputCmd
+	Host    string `short:"s" long:"host" default:"localhost" description:"DAOS server host to query"`
+	Port    uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
+	Metrics string `short:"m" long:"metrics" default:"" description:"Comma-separated list of metric names"`
+}
+
+// Execute runs the command to query metrics from the DAOS storage nodes.
+func (cmd *metricsQueryCmd) Execute(args []string) error {
+	req := new(control.MetricsQueryReq)
+	req.Port = cmd.Port
+	req.Host = cmd.Host
+	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
+
+	if !cmd.shouldEmitJSON {
+		cmd.log.Info(getConnectingMsg(req.Host, req.Port))
+	}
+
+	resp, err := control.MetricsQuery(context.Background(), req)
+	if err != nil {
+		return err
+	}
+
+	if cmd.shouldEmitJSON {
+		return cmd.outputJSON(resp, err)
+	}
+
+	var b strings.Builder
+	err = pretty.PrintMetricsQueryResp(&b, resp)
+	if err != nil {
+		return err
+	}
+	cmd.log.Info(b.String())
+	return nil
 }

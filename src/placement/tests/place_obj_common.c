@@ -762,14 +762,18 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 int
 get_object_classes(daos_oclass_id_t **oclass_id_pp)
 {
-	const uint32_t str_size = 2560;
-	char oclass_names[str_size];
+	const uint32_t str_size = (16 << 10);
+	char *oclass_names;
 	char oclass[64];
 	daos_oclass_id_t *oclass_id;
 	uint32_t length = 0;
 	uint32_t num_oclass = 0;
 	uint32_t oclass_str_index = 0;
 	uint32_t i, oclass_index;
+
+	D_ALLOC(oclass_names, str_size);
+	if (!oclass_names)
+		return -1;
 
 	length = daos_oclass_names_list(str_size, oclass_names);
 
@@ -793,7 +797,7 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 			oclass_str_index++;
 		}
 	}
-
+	D_FREE(oclass_names);
 	return num_oclass;
 }
 
