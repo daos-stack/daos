@@ -136,6 +136,30 @@ func TestHostList_Create(t *testing.T) {
 			startList: "[0-1,3-5]",
 			expErr:    errors.New("invalid range"),
 		},
+		"single hyphen": {
+			startList:    "dserver-0001,dserver-0002,dserver-0003",
+			expRawOut:    "dserver-[0001-0003]",
+			expUniqOut:   "dserver-[0001-0003]",
+			expUniqCount: 3,
+		},
+		"multiple hyphens": {
+			startList:    "d-server-0001,d-server-0002,d-server-0003",
+			expRawOut:    "d-server-[0001-0003]",
+			expUniqOut:   "d-server-[0001-0003]",
+			expUniqCount: 3,
+		},
+		"multiple hyphens range": {
+			startList:    "d-server-[0001-0003]",
+			expRawOut:    "d-server-[0001-0003]",
+			expUniqOut:   "d-server-[0001-0003]",
+			expUniqCount: 3,
+		},
+		"multiple hyphens with suffix": {
+			startList:    "d-server-0001ab,d-server-0002ab",
+			expRawOut:    "d-server-[0001-0002]ab",
+			expUniqOut:   "d-server-[0001-0002]ab",
+			expUniqCount: 2,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			hl, gotErr := hostlist.Create(tc.startList)
