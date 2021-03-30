@@ -46,12 +46,14 @@ int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
  * Per-thread container (memory) object
  *
  * Stores per-thread, per-container information, such as the vos container
- * handle.
+ * handle. N.B. sc_uuid and sc_pool_uuid must be contiguous in memory,
+ * used as a 256 bit key in tls dt_cont_cache.
  */
 struct ds_cont_child {
 	struct daos_llink	 sc_list;
 	daos_handle_t		 sc_hdl;	/* vos_container handle */
 	uuid_t			 sc_uuid;	/* container UUID */
+	uuid_t			 sc_pool_uuid;	/* pool UUID */
 	struct ds_pool_child	*sc_pool;
 	d_list_t		 sc_link;	/* link to spc_cont_list */
 	struct daos_csummer	*sc_csummer;

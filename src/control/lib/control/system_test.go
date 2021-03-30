@@ -8,6 +8,10 @@ package control
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"log/syslog"
+	"math"
 	"strings"
 	"testing"
 
@@ -659,6 +663,39 @@ func TestControl_SystemQuery(t *testing.T) {
 	}
 }
 
+func TestControl_SystemQueryRespErrors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		absentHosts string
+		absentRanks string
+		expErr      error
+	}{
+		"no errors": {},
+		"absent hosts": {
+			absentHosts: "foo-[1-23]",
+			expErr:      errors.New("non-existent hosts foo-[1-23]"),
+		},
+		"absent ranks": {
+			absentRanks: "1-23",
+			expErr:      errors.New("non-existent ranks 1-23"),
+		},
+		"both absent hosts and ranks": {
+			absentHosts: "foo-[1-23]",
+			absentRanks: "1-23",
+			expErr:      errors.New("non-existent hosts foo-[1-23], non-existent ranks 1-23"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := new(SystemQueryResp)
+			ahs := hostlist.MustCreateSet(tc.absentHosts)
+			resp.AbsentHosts.ReplaceSet(ahs)
+			ars := system.MustCreateRankSet(tc.absentRanks)
+			resp.AbsentRanks.ReplaceSet(ars)
+
+			common.CmpErr(t, tc.expErr, resp.Errors())
+		})
+	}
+}
+
 func TestControl_SystemStart(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStartReq)
@@ -772,6 +809,64 @@ func TestControl_SystemStart(t *testing.T) {
 	}
 }
 
+func TestControl_SystemStartRespErrors(t *testing.T) {
+	successResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, nil, system.MemberStateReady),
+		system.NewMemberResult(0, nil, system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+	failedResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, errors.New("fail"), system.MemberStateReady),
+		system.NewMemberResult(0, errors.New("failed"), system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+
+	for name, tc := range map[string]struct {
+		absentHosts string
+		absentRanks string
+		results     system.MemberResults
+		expErr      error
+	}{
+		"no errors": {
+			results: successResults,
+		},
+		"absent hosts": {
+			absentHosts: "foo-[1-23]",
+			results:     successResults,
+			expErr:      errors.New("non-existent hosts foo-[1-23]"),
+		},
+		"absent ranks": {
+			absentRanks: "1-23",
+			results:     successResults,
+			expErr:      errors.New("non-existent ranks 1-23"),
+		},
+		"failed ranks": {
+			results: failedResults,
+			expErr:  errors.New("check results for failed ranks 0,2"),
+		},
+		"absent hosts and ranks with failed ranks": {
+			absentHosts: "foo-[1-23]",
+			absentRanks: "1-23",
+			results:     failedResults,
+			expErr: errors.New("non-existent hosts foo-[1-23], " +
+				"non-existent ranks 1-23, check results for failed ranks 0,2"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := new(SystemStartResp)
+			ahs := hostlist.MustCreateSet(tc.absentHosts)
+			resp.AbsentHosts.ReplaceSet(ahs)
+			ars := system.MustCreateRankSet(tc.absentRanks)
+			resp.AbsentRanks.ReplaceSet(ars)
+			resp.Results = tc.results
+
+			common.CmpErr(t, tc.expErr, resp.Errors())
+		})
+	}
+}
+
 func TestControl_SystemStop(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStopReq)
@@ -881,6 +976,64 @@ func TestControl_SystemStop(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp.AbsentRanks.String(), gotResp.AbsentRanks.String()); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_SystemStopRespErrors(t *testing.T) {
+	successResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, nil, system.MemberStateReady),
+		system.NewMemberResult(0, nil, system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+	failedResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, errors.New("fail"), system.MemberStateReady),
+		system.NewMemberResult(0, errors.New("failed"), system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+
+	for name, tc := range map[string]struct {
+		absentHosts string
+		absentRanks string
+		results     system.MemberResults
+		expErr      error
+	}{
+		"no errors": {
+			results: successResults,
+		},
+		"absent hosts": {
+			absentHosts: "foo-[1-23]",
+			results:     successResults,
+			expErr:      errors.New("non-existent hosts foo-[1-23]"),
+		},
+		"absent ranks": {
+			absentRanks: "1-23",
+			results:     successResults,
+			expErr:      errors.New("non-existent ranks 1-23"),
+		},
+		"failed ranks": {
+			results: failedResults,
+			expErr:  errors.New("check results for failed ranks 0,2"),
+		},
+		"absent hosts and ranks with failed ranks": {
+			absentHosts: "foo-[1-23]",
+			absentRanks: "1-23",
+			results:     failedResults,
+			expErr: errors.New("non-existent hosts foo-[1-23], " +
+				"non-existent ranks 1-23, check results for failed ranks 0,2"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := new(SystemStopResp)
+			ahs := hostlist.MustCreateSet(tc.absentHosts)
+			resp.AbsentHosts.ReplaceSet(ahs)
+			ars := system.MustCreateRankSet(tc.absentRanks)
+			resp.AbsentRanks.ReplaceSet(ars)
+			resp.Results = tc.results
+
+			common.CmpErr(t, tc.expErr, resp.Errors())
 		})
 	}
 }
@@ -1123,8 +1276,8 @@ func TestControl_SystemNotify(t *testing.T) {
 }
 
 func TestControl_EventForwarder_OnEvent(t *testing.T) {
-	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
-	rasEventRankDownNF := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
+	rasEventRankDownFwdable := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
+	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
 		WithForwardable(false)
 
 	for name, tc := range map[string]struct {
@@ -1137,15 +1290,15 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 			event: nil,
 		},
 		"missing access points": {
-			event: rasEventRankDown,
+			event: rasEventRankDownFwdable,
 		},
 		"successful forward": {
-			event:          rasEventRankDown,
+			event:          rasEventRankDownFwdable,
 			aps:            []string{"192.168.1.1"},
 			expInvokeCount: 2,
 		},
 		"skip non-forwardable event": {
-			event: rasEventRankDownNF,
+			event: rasEventRankDown,
 			aps:   []string{"192.168.1.1"},
 		},
 	} {
@@ -1178,36 +1331,88 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 	}
 }
 
+// In real syslog implementation we would see entries logged to logger specific
+// to a given priority, here we just check the correct prefix (maps to severity)
+// is printed which verifies the event was written to the correct logger.
 func TestControl_EventLogger_OnEvent(t *testing.T) {
+	var mockSyslogBuf *strings.Builder
+	mockNewSyslogger := func(prio syslog.Priority, _ int) (*log.Logger, error) {
+		return log.New(mockSyslogBuf, fmt.Sprintf("prio%d ", prio), log.LstdFlags), nil
+	}
+	mockNewSysloggerFail := func(prio syslog.Priority, _ int) (*log.Logger, error) {
+		return nil, errors.Errorf("failed to create new syslogger (prio %d)", prio)
+	}
+
 	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
 	rasEventRankDownFwded := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
 		WithForwarded(true)
 
 	for name, tc := range map[string]struct {
-		event        *events.RASEvent
-		expShouldLog bool
+		event           *events.RASEvent
+		newSyslogger    newSysloggerFn
+		expShouldLog    bool
+		expShouldLogSys bool
 	}{
 		"nil event": {
 			event: nil,
 		},
-		"not forwarded event gets logged": {
-			event:        rasEventRankDown,
-			expShouldLog: true,
-		},
 		"forwarded event is not logged": {
 			event: rasEventRankDownFwded,
 		},
+		"not forwarded error event gets logged": {
+			event:           rasEventRankDown,
+			expShouldLog:    true,
+			expShouldLogSys: true,
+		},
+		"not forwarded info event gets logged": {
+			event: events.NewGenericEvent(events.RASID(math.MaxInt32-1),
+				events.RASSeverityInfo, "DAOS generic test event",
+				`{"people":["bill","steve","bob"]}`),
+			expShouldLog:    true,
+			expShouldLogSys: true,
+		},
+		"sysloggers not created": {
+			event:           rasEventRankDown,
+			newSyslogger:    mockNewSysloggerFail,
+			expShouldLog:    true,
+			expShouldLogSys: false,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			logBasic, bufBasic := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, bufBasic)
 
-			el := NewEventLogger(log)
+			mockSyslogBuf = &strings.Builder{}
+
+			if tc.newSyslogger == nil {
+				tc.newSyslogger = mockNewSyslogger
+			}
+
+			el := newEventLogger(logBasic, tc.newSyslogger)
 			el.OnEvent(context.TODO(), tc.event)
 
+			// check event logged to control plane
 			common.AssertEqual(t, tc.expShouldLog,
-				strings.Contains(buf.String(), "RAS "),
+				strings.Contains(bufBasic.String(), "RAS "),
 				"unexpected log output")
+
+			slStr := mockSyslogBuf.String()
+			t.Logf("syslog out: %s", slStr)
+			if !tc.expShouldLogSys {
+				common.AssertTrue(t, slStr == "",
+					"expected syslog to be empty")
+				return
+			}
+			prioStr := fmt.Sprintf("prio%d ", tc.event.Severity.SyslogPriority())
+			sevOut := "sev: [" + tc.event.Severity.String() + "]"
+
+			// check event logged to correct mock syslogger
+			common.AssertEqual(t, 1, strings.Count(slStr, "RAS EVENT"),
+				"unexpected number of events in syslog")
+			common.AssertTrue(t, strings.Contains(slStr, sevOut),
+				"syslog output missing severity")
+			common.AssertTrue(t, strings.HasPrefix(slStr, prioStr),
+				"syslog output missing syslog priority")
 		})
 	}
 }

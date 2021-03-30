@@ -16,13 +16,8 @@ from job_manager_utils import Mpirun
 from ior_utils import IorCommand, IorMetrics
 from command_utils_base import CommandFailure
 from general_utils import error_count
+import queue
 
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
 
 class NvmeEnospace(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -33,11 +28,11 @@ class NvmeEnospace(ServerFillUp):
 
     def __init__(self, *args, **kwargs):
         """Initialize a NvmeEnospace object."""
-        super(NvmeEnospace, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.daos_cmd = None
 
     def setUp(self):
-        super(NvmeEnospace, self).setUp()
+        super().setUp()
 
         # initialize daos command
         self.daos_cmd = DaosCommand(self.bin)
@@ -216,6 +211,7 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -275,6 +271,7 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -352,6 +349,7 @@ class NvmeEnospace(ServerFillUp):
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
 

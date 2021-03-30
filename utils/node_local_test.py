@@ -71,12 +71,18 @@ def umount(path, bg=False):
 
 class NLTConf():
     """Helper class for configuration"""
-    def __init__(self, bc):
+    def __init__(self, bc, args):
         self.bc = bc
         self.agent_dir = None
         self.wf = None
         self.args = None
         self.max_log_size = None
+
+        self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
+                                                 prefix='dnt_dfuse_')
+
+    def __del__(self):
+        os.rmdir(self.dfuse_parent_dir)
 
     def set_wf(self, wf):
         """Set the WarningsFactory object"""
@@ -261,7 +267,7 @@ class WarningsFactory():
         print('Closed JSON file {} with {} errors'.format(self.filename,
                                                           len(self.issues)))
 
-def load_conf():
+def load_conf(args):
     """Load the build config file"""
     file_self = os.path.dirname(os.path.abspath(__file__))
     json_file = None
@@ -276,12 +282,15 @@ def load_conf():
     ofh = open(json_file, 'r')
     conf = json.load(ofh)
     ofh.close()
-    return NLTConf(conf)
+    return NLTConf(conf, args)
 
-def get_base_env():
+def get_base_env(clean=False):
     """Return the base set of env vars needed for DAOS"""
 
-    env = os.environ.copy()
+    if clean:
+        env = OrderedDict()
+    else:
+        env = os.environ.copy()
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
@@ -316,8 +325,7 @@ class DaosServer():
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
 
-        self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
-        self.agent_dir = self._agent_dir.name
+        self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
 
         self._yaml_file = None
         self._io_server_dir = None
@@ -329,6 +337,7 @@ class DaosServer():
     def __del__(self):
         if self.running:
             self.stop(None)
+        os.rmdir(self.agent_dir)
 
     # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
@@ -354,31 +363,7 @@ class DaosServer():
     def start(self):
         """Start a DAOS server"""
 
-        daos_server = os.path.join(self.conf['PREFIX'], 'bin', 'daos_server')
-
-        self_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Create a server yaml file.  To do this open and copy the
-        # nlt_server.yaml file in the current directory, but overwrite
-        # the server log file with a temporary file so that multiple
-        # server runs do not overwrite each other.
-        scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
-
-        scyaml = yaml.safe_load(scfd)
-        scyaml['engines'][0]['log_file'] = self.server_log.name
-        if self.conf.args.server_debug:
-            scyaml['control_log_mask'] = 'ERROR'
-            scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
-        scyaml['control_log_file'] = self.control_log.name
-
-        self._yaml_file = tempfile.NamedTemporaryFile(
-            prefix='nlt-server-config-',
-            suffix='.yaml')
-
-        self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
-        self._yaml_file.flush()
-
-        server_env = get_base_env()
+        server_env = get_base_env(clean=True)
 
         if self.valgrind:
             valgrind_args = ['--fair-sched=yes',
@@ -406,11 +391,37 @@ class DaosServer():
             server_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
                                                 server_env['PATH'])
 
+        daos_server = os.path.join(self.conf['PREFIX'], 'bin', 'daos_server')
+
+        self_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Create a server yaml file.  To do this open and copy the
+        # nlt_server.yaml file in the current directory, but overwrite
+        # the server log file with a temporary file so that multiple
+        # server runs do not overwrite each other.
+        scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
+
+        scyaml = yaml.safe_load(scfd)
+        scyaml['engines'][0]['log_file'] = self.server_log.name
+        if self.conf.args.server_debug:
+            scyaml['control_log_mask'] = 'ERROR'
+            scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
+        scyaml['control_log_file'] = self.control_log.name
+
+        for (key, value) in server_env.items():
+            scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
+
+        self._yaml_file = tempfile.NamedTemporaryFile(
+            prefix='nlt-server-config-',
+            suffix='.yaml')
+
+        self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
+        self._yaml_file.flush()
+
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
                'start', '-t' '4', '--insecure', '-d', self.agent_dir]
 
-        server_env['DAOS_DISABLE_REQ_FWD'] = '1'
-        self._sp = subprocess.Popen(cmd, env=server_env)
+        self._sp = subprocess.Popen(cmd)
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
@@ -425,8 +436,7 @@ class DaosServer():
         if not self.conf.args.server_debug:
             agent_cmd.append('--debug')
 
-        self._agent = subprocess.Popen(agent_cmd,
-                                       env=os.environ.copy())
+        self._agent = subprocess.Popen(agent_cmd)
         self.conf.agent_dir = self.agent_dir
         self.running = True
 
@@ -675,7 +685,7 @@ class DFuse():
         if path:
             self.dir = path
         else:
-            self.dir = '/tmp/dfs_test'
+            self.dir = os.path.join(conf.dfuse_parent_dir, 'dfuse_mount')
         self.pool = pool
         self.valgrind_file = None
         self.container = container
@@ -821,6 +831,7 @@ class DFuse():
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
         self.valgrind.convert_xml()
+        os.rmdir(self.dir)
         return fatal_errors
 
     def wait_for_exit(self):
@@ -1026,6 +1037,48 @@ class posix_tests():
     def fail(self):
         """Mark a test method as failed"""
         raise NLTestFail
+
+    @needs_dfuse
+    def test_readdir_25(self):
+        """Test reading a directory with 25 entries"""
+        self.readdir_test(25, test_all=True)
+
+    # Works, but is very slow so needs to be run without debugging.
+    #@needs_dfuse
+    #def test_readdir_300(self):
+    #    self.readdir_test(300, test_all=False)
+
+    def readdir_test(self, count, test_all=False):
+        """Run a rudimentary readdir test"""
+
+        wide_dir = tempfile.mkdtemp(dir=self.dfuse.dir)
+        if count == 0:
+            files = os.listdir(wide_dir)
+            assert len(files) == 0
+            return
+        start = time.time()
+        for idx in range(count):
+            fd = open(os.path.join(wide_dir, str(idx)), 'w')
+            fd.close()
+            if test_all:
+                files = os.listdir(wide_dir)
+                assert len(files) == idx + 1
+        duration = time.time() - start
+        rate = count / duration
+        print('Created {} files in {:.1f} seconds rate {:.1f}'.format(count,
+                                                                      duration,
+                                                                      rate))
+        print('Listing dir contents')
+        start = time.time()
+        files = os.listdir(wide_dir)
+        duration = time.time() - start
+        rate = count / duration
+        print('Listed {} files in {:.1f} seconds rate {:.1f}'.format(count,
+                                                                     duration,
+                                                                     rate))
+        print(files)
+        print(len(files))
+        assert len(files) == count
 
     @needs_dfuse
     def test_open_replaced(self):
@@ -1275,6 +1328,14 @@ class posix_tests():
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests"""
 
+    def _run_test():
+        start = time.time()
+        print('Calling {}'.format(fn))
+        rc = obj()
+        duration = time.time() - start
+        print('rc from {} is {}'.format(fn, rc))
+        print('Took {:.1f} seconds'.format(duration))
+
     pools = get_pool_list()
     while len(pools) < 1:
         pools = make_pool(server)
@@ -1283,9 +1344,9 @@ def run_posix_tests(server, conf, test=None):
 
     pt = posix_tests(server, conf, pool=pool, container=container)
     if test:
-        obj = getattr(pt, 'test_{}'.format(test))
-        rc = obj()
-        print('rc from {} is {}'.format(test, rc))
+        fn = 'test_{}'.format(test)
+        obj = getattr(pt, fn)
+        _run_test()
     else:
 
         for fn in sorted(dir(pt)):
@@ -1294,10 +1355,7 @@ def run_posix_tests(server, conf, test=None):
             obj = getattr(pt, fn)
             if not callable(obj):
                 continue
-
-            print('Calling {}'.format(fn))
-            rc = obj()
-            print('rc from {} is {}'.format(fn, rc))
+            _run_test()
 
     destroy_container(conf, pool, container)
     return pt.fatal_errors
@@ -1607,7 +1665,8 @@ def run_duns_overlay_test(server, conf):
     while len(pools) < 1:
         pools = make_pool(server)
 
-    parent_dir = tempfile.TemporaryDirectory(prefix='dnt_uns_')
+    parent_dir = tempfile.TemporaryDirectory(dir=conf.dfuse_parent_dir,
+                                             prefix='dnt_uns_')
 
     uns_dir = os.path.join(parent_dir.name, 'uns_ep')
 
@@ -2405,6 +2464,8 @@ def main():
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--max-log-size', default=None)
+    parser.add_argument('--dfuse-dir', default='/tmp',
+                        help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
@@ -2423,7 +2484,7 @@ def main():
         print('Tests are: {}'.format(','.join(sorted(tests))))
         return
 
-    conf = load_conf()
+    conf = load_conf(args)
 
     wf = WarningsFactory('nlt-errors.json')
 
