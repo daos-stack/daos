@@ -34,6 +34,7 @@ class CartNoPmixLauncherOneNodeTest(CartTest):
         cmd += " -x CRT_PHY_ADDR_STR={}".format(crt_phy_addr)
         cmd += " -x OFI_INTERFACE={}".format(ofi_interface)
         cmd += " -x D_LOG_MASK={}".format(log_mask)
+        cmd += " -x PATH"
         cmd += " {}".format(cli_bin)
         cmd += " {}".format(cli_arg)
 

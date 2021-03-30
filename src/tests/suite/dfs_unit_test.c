@@ -404,7 +404,7 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 }
 
 static void
-dfs_test_file_del(const char *name)
+dfs_test_rm(const char *name)
 {
 	int	rc;
 
@@ -412,9 +412,10 @@ dfs_test_file_del(const char *name)
 	assert_int_equal(rc, 0);
 }
 
-int dfs_test_thread_nr		= 8;
-#define DFS_TEST_MAX_THREAD_NR	(32)
+int dfs_test_thread_nr		= 100;
+#define DFS_TEST_MAX_THREAD_NR	(200)
 pthread_t dfs_test_tid[DFS_TEST_MAX_THREAD_NR];
+
 struct dfs_test_thread_arg {
 	int			thread_idx;
 	pthread_barrier_t	*barrier;
@@ -516,7 +517,7 @@ dfs_test_read_shared_file(void **state)
 		assert_int_equal(rc, 0);
 	}
 
-	dfs_test_file_del(name);
+	dfs_test_rm(name);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
@@ -691,6 +692,78 @@ dfs_test_io_error_code(void **state)
 	assert_int_equal(rc, 0);
 }
 
+int dfs_test_rc[DFS_TEST_MAX_THREAD_NR];
+
+static void *
+dfs_test_mkdir_thread(void *arg)
+{
+	struct dfs_test_thread_arg	*targ = arg;
+	int				rc;
+
+	pthread_barrier_wait(targ->barrier);
+	rc = dfs_mkdir(dfs_mt, NULL, targ->name, S_IFDIR, OC_S1);
+	print_message("dfs_test_read_thread %d, dfs_mkdir rc %d.\n",
+		      targ->thread_idx, rc);
+	dfs_test_rc[targ->thread_idx] = rc;
+	pthread_exit(NULL);
+}
+
+static void
+dfs_test_mt_mkdir(void **state)
+{
+	test_arg_t		*arg = *state;
+	char			name[16];
+	pthread_barrier_t	barrier;
+	int			i, one_success;
+	int			rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	sprintf(name, "MTA_dir_%d\n", arg->myrank);
+
+	/* usr barrier to all threads start at the same time and start
+	 * concurrent test.
+	 */
+	pthread_barrier_init(&barrier, NULL, dfs_test_thread_nr + 1);
+	for (i = 0; i < dfs_test_thread_nr; i++) {
+		dfs_test_targ[i].thread_idx = i;
+		dfs_test_targ[i].name = name;
+		dfs_test_targ[i].barrier = &barrier;
+		rc = pthread_create(&dfs_test_tid[i], NULL,
+				    dfs_test_mkdir_thread, &dfs_test_targ[i]);
+		assert_int_equal(rc, 0);
+	}
+
+	pthread_barrier_wait(&barrier);
+	for (i = 0; i < dfs_test_thread_nr; i++) {
+		rc = pthread_join(dfs_test_tid[i], NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	one_success = 0;
+	for (i = 0; i < dfs_test_thread_nr; i++) {
+		if (dfs_test_rc[i] == 0) {
+			if (one_success == 0) {
+				one_success++;
+				continue;
+			}
+			print_error("mkdir succeeded on more than thread\n");
+			assert_int_not_equal(dfs_test_rc[i], 0);
+		}
+		if (dfs_test_rc[i] != EEXIST)
+			print_error("mkdir returned unexpected error: %d\n",
+				    dfs_test_rc[i]);
+		assert_int_equal(dfs_test_rc[i], EEXIST);
+	}
+
+	if (one_success != 1)
+		print_error("all mkdirs failed, expected 1 to succeed\n");
+	assert_int_equal(one_success, 1);
+
+	dfs_test_rm(name);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -708,6 +781,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_io_error_code, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST8: DFS IO async error code",
 	  dfs_test_io_error_code, async_enable, test_case_teardown},
+	{ "DFS_UNIT_TEST9: multi-threads mkdir same dir",
+	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
 };
 
 static int

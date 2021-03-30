@@ -100,8 +100,7 @@ class ErasureCodeIor(ServerFillUp):
                 # Create the new container with correct redundancy factor
                 # for EC object type
                 self.ec_contaier_create(oclass[0])
-                self.update_ior_cmd_with_pool(oclass=oclass[0],
-                                              create_cont=False)
+                self.update_ior_cmd_with_pool(create_cont=False)
                 # Start IOR Write
                 self.container.uuid = self.ec_container.uuid
                 self.start_ior_load(operation="WriteRead", percent=1,
