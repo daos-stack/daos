@@ -70,8 +70,8 @@ class CPUUsage(IorTestBase):
         Test Description: Test CPU usage of formatted and idle engine.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=server
-        :avocado: tags=cpu_usage
+        :avocado: tags=hw,small
+        :avocado: tags=server,cpu_usage
         """
         # Get PID of daos_engine with ps.
         ps_engine = r"ps -C daos_engine -o %\p"
