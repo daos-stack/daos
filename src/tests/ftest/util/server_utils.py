@@ -531,6 +531,7 @@ class DaosServerManager(SubprocessManager):
         # Use the configuration file settings if no overrides specified
         if using_dcpm is None:
             using_dcpm = self.manager.job.using_dcpm
+        using_dcpm = None
         if using_nvme is None:
             using_nvme = self.manager.job.using_nvme
 
@@ -543,8 +544,7 @@ class DaosServerManager(SubprocessManager):
             hugepages = self.get_config_value("nr_hugepages")
             cmd.sub_command_class.sub_command_class.hugepages.value = hugepages
 
-        self.log.info("NOT!! Preparing DAOS server storage: %s", str(cmd))
-        return
+        self.log.info("Preparing DAOS server storage: %s", str(cmd))
 
         result = pcmd(self._hosts, str(cmd), timeout=40)
         if len(result) > 1 or 0 not in result:
