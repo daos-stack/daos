@@ -619,6 +619,7 @@ class DaosObj():
 
     def __str__(self):
         """Get the string representation of this class."""
+        # pylint: disable=no-else-return
         if self.c_oid:
             # Return the object ID if  defined
             return "{}.{}".format(self.c_oid.hi, self.c_oid.lo)
