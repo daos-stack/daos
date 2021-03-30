@@ -8,6 +8,7 @@
 
 import threading
 import avocado
+import time
 
 from pydaos.raw import DaosApiError
 from test_utils_pool import TestPool
@@ -194,6 +195,7 @@ class NvmeObject(TestWithServers):
         threads = []
         index = 0
         for size in self.pool_size[:-1]:
+            time.sleep(1)
             thread = threading.Thread(target=test_runner,
                                       args=(self, size, self.record_size,
                                             index, self.array_size))

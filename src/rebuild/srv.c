@@ -83,8 +83,6 @@ rebuild_pool_tls_create(uuid_t pool_uuid, uuid_t poh_uuid, uuid_t coh_uuid,
 
 	rebuild_pool_tls->rebuild_pool_ver = ver;
 	uuid_copy(rebuild_pool_tls->rebuild_pool_uuid, pool_uuid);
-	uuid_copy(rebuild_pool_tls->rebuild_poh_uuid, poh_uuid);
-	uuid_copy(rebuild_pool_tls->rebuild_coh_uuid, coh_uuid);
 	rebuild_pool_tls->rebuild_pool_scanning = 1;
 	rebuild_pool_tls->rebuild_pool_scan_done = 0;
 	rebuild_pool_tls->rebuild_pool_obj_count = 0;
@@ -1714,14 +1712,6 @@ rebuild_fini_one(void *arg)
 	if (pool_tls == NULL)
 		return 0;
 
-	if (daos_handle_is_valid(pool_tls->rebuild_pool_hdl)) {
-		D_DEBUG(DB_REBUILD, "close container/pool "
-			DF_UUID"/"DF_UUID"\n",
-			DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
-		dsc_pool_close(pool_tls->rebuild_pool_hdl);
-		pool_tls->rebuild_pool_hdl = DAOS_HDL_INVAL;
-	}
-
 	rebuild_pool_tls_destroy(pool_tls);
 	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	/* close the opened local ds_cont on main XS */
@@ -2033,27 +2023,6 @@ rpt_create(struct ds_pool *pool, uint32_t pm_ver, uint64_t leader_term,
 free:
 	if (rc != 0)
 		rpt_destroy(rpt);
-	return rc;
-}
-
-/**
- * Called by ds_pool_tgt_map_update->update_child_map() to update pool
- * map on each xstream for rebuild.
- */
-int ds_rebuild_pool_map_update(struct ds_pool *pool)
-{
-	struct rebuild_pool_tls *pool_tls;
-	int rc;
-
-	pool_tls = rebuild_pool_tls_lookup(pool->sp_uuid, -1);
-	if (pool_tls == NULL ||
-	    daos_handle_is_inval(pool_tls->rebuild_pool_hdl))
-		return 0;
-
-	/* update the pool map over the client stack */
-	rc = dc_pool_update_map(pool_tls->rebuild_pool_hdl,
-				pool->sp_map);
-
 	return rc;
 }
 
