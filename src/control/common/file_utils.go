@@ -12,12 +12,9 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"os/user"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
@@ -286,27 +283,4 @@ func FindBinary(binName string) (string, error) {
 	}
 
 	return adjPath, nil
-}
-
-// GetFileOwner returns the username of user who owns the file at the given
-// path. Caller should check os.IsNotExist(errors.Cause(err)) to work out if
-// the call failed because the path doesn't exist or is a directory.
-func GetFileOwner(path string) (string, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return "", err
-	}
-	if info.IsDir() {
-		return "", os.ErrNotExist
-	}
-
-	uid := info.Sys().(*syscall.Stat_t).Uid
-	uidStr := strconv.FormatUint(uint64(uid), 10)
-
-	usr, err := user.LookupId(uidStr)
-	if err != nil {
-		return "", err
-	}
-
-	return usr.Username, nil
 }

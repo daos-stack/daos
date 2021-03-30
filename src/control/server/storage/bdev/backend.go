@@ -11,20 +11,24 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const hugePageFilePrefix = "/dev/hugepages/spdk"
+const (
+	hugePageDir    = "/dev/hugepages"
+	hugePagePrefix = "spdk"
+)
 
 type (
 	spdkWrapper struct {
@@ -306,39 +310,59 @@ func detectVMD() ([]string, error) {
 	return vmdAddrs, nil
 }
 
+// getFileOwner returns the username of user who owns the file at the given
+// path. Caller should check os.IsNotExist(errors.Cause(err)) to work out if
+// the call failed because the path doesn't exist or is a directory.
+func getFileOwner(path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return "", os.ErrNotExist
+	}
+
+	uid := info.Sys().(*syscall.Stat_t).Uid
+	uidStr := strconv.FormatUint(uint64(uid), 10)
+
+	usr, err := user.LookupId(uidStr)
+	if err != nil {
+		return "", err
+	}
+
+	return usr.Username, nil
+}
+
 // cleanHugePages removes hugepage files with pathPrefix that are owned by the
 // user with username tgtUsr.
-func cleanHugePages(pathPrefix, tgtUsr string) (int, error) {
-	pattern := pathPrefix + "*"
-	matches, err := filepath.Glob(pattern)
-	if err != nil {
-		return 0, errors.Wrapf(err, "files matching %q", pattern)
-	}
-
-	toRemove := make([]string, 0, len(matches))
-	for _, path := range matches {
-		username, err := common.GetFileOwner(path)
+func cleanHugePages(hugePageDir, prefix, tgtUsr string) (int, error) {
+	var nrRemoved int
+	err := filepath.Walk(hugePageDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			if os.IsNotExist(errors.Cause(err)) {
-				continue
-			}
-			return 0, err
+			return err
+		}
+		if info.IsDir() && path != hugePageDir {
+			return filepath.SkipDir // skip subdirectories
+		}
+		if !strings.HasPrefix(info.Name(), prefix) {
+			return nil // skip files without prefix
+		}
+		username, err := getFileOwner(path)
+		if err != nil {
+			return err
 		}
 		if username != tgtUsr {
-			continue
+			return nil // skip not owned by target user
 		}
-		toRemove = append(toRemove, path)
-	}
-
-	var nrRemoved int
-	for _, path := range toRemove {
 		if err := os.Remove(path); err != nil {
-			return nrRemoved, err
+			return err
 		}
 		nrRemoved++
-	}
 
-	return nrRemoved, nil
+		return nil
+	})
+
+	return nrRemoved, err
 }
 
 // Prepare will cleanup any leftover hugepages owned by the target user and then
@@ -349,7 +373,7 @@ func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	resp := &PrepareResponse{}
 
 	// remove hugepages matching /dev/hugepages/spdk* owned by target user
-	nrRemoved, err := cleanHugePages(hugePageFilePrefix, req.TargetUser)
+	nrRemoved, err := cleanHugePages(hugePageDir, hugePagePrefix, req.TargetUser)
 	if err != nil {
 		return nil, errors.Wrapf(err, "clean spdk hugepages")
 	}
