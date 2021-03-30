@@ -7,7 +7,7 @@
 # pylint: disable=pylint-too-many-lines
 
 # pylint: disable=import-error
-from .. import pydaos_shim_3 as pydaos_shim
+from .. import pydaos_shim as pydaos_shim
 # pylint: enable=import-error
 
 import ctypes

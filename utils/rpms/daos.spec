@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -357,7 +357,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/python3/site-packages/pydaos/__pycache__/*.pyc
 %{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
 %endif
-%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
+%{_libdir}/python3/site-packages/pydaos/pydaos_shim.so
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
@@ -401,6 +401,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Mar 30 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-5
+- Change pydaos_shim_3 to pydaos_shim
+
 * Tue Mar 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.0-4
 - Update libfabric to v1.12.0
 - Disable grdcopy/gdrapi linkage in libfabric

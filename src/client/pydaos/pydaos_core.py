@@ -12,7 +12,7 @@ import pickle
 import sys
 
 # pylint: disable=no-name-in-module
-from . import pydaos_shim_3 as pydaos_shim
+from . import pydaos_shim
 # pylint: enable=no-name-in-module
 
 from . import DAOS_MAGIC

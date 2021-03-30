@@ -1005,7 +1005,7 @@ __daosbase_clear(PyObject *m)
 
 static struct PyModuleDef moduledef = {
 	PyModuleDef_HEAD_INIT,
-	"pydaos_shim_3",
+	"pydaos_shim",
 	NULL,
 	sizeof(struct module_struct),
 	daosMethods,
@@ -1015,7 +1015,7 @@ static struct PyModuleDef moduledef = {
 	NULL
 };
 
-PyMODINIT_FUNC PyInit_pydaos_shim_3(void)
+PyMODINIT_FUNC PyInit_pydaos_shim(void)
 
 {
 	PyObject *module;
