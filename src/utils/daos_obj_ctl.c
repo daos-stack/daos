@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
 #define D_LOGFAC	DD_FAC(tests)
 
 #include <stdio.h>
@@ -17,26 +18,25 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <mpi.h>
+#include <daos.h>
 #include <daos/common.h>
+#include <daos/object.h>
 #include <daos/tests_lib.h>
-#include <daos_srv/vos.h>
-#include <daos_test.h>
-#include <daos/dts.h>
 #include <daos/cmd_parser.h>
+#include "daos_hdlr.h"
 
 /**
  * An example for integer key evtree .
  */
 #define CTL_SEP_VAL		'='
-#define CTL_SEP			','
-#define CTL_BUF_LEN		4096
-
-static char			 pmem_file[PATH_MAX];
+#define CTL_SEP		','
+#define CTL_BUF_LEN		512
 
 static long			 ctl_epoch;
 static daos_unit_oid_t		 ctl_oid;
+static daos_handle_t		 ctl_oh;	/* object open handle */
 static unsigned int		 ctl_abits;	/* see CTL_ARG_* */
+static d_rank_t			 ctl_svc_rank;	/* pool service leader */
 static struct credit_context	 ctl_ctx;
 
 /* available input parameters */
@@ -53,17 +53,16 @@ enum {
 static int
 ctl_update(struct io_credit *cred)
 {
-	return vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0xcafe,
-			      0, &cred->tc_dkey, 1, &cred->tc_iod, NULL,
-			      &cred->tc_sgl);
+
+	return daos_obj_update(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
+			       &cred->tc_iod, &cred->tc_sgl, NULL);
 }
 
 static int
 ctl_fetch(struct io_credit *cred)
 {
-	return vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0,
-			     &cred->tc_dkey, 1, &cred->tc_iod,
-			     &cred->tc_sgl);
+	return daos_obj_fetch(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
+			      &cred->tc_iod, &cred->tc_sgl, NULL, NULL);
 }
 
 static int
@@ -79,105 +78,84 @@ ctl_punch(struct io_credit *cred)
 			akey = &cred->tc_iod.iod_name;
 	}
 
-	int	flags;
-
-	if (ctl_epoch < 0) {
-		flags = VOS_OF_REPLAY_PC;
-		ctl_epoch *= -1;
+	if (!dkey) {
+		rc = daos_obj_punch(ctl_oh, DAOS_TX_NONE, 0, NULL);
+	} else if (!akey) {
+		rc = daos_obj_punch_dkeys(ctl_oh, DAOS_TX_NONE, 0, 1,
+					  dkey, NULL);
 	} else {
-		flags = 0;
-	}
-
-	rc = vos_obj_punch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
-			   0, flags, dkey, 1, akey, NULL);
-	if (rc == -DER_NO_PERM) {
-		D_PRINT("permission denied\n");
-		rc = 0; /* ignore it */
+		rc = daos_obj_punch_akeys(ctl_oh, DAOS_TX_NONE, 0, dkey,
+					  1, akey, NULL);
 	}
 
 	return rc;
 }
 
+#define KDS_NR		128
+
 static int
-ctl_vos_list(struct io_credit *cred)
+ctl_daos_list(struct io_credit *cred)
 {
-	char			*opstr = "";
-	vos_iter_param_t	 param;
-	daos_handle_t		 ih;
-	vos_iter_type_t		 type;
-	int			 n;
-	int			 rc;
+	char		*kstr;
+	char		 kbuf[CTL_BUF_LEN];
+	uint32_t	 knr = KDS_NR;
+	daos_key_desc_t	 kds[KDS_NR] = {0};
+	daos_anchor_t	 anchor;
+	int		 i;
+	int		 rc = 0;
+	int		 total = 0;
 
-	memset(&param, 0, sizeof(param));
-	param.ip_hdl	    = ctl_ctx.tsc_coh;
-	param.ip_oid	    = ctl_oid;
-	param.ip_dkey	    = cred->tc_dkey;
-	param.ip_epr.epr_lo = ctl_epoch;
-	param.ip_epr.epr_hi = ctl_epoch;
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		memset(kbuf, 0, CTL_BUF_LEN);
+		d_iov_set(&cred->tc_val, kbuf, CTL_BUF_LEN);
 
-	if (!(ctl_abits & CTL_ARG_OID))
-		type = VOS_ITER_OBJ;
-	else if (!(ctl_abits & CTL_ARG_DKEY))
-		type = VOS_ITER_DKEY;
-	else
-		type = VOS_ITER_AKEY;
+		if (!(ctl_abits & CTL_ARG_OID)) {
+			fprintf(stderr, "Cannot list object for now\n");
+			return -DER_INVAL;
 
-	rc = vos_iter_prepare(type, &param, &ih, NULL);
-	if (rc == -DER_NONEXIST) {
-		D_PRINT("No matched object or key\n");
-		D_GOTO(out, rc = 0);
+		} else if (!(ctl_abits & CTL_ARG_DKEY)) {
+			rc = daos_obj_list_dkey(ctl_oh, DAOS_TX_NONE, &knr,
+						kds, &cred->tc_sgl, &anchor,
+						NULL);
 
-	} else if (rc) {
-		opstr = "prepare";
-		D_GOTO(out, rc);
+		} else if (!(ctl_abits & CTL_ARG_AKEY)) {
+			rc = daos_obj_list_akey(ctl_oh, DAOS_TX_NONE,
+						&cred->tc_dkey, &knr, kds,
+						&cred->tc_sgl, &anchor, NULL);
+		}
+
+		if (rc) {
+			fprintf(stderr, "Failed to list keys: "DF_RC"\n",
+				DP_RC(rc));
+			return rc;
+		}
+
+		total += knr;
+		for (i = 0, kstr = kbuf; i < knr; i++) {
+			D_PRINT("%s\n", kstr);
+			kstr += kds[i].kd_key_len;
+		}
 	}
+	D_PRINT("total %d keys\n", total);
+	return 0;
+}
 
-	n = 0;
-	rc = vos_iter_probe(ih, NULL);
-	opstr = "probe";
-	while (1) {
-		vos_iter_entry_t        ent;
+static inline void
+ctl_obj_open(bool *opened)
+{
+	int rc;
 
-		if (rc == -DER_NONEXIST) {
-			D_PRINT("Completed, n=%d\n", n);
-			D_GOTO(out, rc = 0);
-		}
-
-		if (rc == 0) {
-			rc = vos_iter_fetch(ih, &ent, NULL);
-			opstr = "fetch";
-		}
-
-		if (rc)
-			D_GOTO(out, rc);
-
-		n++;
-		switch (type) {
-		case VOS_ITER_OBJ:
-			D_PRINT("\t"DF_UOID"\n", DP_UOID(ent.ie_oid));
-			break;
-		case VOS_ITER_DKEY:
-		case VOS_ITER_AKEY:
-			D_PRINT("\t%s\n", (char *)ent.ie_key.iov_buf);
-			break;
-		default:
-			D_PRINT("Unsupported\n");
-			D_GOTO(out, rc = -1);
-		}
-
-		rc = vos_iter_next(ih);
-		opstr = "next";
-	}
-out:
-	if (rc)
-		D_PRINT("list(%s) failed, rc=%d\n", opstr, rc);
-	return rc;
+	rc = daos_obj_open(ctl_ctx.tsc_coh, ctl_oid.id_pub,
+			   DAOS_OO_RW, &ctl_oh, NULL);
+	D_ASSERT(!rc);
+	*opened = true;
 }
 
 static void
 ctl_print_usage(void)
 {
-	printf("obj_ctl -- interactive function testing shell for VOS\n");
+	printf("daos shell -- interactive function testing shell for DAOS\n");
 	printf("Usage:\n");
 	printf("update\to=...,d=...,a=...,v=...,e=...\n");
 	printf("fetch\to=...d=...,a=...,e=...\n");
@@ -197,6 +175,7 @@ ctl_cmd_run(char opc, char *args)
 	char			*str;
 	char			 buf[CTL_BUF_LEN];
 	int			 rc;
+	bool			 opened = false;
 
 	if (args) {
 		strncpy(buf, args, CTL_BUF_LEN);
@@ -260,14 +239,14 @@ ctl_cmd_run(char opc, char *args)
 		strncpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
 		cred->tc_dbuf[DTS_KEY_LEN - 1] = '\0';
 		d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
-			     strlen(cred->tc_dbuf) + 1);
+			  strlen(cred->tc_dbuf) + 1);
 	}
 
 	if ((ctl_abits & CTL_ARG_AKEY) && akey != NULL) {
 		strncpy(cred->tc_abuf, akey, DTS_KEY_LEN);
 		cred->tc_abuf[DTS_KEY_LEN - 1] = '\0';
 		d_iov_set(&cred->tc_iod.iod_name, cred->tc_abuf,
-			     strlen(cred->tc_abuf) + 1);
+			  strlen(cred->tc_abuf) + 1);
 
 		cred->tc_iod.iod_type	= DAOS_IOD_SINGLE;
 		cred->tc_iod.iod_size	= -1; /* overwrite by CTL_ARG_VAL */
@@ -281,11 +260,11 @@ ctl_cmd_run(char opc, char *args)
 		strncpy(cred->tc_vbuf, val, ctl_ctx.tsc_cred_vsize);
 		cred->tc_vbuf[ctl_ctx.tsc_cred_vsize - 1] = '\0';
 		d_iov_set(&cred->tc_val, cred->tc_vbuf,
-			     strlen(cred->tc_vbuf) + 1);
+			  strlen(cred->tc_vbuf) + 1);
 	} else {
 		memset(cred->tc_vbuf, 0, ctl_ctx.tsc_cred_vsize);
 		d_iov_set(&cred->tc_val, cred->tc_vbuf,
-			     ctl_ctx.tsc_cred_vsize);
+			  ctl_ctx.tsc_cred_vsize);
 	}
 	cred->tc_sgl.sg_nr = 1;
 	cred->tc_sgl.sg_iovs = &cred->tc_val;
@@ -295,6 +274,8 @@ ctl_cmd_run(char opc, char *args)
 		if (ctl_abits != CTL_ARG_ALL) {
 			ctl_print_usage();
 			D_GOTO(out, rc = -1);
+		} else {
+			ctl_obj_open(&opened);
 		}
 
 		rc = ctl_update(cred);
@@ -303,6 +284,8 @@ ctl_cmd_run(char opc, char *args)
 		if (ctl_abits != (CTL_ARG_ALL & ~CTL_ARG_VAL)) {
 			ctl_print_usage();
 			D_GOTO(out, rc = -1);
+		} else {
+			ctl_obj_open(&opened);
 		}
 
 		rc = ctl_fetch(cred);
@@ -316,6 +299,8 @@ ctl_cmd_run(char opc, char *args)
 		    !(ctl_abits & CTL_ARG_OID)) {
 			ctl_print_usage();
 			D_GOTO(out, rc = -1);
+		} else {
+			ctl_obj_open(&opened);
 		}
 
 		rc = ctl_punch(cred);
@@ -327,9 +312,10 @@ ctl_cmd_run(char opc, char *args)
 		} else {
 			if (!(ctl_abits & CTL_ARG_EPOCH))
 				ctl_epoch = DAOS_EPOCH_MAX;
+			ctl_obj_open(&opened);
 		}
 
-		rc = ctl_vos_list(cred);
+		rc = ctl_daos_list(cred);
 		break;
 	case 'h':
 		ctl_print_usage();
@@ -345,6 +331,9 @@ ctl_cmd_run(char opc, char *args)
 	if (rc && rc != -ESHUTDOWN)
 		D_GOTO(out, rc = -2);
 out:
+	if (opened)
+		daos_obj_close(ctl_oh, NULL);
+
 	switch (rc) {
 	case -2: /* real failure */
 		D_PRINT("Operation failed, rc="DF_RC"\n",
@@ -370,32 +359,117 @@ static struct option ctl_ops[] = {
 	{ NULL,		0,			NULL,	0	},
 };
 
-int
-main(int argc, char *argv[])
+enum {
+	CTL_INIT_MODULE,	/* modules have been loaded */
+	CTL_INIT_POOL,		/* pool has been created */
+	CTL_INIT_CONT,		/* container has been created */
+	CTL_INIT_CREDITS,	/* I/O credits have been initialized */
+};
+
+static int
+cont_init(struct credit_context *tsc)
+{
+	daos_handle_t	coh = DAOS_HDL_INVAL;
+	int		rc;
+
+	rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid, NULL,
+			      NULL);
+	if (rc != 0)
+		goto out;
+
+	rc = daos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid,
+			    DAOS_COO_RW, &coh, NULL, NULL);
+
+	tsc->tsc_coh = coh;
+
+out:
+	return rc;
+}
+
+static void
+cont_fini(struct credit_context *tsc)
+{
+	daos_cont_close(tsc->tsc_coh, NULL);
+
+	/* NB: no container destroy at here, it will be destroyed by pool
+	 * destroy later. This is because container destroy could be too
+	 * expensive after performance tests.
+	 */
+}
+
+static void
+ctx_fini(struct credit_context *tsc)
+{
+	switch (tsc->tsc_init) {
+	case CTL_INIT_CREDITS:	/* finalize credits */
+		credits_fini(tsc);
+		/* fall through */
+	case CTL_INIT_CONT:	/* close and destroy container */
+		cont_fini(tsc);
+	}
+}
+
+static int
+ctx_init(struct credit_context *tsc)
 {
 	int	rc;
 
-	if (argc == 2)
-		goto out_usage;
+	tsc->tsc_init = CTL_INIT_MODULE;
 
-	uuid_generate(ctl_ctx.tsc_pool_uuid);
+	rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL,
+			       DAOS_PC_RW, &tsc->tsc_poh,
+			       NULL /* info */, NULL /* ev */);
+
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(tsc->tsc_pool_uuid),
+			d_errdesc(rc), rc);
+		D_GOTO(out, rc);
+	}
+
+	tsc->tsc_init = CTL_INIT_POOL;
+
+	rc = cont_init(tsc);
+	if (rc)
+		goto out;
+	tsc->tsc_init = CTL_INIT_CONT;
+
+	/* initialize I/O credits, which include EQ, event, I/O buffers... */
+	rc = credits_init(tsc);
+	if (rc)
+		goto out;
+	tsc->tsc_init = CTL_INIT_CREDITS;
+
+	return 0;
+ out:
+	fprintf(stderr, "Failed to initialize step=%d, rc=%d\n",
+		tsc->tsc_init, rc);
+	ctx_fini(tsc);
+	return rc;
+}
+
+static int
+daos_shell(struct cmd_args_s *ap)
+{
+	int rc;
+
+	assert(ap != NULL);
+
+	uuid_copy(ctl_ctx.tsc_pool_uuid, ap->p_uuid);
 	uuid_generate(ctl_ctx.tsc_cont_uuid);
 
-	ctl_ctx.tsc_scm_size	= (128 << 20); /* small one should be enough */
-	ctl_ctx.tsc_nvme_size	= (8ULL << 30);
+	D_INFO("\tDAOS system name: %s\n", ap->sysname);
+	D_INFO("\tpool UUID: "DF_UUIDF"\n", DP_UUID(ap->p_uuid));
+	D_INFO("\tcont UUID: "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
+
 	ctl_ctx.tsc_cred_vsize	= 1024;	/* long enough for console input */
 	ctl_ctx.tsc_cred_nr	= -1;	/* sync mode all the time */
-	ctl_ctx.tsc_mpi_rank	= 0;
 	ctl_ctx.tsc_mpi_size	= 1;	/* just one rank */
+	ctl_ctx.tsc_mpi_rank	= 0;
+	ctl_ctx.tsc_svc.rl_ranks = &ctl_svc_rank;
+	ctl_ctx.tsc_svc.rl_nr = 1;
 
-	if (argc == 3)
-		strncpy(pmem_file, argv[2], PATH_MAX - 1);
-	else
-		strcpy(pmem_file, "/mnt/daos/vos_ctl.pmem");
-
-	ctl_ctx.tsc_pmem_file = pmem_file;
-
-	rc = dts_ctx_init(&ctl_ctx);
+	rc = ctx_init(&ctl_ctx);
 	if (rc != 0) {
 		fprintf(stderr, "Failed to initialize utility: "DF_RC"\n",
 			DP_RC(rc));
@@ -403,12 +477,30 @@ main(int argc, char *argv[])
 	}
 
 	rc = cmd_parser(ctl_ops, "$ > ", ctl_cmd_run);
-	if (rc)
-		dts_ctx_fini(&ctl_ctx);
+
+	if (rc) {
+		ctx_fini(&ctl_ctx);
+  }
+	return rc;
+}
+
+int
+obj_ctl_shell(struct cmd_args_s *ap)
+{
+	int	rc;
+
+	switch (ap->sh_op) {
+	case SH_DAOS:
+		rc = daos_shell(ap);
+		break;
+	case SH_VOS:
+		fprintf(stdout, "Shell 'vos' option not yet implemented\n");
+		rc = -DER_NOSYS;
+		break;
+	default:
+		fprintf(stdout, "Shell unknown option\n");
+		rc = -DER_INVAL;
+	}
 
 	return rc;
-
- out_usage:
-	printf("%s [pmem_file]\n", argv[0]);
-	return -1;
 }

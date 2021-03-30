@@ -16,7 +16,7 @@
 /** MAX number of data cells */
 #define OBJ_EC_MAX_K		(64)
 /** MAX number of parity cells */
-#define OBJ_EC_MAX_P		(16)
+#define OBJ_EC_MAX_P		(8)
 #define OBJ_EC_MAX_M		(OBJ_EC_MAX_K + OBJ_EC_MAX_P)
 /** Length of target bitmap */
 #define OBJ_TGT_BITMAP_LEN						\

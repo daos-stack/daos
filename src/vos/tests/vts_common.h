@@ -92,21 +92,21 @@ vts_ctx_fini(struct vos_test_ctx *tcx);
  * - create and connect to pool based on the input pool uuid and size
  * - create and open container based on the input container uuid
  */
-int dts_ctx_init(struct dts_context *tsc);
+int dts_ctx_init(struct credit_context *tsc);
 /**
  * Finalize I/O test context:
  * - close and destroy the test container
  * - disconnect and destroy the test pool
  */
-void dts_ctx_fini(struct dts_context *tsc);
+void dts_ctx_fini(struct credit_context *tsc);
 
 /**
  * Try to obtain a free credit from the I/O context.
  */
-struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
+struct io_credit *dts_credit_take(struct credit_context *tsc);
 
 /** return the IO credit to the I/O context */
-void dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred);
+void dts_credit_return(struct credit_context *tsc, struct io_credit *cred);
 
 /**
  * VOS test suite run tests
