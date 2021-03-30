@@ -364,7 +364,7 @@ enum {
 	DAOS_OCH_RDD_RP		= (1 << 2),	/** Replication */
 	DAOS_OCH_RDD_EC		= (1 << 3),	/** Erasure Code */
 	/** Flags to control OC Sharding */
-	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default - use 1 grp */
+	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default - use MAX */
 	DAOS_OCH_SHD_TINY	= (1 << 5),	/** <= 4 grps */
 	DAOS_OCH_SHD_REG	= (1 << 6),	/** max(128, 25%) */
 	DAOS_OCH_SHD_HI		= (1 << 7),	/** max(256, 50%) */
