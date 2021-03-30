@@ -1,3 +1,15 @@
+daos (1.3.0-5) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Move libdts.so to the daos-tests subpackage
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 29 Mar 2021 10:57:14 -0400
+
+daos (1.3.0-4) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update to ofi v1.12.0 release
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com> Tue, 23 Mar 2021 05:00:01 -0000
+
 daos (1.3.0-2) unstable; urgency=medium
   [ Li Wei ]
   * Require raft-devel 0.7.3 that fixes an unstable leadership problem caused
