@@ -1,7 +1,7 @@
 /*
  *	libconfigini - an ini formatted configuration parser library
  *	Copyright (C) 2013-present Taner YILMAZ <taner44@gmail.com>
-
+ *
  *	Redistribution and use in source and binary forms, with or without
  *	modification, are permitted provided that the following conditions
  *	are met:
@@ -47,7 +47,7 @@
 /**
  * \brief Configuration key-value
  */
-typedef struct ConfigKeyValue {
+struct ConfigKeyValue {
 	char *key;
 	char *value;
 
@@ -57,7 +57,7 @@ typedef struct ConfigKeyValue {
 /**
  * \brief Configuration section
  */
-typedef struct ConfigSection {
+struct ConfigSection {
 	char *name;
 	int numofkv;
 
@@ -79,11 +79,12 @@ struct Config {
 	TAILQ_HEAD(, ConfigSection) sect_list;
 };
 
-static int StrSafeCopy(char *dst, const char *src, int size)
+static int
+StrSafeCopy(char *dst, const char *src, int size)
 {
-	char *d = dst;
-	const char *s = src;
-	int n = size;
+	char		*d = dst;
+	const char	*s = src;
+	int		 n = size;
 
 	if (n != 0 && --n != 0) {
 		do {
@@ -103,7 +104,8 @@ static int StrSafeCopy(char *dst, const char *src, int size)
 	return (s - src - 1);
 }
 
-static bool StrIsTypeOfTrue(const char *s)
+static bool
+StrIsTypeOfTrue(const char *s)
 {
 	if (!strcasecmp(s, "true") || !strcasecmp(s, "yes") ||
 	    !strcasecmp(s, "1"))
@@ -111,7 +113,8 @@ static bool StrIsTypeOfTrue(const char *s)
 	return false;
 }
 
-static bool StrIsTypeOfFalse(const char *s)
+static bool
+StrIsTypeOfFalse(const char *s)
 {
 	if (!strcasecmp(s, "false") || !strcasecmp(s, "no") ||
 	    !strcasecmp(s, "0"))
@@ -125,18 +128,19 @@ static bool StrIsTypeOfFalse(const char *s)
  * /////////////////////////////////////////////////////////////////////
  */
 
-const char *ConfigRetToString(ConfigRet ret)
+const char
+*ConfigRetToString(ConfigRet ret)
 {
 	switch (ret) {
-	case CONFIG_OK:		return "OK";
-	case CONFIG_ERR_FILE:	  return "File IO error";
-	case CONFIG_ERR_NO_SECTION:    return "No section";
-	case CONFIG_ERR_NO_KEY:	return "No key";
-	case CONFIG_ERR_MEMALLOC:      return "Memory allocation failed";
-	case CONFIG_ERR_INVALID_PARAM: return "Invalid parameter";
-	case CONFIG_ERR_INVALID_VALUE: return "Invalid value";
-	case CONFIG_ERR_PARSING:       return "Parse error";
-	default:		       return NULL;
+	case CONFIG_OK:			return "OK";
+	case CONFIG_ERR_FILE:		return "File IO error";
+	case CONFIG_ERR_NO_SECTION:	return "No section";
+	case CONFIG_ERR_NO_KEY:		return "No key";
+	case CONFIG_ERR_MEMALLOC:	return "Memory allocation failed";
+	case CONFIG_ERR_INVALID_PARAM:	return "Invalid parameter";
+	case CONFIG_ERR_INVALID_VALUE:	return "Invalid value";
+	case CONFIG_ERR_PARSING:	return "Parse error";
+	default:			return NULL;
 	}
 }
 
@@ -148,7 +152,8 @@ const char *ConfigRetToString(ConfigRet ret)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigSetCommentCharset(Config *cfg, const char *comment_ch)
+ConfigRet
+ConfigSetCommentCharset(Config *cfg, const char *comment_ch)
 {
 	char *p;
 
@@ -174,7 +179,8 @@ ConfigRet ConfigSetCommentCharset(Config *cfg, const char *comment_ch)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigSetKeyValSepChar(Config *cfg, char ch)
+ConfigRet
+ConfigSetKeyValSepChar(Config *cfg, char ch)
 {
 	if (!cfg)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -195,10 +201,11 @@ ConfigRet ConfigSetKeyValSepChar(Config *cfg, char ch)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigSetBoolString(Config *cfg, const char *true_str,
-			      const char *false_str)
+ConfigRet
+ConfigSetBoolString(Config *cfg, const char *true_str, const char *false_str)
 {
-	char *t, *f;
+	char *t;
+	char *f;
 
 	if (!cfg ||
 	    !true_str || !*true_str || !StrIsTypeOfTrue(true_str) ||
@@ -241,8 +248,9 @@ ConfigRet ConfigSetBoolString(Config *cfg, const char *true_str,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-static ConfigRet ConfigGetSection(const Config *cfg, const char *section,
-				  ConfigSection **sect)
+static ConfigRet
+ConfigGetSection(const Config *cfg, const char *section,
+		 struct ConfigSection **sect)
 {
 	if (!cfg || !sect)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -266,9 +274,10 @@ static ConfigRet ConfigGetSection(const Config *cfg, const char *section,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-bool ConfigHasSection(const Config *cfg, const char *section)
+bool
+ConfigHasSection(const Config *cfg, const char *section)
 {
-	ConfigSection *sect = NULL;
+	struct ConfigSection *sect = NULL;
 
 	return ((ConfigGetSection(cfg, section, &sect) == CONFIG_OK)
 		? true : false);
@@ -284,9 +293,9 @@ bool ConfigHasSection(const Config *cfg, const char *section)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-static ConfigRet ConfigGetKeyValue(const Config *cfg, ConfigSection *sect,
-				   const char *key,
-		ConfigKeyValue **kv)
+static ConfigRet
+ConfigGetKeyValue(const Config *cfg, struct ConfigSection *sect,
+		  const char *key, struct ConfigKeyValue **kv)
 {
 	if (!sect || !key || !kv)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -306,7 +315,8 @@ static ConfigRet ConfigGetKeyValue(const Config *cfg, ConfigSection *sect,
  *
  * \return	   Returns number of sections on success, -1 on failure.
  */
-int ConfigGetSectionCount(const Config *cfg)
+int
+ConfigGetSectionCount(const Config *cfg)
 {
 	if (!cfg)
 		return -1;
@@ -323,9 +333,10 @@ int ConfigGetSectionCount(const Config *cfg)
  *
  * \return	   Returns number of keys on success, -1 on failure.
  */
-int ConfigGetKeyCount(const Config *cfg, const char *section)
+int
+ConfigGetKeyCount(const Config *cfg, const char *section)
 {
-	ConfigSection *sect = NULL;
+	struct ConfigSection *sect = NULL;
 
 	if (!cfg)
 		return -1;
@@ -351,12 +362,13 @@ int ConfigGetKeyCount(const Config *cfg, const char *section)
  *
  * \return	      Number of pointers in array..
  */
-int ConfigGetKeys(const Config *cfg, const char *section,
-		  char **array, int max_size, int begin_index)
+int
+ConfigGetKeys(const Config *cfg, const char *section,
+	      char **array, int max_size, int begin_index)
 {
-	ConfigSection  *sect = NULL;
-	ConfigKeyValue *kv   = NULL;
-	int		number = 0;
+	struct ConfigSection	*sect = NULL;
+	struct ConfigKeyValue	*kv   = NULL;
+	int			 number = 0;
 
 	if (!cfg)
 		return -1;
@@ -406,13 +418,14 @@ int ConfigGetKeys(const Config *cfg, const char *section,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadString(const Config *cfg, const char *section,
-			   const char *key, char *value, int size,
-			   const char *dfl_value)
+ConfigRet
+ConfigReadString(const Config *cfg, const char *section,
+		 const char *key, char *value, int size,
+		 const char *dfl_value)
 {
-	ConfigSection  *sect = NULL;
-	ConfigKeyValue *kv   = NULL;
-	ConfigRet       ret  = CONFIG_OK;
+	struct ConfigSection	*sect = NULL;
+	struct ConfigKeyValue	*kv   = NULL;
+	ConfigRet		 ret  = CONFIG_OK;
 
 	if (!cfg || !key || !value || (size < 1))
 		return CONFIG_ERR_INVALID_PARAM;
@@ -448,13 +461,14 @@ ConfigRet ConfigReadString(const Config *cfg, const char *section,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadInt(const Config *cfg, const char *section,
-			const char *key, int *value, int dfl_value)
+ConfigRet
+ConfigReadInt(const Config *cfg, const char *section,
+	      const char *key, int *value, int dfl_value)
 {
-	ConfigSection  *sect = NULL;
-	ConfigKeyValue *kv   = NULL;
-	ConfigRet       ret  = CONFIG_OK;
-	char	   *p    = NULL;
+	struct ConfigSection	*sect = NULL;
+	struct ConfigKeyValue	*kv   = NULL;
+	ConfigRet		 ret  = CONFIG_OK;
+	char			*p    = NULL;
 
 	if (!cfg || !key || !value)
 		return  CONFIG_ERR_INVALID_PARAM;
@@ -491,14 +505,15 @@ ConfigRet ConfigReadInt(const Config *cfg, const char *section,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadUnsignedInt(const Config *cfg, const char *section,
-				const char *key, unsigned int *value,
-				unsigned int dfl_value)
+ConfigRet
+ConfigReadUnsignedInt(const Config *cfg, const char *section,
+		      const char *key, unsigned int *value,
+		      unsigned int dfl_value)
 {
-	ConfigSection  *sect = NULL;
-	ConfigKeyValue *kv   = NULL;
-	ConfigRet       ret  = CONFIG_OK;
-	char	   *p    = NULL;
+	struct ConfigSection	*sect = NULL;
+	struct ConfigKeyValue	*kv   = NULL;
+	ConfigRet		 ret  = CONFIG_OK;
+	char			*p    = NULL;
 
 	if (!cfg || !key || !value)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -535,13 +550,14 @@ ConfigRet ConfigReadUnsignedInt(const Config *cfg, const char *section,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadFloat(const Config *cfg, const char *section,
-			  const char *key, float *value, float dfl_value)
+ConfigRet
+ConfigReadFloat(const Config *cfg, const char *section,
+		const char *key, float *value, float dfl_value)
 {
-	ConfigSection  *sect = NULL;
-	ConfigKeyValue *kv   = NULL;
-	ConfigRet       ret  = CONFIG_OK;
-	char	   *p    = NULL;
+	struct ConfigSection	*sect = NULL;
+	struct ConfigKeyValue	*kv   = NULL;
+	ConfigRet		 ret  = CONFIG_OK;
+	char			*p    = NULL;
 
 	if (!cfg || !key || !value)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -578,13 +594,14 @@ ConfigRet ConfigReadFloat(const Config *cfg, const char *section,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadDouble(const Config *cfg, const char *section,
-			   const char *key, double *value, double dfl_value)
+ConfigRet
+ConfigReadDouble(const Config *cfg, const char *section,
+		 const char *key, double *value, double dfl_value)
 {
-	ConfigSection  *sect = NULL;
-	ConfigKeyValue *kv   = NULL;
-	ConfigRet       ret  = CONFIG_OK;
-	char	   *p    = NULL;
+	struct ConfigSection	*sect = NULL;
+	struct ConfigKeyValue	*kv   = NULL;
+	ConfigRet		 ret  = CONFIG_OK;
+	char			*p    = NULL;
 
 	if (!cfg || !key || !value)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -607,7 +624,7 @@ ConfigRet ConfigReadDouble(const Config *cfg, const char *section,
 }
 
 /**
- * \brief	      ConfigReadBool() reads a boolean value from the cfg.
+ * \brief	     ConfigReadBool() reads a boolean value from the cfg.
  *		     If any error occurs default value is copied to 'value'
  *		     buffer and returns reason. If key is optional and does
  *		     not exists in config, the 'value' is default value and
@@ -621,12 +638,13 @@ ConfigRet ConfigReadDouble(const Config *cfg, const char *section,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadBool(const Config *cfg, const char *section,
-			 const char *key, bool *value, bool dfl_value)
+ConfigRet
+ConfigReadBool(const Config *cfg, const char *section,
+	       const char *key, bool *value, bool dfl_value)
 {
-	ConfigSection  *sect = NULL;
-	ConfigKeyValue *kv   = NULL;
-	ConfigRet       ret  = CONFIG_OK;
+	struct ConfigSection	*sect = NULL;
+	struct ConfigKeyValue	*kv   = NULL;
+	ConfigRet		 ret  = CONFIG_OK;
 
 	if (!cfg || !key || !value)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -666,11 +684,12 @@ ConfigRet ConfigReadBool(const Config *cfg, const char *section,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-static ConfigRet _ConfigAddSection(Config *cfg, const char *section,
-				   ConfigSection **sect)
+static ConfigRet
+_ConfigAddSection(Config *cfg, const char *section,
+		  struct ConfigSection **sect)
 {
-	ConfigSection *_sect = NULL;
-	ConfigRet      ret   = CONFIG_OK;
+	struct ConfigSection	*_sect = NULL;
+	ConfigRet		 ret   = CONFIG_OK;
 
 	if (!cfg)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -682,7 +701,7 @@ static ConfigRet _ConfigAddSection(Config *cfg, const char *section,
 	if (ret != CONFIG_ERR_NO_SECTION)
 		return ret;
 
-	*sect = calloc(1, sizeof(ConfigSection));
+	*sect = calloc(1, sizeof(struct ConfigSection));
 	if (*sect == NULL)
 		return CONFIG_ERR_MEMALLOC;
 
@@ -709,9 +728,10 @@ static ConfigRet _ConfigAddSection(Config *cfg, const char *section,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddSection(Config *cfg, const char *section)
+ConfigRet
+ConfigAddSection(Config *cfg, const char *section)
 {
-	ConfigRet      ret   = CONFIG_OK;
+	ConfigRet	ret = CONFIG_OK;
 
 	ret = _ConfigAddSection(cfg, section, NULL);
 	return ret;
@@ -728,14 +748,15 @@ ConfigRet ConfigAddSection(Config *cfg, const char *section)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddString(Config *cfg, const char *section, const char *key,
-			  const char *value)
+ConfigRet
+ConfigAddString(Config *cfg, const char *section, const char *key,
+		const char *value)
 {
-	ConfigSection  *sect = NULL;
-	ConfigKeyValue *kv   = NULL;
-	ConfigRet       ret  = CONFIG_OK;
-	const char     *p    = NULL;
-	const char     *q    = NULL;
+	struct ConfigSection	*sect = NULL;
+	struct ConfigKeyValue	*kv   = NULL;
+	ConfigRet		 ret  = CONFIG_OK;
+	const char		*p    = NULL;
+	const char		*q    = NULL;
 
 	if (!cfg || !key || !value)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -753,7 +774,7 @@ ConfigRet ConfigAddString(Config *cfg, const char *section, const char *key,
 		break;
 
 	case CONFIG_ERR_NO_KEY:
-		kv = calloc(1, sizeof(ConfigKeyValue));
+		kv = calloc(1, sizeof(struct ConfigKeyValue));
 		if (kv == NULL)
 			return CONFIG_ERR_MEMALLOC;
 		kv->key = strdup(key);
@@ -803,8 +824,8 @@ ConfigRet ConfigAddString(Config *cfg, const char *section, const char *key,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddInt(Config *cfg, const char *section, const char *key,
-		       int value)
+ConfigRet
+ConfigAddInt(Config *cfg, const char *section, const char *key, int value)
 {
 	char buf[64];
 
@@ -824,8 +845,9 @@ ConfigRet ConfigAddInt(Config *cfg, const char *section, const char *key,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddUnsignedInt(Config *cfg, const char *section,
-			       const char *key, unsigned int value)
+ConfigRet
+ConfigAddUnsignedInt(Config *cfg, const char *section,
+		     const char *key, unsigned int value)
 {
 	char buf[64];
 
@@ -844,8 +866,8 @@ ConfigRet ConfigAddUnsignedInt(Config *cfg, const char *section,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddFloat(Config *cfg, const char *section, const char *key,
-			 float value)
+ConfigRet
+ConfigAddFloat(Config *cfg, const char *section, const char *key, float value)
 {
 	char buf[64];
 
@@ -865,8 +887,9 @@ ConfigRet ConfigAddFloat(Config *cfg, const char *section, const char *key,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddDouble(Config *cfg, const char *section, const char *key,
-			  double value)
+ConfigRet
+ConfigAddDouble(Config *cfg, const char *section, const char *key,
+		double value)
 {
 	char buf[64];
 
@@ -886,8 +909,8 @@ ConfigRet ConfigAddDouble(Config *cfg, const char *section, const char *key,
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigAddBool(Config *cfg, const char *section, const char *key,
-			bool value)
+ConfigRet
+ConfigAddBool(Config *cfg, const char *section, const char *key, bool value)
 {
 	return ConfigAddString(cfg, section, key, value ?
 			       cfg->true_str : cfg->false_str);
@@ -899,7 +922,8 @@ ConfigRet ConfigAddBool(Config *cfg, const char *section, const char *key,
  * /////////////////////////////////////////////////////////////////////
  */
 
-static void _ConfigRemoveKey(ConfigSection *sect, ConfigKeyValue *kv)
+static void
+_ConfigRemoveKey(struct ConfigSection *sect, struct ConfigKeyValue *kv)
 {
 	TAILQ_REMOVE(&sect->kv_list, kv, next);
 	--(sect->numofkv);
@@ -921,11 +945,12 @@ static void _ConfigRemoveKey(ConfigSection *sect, ConfigKeyValue *kv)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigRemoveKey(Config *cfg, const char *section, const char *key)
+ConfigRet
+ConfigRemoveKey(Config *cfg, const char *section, const char *key)
 {
-	ConfigSection  *sect = NULL;
-	ConfigKeyValue *kv   = NULL;
-	ConfigRet       ret  = CONFIG_OK;
+	struct ConfigSection	*sect = NULL;
+	struct ConfigKeyValue	*kv   = NULL;
+	ConfigRet		 ret  = CONFIG_OK;
 
 	if (!cfg || !key)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -940,9 +965,10 @@ ConfigRet ConfigRemoveKey(Config *cfg, const char *section, const char *key)
 	return ret;
 }
 
-static void _ConfigRemoveSection(Config *cfg, ConfigSection *sect)
+static void
+_ConfigRemoveSection(Config *cfg, struct ConfigSection *sect)
 {
-	ConfigKeyValue *kv, *t_kv;
+	struct ConfigKeyValue *kv, *t_kv;
 
 	if (!cfg || !sect)
 		return;
@@ -967,10 +993,11 @@ static void _ConfigRemoveSection(Config *cfg, ConfigSection *sect)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigRemoveSection(Config *cfg, const char *section)
+ConfigRet
+ConfigRemoveSection(Config *cfg, const char *section)
 {
-	ConfigSection *sect = NULL;
-	ConfigRet      ret  = CONFIG_OK;
+	struct ConfigSection	*sect = NULL;
+	ConfigRet		 ret  = CONFIG_OK;
 
 	if (!cfg)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -988,7 +1015,8 @@ ConfigRet ConfigRemoveSection(Config *cfg, const char *section)
  *
  * \return	     Config* handle on success, NULL on failure
  */
-Config *ConfigNew()
+Config
+*ConfigNew()
 {
 	Config *cfg = NULL;
 
@@ -1018,9 +1046,10 @@ Config *ConfigNew()
  *
  * \param cfg      config handle
  */
-void ConfigFree(Config *cfg)
+void
+ConfigFree(Config *cfg)
 {
-	ConfigSection *sect, *t_sect;
+	struct ConfigSection *sect, *t_sect;
 
 	if (cfg == NULL)
 		return;
@@ -1053,9 +1082,11 @@ void ConfigFree(Config *cfg)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-static ConfigRet GetSectName(Config *cfg, char *p, char **section)
+static ConfigRet
+GetSectName(Config *cfg, char *p, char **section)
 {
-	char *q, *r;
+	char *q;
+	char *r;
 
 	if (!cfg || !p || !*p || !section)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -1114,9 +1145,11 @@ static ConfigRet GetSectName(Config *cfg, char *p, char **section)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-static ConfigRet GetKeyVal(Config *cfg, char *p, char **key, char **val)
+static
+ConfigRet GetKeyVal(Config *cfg, char *p, char **key, char **val)
 {
-	char *q, *v;
+	char *q;
+	char *v;
 
 	if (!cfg || !p || !*p || !key || !val)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -1181,17 +1214,18 @@ static ConfigRet GetKeyVal(Config *cfg, char *p, char **key, char **val)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigRead(FILE *fp, Config **cfg)
+ConfigRet
+ConfigRead(FILE *fp, Config **cfg)
 {
-	ConfigSection *sect    = NULL;
-	char	  *p       = NULL;
-	char	  *section = NULL;
-	char	  *key     = NULL;
-	char	  *val     = NULL;
-	char	   buf[3 * 1024];
-	Config	*_cfg    = NULL;
-	bool	   newcfg  = false;
-	ConfigRet      ret     = CONFIG_OK;
+	struct ConfigSection	*sect    = NULL;
+	char			*p       = NULL;
+	char			*section = NULL;
+	char			*key     = NULL;
+	char			*val     = NULL;
+	char			 buf[3 * 1024];
+	Config			*_cfg    = NULL;
+	bool			 newcfg  = false;
+	ConfigRet		 ret     = CONFIG_OK;
 
 	if (!fp || !cfg || (*cfg && ((*cfg)->initnum != CONFIG_INIT_MAGIC)))
 		return CONFIG_ERR_INVALID_PARAM;
@@ -1257,7 +1291,8 @@ error:
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigReadFile(const char *filename, Config **cfg)
+ConfigRet
+ConfigReadFile(const char *filename, Config **cfg)
 {
 	FILE      *fp  = NULL;
 	ConfigRet  ret = CONFIG_OK;
@@ -1285,10 +1320,11 @@ ConfigRet ConfigReadFile(const char *filename, Config **cfg)
  *
  * \return	      Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigPrint(const Config *cfg, FILE *stream)
+ConfigRet
+ConfigPrint(const Config *cfg, FILE *stream)
 {
-	ConfigSection  *sect = NULL;
-	ConfigKeyValue *kv   = NULL;
+	struct ConfigSection  *sect = NULL;
+	struct ConfigKeyValue *kv   = NULL;
 
 	if (!cfg || !stream)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -1316,10 +1352,11 @@ ConfigRet ConfigPrint(const Config *cfg, FILE *stream)
  *
  * \return	      Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigPrintSection(const Config *cfg, FILE *stream, char *section)
+ConfigRet
+ConfigPrintSection(const Config *cfg, FILE *stream, char *section)
 {
-	ConfigSection  *sect = NULL;
-	ConfigKeyValue *kv   = NULL;
+	struct ConfigSection  *sect = NULL;
+	struct ConfigKeyValue *kv   = NULL;
 
 	if (!cfg || !stream)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -1351,9 +1388,10 @@ ConfigRet ConfigPrintSection(const Config *cfg, FILE *stream, char *section)
  *
  * \return	      Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigPrintSectionNames(const Config *cfg, FILE *stream)
+ConfigRet
+ConfigPrintSectionNames(const Config *cfg, FILE *stream)
 {
-	ConfigSection  *sect = NULL;
+	struct ConfigSection  *sect = NULL;
 
 	if (!cfg || !stream)
 		return CONFIG_ERR_INVALID_PARAM;
@@ -1377,7 +1415,8 @@ ConfigRet ConfigPrintSectionNames(const Config *cfg, FILE *stream)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigPrintToFile(const Config *cfg, char *filename)
+ConfigRet
+ConfigPrintToFile(const Config *cfg, char *filename)
 {
 	FILE      *fp  = NULL;
 	ConfigRet  ret = CONFIG_OK;
@@ -1404,7 +1443,8 @@ ConfigRet ConfigPrintToFile(const Config *cfg, char *filename)
  *
  * \return	     Returns CONFIG_RET_OK as success, otherwise is an error.
  */
-ConfigRet ConfigPrintSettings(const Config *cfg, FILE *stream)
+ConfigRet
+ConfigPrintSettings(const Config *cfg, FILE *stream)
 {
 	if (!cfg || !stream)
 		return CONFIG_ERR_INVALID_PARAM;

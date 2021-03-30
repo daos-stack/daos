@@ -28,7 +28,8 @@
 /*
  * Read Config file
  */
-static void Test1(void)
+static void
+Test1(void)
 {
 	Config *cfg = NULL;
 
@@ -48,7 +49,8 @@ static void Test1(void)
 /*
  * Create Config handle, read Config file, edit and save to new file
  */
-static void Test2(void)
+static void
+Test2(void)
 {
 	Config *cfg = NULL;
 
@@ -82,7 +84,8 @@ static void Test2(void)
 /*
  * Create Config handle and add sections & key-values
  */
-static void Test3(void)
+static void
+Test3(void)
 {
 	Config *cfg = NULL;
 
@@ -107,7 +110,8 @@ static void Test3(void)
 /*
  * Create Config without any section
  */
-static void Test4(void)
+static void
+Test4(void)
 {
 	Config *cfg = NULL;
 	char s[1024];
@@ -150,7 +154,8 @@ static void Test4(void)
 	ConfigFree(cfg);
 }
 
-int main(void)
+int
+main(void)
 {
 	Test1();
 	Test2();
