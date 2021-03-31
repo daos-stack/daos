@@ -355,7 +355,7 @@ dmg_pool_create(const char *dmg_config_file,
 	FILE			*tmp_file = NULL;
 	daos_mgmt_pool_info_t	pool_info = {};
 	struct json_object	*dmg_out = NULL;
-	int			fd, rc = 0;
+	int			fd = -1, rc = 0;
 
 	if (grp != NULL) {
 		args = cmd_push_arg(args, &argcount,
