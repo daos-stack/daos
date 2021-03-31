@@ -335,9 +335,9 @@ typedef struct {
 enum {
 	/** It is unknown if the extent is covered or visible */
 	VOS_VIS_FLAG_UNKNOWN = 0,
-	/** The extent is not visible at at the requested epoch (epr_hi) */
+	/** The extent is not visible at the requested epoch (epr_hi) */
 	VOS_VIS_FLAG_COVERED = (1 << 0),
-	/** The extent is not visible at at the requested epoch (epr_hi) */
+	/** The extent is visible at the requested epoch (epr_hi) */
 	VOS_VIS_FLAG_VISIBLE = (1 << 1),
 	/** The extent represents only a portion of the in-tree extent */
 	VOS_VIS_FLAG_PARTIAL = (1 << 2),

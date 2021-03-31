@@ -605,7 +605,7 @@ vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc)
 	D_ASSERT(epc != NULL);
 	idx = ilog_ts_idx_get(ilog);
 
-	found = vos_ts_lookup_entry(idx, type, &se_entry);
+	found = vos_ts_peek_entry(idx, type, &se_entry);
 	if (found) {
 		D_ASSERT(se_entry != NULL);
 		wcache = &se_entry->te_w_cache;
