@@ -144,7 +144,7 @@ daos_debug_init(char *logfile)
 	}
 
 
-	rc = d_log_init_adv("DAOS", logfile, flags, DLOG_INFO, DLOG_CRIT);
+	rc = d_log_init_adv("DAOS", logfile, flags, DLOG_ERR, DLOG_CRIT);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
 			DP_RC(rc));

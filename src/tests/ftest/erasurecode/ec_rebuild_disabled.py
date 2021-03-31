@@ -38,7 +38,8 @@ class EcDisabledRebuild(ErasureCodeIor):
 
         # Kill the last server rank and wait for 20 seconds, Rebuild is disabled
         # so data should not be rebuild
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log)
+        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log,
+                                           force=True)
         time.sleep(20)
 
         # Read IOR data and verify for different EC object and different sizes
@@ -47,7 +48,8 @@ class EcDisabledRebuild(ErasureCodeIor):
 
         # Kill the another server rank and wait for 20 seconds,Rebuild will
         # not happens because i's disabled.Read/verify data with Parity 2.
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log)
+        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
+                                           force=True)
         time.sleep(20)
 
         # Read IOR data and verify for different EC object and different sizes
