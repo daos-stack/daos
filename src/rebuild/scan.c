@@ -121,7 +121,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
 				       arg->ephs, arg->shards, arg->count,
-				       /* Clear containers for reint */
+				       /* Delete local objects for reint */
 				       rpt->rt_rebuild_op == RB_OP_REINT);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
@@ -406,10 +406,8 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 						 *tgts, *shards,
 						 max_shards);
 		} else if (rebuild_op == RB_OP_DRAIN) {
-			rc = pl_obj_find_rebuild(map, md, NULL,
-						 rebuild_ver,
-						 *tgts, *shards,
-						 max_shards);
+			rc = pl_obj_find_drain(map, md, NULL, rebuild_ver,
+					       *tgts, *shards, max_shards);
 		} else if (rebuild_op == RB_OP_REINT) {
 			rc = pl_obj_find_reint(map, md, NULL,
 					       rebuild_ver,
@@ -525,7 +523,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			D_GOTO(out, rc);
 
 		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
-						      layout, myrank, mytarget);
+						      layout, myrank, mytarget,
+						      oid.id_shard);
 		if (!still_needed) {
 			struct rebuild_pool_tls *tls;
 
@@ -590,24 +589,11 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		rc = pool_map_find_target(map->pl_poolmap, tgts[i], &target);
 		D_ASSERT(rc == 1);
 
-		/* During rebuild test, it will manually exclude some target to
-		 * trigger the rebuild, then later add it back, so some objects
-		 * might exist on some illegal target, so they might use its
-		 * "own" target as the spare target, let's skip these object
-		 * now. When we have better support from CART exclude/addback,
-		 * myrank should always not equal to tgt_rebuild. XXX
-		 */
-		if (myrank != target->ta_comp.co_rank) {
-			rc = rebuild_object_insert(rpt, tgts[i], shards[i],
-						   arg->co_uuid,
-						   oid, ent->ie_epoch);
-			if (rc)
-				D_GOTO(out, rc);
-		} else {
-			D_DEBUG(DB_REBUILD, "rebuild skip "DF_UOID".\n",
-				DP_UOID(oid));
-			rc = 0;
-		}
+		rc = rebuild_object_insert(rpt, tgts[i], shards[i],
+					   arg->co_uuid,
+					   oid, ent->ie_epoch);
+		if (rc)
+			D_GOTO(out, rc);
 	}
 
 out:
@@ -661,6 +647,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
+	param.ip_flags |= VOS_IT_PUNCHED;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
 			 rebuild_obj_scan_cb, NULL, arg, &dth);

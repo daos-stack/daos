@@ -77,8 +77,8 @@ class GlobalHandle(TestWithServers):
             # p.join()
             # for now verifying global handle in the same process which is not
             # the intended use case
-            self.check_handle(buf_len, iov_len, buf,
-                              self.pool.pool.get_uuid_str(), 0)
+            self.check_handle(
+                buf_len, iov_len, buf, self.pool.pool.get_uuid_str(), 0)
 
         except DaosApiError as error:
             self.log.error(error)

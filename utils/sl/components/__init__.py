@@ -122,7 +122,7 @@ def define_mercury(reqs):
                 headers=['psm2.h'],
                 libs=['psm2'])
 
-    if reqs.build_type == 'debug':
+    if reqs.target_type == 'debug':
         OFI_DEBUG = '--enable-debug '
     else:
         OFI_DEBUG = '--disable-debug '
@@ -132,6 +132,7 @@ def define_mercury(reqs):
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
                           '--disable-efa ' +
+                          '--without-gdrcopy ' +
                           OFI_DEBUG +
                           exclude(reqs, 'psm2',
                                   '--enable-psm2' +
@@ -159,7 +160,7 @@ def define_mercury(reqs):
                           'make install'], libs=['opa'],
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
 
-    if reqs.build_type == 'debug':
+    if reqs.target_type == 'debug':
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=ON '
     else:
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=OFF '
@@ -209,9 +210,6 @@ def define_common(reqs):
     reqs.define('python34_devel', headers=['python3.4m/Python.h'],
                 package='python34-devel')
 
-    reqs.define('python27_devel', headers=['python2.7/Python.h'],
-                package='python-devel')
-
     reqs.define('libelf', headers=['libelf.h'], package='elfutils-libelf-devel')
 
     reqs.define('tbbmalloc', libs=['tbbmalloc_proxy'], package='tbb-devel')
@@ -219,7 +217,7 @@ def define_common(reqs):
     reqs.define('jemalloc', libs=['jemalloc'], package='jemalloc-devel')
 
     reqs.define('boost', headers=['boost/preprocessor.hpp'],
-                package='boost-devel')
+                package='boost-python36-devel')
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
@@ -287,7 +285,8 @@ def define_components(reqs):
                 commands=['git clean -dxf',
                           './autogen.sh',
                           './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
-                          ' --enable-valgrind',
+                          ' --enable-valgrind'
+                          ' --enable-stack-unwind',
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],
                 requires=['valgrind_devel'],

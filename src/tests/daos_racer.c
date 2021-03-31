@@ -20,6 +20,7 @@
 #include <daos/tests_lib.h>
 #include <daos_test.h>
 #include <daos/dts.h>
+#include <daos/credit.h>
 
 enum {
 	UPDATE,
@@ -48,7 +49,7 @@ enum {
 	OBJ_CNT
 };
 
-static struct dts_context	ts_ctx;
+static struct credit_context	ts_ctx;
 unsigned		seed;
 int			dkey_cnt = MAX_KEY_CNT;
 int			akey_cnt = MAX_KEY_CNT;
@@ -498,6 +499,18 @@ main(int argc, char **argv)
 
 			break;
 		}
+	}
+
+	/*
+	 * For daos_racer, if pool/cont uuids are supplied as command line
+	 * arguments it's assumed that the pool/cont were created. If only a
+	 * cont uuid is supplied then a pool and container will be created and
+	 * the cont uuid will be used during creation
+	 */
+	if (!uuid_is_null(ts_ctx.tsc_pool_uuid)) {
+		ts_ctx.tsc_skip_pool_create = true;
+		if (!uuid_is_null(ts_ctx.tsc_cont_uuid))
+			ts_ctx.tsc_skip_cont_create = true;
 	}
 
 	if (seed == 0) {
