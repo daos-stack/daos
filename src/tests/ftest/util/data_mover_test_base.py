@@ -157,19 +157,25 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         """
         return " ".join(self.get_posix_test_path_list())
 
-    def new_posix_test_path(self, create=True):
+    def new_posix_test_path(self, create=True, parent=None):
         """Generate a new, unique posix path.
 
         Args:
             create (bool): Whether to create the directory.
                 Defaults to True.
+            parent (str, optional): The parent directory to create the
+                path in. Defaults to self.tmp.
 
         Returns:
             str: the posix path.
 
         """
         dir_name = "posix_test{}".format(len(self.posix_test_paths))
-        path = join(self.tmp, dir_name)
+
+        if parent:
+            path = join(parent, dir_name)
+        else:
+            path = join(self.tmp, dir_name)
 
         # Add to the list of posix paths
         self.posix_test_paths.append(path)

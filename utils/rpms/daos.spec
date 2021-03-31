@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -182,6 +182,7 @@ Requires: python3-tabulate
 Requires: fio
 Requires: dbench
 Requires: lbzip2
+Requires: attr
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
@@ -401,6 +402,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed Mar 31 2021 Dalton A. Bohning <daltonx.bohning@intel.com> - 1.3.0-6
+- Add attr to the test dependencies
+
 * Mon Mar 29 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.0-5
 - Move libdts.so to the daos-tests subpackage
 
