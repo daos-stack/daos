@@ -226,7 +226,7 @@ This is the package needed to build software with the DAOS library.
      %{?compiler_args}
 
 %if ("%{?compiler_args}" == "COMPILER=covc")
-cp -f test.cov /tmp/
+mv test.cov{,-build}
 %endif
 
 %install
@@ -243,7 +243,7 @@ cp -f test.cov /tmp/
       %{?compiler_args}
 
 %if ("%{?compiler_args}" == "COMPILER=covc")
-cp -f /tmp/test.cov %{buildroot}/usr/lib/daos/TESTING/ftest/
+mv test.cov-build %{buildroot}/usr/lib/daos/TESTING/ftest/test.cov
 %endif
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
