@@ -38,6 +38,13 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		dfs_flags |= DFS_SET_ATTR_MTIME;
 	}
 
+	if (to_set & FUSE_SET_ATTR_CTIME) {
+		DFUSE_TRA_DEBUG(ie, "ctime %#lx", attr->st_ctime);
+		to_set &= ~FUSE_SET_ATTR_CTIME;
+		attr->st_mtime = attr->st_ctime;
+		dfs_flags |= DFS_SET_ATTR_MTIME;
+	}
+
 	if (to_set & FUSE_SET_ATTR_SIZE) {
 		DFUSE_TRA_DEBUG(ie, "size %#lx",
 				attr->st_size);
