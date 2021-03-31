@@ -422,7 +422,8 @@ dmg_pool_create(const char *dmg_config_file,
 			}
 			tmp_file = fdopen(fd, "w");
 			if (tmp_file == NULL) {
-				D_ERROR("failed to associate stream: %s\n", strerror(errno));
+				D_ERROR("failed to associate stream: %s\n",
+					strerror(errno));
 				close(fd);
 				D_GOTO(out_cmd, rc = -DER_MISC);
 			}
