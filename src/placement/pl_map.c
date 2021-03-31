@@ -149,6 +149,27 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    uint32_t rebuild_ver, uint32_t *tgt_rank,
 		    uint32_t *shard_id, unsigned int array_size)
 {
+	struct daos_oclass_attr *oc_attr;
+
+	D_ASSERT(map->pl_ops != NULL);
+
+	oc_attr = daos_oclass_attr_find(md->omd_id);
+	if (daos_oclass_grp_size(oc_attr) == 1)
+		return 0;
+
+	if (!map->pl_ops->o_obj_find_rebuild)
+		return -DER_NOSYS;
+
+	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, rebuild_ver,
+					       tgt_rank, shard_id, array_size);
+}
+
+int
+pl_obj_find_drain(struct pl_map *map, struct daos_obj_md *md,
+		  struct daos_obj_shard_md *shard_md,
+		  uint32_t rebuild_ver, uint32_t *tgt_rank,
+		  uint32_t *shard_id, unsigned int array_size)
+{
 	D_ASSERT(map->pl_ops != NULL);
 
 	if (!map->pl_ops->o_obj_find_rebuild)
@@ -164,13 +185,19 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		    uint32_t reint_ver, uint32_t *tgt_rank,
 		    uint32_t *shard_id, unsigned int array_size)
 {
+	struct daos_oclass_attr *oc_attr;
+
 	D_ASSERT(map->pl_ops != NULL);
+
+	oc_attr = daos_oclass_attr_find(md->omd_id);
+	if (daos_oclass_grp_size(oc_attr) == 1)
+		return 0;
 
 	if (!map->pl_ops->o_obj_find_reint)
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_reint(map, md, shard_md, reint_ver,
-					       tgt_rank, shard_id, array_size);
+					     tgt_rank, shard_id, array_size);
 }
 
 int
