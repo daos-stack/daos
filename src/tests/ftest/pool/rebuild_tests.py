@@ -34,14 +34,23 @@ class RebuildTests(TestWithServers):
         rank = self.params.get("rank", "/run/testparams/*")
         obj_class = self.params.get("object_class", "/run/testparams/*")
 
-        # Create the pools and confirm their status
+        # Collect server configuration information
         server_count = len(self.hostlist_servers)
+        engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
+        engine_count = 1 if engine_count is None else int(engine_count)
+        target_count = int(self.server_managers[0].get_config_value("targets"))
+        self.log.info(
+            "Running with %s servers, %s engines per server, and %s targets "
+            "per engine", server_count, engine_count, target_count)
+
+        # Create the pools and confirm their status
         status = True
         for index in range(pool_quantity):
             self.pool[index].create()
             status &= self.pool[index].check_pool_info(
-                pi_nnodes=server_count,
-                pi_ntargets=server_count,               # DAOS-2799
+                pi_nnodes=server_count * engine_count,
+                pi_ntargets=server_count * engine_count * target_count,
                 pi_ndisabled=0
             )
             status &= self.pool[index].check_rebuild_status(
@@ -94,9 +103,9 @@ class RebuildTests(TestWithServers):
         status = True
         for index in range(pool_quantity):
             status &= self.pool[index].check_pool_info(
-                pi_nnodes=server_count,
-                pi_ntargets=server_count,              # DAOS-2799
-                pi_ndisabled=1
+                pi_nnodes=server_count * engine_count,
+                pi_ntargets=server_count * engine_count * target_count,
+                pi_ndisabled=target_count
             )
             status &= self.pool[index].check_rebuild_status(
                 rs_done=1, rs_obj_nr=rs_obj_nr[index],
@@ -120,7 +129,10 @@ class RebuildTests(TestWithServers):
         Use Cases:
             single pool rebuild, single client, various record/object counts
 
-        :avocado: tags=all,daily_regression,large,pool,rebuild,rebuildsimple
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm,large
+        :avocado: tags=rebuild
+        :avocado: tags=pool,rebuild_tests,test_simple_rebuild
         """
         self.run_rebuild_test(1)
 
@@ -134,6 +146,9 @@ class RebuildTests(TestWithServers):
         Use Cases:
             multipool rebuild, single client, various object and record counts
 
-        :avocado: tags=all,daily_regression,large,pool,rebuild,rebuildmulti
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm,large
+        :avocado: tags=rebuild
+        :avocado: tags=pool,rebuild_tests,test_multipool_rebuild
         """
         self.run_rebuild_test(self.params.get("quantity", "/run/testparams/*"))
