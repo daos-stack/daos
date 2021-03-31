@@ -242,8 +242,8 @@ progress_fn(void *arg)
 
 static int
 self_test_init(char *dest_name, crt_context_t *crt_ctx,
-			  crt_group_t **srv_grp, pthread_t *tid,
-			  char *attach_info_path, bool listen)
+	       crt_group_t **srv_grp, pthread_t *tid,
+	       char *attach_info_path, bool listen)
 {
 	uint32_t	 init_flags = 0;
 	uint32_t	 grp_size;
@@ -447,8 +447,8 @@ status_req_cb(const struct crt_cb_info *cb_info)
  */
 static void
 print_fail_counts(struct st_latency *latencies,
-			      uint32_t num_latencies,
-			      const char *prefix)
+		  uint32_t num_latencies,
+		  const char *prefix)
 {
 	uint32_t last_err_idx = 0;
 	uint32_t local_rep = 0;
@@ -795,8 +795,8 @@ print_results(struct st_latency *latencies,
 		 *    = scale / average;
 		 * bw = tp * size_per_request
 		 * WARNING: this evaluation of tp was a factor of 10
-		 *          to low.  It has been increased via scaling
-		 *          factor.  Need to understand why.
+		 *	  to low.  It has been increased via scaling
+		 *	  factor.  Need to understand why.
 		 */
 		throughput = 10000000000.0F / latency_avg;
 		bandwidth = throughput * size_per_request /
@@ -952,6 +952,7 @@ get_config_value(Config *cfg, char *sec_name, char *key,
 	char		*c_endpoint = NULL;
 	char		*c_remaining = NULL;
 	char		*c_tag = NULL;
+	char		*end_ptr;
 	int		 i;
 	int		 status_size = sizeof(status) /
 				       sizeof(struct status_feature);
@@ -963,7 +964,6 @@ get_config_value(Config *cfg, char *sec_name, char *key,
 	int		 itemp2;
 	char		 id[MASTER_VALUE_SIZE];
 	int		 ini_value;
-	int		 temp;
 
 	/* Make sure config is valid */
 	if (cfg == NULL) {
@@ -1006,15 +1006,19 @@ get_config_value(Config *cfg, char *sec_name, char *key,
 
 	if ((c_master != NULL) && isdigit(*c_master)) {
 		/* avoid checkpatch warning */
-		temp = sscanf(c_master, "%d", &master);
-		if (temp != 1)
+		master = strtol(c_master, &end_ptr, 10);
+		if (end_ptr == c_master) {
+			/* Error reading in master value */
 			D_GOTO(exit_code_free, value);
+		}
 	}
 	if ((c_tag != NULL) && isdigit(*c_tag)) {
 		/* avoid checkpatch warning */
-		temp = sscanf(c_tag, "%d", &master_tag);
-		if (temp != 1)
+		master_tag = strtol(c_tag, &end_ptr, 10);
+		if (end_ptr == c_tag) {
+			/* Error reading in tag value */
 			D_GOTO(exit_code_free, value);
+		}
 	}
 
 	/*
@@ -1027,17 +1031,22 @@ get_config_value(Config *cfg, char *sec_name, char *key,
 	c_endpoint = strtok_r(c_endpoint, ":", &c_tag);
 	if ((c_endpoint != NULL) && isdigit(*c_endpoint)) {
 		/* avoid check patch warning */
-		temp = sscanf(c_endpoint, "%d", &endpoint);
-		if (temp != 1)
+		endpoint = strtol(c_endpoint, &end_ptr, 10);
+		if (end_ptr == c_endpoint) {
+			/* Error reading in endpoint */
 			D_GOTO(exit_code_free, value);
+		}
 	}
 	if ((c_tag != NULL) && isdigit(*c_tag)) {
-		/* avoid check patch warning */
-		temp = sscanf(c_tag, "%d", &endpoint_tag);
-		if (temp != 1)
+		endpoint_tag = strtol(c_tag, &end_ptr, 10);
+		if (end_ptr == c_tag) {
+			/* Error reading in tag */
 			D_GOTO(exit_code_free, value);
+		}
 	}
 
+	D_DEBUG(DB_TEST, "Key to Match: %d:%d - %d:%d\n",
+		master, master_tag, endpoint, endpoint_tag);
 	/*
 	 * Priority search: match master and endpoint exactly.
 	 * Search through all keys searching for a match with
@@ -1070,12 +1079,10 @@ get_config_value(Config *cfg, char *sec_name, char *key,
 			c_master = strtok_r(id, "-", &c_endpoint);
 			c_master = strtok_r(c_master, ":", &c_tag);
 			if ((c_master != NULL) && isdigit(*c_master)) {
-				/* avoid check patch warning */
-				temp = sscanf(c_master, "%d", &itemp);
-				if (temp != 1)
+				itemp = strtol(c_master, &end_ptr, 10);
+				if (end_ptr == c_master)
 					D_GOTO(exit_code_free, value);
 			}
-
 			/* Match with master, check endpoint */
 			if (itemp == master) {
 				/* search endpoint key and compare */
@@ -1085,10 +1092,9 @@ get_config_value(Config *cfg, char *sec_name, char *key,
 				c_endpoint = strtok_r(c_endpoint, ":", &c_tag);
 				if ((c_endpoint != NULL) &&
 				    isdigit(*c_endpoint)) {
-					/* avoid check patch warning */
-					temp = sscanf(c_endpoint, "%d",
-						      &itemp2);
-					if (temp != 1)
+					itemp2 = strtol(c_endpoint, &end_ptr,
+							10);
+					if (end_ptr == c_endpoint)
 						D_GOTO(exit_code_free, value);
 				}
 				if (itemp2 == endpoint) {
@@ -1138,9 +1144,8 @@ code_search_master:
 			c_master = strtok_r(c_master, ":", &c_tag);
 			itemp = -1;
 			if ((c_master != NULL) && isdigit(*c_master)) {
-				/* avoid checkpatch warning */
-				temp = sscanf(c_master, "%d", &itemp);
-				if (temp != 1)
+				itemp = strtol(c_master, NULL, 10);
+				if (end_ptr == c_master)
 					D_GOTO(exit_code_free, value);
 			}
 			if (itemp == master) {
@@ -1195,6 +1200,7 @@ code_search_endpoint:
 			c_master = strtok_r(id, "-", &c_endpoint);
 			c_master = strtok_r(c_master, ":", &c_tag);
 			if ((c_master != NULL) && strcmp(c_master, "*") == 0) {
+				itemp = -1;
 				/* endpoint must be a value */
 				c_endpoint = strtok_r(c_endpoint, "-",
 						      &c_remaining);
@@ -1202,9 +1208,9 @@ code_search_endpoint:
 
 				if ((c_endpoint != NULL) &&
 				    isdigit(*c_endpoint)) {
-					/* avoid checkpatch warning */
-					temp = sscanf(c_endpoint, "%d", &itemp);
-					if (temp != 1)
+					itemp = strtol(c_endpoint, &end_ptr,
+						       10);
+					if (end_ptr == c_endpoint)
 						D_GOTO(exit_code_free, value);
 				}
 
@@ -2560,10 +2566,10 @@ print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Short version: -d\n"
 	       "      Display the configuration file setup\n"
 	       "      Negative values of these will displays only\n"
-	       "        '0' - no display shown\n"
-	       "        '1' - show info on specified sector/group\n"
-	       "        '2' - show all sector/group headings\n"
-	       "        '3' - show all sector/group info specified in file\n"
+	       "	'0' - no display shown\n"
+	       "	'1' - show info on specified sector/group\n"
+	       "	'2' - show all sector/group headings\n"
+	       "	'3' - show all sector/group info specified in file\n"
 	       "\n",
 	       prog_name
 	);
@@ -2583,22 +2589,22 @@ print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "	Note: Can be specified multiple times\n"
 	       "\n"
 	       "      ranks and tags are comma-separated lists to connect to\n"
-	       "        Supports both ranges and lists - for example, \"1-5,3,8\"\n"
+	       "	Supports both ranges and lists - for example, \"1-5,3,8\"\n"
 	       "\n"
 	       "      Example: --endpoint 1-3,2:0-1\n"
-	       "        This would create these endpoints:\n"
-	       "          1:0\n"
-	       "          1:1\n"
-	       "          2:0\n"
-	       "          2:1\n"
-	       "          3:0\n"
-	       "          3:1\n"
-	       "          2:0\n"
-	       "          2:1\n"
+	       "	This would create these endpoints:\n"
+	       "	  1:0\n"
+	       "	  1:1\n"
+	       "	  2:0\n"
+	       "	  2:1\n"
+	       "	  3:0\n"
+	       "	  3:1\n"
+	       "	  2:0\n"
+	       "	  2:1\n"
 	       "\n"
-	       "        By default, self-test will send test messages to these\n"
-	       "        endpoints in the order listed above.See --randomize-endpoints\n"
-	       "        for more information\n"
+	       "	By default, self-test will send test messages to these\n"
+	       "	endpoints in the order listed above.See --randomize-endpoints\n"
+	       "	for more information\n"
 	       "\n"
 	       "Optional Arguments\n"
 	       "  --help\n"
@@ -2639,10 +2645,10 @@ print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Short version: -d\n"
 	       "      Display the configuration file setup\n"
 	       "      Negative values of these will displays only\n"
-	       "        '0' - no display shown\n"
-	       "        '1' - show info on specified sector/group\n"
-	       "        '2' - show all sector/group headings\n"
-	       "        '3' - show all sector/group info specified in file\n"
+	       "	'0' - no display shown\n"
+	       "	'1' - show info on specified sector/group\n"
+	       "	'2' - show all sector/group headings\n"
+	       "	'3' - show all sector/group info specified in file\n"
 	       "\n"
 	       "  --raw_data <value>\n"
 	       "      Short version: -b\n"
@@ -2664,76 +2670,76 @@ print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "\n"
 	       "      Each size integer can be prepended with a single character to specify\n"
 	       "      the underlying transport mechanism. Available types are:\n"
-	       "        'e' - Empty (no payload)\n"
-	       "        'i' - I/O vector (IOV)\n"
-	       "        'b' - Bulk transfer\n"
+	       "	'e' - Empty (no payload)\n"
+	       "	'i' - I/O vector (IOV)\n"
+	       "	'b' - Bulk transfer\n"
 	       "      For example, (b1000) would transfer 1000 bytes via bulk in both directions\n"
 	       "      Similarly, (i100 b1000) would use IOV to send and bulk to reply\n"
 	       "      Only reasonable combinations are permitted (i.e. e1000 is not allowed)\n"
 	       "      If no type specifier is specified, one will be chosen automatically.\n"
-	       "        The simple heuristic is that bulk will be used if a specified\n"
-	       "        size is >= %u\n"
+	       "	The simple heuristic is that bulk will be used if a specified\n"
+	       "	size is >= %u\n"
 	       "      BULK_GET will be used on the service side to 'send' data from client\n"
-	       "        to service, and BULK_PUT will be used on the service side to 'reply'\n"
-	       "        (assuming bulk transfers specified)\n"
+	       "	to service, and BULK_PUT will be used on the service side to 'reply'\n"
+	       "	(assuming bulk transfers specified)\n"
 	       "\n"
 	       "      Note that different messages are sent internally via different structures.\n"
 	       "      These are enumerated as follows, with x,y > 0:\n"
-	       "        (0  0)  - Empty payload sent in both directions\n"
-	       "        (ix 0)  - 8-byte session_id + x-byte iov sent, empty reply\n"
-	       "        (0  iy) - 8-byte session_id sent, y-byte iov reply\n"
-	       "        (ix iy) - 8-byte session_id + x-byte iov sent, y-byte iov reply\n"
-	       "        (0  by) - 8-byte session_id + 8-byte bulk handle sent\n"
-	       "                  y-byte BULK_PUT, empty reply\n"
-	       "        (bx 0)  - 8-byte session_id + 8-byte bulk_handle sent\n"
-	       "                  x-byte BULK_GET, empty reply\n"
-	       "        (ix by) - 8-byte session_id + x-byte iov + 8-byte bulk_handle sent\n"
-	       "                  y-byte BULK_PUT, empty reply\n"
-	       "        (bx iy) - 8-byte session_id + 8-byte bulk_handle sent\n"
-	       "                  x-byte BULK_GET, y-byte iov reply\n"
-	       "        (bx by) - 8-byte session_id + 8-byte bulk_handle sent\n"
-	       "                  x-byte BULK_GET, y-byte BULK_PUT, empty reply\n"
+	       "	(0  0)  - Empty payload sent in both directions\n"
+	       "	(ix 0)  - 8-byte session_id + x-byte iov sent, empty reply\n"
+	       "	(0  iy) - 8-byte session_id sent, y-byte iov reply\n"
+	       "	(ix iy) - 8-byte session_id + x-byte iov sent, y-byte iov reply\n"
+	       "	(0  by) - 8-byte session_id + 8-byte bulk handle sent\n"
+	       "		  y-byte BULK_PUT, empty reply\n"
+	       "	(bx 0)  - 8-byte session_id + 8-byte bulk_handle sent\n"
+	       "		  x-byte BULK_GET, empty reply\n"
+	       "	(ix by) - 8-byte session_id + x-byte iov + 8-byte bulk_handle sent\n"
+	       "		  y-byte BULK_PUT, empty reply\n"
+	       "	(bx iy) - 8-byte session_id + 8-byte bulk_handle sent\n"
+	       "		  x-byte BULK_GET, y-byte iov reply\n"
+	       "	(bx by) - 8-byte session_id + 8-byte bulk_handle sent\n"
+	       "		  x-byte BULK_GET, y-byte BULK_PUT, empty reply\n"
 	       "\n"
 	       "      Note also that any message size other than (0 0) will use test sessions.\n"
-	       "        A self-test session will be negotiated with the service before sending\n"
-	       "        any traffic, and the session will be closed after testing this\n"
-	       "        size completes.\n"
-	       "        The time to create and tear down these sessions is NOT measured.\n"
+	       "	A self-test session will be negotiated with the service before sending\n"
+	       "	any traffic, and the session will be closed after testing this\n"
+	       "	size completes.\n"
+	       "	The time to create and tear down these sessions is NOT measured.\n"
 	       "\n"
 	       "      Default: \"%s\"\n"
 	       "\n"
 	       "  --master-endpoint <ranks:tags>\n"
 	       "      Short version: -m\n"
 	       "      Describes an endpoint (or range of endpoints) that will each run a\n"
-	       "        1:many self-test against the list of endpoints given via the\n"
-	       "        --endpoint argument.\n"
+	       "	1:many self-test against the list of endpoints given via the\n"
+	       "	--endpoint argument.\n"
 	       "\n"
 	       "      Specifying multiple --master-endpoint ranks/tags sets up a many:many\n"
-	       "        self-test - the first 'many' is the list of master endpoints, each\n"
-	       "        which executes a separate concurrent test against the second\n"
-	       "        'many' (the list of test endpoints)\n"
+	       "	self-test - the first 'many' is the list of master endpoints, each\n"
+	       "	which executes a separate concurrent test against the second\n"
+	       "	'many' (the list of test endpoints)\n"
 	       "\n"
 	       "      The argument syntax for this option is identical to that for\n"
-	       "        --endpoint. Also, like --endpoint, --master-endpoint can be\n"
-	       "        specified multiple times\n"
+	       "	--endpoint. Also, like --endpoint, --master-endpoint can be\n"
+	       "	specified multiple times\n"
 	       "\n"
 	       "      Unlike --endpoint, the list of master endpoints is sorted and\n"
-	       "        any duplicate entries are removed automatically. This is because\n"
-	       "        each instance of self-test can only manage one 1:many test at\n"
-	       "        a time\n"
+	       "	any duplicate entries are removed automatically. This is because\n"
+	       "	each instance of self-test can only manage one 1:many test at\n"
+	       "	a time\n"
 	       "\n"
 	       "      If not specified, the default value is to use this command-line\n"
-	       "        application itself to run a 1:many test against the test endpoints\n"
+	       "	application itself to run a 1:many test against the test endpoints\n"
 	       "\n"
 	       "      This client application sends all of the self-test parameters to\n"
-	       "        this master node and instructs it to run a self-test session against\n"
-	       "        the other endpoints specified by the --endpoint argument\n"
+	       "	this master node and instructs it to run a self-test session against\n"
+	       "	the other endpoints specified by the --endpoint argument\n"
 	       "\n"
 	       "      This allows self-test to be run between any arbitrary CART-enabled\n"
-	       "        applications without having to make them self-test aware. These\n"
-	       "        other applications can be busy doing something else entirely and\n"
-	       "        self-test will have no impact on that workload beyond consuming\n"
-	       "        additional network and compute resources\n"
+	       "	applications without having to make them self-test aware. These\n"
+	       "	other applications can be busy doing something else entirely and\n"
+	       "	self-test will have no impact on that workload beyond consuming\n"
+	       "	additional network and compute resources\n"
 	       "\n"
 	       "  --repetitions-per-size <N>\n"
 	       "      Short version: -r\n"
@@ -2746,9 +2752,9 @@ print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Maximum number of RPCs allowed to be executing concurrently.\n"
 	       "\n"
 	       "      Note that at the beginning of each test run, a buffer of size send_size\n"
-	       "        is allocated for each inflight RPC (total max_inflight * send_size).\n"
-	       "        This could be a lot of memory. Also, if the reply uses bulk, the\n"
-	       "        size increases to (max_inflight * max(send_size, reply_size))\n"
+	       "	is allocated for each inflight RPC (total max_inflight * send_size).\n"
+	       "	This could be a lot of memory. Also, if the reply uses bulk, the\n"
+	       "	size increases to (max_inflight * max(send_size, reply_size))\n"
 	       "\n"
 	       "      Default: %d\n"
 	       "\n"
@@ -2758,16 +2764,16 @@ print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Forces all test buffers to be aligned (or misaligned) as specified.\n"
 	       "\n"
 	       "      The argument specifies what the least-significant byte of all test buffer\n"
-	       "        addresses should be forced to be. For example, if --align 0 is specified,\n"
-	       "        all test buffer addresses will end in 0x00 (thus aligned to 256 bytes).\n"
-	       "        To force misalignment, use something like --align 3. For 64-bit (8-byte)\n"
-	       "        alignment, use something like --align 8 or --align 24 (0x08 and 0x18)\n"
+	       "	addresses should be forced to be. For example, if --align 0 is specified,\n"
+	       "	all test buffer addresses will end in 0x00 (thus aligned to 256 bytes).\n"
+	       "	To force misalignment, use something like --align 3. For 64-bit (8-byte)\n"
+	       "	alignment, use something like --align 8 or --align 24 (0x08 and 0x18)\n"
 	       "\n"
 	       "      Alignment should be specified as a decimal value in the range [%d:%d]\n"
 	       "\n"
 	       "      If specified, buffers will be allocated with an extra 256 bytes of\n"
-	       "        alignment padding and the buffer to transfer will start at the point which\n"
-	       "        the least - significant byte of the address matches the requested alignment.\n"
+	       "	alignment padding and the buffer to transfer will start at the point which\n"
+	       "	the least - significant byte of the address matches the requested alignment.\n"
 	       "\n"
 	       "      Default is no alignment - whatever is returned by the allocator is used\n"
 	       "\n"
@@ -2781,10 +2787,10 @@ print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "  --path  /path/to/attach_info_file/directory\n"
 	       "      Short version: -p  prefix\n"
 	       "      This option implies --singleton is set.\n"
-	       "        If specified, self_test will use the address information in:\n"
-	       "        /tmp/group_name.attach_info_tmp, if prefix is specified, self_test will\n"
-	       "        use the address information in: prefix/group_name.attach_info_tmp.\n"
-	       "        Note the = sign in the option.\n",
+	       "	If specified, self_test will use the address information in:\n"
+	       "	/tmp/group_name.attach_info_tmp, if prefix is specified, self_test will\n"
+	       "	use the address information in: prefix/group_name.attach_info_tmp.\n"
+	       "	Note the = sign in the option.\n",
 	       prog_name, UINT32_MAX,
 	       CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
 	       max_inflight, CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MIN);
@@ -3245,7 +3251,10 @@ config_file_setup(char *file_name, char *section_name,
 {
 	Config *cfg = NULL;
 	int ret = 0;
+	char *end_ptr;
+#if 0
 	int sret;
+#endif
 	ConfigRet config_ret;
 	char string[STRING_MAX_SIZE];
 	int len;
@@ -3265,10 +3274,15 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (display || (config_ret == CONFIG_OK)) {
 		printf("Configuration file %s\n", file_name);
+		/*
+		 * display option set via command line "display"
+		 * or by display option in file "string"
+		 */
 		if (display)
-			sret = sscanf(display, "%d", &temp);
+			temp = strtol(display, NULL, 10);
 		else
-			sret = sscanf(&string[0], "%d", &temp);
+			temp = strtol(&string[0], NULL, 10);
+
 		if ((temp == 1) || (temp == -1)) {
 			/* Avoid checkpatch warning */
 			ConfigPrintSection(cfg, stdout, section_name);
@@ -3350,8 +3364,8 @@ config_file_setup(char *file_name, char *section_name,
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		sret = sscanf(&string[0], "%d", &gbl.g_rep_count);
-		if (sret != 1) {
+		gbl.g_rep_count = strtol(&string[0], &end_ptr, 10);
+		if (end_ptr == &string[0]) {
 			gbl.g_rep_count = gbl.g_default_rep_count;
 			printf("Warning: Invalid repetitions-per-size\n"
 			       "  Using default value %d instead\n",
@@ -3365,8 +3379,8 @@ config_file_setup(char *file_name, char *section_name,
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		sret = sscanf(&string[0], "%d", &gbl.g_max_inflight);
-		if (sret != 1) {
+		gbl.g_max_inflight = strtol(&string[0], &end_ptr, 10);
+		if (end_ptr == &string[0]) {
 			gbl.g_max_inflight = gbl.g_default_max_inflight;
 			printf("Warning: Invalid max-inflight-rpcs\n"
 			"  Using default value %d instead\n",
@@ -3379,8 +3393,9 @@ config_file_setup(char *file_name, char *section_name,
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		sret = sscanf(string, "%" SCNd16, &gbl.g_buf_alignment);
-		if (sret != 1 || gbl.g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
+		gbl.g_buf_alignment = strtol(&string[0], &end_ptr, 10);
+		if (end_ptr == &string[0] ||
+		    gbl.g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
 		    gbl.g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
 			printf("Warning: Invalid align value %d;"
 			       " Expected value in range [%d:%d]\n",
@@ -3395,7 +3410,7 @@ config_file_setup(char *file_name, char *section_name,
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		sret = sscanf(&string[0], "%d", &temp);
+		temp = strtol(&string[0], NULL, 10);
 		if (temp == 0)
 			gbl.g_output_megabits = 0;
 		else
@@ -3414,7 +3429,7 @@ config_file_setup(char *file_name, char *section_name,
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		sret = sscanf(&string[0], "%d", &temp);
+		temp = strtol(&string[0], NULL, 10);
 		if (temp == 0)
 			gbl.g_randomize_endpoints = false;
 		else
@@ -3442,7 +3457,7 @@ config_file_setup(char *file_name, char *section_name,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
 		/* Avoid checkpatch warning */
-		sret = sscanf(&string[0], "%f", &gbl.g_scale_factor);
+		gbl.g_scale_factor = strtol(&string[0], NULL, 10);
 	}
 
 	/**********/
@@ -3451,7 +3466,7 @@ config_file_setup(char *file_name, char *section_name,
 				      &string[0], STRING_MAX_SIZE,
 				      (char *)NULL);
 	if (config_ret == CONFIG_OK) {
-		sret = sscanf(&string[0], "%d", &gbl.g_raw_data);
+		gbl.g_raw_data = strtol(&string[0], NULL, 10);
 		gbl.g_raw_data = gbl.g_raw_data <
 				 SELF_TEST_MAX_RAW_DATA_OUTPUT ?
 				 gbl.g_raw_data : SELF_TEST_MAX_RAW_DATA_OUTPUT;
@@ -3539,6 +3554,7 @@ parse_command_options(int argc, char *argv[])
 {
 	int	c;
 	int	ret = 0;
+	char	*end_ptr = NULL;
 
 	while (1) {
 		c = getopt_long(argc, argv, ARGV_PARAMETERS,
@@ -3580,8 +3596,8 @@ parse_command_options(int argc, char *argv[])
 			gbl.g_msg_sizes_str = optarg;
 			break;
 		case 'r':
-			ret = sscanf(optarg, "%d", &gbl.g_rep_count);
-			if (ret != 1) {
+			gbl.g_rep_count = strtol(optarg, &end_ptr, 10);
+			if (end_ptr == optarg) {
 				gbl.g_rep_count = gbl.g_default_rep_count;
 				printf("Warning: Invalid repetitions-per-size\n"
 				       "  Using default value %d instead\n",
@@ -3589,8 +3605,8 @@ parse_command_options(int argc, char *argv[])
 			}
 			break;
 		case 'i':
-			ret = sscanf(optarg, "%d", &gbl.g_max_inflight);
-			if (ret != 1) {
+			gbl.g_max_inflight = strtol(optarg, &end_ptr, 10);
+			if (end_ptr == optarg) {
 				gbl.g_max_inflight = gbl.g_default_max_inflight;
 				printf("Warning: Invalid max-inflight-rpcs\n"
 				       "  Using default value %d instead\n",
@@ -3598,8 +3614,8 @@ parse_command_options(int argc, char *argv[])
 			}
 			break;
 		case 'a':
-			ret = sscanf(optarg, "%" SCNd16, &gbl.g_buf_alignment);
-			if (ret != 1 ||
+			gbl.g_buf_alignment = strtol(optarg, &end_ptr, 10);
+			if (end_ptr == optarg ||
 			    gbl.g_buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
 			    gbl.g_buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
 				printf("Warning: Invalid align value %d;"
@@ -3625,14 +3641,14 @@ parse_command_options(int argc, char *argv[])
 			gbl.g_randomize_endpoints = true;
 			break;
 		case 'v':  /* *** */
-			ret = sscanf(optarg, "%d", &gbl.g_raw_data);
+			gbl.g_raw_data = strtol(optarg, NULL, 10);
 			gbl.g_raw_data = gbl.g_raw_data <
 				     SELF_TEST_MAX_RAW_DATA_OUTPUT ?
 				     gbl.g_raw_data :
 				     SELF_TEST_MAX_RAW_DATA_OUTPUT;
 			break;
 		case 'w':  /* *** */
-			ret = sscanf(optarg, "%f", &gbl.g_scale_factor);
+			gbl.g_scale_factor = strtof(optarg, NULL);
 			break;
 		case 'x':
 			if (gbl.alloc_g_expected_results) {
@@ -3905,8 +3921,8 @@ main(int argc, char *argv[])
 	else
 		printf("  Buffer addresses end with:  %3d\n",
 		       gbl.g_buf_alignment);
-	printf("  Repetitions per size:       %3d\n"
-	       "  Max inflight RPCs:          %3d\n\n",
+	printf("  Repetitions per size:	      %3d\n"
+	       "  Max inflight RPCs:	      %3d\n\n",
 	       gbl.g_rep_count, gbl.g_max_inflight);
 
 	/* Evaluate name of results file */

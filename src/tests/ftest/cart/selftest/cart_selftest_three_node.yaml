@@ -39,9 +39,9 @@ tests: !mux
     test_clients_env: ""
     test_clients_ppn: 1
     test_clients_bin:
-      - ../../../../bin/self_test
-      - ../../../../bin/self_test
-      - ../tests/test_group_np_cli
+      - self_test
+      - self_test
+      - test_group_np_cli
     test_clients_arg:
       - " -f ../../../../etc/selftest.cnf -c align_4k_inFlight_16_size_1M_B -o client_1"
       - " -f ../../../../etc/selftest.cnf -c align_4k_inFlight_16_size_1M_B -o client_2"
@@ -58,9 +58,9 @@ tests: !mux
     test_clients_env: ""
     test_clients_ppn: 1
     test_clients_bin:
-      - ../../../../bin/self_test
-      - ../../../../bin/self_test
-      - ../tests/test_group_np_cli
+      - self_test
+      - self_test
+      - test_group_np_cli
     test_clients_arg:
       - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_1_size_1M_B -o client_1"
       - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_1_size_1M_B -o client_2"
@@ -78,9 +78,9 @@ tests: !mux
     test_clients_env: ""
     test_clients_ppn: 1
     test_clients_bin:
-      - ../../../../bin/self_test
-      - ../../../../bin/self_test
-      - ../tests/test_group_np_cli
+      - self_test
+      - self_test
+      - test_group_np_cli
     test_clients_arg:
       - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_4_size_1M_B -o client_1"
       - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_4_size_1M_B -o client_2"
@@ -97,9 +97,9 @@ tests: !mux
     test_clients_env: ""
     test_clients_ppn: 1
     test_clients_bin:
-      - ../../../../bin/self_test
-      - ../../../../bin/self_test
-      - ../tests/test_group_np_cli
+      - self_test
+      - self_test
+      - test_group_np_cli
     test_clients_arg:
       - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_16_size_1M_B -o client_1"
       - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_16_size_1M_B -o client_2"
@@ -116,9 +116,9 @@ tests: !mux
     test_clients_env: ""
     test_clients_ppn: 1
     test_clients_bin:
-      - ../../../../bin/self_test
-      - ../../../../bin/self_test
-      - ../tests/test_group_np_cli
+      - self_test
+      - self_test
+      - test_group_np_cli
     test_clients_arg:
       - "--group-name selftest_srv_grp --endpoint 0-1:0 --master-endpoint 0-1:0  --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n"
       - "--group-name selftest_srv_grp --endpoint 0-1:0 --master-endpoint 0-1:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n"
