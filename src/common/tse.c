@@ -55,6 +55,12 @@ tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
 	if (rc != 0)
 		return rc;
 
+	rc = D_MUTEX_INIT(&dsp->dsp_comp_lock, NULL);
+	if (rc != 0) {
+		D_MUTEX_DESTROY(&dsp->dsp_lock);
+		return rc;
+	}
+
 	if (comp_cb != NULL) {
 		rc = tse_sched_register_comp_cb(sched, comp_cb, udata);
 		if (rc != 0)
@@ -266,6 +272,7 @@ tse_sched_fini(tse_sched_t *sched)
 	D_ASSERT(d_list_empty(&dsp->dsp_complete_list));
 	D_ASSERT(d_list_empty(&dsp->dsp_sleeping_list));
 	D_MUTEX_DESTROY(&dsp->dsp_lock);
+	D_MUTEX_DESTROY(&dsp->dsp_comp_lock);
 }
 
 static inline void
@@ -466,14 +473,17 @@ static bool
 tse_task_complete_callback(tse_task_t *task)
 {
 	struct tse_task_private	*dtp = tse_task2priv(task);
+	struct tse_sched_private *dsp = dtp->dtp_sched;
 	uint32_t		 dep_cnt = dtp->dtp_dep_cnt;
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
 
+	D_MUTEX_LOCK(&dsp->dsp_comp_lock);
 	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
 		int ret;
 
 		d_list_del(&dtc->dtc_list);
+		D_MUTEX_UNLOCK(&dsp->dsp_comp_lock);
 		ret = dtc->dtc_cb(task, dtc->dtc_arg);
 		if (task->dt_result == 0)
 			task->dt_result = ret;
@@ -492,7 +502,9 @@ tse_task_complete_callback(tse_task_t *task)
 				task);
 			return false;
 		}
+		D_MUTEX_LOCK(&dsp->dsp_comp_lock);
 	}
+	D_MUTEX_UNLOCK(&dsp->dsp_comp_lock);
 
 	return true;
 }
