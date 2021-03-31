@@ -45,7 +45,7 @@
  */
 #define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
-#define DAOS_AGG_LAZY_RATE	1000 /* ms */
+#define DAOS_AGG_LAZY_RATE	50 /* ms */
 
 static inline bool
 agg_rate_ctl(void *arg)
@@ -60,15 +60,12 @@ agg_rate_ctl(void *arg)
 	switch (pool->sp_reclaim) {
 	case DAOS_RECLAIM_DISABLED:
 		return true;
-	case DAOS_RECLAIM_LAZY:
+	default:
 		if (dss_xstream_is_busy() &&
 		    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE)
 			sched_req_sleep(req, DAOS_AGG_LAZY_RATE);
 		else
 			sched_req_yield(req);
-		return false;
-	default:
-		sched_req_yield(req);
 		return false;
 	}
 }

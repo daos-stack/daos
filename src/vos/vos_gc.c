@@ -17,7 +17,7 @@
 
 enum {
 	GC_CREDS_MIN	= 1,	/**< minimum credits for vos_gc_run/pool() */
-	GC_CREDS_PRIV	= 256,	/**< credits for internal usage */
+	GC_CREDS_PRIV	= 32,	/**< credits for internal usage */
 	GC_CREDS_MAX	= 4096,	/**< maximum credits for vos_gc_run/pool() */
 };
 
