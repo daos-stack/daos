@@ -19,6 +19,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/sys/unix"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 // AssertTrue asserts b is true
@@ -163,12 +164,8 @@ func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 
 // DefaultCmpOpts gets default go-cmp comparison options for tests.
 func DefaultCmpOpts() []cmp.Option {
-	// Avoid comparing the internal Protobuf fields
-	isHiddenPBField := func(path cmp.Path) bool {
-		return strings.HasPrefix(path.Last().String(), ".XXX_")
-	}
 	return []cmp.Option{
-		cmp.FilterPath(isHiddenPBField, cmp.Ignore()),
+		protocmp.Transform(), // makes Protobuf structs comparable
 	}
 }
 

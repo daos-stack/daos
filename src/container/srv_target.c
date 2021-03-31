@@ -621,7 +621,12 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	if (rc != 0)
 		goto out_pool;
 
+	/* sc_uuid, sc_pool_uuid contiguous in memory within the structure */
+	D_CASSERT(offsetof(struct ds_cont_child, sc_uuid) + sizeof(uuid_t) ==
+		  offsetof(struct ds_cont_child, sc_pool_uuid));
 	uuid_copy(cont->sc_uuid, co_uuid);
+	uuid_copy(cont->sc_pool_uuid, po_uuid);
+
 	cont->sc_aggregation_full_scan_hlc = 0;
 	/* prevent aggregation till snapshot iv refreshed */
 	cont->sc_aggregation_max = 0;
@@ -667,9 +672,14 @@ static bool
 cont_child_cmp_keys(const void *key, unsigned int ksize,
 		    struct daos_llink *llink)
 {
+	const void	*key_cuuid = key;
+	const void	*key_puuid = (const char *)key + sizeof(uuid_t);
 	struct ds_cont_child *cont = cont_child_obj(llink);
 
-	return uuid_compare(key, cont->sc_uuid) == 0;
+	/* Key is a concatenation of cont UUID followed by pool UUID */
+	D_ASSERTF(ksize == (2 * sizeof(uuid_t)), "%u\n", ksize);
+	return ((uuid_compare(key_cuuid, cont->sc_uuid) == 0) &&
+		(uuid_compare(key_puuid, cont->sc_pool_uuid) == 0));
 }
 
 static uint32_t
@@ -677,7 +687,11 @@ cont_child_rec_hash(struct daos_llink *llink)
 {
 	struct ds_cont_child *cont = cont_child_obj(llink);
 
-	return d_hash_string_u32((const char *)cont->sc_uuid, sizeof(uuid_t));
+	/* Key is a concatenation of cont/pool UUIDs.
+	 * i.e., ds_cont-child contiguous members sc_uuid + sc_pool_uuid
+	 */
+	return d_hash_string_u32((const char *)cont->sc_uuid,
+				 2 * sizeof(uuid_t));
 }
 
 static struct daos_llink_ops cont_child_cache_ops = {
@@ -705,18 +719,22 @@ ds_cont_child_cache_destroy(struct daos_lru_cache *cache)
 }
 
 /*
- * If "po_uuid == NULL", then this is assumed to be a pure lookup. In this case,
+ * If create == false, then this is assumed to be a pure lookup. In this case,
  * -DER_NONEXIST is returned if the ds_cont_child object does not exist.
  */
 static int
 cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
-		  const uuid_t po_uuid, struct ds_cont_child **cont)
+		  const uuid_t po_uuid, bool create,
+		  struct ds_cont_child **cont)
 {
 	struct daos_llink      *llink;
+	uuid_t			key[2];	/* HT key is cuuid+puuid */
 	int			rc;
 
-	rc = daos_lru_ref_hold(cache, (void *)co_uuid, sizeof(uuid_t),
-			       (void *)po_uuid, &llink);
+	uuid_copy(key[0], co_uuid);
+	uuid_copy(key[1], po_uuid);
+	rc = daos_lru_ref_hold(cache, (void *)key, sizeof(key),
+			       create ? (void *)po_uuid : NULL, &llink);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, DF_CONT": failed to lookup%s "
@@ -800,7 +818,8 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
 
 	rc = cont_child_lookup(tls->dt_cont_cache, co_uuid,
-			       pool_child->spc_uuid, &cont_child);
+			       pool_child->spc_uuid, true /* create */,
+			       &cont_child);
 	if (rc) {
 		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DF_DSMS,
 			 DF_CONT"[%d]: Load container error:%d\n",
@@ -1075,7 +1094,8 @@ cont_child_destroy_one(void *vin)
 	while (1) {
 		struct ds_cont_child *cont;
 
-		rc = cont_child_lookup(tls->dt_cont_cache, in->tdi_uuid, NULL,
+		rc = cont_child_lookup(tls->dt_cont_cache, in->tdi_uuid,
+				       in->tdi_pool_uuid, false /* create */,
 				       &cont);
 		if (rc == -DER_NONEXIST)
 			break;
@@ -1189,7 +1209,7 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 	struct dsm_tls		*tls = dsm_tls_get();
 
 	return cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
-				 ds_cont);
+				 true /* create */, ds_cont);
 }
 
 /**

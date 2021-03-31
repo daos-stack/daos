@@ -91,21 +91,21 @@ daos_tests:
     test_rebuild_27: r
     test_rebuild_28: r
   args:
-    test_rebuild_0to10: -s3 -u subtests="0-10"
-    test_rebuild_12to15: -s3 -u subtests="12-15"
-    test_rebuild_16: -s3 -u subtests="16"
-    test_rebuild_17: -s3 -u subtests="17"
-    test_rebuild_18: -s3 -u subtests="18"
-    test_rebuild_19: -s3 -u subtests="19"
-    test_rebuild_20: -s3 -u subtests="20"
-    test_rebuild_21: -s3 -u subtests="21"
-    test_rebuild_22: -s3 -u subtests="22"
-    test_rebuild_23: -s3 -u subtests="23"
-    test_rebuild_24: -s3 -u subtests="24"
-    test_rebuild_25: -s3 -u subtests="25"
-    test_rebuild_26: -s3 -u subtests="26"
-    test_rebuild_27: -s6 -u subtests="27"
-    test_rebuild_28: -s3 -u subtests="28"
+    test_rebuild_0to10: -s3 -u subtests="0-10" --csum_type=crc32
+    test_rebuild_12to15: -s3 -u subtests="12-15" --csum_type=crc32
+    test_rebuild_16: -s3 -u subtests="16" --csum_type=crc32
+    test_rebuild_17: -s3 -u subtests="17" --csum_type=crc32
+    test_rebuild_18: -s3 -u subtests="18" --csum_type=crc32
+    test_rebuild_19: -s3 -u subtests="19" --csum_type=crc32
+    test_rebuild_20: -s3 -u subtests="20" --csum_type=crc32
+    test_rebuild_21: -s3 -u subtests="21" --csum_type=crc32
+    test_rebuild_22: -s3 -u subtests="22" --csum_type=crc32
+    test_rebuild_23: -s3 -u subtests="23" --csum_type=crc32
+    test_rebuild_24: -s3 -u subtests="24" --csum_type=crc32
+    test_rebuild_25: -s3 -u subtests="25" --csum_type=crc32
+    test_rebuild_26: -s3 -u subtests="26" --csum_type=crc32
+    test_rebuild_27: -s6 -u subtests="27" --csum_type=crc32
+    test_rebuild_28: -s3 -u subtests="28" --csum_type=crc32
   stopped_ranks:
     test_rebuild_22: [7]
     test_rebuild_23: [7]
