@@ -4,13 +4,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+from __future__ import division
 import os
+
 from nvme_utils import ServerFillUp, get_device_ids
 from test_utils_pool import TestPool
 from dmg_utils import DmgCommand
 from command_utils_base import CommandFailure
-from apricot import skipForTicket
-
 
 class NvmeHealth(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -18,8 +18,6 @@ class NvmeHealth(ServerFillUp):
     Test Class Description: To validate NVMe health test cases
     :avocado: recursive
     """
-
-    @skipForTicket("DAOS-7011")
     def test_monitor_for_large_pools(self):
         """Jira ID: DAOS-4722.
 
@@ -34,21 +32,21 @@ class NvmeHealth(ServerFillUp):
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches
         no_of_pools = self.params.get("number_of_pools", '/run/pool/*')
-        # Stop the servers to run SPDK too to get the server capacity
-        self.stop_servers()
-        storage = self.get_nvme_max_capacity()
-        self.start_servers()
+        pool_capacity = self.params.get("pool_used_percentage", '/run/pool/*')
+        pool_capacity = pool_capacity / 100
+        storage = self.get_max_storage_sizes()
 
-        # Create the pool from 80% of available of storage space
-        single_pool_nvme_size = int((storage * 0.80)/no_of_pools)
+        #Create the pool from available of storage space
+        single_pool_nvme_size = int((storage[1] * pool_capacity)/no_of_pools)
+        single_pool_scm_size = int((storage[0] * pool_capacity)/no_of_pools)
 
         self.pool = []
         # Create the Large number of pools
         for _pool in range(no_of_pools):
+            self.log.info("-- Creating pool number = %s", _pool)
             pool = TestPool(self.context, self.get_dmg_command())
             pool.get_params(self)
-            # SCM size is 10% of NVMe
-            pool.scm_size.update('{}'.format(int(single_pool_nvme_size * 0.10)))
+            pool.scm_size.update('{}'.format(single_pool_scm_size))
             pool.nvme_size.update('{}'.format(single_pool_nvme_size))
             pool.create()
             self.pool.append(pool)

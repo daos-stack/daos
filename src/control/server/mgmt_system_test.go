@@ -156,7 +156,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				sort.Slice(r, func(i, j int) bool { return r[i].Rank < r[j].Rank })
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -220,7 +221,8 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -302,7 +304,8 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 
 			<-ctx.Done()
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
@@ -954,7 +957,8 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expMembers, gotResp.Members, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expMembers, gotResp.Members, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expMembers, gotResp.Members, name)
@@ -1211,7 +1215,8 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
@@ -1602,7 +1607,8 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
@@ -1800,7 +1806,8 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)

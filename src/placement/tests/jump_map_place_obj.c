@@ -1257,16 +1257,11 @@ down_back_to_up_in_same_order(void **state)
 	 * to the reintegrated target, and one moving between two otherwise
 	 * healthy targets because of the retry/collision mechanism of the jump
 	 * map algorithm.
-	 *
-	 * XXX This will likely break if the jump consistent hashing algorithm
-	 * is changed. It's just fortunate we happened to trigger this somewhat
-	 * rare case here. If you are reading this later and you find this
-	 * assert triggering because the value is 1 instead of 2, likely the
-	 * placement algorithm was modified so that this test no longer hits
-	 * this corner case.
+	 * Due to layout colocation, if the oid has been changed, then it could
+	 * be 2 or even 3 as well, with current oid setting, this is 1.
 	 */
-	assert_int_equal(2, ctx.reint.out_nr);
-	jtc_assert_rebuild_reint_new(ctx, 2, 0, 2, 0);
+	assert_int_equal(1, ctx.reint.out_nr);
+	jtc_assert_rebuild_reint_new(ctx, 1, 0, 1, 0);
 
 	/* Take second downed target up */
 	jtc_set_status_on_target(&ctx, UP, orig_shard_targets[1]);
