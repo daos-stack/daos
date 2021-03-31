@@ -384,8 +384,7 @@ boolean skip_ftest_hw(String size) {
 }
 
 boolean skip_bandit_check() {
-    return cachedCommitPragma(pragma: 'Skip-python-bandit',
-                              def_val: 'false') == 'true' ||
+    return cachedCommitPragma(pragma: 'Skip-python-bandit') == 'true' ||
            quick_functional()
 }
 
