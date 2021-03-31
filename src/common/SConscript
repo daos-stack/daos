@@ -51,7 +51,13 @@ def build_dts_library(env):
 
     denv.AppendUnique(CPPPATH=["../tests/suite"])
 
-    Import('dc_credit')
+    dc_credit = denv.SharedObject(['credit.c'])
+    Export('dc_credit')
+
+    denv.Replace(SHOBJPREFIX='t_')
+    t_cmd_parser = denv.SharedObject(['cmd_parser.c'])
+    Export('t_cmd_parser')
+
     dts_lib = daos_build.library(denv, 'libdts', [dc_credit, 'dts.c'],
                                  LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dts_lib)
@@ -84,9 +90,6 @@ def scons():
 
     tlib_env = denv.Clone()
     tlib_env.AppendUnique(LIBS=['json-c'])
-
-    dc_credit = denv.SharedObject(['credit.c'])
-    Export('dc_credit')
 
     cmd_parser = denv.SharedObject(['cmd_parser.c'])
     Export('cmd_parser')
