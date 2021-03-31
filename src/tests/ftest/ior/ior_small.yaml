@@ -1,15 +1,9 @@
 hosts:
   test_servers:
     - server-A
-    - server-B
-    - server-C
-    - server-D
   test_clients:
-    - client-E
-    - client-F
-    - client-G
-    - client-H
-timeout: 200
+    - client-B
+timeout: 20000
 server_config:
     name: daos_server
     servers:
@@ -36,7 +30,7 @@ container:
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 ior:
-    ior_timeout: 30
+    ior_timeout: 3000
     client_processes:
         np_16:
             np: 16

@@ -29,7 +29,7 @@ from daos_utils import DaosCommand
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing
+    get_default_config_file, pcmd, get_file_listing, run_command
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -1031,6 +1031,9 @@ class TestWithServers(TestWithoutServers):
 
         # Stop any test jobs that may still be running
         self._teardown_errors.extend(self.stop_job_managers())
+
+        # Report space usage
+        self.log.info(run_command("dmg storage query usage").stdout_text)
 
         # Destroy any containers first
         self._teardown_errors.extend(self.destroy_containers(self.container))
