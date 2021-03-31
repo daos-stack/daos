@@ -55,6 +55,12 @@ tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
 	if (rc != 0)
 		return rc;
 
+	rc = D_MUTEX_INIT(&dsp->dsp_comp_lock, NULL);
+	if (rc != 0) {
+		D_MUTEX_DESTROY(&dsp->dsp_lock);
+		return rc;
+	}
+
 	if (comp_cb != NULL) {
 		rc = tse_sched_register_comp_cb(sched, comp_cb, udata);
 		if (rc != 0)
@@ -266,6 +272,7 @@ tse_sched_fini(tse_sched_t *sched)
 	D_ASSERT(d_list_empty(&dsp->dsp_complete_list));
 	D_ASSERT(d_list_empty(&dsp->dsp_sleeping_list));
 	D_MUTEX_DESTROY(&dsp->dsp_lock);
+	D_MUTEX_DESTROY(&dsp->dsp_comp_lock);
 }
 
 static inline void
@@ -465,12 +472,20 @@ tse_task_prep_callback(tse_task_t *task)
 static bool
 tse_task_complete_callback(tse_task_t *task)
 {
-	struct tse_task_private	*dtp = tse_task2priv(task);
-	uint32_t		 dep_cnt = dtp->dtp_dep_cnt;
-	struct tse_task_cb	*dtc;
-	struct tse_task_cb	*tmp;
+	struct tse_task_private		*dtp = tse_task2priv(task);
+	struct tse_sched_private	*dsp = dtp->dtp_sched;
+	d_list_t			 comp_list;
+	uint32_t			 dep_cnt = dtp->dtp_dep_cnt;
+	struct tse_task_cb		*dtc;
+	struct tse_task_cb		*tmp;
+	bool				 done = true;
 
-	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
+	D_INIT_LIST_HEAD(&comp_list);
+	D_MUTEX_LOCK(&dsp->dsp_comp_lock);
+	d_list_splice_init(&dtp->dtp_comp_cb_list, &comp_list);
+	D_MUTEX_UNLOCK(&dsp->dsp_comp_lock);
+
+	d_list_for_each_entry_safe(dtc, tmp, &comp_list, dtc_list) {
 		int ret;
 
 		d_list_del(&dtc->dtc_list);
@@ -483,18 +498,26 @@ tse_task_complete_callback(tse_task_t *task)
 		/** Task was re-initialized; break */
 		if (!dtp->dtp_completing) {
 			D_DEBUG(DB_TRACE, "re-init task %p\n", task);
-			return false;
+			done = false;
+			break;
 		}
 
 		/** New dependent task added in completion call-back */
 		if (dtp->dtp_dep_cnt > dep_cnt) {
 			D_DEBUG(DB_TRACE, "new dep-task added to task %p\n",
 				task);
-			return false;
+			done = false;
+			break;
 		}
 	}
 
-	return true;
+	if (!d_list_empty(&comp_list)) {
+		D_MUTEX_LOCK(&dsp->dsp_comp_lock);
+		d_list_splice_init(&comp_list, &dtp->dtp_comp_cb_list);
+		D_MUTEX_UNLOCK(&dsp->dsp_comp_lock);
+	}
+
+	return done;
 }
 
 /*
