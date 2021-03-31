@@ -59,7 +59,7 @@ pool_reserved:
     control_method: dmg
 container:
     type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 container_reserved:
     oclass: OC_RP_2G1
@@ -71,7 +71,7 @@ container_reserved:
     record_size: 100
     array_size: 1
     type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: API
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
