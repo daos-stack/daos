@@ -6,37 +6,78 @@
 #
 
 # Pull base image
-FROM centos:centos7.9.2009
+FROM centos:centos7
 LABEL maintainer="daos@daos.groups.io"
+
+# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+ARG CB0
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
-RUN yum clean all &&							\
-    yum -y install epel-release &&					\
-    yum -y upgrade &&							\
-    yum -y install							\
-	boost-devel clang-analyzer cmake CUnit-devel doxygen file flex	\
-	gcc gcc-c++ git golang graphviz lcov				\
-	libaio-devel libcmocka-devel libevent-devel libiscsi-devel	\
-	libtool libtool-ltdl-devel libuuid-devel libyaml-devel		\
-	make nasm numactl-devel openssl-devel				\
-	pandoc patch python-devel python36-devel python-magic		\
-	python-pep8 python-pygit2 python2-pygithub python-requests	\
-	readline-devel scons sg3_utils yasm pciutils			\
-	valgrind-devel python36-pylint man java-1.8.0-openjdk maven	\
-	json-c-devel python36-requests lz4-devel			\
-	python2-avocado python2-avocado-plugins-output-html		\
-	python2-avocado-plugins-varianter-yaml-to-mux			\
-	python-pathlib							\
-	ndctl ipmctl e2fsprogs						\
-	python2-clustershell python2-Cython				\
-	python36-clustershell python36-paramiko				\
-	python36-numpy Lmod						\
-	fuse3-devel libipmctl-devel python36-pyxattr			\
-	hwloc-devel patchelf python36-tabulate				\
-	java-1.8.0-openjdk python-distro python36-distro		\
-	libunwind-devel &&						\
+RUN yum clean all && \
+    yum -y install epel-release && \
+    yum -y upgrade && \
+    yum -y install \
+        boost-python36-devel \
+        clang-analyzer \
+        cmake \
+        CUnit-devel \
+        doxygen \
+        e2fsprogs \
+        file \
+        flex \
+        fuse3-devel \
+        gcc \
+        gcc-c++ \
+        git \
+        golang \
+        graphviz \
+        hwloc-devel \
+        ipmctl \
+        java-1.8.0-openjdk \
+        json-c-devel \
+        lcov \
+        libaio-devel \
+        libcmocka-devel \
+        libevent-devel \
+        libipmctl-devel \
+        libiscsi-devel \
+        libtool \
+        libtool-ltdl-devel \
+        libunwind-devel \
+        libuuid-devel \
+        libyaml-devel \
+        Lmod \
+        lz4-devel \
+        make \
+        man \
+        maven \
+        nasm \
+        ndctl \
+        numactl-devel \
+        openssl-devel \
+        pandoc \
+        patch \
+        patchelf \
+        pciutils \
+        python3-pip \
+        python36-Cython \
+        python36-devel \
+        python36-distro \
+        python36-jira \
+        python36-numpy \
+        python36-paramiko \
+        python36-pylint \
+        python36-requests \
+        python36-requests \
+        python36-tabulate \
+        python36-pyxattr \
+        python36-scons \
+        readline-devel \
+        sg3_utils \
+        valgrind-devel \
+        yasm && \
     yum clean all
 
 # Install this individually because of potential conflicts
@@ -50,11 +91,28 @@ RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 
+# Removing PyYAML 3.10 to allow pip install to upgrade
+RUN yum -y remove python36-PyYAML
+
+RUN python3 -m pip install --upgrade pip
+
+RUN python3 -m pip --no-cache-dir install \
+    "avocado-framework<70.0" \
+    "avocado-framework-plugin-result-html<70.0" \
+    "avocado-framework-plugin-varianter-yaml-to-mux<70.0" \
+    clustershell \
+    pep8 \
+    pygit2 \
+    python-magic
+
+# Add codespell to path.
+ENV PATH=$PATH:/home/daos/.local/bin
+
+
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos && chown -R daos_server.daos_server /opt/daos
-RUN mkdir /mnt/daos && chown daos_server.daos_server /mnt/daos
-RUN mkdir /var/run/daos_server && chown daos_server.daos_server /var/run/daos_server
-RUN mkdir /var/run/daos_agent && chown daos_agent.daos_agent /var/run/daos_agent
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&	\
+    chown daos_agent.daos_agent /var/run/daos_agent
 
 # Dependencies
 # Packages for NVML exist in CentOS, but are
@@ -124,23 +182,6 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
       rm -rf bullseye; \
     fi
 
-# force an upgrade to get any newly built RPMs
-ARG CACHEBUST=1
-RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-	yum clean all
-
-# Control what to build.  By default Dockerfiles build everything to allow for
-# ease-of-use for users, however in CI everything is turned off and then
-# selectively enabled.  Turning off any step disables all future steps.
-ARG DAOS_DEPS_BUILD=yes
-ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-# Legacy, NOBUILD should be set to any string to disable all three.
-ARG NOBUILD=no
-
-# select compiler to use
-ARG COMPILER=gcc
-
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few
 # seconds.
@@ -152,9 +193,32 @@ RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
+# Control what to build.  By default Dockerfiles build everything to allow for
+# ease-of-use for users, however in CI everything is turned off and then
+# selectively enabled.  Turning off any step disables all future steps.
+ARG DAOS_DEPS_BUILD=yes
+
+# Now do an update to ensure software is up to date for the deps build.  If the
+# src hasn't changed then this won't do anything, but if it has then we want to
+# ensure that latest dependencies are used.
+USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
-    /bin/rm -rf build *.gz)
+    { yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    yum clean all; }
+USER daos_server:daos_server
+
+ARG DEPS_JOBS=1
+
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
+    /bin/rm -rf build *.gz; }
+
+USER root:root
+# force an upgrade to get any newly built RPMs
+ARG CACHEBUST
+RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    yum clean all
+USER daos_server:daos_server
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -165,11 +229,16 @@ RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
+# select compiler to use
+ARG COMPILER=gcc
+ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
+
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    (scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
-    cp -r utils/config/examples /opt/daos)
+    cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
@@ -190,6 +259,8 @@ RUN echo -e "<settings>\n\
                 </mirror>\n\
         </mirrors>\n\
 </settings>" > /home/daos/.m2/settings.xml
+
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos

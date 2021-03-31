@@ -18,7 +18,7 @@ class FioBase(DfuseTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a FioBase object."""
-        super(FioBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fio_cmd = None
         self.processes = None
         self.manager = None
@@ -29,7 +29,7 @@ class FioBase(DfuseTestBase):
         self.update_log_file_names()
 
         # Start the servers and agents
-        super(FioBase, self).setUp()
+        super().setUp()
 
         # Get the parameters for Fio
         self.fio_cmd = FioCommand()

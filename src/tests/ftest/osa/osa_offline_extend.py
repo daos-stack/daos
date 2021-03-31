@@ -20,7 +20,7 @@ class OSAOfflineExtend(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOfflineExtend, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",

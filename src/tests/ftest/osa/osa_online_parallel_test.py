@@ -16,13 +16,7 @@ from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from apricot import skipForTicket
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+import queue
 
 
 class OSAOnlineParallelTest(OSAUtils):
@@ -36,7 +30,7 @@ class OSAOnlineParallelTest(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOnlineParallelTest, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
@@ -135,8 +129,8 @@ class OSAOnlineParallelTest(OSAUtils):
             pool_uuid.append(pool[val].uuid)
 
         # Exclude and reintegrate the pool_uuid, rank and targets
-        for val in range(0, num_pool):
-            self.pool = pool[val]
+        for value in range(0, num_pool):
+            self.pool = pool[value]
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
@@ -157,7 +151,7 @@ class OSAOnlineParallelTest(OSAUtils):
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
-                                                    kwargs={"pool": pool[val],
+                                                    kwargs={"pool": pool[value],
                                                             "oclass": oclass,
                                                             "api": api,
                                                             "test": test,

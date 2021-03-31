@@ -27,5 +27,8 @@ ior:
 dcp:
     client_processes:
         np: 1
+dsync:
+    client_processes:
+        np: 1
 dfuse:
     mount_dir: "/tmp/daos_dfuse"

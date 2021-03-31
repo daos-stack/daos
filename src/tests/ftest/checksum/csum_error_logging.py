@@ -20,7 +20,7 @@ class CSumErrorLog(DaosCoreBase):
     """
     # pylint: disable=too-many-instance-attributes,too-many-ancestors
     def setUp(self):
-        super(CSumErrorLog, self).setUp()
+        super().setUp()
         self.dmg = self.get_dmg_command()
         self.dmg.hostlist = self.hostlist_servers[0]
 
@@ -34,16 +34,19 @@ class CSumErrorLog(DaosCoreBase):
         finally:
             self.dmg.json.value = False
 
-        data = json.loads(result.stdout)
+        data = json.loads(result.stdout_text)
         resp = data['response']
         if data['error'] or len(resp['host_errors']) > 0:
             if data['error']:
                 self.fail("dmg command failed: {}".format(data['error']))
             else:
                 self.fail("dmg command failed: {}".format(resp['host_errors']))
-        for v in resp['host_storage_map'].values():
-            if v['storage']['smd_info']['devices']:
-                return v['storage']['smd_info']['devices'][0]['uuid']
+        uuid = None
+        for value in list(resp['host_storage_map'].values()):
+            if value['storage']['smd_info']['devices']:
+                uuid = value['storage']['smd_info']['devices'][0]['uuid']
+                break
+        return uuid
 
     def get_checksum_error_value(self, device_id=None):
         """Get checksum error value from dmg storage_query_device_health.
@@ -53,7 +56,7 @@ class CSumErrorLog(DaosCoreBase):
         """
         if device_id is None:
             self.fail("No device id provided")
-            return
+
         self.dmg.json.value = True
         try:
             result = self.dmg.storage_query_device_health(device_id)
@@ -62,17 +65,20 @@ class CSumErrorLog(DaosCoreBase):
         finally:
             self.dmg.json.value = False
 
-        data = json.loads(result.stdout)
+        data = json.loads(result.stdout_text)
         resp = data['response']
         if data['error'] or len(resp['host_errors']) > 0:
             if data['error']:
                 self.fail("dmg command failed: {}".format(data['error']))
             else:
                 self.fail("dmg command failed: {}".format(resp['host_errors']))
-        for v in resp['host_storage_map'].values():
-            if v['storage']['smd_info']['devices']:
-                dev = v['storage']['smd_info']['devices'][0]
-                return dev['health']['checksum_errs']
+        checksum_errs = None
+        for value in list(resp['host_storage_map'].values()):
+            if value['storage']['smd_info']['devices']:
+                dev = value['storage']['smd_info']['devices'][0]
+                checksum_errs = dev['health']['checksum_errs']
+                break
+        return checksum_errs
 
     def test_csum_error_logging(self):
         """Jira ID: DAOS-3927
