@@ -16,16 +16,14 @@ sudo ./install.sh
 popd
 
 fc_conf="/etc/freshclam.conf"
-sudo chmod 766 "$fc_conf"
 if ! grep -q 'ScriptedUpdates no' "$fc_conf"; then
-  printf "ScriptedUpdates no\n" >> "$fc_conf"
+  sudo -E bash -c "echo \"ScriptedUpdates no\" >> \"$fc_conf\""
 fi
 : "${JOB_URL:=${JENKINS_URL}job/clamav_daily_update/}"
 if ! grep -q "$JENKINS_URL" "$fc_conf"; then
-  printf "PrivateMirror %s\n" \
-         "${JOB_URL}lastSuccessfulBuild/artifact/download/clam" >> "$fc_conf"
+  clam_url="${JOB_URL}lastSuccessfulBuild/artifact/download/clam"
+  sudo -E bash -c "echo \"PrivateMirror ${clam_url}\" >> \"$fc_conf\""
 fi
-sudo chmod 744 "$fc_conf"
 sudo freshclam
 rm -f /var/tmp/clamscan.out
 rm "/var/tmp/${lmd_tarball}"
