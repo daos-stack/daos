@@ -29,7 +29,7 @@ tests: !mux
   ctl:
     name: ctl_basic
     test_servers_bin: crt_launch
-    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp_ctl_one_node"
+    test_servers_arg: "-e test_group_np_srv --name server_grp_ctl_one_node"
     test_servers_env: ""
     test_servers_ppn: "1"
 
@@ -41,7 +41,7 @@ tests: !mux
       - cart_ctl
       - cart_ctl
       - cart_ctl
-      - ../tests/test_group_np_cli
+      - test_group_np_cli
     test_clients_arg:
       - "get_uri_cache --group-name server_grp_ctl_one_node --rank 0"
       - "list_ctx --group-name server_grp_ctl_one_node --rank 0"
