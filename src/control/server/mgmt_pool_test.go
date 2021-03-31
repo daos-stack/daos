@@ -14,9 +14,9 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -1008,7 +1008,7 @@ func TestListPools_Success(t *testing.T) {
 
 	cmpOpts := common.DefaultCmpOpts()
 	cmpOpts = append(cmpOpts,
-		cmpopts.SortSlices(func(a, b *mgmtpb.ListPoolsResp_Pool) bool {
+		protocmp.SortRepeated(func(a, b *mgmtpb.ListPoolsResp_Pool) bool {
 			return a.GetUuid() < b.GetUuid()
 		}),
 	)
