@@ -432,7 +432,7 @@ func TestBdev_Backend_getFileOwner(t *testing.T) {
 		expErr         error
 		expErrNotExist bool
 	}{
-		"path doesnt exist": {
+		"path does not exist": {
 			expErr:         errors.New("stat"),
 			expErrNotExist: true,
 		},
