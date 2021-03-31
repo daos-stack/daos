@@ -836,6 +836,7 @@ class PreReqComponent():
                         '$CVS --add \'!**/src/utils/ctl/\'',
                         '$CVS --add \'!**/src/vea/tests/\'',
                         '$CVS --add \'!**/src/vos/tests/\'',
+                        '$CVS --add \'!**/src/engine/tests/\'',
                         '$CVS --add \'!**/src/tests/\'']
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
