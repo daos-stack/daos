@@ -142,7 +142,7 @@ def run_event_check(self, since, until):
     # when systemctl is enabled add daos events
     events = self.params.get("events", "/run/*")
     # check events on all nodes
-    hosts = list(set(self.hostlist_clients + self.hostlist_servers))
+    hosts = list(set(self.hostlist_servers))
     if events:
         command = "sudo /usr/bin/journalctl --system -t kernel -t "
         "daos_server --since=\"{}\" --until=\"{}\"".format(since, until)
@@ -176,7 +176,7 @@ def run_monitor_check(self):
             pcmd(hosts, command, timeout=30)
 
 
-def get_harassers(harassers):
+def get_harassers(harasser):
     """Create a valid harasserlist from the yaml job harassers.
 
     Args:
@@ -188,9 +188,13 @@ def get_harassers(harassers):
 
     """
     harasserlist = []
-    for harasser in harassers:
+    offline_harasserlist = []
+    if "-offline" in harasser:
+        offline_harasser = harasser.replace("-offline", "")
+        offline_harasserlist.extend(offline_harasser.split("_"))
+    else:
         harasserlist.extend(harasser.split("_"))
-    return harasserlist
+    return harasserlist, offline_harasserlist
 
 
 def wait_for_pool_rebuild(self, pool, name):
@@ -208,6 +212,9 @@ def wait_for_pool_rebuild(self, pool, name):
         "<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
 
     try:
+        # Wait for rebuild to start
+        pool.wait_for_rebuild(True)
+        # Wait for rebuild to complete
         pool.wait_for_rebuild(False)
         rebuild_status = True
     except DaosTestError as error:
@@ -612,6 +619,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     """
     commands = []
     ior_params = "/run/" + job_spec + "/*"
+    ior_timeout = self.params.get("job_timeout", ior_params + "*", 10)
     mpi_module = self.params.get(
         "mpi_module", "/run/*", default="mpi/mpich-x86_64")
     # IOR job specs with a list of parameters; update each value
@@ -640,13 +648,12 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             "DAOS-6308",
                             "IOR -a {} with -o {}".format(api, o_type))
                         continue
+                    if api in ["HDF5-VOL", "HDF5", "POSIX"] and ppn > 16:
+                        continue
                     ior_cmd = IorCommand()
                     ior_cmd.namespace = ior_params
                     ior_cmd.get_params(self)
-                    if self.job_timeout is not None:
-                        ior_cmd.max_duration.update(self.job_timeout)
-                    else:
-                        ior_cmd.max_duration.update(10)
+                    ior_cmd.max_duration.update(ior_timeout)
                     if api == "HDF5-VOL":
                         ior_cmd.api.update("HDF5")
                     else:
@@ -725,7 +732,6 @@ def create_racer_cmdline(self, job_spec, pool):
     daos_racer.cont_uuid.update(self.container[-1].uuid)
     log_name = job_spec
     srun_cmds = []
-    # add fio cmline
     srun_cmds.append(str(daos_racer.__str__()))
     srun_cmds.append("status=$?")
     # add exit code
@@ -816,6 +822,7 @@ def build_job_script(self, commands, job, nodesperjob):
         script_list: list of slurm batch scripts
 
     """
+    job_timeout = self.params.get("job_timeout", "/run/" + job + "/*", 10)
     self.log.info("<<Build Script>> at %s", time.ctime())
     script_list = []
     # if additional cmds are needed in the batch script
@@ -837,7 +844,7 @@ def build_job_script(self, commands, job, nodesperjob):
             self.test_log_dir, self.test_name + "_" + log_name + "_%N_" + "%j_")
         error = os.path.join(str(output) + "ERROR_")
         sbatch = {
-            "time": str(self.job_timeout) + ":00",
+            "time": str(job_timeout) + ":00",
             "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
             "error": str(error),
             "export": "ALL"
