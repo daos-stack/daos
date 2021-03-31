@@ -60,12 +60,6 @@ type (
 		getDeadline() time.Time
 	}
 
-	// sysSetter defines an interface to be implemented by
-	// requests that can set the system name Field.
-	sysSetter interface {
-		SetSystem(string)
-	}
-
 	// UnaryRequest defines an interface to be implemented by
 	// unary request types (1 response to 1 request).
 	UnaryRequest interface {
@@ -73,7 +67,6 @@ type (
 		deadliner
 		retryer
 		unaryRPCGetter
-		sysSetter
 	}
 )
 
@@ -94,13 +87,17 @@ func (r *request) SetSystem(name string) {
 	r.Sys = name
 }
 
-// getSystem returns the system name set for the request, or
-// the default name.
-func (r *request) getSystem() string {
-	if r.Sys == "" {
+// getSystem returns the system name set on the request or that returned by the
+// supplied sysGetter implementation or the build defined default name.
+func (r *request) getSystem(getter sysGetter) string {
+	switch {
+	case r.Sys != "":
+		return r.Sys
+	case getter.GetSystem() != "":
+		return getter.GetSystem()
+	default:
 		return build.DefaultSystemName
 	}
-	return r.Sys
 }
 
 // getHostList returns the hostlist set for the request, which
