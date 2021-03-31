@@ -422,65 +422,6 @@ func TestBdev_Backend_Update(t *testing.T) {
 	}
 }
 
-func TestBdev_Backend_getFileOwner(t *testing.T) {
-	curUsr, _ := user.Current()
-
-	for name, tc := range map[string]struct {
-		createFile     bool
-		createDir      bool
-		expUsername    string
-		expErr         error
-		expErrNotExist bool
-	}{
-		"path does not exist": {
-			expErr:         errors.New("stat"),
-			expErrNotExist: true,
-		},
-		"path is a directory": {
-			createDir:      true,
-			expErr:         os.ErrNotExist,
-			expErrNotExist: true,
-		},
-		"success": {
-			createFile:  true,
-			expUsername: curUsr.Username,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			tmpDir, cleanup := common.CreateTestDir(t)
-			defer cleanup()
-
-			name := "foo"
-			path := filepath.Join(tmpDir, name)
-
-			switch {
-			case tc.createFile:
-				f, err := os.Create(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := f.Close(); err != nil {
-					t.Fatal(err)
-				}
-				t.Logf("file created %q", path)
-			case tc.createDir:
-				pathDir, err := ioutil.TempDir(tmpDir, name)
-				if err != nil {
-					t.Fatal(err)
-				}
-				t.Logf("directory created %q", pathDir)
-				path = pathDir
-			}
-
-			username, err := getFileOwner(path)
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expErrNotExist, os.IsNotExist(errors.Cause(err)),
-				"unexpected not exist error state")
-			common.AssertEqual(t, tc.expUsername, username, "unexpected owner username")
-		})
-	}
-}
-
 func TestBdev_Backend_cleanHugePages(t *testing.T) {
 	curUsr, _ := user.Current()
 
@@ -536,10 +477,8 @@ func TestBdev_Backend_cleanHugePages(t *testing.T) {
 
 			t.Logf("cleaning huge pages with prefix %q owned by %q",
 				tc.lookPrefix, tc.tgtUsr)
-			nrRemoved, err := cleanHugePages(tmpDir, tc.lookPrefix, tc.tgtUsr)
+			err := cleanHugePages(tmpDir, tc.lookPrefix, tc.tgtUsr)
 			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expNrRemoved, nrRemoved,
-				"unexpected number of pages removed")
 
 			files, err := ioutil.ReadDir(tmpDir)
 			if err != nil {
@@ -549,6 +488,8 @@ func TestBdev_Backend_cleanHugePages(t *testing.T) {
 			// doesn't contain any sub-directories
 			common.AssertEqual(t, tc.expNrRemain, len(files),
 				"unexpected number of pages remaining")
+			common.AssertEqual(t, tc.expNrRemoved, tc.nrPages-len(files),
+				"unexpected number of pages removed")
 		})
 	}
 }
