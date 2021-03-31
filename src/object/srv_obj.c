@@ -1427,7 +1427,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		goto out;
 
 	biod = vos_ioh2desc(ioh);
-	rc = bio_iod_prep(biod);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO);
 	if (rc) {
 		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1859,7 +1859,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 		goto out;
 	}
 	biod = vos_ioh2desc(ioh);
-	rc = bio_iod_prep(biod);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO);
 	if (rc) {
 		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
@@ -1942,7 +1942,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			goto out;
 		}
 		biod = vos_ioh2desc(ioh);
-		rc = bio_iod_prep(biod);
+		rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO);
 		if (rc) {
 			D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
@@ -3662,7 +3662,7 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			goto out;
 
 		biods[i] = vos_ioh2desc(iohs[i]);
-		rc = bio_iod_prep(biods[i]);
+		rc = bio_iod_prep(biods[i], BIO_CHK_TYPE_IO);
 		if (rc != 0) {
 			D_ERROR("bio_iod_prep failed for obj "DF_UOID
 				", DTX "DF_DTI": "DF_RC"\n",
