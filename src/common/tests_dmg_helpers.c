@@ -422,7 +422,8 @@ dmg_pool_create(const char *dmg_config_file,
 			}
 			tmp_file = fdopen(fd, "w");
 			if (tmp_file == NULL) {
-				D_ERROR("failed to open %s\n", tmp_name);
+				D_ERROR("failed to associate stream: %s\n", strerror(errno));
+				close(fd);
 				D_GOTO(out_cmd, rc = -DER_MISC);
 			}
 
@@ -477,7 +478,7 @@ out_json:
 out_cmd:
 	cmd_free_args(args, argcount);
 out:
-	if (tmp_file != NULL)
+	if (fd >= 0)
 		unlink(tmp_name);
 	return rc;
 }
