@@ -199,9 +199,6 @@ struct rebuild_task {
  */
 struct rebuild_pool_tls {
 	uuid_t		rebuild_pool_uuid;
-	uuid_t		rebuild_poh_uuid;
-	uuid_t		rebuild_coh_uuid;
-	daos_handle_t	rebuild_pool_hdl;
 	daos_handle_t	rebuild_tree_hdl; /*hold objects being rebuilt */
 	d_list_t	rebuild_pool_list;
 	uint64_t	rebuild_pool_obj_count;
