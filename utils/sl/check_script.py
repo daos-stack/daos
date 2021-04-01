@@ -223,7 +223,7 @@ def check_script(fname, *args, **kw):
     rc_file = "tmp_pylint3.rc"
     if pycmd is None:
         print("Required pylint isn't installed on this machine")
-        return 0
+        return
 
     rc_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -247,7 +247,7 @@ def check_script(fname, *args, **kw):
     except OSError as exception:
         if exception.errno == errno.ENOENT:
             print("pylint could not be found")
-            return 1
+            return
         raise
     except subprocess.CalledProcessError:
         pass
