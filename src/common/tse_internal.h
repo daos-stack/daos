@@ -69,6 +69,8 @@ struct tse_task_private {
 	 * DAOS internal task parameter pointer.
 	 */
 	void				*dtp_priv_internal;
+	/* spinlock to protect dtp_comp_cb_list */
+	pthread_spinlock_t		 dtp_spin;
 	/**
 	 * reserved buffer for user to assign embedded parameters, it also can
 	 * be used as task stack space that can push/pop parameters to

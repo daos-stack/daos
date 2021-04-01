@@ -247,6 +247,7 @@ tse_task_decref(tse_task_t *task)
 
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
 
+	D_SPIN_DESTROY(&dtp->dtp_spin);
 	/*
 	 * MSC - since we require user to allocate task, maybe we should have
 	 * user also free it. This now requires task to be on the heap all the
@@ -470,6 +471,7 @@ tse_task_complete_callback(tse_task_t *task)
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
 
+	D_SPIN_LOCK(&dtp->dtp_spin);
 	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
 		int ret;
 
@@ -483,6 +485,7 @@ tse_task_complete_callback(tse_task_t *task)
 		/** Task was re-initialized; break */
 		if (!dtp->dtp_completing) {
 			D_DEBUG(DB_TRACE, "re-init task %p\n", task);
+			D_SPIN_UNLOCK(&dtp->dtp_spin);
 			return false;
 		}
 
@@ -490,9 +493,11 @@ tse_task_complete_callback(tse_task_t *task)
 		if (dtp->dtp_dep_cnt > dep_cnt) {
 			D_DEBUG(DB_TRACE, "new dep-task added to task %p\n",
 				task);
+			D_SPIN_UNLOCK(&dtp->dtp_spin);
 			return false;
 		}
 	}
+	D_SPIN_UNLOCK(&dtp->dtp_spin);
 
 	return true;
 }
@@ -917,6 +922,7 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	D_INIT_LIST_HEAD(&dtp->dtp_dep_list);
 	D_INIT_LIST_HEAD(&dtp->dtp_comp_cb_list);
 	D_INIT_LIST_HEAD(&dtp->dtp_prep_cb_list);
+	D_SPIN_INIT(&dtp->dtp_spin, PTHREAD_PROCESS_PRIVATE);
 
 	dtp->dtp_refcnt   = 1;
 	dtp->dtp_func	  = task_func;
