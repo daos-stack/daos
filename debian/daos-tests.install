@@ -24,6 +24,7 @@ usr/bin/daos_gen_io_conf
 usr/bin/daos_run_io_conf
 usr/bin/crt_launch
 usr/bin/fault_status
+usr/lib64/libdts.so
 etc/daos/fault-inject-cart.yaml
 # For avocado tests
 usr/lib/daos/.build_vars.json

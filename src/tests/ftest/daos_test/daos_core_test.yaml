@@ -103,19 +103,6 @@ daos_tests:
     test_daos_degraded_ec_0to6: DAOS_Degraded_EC_0to6
     test_daos_degraded_ec_8to22: DAOS_Degraded_EC_8to22
     test_daos_dedup: DAOS_Dedup
-    test_daos_capability: DAOS_Capability
-    test_daos_epoch_recovery: DAOS_Epoch_Recovery
-    test_daos_md_replication: DAOS_MD_Replication
-    test_daos_rebuild_simple: DAOS_Rebuild_Simple
-    test_daos_drain_simple: DAOS_Drain_Simple
-    test_daos_extend_simple: DAOS_Extend_Simple
-    test_daos_oid_allocator: DAOS_OID_Allocator
-    test_daos_checksum: DAOS_Checksum
-    test_daos_rebuild_ec: DAOS_Rebuild_EC
-    test_daos_aggregate_ec: DAOS_Aggregate_EC
-    test_daos_degraded_ec_0to6: DAOS_Degraded_EC_0to6
-    test_daos_degraded_ec_8to22: DAOS_Degraded_EC_8to22
-    test_daos_dedup: DAOS_Dedup
   daos_test:
     test_daos_degraded_mode: d
     test_daos_management: m
@@ -143,8 +130,30 @@ daos_tests:
     test_daos_degraded_ec_8to22: X
     test_daos_dedup: U
   args:
-    test_daos_degraded_ec_0to6: -u subtests="0-6"
-    test_daos_degraded_ec_8to22: -u subtests="8-22"
+    test_daos_degraded_ec_0to6: -u subtests="0-6" --csum_type=off
+    test_daos_degraded_ec_8to22: -u subtests="8-22" --csum_type=off
+    test_daos_degraded_mode: --csum_type=crc32
+    test_daos_management: --csum_type=crc32
+    test_daos_pool: --csum_type=crc32
+    test_daos_container: --csum_type=crc32
+    test_daos_epoch: --csum_type=crc32
+    test_daos_single_rdg_tx: --csum_type=crc32
+    test_daos_distributed_tx: --csum_type=crc32
+    test_daos_verify_consistency: --csum_type=crc32
+    test_daos_io: --csum_type=crc32
+    test_daos_object_array: --csum_type=crc32
+    test_daos_array: --csum_type=crc32
+    test_daos_kv: --csum_type=crc32
+    test_daos_capability: --csum_type=crc32
+    test_daos_epoch_recovery: --csum_type=crc32
+    test_daos_md_replication: --csum_type=crc32
+    test_daos_rebuild_simple: --csum_type=crc32
+    test_daos_drain_simple: --csum_type=crc32
+    test_daos_extend_simple: --csum_type=crc32
+    test_daos_oid_allocator: --csum_type=crc32
+    test_daos_rebuild_ec: --csum_type=off
+    test_daos_aggregate_ec: --csum_type=off
+    test_daos_dedup: --csum_type=crc32
   scalable_endpoint:
     test_daos_degraded_mode: True
   stopped_ranks:

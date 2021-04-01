@@ -41,7 +41,6 @@ int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 int ds_rebuild_query(uuid_t pool_uuid,
 		     struct daos_rebuild_status *status);
 int ds_rebuild_regenerate_task(struct ds_pool *pool);
-int ds_rebuild_pool_map_update(struct ds_pool *pool);
 void ds_rebuild_leader_stop_all(void);
 void ds_rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version);
 void ds_rebuild_abort(uuid_t pool_uuid, unsigned int version);
