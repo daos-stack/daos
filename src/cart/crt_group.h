@@ -104,7 +104,9 @@ struct crt_grp_priv {
 
 	/* set of variables only valid in primary service groups */
 	uint32_t		 gp_primary:1, /* flag of primary group */
-				 gp_view:1; /* flag to indicate it is a view */
+				 gp_view:1, /* flag to indicate it is a view */
+				/* Auto remove rank from secondary group */
+				 gp_auto_remove:1;
 
 	/* group reference count */
 	uint32_t		 gp_refcount;

@@ -225,6 +225,15 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, errors.New("pool request contains zero target ranks")
 	}
 
+	// Clamp the maximum allowed svc replicas to the smaller of requested
+	// storage ranks or MaxPoolServiceReps.
+	maxSvcReps := func(allRanks int) uint32 {
+		if allRanks > MaxPoolServiceReps {
+			return uint32(MaxPoolServiceReps)
+		}
+		return uint32(allRanks)
+	}(len(req.GetRanks()))
+
 	// Set the number of service replicas to a reasonable default
 	// if the request didn't specify. Note that the number chosen
 	// should not be even in order to work best with the raft protocol's
@@ -234,12 +243,15 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		if len(req.GetRanks()) < DefaultPoolServiceReps {
 			req.Numsvcreps = 1
 		}
-	} else if req.GetNumsvcreps() > MaxPoolServiceReps {
-		return nil, FaultPoolInvalidServiceReps
+	} else if req.GetNumsvcreps() > maxSvcReps {
+		return nil, FaultPoolInvalidServiceReps(maxSvcReps)
 	}
 
-	// I/O Engine needs the fault domain tree for placement purposes
-	req.FaultDomains = svc.sysdb.FaultDomainTree().ToProto()
+	// IO engine needs the fault domain tree for placement purposes
+	req.FaultDomains, err = svc.membership.CompressedFaultDomainTree(req.Ranks...)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := svc.calculateCreateStorage(req); err != nil {
 		return nil, err
@@ -365,26 +377,26 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
-	// FIXME: There are some potential races here. We may want
-	// to somehow do all of this under a lock, to prevent multiple
-	// gRPC callers from modifying the same pool concurrently.
-
 	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
 	if err != nil {
 		return nil, err
 	}
 
-	lastState := ps.State
+	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
-		return nil, drpc.DaosAlready
+		// If we already tried to destroy the pool but it failed for some
+		// reason, try again, but instead use the full set of storage ranks
+		// in case the MS has lost track of the actual svc ranks.
+		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
+		inCleanupMode = true
+	} else {
+		ps.State = system.PoolServiceStateDestroying
+		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+			return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+		}
+		req.SvcRanks = system.RanksToUint32(ps.Replicas)
 	}
 
-	ps.State = system.PoolServiceStateDestroying
-	if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-		return nil, err
-	}
-
-	req.SvcRanks = system.RanksToUint32(ps.Replicas)
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
@@ -397,20 +409,23 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", resp)
 
-	switch drpc.DaosStatus(resp.Status) {
-	case drpc.DaosSuccess:
+	ds := drpc.DaosStatus(resp.Status)
+	switch ds {
+	case drpc.DaosSuccess, drpc.DaosNotLeader, drpc.DaosNotReplica:
+		if ds == drpc.DaosNotLeader || ds == drpc.DaosNotReplica {
+			// If we're not cleaning up, then this is an error.
+			if !inCleanupMode {
+				svc.log.Errorf("PoolDestroy dRPC call failed due to %s in non-cleanup path", ds)
+				break
+			}
+			// Otherwise, we've done all we can to try to recover.
+			resp.Status = int32(drpc.DaosSuccess)
+		}
 		if err := svc.sysdb.RemovePoolService(uuid); err != nil {
 			return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
 		}
-	// TODO: Identify errors that should leave the pool in a "Destroying"
-	// state and enumerate them here.
 	default:
-		// Revert the pool back to the previous state if the destroy failed
-		// and the pool should not remain in the "Destroying" state.
-		ps.State = lastState
-		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-			return nil, err
-		}
+		svc.log.Errorf("PoolDestroy dRPC call failed: %s", ds)
 	}
 
 	return resp, nil
@@ -490,8 +505,12 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolExtend dispatch, req:%+v\n", req)
 
-	// the I/O Engine needs the domain tree for placement purposes
-	req.FaultDomains = svc.sysdb.FaultDomainTree().ToProto()
+	// the IO engine needs the domain tree for placement purposes
+	fdTree, err := svc.membership.CompressedFaultDomainTree(req.Ranks...)
+	if err != nil {
+		return nil, err
+	}
+	req.FaultDomains = fdTree
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 

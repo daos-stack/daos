@@ -91,6 +91,7 @@ struct counts {
 	int num_punched_objs;
 	int num_dkeys;
 	int num_punched_dkeys;
+	int num_punched_objs_dkey;
 	int num_akeys;
 	int num_punched_akeys;
 	int num_recx;
@@ -110,6 +111,8 @@ count_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		counts->num_dkeys++;
 		if (entry->ie_punch)
 			counts->num_punched_dkeys++;
+		if (entry->ie_obj_punch)
+			counts->num_punched_objs_dkey++;
 		break;
 	case VOS_ITER_AKEY:
 		counts->num_akeys++;
@@ -150,12 +153,15 @@ vos_check(void **state, vos_iter_param_t *param, vos_iter_type_t type,
 	assert_int_equal(expected->num_punched_dkeys, counts.num_punched_dkeys);
 	assert_int_equal(expected->num_punched_akeys, counts.num_punched_akeys);
 	assert_int_equal(expected->num_punched_recx, counts.num_punched_recx);
+	assert_int_equal(expected->num_punched_objs_dkey,
+			 counts.num_punched_objs_dkey);
 }
 
 static void
 vos_check_obj(void **state, daos_epoch_t epoch, int flags, int objs,
-	      int punched_objs, int dkeys, int punched_dkeys, int akeys,
-	      int punched_akeys, int recxs, int punched_recx)
+	      int punched_objs, int punched_objs_dkey, int dkeys,
+	      int punched_dkeys, int akeys, int punched_akeys, int recxs,
+	      int punched_recx)
 {
 	struct io_test_args	*arg = *state;
 	vos_iter_param_t	 param = {0};
@@ -171,6 +177,7 @@ vos_check_obj(void **state, daos_epoch_t epoch, int flags, int objs,
 	counts.num_akeys = akeys;
 	counts.num_recx = recxs;
 	counts.num_punched_objs = punched_objs;
+	counts.num_punched_objs_dkey = punched_objs_dkey;
 	counts.num_punched_dkeys = punched_dkeys;
 	counts.num_punched_akeys = punched_akeys;
 	counts.num_punched_recx = punched_recx;
@@ -180,8 +187,8 @@ vos_check_obj(void **state, daos_epoch_t epoch, int flags, int objs,
 
 static void
 vos_check_dkey(void **state, daos_epoch_t epoch, int flags, daos_unit_oid_t oid,
-	       int dkeys, int punched_dkeys, int akeys, int punched_akeys,
-	       int recxs, int punched_recx)
+	       int punched_objs, int dkeys, int punched_dkeys, int akeys,
+	       int punched_akeys, int recxs, int punched_recx)
 {
 	struct io_test_args	*arg = *state;
 	vos_iter_param_t	 param = {0};
@@ -199,6 +206,7 @@ vos_check_dkey(void **state, daos_epoch_t epoch, int flags, daos_unit_oid_t oid,
 	counts.num_punched_dkeys = punched_dkeys;
 	counts.num_punched_akeys = punched_akeys;
 	counts.num_punched_recx = punched_recx;
+	counts.num_punched_objs_dkey = punched_objs;
 
 	vos_check(state, &param, VOS_ITER_DKEY, &counts);
 }
@@ -280,9 +288,9 @@ array_set_get_size(void **state)
 	assert_int_equal(size, 0);
 
 	flags = VOS_IT_EPC_RR | VOS_IT_RECX_VISIBLE;
-	vos_check_obj(state, 9, flags, 1, 0, 1, 0, 1, 0, 0, 0);
-	vos_check_obj(state, 3, flags, 1, 1, 2, 1, 2, 0, 1, 0);
-	vos_check_obj(state, 5, flags, 1, 1, 2, 0, 2, 0, 2, 1);
+	vos_check_obj(state, 9, flags, 1, 0, 0, 1, 0, 1, 0, 0, 0);
+	vos_check_obj(state, 3, flags, 1, 1, 2, 2, 1, 2, 0, 1, 0);
+	vos_check_obj(state, 5, flags, 1, 1, 2, 2, 0, 2, 0, 2, 1);
 }
 
 static void
@@ -701,19 +709,19 @@ punch_model_test(void **state)
 	(void)vos_check_akey; /* For now, unused. Reference to avoid warning */
 
 	/* Now recurse at an epoch prior to punches */
-	vos_check_dkey(state, 1, 0, oid, 1, 1, 1, 1, 1, 0);
+	vos_check_dkey(state, 1, 0, oid, 1, 1, 1, 1, 1, 1, 0);
 
 	/* Now recurse including punched entries */
-	vos_check_dkey(state, 8, VOS_IT_PUNCHED, oid, 1, 0, 1, 0, 4, 0);
+	vos_check_dkey(state, 8, VOS_IT_PUNCHED, oid, 1, 1, 0, 1, 0, 4, 0);
 
 	/* Now recurse after punch, not including punched entries */
-	vos_check_obj(state, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	vos_check_obj(state, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
 	/* Now recurse including punched entries after object punch */
-	vos_check_obj(state, 10, VOS_IT_PUNCHED, 1, 0, 1, 0, 1, 0, 5, 0);
+	vos_check_obj(state, 10, VOS_IT_PUNCHED, 1, 0, 0, 1, 0, 1, 0, 5, 0);
 
 	/* Now recurse visible entries at 11 */
-	vos_check_obj(state, 11, 0, 1, 0, 1, 0, 1, 0, 1, 0);
+	vos_check_obj(state, 11, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0);
 
 	/** Read the value at 11 */
 	memset(buf, 0, sizeof(buf));
@@ -2326,6 +2334,118 @@ start_over:
 	start_epoch = epoch + 1;
 }
 
+static struct dtx_id
+execute_op(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	   daos_key_t *dkey, daos_key_t *akey, d_sg_list_t *sgl,
+	   char *buf, int len, bool commit, int op)
+{
+	struct vos_ioreq	req = {0};
+	daos_iod_t		iod = {0};
+	int			rc;
+
+	vts_dtx_begin(&oid, coh, epoch, 0, &req.dth);
+
+	req.oid = oid;
+	req.coh = coh;
+	req.xid = req.dth->dth_xid;
+	req.flags = 0;
+	req.dkey = dkey;
+	req.akey = akey;
+	if (akey)
+		req.akey_nr = 1;
+
+	if (op <= TX_OP_PUNCH_AKEY) {
+		do_punch(&req);
+		goto do_commit;
+	}
+
+	iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_recxs = NULL;
+	iod.iod_nr = 1;
+	req.akey = NULL;
+	req.iod = &iod;
+	iod.iod_name = *akey;
+	iod.iod_size = len;
+	d_iov_set(&sgl->sg_iovs[0], (void *)buf, iod.iod_size);
+	sgl->sg_nr = 1;
+	sgl->sg_nr_out = 0;
+	req.sgl = sgl;
+	req.fetch_sgl = sgl;
+	do_io(&req, op);
+do_commit:
+	vts_dtx_end(req.dth);
+	if (commit && req.commit) {
+		rc = vos_dtx_commit(coh, &req.xid, 1, NULL);
+		assert_rc_equal(rc, 1);
+	}
+
+	return req.xid;
+}
+
+
+static void
+uncommitted_parent(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_key_t		dkey;
+	daos_key_t		akey[2];
+	daos_iod_t		iod;
+	d_sg_list_t		sgl;
+	char			buf[32];
+	daos_epoch_t		epoch = start_epoch;
+	daos_handle_t		coh;
+	char			*first = "Hello";
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[2][UPDATE_AKEY_SIZE];
+	daos_unit_oid_t		oid;
+	struct dtx_id		xid;
+
+	test_args_reset(arg, VPOOL_SIZE);
+	coh = arg->ctx.tc_co_hdl;
+
+	memset(&iod, 0, sizeof(iod));
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+
+	/* Set up dkey and akey */
+	oid = gen_oid(arg->ofeat);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	vts_key_gen(&akey_buf[0][0], arg->akey_size, true, arg);
+	set_iov(&akey[0], &akey_buf[0][0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	vts_key_gen(&akey_buf[1][0], arg->akey_size, true, arg);
+	set_iov(&akey[1], &akey_buf[1][0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+
+	execute_op(coh, oid, epoch, &dkey, &akey[0], &sgl, first, 5, true,
+		   TX_OP_UPDATE1);
+	epoch += 10;
+	xid = execute_op(coh, oid, epoch, NULL, NULL, NULL, NULL, 0, false,
+			 TX_OP_PUNCH_OBJ);
+	epoch += 10;
+	execute_op(coh, oid, epoch, &dkey, &akey[1], &sgl, first, 5, true,
+		   TX_OP_UPDATE1);
+	/** Commit the punch */
+	rc = vos_dtx_commit(coh, &xid, 1, NULL);
+	assert_rc_equal(rc, 1);
+
+	memset(buf, 'x', sizeof(buf));
+	epoch += 10;
+	execute_op(coh, oid, epoch, &dkey, &akey[0], &sgl, buf, 5, true,
+		   TX_OP_FETCH1);
+	assert_memory_equal(buf, "xxxxx", 5);
+
+	memset(buf, 'x', sizeof(buf));
+	epoch += 10;
+	execute_op(coh, oid, epoch, &dkey, &akey[1], &sgl, buf, 5, true,
+		   TX_OP_FETCH1);
+	assert_memory_equal(buf, first, 5);
+
+	d_sgl_fini(&sgl, false);
+	start_epoch = epoch + 1;
+}
+
 static void
 test_multiple_key_conditionals_common(void **state, bool with_dtx)
 {
@@ -2564,6 +2684,7 @@ static const struct CMUnitTest punch_model_tests_pmdk[] = {
 	{ "VOS864: Multikey conditionals with tx",
 		test_multiple_key_conditionals_tx, NULL, NULL },
 	{ "VOS865: Many transactions", many_tx, NULL, NULL },
+	{ "VOS866: Uncommitted parent punch", uncommitted_parent, NULL, NULL },
 };
 
 static const struct CMUnitTest punch_model_tests_all[] = {

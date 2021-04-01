@@ -1893,6 +1893,14 @@ int main(int argc, char *argv[])
 
 	/********************* Clean up *********************/
 cleanup:
+	if (ms_endpts != NULL) {
+		D_FREE(ms_endpts);
+		ms_endpts = NULL;
+	}
+	if (endpts != NULL) {
+		D_FREE(endpts);
+		endpts = NULL;
+	}
 	if (all_params != NULL)
 		D_FREE(all_params);
 	d_log_fini();

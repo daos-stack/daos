@@ -173,7 +173,8 @@ blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 	D_ASSERT(xs_ctxt != NULL);
 	if (xs_ctxt->bxc_tgt_id == -1) {
 		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
-		xs_poll_completion(xs_ctxt, &ba->bca_inflights);
+		rc = xs_poll_completion(xs_ctxt, &ba->bca_inflights, 0);
+		D_ASSERT(rc == 0);
 	} else {
 		rc = ABT_eventual_wait(ba->bca_eventual, NULL);
 		if (rc != ABT_SUCCESS)

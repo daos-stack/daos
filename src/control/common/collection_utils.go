@@ -170,3 +170,20 @@ func PercentageString(part, total uint64) string {
 	return fmt.Sprintf("%v %%",
 		int((float64(part)/float64(total))*float64(100)))
 }
+
+// TokenizeCommaSeparatedString splits the input string on comma boundaries,
+// and discards any empty strings in the result.
+func TokenizeCommaSeparatedString(str string) []string {
+	tokens := strings.Split(str, ",")
+	for i := len(tokens) - 1; i >= 0; i-- {
+		tokens[i] = strings.TrimSpace(tokens[i])
+		if tokens[i] == "" {
+			if i == len(tokens)-1 {
+				tokens = tokens[:i]
+			} else {
+				tokens = append(tokens[:i], tokens[i+1:]...)
+			}
+		}
+	}
+	return tokens
+}

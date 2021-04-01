@@ -29,7 +29,7 @@ type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
 	Evict        PoolEvictCmd        `command:"evict" alias:"ev" description:"Evict all pool connections to a DAOS pool"`
-	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
+	List         PoolListCmd         `command:"list" alias:"l" description:"List DAOS pools"`
 	Extend       PoolExtendCmd       `command:"extend" alias:"ext" description:"Extend a DAOS pool to include new ranks."`
 	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude targets from a rank"`
 	Drain        PoolDrainCmd        `command:"drain" alias:"d" description:"Drain targets from a rank"`
@@ -160,6 +160,46 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	return nil
 }
 
+// PoolListCmd represents the command to fetch a list of all DAOS pools in the system.
+type PoolListCmd struct {
+	logCmd
+	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+}
+
+// Execute is run when PoolListCmd activates
+func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
+	defer func() {
+		errOut = errors.Wrap(errOut, "list pools failed")
+	}()
+
+	if cmd.config == nil {
+		return errors.New("no configuration loaded")
+	}
+
+	ctx := context.Background()
+	req := new(control.ListPoolsReq)
+	req.SetSystem(cmd.config.SystemName)
+
+	resp, err := control.ListPools(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, nil)
+	}
+
+	var out strings.Builder
+	if err := pretty.PrintListPoolsResponse(&out, resp); err != nil {
+		return err
+	}
+	cmd.log.Info(out.String())
+
+	return nil
+}
+
 // poolCmd is the base struct for all pool commands that work with existing pools.
 type poolCmd struct {
 	logCmd
@@ -211,11 +251,6 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolDestroy(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -244,11 +279,6 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolEvict(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -282,11 +312,6 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolExclude(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -314,9 +339,6 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 	var idxlist []uint32
 	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
 		err = errors.WithMessage(err, "parsing rank list")
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -324,11 +346,6 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolDrain(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -359,9 +376,6 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 	ranks, err := system.ParseRanks(cmd.RankList)
 	if err != nil {
 		err = errors.Wrap(err, "parsing rank list")
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -388,11 +402,6 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err = control.PoolExtend(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -420,9 +429,6 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 	var idxlist []uint32
 	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
 		err = errors.WithMessage(err, "parsing rank list")
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -430,11 +436,6 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolReintegrate(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.errorJSON(err)
-	}
-
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -605,9 +606,6 @@ func (cmd *PoolOverwriteACLCmd) Execute(args []string) error {
 
 	acl, err := control.ReadACLFile(cmd.ACLFile)
 	if err != nil {
-		if cmd.jsonOutputEnabled() {
-			return cmd.errorJSON(err)
-		}
 		return err
 	}
 
@@ -656,9 +654,6 @@ func (cmd *PoolUpdateACLCmd) Execute(args []string) error {
 	if cmd.ACLFile != "" {
 		aclFileResult, err := control.ReadACLFile(cmd.ACLFile)
 		if err != nil {
-			if cmd.jsonOutputEnabled() {
-				return cmd.errorJSON(err)
-			}
 			return err
 		}
 		acl = aclFileResult

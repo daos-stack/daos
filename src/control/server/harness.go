@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	defaultRequestTimeout = 3 * time.Second
-	defaultStartTimeout   = 10 * defaultRequestTimeout
+	rankReqTimeout   = 10 * time.Second
+	rankStartTimeout = 3 * rankReqTimeout
 )
 
 // EngineHarness is responsible for managing Engine instances.
@@ -43,8 +43,8 @@ func NewEngineHarness(log logging.Logger) *EngineHarness {
 	return &EngineHarness{
 		log:              log,
 		instances:        make([]*EngineInstance, 0),
-		rankReqTimeout:   defaultRequestTimeout,
-		rankStartTimeout: defaultStartTimeout,
+		rankReqTimeout:   rankReqTimeout,
+		rankStartTimeout: rankStartTimeout,
 	}
 }
 
@@ -92,16 +92,16 @@ func (h *EngineHarness) FilterInstancesByRankSet(ranks string) ([]*EngineInstanc
 }
 
 // AddInstance adds a new Engine instance to be managed.
-func (h *EngineHarness) AddInstance(srv *EngineInstance) error {
+func (h *EngineHarness) AddInstance(ei *EngineInstance) error {
 	if h.isStarted() {
 		return errors.New("can't add instance to already-started harness")
 	}
 
 	h.Lock()
 	defer h.Unlock()
-	srv.setIndex(uint32(len(h.instances)))
+	ei.setIndex(uint32(len(h.instances)))
 
-	h.instances = append(h.instances, srv)
+	h.instances = append(h.instances, ei)
 	return nil
 }
 
@@ -169,10 +169,8 @@ func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *even
 		}()
 	}
 
-	for _, srv := range instances {
-		// start first time then relinquish control to instance
-		go srv.Run(ctx, cfg.RecreateSuperblocks)
-		srv.startLoop <- true
+	for _, ei := range instances {
+		ei.Run(ctx, cfg.RecreateSuperblocks)
 	}
 
 	<-ctx.Done()
@@ -188,9 +186,9 @@ func (h *EngineHarness) readyRanks() []system.Rank {
 	defer h.RUnlock()
 
 	ranks := make([]system.Rank, 0)
-	for _, srv := range h.instances {
-		if srv.hasSuperblock() && srv.isReady() {
-			ranks = append(ranks, *srv.getSuperblock().Rank)
+	for _, ei := range h.instances {
+		if ei.hasSuperblock() && ei.isReady() {
+			ranks = append(ranks, *ei.getSuperblock().Rank)
 		}
 	}
 
