@@ -643,7 +643,7 @@ class PreReqComponent():
                                    PathVariable.PathIsDirCreate))
 
         bdir = self._setup_build_type()
-        self.build_type = self.__env.get("BUILD_TYPE")
+        self.target_type = self.__env.get("TTYPE_REAL")
         self.__env["BUILD_DIR"] = bdir
         ensure_dir_exists(bdir, self.__dry_run)
         self.setup_path_var('BUILD_DIR')

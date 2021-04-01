@@ -16,17 +16,16 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_info		*dfuse_info = fs_handle->dpi_info;
 	struct dfuse_inode_entry	*ie = NULL;
-	struct dfuse_dfs		*dfs = NULL;
-	struct dfuse_dfs		*dfsi;
+	struct dfuse_cont		*dfc = NULL;
 	struct dfuse_pool		*dfp = NULL;
-	struct dfuse_pool		*dfpi;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*prop_entry;
 	daos_pool_info_t		pool_info = {};
-	struct fuse_entry_param		entry = {0};
+	d_list_t			*rlink;
 	int				rc;
+	uuid_t				pool;
+	uuid_t				cont = {};
 
 	/*
 	 * This code is only supposed to support one level of directory descent
@@ -35,101 +34,56 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 */
 	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_ino);
 
-	D_ALLOC_PTR(dfp);
-	if (!dfp)
-		D_GOTO(err, rc = ENOMEM);
-
-	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
-
 	/*
 	 * Dentry names with invalid uuids cannot possibly be added. In this
 	 * case, return the negative dentry with a timeout to prevent future
 	 * lookups.
 	 */
-	if (uuid_parse(name, dfp->dfp_pool) < 0) {
-		entry.entry_timeout = 60;
-		DFUSE_TRA_INFO(parent, "Invalid container uuid");
+	if (uuid_parse(name, pool) < 0) {
+		struct fuse_entry_param entry = {.entry_timeout = 60};
+
+		DFUSE_TRA_INFO(parent, "Invalid pool uuid");
 		DFUSE_REPLY_ENTRY(parent, req, entry);
-		D_FREE(dfp);
 		return;
 	}
 
-	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
+	DFUSE_TRA_DEBUG(parent, "Lookup of "DF_UUID,
+			DP_UUID(pool));
 
-	d_list_for_each_entry(dfpi,
-			      &fs_handle->dpi_info->di_dfp_list,
-			      dfp_list) {
-		if (uuid_compare(dfp->dfp_pool, dfpi->dfp_pool) != 0)
-			continue;
+	rc = dfuse_pool_open(fs_handle, &pool, &dfp);
+	if (rc != 0)
+		goto err;
 
-		d_list_for_each_entry(dfsi,
-				      &dfpi->dfp_dfs_list,
-				      dfs_list) {
-			if (uuid_is_null(dfsi->dfs_cont) != 1)
-				continue;
+	rc = dfuse_cont_open(fs_handle, dfp, &cont, &dfc);
+	if (rc != 0)
+		goto err;
 
-			DFUSE_TRA_INFO(dfpi, "Found existing pool");
+	/* Drop the reference on the pool */
+	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 
-			rc = dfuse_check_for_inode(fs_handle, dfsi->dfs_ino,
-						   &ie);
-			D_ASSERT(rc == -DER_SUCCESS);
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet,
+				&dfc->dfs_ino,
+				sizeof(dfc->dfs_ino));
+	if (rlink) {
+		struct fuse_entry_param	entry = {0};
 
-			DFUSE_TRA_INFO(ie, "Reusing existing pool");
-			entry.attr = ie->ie_stat;
-			entry.generation = 1;
-			entry.ino = entry.attr.st_ino;
+		ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-			entry.attr_timeout = dfsi->dfs_attr_timeout;
-			entry.entry_timeout = dfsi->dfs_dentry_timeout;
+		DFUSE_TRA_INFO(ie,
+			       "Reusing existing pool entry without reconnect");
 
-			DFUSE_REPLY_ENTRY(ie, req, entry);
-			D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
-			D_FREE(dfp);
-			return;
-		}
-	}
-
-	D_ALLOC_PTR(dfs);
-	if (!dfs)
-		D_GOTO(err_unlock, rc = ENOMEM);
-
-	dfuse_dfs_init(dfs, parent->ie_dfs);
-
-	/* Turn on some caching of metadata, otherwise container operations will
-	 * be very frequent
-	 */
-	dfs->dfs_attr_timeout = 5;
-	dfs->dfs_ndentry_timeout = 5;
-
-	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
-	dfs->dfs_dfp = dfp;
-
-	DFUSE_TRA_UP(dfp, parent->ie_dfs->dfs_dfp, "dfp");
-
-	DFUSE_TRA_UP(dfs, dfp, "dfs");
-
-	rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
-			       DAOS_PC_RW,
-			       &dfp->dfp_poh, &dfp->dfp_pool_info,
-			       NULL);
-	if (rc) {
-		if (rc == -DER_NO_PERM)
-			DFUSE_TRA_INFO(dfp,
-				       "daos_pool_connect() failed, "DF_RC,
-				       DP_RC(rc));
-		else
-			DFUSE_TRA_ERROR(dfp,
-					"daos_pool_connect() failed, "DF_RC,
-					DP_RC(rc));
-
-		D_GOTO(err_unlock, rc = daos_der2errno(rc));
+		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
+		entry.attr = ie->ie_stat;
+		entry.entry_timeout = dfc->dfs_attr_timeout;
+		entry.generation = 1;
+		entry.ino = entry.attr.st_ino;
+		DFUSE_REPLY_ENTRY(ie, req, entry);
+		return;
 	}
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
-		D_GOTO(close, rc = ENOMEM);
-
-	ie->ie_root = true;
+		D_GOTO(decref, rc = ENOMEM);
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
@@ -138,18 +92,18 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 
 	atomic_store_relaxed(&ie->ie_ref, 1);
-	ie->ie_dfs = dfs;
+	ie->ie_dfs = dfc;
 
 	prop = daos_prop_alloc(0);
 	if (prop == NULL) {
 		DFUSE_TRA_ERROR(dfp, "Failed to allocate pool property");
-		D_GOTO(close, rc = ENOMEM);
+		D_GOTO(decref, rc = ENOMEM);
 	}
 
 	rc = daos_pool_query(dfp->dfp_poh, NULL, &pool_info, prop, NULL);
 	if (rc) {
-		DFUSE_TRA_ERROR(ie, "daos_pool_query() failed: (%d)", rc);
-		D_GOTO(close, rc = daos_der2errno(rc));
+		DFUSE_TRA_ERROR(dfp, "daos_pool_query() failed: (%d)", rc);
+		D_GOTO(decref, rc = daos_der2errno(rc));
 	}
 
 	/* Convert the owner information to uid/gid */
@@ -160,7 +114,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc != 0) {
 		DFUSE_TRA_ERROR(dfp, "Unable to convert owner to uid: (%d)",
 				rc);
-		D_GOTO(close, rc = daos_der2errno(rc));
+		D_GOTO(decref, rc = daos_der2errno(rc));
 	}
 
 	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
@@ -171,7 +125,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		DFUSE_TRA_ERROR(dfp,
 				"Unable to convert owner-group to gid: (%d)",
 				rc);
-		D_GOTO(close, rc = daos_der2errno(rc));
+		D_GOTO(decref, rc = daos_der2errno(rc));
 	}
 
 	/*
@@ -182,30 +136,22 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	daos_prop_free(prop);
 
-	d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
-
-	dfs->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
-
-	ie->ie_stat.st_ino = dfs->dfs_ino;
-	dfs->dfs_ops = &dfuse_cont_ops;
+	ie->ie_stat.st_ino = dfc->dfs_ino;
 
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 
-	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return;
-close:
-	daos_pool_disconnect(dfp->dfp_poh, NULL);
+decref:
+	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 	D_FREE(ie);
 	daos_prop_free(prop);
-err_unlock:
-	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 err:
 	if (rc == ENOENT) {
-		entry.entry_timeout = dfs->dfs_ndentry_timeout;
+		struct fuse_entry_param entry = {0};
+
+		entry.entry_timeout = parent->ie_dfs->dfs_ndentry_timeout;
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	}
-	D_FREE(dfs);
-	D_FREE(dfp);
 }
