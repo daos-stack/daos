@@ -14,6 +14,7 @@
 #include <daos_srv/pool.h>
 #include <daos_api.h>
 #include <daos_security.h>
+#include <daos/policy.h>
 
 #include "svc.pb-c.h"
 #include "acl.pb-c.h"
@@ -228,6 +229,11 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 	}
 
 	if (policy != NULL && *policy != '\0') {
+		if (!is_policy_name_valid(policy)) {
+			D_ERROR("Invalid policy name: %s\n", policy);
+			D_GOTO(err_out, rc = -DER_INVAL);
+		}
+
 		D_ASPRINTF(out_policy, "%s", policy);
 		if (out_policy == NULL)
 			D_GOTO(err_out, rc = -DER_NOMEM);
@@ -284,6 +290,7 @@ err_out:
 	D_FREE(out_label);
 	D_FREE(out_owner_grp);
 	D_FREE(out_owner);
+	D_FREE(out_policy);
 	return rc;
 }
 

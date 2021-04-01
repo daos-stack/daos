@@ -20,6 +20,7 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
+#include <daos/policy.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
 #include "vos_ilog.h"
@@ -126,17 +127,6 @@ agg_reserve_space(daos_size_t *rsrvd)
 	rsrvd[DAOS_MEDIA_SCM]	+= size;
 	rsrvd[DAOS_MEDIA_NVME]	+= size;
 }
-
-/**
- * VOS tiering policy
- */
-typedef enum tier_policy {
-        //TIER_POLICY_NOT_SET = -1,
-        TIER_POLICY_DEFAULT,
-        TIER_POLICY_IO_SIZE,
-        TIER_POLICY_WRITE_INTENSIVITY,
-        TIER_POLICY_MAX
-} tier_policy_t;
 
 
 /**

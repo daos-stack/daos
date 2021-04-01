@@ -26,6 +26,9 @@
 // void
 // vos_policy_init();
 
+bool
+is_policy_name_valid(const char *name);
+
 daos_media_type_t
 vos_policy_media_select(struct vos_pool *pool, daos_iod_type_t type,
                         daos_size_t size);

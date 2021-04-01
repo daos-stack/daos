@@ -10,10 +10,15 @@
  * Author: Krzysztof Majzerowicz-Jaszcz (krzysztof.majzerowicz-jaszcz@intel.com)
  */
 
+#include <daos/policy.h>
 #include "vos_policy.h"
 
+
+/* policy functions definitions */
+
+/* default policy - former "vos_media_select" function */
 static daos_media_type_t
-vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
+policy_default(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 {
 	if (pool->vp_vea_info == NULL)
 		return DAOS_MEDIA_SCM;
@@ -21,7 +26,7 @@ vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 	return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
 }
 
-
+/* policy based on io size */
 static daos_media_type_t
 policy_io_size(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 {
@@ -40,6 +45,7 @@ policy_io_size(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
         return medium;
 }
 
+/* policy based on how write-intesive is data to store */
 static daos_media_type_t
 policy_write_intensivity(struct vos_pool *pool, daos_iod_type_t type,
                          daos_size_t size)
@@ -47,18 +53,15 @@ policy_write_intensivity(struct vos_pool *pool, daos_iod_type_t type,
         return DAOS_MEDIA_NVME;
 }
 
-static daos_media_type_t (*vos_policies[TIER_POLICY_MAX])(struct vos_pool*,
+
+/* policy functions table */
+static const daos_media_type_t (*vos_policies[TIER_POLICY_MAX])(struct vos_pool*,
                                                         daos_iod_type_t,
                                                         daos_size_t) =
-                   {vos_media_select, policy_io_size, policy_write_intensivity};
+                   {policy_default, policy_io_size, policy_write_intensivity};
 
 
 
-// void
-// vos_policy_init()
-// {
-//         return;
-// }
 
 daos_media_type_t
 vos_policy_media_select(struct vos_pool *pool, daos_iod_type_t type,
