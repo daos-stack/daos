@@ -157,10 +157,11 @@ enum {
 	D_TM_CSV			= 0x002,
 };
 
-/** Optional CSV field descriptors */
+/** Optional field descriptors */
 enum {
 	D_TM_INCLUDE_TIMESTAMP		= 0x001,
 	D_TM_INCLUDE_METADATA		= 0x002,
+	D_TM_INCLUDE_TYPE		= 0x004,
 };
 
 /**

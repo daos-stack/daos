@@ -16,10 +16,13 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // HostStorage describes a host storage configuration which
@@ -415,12 +418,70 @@ func (ssp *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 	return ssp.HostStorage.Add(hr.Addr, hs)
 }
 
+// checkFormatReq performs some validation to determine whether or not the
+// system should be erased before allowing a format request for the hosts
+// in the request. The goal is to prevent reformatting a running system while
+// allowing (re-)format of hosts that are not participating as MS replicas.
+func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFormatReq) error {
+	reqHosts, err := common.ParseHostList(req.HostList, build.DefaultControlPort)
+	if err != nil {
+		return err
+	}
+
+	checkError := func(err error) error {
+		// If the call succeeded, then the MS is running and
+		// we should return an error.
+		if err == nil {
+			return FaultFormatRunningSystem
+		}
+
+		// We expect a system unavailable error when the MS is
+		// not running, so it's safe to swallow these errors. Any
+		// other error should be returned.
+		if !(system.IsUnavailable(err) || err == errMSConnectionFailure) {
+			return err
+		}
+
+		// Safe to proceed.
+		return nil
+	}
+
+	// If the request does not specify a hostlist, then it will use the
+	// hostlist set in the configuration, which implies a full system
+	// format. In this case, we just need to check whether or not the
+	// MS is running and fail if so.
+	if len(reqHosts) == 0 {
+		sysReq := &SystemQueryReq{FailOnUnavailable: true}
+		_, err := SystemQuery(ctx, rpcClient, sysReq)
+
+		return checkError(err)
+	}
+
+	// Check the hosts in the format request's hostlist to see if there is
+	// a MS replica running on any of them, in which case an error will
+	// be returned.
+	for _, host := range reqHosts {
+		sysReq := &SystemQueryReq{FailOnUnavailable: true}
+		sysReq.AddHost(host)
+		_, err := SystemQuery(ctx, rpcClient, sysReq)
+		if err := checkError(err); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // StorageFormat concurrently performs storage preparation steps across
 // all hosts supplied in the request's hostlist, or all configured hosts
 // if not explicitly specified. The function blocks until all results
 // (successful or otherwise) are received, and returns a single response
 // structure containing results for all host storage prepare operations.
 func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageFormatReq) (*StorageFormatResp, error) {
+	if err := checkFormatReq(ctx, rpcClient, req); err != nil {
+		return nil, err
+	}
+
 	pbReq := new(ctlpb.StorageFormatReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, err

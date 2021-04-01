@@ -16,8 +16,6 @@ class RebuildTests(TestWithServers):
     :avocado: recursive
     """
 
-    CANCEL_FOR_TICKET = [["DAOS-6865", "object_qty", 20]]
-
     def run_rebuild_test(self, pool_quantity):
         """Run the rebuild test for the specified number of pools.
 
@@ -136,7 +134,7 @@ class RebuildTests(TestWithServers):
         """
         self.run_rebuild_test(1)
 
-    @skipForTicket("DAOS-7050")
+    @skipForTicket("DAOS-7050, DAOS-7134")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
 
