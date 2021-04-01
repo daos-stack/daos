@@ -14,6 +14,8 @@ class ReadArrayTest(RebuildTestBase):
     :avocado: recursive
     """
 
+    CANCEL_FOR_TICKET = [["DAOS-2799", "targets", 8]]
+
     def execute_during_rebuild(self):
         """Read the objects during rebuild."""
         message = "Reading the array objects during rebuild"
@@ -41,9 +43,6 @@ class ReadArrayTest(RebuildTestBase):
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
 
-        :avocado: tags=all,large,full_regression
-        :avocado: tags=vm,large
-        :avocado: tags=rebuild
-        :avocado: tags=rebuild_tests,rebuildreadarray
+        :avocado: tags=all,large,full_regression,rebuild,rebuildreadarray
         """
         self.execute_rebuild_test()
