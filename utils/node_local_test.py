@@ -1944,7 +1944,7 @@ def check_readdir_perf(server, conf):
     dfuse = DFuse(server, conf, pool=pool)
 
     print('Creating container and populating')
-    count = 1024
+    count = 32768
     dfuse.start()
     parent = os.path.join(dfuse.dir, container)
     try:
@@ -2337,16 +2337,19 @@ class AllocFailTest():
         fatal_errors = False
 
         while not finished or active:
-            if len(active) < max_child and not finished:
-                active.append(self._run_cmd(fid))
-                fid += 1
+            if not finished:
+                while len(active) < max_child:
+                    active.append(self._run_cmd(fid))
+                    fid += 1
 
-                if len(active) > max_count:
-                    max_count = len(active)
+                    if len(active) > max_count:
+                        max_count = len(active)
 
             # Now complete as many as have finished.
-            while active and active[0].has_finished():
-                ret = active.pop(0)
+            for ret in active:
+                if not ret.has_finished():
+                    continue
+                active.remove(ret)
                 print(ret)
                 if ret.returncode < 0:
                     fatal_errors = True
@@ -2373,6 +2376,12 @@ class AllocFailTest():
         """
 
         cmd_env = get_base_env()
+
+        # Debug flags to enable all memory allocation logging, but as little
+        # else as possible.
+        cmd_env['D_LOG_MASK'] = 'DEBUG'
+        cmd_env['DD_MASK'] = 'mem'
+        del cmd_env['DD_SUBSYS']
 
         if self.use_il:
             cmd_env['LD_PRELOAD'] = os.path.join(self.conf['PREFIX'],
