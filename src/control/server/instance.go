@@ -50,7 +50,7 @@ type EngineInstance struct {
 	waitDrpc          atm.Bool
 	drpcReady         chan *srvpb.NotifyReadyReq
 	ready             atm.Bool
-	startLoop         chan bool // restart loop
+	startRequested    chan bool
 	fsRoot            string
 	hostFaultDomain   *system.FaultDomain
 	joinSystem        systemJoinFn
@@ -61,6 +61,7 @@ type EngineInstance struct {
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
+	_cancelCtx  context.CancelFunc
 	_drpcClient drpc.DomainSocketClient
 	_superblock *Superblock
 	_lastErr    error // populated when harness receives signal
@@ -80,7 +81,7 @@ func NewEngineInstance(log logging.Logger,
 		joinSystem:        joinFn,
 		drpcReady:         make(chan *srvpb.NotifyReadyReq),
 		storageReady:      make(chan bool),
-		startLoop:         make(chan bool),
+		startRequested:    make(chan bool),
 	}
 }
 
