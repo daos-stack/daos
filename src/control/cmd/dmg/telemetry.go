@@ -360,14 +360,14 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	if !cmd.shouldEmitJSON {
 		cmd.log.Info(getConnectingMsg(req.Host, req.Port))
 	}
+
 	resp, err := control.MetricsList(context.Background(), req)
+	if err != nil {
+		return err
+	}
 
 	if cmd.shouldEmitJSON {
 		return cmd.outputJSON(resp, err)
-	}
-
-	if err != nil {
-		return err
 	}
 
 	var b strings.Builder
@@ -402,14 +402,14 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	if !cmd.shouldEmitJSON {
 		cmd.log.Info(getConnectingMsg(req.Host, req.Port))
 	}
+
 	resp, err := control.MetricsQuery(context.Background(), req)
+	if err != nil {
+		return err
+	}
 
 	if cmd.shouldEmitJSON {
 		return cmd.outputJSON(resp, err)
-	}
-
-	if err != nil {
-		return err
 	}
 
 	var b strings.Builder
