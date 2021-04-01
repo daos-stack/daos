@@ -102,6 +102,7 @@ const (
 	ClientConnectionNoRoute
 	ClientConnectionRefused
 	ClientConnectionClosed
+	ClientFormatRunningSystem
 )
 
 const (
