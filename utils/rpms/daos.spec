@@ -404,7 +404,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Thu Apr 1 2021 Maureen Jean <maureen.jean@intel.com> 1.1.4-3
 - Change pydaos_shim_3 to pydaos_shim
 
-* Mon Mar 29 2021 Brian J. Murrell <brian.murrell@intel.com> 1.1.4-2 
+* Mon Mar 29 2021 Brian J. Murrell <brian.murrell@intel.com> 1.1.4-2
 - Move libdts.so to the daos-tests subpackage
 
 * Mon Mar 22 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.4-1
