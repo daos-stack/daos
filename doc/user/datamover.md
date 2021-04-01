@@ -2,8 +2,10 @@
 
 The Dataset Mover is a collection of multiple tools that allow users to copy
 and serialize data across DAOS and POSIX file systems. There is support for
-data movement across POSIX, DAOS, and HDF5 containers, as well as support for
-serializing a DAOS container to an HDF5 file and deserializing back to DAOS.
+data movement across POSIX, DAOS, and HDF5 containers.
+There is also support for serializing and deserializing a DAOS container,
+where a representation of the container is stored on a POSIX filesystem
+in an HDF5 file(s) and can be restored to a new DAOS container.
 
 ## Overview of Tools
 
