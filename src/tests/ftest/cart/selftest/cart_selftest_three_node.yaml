@@ -28,7 +28,8 @@ hosts: !mux
 timeout: 600
 tests: !mux
 
-###### 4KB aligned, 1MB Bulk transfer, 16 RPC in flight #####
+  ###### 4KB aligned, 1MB Bulk transfer, 16 RPC in flight #####
+
   self_file_1:
     name: self_test_file_1_
     test_servers_bin: crt_launch
@@ -47,7 +48,7 @@ tests: !mux
       - " -f ../../../../etc/selftest.cnf -c align_4k_inFlight_16_size_1M_B -o client_2"
       - "--name client-group --attach_to selftest_srv_grp --shut_only"
 
-###### 1KB aligned, 1MB Bulk transfer, 1 RPC in flight #####
+  ###### 1KB aligned, 1MB Bulk transfer, 1 RPC in flight #####
   self_file_2:
     name: self_test_np
     test_servers_bin: crt_launch
@@ -67,7 +68,7 @@ tests: !mux
       - "--name client-group --attach_to selftest_srv_grp --shut_only"
 
 
-###### 1KB aligned, 1MB Bulk transfer, 4 RPC in flight #####
+  ###### 1KB aligned, 1MB Bulk transfer, 4 RPC in flight #####
   self_file_3:
     name: self_test_np
     test_servers_bin: crt_launch
@@ -86,7 +87,7 @@ tests: !mux
       - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_4_size_1M_B -o client_2"
       - "--name client-group --attach_to selftest_srv_grp --shut_only"
 
-###### 1KB aligned, 1MB Bulk transfer, 16 RPC in flight #####
+  ###### 1KB aligned, 1MB Bulk transfer, 16 RPC in flight #####
   self_file_4:
     name: self_test_np
     test_servers_bin: crt_launch
@@ -105,7 +106,7 @@ tests: !mux
       - " -f ../../../../etc/selftest.cnf -c align_1k_inFlight_16_size_1M_B -o client_2"
       - "--name client-group --attach_to selftest_srv_grp --shut_only"
 
-###### Command line input, Multiple sizes with bulk and IVO  #####
+  ###### Command line input, Multiple sizes with bulk and IVO  #####
   self_cmdline:
     name: self_test_np
     test_servers_bin: crt_launch
