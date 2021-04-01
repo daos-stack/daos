@@ -469,7 +469,12 @@ err:
 }
 
 #define ATTR_COUNT 4
-/* Called once after container connect, after dfs_mount() */
+/* Setup caching attributes for a container.
+ *
+ * These are read from pool attributes, or can be overwritten on the command
+ * line, but only for the root dfc in that case, so to use caching with
+ * multiple containers it needs to be set via attributes.
+ */
 static int
 dfuse_cont_init(struct dfuse_cont *dfc)
 {
@@ -477,11 +482,11 @@ dfuse_cont_init(struct dfuse_cont *dfc)
 					       "dfuse-dentry",
 					       "dfuse-ndentry",
 					       "dfuse-data-cache"};
-	size_t	size;
-	char	*buff;
-	int	rc;
-	int	i;
-	unsigned int value;
+	size_t		size;
+	char		*buff;
+	int		rc;
+	int		i;
+	unsigned int	value;
 
 	D_ALLOC(buff, 128);
 	if (buff == NULL)
@@ -496,9 +501,9 @@ dfuse_cont_init(struct dfuse_cont *dfc)
 		if (rc == -DER_NONEXIST) {
 			continue;
 		} else if (rc != -DER_SUCCESS) {
-			D_GOTO(out, rc = daos_der2errno(rc));
 			DFUSE_TRA_WARNING(dfc, "Failed to load value for '%s' "
 					  DF_RC, names[i], DP_RC(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
 		if (i == 3) {
@@ -528,7 +533,6 @@ out:
 	D_FREE(buff);
 	return rc;
 }
-
 
 /*
  * Return a container connection by uuid.

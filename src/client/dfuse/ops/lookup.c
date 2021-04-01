@@ -27,12 +27,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	/* Do not cache directory attributes as this does not work with uns */
 	if (!S_ISDIR(ie->ie_stat.st_mode))
-		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+		entry.entry_timeout = ie->ie_dfs->dfs_dentry_timeout;
+
+	/* Set the attr caching attributes of this entry */
+	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
-
-	/* Set the caching attributes of this entry */
-	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
@@ -179,9 +179,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
 	ie->ie_dfs = dfs;
-
-	/* ??? */
-	ie->ie_root = true;
 
 	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %#lx",
 		       dfs->dfs_ino);

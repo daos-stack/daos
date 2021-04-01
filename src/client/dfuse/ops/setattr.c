@@ -38,7 +38,11 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		dfs_flags |= DFS_SET_ATTR_MTIME;
 	}
 
-	if (to_set & FUSE_SET_ATTR_CTIME) {
+	/* Only set this when caching is enabled as dfs doesn't fully support
+	 * ctime, but rather uses mtime instead.  In practice this is only
+	 * seen when using writeback cache.
+	 */
+	if (ie->ie_dfs->dfs_data_caching && to_set & FUSE_SET_ATTR_CTIME) {
 		DFUSE_TRA_DEBUG(ie, "ctime %#lx", attr->st_ctime);
 		to_set &= ~FUSE_SET_ATTR_CTIME;
 		attr->st_mtime = attr->st_ctime;
