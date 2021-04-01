@@ -57,7 +57,7 @@ daos_tests:
     test_daos_nvme_recovery_3: N
     test_daos_nvme_recovery_4: N
   args:
-    test_daos_nvme_recovery_1: -u subtests="1"
-    test_daos_nvme_recovery_2: -u subtests="2"
-    test_daos_nvme_recovery_3: -u subtests="3"
-    test_daos_nvme_recovery_4: -u subtests="4"
+    test_daos_nvme_recovery_1: -u subtests="1" --csum_type=crc32
+    test_daos_nvme_recovery_2: -u subtests="2" --csum_type=crc32
+    test_daos_nvme_recovery_3: -u subtests="3" --csum_type=crc32
+    test_daos_nvme_recovery_4: -u subtests="4" --csum_type=crc32
