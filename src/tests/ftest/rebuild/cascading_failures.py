@@ -14,8 +14,6 @@ class CascadingFailures(RebuildTestBase):
     :avocado: recursive
     """
 
-    CANCEL_FOR_TICKET = [["DAOS-2799", "targets", 8]]
-
     def __init__(self, *args, **kwargs):
         """Initialize a CascadingFailures object."""
         super().__init__(*args, **kwargs)
@@ -92,8 +90,10 @@ class CascadingFailures(RebuildTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=all,large,full_regression,rebuild
-        :avocado: tags=multitarget,simultaneous
+        :avocado: tags=all,large,full_regression
+        :avocado: tags=vm,large
+        :avocado: tags=rebuild
+        :avocado: tags=rebuild_tests,multitarget,simultaneous
         """
         self.mode = "simultaneous"
         self.execute_rebuild_test()
@@ -112,7 +112,9 @@ class CascadingFailures(RebuildTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=all,large,full_regression,rebuild
+        :avocado: tags=all,large,full_regression
+        :avocado: tags=vm,large
+        :avocado: tags=rebuild
         :avocado: tags=multitarget,sequential
         """
         self.mode = "sequential"
@@ -133,6 +135,7 @@ class CascadingFailures(RebuildTestBase):
             Verify rebuild with multiple server failures.
 
         :avocado: tags=all,large,full_regression,rebuild
+        :avocado: tags=vm,large
         :avocado: tags=multitarget,cascading
         """
         self.mode = "cascading"
