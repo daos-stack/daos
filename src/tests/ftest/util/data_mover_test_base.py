@@ -417,9 +417,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
     def dataset_gen(self, cont, num_objs, num_dkeys, num_akeys_single,
                     num_akeys_array, akey_sizes, akey_extents):
-        """Generate a dataset with some number of objects, dkeys, and akeys,
-           where the akeys have varying sizes.
-           Expects the container to be created with the API control method.
+        """Generate a dataset with some number of objects, dkeys, and akeys.
+
+        Expects the container to be created with the API control method.
 
         Args:
             cont (TestContainer): the container.
@@ -893,7 +893,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         between serializing and deserializing.
 
         Args:
-            Args:
             src_pool (TestPool, optional): the source pool.
                 Alternatively, this can be the pool uuid.
             src_cont (TestContainer, optional): the source container.
