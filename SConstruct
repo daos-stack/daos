@@ -17,6 +17,8 @@ except NameError:
 
 sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
 import daos_build
+from prereq_tools import PreReqComponent
+
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -178,13 +180,15 @@ def scons(): # pylint: disable=too-many-locals
     """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
         try:
+            # pylint: disable=import-outside-toplevel
             import pygit2
             import github
             import yaml
+            # pylint: enable=import-outside-toplevel
         except ImportError:
             print("You need yaml, pygit2 and pygithub python modules to "
                   "create releases")
-            exit(1)
+            sys.exit(1)
 
         variables = Variables()
 
@@ -205,7 +209,7 @@ def scons(): # pylint: disable=too-many-locals
             tag = env['RELEASE']
         except KeyError:
             print("Usage: scons RELEASE=x.y.z release")
-            exit(1)
+            sys.exit(1)
 
         dash = tag.find('-')    # pylint: disable=no-member
         if dash > 0:
@@ -218,7 +222,7 @@ def scons(): # pylint: disable=too-many-locals
             while answer not in ["y", "n", ""]:
                 answer = input(question).lower().strip()
             if answer != 'y':
-                exit(1)
+                sys.exit(1)
 
             version = tag
 
@@ -231,7 +235,7 @@ def scons(): # pylint: disable=too-many-locals
                 print("You need to install hub (from the hub RPM on EL7) to "
                       "and run it at least once to create an authorization "
                       "token in order to create releases")
-                exit(1)
+                sys.exit(1)
             raise
 
         # create a branch for the PR
@@ -245,7 +249,7 @@ def scons(): # pylint: disable=too-many-locals
             print("Branch {}/{} is not a valid branch\n"
                   "See https://github.com/{}/daos/branches".format(
                       remote_name, base_branch, org_name))
-            exit(1)
+            sys.exit(1)
 
         # older pygit2 didn't have AlreadyExistsError
         try:
@@ -259,7 +263,7 @@ def scons(): # pylint: disable=too-many-locals
             print("Branch {} exists locally already.\n"
                   "You need to delete it or rename it to try again.".format(
                       branch))
-            exit(1)
+            sys.exit(1)
 
         # and check it out
         print("Checking out branch for the PR...")
@@ -269,7 +273,7 @@ def scons(): # pylint: disable=too-many-locals
         if not update_rpm_version(version, tag):
             print("Branch has been left in the created state.  You will have "
                   "to clean it up manually.")
-            exit(1)
+            sys.exit(1)
 
         print("Updating the VERSION and TAG files...")
         with open("VERSION", "w") as version_file:
@@ -330,12 +334,14 @@ def scons(): # pylint: disable=too-many-locals
         # and push it
         print("Pushing the changes to GitHub...")
         remote = repo.remotes[remote_name]
+        # pylint: disable=no-member
         try:
             remote.push(['refs/heads/{}'.format(branch)],
                         callbacks=MyCallbacks())
         except pygit2.GitError as excpt:
             print("Error pushing branch: {}".format(excpt))
-            exit(1)
+            sys.exit(1)
+        # pylint: enable=no-member
 
         print("Creating the PR...")
         # now create a PR for it
@@ -361,9 +367,7 @@ def scons(): # pylint: disable=too-many-locals
 
         print("Done.")
 
-        exit(0)
-
-    from prereq_tools import PreReqComponent
+        sys.exit(0)
 
     env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
