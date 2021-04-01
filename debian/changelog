@@ -1,11 +1,11 @@
 daos (1.1.4-3) unstable; urgency=medium
   [ Brian J. Murrell ]
-  * Update Argobots to 1.1rc2
+  * Update Argobots to 1.1
 
- -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 01 Apr 2021 08:43:28 -0400
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 01 Apr 2021 11:20:59 -0400
 
 daos (1.1.4-2) unstable; urgency=medium
-
+  [ Brian J. Murrell ]
   * Move libdts.so to the daos-tests subpackage
 
  -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 29 Mar 2021 10:54:39 -0400
