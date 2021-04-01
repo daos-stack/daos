@@ -6,11 +6,7 @@
 
 set -e
 
-# Allow running in daos tree, or in parent.  This mostly allows local scripts to
-# run, for example
-# docker build . -f utils/docker/Dockerfile.centos.7 --build-arg DAOS_KEEP_SRC=yes -t mycont
-# docker run -ti --tmpfs /mnt/daos mycont sudo ./ci/unit/docker_nlt.sh
-# 
+# Allow running in daos tree, or in parent.
 [ -d daos ] && cd daos
 
 . utils/sl/setup_local.sh
