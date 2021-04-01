@@ -27,7 +27,7 @@ BuildRequires: gcc-c++
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
 %if (0%{?rhel} >= 7)
-BuildRequires: argobots-devel >= 1.0~rc2
+BuildRequires: argobots-devel >= 1.1
 BuildRequires: json-c-devel
 BuildRequires: boost-python36-devel
 %else
@@ -401,8 +401,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Wed Mar 31 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-6
-- Update argobots to 1.1rc2
+* Thu Apr 01 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-6
+- Update argobots to 1.1
 
 * Mon Mar 29 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.0-5
 - Move libdts.so to the daos-tests subpackage
