@@ -29,6 +29,7 @@ class OSAOfflineExtend(OSAUtils):
         self.extra_servers = self.params.get("test_servers",
                                              "/run/extra_servers/*")
         self.rank = self.params.get("rank_list", '/run/test_ranks/*')
+        self.test_oclass = None
 
     def run_offline_extend_test(self, num_pool, data=False,
                                 server_boot=False, oclass=None):
@@ -44,6 +45,8 @@ class OSAOfflineExtend(OSAUtils):
         """
         # Create a pool
         pool = {}
+        tmp = server_boot
+        self.log.info(tmp)
         if oclass is None:
             oclass = []
             oclass.append(self.ior_cmd.dfs_oclass.value)
