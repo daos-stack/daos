@@ -302,7 +302,11 @@ degrade_small_sub_setup(void **state)
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			DEGRADE_SMALL_POOL_SIZE, 6, NULL);
-	return rc;
+	if (rc)
+		print_message("It can not create the pool with 6 ranks"
+			      " probably due to not enough ranks %d\n", rc);
+
+	return 0;
 }
 
 /** create a new pool/container for each test */
