@@ -188,7 +188,7 @@ def scons(): # pylint: disable=too-many-locals
         except ImportError:
             print("You need yaml, pygit2 and pygithub python modules to "
                   "create releases")
-            sys.exit(1)
+            Exit(1)
 
         variables = Variables()
 
@@ -209,7 +209,7 @@ def scons(): # pylint: disable=too-many-locals
             tag = env['RELEASE']
         except KeyError:
             print("Usage: scons RELEASE=x.y.z release")
-            sys.exit(1)
+            Exit(1)
 
         dash = tag.find('-')    # pylint: disable=no-member
         if dash > 0:
@@ -222,7 +222,7 @@ def scons(): # pylint: disable=too-many-locals
             while answer not in ["y", "n", ""]:
                 answer = input(question).lower().strip()
             if answer != 'y':
-                sys.exit(1)
+                Exit(1)
 
             version = tag
 
@@ -235,7 +235,7 @@ def scons(): # pylint: disable=too-many-locals
                 print("You need to install hub (from the hub RPM on EL7) to "
                       "and run it at least once to create an authorization "
                       "token in order to create releases")
-                sys.exit(1)
+                Exit(1)
             raise
 
         # create a branch for the PR
@@ -249,7 +249,7 @@ def scons(): # pylint: disable=too-many-locals
             print("Branch {}/{} is not a valid branch\n"
                   "See https://github.com/{}/daos/branches".format(
                       remote_name, base_branch, org_name))
-            sys.exit(1)
+            Exit(1)
 
         # older pygit2 didn't have AlreadyExistsError
         try:
@@ -263,7 +263,7 @@ def scons(): # pylint: disable=too-many-locals
             print("Branch {} exists locally already.\n"
                   "You need to delete it or rename it to try again.".format(
                       branch))
-            sys.exit(1)
+            Exit(1)
 
         # and check it out
         print("Checking out branch for the PR...")
@@ -273,7 +273,7 @@ def scons(): # pylint: disable=too-many-locals
         if not update_rpm_version(version, tag):
             print("Branch has been left in the created state.  You will have "
                   "to clean it up manually.")
-            sys.exit(1)
+            Exit(1)
 
         print("Updating the VERSION and TAG files...")
         with open("VERSION", "w") as version_file:
@@ -340,7 +340,7 @@ def scons(): # pylint: disable=too-many-locals
                         callbacks=MyCallbacks())
         except pygit2.GitError as excpt:
             print("Error pushing branch: {}".format(excpt))
-            sys.exit(1)
+            Exit(1)
         # pylint: enable=no-member
 
         print("Creating the PR...")
@@ -367,7 +367,7 @@ def scons(): # pylint: disable=too-many-locals
 
         print("Done.")
 
-        sys.exit(0)
+        Exit(0)
 
     env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
