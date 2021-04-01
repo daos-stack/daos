@@ -404,7 +404,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	for _, srv := range instances {
 		formatting++
 		go func(s *EngineInstance) {
-			scmChan <- s.StorageFormatSCM(req.Reformat)
+			scmChan <- s.StorageFormatSCM(ctx, req.Reformat)
 		}(srv)
 	}
 
@@ -451,7 +451,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 			srv.log.Errorf(msgFormatErr, srv.Index())
 			continue
 		}
-		srv.NotifyStorageReady()
+		srv.NotifyStorageReady(ctx)
 	}
 
 	return resp, nil

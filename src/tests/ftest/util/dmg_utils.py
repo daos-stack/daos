@@ -424,12 +424,11 @@ class DmgCommand(DmgCommandBase):
 
         return data
 
-    def pool_query(self, pool, use_json=True):
+    def pool_query(self, pool):
         """Query a pool with the dmg command.
 
         Args:
             uuid (str): Pool UUID to query.
-            use_json (bool): Whether to use --json. Defaults to True.
 
         Raises:
             CommandFailure: if the dmg pool query command fails.
@@ -475,10 +474,7 @@ class DmgCommand(DmgCommandBase):
         #     "error": null,
         #     "status": 0
         # }
-        if use_json:
-            return self._get_json_result(("pool", "query"), pool=pool)
-
-        return self._get_result(("pool", "query"), pool=pool)
+        return self._get_json_result(("pool", "query"), pool=pool)
 
     def pool_destroy(self, pool, force=True):
         """Destroy a pool with the dmg command.

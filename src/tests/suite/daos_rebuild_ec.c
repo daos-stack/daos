@@ -151,8 +151,15 @@ rebuild_ec_setup(void  **state, int number)
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			REBUILD_SMALL_POOL_SIZE, number, NULL);
-	if (rc)
-		return rc;
+	if (rc) {
+		/* Let's skip for this case, since it is possible there
+		 * is not enough ranks here.
+		 */
+		print_message("It can not create the pool with %d ranks"
+			      " probably due to not enough ranks %d\n",
+			      number, rc);
+		return 0;
+	}
 
 	arg = *state;
 	if (dt_obj_class != DAOS_OC_UNKNOWN)

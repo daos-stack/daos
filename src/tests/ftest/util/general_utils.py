@@ -853,7 +853,7 @@ def error_count(error, hostlist, log_file):
     # Get the Client side Error from client_log file.
     requested_error_count = 0
     other_error_count = 0
-    command = 'cat {} | grep ERR'.format(get_log_file(log_file))
+    command = 'cat {} | grep \" ERR \"'.format(get_log_file(log_file))
     results = run_pcmd(hostlist, command, False, None, None)
     for result in results:
         for line in result["stdout"]:
@@ -864,7 +864,6 @@ def error_count(error, hostlist, log_file):
                     other_error_count += 1
 
     return requested_error_count, other_error_count
-
 
 def get_module_class(name, module):
     """Get the class object in the specified module by its name.
