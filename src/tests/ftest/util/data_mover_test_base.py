@@ -430,15 +430,21 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             akey_sizes (list): varying akey sizes to iterate.
             akey_extents (list): varying number of akey extents to iterate.
 
+        Returns:
+            list: a list of DaosObj created.
+
         """
         self.log.info("Creating dataset in %s/%s",
                       str(cont.pool.uuid), str(cont.uuid))
 
         cont.open()
 
+        obj_list = []
+
         for obj_idx in range(num_objs):
             # Open the obj
             obj = DaosObj(cont.pool.context, cont.container)
+            obj_list.append(obj)
             obj.create(rank=obj_idx, objcls=2)
             obj.open()
 
@@ -481,11 +487,15 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             obj.close()
         cont.close()
 
-    def dataset_verify(self, cont, num_objs, num_dkeys, num_akeys_single,
-                        num_akeys_array, akey_sizes, akey_extents):
+        return obj_list
+
+    def dataset_verify(self, obj_list, cont, num_objs, num_dkeys,
+                       num_akeys_single, num_akeys_array, akey_sizes,
+                       akey_extents):
         """Verify a dataset generated with dataset_gen.
 
         Args:
+            obj_list (list): obj_list returned from dataset_gen.
             cont (TestContainer): the container.
             num_objs (int): number of objects created in the container.
             num_dkeys (int): number of dkeys created per object.
@@ -502,8 +512,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         for obj_idx in range(num_objs):
             # Open the obj
-            obj = DaosObj(cont.pool.context, cont.container)
-            obj.create(rank=obj_idx, objcls=2)
+            c_oid = obj_list[obj_idx].c_oid
+            obj = DaosObj(cont.pool.context, cont.container, c_oid=c_oid)
             obj.open()
 
             ioreq = IORequest(cont.pool.context, cont.container, obj)

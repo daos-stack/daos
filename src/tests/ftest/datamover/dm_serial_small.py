@@ -26,8 +26,6 @@ class DmSerialSmallTest(DataMoverTestBase):
         # Start the servers and agents
         super().setUp()
 
-        self.obj_list = []
-
         # Get the dataset parameters
         self.num_objs = self.params.get(
             "num_objs", "/run/dataset/*")
@@ -65,7 +63,7 @@ class DmSerialSmallTest(DataMoverTestBase):
         cont1 = self.create_cont(pool1)
 
         # Create dataset in cont1
-        self.dataset_gen(
+        obj_list = self.dataset_gen(
             cont1,
             self.num_objs, self.num_dkeys, self.num_akeys_single,
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
@@ -86,7 +84,7 @@ class DmSerialSmallTest(DataMoverTestBase):
         # Verify data in cont2
         cont2 = self.get_cont(pool2, cont2_uuid)
         self.dataset_verify(
-            cont2,
+            obj_list, cont2,
             self.num_objs, self.num_dkeys, self.num_akeys_single,
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
 
