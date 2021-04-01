@@ -335,9 +335,9 @@ typedef struct {
 enum {
 	/** It is unknown if the extent is covered or visible */
 	VOS_VIS_FLAG_UNKNOWN = 0,
-	/** The extent is not visible at at the requested epoch (epr_hi) */
+	/** The extent is not visible at the requested epoch (epr_hi) */
 	VOS_VIS_FLAG_COVERED = (1 << 0),
-	/** The extent is not visible at at the requested epoch (epr_hi) */
+	/** The extent is visible at the requested epoch (epr_hi) */
 	VOS_VIS_FLAG_VISIBLE = (1 << 1),
 	/** The extent represents only a portion of the in-tree extent */
 	VOS_VIS_FLAG_PARTIAL = (1 << 2),
@@ -360,6 +360,8 @@ typedef struct {
 			daos_epoch_t		ie_punch;
 			/** If applicable, non-zero if object is punched */
 			daos_epoch_t		ie_obj_punch;
+			/** Last update timestamp */
+			daos_epoch_t		ie_last_update;
 			union {
 				/** key value */
 				daos_key_t	ie_key;

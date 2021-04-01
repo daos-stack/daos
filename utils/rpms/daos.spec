@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -356,7 +356,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/python3/site-packages/pydaos/__pycache__/*.pyc
 %{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
 %endif
-%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
+%{_libdir}/python3/site-packages/pydaos/pydaos_shim.so
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
@@ -401,8 +401,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Thu Apr 01 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-6
+* Thu Apr 01 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-7
 - Update argobots to 1.1
+
+* Tue Mar 30 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-6
+- Change pydaos_shim_3 to pydaos_shim
 
 * Mon Mar 29 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.0-5
 - Move libdts.so to the daos-tests subpackage
