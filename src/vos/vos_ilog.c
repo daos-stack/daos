@@ -592,3 +592,31 @@ vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type)
 
 	return vos_ts_evict(idx, type);
 }
+
+void
+vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc)
+{
+	struct vos_ts_entry	*se_entry = NULL;
+	struct vos_wts_cache	*wcache;
+	uint32_t		*idx;
+	bool			 found;
+
+	D_ASSERT(ilog != NULL);
+	D_ASSERT(epc != NULL);
+	idx = ilog_ts_idx_get(ilog);
+
+	found = vos_ts_peek_entry(idx, type, &se_entry);
+	if (found) {
+		D_ASSERT(se_entry != NULL);
+		wcache = &se_entry->te_w_cache;
+
+		if (wcache->wc_ts_w[wcache->wc_w_high] != 0) {
+			*epc = wcache->wc_ts_w[wcache->wc_w_high];
+			return;
+		}
+		/* Not enough history */
+	}
+
+	/* Return EPOCH_MAX as last update timestamp on cache miss */
+	*epc = DAOS_EPOCH_MAX;
+}

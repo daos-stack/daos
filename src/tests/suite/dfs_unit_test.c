@@ -412,8 +412,8 @@ dfs_test_rm(const char *name)
 	assert_int_equal(rc, 0);
 }
 
-int dfs_test_thread_nr		= 100;
-#define DFS_TEST_MAX_THREAD_NR	(200)
+int dfs_test_thread_nr		= 32;
+#define DFS_TEST_MAX_THREAD_NR	(64)
 pthread_t dfs_test_tid[DFS_TEST_MAX_THREAD_NR];
 
 struct dfs_test_thread_arg {
