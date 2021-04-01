@@ -4,6 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
+import threading
 from apricot import TestWithServers
 
 
