@@ -71,7 +71,7 @@ There are two mandatory command-line options; these are:
 | --src=daos://<pool/cont\> \| <path\>      | the source container      |
 | --dst=daos://<pool\>[/cont\>] \| <path\>  | the destination container |
 
-The desintation container must not already exist.
+The destination container must not already exist.
 
 #### Examples
 
