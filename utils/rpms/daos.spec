@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       6%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -30,7 +30,7 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 7)
-BuildRequires: argobots-devel >= 1.0rc1
+BuildRequires: argobots-devel >= 1.1
 BuildRequires: json-c-devel
 BuildRequires: boost-python36-devel
 %else
@@ -64,7 +64,6 @@ BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
-BuildRequires: readline-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
 %if (0%{?rhel} >= 7)
@@ -413,6 +412,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Apr 02 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-8
+- Remove unused readline-devel
+
+* Thu Apr 01 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-7
+- Update argobots to 1.1
+
 * Tue Mar 30 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-6
 - Change pydaos_shim_3 to pydaos_shim
 
