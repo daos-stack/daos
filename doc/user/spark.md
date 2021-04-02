@@ -29,18 +29,14 @@ environment. Otherwise, they can be deployed by following the
 There are two artifacts to download, daos-java and hadoop-daos, from maven.
 Here are maven dependencies.
 
-```xml
-<dependency>
-    <groupId>io.daos</groupId>
-    <artifactId>daos-java</artifactId>
-    <version>...</version>
-</dependency>
-<dependency>
-    <groupId>io.daos</groupId>
-    <artifactId>hadoop-daos</artifactId>
-    <version>...</version>
-</dependency>
+You can download them with below commands if you have maven installed.
+```bash
+mvn dependency:get -Dartifact=io.daos:daos-java:<version> -Ddest=./
+mvn dependency:get -Dartifact=io.daos:hadoop-daos:<version> -Ddest=./
 ```
+
+Or search these artifacts from maven central(https://search.maven.org) and
+download them manually.
 
 You can also build artifacts by yourself.
 see [Build Daos Hadoop Filesystem](#builddaos) for details.
@@ -57,8 +53,9 @@ the nodes or copy them to every node.<br/>
 
 ### `daos-site-example.xml`
 
-Rename to `daos-site.xml` and copy it to your application config directory,
-e.g., `$SPARK_HOME/conf` for Spark and `$HADOOP_HOME/etc/hadoop` for Hadoop.
+Extract from `hadoop-daos-<version>.jar` and rename to `daos-site.xml`. Then
+copy it to your application config directory, e.g., `$SPARK_HOME/conf` for
+Spark and `$HADOOP_HOME/etc/hadoop` for Hadoop.
 
 ## Configure Hadoop
 
@@ -189,7 +186,7 @@ $ daos cont create --pool <pool UUID> -path <your path> --type=POSIX
 Or
 
 ```bash
-$ java -Dpath="your path" -Dpool_id="your pool uuid" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns create
+$ java -Dpath="your path" -Dpool_id="your pool uuid" -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns create
 ```
 
 After creation, you can use below command to see what DAOS properties set to
@@ -217,8 +214,17 @@ URIs described above.
 ### <a name="mapreduce"></a>Run Map-Reduce in Hadoop
 
 Edit `$HADOOP_HOME/etc/hadoop/core-site.xml` to change fs.defaultFS to
-`daos:///` or "daos://uns/\<your path\>". Then append below configuration
-to this file and `$HADOOP_HOME/etc/hadoop/yarn-site.xml`.
+`daos:///`. It is not recommended to set fs.defaultFS to a DAOS UNS path.
+You may get an error complaining pool/container UUIDs cannot be found. It's
+because Hadoop considers the default filesystem is DAOS since you configured
+DAOS UNS URI. YARN has some working directories defaulting to local path
+without schema, like "/tmp/yarn", which is then constructed as
+"daos:///tmp/yarn". With this URI, Hadoop cannot connect to DAOS since no
+pool/container UUIDs can be found if daos-site.xml is not provided too.
+               .
+
+Then append below configuration to this file and
+`$HADOOP_HOME/etc/hadoop/yarn-site.xml`.
 
 ```xml
 <property>
@@ -241,17 +247,6 @@ configuration to the scheduler configuration file, like
 
 Then replicate `daos-site.xml`, `core-site.xml`, `yarn-site.xml` and
 `capacity-scheduler.xml` to other nodes.
-
-There is one pitfall that YARN runs with DAOS UNS URI, "daos:///uns-path",
-configured to `fs.defaultFS`. You may get an error complaining pool/container
-UUIDs cannot be found. It's because Hadoop considers the default filesystem is
-DAOS since you configured DAOS UNS URI. YARN has some working directories
-defaulting to local path without schema, like "/tmp/yarn", which is then
-constructed as "daos:///tmp/yarn". With this URI, Hadoop cannot connect to DAOS
-since no pool/container UUIDs can be found if daos-site.xml is not provided too
-.
-
-The simplest workaround for now is not set DAOS UNS URI to `fs.defaultFS`.
 
 #### Known Issues
 
@@ -278,7 +273,7 @@ Or
 
 ```bash
 $ java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=daos_server"
-    -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns setappinfo
+    -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns setappinfo
 ```
 
 For the "value" property, you need to follow pattern, key1=value1:key2=value2..
@@ -288,13 +283,13 @@ If value* contains characters of '=' or ':', you need to escape the value with
 below command.
 
 ```bash
-$ java -Dop=escape-app-value -Dinput="daos_server:1=2" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns util
+$ java -Dop=escape-app-value -Dinput="daos_server:1=2" -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns util
 ```
 
 You'll get escaped value, "daos_server\u003a1\u003d2", for "daos_server:1=2".
 
 If you configure the same property in both `daos-site.xml` and UNS path, the
-value in `daos-sitem.xml` takes priority. If user set Hadoop configuration
+value in `daos-site.xml` takes priority. If user sets Hadoop configuration
 before initializing Hadoop DAOS FileSystem, the user's configuration takes
 priority.
 
