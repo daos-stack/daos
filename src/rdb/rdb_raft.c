@@ -2287,6 +2287,12 @@ lc:
 	/* Load the log entries. */
 	for (i = db->d_lc_record.dlr_base + 1; i < db->d_lc_record.dlr_tail;
 	     i++) {
+		/*
+		 * Yield before loading the first entry (for the rdb_lc_discard
+		 * call above) and every a few entries.
+		 */
+		if ((i - db->d_lc_record.dlr_base - 1) % 64 == 0)
+			ABT_thread_yield();
 		rc = rdb_raft_load_entry(db, i);
 		if (rc != 0)
 			goto err_lc;
