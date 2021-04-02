@@ -460,7 +460,7 @@ collect_raw_health_data(struct bio_xs_context *ctxt)
 }
 
 void
-bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
+bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now, bool bypass)
 {
 	struct bio_dev_health	*dev_health;
 	struct bio_blobstore	*bbs;
@@ -493,7 +493,8 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 		D_ERROR("State transition on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
 
-	collect_raw_health_data(ctxt);
+	if (!bypass)
+		collect_raw_health_data(ctxt);
 }
 
 /* Print the io stat every few seconds, for debug only */

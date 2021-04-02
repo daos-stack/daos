@@ -86,6 +86,9 @@ static uint64_t		dss_mod_facs;
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
 
+/** Bypass for the nvme health check */
+bool			dss_nvme_bypass_health_check;
+
 d_rank_t
 dss_self_rank(void)
 {
@@ -762,6 +765,8 @@ Options:\n\
       Identifier for this server instance (default %u)\n\
   --pinned_numa_node=numanode, -p numanode\n\
       Bind to cores within the specified NUMA node\n\
+  --bypass_health_chk, -b\n\
+      Boolean set to inhibit collection of NVME health data\n\
   --mem_size=mem_size, -r mem_size\n\
       Allocates mem_size MB for SPDK when using primary process mode\n\
   --help, -h\n\
@@ -788,6 +793,7 @@ parse(int argc, char **argv)
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
 		{ "instance_idx",	required_argument,	NULL,	'I' },
+		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -795,7 +801,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:b",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
@@ -851,6 +857,9 @@ parse(int argc, char **argv)
 			break;
 		case 'I':
 			dss_instance_idx = atoi(optarg);
+			break;
+		case 'b':
+			dss_nvme_bypass_health_check = true;
 			break;
 		default:
 			usage(argv[0], stderr);
