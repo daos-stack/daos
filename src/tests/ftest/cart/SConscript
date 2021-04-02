@@ -40,6 +40,8 @@
 import os
 import daos_build
 
+TEST_LIB_SRC = ['tests_common.c']
+
 SIMPLE_TEST_SRC = ['threaded_client.c', 'dual_iface_server.c',
                    'no_pmix_multi_ctx.c', 'threaded_server.c',
                    'test_corpc_prefwd.c',
@@ -59,11 +61,42 @@ TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
                        'no_pmix_group_version.c']
 FAULT_STATUS_TEST = 'fault_status.c'
 
+def build_internal_library():
+    """Build test internal lirary"""
+    Import('env', 'prereqs', 'cart_lib', 'gurt_lib',  'CART_VERSION')
+
+    ##############################
+    # Create cart test library
+    ##############################
+    denv = env.Clone()
+    denv.Append(CPPDEFINES=['-foobar'])
+    prereqs.require(denv, 'hwloc')
+
+    cart_test_lib  = daos_build.library(denv, 'cart_test', TEST_LIB_SRC,
+                                         SHLIBVERSION=CART_VERSION)
+    denv.Append(CPPDEFINES=['-foobar2'])
+
+    denv.Requires(cart_test_lib, [gurt_lib])
+    denv.InstallVersionedLib('$PREFIX/lib64/', cart_test_lib,
+                             SHLIBVERSION=CART_VERSION)
+    Default(cart_test_lib)
+    Export('cart_test_lib')
+
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
+    Import('env', 'prereqs', 'cart_lib', 'gurt_lib', 'CART_VERSION')
+    Import('tbuild')
 
+    # build library for linkage
+    if tbuild.match('lib')
+        build_internal_library()
+        return
+
+    ##############################
+    # Create test programs
+    ##############################
+    Import('cart_test_lib')
     tenv = env.Clone()
 
     tenv.AppendUnique(CPPPATH=['#/src/cart/src/cart'])
@@ -74,39 +107,39 @@ def scons():
     # Compile all of the tests
     for test in SIMPLE_TEST_SRC:
         target = daos_build.test(tenv, test, install_off='../../../../')
-        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Requires(target, [cart_lib, gurt_lib, cart_test_lib])
         tenv.Install(tests_dir, target)
 
     for test in IV_TESTS:
         target = daos_build.test(tenv, test, install_off='../../../../')
-        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Requires(target, [cart_lib, gurt_lib, cart_test_lib])
         tenv.Install(tests_dir, target)
 
     for test in SWIM_TESTS:
         target = daos_build.test(tenv, test, install_off='../../../../')
-        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Requires(target, [cart_lib, gurt_lib, cart_test_lib])
         tenv.Install(tests_dir, target)
 
     for test in HLC_TESTS:
         target = daos_build.test(tenv, test, install_off='../../../../')
-        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Requires(target, [cart_lib, gurt_lib, cart_test_lib])
         tenv.Install(tests_dir, target)
 
     for test in TEST_GROUP_NP_TESTS:
         target = daos_build.test(tenv, test, install_off='../../../../')
-        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Requires(target, [cart_lib, gurt_lib, cart_test_lib])
         tenv.Install(tests_dir, target)
 
     # Build FAULT_STATUS_TEST separately and install it into bin/
     target = daos_build.test(tenv, FAULT_STATUS_TEST)
-    tenv.Requires(target, [cart_lib, gurt_lib])
+    tenv.Requires(target, [cart_lib, gurt_lib, cart_test_lib])
     tenv.Install(os.path.join("$PREFIX", 'bin'), target)
 
     benv = tenv.Clone()
 
     benv.AppendUnique(CFLAGS=['-std=gnu99', '-pedantic'])
     basic_target = daos_build.test(tenv, BASIC_SRC)
-    benv.Requires(basic_target, [cart_lib, gurt_lib])
+    benv.Requires(basic_target, [cart_lib, gurt_lib, cart_test_lib])
 
     # Call scons on unit test directory
     SConscript('utest/SConscript')
