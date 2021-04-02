@@ -65,6 +65,8 @@ class RebuildTests(TestWithServers):
             self.container[index].write_objects(rank, obj_class)
 
         # Determine how many objects will need to be rebuilt
+        # and create threads for wait_for_rebuild start
+        threads = []
         for index in range(pool_quantity):
             target_rank_lists = self.container[index].get_target_rank_lists(
                 " prior to rebuild")
@@ -83,11 +85,8 @@ class RebuildTests(TestWithServers):
                 self.container[index].object_qty.value *
                 self.container[index].record_qty.value,
                 self.container[index], rank)
-
-        # Setup thread for wait_for_rebuild start
-        threads = []
-        for index in range(pool_quantity):
-            self.log.info(" ..construct thread # %s", index)
+            self.log.info(
+                " ..construct thread # %s for wait_for_rebuild start", index)
             thread = threading.Thread(
                 target=self.pool[index].wait_for_rebuild(True))
             threads.append(thread)
