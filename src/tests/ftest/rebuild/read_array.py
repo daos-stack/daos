@@ -42,7 +42,6 @@ class ReadArrayTest(RebuildTestBase):
             numbers of rebuild targets and no available rebuild targets.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm,large,rebuild
-        :avocado: tags=rebuild_tests,rebuildreadarray
+        :avocado: tags=vm,large,rebuild,rebuildreadarray
         """
         self.execute_rebuild_test()
