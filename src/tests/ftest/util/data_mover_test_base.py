@@ -489,6 +489,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         return obj_list
 
+    # pylint: disable=too-many-locals
     def dataset_verify(self, obj_list, cont, num_objs, num_dkeys,
                        num_akeys_single, num_akeys_array, akey_sizes,
                        akey_extents):
