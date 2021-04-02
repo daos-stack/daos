@@ -317,20 +317,22 @@ func detectVMD() ([]string, error) {
 func hugePageWalkFunc(hugePageDir, prefix, tgtUid string, remove removeFn) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		switch {
+		case err != nil:
+			return err
+		case info == nil:
+			return errors.New("nil fileinfo")
 		case info.IsDir():
 			if path == hugePageDir {
 				return nil
 			}
 			return filepath.SkipDir // skip subdirectories
-		case err != nil:
-			return err
 		case !strings.HasPrefix(info.Name(), prefix):
 			return nil // skip files without prefix
 		}
 
 		stat, ok := info.Sys().(*syscall.Stat_t)
-		if !ok {
-			return nil
+		if !ok || stat == nil {
+			return errors.New("stat missing for file")
 		}
 		if strconv.Itoa(int(stat.Uid)) != tgtUid {
 			return nil // skip not owned by target user

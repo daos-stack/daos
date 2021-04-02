@@ -462,6 +462,7 @@ func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
 		prefix     string
 		tgtUid     string
 		testInputs []*testWalkInput
+		removeErr  error
 		expRemoved []string
 	}{
 		"ignore subdirectory": {
@@ -478,6 +479,42 @@ func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
 						isDir: true,
 					},
 					expErr: errors.New("skip this directory"),
+				},
+			},
+			expRemoved: []string{},
+		},
+		"input error propagated": {
+			testInputs: []*testWalkInput{
+				{
+					path:   filepath.Join(testDir, "prefix1_foo"),
+					info:   testFileInfo(t, "prefix1_foo", 42),
+					err:    errors.New("walk failed"),
+					expErr: errors.New("walk failed"),
+				},
+			},
+			expRemoved: []string{},
+		},
+		"nil fileinfo": {
+			testInputs: []*testWalkInput{
+				{
+					path:   filepath.Join(testDir, "prefix1_foo"),
+					info:   nil,
+					expErr: errors.New("nil fileinfo"),
+				},
+			},
+			expRemoved: []string{},
+		},
+		"nil file stat": {
+			prefix: "prefix1",
+			tgtUid: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: &mockFileInfo{
+						name: "prefix1_foo",
+						stat: nil,
+					},
+					expErr: errors.New("stat missing for file"),
 				},
 			},
 			expRemoved: []string{},
@@ -512,12 +549,27 @@ func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
 			},
 			expRemoved: []string{filepath.Join(testDir, "prefix1_bar")},
 		},
+		"remove fails": {
+			prefix: "prefix1",
+			tgtUid: "42",
+			testInputs: []*testWalkInput{
+				{
+					path:   filepath.Join(testDir, "prefix1_foo"),
+					info:   testFileInfo(t, "prefix1_foo", 42),
+					expErr: errors.New("could not remove"),
+				},
+			},
+			expRemoved: []string{},
+			removeErr:  errors.New("could not remove"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			removedFiles := make([]string, 0)
 			removeFn := func(path string) error {
-				removedFiles = append(removedFiles, path)
-				return nil
+				if tc.removeErr == nil {
+					removedFiles = append(removedFiles, path)
+				}
+				return tc.removeErr
 			}
 
 			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUid, removeFn)
