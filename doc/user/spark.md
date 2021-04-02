@@ -43,7 +43,7 @@ Here are maven dependencies.
 ```
 
 You can also build artifacts by yourself.
-see [Build Daos Hadoop Filesystem] (#builddaos) for details.
+see [Build Daos Hadoop Filesystem](#builddaos) for details.
 
 
 ## Deploy DAOS Hadoop Filesystem
@@ -78,7 +78,7 @@ $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<DAOS_INSTALL>/lib64:<DAOS_INSTALL>/li
 ### <a name="non-uns"></a>Set DAOS URI and Pool/Container
 
 In `daos-site.xml`, we default the DAOS URI as simplest form, "daos:///". For
-other form of URIs, please check [DAOS More URIs] (#uris).
+other form of URIs, please check [DAOS More URIs](#uris).
 
 If the DAOS pool and container have not been created, we can use the following
 command to create them and get the pool UUID and container UUID.
@@ -121,7 +121,7 @@ $ hadoop fs -ls /
 
 You can also play around with other Hadoop commands, like -copyFromLocal and
 -copyToLocal. You can also start Yarn and run some mapreduce jobs on Yarn.
-See [Run Map-Reduce in Hadoop] (#mapreduce)
+See [Run Map-Reduce in Hadoop](#mapreduce)
 
 ## Configure Spark
 
@@ -201,7 +201,7 @@ $ getfattr -d -m - <your path>
 
 #### DAOS Non-UNS Path
 
-Check [Set DAOS URI and Pool/Container] (#non-uns).
+Check [Set DAOS URI and Pool/Container](#non-uns).
 
 #### Special UUID Path
 DAOS supports a specialized URI with pool/container UUIDs embedded. The format
@@ -257,7 +257,6 @@ The simplest workaround for now is not set DAOS UNS URI to `fs.defaultFS`.
 
 If you use Omni-path PSM2 provider in DAOS, you'll get connection issue in
 Yarn container due to PSM2 resource not being released properly in time.
-```
 
 ### Tune More Configurations
 
@@ -274,6 +273,7 @@ path with below command.
 # install attr package if get "command not found" error
 $ setfattr -n user.daos.hadoop -v "fs.daos.server.group=daos_server" <your path>
 ```
+
 Or
 
 ```bash
