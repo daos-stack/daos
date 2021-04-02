@@ -9,6 +9,7 @@ import random
 import threading
 import copy
 from osa_utils import OSAUtils
+from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from command_utils import CommandFailure
 from apricot import skipForTicket
@@ -28,6 +29,7 @@ class OSAOfflineParallelTest(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
+        self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
         # Start an additional server.
