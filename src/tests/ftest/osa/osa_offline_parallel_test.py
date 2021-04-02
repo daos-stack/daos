@@ -28,7 +28,13 @@ class OSAOfflineParallelTest(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
+        self.ior_test_sequence = self.params.get("ior_test_sequence",
+                                                 '/run/ior/iorflags/*')
+        # Start an additional server.
+        self.extra_servers = self.params.get("test_servers",
+                                             "/run/extra_servers/*")
         self.out_queue = queue.Queue()
+        self.dmg_command.exit_status_exception = True
 
     def dmg_thread(self, action, action_args, results):
         """Generate different dmg command related to OSA.
@@ -54,11 +60,8 @@ class OSAOfflineParallelTest(OSAUtils):
             getattr(dmg, "pool_{}".format(action))(**action_args[action])
         except CommandFailure as _error:
             results.put("{} failed".format(action))
-            # Future enhancement for extend
-            # elif action == "extend":
-            #    dmg.pool_extend(puuid, (rank + 2))
 
-    def run_offline_parallel_test(self, num_pool, data=False):
+    def run_offline_parallel_test(self, num_pool, data=False, oclass=None):
         """Run multiple OSA commands in parallel with or without data.
             Args:
             num_pool (int) : total pools to create for testing purposes.
@@ -69,6 +72,8 @@ class OSAOfflineParallelTest(OSAUtils):
         pool = {}
         pool_uuid = []
         target_list = []
+        if oclass is None:
+            oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude target : random two targets (target idx : 0-7)
         n = random.randint(0, 6)
@@ -79,10 +84,15 @@ class OSAOfflineParallelTest(OSAUtils):
         # Exclude rank 2.
         rank = 2
 
+        test_seq = self.ior_test_sequence[0]
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
                                  dmg_command=self.get_dmg_command())
             pool[val].get_params(self)
+            if val == 0:
+                # Start the additional servers and extend the pool
+                self.log.info("Extra Servers = %s", self.extra_servers)
+                self.start_additional_servers(self.extra_servers)
             # Split total SCM and NVME size for creating multiple pools.
             pool[val].scm_size.value = int(pool[val].scm_size.value /
                                            num_pool)
@@ -92,7 +102,8 @@ class OSAOfflineParallelTest(OSAUtils):
             pool_uuid.append(pool[val].uuid)
             self.pool = pool[val]
             if data:
-                self.write_single_object()
+                self.run_ior_thread("Write", oclass, test_seq)
+                self.run_mdtest_thread()
 
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
@@ -109,7 +120,8 @@ class OSAOfflineParallelTest(OSAUtils):
                 "exclude": {"pool": self.pool.uuid, "rank": (rank + 1),
                             "tgt_idx": t_string},
                 "reintegrate": {"pool": self.pool.uuid, "rank": (rank + 1),
-                                "tgt_idx": t_string}
+                                "tgt_idx": t_string},
+                "extend": {"pool": self.pool.uuid, "rank": (rank + 2)}
             }
             for action in sorted(action_args):
                 # Add a dmg thread
@@ -143,9 +155,14 @@ class OSAOfflineParallelTest(OSAUtils):
             self.assertTrue(pver_end == 25,
                             "Pool Version Error:  at the end")
         if data:
-            self.verify_single_object()
+            self.run_ior_thread("Read", oclass, test_seq)
+            self.run_mdtest_thread()
+            self.container = self.pool_cont_dict[self.pool][0]
+            kwargs = {"pool": self.pool.uuid,
+                      "cont": self.container.uuid}
+            output = self.daos_command.container_check(**kwargs)
+            self.log.info(output)
 
-    @skipForTicket("DAOS-6668")
     def test_osa_offline_parallel_test(self):
         """
         JIRA ID: DAOS-4752
@@ -153,7 +170,25 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel.
 
         :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_parallel,offline_parallel
+        :avocado: tags=osa,osa_parallel
+        :avocado: tags=osa_parallel_basic_test
         """
+        # Run the parallel offline test.
+        self.log.info("Offline Parallel Test: Basic Test")
+        self.run_offline_parallel_test(1, True)
+
+    def test_osa_offline_parallel_test_no_csum(self):
+        """
+        JIRA ID: DAOS-7161
+
+        Test Description: Runs multiple OSA commands in parallel.
+
+        :avocado: tags=all,daily_regression,hw,medium,ib2
+        :avocado: tags=osa,offline_parallel
+        :avocado: tags=offline_parallel_without_csum
+        """
+        self.test_with_checksum = self.params.get("test_with_checksum",
+                                                  '/run/checksum/*')
+        self.log.info("Offline Parallel Test: Without Checksum")
         # Run the parallel offline test.
         self.run_offline_parallel_test(1, True)
