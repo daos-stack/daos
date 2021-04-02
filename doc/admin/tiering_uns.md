@@ -67,7 +67,7 @@ The current state of work can be summarized as follow :
     `lctl set_param mdt/*/enable_remote_dir_gid=-1` command.
 
 -   in addition, there is a feature available to provide a customized format
-    of LOV/LMV EAs, different from default `<pool-UUID>/<cont-UUID>`, throug the
+    of LOV/LMV EAs, different from default `<pool-UUID>/<cont-UUID>`, through the
     `llite/*/foreign_symlink_upcall` tunable. It allows to provide the path
     of a user-land upcall which will have to indicate  where to extract both
     `<pool-UUID>` and `<cont-UUID>` in LOV/LMV EAs, using a series of [pos, len]
