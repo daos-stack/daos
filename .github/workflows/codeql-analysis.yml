@@ -28,14 +28,6 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    # Initializes the CodeQL tools for scanning.
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v1
-      with:
-        #Not sure if this is needed languages: ${{ matrix.language }}
-        setup-python-dependencies: false
-        queries: +security-and-quality
-
     # Packages DAOS needs to build
     - name: Install Build Dependencies
       run: |
@@ -46,10 +38,23 @@ jobs:
         sudo apt-get -y install build-essential scons python3-distro python3-distutils valgrind autoconf libtool-bin locales pkg-config pandoc clang cmake libcmocka-dev libnuma-dev patchelf libhwloc-dev libboost-dev uuid-dev libssl-dev fuse3 libfuse3-dev curl libjson-c-dev liblz4-dev libibverbs-dev librdmacm-dev libaio-dev yasm python3-dev golang-go git libyaml-dev python3-tabulate python3-pyxattr openjdk-8-jdk maven libipmctl-dev libcunit1-dev libopenmpi-dev numactl doxygen libunwind-dev
         sudo apt-get clean all
 
+    # Build DAOS external dependencies so they are not part of the analysis
+    - name: Build DAOS External Dependencies
+    - run: |
+        git submodule init && git submodule update
+        scons --deps-only --build-deps=yes --config=force
+
+    # Initializes the CodeQL tools for scanning.
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v1
+      with:
+        #Not sure if this is needed languages: ${{ matrix.language }}
+        setup-python-dependencies: false
+        queries: +security-and-quality
+
     - name: Build DAOS
       run: |
-        git submodule init && git submodule update
-        scons --build-deps=yes --config=force install
+        scons install
 
     - name: Build DAOS Java Packages
       run: |
