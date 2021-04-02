@@ -28,6 +28,14 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
+    # Initializes the CodeQL tools for scanning.
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v1
+      with:
+        #Not sure if this is needed languages: ${{ matrix.language }}
+        setup-python-dependencies: false
+        queries: +security-and-quality
+
     # Packages DAOS needs to build
     - name: Install Build Dependencies
       run: |
@@ -53,14 +61,6 @@ jobs:
         mkdir -p ~/.m2
         echo -e "<settings>\n <mirrors>\n  <mirror>\n   <id>google-maven-central</id>\n   <name>GCS Maven Central mirror</name>\n   <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n   <mirrorOf>central</mirrorOf>\n  </mirror>\n </mirrors>\n</settings>" > ~/.m2/settings.xml
         cd src/client/java && mvn clean install -DskipITs -Dgpg.skip -Ddaos.install.path=$PWD/../../../install
-
-    # Initializes the CodeQL tools for scanning.
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v1
-      with:
-        #Not sure if this is needed languages: ${{ matrix.language }}
-        setup-python-dependencies: false
-        queries: +security-and-quality
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
