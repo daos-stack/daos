@@ -1770,6 +1770,10 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 		(void)d_tm_increment_counter(&tls->ot_fetch_bytes,
 					     ioc->ioc_io_size, NULL);
 		lat = &tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
+		/* Count subset of fetches that are done by rebuild */
+		if (ioc->ioc_rb_fetch)
+			(void)d_tm_increment_counter(&tls->ot_rb_fetch_bytes,
+						     ioc->ioc_io_size, NULL);
 		break;
 	default:
 		lat = &tls->ot_op_lat[opc];
@@ -2252,8 +2256,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		epoch.oe_first = orw->orw_epoch_first;
 		epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
 
-		if (orw->orw_flags & ORF_FOR_MIGRATION)
+		if (orw->orw_flags & ORF_FOR_MIGRATION) {
 			dtx_flags = DTX_FOR_MIGRATION;
+			ioc.ioc_rb_fetch = 1;
+		}
 		if (orw->orw_flags & ORF_DTX_REFRESH)
 			dtx_flags |= DTX_FORCE_REFRESH;
 

@@ -278,8 +278,9 @@ struct obj_tls {
 	struct d_tm_node_t	*ot_update_lat[NR_LATENCY_BUCKETS];
 	struct d_tm_node_t	*ot_fetch_lat[NR_LATENCY_BUCKETS];
 
-	/** Total number of bytes fetched (type = counter) */
+	/** Total number of bytes fetched and rebuild subset (type = counter) */
 	struct d_tm_node_t	*ot_fetch_bytes;
+	struct d_tm_node_t	*ot_rb_fetch_bytes;
 	/** Total number of bytes updated (type = counter) */
 	struct d_tm_node_t	*ot_update_bytes;
 
@@ -608,7 +609,8 @@ struct obj_io_context {
 	uint64_t		 ioc_io_size;
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
-				 ioc_lost_reply:1;
+				 ioc_lost_reply:1,
+				 ioc_rb_fetch:1;
 };
 
 struct ds_obj_exec_arg {

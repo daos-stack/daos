@@ -190,6 +190,14 @@ obj_tls_init(int xs_id, int tgt_id)
 		D_WARN("Failed to create bytes fetch sensor: "DF_RC"\n",
 		       DP_RC(rc));
 
+	/** Rebuild bytes read (subset of total bytes read) */
+	rc = d_tm_add_metric(&tls->ot_rb_fetch_bytes, D_TM_COUNTER,
+			     "total number of bytes fetched/read (by rebuild)",
+			     "", "io/%u/rb_fetch_bytes", tgt_id);
+	if (rc)
+		D_WARN("Failed to create rebuild bytes fetch sensor: "DF_RC"\n",
+		       DP_RC(rc));
+
 	/** Total bytes written */
 	rc = d_tm_add_metric(&tls->ot_update_bytes, D_TM_COUNTER,
 			     "total number of bytes updated/written", "",
