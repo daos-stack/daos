@@ -22,26 +22,27 @@ class OSAOfflineDrain(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get(
             "ior_test_sequence", '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get(
-            "obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
 
-    def run_offline_drain_test(self, num_pool, data=False):
+    def run_offline_drain_test(self, num_pool, data=False,
+                               oclass=None):
         """Run the offline drain without data.
             Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
+            oclass (str): DAOS object class (eg: RP_2G1,etc)
         """
         # Create a pool
         pool = {}
-        pool_uuid = []
         target_list = []
+
+        if oclass is None:
+            oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude target : random two targets  (target idx : 0-7)
         n = random.randint(0, 6)
@@ -61,25 +62,28 @@ class OSAOfflineDrain(OSAUtils):
             pool[val].nvme_size.value = int(pool[val].nvme_size.value /
                                             num_pool)
             pool[val].create()
-            pool_uuid.append(pool[val].uuid)
             self.pool = pool[val]
-            if data:
-                self.run_ior_thread("Write", self.ior_dfs_oclass[0],
-                                    self.ior_apis[0],
-                                    self.ior_test_sequence[0])
+            self.pool.set_property("reclaim", "disabled")
+            test_seq = self.ior_test_sequence[0]
 
-        # Drain the pool_uuid, rank and targets
+            if data:
+                self.run_ior_thread("Write", oclass, test_seq)
+                self.run_mdtest_thread()
+
+        # Drain rank and targets
         for val in range(0, num_pool):
             self.pool = pool[val]
             rank = rank + val
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
+            if self.test_during_aggregation is True:
+                self.pool.set_property("reclaim", "time")
+                self.delete_extra_container(self.pool)
+                self.simple_exclude_reintegrate_loop(rank)
             output = self.dmg_command.pool_drain(self.pool.uuid,
                                                  rank, t_string)
-            self.log.info(output)
-            self.is_rebuild_done(3)
-            self.assert_on_rebuild_failure()
+            self.print_and_assert_on_rebuild_failure(output)
 
             pver_drain = self.get_pool_version()
             self.log.info("Pool Version after drain %d", pver_drain)
@@ -92,8 +96,8 @@ class OSAOfflineDrain(OSAUtils):
             pool[val].display_pool_daos_space(display_string)
 
         if data:
-            self.run_ior_thread("Read", self.ior_dfs_oclass[0],
-                                self.ior_apis[0], self.ior_test_sequence[0])
+            self.run_ior_thread("Read", oclass, test_seq)
+            self.run_mdtest_thread()
 
     def test_osa_offline_drain(self):
         """

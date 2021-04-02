@@ -108,6 +108,24 @@ class DaosCommand(DaosCommandBase):
             cont=cont, path=path, type=cont_type, oclass=oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file)
 
+    def container_clone(self, src, dst):
+        """Clone a container to a new container.
+
+        Args:
+            src (str): the source, formatted as daos://<pool>/<cont>
+            dst (str): the destination, formatted as daos://<pool>/<cont>
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container clone command fails.
+
+        """
+        return self._get_result(
+            ("container", "clone"), src=src, dst=dst)
+
     def container_destroy(self, pool, cont, force=None, sys_name=None):
         """Destroy a container.
 
@@ -130,6 +148,28 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("container", "destroy"), pool=pool, sys_name=sys_name,
             cont=cont, force=force)
+
+    def container_check(self, pool, cont, sys_name=None, path=None):
+        """Check the integrity of container objects.
+
+        Args:
+            pool (str): UUID of the pool in which to create the container
+            cont (str): container UUID.
+            sys_name (str, optional):  DAOS system name context for servers.
+                Defaults to None.
+            path (str): Container namespace path. Defaults to None
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container check command fails.
+
+        """
+        return self._get_result(
+            ("container", "check"), pool=pool, cont=cont,
+            sys_name=sys_name, path=path)
 
     def container_get_acl(self, pool, cont,
                           verbose=False, outfile=None):

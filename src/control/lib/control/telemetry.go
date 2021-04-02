@@ -217,7 +217,7 @@ func MetricsList(ctx context.Context, req *MetricsListReq) (*MetricsListResp, er
 
 	resp := new(MetricsListResp)
 
-	list := make([]*MetricSet, 0)
+	list := make([]*MetricSet, 0, len(scraped))
 	for _, name := range scraped.Keys() {
 		mf := scraped[name]
 		newMetric := &MetricSet{
@@ -277,7 +277,7 @@ func MetricsQuery(ctx context.Context, req *MetricsQueryReq) (*MetricsQueryResp,
 func newMetricsQueryResp(scraped pbMetricMap, metricNames []string) (*MetricsQueryResp, error) {
 	resp := new(MetricsQueryResp)
 
-	list := make([]*MetricSet, 0)
+	list := make([]*MetricSet, 0, len(metricNames))
 	for _, name := range metricNames {
 		mf, found := scraped[name]
 		if !found {
@@ -291,7 +291,12 @@ func newMetricsQueryResp(scraped pbMetricMap, metricNames []string) (*MetricsQue
 		}
 
 		for _, m := range mf.Metric {
-			newSet.Metrics = append(newSet.Metrics, getMetricFromPrometheus(m, mf.GetType()))
+			newMetric, err := getMetricFromPrometheus(m, mf.GetType())
+			if err != nil {
+				// skip anything we can't process
+				continue
+			}
+			newSet.Metrics = append(newSet.Metrics, newMetric)
 		}
 
 		list = append(list, newSet)
@@ -301,13 +306,13 @@ func newMetricsQueryResp(scraped pbMetricMap, metricNames []string) (*MetricsQue
 	return resp, nil
 }
 
-func getMetricFromPrometheus(pMetric *pclient.Metric, metricType pclient.MetricType) Metric {
+func getMetricFromPrometheus(pMetric *pclient.Metric, metricType pclient.MetricType) (Metric, error) {
 	labels := metricsLabelsToMap(pMetric)
 	switch metricType {
 	case pclient.MetricType_COUNTER:
-		return newSimpleMetric(labels, pMetric.GetCounter().GetValue())
+		return newSimpleMetric(labels, pMetric.GetCounter().GetValue()), nil
 	case pclient.MetricType_GAUGE:
-		return newSimpleMetric(labels, pMetric.GetGauge().GetValue())
+		return newSimpleMetric(labels, pMetric.GetGauge().GetValue()), nil
 	case pclient.MetricType_SUMMARY:
 		summary := pMetric.GetSummary()
 		newMetric := &SummaryMetric{
@@ -319,7 +324,7 @@ func getMetricFromPrometheus(pMetric *pclient.Metric, metricType pclient.MetricT
 		for _, q := range summary.Quantile {
 			newMetric.Quantiles[q.GetQuantile()] = q.GetValue()
 		}
-		return newMetric
+		return newMetric, nil
 	case pclient.MetricType_HISTOGRAM:
 		histogram := pMetric.GetHistogram()
 		newMetric := &HistogramMetric{
@@ -334,10 +339,12 @@ func getMetricFromPrometheus(pMetric *pclient.Metric, metricType pclient.MetricT
 					CumulativeCount: b.GetCumulativeCount(),
 				})
 		}
-		return newMetric
+		return newMetric, nil
+	case pclient.MetricType_UNTYPED:
+		return newSimpleMetric(labels, pMetric.GetUntyped().GetValue()), nil
 	}
 
-	return newSimpleMetric(labels, pMetric.GetUntyped().GetValue())
+	return nil, errors.New("unknown metric type")
 }
 
 func newSimpleMetric(labels map[string]string, value float64) *SimpleMetric {

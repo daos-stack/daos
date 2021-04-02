@@ -206,6 +206,7 @@ obj_layout_free(struct dc_object *obj)
 	if (obj->cob_shards->do_open_count == 0)
 		layout = obj->cob_shards;
 	obj->cob_shards = NULL;
+	obj->cob_shards_nr = 0;
 	D_SPIN_UNLOCK(&obj->cob_spin);
 
 	if (layout != NULL)
@@ -794,7 +795,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	struct daos_oclass_attr	*oca;
 	int			 rc = 0;
 
-	if (epoch != NULL)
+	if (epoch != NULL && !obj_auxi->req_reasbed)
 		reasb_req->orr_epoch = *epoch;
 	reasb_req->orr_size_set = 0;
 	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetch) {
@@ -3618,7 +3619,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	    DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
 		obj_auxi->io_retry = 0;
 
-	if (pm_stale || obj_auxi->io_retry)
+	if (!obj_auxi->no_retry && (pm_stale || obj_auxi->io_retry))
 		obj_retry_cb(task, obj, obj_auxi, pm_stale);
 
 	if (!obj_auxi->io_retry) {
@@ -4078,8 +4079,10 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (obj_auxi->ec_wait_recov)
 		goto out_task;
 
-	if (args->extra_flags & DIOF_FOR_MIGRATION)
+	if (args->extra_flags & DIOF_FOR_MIGRATION) {
 		obj_auxi->flags |= ORF_FOR_MIGRATION;
+		obj_auxi->no_retry = 1;
+	}
 
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
 		obj_auxi->flags |= ORF_CHECK_EXISTENCE;
@@ -4668,6 +4671,10 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 		obj_decref(obj);
 		D_GOTO(out_task, rc);
 	}
+
+	if (args->dkey_anchor != NULL &&
+	    daos_anchor_get_flags(args->dkey_anchor) & DIOF_FOR_MIGRATION)
+		obj_auxi->no_retry = 1;
 
 	if (obj_is_ec(obj))
 		obj_auxi->is_ec_obj = 1;
@@ -5409,10 +5416,6 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	struct pl_map_attr	attr;
 	int			rc;
 
-	/** TODO - unsupported for now */
-	if (cid == OC_UNKNOWN)
-		return -DER_INVAL;
-
 	/** select the oclass */
 	poh = dc_cont_hdl2pool_hdl(coh);
 	if (daos_handle_is_inval(poh))
@@ -5428,8 +5431,13 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
 		attr.pa_domain_nr, attr.pa_target_nr);
 
-	rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr,
-				 &cid);
+	/** TODO - unsupported for now */
+	if (cid == OC_UNKNOWN)
+		rc = dc_set_oclass(coh, attr.pa_domain_nr, attr.pa_target_nr,
+				   ofeats, hints, &cid);
+	else
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
+					 attr.pa_target_nr, &cid);
 	if (rc)
 		return rc;
 
