@@ -8,7 +8,7 @@ import random
 
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError
-from general_utils import get_random_string
+from general_utils import get_random_bytes
 
 
 class BasicSnapshot(TestWithServers):
@@ -30,7 +30,7 @@ class BasicSnapshot(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a BasicSnapshot object."""
-        super(BasicSnapshot, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.snapshot = None
 
     def test_basic_snapshot(self):
@@ -67,10 +67,10 @@ class BasicSnapshot(TestWithServers):
         try:
             # create an object and write some data into it
             obj_cls = self.params.get("obj_class", '/run/object_class/*')
-            thedata = "Now is the winter of our discontent made glorious"
+            thedata = b"Now is the winter of our discontent made glorious"
             datasize = len(thedata) + 1
-            dkey = "dkey"
-            akey = "akey"
+            dkey = b"dkey"
+            akey = b"akey"
             obj = self.container.write_an_obj(thedata,
                                               datasize,
                                               dkey,
@@ -94,7 +94,7 @@ class BasicSnapshot(TestWithServers):
             more_transactions = 500
             while more_transactions:
                 size = random.randint(1, 250) + 1
-                new_data = get_random_string(size)
+                new_data = get_random_bytes(size)
                 new_obj = self.container.write_an_obj(
                     new_data, size, dkey, akey, obj_cls=obj_cls)
                 new_obj.close()

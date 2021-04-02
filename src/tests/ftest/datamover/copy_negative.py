@@ -31,7 +31,7 @@ class CopyNegativeTest(DataMoverTestBase):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(CopyNegativeTest, self).setUp()
+        super().setUp()
 
         # Get the parameters
         self.test_file = self.ior_cmd.test_file.value
@@ -256,6 +256,7 @@ class CopyNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=self.MFU_ERR_INVAL_ARG)
 
+    @skipForTicket("DAOS-6871")
     def test_copy_space_dcp(self):
         """Jira ID: DAOS-5515
         Test Description:

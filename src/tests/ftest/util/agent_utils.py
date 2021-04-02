@@ -8,7 +8,7 @@ import socket
 from getpass import getuser
 
 from command_utils_base import \
-    CommandFailure, FormattedParameter, YamlParameters, EnvironmentVariables, \
+    CommandFailure, FormattedParameter, EnvironmentVariables, \
     CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import get_log_file
@@ -78,13 +78,13 @@ class DaosAgentCommand(YamlCommand):
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 60 seconds.
         """
-        super(DaosAgentCommand, self).__init__(
+        super().__init__(
             "/run/agent_config/*", "daos_agent", path, yaml_cfg, timeout)
         self.pattern = "listening on "
 
         # If specified use the configuration file from the YamlParameters object
         default_yaml_file = None
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "filename"):
             default_yaml_file = self.yaml.filename
 
         # Command line parameters:
@@ -109,7 +109,7 @@ class DaosAgentCommand(YamlCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(DaosAgentCommand, self).get_params(test)
+        super().get_params(test)
 
         # Run daos_agent with test variant specific log file names if specified
         self.yaml.update_log_file(getattr(test, "agent_log"))
@@ -126,7 +126,7 @@ class DaosAgentCommand(YamlCommand):
 
         def __init__(self):
             """Create a daos_agent dump-attachinfo subcommand object."""
-            super(DaosAgentCommand.DumpAttachInfoSubCommand, self).__init__(
+            super().__init__(
                 "/run/daos_agent/dump-attachinfo/*", "dump-attachinfo")
 
             self.output = FormattedParameter("--output {}", None)
@@ -180,7 +180,7 @@ class DaosAgentManager(SubprocessManager):
         """
         agent_command = get_agent_command(
             group, cert_dir, bin_dir, config_file, config_temp)
-        super(DaosAgentManager, self).__init__(agent_command, manager)
+        super().__init__(agent_command, manager)
 
         # Set the correct certificate file ownership
         if manager == "Systemctl":
@@ -203,7 +203,7 @@ class DaosAgentManager(SubprocessManager):
             path (str): path in which to create the hostfile
             slots (int): number of slots per host to specify in the hostfile
         """
-        super(DaosAgentManager, self)._set_hosts(hosts, path, slots)
+        super()._set_hosts(hosts, path, slots)
 
         # Update the expected number of messages to reflect the number of
         # daos_agent processes that will be started by the command
@@ -222,7 +222,7 @@ class DaosAgentManager(SubprocessManager):
         # Verify the socket directory exists when using a non-systemctl manager
         self.verify_socket_directory(getuser())
 
-        super(DaosAgentManager, self).start()
+        super().start()
 
     def stop(self):
         """Stop the agent through the job manager.
@@ -238,14 +238,14 @@ class DaosAgentManager(SubprocessManager):
 
         # Stop the subprocess running the manager command
         try:
-            super(DaosAgentManager, self).stop()
+            super().stop()
         except CommandFailure as error:
             messages.append(
                 "Error stopping the {} subprocess: {}".format(
                     self.manager.command, error))
 
         # Kill any leftover processes that may not have been stopped correctly
-        self.kill()
+        self.manager.kill()
 
         # Report any errors after all stop actions have been attempted
         if messages:

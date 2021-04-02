@@ -17,7 +17,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct fuse_file_info	        fi_out = {0};
 	int rc;
 
-	DFUSE_TRA_INFO(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino,
+	DFUSE_TRA_INFO(parent, "Parent:%#lx '%s'", parent->ie_stat.st_ino,
 		       name);
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
@@ -94,12 +94,17 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	LOG_FLAGS(ie, fi->flags);
 	LOG_MODES(ie, mode);
 
+	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
+
+	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
+			    &ie->ie_stat.st_ino);
+
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, &fi_out, true, req);
 
 	return;
 release:
-	dfs_release(ie->ie_obj);
+	dfs_release(oh->doh_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(oh);

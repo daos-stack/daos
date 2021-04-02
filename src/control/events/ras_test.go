@@ -37,7 +37,9 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-var defEvtCmpOpts = []cmp.Option{cmpopts.IgnoreUnexported(RASEvent{})}
+var defEvtCmpOpts = append(common.DefaultCmpOpts(),
+	cmpopts.IgnoreUnexported(RASEvent{}),
+)
 
 func TestEvents_HandleClusterEvent(t *testing.T) {
 	genericEvent := mockGenericEvent()
@@ -135,7 +137,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			common.AssertStringsEqual(t, tc.expEvtTypes, tly1.getRx(),
 				"unexpected received events")
 
-			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+			if diff := cmp.Diff(tc.expResp, resp, defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
