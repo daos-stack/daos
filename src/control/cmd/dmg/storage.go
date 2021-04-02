@@ -10,14 +10,12 @@ import (
 	"context"
 	"strings"
 
-	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // storageCmd is the struct representing the top-level storage subcommand.
@@ -175,66 +173,8 @@ type storageFormatCmd struct {
 	hostListCmd
 	jsonOutputCmd
 	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
-	Reformat bool `long:"reformat" description:"Reformat storage overwriting any existing filesystem (CAUTION: destructive operation)"`
-}
-
-// shouldReformatSystem queries system to interrogate membership before deciding
-// whether a system reformat is appropriate.
-//
-// Reformat system if membership is not empty and all member ranks are stopped.
-func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, error) {
-	if cmd.Reformat {
-		resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{})
-		if err != nil {
-			// If the AP hasn't been started, it will respond as if it
-			// is not a replica.
-			if system.IsNotReplica(err) || system.IsUnavailable(err) {
-				return false, nil
-			}
-			return false, errors.Wrap(err, "System-Query command failed")
-		}
-
-		if len(resp.Members) == 0 {
-			cmd.log.Debug("no system members, reformat host list")
-
-			return false, nil
-		}
-
-		notStoppedRanks, err := system.CreateRankSet("")
-		if err != nil {
-			return false, err
-		}
-		for _, member := range resp.Members {
-			if member.State() != system.MemberStateStopped {
-				notStoppedRanks.Add(member.Rank)
-			}
-		}
-		if notStoppedRanks.Count() > 0 {
-			return false, errors.Errorf(
-				"system reformat requires the following %s to be stopped: %s",
-				english.Plural(notStoppedRanks.Count(), "rank", "ranks"),
-				notStoppedRanks.String())
-		}
-
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func (cmd *storageFormatCmd) systemReformat(ctx context.Context) error {
-	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
-		new(control.SystemResetFormatReq))
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return cmd.printFormatResp(resp)
+	Reformat bool `long:"reformat" description:"Alias for --force, will be removed in a future release"`
+	Force    bool `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
 }
 
 // Execute is run when storageFormatCmd activates.
@@ -243,18 +183,18 @@ func (cmd *storageFormatCmd) systemReformat(ctx context.Context) error {
 func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 	ctx := context.Background()
 
-	sysReformat, err := cmd.shouldReformatSystem(ctx)
-	if err != nil {
-		return err
-	}
-	if sysReformat {
-		return cmd.systemReformat(ctx)
-	}
-
-	req := &control.StorageFormatReq{Reformat: cmd.Reformat}
+	req := &control.StorageFormatReq{Reformat: cmd.Force}
 	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
 
+	// TODO (DAOS-7080): Deprecate this parameter in favor of wiping SCM
+	// during the erase operation. For the moment, though, the reworked
+	// logic will prevent format of a running system, so the main use case
+	// here is to enable backward-compatibility for existing scripts.
+	if cmd.Reformat {
+		req.Reformat = true
+	}
+
+	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, err)
 	}
