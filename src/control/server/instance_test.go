@@ -87,15 +87,12 @@ func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
 			superblock: &Superblock{
 				HostFaultDomain: "/host",
 			},
-			expWritten: true,
+			expErr: errors.New("nil fault domain"),
 		},
 		"adding domain": {
 			superblock: &Superblock{},
 			newDomain:  system.MustCreateFaultDomain("host"),
 			expWritten: true,
-		},
-		"no domain": {
-			superblock: &Superblock{},
 		},
 		"empty domain": {
 			superblock: &Superblock{
