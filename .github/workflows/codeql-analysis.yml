@@ -40,7 +40,7 @@ jobs:
 
     # Build DAOS external dependencies so they are not part of the analysis
     - name: Build DAOS External Dependencies
-    - run: |
+      run: |
         git submodule init && git submodule update
         scons --deps-only --build-deps=yes --config=force
 
