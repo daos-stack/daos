@@ -166,8 +166,6 @@ def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
 
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
-    prereqs.define('readline', libs=['readline', 'history'],
-                   package='readline')
     reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
             'uuid', 'crypto', 'fuse', 'protobufc', 'json-c', 'lz4']
     if not is_platform_arm():
