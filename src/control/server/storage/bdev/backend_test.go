@@ -7,12 +7,11 @@ package bdev
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"os"
-	"os/user"
 	"path/filepath"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -422,74 +421,113 @@ func TestBdev_Backend_Update(t *testing.T) {
 	}
 }
 
-func TestBdev_Backend_cleanHugePages(t *testing.T) {
-	curUsr, _ := user.Current()
+type mockFileInfo struct {
+	name    string
+	size    int64
+	mode    os.FileMode
+	modTime time.Time
+	isDir   bool
+	stat    *syscall.Stat_t
+}
+
+func (mfi *mockFileInfo) Name() string       { return mfi.name }
+func (mfi *mockFileInfo) Size() int64        { return mfi.size }
+func (mfi *mockFileInfo) Mode() os.FileMode  { return mfi.mode }
+func (mfi *mockFileInfo) ModTime() time.Time { return mfi.modTime }
+func (mfi *mockFileInfo) IsDir() bool        { return mfi.isDir }
+func (mfi *mockFileInfo) Sys() interface{}   { return mfi.stat }
+
+func testFileInfo(t *testing.T, name string, uid uint32) os.FileInfo {
+	t.Helper()
+
+	return &mockFileInfo{
+		name: name,
+		stat: &syscall.Stat_t{
+			Uid: uid,
+		},
+	}
+}
+
+type testWalkInput struct {
+	path   string
+	info   os.FileInfo
+	err    error
+	expErr error
+}
+
+func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
+	testDir := "/wherever"
 
 	for name, tc := range map[string]struct {
-		owner, tgtUsr, filePrefix, lookPrefix string
-		nrPages, expNrRemoved, expNrRemain    int
-		expErr                                error
+		prefix     string
+		tgtUid     string
+		testInputs []*testWalkInput
+		expRemoved []string
 	}{
-		"success": {
-			owner:        curUsr.Username,
-			tgtUsr:       curUsr.Username,
-			filePrefix:   "spdk_",
-			lookPrefix:   "spdk",
-			nrPages:      10,
-			expNrRemoved: 10,
-			expNrRemain:  0,
+		"ignore subdirectory": {
+			prefix: "prefix1",
+			tgtUid: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: &mockFileInfo{
+						name: "prefix1_foo",
+						stat: &syscall.Stat_t{
+							Uid: 42,
+						},
+						isDir: true,
+					},
+					expErr: errors.New("skip this directory"),
+				},
+			},
+			expRemoved: []string{},
 		},
-		"different prefix": {
-			owner:        curUsr.Username,
-			tgtUsr:       curUsr.Username,
-			filePrefix:   "foo",
-			lookPrefix:   "spdk",
-			nrPages:      10,
-			expNrRemoved: 0,
-			expNrRemain:  10,
+		"prefix matching": {
+			prefix: "prefix1",
+			tgtUid: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix2_foo"),
+					info: testFileInfo(t, "prefix2_foo", 42),
+				},
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: testFileInfo(t, "prefix1_foo", 42),
+				},
+			},
+			expRemoved: []string{filepath.Join(testDir, "prefix1_foo")},
 		},
-		"different user": {
-			owner:        curUsr.Username,
-			tgtUsr:       "nobody",
-			filePrefix:   "spdk_",
-			lookPrefix:   "spdk",
-			nrPages:      10,
-			expNrRemoved: 0,
-			expNrRemain:  10,
+		"uid matching": {
+			prefix: "prefix1",
+			tgtUid: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: testFileInfo(t, "prefix1_foo", 41),
+				},
+				{
+					path: filepath.Join(testDir, "prefix1_bar"),
+					info: testFileInfo(t, "prefix1_bar", 42),
+				},
+			},
+			expRemoved: []string{filepath.Join(testDir, "prefix1_bar")},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			tmpDir, cleanup := common.CreateTestDir(t)
-			defer cleanup()
-
-			for i := 0; i < tc.nrPages; i++ {
-				name := fmt.Sprintf("%s_%d", tc.filePrefix, i)
-				path := filepath.Join(tmpDir, name)
-				f, err := os.Create(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := f.Close(); err != nil {
-					t.Fatal(err)
-				}
-				t.Logf("%s created", path)
+			removedFiles := make([]string, 0)
+			removeFn := func(path string) error {
+				removedFiles = append(removedFiles, path)
+				return nil
 			}
 
-			t.Logf("cleaning huge pages with prefix %q owned by %q",
-				tc.lookPrefix, tc.tgtUsr)
-			err := cleanHugePages(tmpDir, tc.lookPrefix, tc.tgtUsr)
-			common.CmpErr(t, tc.expErr, err)
-
-			files, err := ioutil.ReadDir(tmpDir)
-			if err != nil {
-				t.Fatal(err)
+			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUid, removeFn)
+			for _, ti := range tc.testInputs {
+				gotErr := testFn(ti.path, ti.info, ti.err)
+				common.CmpErr(t, ti.expErr, gotErr)
 			}
-			// len(files) makes the assumption that test directory
-			// doesn't contain any sub-directories
-			common.AssertEqual(t, tc.expNrRemain, len(files),
-				"unexpected number of pages remaining")
-			common.AssertEqual(t, tc.expNrRemoved, tc.nrPages-len(files),
-				"unexpected number of pages removed")
+			if diff := cmp.Diff(tc.expRemoved, removedFiles); diff != "" {
+				t.Fatalf("unexpected remove result (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
