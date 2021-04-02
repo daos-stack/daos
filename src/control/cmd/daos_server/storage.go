@@ -21,8 +21,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-const hugePageDir = "/dev/hugepages"
-
 type storageCmd struct {
 	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
 	Scan    storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to local server"`
