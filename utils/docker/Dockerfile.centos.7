@@ -16,6 +16,11 @@ ARG CB0
 ARG REPO_URL=""
 ARG REPO_EL7=""
 
+# Install EPEL and switch to dnf as it seems a bit faster.
+RUN yum clean all &&                                            \
+    yum -y install dnf epel-release yum-utils &&                \
+    yum clean all
+
 # If a local repository is supplied, then we should use it
 # and disable using the distro repositories.
 RUN if [ -n "$REPO_URL" ]; then                                 \
@@ -28,8 +33,8 @@ baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
 exclude=fuse-3* fuse-devel-3* fuse-libs-3* fuse-debuginfo-3* ompi*\n\
-gpgcheck=0\n" >> /etc/yum.repos.d/local-centos-group.repo;   \
-      yum --assumeyes install yum-utils;                        \
+gpgcheck=0\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
+      yum clean all;                                            \
       yum-config-manager --assumeyes --quiet                    \
                          --disable base epel extra updates;     \
     fi;                                                         \
@@ -43,10 +48,7 @@ gpgcheck=0\n" >> /etc/yum.repos.d/local-centos-group.repo;   \
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
-RUN yum clean all && \
-    yum -y install epel-release && \
-    yum -y install dnf && \
-    dnf clean all && dnf -y upgrade && \
+RUN dnf clean all && dnf -y upgrade && \
     dnf -y install \
         boost-python36-devel \
         clang-analyzer \
@@ -113,7 +115,8 @@ RUN dnf clean all && dnf -y install openmpi3-devel && dnf clean all
 ARG UID=1000
 
 # Add DAOS users
-RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home/daos daos_server
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
+            --home /home/daos daos_server
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
@@ -137,8 +140,8 @@ ENV PATH=$PATH:/home/daos/.local/bin
 
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
-    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&	\
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
 # Dependencies
@@ -172,6 +175,7 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
         yum clean all;                                                        \
         echo "$QUICKBUILD_DEPS" |                                             \
         tr '\n' '\0' | xargs -0 yum --nogpgcheck -y install;                  \
+        yum clean all;                                                        \
     fi
 
 ARG BULLSEYE=""

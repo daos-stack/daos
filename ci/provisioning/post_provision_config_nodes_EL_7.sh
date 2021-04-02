@@ -38,7 +38,6 @@ group_repo_post() {
 }
 
 distro_custom() {
-
     if [ ! -e /usr/bin/pip3 ] &&
        [ -e /usr/bin/pip3.6 ]; then
         ln -s pip3.6 /usr/bin/pip3

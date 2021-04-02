@@ -16,7 +16,8 @@ ARG REPO_URL
 ARG REPO_EL8=""
 
 # Need to do this before switching to a alternate local repo
-RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
+RUN dnf clean all &&                                            \
+    dnf -y install epel-release dnf-plugins-core dnf-utils &&   \
     dnf config-manager --set-enabled powertools
 
 # If a local repository is supplied, then we should use it
@@ -31,7 +32,7 @@ baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=0\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
-      dnf --assumeyes install dnf-utils;                        \
+      dnf clean all;                                            \
       dnf config-manager --assumeyes --quiet --disable          \
           baseos powertools epel epel-modular extras;           \
     fi;                                                         \
@@ -139,7 +140,7 @@ ARG DAOS_DEPS_BUILD=yes
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { dnf --nogpgcheck -y upgrade \
+    { dnf -y upgrade \
           --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
     dnf clean all; }
 USER daos_server:daos_server

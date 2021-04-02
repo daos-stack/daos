@@ -16,18 +16,50 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install basic tools
 # *** Keep these in as much alphbetical order as possible ***
-RUN apt-get -y update && apt-get -y install apt-utils &&               \
-    apt-get -y upgrade && apt-get -y install                           \
-    autoconf build-essential clang cmake curl doxygen                  \
-    fuse3 git golang-go                                                \
-    libaio-dev libboost-dev libcmocka-dev libcunit1-dev libfuse3-dev   \
-    libhwloc-dev libibverbs-dev libipmctl-dev libjson-c-dev liblz4-dev \
-    libnuma-dev libopenmpi-dev librdmacm-dev libssl-dev libtool-bin    \
-    libunwind-dev libyaml-dev locales                                  \
-    maven numactl openjdk-8-jdk pandoc patchelf pkg-config             \
-    python3-dev python3-distro python3-distutils python3-pyxattr       \
-    python3-tabulate                                                   \
-    scons valgrind uuid-dev yasm                                       \
+RUN apt-get -y update && apt-get -y install apt-utils && \
+    apt-get -y upgrade && apt-get -y install \
+    autoconf \
+    build-essential \
+    clang \
+    cmake \
+    curl \
+    doxygen \
+    fuse3 \
+    git \
+    golang-go \
+    libaio-dev \
+    libboost-dev \
+    libcmocka-dev \
+    libcunit1-dev \
+    libfuse3-dev \
+    libhwloc-dev \
+    libibverbs-dev \
+    libipmctl-dev \
+    libjson-c-dev \
+    liblz4-dev \
+    libnuma-dev \
+    libopenmpi-dev \
+    librdmacm-dev \
+    libssl-dev \
+    libtool-bin \
+    libunwind-dev \
+    libyaml-dev \
+    locales \
+    maven \
+    numactl \
+    openjdk-8-jdk \
+    pandoc \
+    patchelf \
+    pkg-config \
+    python3-dev \
+    python3-distro \
+    python3-distutils \
+    python3-pyxattr \
+    python3-tabulate \
+    scons \
+    valgrind \
+    uuid-dev \
+    yasm \
     && apt-get clean all
 
 # hack the default shell to bash instead of dash

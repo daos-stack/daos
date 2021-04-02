@@ -140,7 +140,9 @@ RUN if $QUICKBUILD; then                                                       \
         done;                                                                  \
         zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref;   \
         echo "Installing: $QUICKBUILD_DEPS";                                   \
-        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 zypper --non-interactive install; \
+        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' |                               \
+              xargs -0 zypper --non-interactive install;                       \
+        zypper clean --all;                                                    \
     fi
 
 RUN zypper addlock fuse fuse-libs fuse-devel \
@@ -167,7 +169,8 @@ ARG DAOS_DEPS_BUILD=yes
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { zypper clean --all; }
+    { zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
+      zypper --non-interactive update && zypper clean --all; }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
@@ -179,7 +182,9 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 # force an upgrade to get any newly built RPMs
 USER root:root
 ARG CACHEBUST
-RUN zypper clean --all
+RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
+    zypper --non-interactive update && \
+    zypper clean --all
 USER daos_server:daos_server
 
 WORKDIR /home/daos/daos/
