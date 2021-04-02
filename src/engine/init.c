@@ -86,9 +86,6 @@ static uint64_t		dss_mod_facs;
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
 
-/** Bypass for the nvme health check */
-bool			dss_nvme_bypass_health_check;
-
 d_rank_t
 dss_self_rank(void)
 {

@@ -89,8 +89,8 @@ unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
  */
 bool		dss_helper_pool;
 
-/** inhibits NVME health check */
-extern bool	dss_nvme_bypass_health_check;
+/** Bypass for the nvme health check */
+bool		dss_nvme_bypass_health_check;
 
 static daos_epoch_t	dss_start_epoch;
 
