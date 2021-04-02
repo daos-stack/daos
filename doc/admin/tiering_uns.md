@@ -52,7 +52,7 @@ The current state of work can be summarized as follow :
 -   Lustre client mount command will have to use the new
     `foreign_symlink=<absolute_path>` option to set the prefix to be used in
     front of the <pool-UUID>/<cont-UUID> relative path based on pool/container
-    informations being extracted from LOV/LMV foreign symlink EAs. This can also
+    information being extracted from LOV/LMV foreign symlink EAs. This can also
     be configured by dynamically modifying both `foreign_symlink_[enable,prefix]`
     parameters for each/any Lustre client mount, using the
     `lctl set_param llite/*/foreign_symlink_[enable,prefix]=[0|1,<path>]` command.
@@ -67,10 +67,10 @@ The current state of work can be summarized as follow :
     `lctl set_param mdt/*/enable_remote_dir_gid=-1` command.
 
 -   in addition, there is a feature available to provide a customized format
-    of LOV/LMV EAs, different from default `<pool-UUID>/<cont-UUID>`, thru the
+    of LOV/LMV EAs, different from default `<pool-UUID>/<cont-UUID>`, throug the
     `llite/*/foreign_symlink_upcall` tunable. It allows to provide the path
     of a user-land upcall which will have to indicate  where to extract both
-    `<pool-UUID>` and `<cont-UUID>` in LOV/LMV EAs, using a serie of [pos, len]
+    `<pool-UUID>` and `<cont-UUID>` in LOV/LMV EAs, using a series of [pos, len]
     tuples and constant strings. `lustre/utils/l_foreign_symlink.c` is a helper
     example in Lustre source code.
 
