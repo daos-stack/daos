@@ -85,7 +85,6 @@ RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
     python3-pyxattr  \
     python3-PyYAML \
     python3-tabulate \
-    readline-devel \
     scons \
     sg3_utils \
     valgrind-devel \
