@@ -7,7 +7,7 @@
 from apricot import TestWithServers, skipForTicket
 
 
-class RebuildTests(TestWithServers):
+class RebuildBasic(TestWithServers):
     """Test class for rebuild tests.
 
     Test Class Description:
@@ -16,15 +16,16 @@ class RebuildTests(TestWithServers):
     :avocado: recursive
     """
 
-    def run_rebuild_test(self, pool_quantity):
+    CANCEL_FOR_TICKET = [["DAOS-7050,DAOS-7134", "pool_qty", 2]]
+
+    def run_rebuild_test(self):
         """Run the rebuild test for the specified number of pools.
 
-        Args:
-            pool_quantity (int): number of pools to test
         """
         # Get the test parameters
         self.pool = []
         self.container = []
+        pool_quantity = self.params.get("pool_qty", "/run/testparams/*")
         for _ in range(pool_quantity):
             self.pool.append(self.get_pool(create=False))
             self.container.append(
@@ -130,23 +131,6 @@ class RebuildTests(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm,large
         :avocado: tags=rebuild
-        :avocado: tags=pool,rebuild_tests,test_simple_rebuild
+        :avocado: tags=pool,rebuild_basic,test_simple_rebuild
         """
-        self.run_rebuild_test(1)
-
-    @skipForTicket("DAOS-7050, DAOS-7134")
-    def test_multipool_rebuild(self):
-        """JIRA ID: DAOS-XXXX (Rebuild-002).
-
-        Test Description:
-            Expand on the basic test by rebuilding 2 pools at once.
-
-        Use Cases:
-            multipool rebuild, single client, various object and record counts
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm,large
-        :avocado: tags=rebuild
-        :avocado: tags=pool,rebuild_tests,test_multipool_rebuild
-        """
-        self.run_rebuild_test(self.params.get("quantity", "/run/testparams/*"))
+        self.run_rebuild_test()

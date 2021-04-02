@@ -48,6 +48,10 @@ testparams:
       rank: 2
     rank3:
       rank: 3
-  quantity: 2
+  pools: !mux
+    pool1:
+      pool_qty: 1
+    pool2:
+      pool_qty: 2
   object_class: OC_RP_3G1
 
