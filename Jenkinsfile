@@ -251,7 +251,6 @@ String functional_packages(String distro) {
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
-String test_tag = "full_regression"
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -398,8 +397,7 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
-                                       test_function: 'runTestFunctionalV2',
-                                       test_tag: test_tag
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
@@ -422,8 +420,7 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
-                                       test_function: 'runTestFunctionalV2',
-                                       test_tag: test_tag
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
@@ -446,8 +443,7 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
-                                       test_function: 'runTestFunctionalV2',
-                                       test_tag: test_tag
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
@@ -472,8 +468,7 @@ pipeline {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
-                                       test_function: 'runTestFunctionalV2',
-                                       test_tag: test_tag
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
@@ -498,8 +493,7 @@ pipeline {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
-                                       test_function: 'runTestFunctionalV2',
-                                       test_tag: test_tag
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
@@ -524,8 +518,7 @@ pipeline {
                         functionalTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages(),
-                                       test_function: 'runTestFunctionalV2',
-                                       test_tag: test_tag
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
