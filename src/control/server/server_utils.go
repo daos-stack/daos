@@ -245,30 +245,35 @@ func registerEngineCallbacks(engine *EngineInstance, pubSub *events.PubSub, allS
 	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname(), engine.Index()))
 
 	var onceReady sync.Once
-	engine.OnReady(func(_ context.Context) (err error) {
+	engine.OnReady(func(_ context.Context) error {
 		// Indicate that engine has been started, only do this
 		// the first time that the engine starts as shared
 		// memory persists between engine restarts.
 		onceReady.Do(func() {
 			allStarted.Done()
 		})
-		return
+
+		return nil
 	})
 }
 
-func configureFirstEngine(engine *EngineInstance, sysdb *system.Database, joinFn systemJoinFn) {
+func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *system.Database, joinFn systemJoinFn) {
 	if !sysdb.IsReplica() {
 		return
 	}
 
 	// Start the system db after instance 0's SCM is ready.
 	var onceStorageReady sync.Once
-	engine.OnStorageReady(func(ctx context.Context) (err error) {
+	engine.OnStorageReady(func(_ context.Context) (err error) {
 		onceStorageReady.Do(func() {
+			// NB: We use the outer context rather than
+			// the closure context in order to avoid
+			// tying the db to the instance.
 			err = errors.Wrap(sysdb.Start(ctx),
 				"failed to start system db",
 			)
 		})
+
 		return
 	})
 
@@ -286,6 +291,7 @@ func configureFirstEngine(engine *EngineInstance, sysdb *system.Database, joinFn
 			req.Rank = 0
 			sb.Rank = system.NewRankPtr(0)
 		}
+
 		return joinFn(ctx, req)
 	}
 }

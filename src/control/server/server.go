@@ -174,7 +174,7 @@ func (srv *server) initStorage() error {
 	return srv.ctlSvc.Setup()
 }
 
-func (srv *server) createEngine(ei int, ec *engine.Config) (*EngineInstance, error) {
+func (srv *server) createEngine(ctx context.Context, ei int, ec *engine.Config) (*EngineInstance, error) {
 	// Closure to join an engine instance to a system using control API.
 	joinFn := func(ctxIn context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
 		req.SetHostList(srv.cfg.AccessPoints)
@@ -195,12 +195,10 @@ func (srv *server) createEngine(ei int, ec *engine.Config) (*EngineInstance, err
 
 	engine := NewEngineInstance(srv.log, bcp, srv.scmProvider, joinFn,
 		engine.NewRunner(srv.log, ec)).WithHostFaultDomain(srv.harness.faultDomain)
-
 	if ei == 0 {
-		return engine, nil
+		configureFirstEngine(ctx, engine, srv.sysdb, joinFn)
 	}
 
-	configureFirstEngine(engine, srv.sysdb, joinFn)
 	return engine, nil
 }
 
@@ -211,7 +209,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 	registerTelemetryCallback(ctx, srv)
 
 	for ei, ec := range srv.cfg.Engines {
-		engine, err := srv.createEngine(ei, ec)
+		engine, err := srv.createEngine(ctx, ei, ec)
 		if err != nil {
 			return err
 		}

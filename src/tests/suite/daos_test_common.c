@@ -588,6 +588,12 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 	int		 i;
 	static bool	 runable = true;
 
+	if (arg == NULL) {
+		print_message("state not set, likely due to group-setup"
+			      " issue\n");
+		return false;
+	}
+
 	if (arg->myrank == 0) {
 		int			tgts_per_node;
 		int			disable_nodes;
