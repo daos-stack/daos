@@ -109,18 +109,18 @@ func connectServer(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*n
 	return ctlAddr, lis, nil
 }
 
-// Provide special handling for the ofi+verbs provide.
-// Mercury uses the interface name such as ib0, while OFI uses the device name
-// such as hfi1_0 CaRT and Mercury will now support the new OFI_DOMAIN
-// environment variable so that we can specify the correct device for each.
-func updateFabricEnvars(ctx context.Context, ec *engine.Config) error {
-	if strings.HasPrefix(ec.Fabric.Provider, "ofi+verbs") && !ec.HasEnvVar("OFI_DOMAIN") {
-		deviceAlias, err := netdetect.GetDeviceAlias(ctx, ec.Fabric.Interface)
+// updateFabricEnvars adjusts the engine fabric configuration.
+func updateFabricEnvars(ctx context.Context, cfg *engine.Config) error {
+	if strings.HasPrefix(cfg.Fabric.Provider, "ofi+verbs") && !cfg.HasEnvVar("OFI_DOMAIN") {
+		// Mercury uses the interface name such as ib0, while OFI uses the device
+		// name such as hfi1_0 CaRT and Mercury will now support the new OFI_DOMAIN
+		// environment variable so that we can specify the correct device for each.
+		deviceAlias, err := netdetect.GetDeviceAlias(ctx, cfg.Fabric.Interface)
 		if err != nil {
-			return errors.Wrapf(err, "failed to resolve alias for %s", ec.Fabric.Interface)
+			return errors.Wrapf(err, "failed to resolve alias for %s", cfg.Fabric.Interface)
 		}
 		envVar := "OFI_DOMAIN=" + deviceAlias
-		ec.WithEnvVars(envVar)
+		cfg.WithEnvVars(envVar)
 	}
 
 	return nil
@@ -151,17 +151,17 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 	}
 
 	var netDevClass uint32
-	for idx, ec := range cfg.Engines {
-		if err := updateFabricEnvars(ctx, ec); err != nil {
+	for i, c := range cfg.Engines {
+		if err := updateFabricEnvars(ctx, c); err != nil {
 			return 0, errors.Wrap(err, "update fabric envars")
 		}
 
-		if idx != 0 {
+		if i != 0 {
 			continue
 		}
 
 		// set device class based on fabric cfg of first engine
-		netDevClass, err = cfg.GetDeviceClassFn(ec.Fabric.Interface)
+		netDevClass, err = cfg.GetDeviceClassFn(c.Fabric.Interface)
 		if err != nil {
 			return 0, err
 		}
@@ -296,19 +296,17 @@ func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *sy
 	}
 }
 
-// registerTelemetryCallback sets callback which will launch Prometheus
-// telemetry exporter when all engines have been started.
-func registerTelemetryCallback(ctx context.Context, srv *server) {
+// registerTelemetryCallbacks sets telemetry related callbacks to
+// be triggered when all engines have been started.
+func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 	telemPort := srv.cfg.TelemetryPort
 	if telemPort == 0 {
 		return
 	}
 
-	srv.onEnginesStarted(func(ctxIn context.Context) {
+	srv.OnEnginesStarted(func(ctxIn context.Context) error {
 		srv.log.Debug("starting Prometheus exporter")
-		if err := startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances()); err != nil {
-			srv.log.Errorf("failed to start prometheus exporter: %s", err)
-		}
+		return startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances())
 	})
 }
 

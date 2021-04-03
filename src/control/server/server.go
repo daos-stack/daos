@@ -74,7 +74,7 @@ type server struct {
 	bdevProvider *bdev.Provider
 	grpcServer   *grpc.Server
 
-	enginesStartedCbs []func(context.Context)
+	onEnginesStarted []func(context.Context) error
 }
 
 func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
@@ -134,8 +134,8 @@ func (srv *server) createServices(ctx context.Context) error {
 	return nil
 }
 
-func (srv *server) onEnginesStarted(fn func(context.Context)) {
-	srv.enginesStartedCbs = append(srv.enginesStartedCbs, fn)
+func (srv *server) OnEnginesStarted(fns ...func(context.Context) error) {
+	srv.onEnginesStarted = append(srv.onEnginesStarted, fns...)
 }
 
 func (srv *server) shutdown() {
@@ -174,8 +174,8 @@ func (srv *server) initStorage() error {
 	return srv.ctlSvc.Setup()
 }
 
-func (srv *server) createEngine(ctx context.Context, ei int, ec *engine.Config) (*EngineInstance, error) {
-	// Closure to join an engine instance to a system using control API.
+func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config) (*EngineInstance, error) {
+	// Closure to join an engine instance to a syshtem using control API.
 	joinFn := func(ctxIn context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
 		req.SetHostList(srv.cfg.AccessPoints)
 		req.SetSystem(srv.cfg.SystemName)
@@ -185,17 +185,17 @@ func (srv *server) createEngine(ctx context.Context, ei int, ec *engine.Config) 
 	}
 
 	// Indicate whether VMD devices have been detected and can be used.
-	ec.Storage.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
+	cfg.Storage.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
 
 	// TODO: ClassProvider should be encapsulated within bdevProvider
-	bcp, err := bdev.NewClassProvider(srv.log, ec.Storage.SCM.MountPoint, &ec.Storage.Bdev)
+	bcp, err := bdev.NewClassProvider(srv.log, cfg.Storage.SCM.MountPoint, &cfg.Storage.Bdev)
 	if err != nil {
 		return nil, err
 	}
 
 	engine := NewEngineInstance(srv.log, bcp, srv.scmProvider, joinFn,
-		engine.NewRunner(srv.log, ec)).WithHostFaultDomain(srv.harness.faultDomain)
-	if ei == 0 {
+		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
+	if idx == 0 {
 		configureFirstEngine(ctx, engine, srv.sysdb, joinFn)
 	}
 
@@ -206,10 +206,10 @@ func (srv *server) createEngine(ctx context.Context, ei int, ec *engine.Config) 
 // goroutine to execute callbacks when all engines are started.
 func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
-	registerTelemetryCallback(ctx, srv)
+	registerTelemetryCallbacks(ctx, srv)
 
-	for ei, ec := range srv.cfg.Engines {
-		engine, err := srv.createEngine(ctx, ei, ec)
+	for i, c := range srv.cfg.Engines {
+		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
 			return err
 		}
@@ -223,12 +223,12 @@ func (srv *server) addEngines(ctx context.Context) error {
 		allStarted.Add(1)
 	}
 
-	go func(ctxIn context.Context) {
-		allStarted.Wait()
-		for _, cb := range srv.enginesStartedCbs {
-			cb(ctxIn)
+	allStarted.Wait()
+	for _, cb := range srv.onEnginesStarted {
+		if err := cb(ctx); err != nil {
+			srv.log.Errorf("on engines started: %s", err)
 		}
-	}(ctx)
+	}
 
 	return nil
 }
@@ -298,18 +298,7 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 		"%s harness exited", build.ControlPlaneName)
 }
 
-// Start is the entry point for a daos_server instance, perform the following
-// tasks in order to bring-up:
-//
-// - create server struct with component references
-// - create service wrappers for rpc and event services
-// - initialize network components
-// - initialize storage components
-// - create and add configured engine instances to server
-// - create and configure main grpc server to handle requests
-// - register actions to be taken on receipt of events
-// - start listening server and processing loops
-//
+// Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	faultDomain, err := processConfig(log, cfg)
 	if err != nil {
