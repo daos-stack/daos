@@ -53,6 +53,14 @@ class DaosServerDumpTest(TestWithServers):
             self.fail(
                 "Server start failed when it was expected to complete")
 
+        # DEBUG check cmds to find server processes to kill
+        print("===== ps -x ======")
+        ret_codes = pcmd(self.hostlist_servers, r"ps -x")
+        print("===== ps -x | grep -E daos_engine ======")
+        ret_codes = pcmd(self.hostlist_servers, r"ps -x | grep -E daos_engine")
+        print("===== ps -x | grep -E daos_engine | grep -vE '\<(grep|defunct)\>' ======")
+        ret_codes = pcmd(self.hostlist_servers, r"ps -x | grep -E daos_engine | grep -vE '\<(grep|defunct)\>'")
+
         return_codes = stop_processes(self.hostlist_servers, r"daos_engine",
                            added_filter=r"'\<(grep|defunct)\>'",
                            send_sigusr2=True)
