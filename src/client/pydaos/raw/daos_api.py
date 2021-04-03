@@ -16,6 +16,7 @@ import uuid
 import os
 import inspect
 import sys
+import time
 import enum
 
 from . import daos_cref
@@ -614,7 +615,16 @@ class DaosObj():
                                    "handle: {1}".format(ret, self.obj_handle))
             self.obj_handle = None
 
-    def create(self, rank=None, objcls=None):
+    def __str__(self):
+        """Get the string representation of this class."""
+        # pylint: disable=no-else-return
+        if self.c_oid:
+            # Return the object ID if  defined
+            return "{}.{}".format(self.c_oid.hi, self.c_oid.lo)
+        else:
+            return self.__repr__()
+
+    def create(self, rank=None, objcls=None, seed=None):
         """Create a DAOS object by generating an oid.
 
         Args:
@@ -622,20 +632,26 @@ class DaosObj():
             objcls (object, optional): the DAOS class for this object specified
                 as either one of the DAOS object class enumerations or an
                 enumeration name or value. Defaults to DaosObjClass.OC_RP_XSF.
+            seed (ctypes.c_uint, optional): seed for the dts_oid_gen function.
+                Defaults to None which will use seconds since epoch as the seed.
 
         Raises:
             DaosApiError: if the object class is invalid
 
         """
-        func = self.context.get_function('generate-oid')
-
         # Convert the object class into an valid object class enumeration value
         if objcls is None:
             obj_cls_int = DaosObjClass.OC_RP_XSF.value
         else:
             obj_cls_int = get_object_class(objcls).value
 
+        func = self.context.get_function('oid_gen')
+        if seed is None:
+            seed = ctypes.c_uint(int(time.time()))
         self.c_oid = daos_cref.DaosObjId()
+        self.c_oid.hi = func(seed)
+
+        func = self.context.get_function('generate-oid')
         ret = func(self.container.coh, ctypes.byref(self.c_oid), 0, obj_cls_int,
                    0, 0)
         if ret != 0:
@@ -2211,7 +2227,8 @@ class DaosContext():
             'set-pool-attr':   self.libdaos.daos_pool_set_attr,
             'stop-service':    self.libdaos.daos_pool_stop_svc,
             'test-event':      self.libdaos.daos_event_test,
-            'update-obj':      self.libdaos.daos_obj_update}
+            'update-obj':      self.libdaos.daos_obj_update,
+            'oid_gen':         self.libtest.dts_oid_gen}
 
     def get_function(self, function):
         """Call a function through the API."""

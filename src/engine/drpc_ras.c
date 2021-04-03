@@ -20,16 +20,11 @@
 static void
 free_event(Shared__RASEvent *evt)
 {
-	if (evt->obj_id != NULL)
-		D_FREE(evt->obj_id);
-	if (evt->pool_uuid != NULL)
-		D_FREE(evt->pool_uuid);
-	if (evt->cont_uuid != NULL)
-		D_FREE(evt->cont_uuid);
-	if (evt->hostname != NULL)
-		D_FREE(evt->hostname);
-	if (evt->timestamp != NULL)
-		D_FREE(evt->timestamp);
+	D_FREE(evt->obj_id);
+	D_FREE(evt->pool_uuid);
+	D_FREE(evt->cont_uuid);
+	D_FREE(evt->hostname);
+	D_FREE(evt->timestamp);
 }
 
 static int
@@ -104,11 +99,9 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	return 0;
 
 out_hn:
-	if (evt->hostname != NULL)
-		D_FREE(evt->hostname);
+	D_FREE(evt->hostname);
 out_ts:
-	if (evt->timestamp != NULL)
-		D_FREE(evt->timestamp);
+	D_FREE(evt->timestamp);
 out:
 	return rc;
 }
