@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.1.4
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -346,7 +346,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
 %{_libdir}/libvos_size.so
-%{_libdir}/libdts.so
 %dir %{_libdir}/python3/site-packages/pydaos
 %dir %{_libdir}/python3/site-packages/storage_estimator
 %{_libdir}/python3/site-packages/pydaos/*.py
@@ -394,6 +393,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
+%{_libdir}/libdts.so
 
 %files devel
 %{_includedir}/*
@@ -401,6 +401,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Mon Mar 29 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.1.4-2
+- Move libdts.so to the daos-tests subpackage
+
 * Mon Mar 22 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.4-1
 - Version bump up to 1.1.4
 

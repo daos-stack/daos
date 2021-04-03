@@ -1215,10 +1215,10 @@ agg_peer_update_ult(void *arg)
 	d_sg_list_t		 sgl = { 0 };
 	crt_endpoint_t		 tgt_ep = { 0 };
 	unsigned char		*buf = NULL;
-	struct obj_ec_agg_in	*ec_agg_in = NULL;
-	struct obj_ec_agg_out	*ec_agg_out = NULL;
+	struct obj_ec_agg_in	*ec_agg_in;
+	struct obj_ec_agg_out	*ec_agg_out;
 	struct ec_agg_param	*agg_param;
-	crt_rpc_t		*rpc;
+	crt_rpc_t		*rpc = NULL;
 	int			 rc = 0;
 
 	tgt_ep.ep_rank = entry->ae_peer_pshards[0].sd_rank;
@@ -1229,6 +1229,7 @@ agg_peer_update_ult(void *arg)
 		D_ERROR("obj_req_create failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+	D_ASSERT(rpc != NULL);
 	ec_agg_in = crt_req_get(rpc);
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	uuid_copy(ec_agg_in->ea_pool_uuid,
@@ -1262,7 +1263,7 @@ agg_peer_update_ult(void *arg)
 				     CRT_BULK_RW, &ec_agg_in->ea_bulk);
 		if (rc) {
 			D_ERROR("crt_bulk_create failed: "DF_RC"\n", DP_RC(rc));
-			goto out;
+			goto out_rpc;
 		}
 	}
 
@@ -1276,13 +1277,13 @@ agg_peer_update_ult(void *arg)
 			      ec_agg_in->ea_remove_nr);
 		if (ec_agg_in->ea_remove_recxs.ca_arrays == NULL) {
 			rc = -DER_NOMEM;
-			goto out;
+			goto out_bulk;
 		}
 		D_ALLOC_ARRAY(ec_agg_in->ea_remove_eps.ca_arrays,
 			      ec_agg_in->ea_remove_nr);
 		if (ec_agg_in->ea_remove_eps.ca_arrays == NULL) {
 			rc = -DER_NOMEM;
-			goto out;
+			goto out_bulk;
 		}
 
 		d_list_for_each_entry(ext, &entry->ae_cur_stripe.as_dextents,
@@ -1313,22 +1314,23 @@ agg_peer_update_ult(void *arg)
 		D_ERROR("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
 		if (stripe_ud->asu_write_par)
 			crt_bulk_free(ec_agg_in->ea_bulk);
-		goto out;
+		goto out_bulk;
 	}
 	ec_agg_out = crt_reply_get(rpc);
 	rc = ec_agg_out->ea_status;
 	if (rc)
 		D_ERROR("remote update rpc failed: "DF_RC"\n", DP_RC(rc));
 
+out_bulk:
 	if (stripe_ud->asu_write_par)
 		crt_bulk_free(ec_agg_in->ea_bulk);
-out:
+out_rpc:
 	if (ec_agg_in->ea_remove_nr) {
 		D_FREE(ec_agg_in->ea_remove_recxs.ca_arrays);
 		D_FREE(ec_agg_in->ea_remove_eps.ca_arrays);
 	}
-	if (rpc)
-		crt_req_decref(rpc);
+	crt_req_decref(rpc);
+out:
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -1412,7 +1414,7 @@ agg_process_holes_ult(void *arg)
 	struct ec_agg_param	*agg_param;
 	struct obj_ec_rep_in	*ec_rep_in = NULL;
 	struct obj_ec_rep_out	*ec_rep_out = NULL;
-	crt_rpc_t		*rpc;
+	crt_rpc_t		*rpc = NULL;
 	unsigned int		 len = ec_age2cs(entry);
 	unsigned int		 k = ec_age2k(entry);
 	unsigned long		 ss = entry->ae_cur_stripe.as_stripenum *
@@ -1543,6 +1545,8 @@ agg_process_holes_ult(void *arg)
 		D_ERROR("remote update rpc failed: "DF_RC"\n", DP_RC(rc));
 
 out:
+	if (rpc)
+		crt_req_decref(rpc);
 	D_FREE(stripe_ud->asu_recxs);
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
@@ -1583,8 +1587,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 		rc = dss_abterr2der(rc);
 		goto ev_out;
 	}
-	if (*status != 0)
-		rc = *status;
+
 	/* Update local vos with replicate */
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;

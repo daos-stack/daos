@@ -794,7 +794,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	struct daos_oclass_attr	*oca;
 	int			 rc = 0;
 
-	if (epoch != NULL)
+	if (epoch != NULL && !obj_auxi->req_reasbed)
 		reasb_req->orr_epoch = *epoch;
 	reasb_req->orr_size_set = 0;
 	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetch) {
@@ -3865,6 +3865,11 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 rc;
 
+	D_DEBUG(DB_CSUM, "obj: %p, args: %p, obj_auxi: %p, csummer: %p, "
+			 "csum_type: %d, csum_enabled: %s\n",
+		obj, args, obj_auxi, csummer,
+		cont_props.dcp_csum_type,
+		cont_props.dcp_csum_enabled ? "Yes" : "No");
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return 0;
 
