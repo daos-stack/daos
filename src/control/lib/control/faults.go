@@ -31,6 +31,11 @@ var (
 		"empty hostlist parameter in configuration",
 		"specify a non-empty list of DAOS server addresses in configuration ('hostlist' parameter) and retry the client application",
 	)
+	FaultFormatRunningSystem = clientFault(
+		code.ClientFormatRunningSystem,
+		"storage format invoked on a running system",
+		"stop and erase the system, then retry the format operation",
+	)
 )
 
 func IsConnectionError(err error) bool {

@@ -122,7 +122,7 @@ def define_mercury(reqs):
                 headers=['psm2.h'],
                 libs=['psm2'])
 
-    if reqs.build_type == 'debug':
+    if reqs.target_type == 'debug':
         OFI_DEBUG = '--enable-debug '
     else:
         OFI_DEBUG = '--disable-debug '
@@ -132,6 +132,7 @@ def define_mercury(reqs):
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
                           '--disable-efa ' +
+                          '--without-gdrcopy ' +
                           OFI_DEBUG +
                           exclude(reqs, 'psm2',
                                   '--enable-psm2' +
@@ -159,7 +160,7 @@ def define_mercury(reqs):
                           'make install'], libs=['opa'],
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
 
-    if reqs.build_type == 'debug':
+    if reqs.target_type == 'debug':
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=ON '
     else:
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=OFF '

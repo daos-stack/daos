@@ -158,43 +158,79 @@ func (ei *EngineInstance) exit(ctx context.Context, exitErr error) {
 // will only return (if no errors are returned during setup) on I/O Engine
 // process exit (triggered by harness shutdown through context cancellation
 // or abnormal I/O Engine process termination).
-func (ei *EngineInstance) run(ctx context.Context, recreateSBs bool) (err error) {
+func (ei *EngineInstance) run(parent context.Context, recreateSBs bool) error {
 	errChan := make(chan error)
 
-	if err = ei.format(ctx, recreateSBs); err != nil {
-		return
+	// Create a cancelable subcontext to allow Stop() to interrupt
+	// goroutines that shouldn't continue running after the engine
+	// exits.
+	var ctx context.Context
+	ei.Lock()
+	ctx, ei._cancelCtx = context.WithCancel(parent)
+	ei.Unlock()
+
+	if err := ei.format(ctx, recreateSBs); err != nil {
+		return err
 	}
 
-	if err = ei.start(ctx, errChan); err != nil {
-		return
+	// Use the parent context here to avoid interfering with the shutdown
+	// logic in the runner.
+	if err := ei.start(parent, errChan); err != nil {
+		return err
 	}
 	ei.waitDrpc.SetTrue()
 
-	if err = ei.waitReady(ctx, errChan); err != nil {
-		return
+	if err := ei.waitReady(ctx, errChan); err != nil {
+		// If the error is for anything other than the fact
+		// that our subcontext was canceled, exit early.
+		if ctx.Err() == nil {
+			return err
+		}
 	}
 
 	return <-errChan // receive on runner exit
 }
 
-// Run is the processing loop for an EngineInstance. Starts are triggered by
-// receiving true on instance start channel.
-func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case relaunch := <-ei.startLoop:
-			if !relaunch {
-				return
-			}
-			ei.exit(ctx, ei.run(ctx, recreateSBs))
-		}
+// requestStart makes a request to (re-)start the engine, and blocks
+// until the request is received.
+func (ei *EngineInstance) requestStart(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+	case ei.startRequested <- true:
 	}
+}
+
+// Run starts the control loop for an EngineInstance. Engine starts are triggered by
+// calling requestStart() on the instance.
+func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
+	// Start the instance control loop.
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case relaunch := <-ei.startRequested:
+				if !relaunch {
+					return
+				}
+
+				ei.exit(ctx, ei.run(ctx, recreateSBs))
+			}
+		}
+	}()
+
+	// Start the instance runner.
+	ei.requestStart(ctx)
 }
 
 // Stop sends signal to stop EngineInstance runner (nonblocking).
 func (ei *EngineInstance) Stop(signal os.Signal) error {
+	ei.RLock()
+	if ei._cancelCtx != nil {
+		ei._cancelCtx()
+	}
+	ei.RUnlock()
+
 	if err := ei.runner.Signal(signal); err != nil {
 		return err
 	}
