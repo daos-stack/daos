@@ -345,6 +345,34 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
+    @staticmethod
+    def log_check_valgrind_memcheck(self):
+        """Check valgrind memcheck log files for errors."""
+        logparse = self.params.get("logparse", "/run/tests/*/")
+
+        # FIXME: logparse doesn't seem to be used in any YAML file.
+        # if logparse is None or not logparse:
+        #     return
+
+        strict_test = False
+        self.log.info("Parsing log path %s", self.log_path)
+        if not os.path.exists(self.log_path):
+            self.log.info("Path does not exist")
+            return
+
+        for filename in os.listdir(self.log_path):
+
+            log_file = os.path.join(self.log_path, filename)
+            if not os.path.isfile(log_file):
+                self.log.info("File is a Directory. Skipping.... :%s", log_file)
+                continue
+
+            self.log.info("Parsing %s", log_file)
+
+            cl = cart_logparse.LogIter(log_file)
+            c_log_test = cart_logtest.LogTest(cl)
+            c_log_test.check_log_file(strict_test)
+
     def launch_srv_cli_test(self, srvcmd, clicmd):
         """Launch a sever in the background and client in the foreground."""
         srv_rtn = self.launch_cmd_bg(srvcmd)
@@ -361,6 +389,8 @@ class CartTest(TestWithoutServers):
             self.fail(
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
+
+        self.log_check_valgrind_memcheck(self)
 
         return 0
 
