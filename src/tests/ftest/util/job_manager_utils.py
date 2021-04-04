@@ -211,7 +211,7 @@ class Orterun(JobManager):
         self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
-        self.tag_output = FormattedParameter("--tag-output", True)
+        self.tag_output = FormattedParameter("-x COVFILE=/tmp/test.cov --tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
         self.working_dir = FormattedParameter("-wdir {}", None)
 
