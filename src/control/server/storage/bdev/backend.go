@@ -384,6 +384,7 @@ func (b *spdkBackend) vmdPrep(req PrepareRequest) (bool, error) {
 // bdev_include and bdev_exclude list filters provided in the server config file.
 // This will make the devices available though SPDK.
 func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
+	b.log.Debugf("provider backend prepare %v", req)
 	resp := &PrepareResponse{}
 
 	usr, err := user.Lookup(req.TargetUser)
@@ -415,6 +416,7 @@ func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 }
 
 func (b *spdkBackend) PrepareReset() error {
+	b.log.Debugf("provider backend prepare reset")
 	return b.script.Reset()
 }
 

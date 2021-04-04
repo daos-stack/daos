@@ -41,7 +41,9 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 }
 
 // doNvmePrepare issues prepare request and returns response.
-func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) *ctlpb.PrepareNvmeResp {
+func (c *ControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) *ctlpb.PrepareNvmeResp {
+	c.log.Debugf("performing nvme prep %v", req)
+
 	_, err := c.NvmePrepare(bdev.PrepareRequest{
 		HugePageCount: int(req.GetNrhugepages()),
 		TargetUser:    req.GetTargetuser(),
@@ -78,24 +80,33 @@ func newPrepareScmResp(inResp *scm.PrepareResponse, inErr error) (*ctlpb.Prepare
 	return outResp, nil
 }
 
-func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (*ctlpb.PrepareScmResp, error) {
+func (c *ControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (*ctlpb.PrepareScmResp, error) {
+	c.log.Debugf("performing scm prep %v", req)
+
 	scmState, err := c.GetScmState()
 	if err != nil {
 		return newPrepareScmResp(nil, err)
 	}
 	c.log.Debugf("SCM state before prep: %s", scmState)
 
-	resp, err := c.ScmPrepare(scm.PrepareRequest{Reset: pbReq.Reset_})
+	resp, err := c.ScmPrepare(scm.PrepareRequest{Reset: req.Reset_})
 
 	return newPrepareScmResp(resp, err)
 }
 
-// StoragePrepare configures SSDs for user specific access with SPDK and
-// groups SCM modules in AppDirect/interleaved mode as kernel "pmem" devices.
-func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (*ctlpb.StoragePrepareResp, error) {
-	c.log.Debug("received StoragePrepare RPC; proceeding to instance storage preparation")
+// StoragePrepare configures resident host storage for use with DAOS, fails if
+// harness engine instances have started.
+func (c *ControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (*ctlpb.StoragePrepareResp, error) {
+	c.log.Debugf("received StoragePrepare RPC %v", req)
 
 	resp := new(ctlpb.StoragePrepareResp)
+
+	for _, ei := range c.harness.Instances() {
+		if ei.isStarted() {
+			return nil, errors.Errorf("instance %d: can't prepare storage if running",
+				ei.Index())
+		}
+	}
 
 	if req.Nvme != nil {
 		resp.Nvme = c.doNvmePrepare(req.Nvme)
@@ -358,7 +369,7 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
-	c.log.Debug("received StorageScan RPC")
+	c.log.Debugf("received StorageScan RPC %v", req)
 
 	if req == nil {
 		return nil, errors.New("nil request")
@@ -397,7 +408,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	resp.Crets = make([]*ctlpb.NvmeControllerResult, 0, len(instances))
 	scmChan := make(chan *ctlpb.ScmMountResult, len(instances))
 
-	c.log.Debugf("received StorageFormat RPC %v; proceeding to instance storage format", req)
+	c.log.Debugf("received StorageFormat RPC %v", req)
 
 	// TODO: enable per-instance formatting
 	formatting := 0
