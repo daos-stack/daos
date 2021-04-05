@@ -191,6 +191,25 @@ func CreateTestDir(t *testing.T) (string, func()) {
 	}
 }
 
+// CreateTestFile creates a file in the given directory with a random name, and
+// writes the content string to the file. It returns the path to the file.
+func CreateTestFile(t *testing.T, dir, content string) string {
+	t.Helper()
+
+	file, err := ioutil.TempFile(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return file.Name()
+}
+
 // CreateTestSocket creates a Unix Domain Socket that can listen for connections
 // on a given path. It returns the listener and a cleanup function.
 func CreateTestSocket(t *testing.T, sockPath string) (*net.UnixListener, func()) {
