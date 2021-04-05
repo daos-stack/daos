@@ -1431,7 +1431,7 @@ agg_process_holes_ult(void *arg)
 				   &entry->ae_cur_stripe.as_dextents, ae_link) {
 		if (agg_extent->ae_epoch < entry->ae_par_extent.ape_epoch)
 			continue;
-		if(agg_extent->ae_hole)
+		if (agg_extent->ae_hole)
 			valid_hole = true;
 		if (agg_extent->ae_recx.rx_idx - ss > last_ext_end) {
 			stripe_ud->asu_recxs[ext_cnt].rx_idx =
@@ -1466,7 +1466,8 @@ agg_process_holes_ult(void *arg)
 	iod.iod_nr = ext_cnt;
 	iod.iod_recxs = stripe_ud->asu_recxs;
 	entry->ae_sgl.sg_nr = 1;
-	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len =  ext_tot_len * entry->ae_rsize;
+	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len =
+		ext_tot_len * entry->ae_rsize;
 	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len <= k * len);
 	/* Pull data via dsc_obj_fetch */
 	if (ext_cnt) {
