@@ -351,11 +351,11 @@ dmg_pool_create(const char *dmg_config_file,
 	struct passwd		*passwd = NULL;
 	struct group		*group = NULL;
 	struct daos_prop_entry	*entry;
-	char			tmp_buf[L_tmpnam], *tmp_name = tmp_buf;
+	char			tmp_name[] = "/tmp/acl_XXXXXX";
 	FILE			*tmp_file = NULL;
 	daos_mgmt_pool_info_t	pool_info = {};
 	struct json_object	*dmg_out = NULL;
-	int			rc = 0;
+	int			fd = -1, rc = 0;
 
 	if (grp != NULL) {
 		args = cmd_push_arg(args, &argcount,
@@ -415,14 +415,16 @@ dmg_pool_create(const char *dmg_config_file,
 	if (prop != NULL) {
 		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 		if (entry != NULL) {
-			tmp_name = tmpnam(tmp_buf);
-			if (tmp_name == NULL) {
-				D_ERROR("failed to create tmpfile name\n");
+			fd = mkstemp(tmp_name);
+			if (fd < 0) {
+				D_ERROR("failed to create tmpfile file\n");
 				D_GOTO(out_cmd, rc = -DER_NOMEM);
 			}
-			tmp_file = fopen(tmp_name, "w");
+			tmp_file = fdopen(fd, "w");
 			if (tmp_file == NULL) {
-				D_ERROR("failed to open %s\n", tmp_name);
+				D_ERROR("failed to associate stream: %s\n",
+					strerror(errno));
+				close(fd);
 				D_GOTO(out_cmd, rc = -DER_MISC);
 			}
 
@@ -477,7 +479,7 @@ out_json:
 out_cmd:
 	cmd_free_args(args, argcount);
 out:
-	if (tmp_file != NULL)
+	if (fd >= 0)
 		unlink(tmp_name);
 	return rc;
 }
