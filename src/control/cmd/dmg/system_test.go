@@ -39,7 +39,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single rank",
 			"system query --ranks 0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":""}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":"","FailOnUnavailable":false}`,
 			}, " "),
 			nil,
 		},
@@ -47,7 +47,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple ranks",
 			"system query --ranks 0,2,4-8",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"[0,2,4-8]","Hosts":""}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"[0,2,4-8]","Hosts":"","FailOnUnavailable":false}`,
 			}, " "),
 			nil,
 		},
@@ -61,7 +61,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single host",
 			"system query --rank-hosts foo-0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"foo-0"}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"foo-0","FailOnUnavailable":false}`,
 			}, " "),
 			nil,
 		},
@@ -69,7 +69,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple hosts",
 			"system query --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","FailOnUnavailable":false}`,
 			}, " "),
 			nil,
 		},

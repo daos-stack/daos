@@ -162,43 +162,79 @@ func (srv *EngineInstance) exit(ctx context.Context, exitErr error) {
 // will only return (if no errors are returned during setup) on I/O Engine
 // process exit (triggered by harness shutdown through context cancellation
 // or abnormal I/O Engine process termination).
-func (srv *EngineInstance) run(ctx context.Context, recreateSBs bool) (err error) {
+func (srv *EngineInstance) run(parent context.Context, recreateSBs bool) error {
 	errChan := make(chan error)
 
-	if err = srv.format(ctx, recreateSBs); err != nil {
-		return
+	// Create a cancelable subcontext to allow Stop() to interrupt
+	// goroutines that shouldn't continue running after the engine
+	// exits.
+	var ctx context.Context
+	srv.Lock()
+	ctx, srv._cancelCtx = context.WithCancel(parent)
+	srv.Unlock()
+
+	if err := srv.format(ctx, recreateSBs); err != nil {
+		return err
 	}
 
-	if err = srv.start(ctx, errChan); err != nil {
-		return
+	// Use the parent context here to avoid interfering with the shutdown
+	// logic in the runner.
+	if err := srv.start(parent, errChan); err != nil {
+		return err
 	}
 	srv.waitDrpc.SetTrue()
 
-	if err = srv.waitReady(ctx, errChan); err != nil {
-		return
+	if err := srv.waitReady(ctx, errChan); err != nil {
+		// If the error is for anything other than the fact
+		// that our subcontext was canceled, exit early.
+		if ctx.Err() == nil {
+			return err
+		}
 	}
 
 	return <-errChan // receive on runner exit
 }
 
-// Run is the processing loop for an EngineInstance. Starts are triggered by
-// receiving true on instance start channel.
-func (srv *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case relaunch := <-srv.startLoop:
-			if !relaunch {
-				return
-			}
-			srv.exit(ctx, srv.run(ctx, recreateSBs))
-		}
+// requestStart makes a request to (re-)start the engine, and blocks
+// until the request is received.
+func (srv *EngineInstance) requestStart(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+	case srv.startRequested <- true:
 	}
+}
+
+// Run starts the control loop for an EngineInstance. Engine starts are triggered by
+// calling requestStart() on the instance.
+func (srv *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
+	// Start the instance control loop.
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case relaunch := <-srv.startRequested:
+				if !relaunch {
+					return
+				}
+
+				srv.exit(ctx, srv.run(ctx, recreateSBs))
+			}
+		}
+	}()
+
+	// Start the instance runner.
+	srv.requestStart(ctx)
 }
 
 // Stop sends signal to stop EngineInstance runner (nonblocking).
 func (srv *EngineInstance) Stop(signal os.Signal) error {
+	srv.RLock()
+	if srv._cancelCtx != nil {
+		srv._cancelCtx()
+	}
+	srv.RUnlock()
+
 	if err := srv.runner.Signal(signal); err != nil {
 		return err
 	}

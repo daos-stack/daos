@@ -82,6 +82,7 @@ class DaosCoreBase(TestWithServers):
                         item.split("=")[0]: item.split("=")[1]
                         for item in env_vars}
                     env_dict["CRT_CTX_SHARE_ADDR"] = "1"
+                    env_dict["COVFILE"] = "/tmp/test.cov"
                     if "CRT_CTX_NUM" not in env_dict or \
                             int(env_dict["CRT_CTX_NUM"]) < int(targets):
                         env_dict["CRT_CTX_NUM"] = str(targets)
@@ -121,6 +122,7 @@ class DaosCoreBase(TestWithServers):
                 "-x", "=".join(["D_LOG_FILE", get_log_file(self.client_log)]),
                 "--map-by node", "-x", "D_LOG_MASK=DEBUG",
                 "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
+                "-x", "COVFILE=/tmp/test.cov",
                 self.daos_test,
                 "-n", dmg_config_file,
                 "".join(["-", subtest]),
