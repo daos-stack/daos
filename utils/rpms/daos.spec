@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.1.4
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -30,7 +30,7 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 7)
-BuildRequires: argobots-devel >= 1.0rc1
+BuildRequires: argobots-devel >= 1.1
 BuildRequires: json-c-devel
 BuildRequires: boost-python36-devel
 %else
@@ -413,6 +413,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Thu Apr 01 2021 Brian J. Murrell <brian.murrell@intel.com> 1.1.4-3
+- Update argobots to 1.1
+
 * Mon Mar 29 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.1.4-2
 - Move libdts.so to the daos-tests subpackage
 
