@@ -1516,7 +1516,7 @@ pipeline {
         } // stage ('Test Report')
     } // stages
     post {
-         always {
+        always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
                                                      'centos7-gcc-unit-memcheck']
         }

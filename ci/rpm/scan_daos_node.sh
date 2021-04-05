@@ -11,16 +11,16 @@ rm -rf "/var/tmp/${lmd_src}"
 mkdir -p "/var/tmp/${lmd_src}"
 tar -C "/var/tmp/${lmd_src}" --strip-components=1 -xf "/var/tmp/${lmd_tarball}"
 pushd "/var/tmp/${lmd_src}"
-sudo ./install.sh
-  sudo ln -s /usr/local/maldetect/ /bin/maldet
+  sudo ./install.sh
 popd
+sudo maldet --update-sigs
 
 fc_conf="/etc/freshclam.conf"
-if ! grep -q 'ScriptedUpdates no' "$fc_conf"; then
+if ! sudo grep -q 'ScriptedUpdates no' "$fc_conf"; then
   sudo -E bash -c "echo \"ScriptedUpdates no\" >> \"$fc_conf\""
 fi
 : "${JOB_URL:=${JENKINS_URL}job/clamav_daily_update/}"
-if ! grep -q "$JENKINS_URL" "$fc_conf"; then
+if ! sudo grep -q "$JENKINS_URL" "$fc_conf"; then
   clam_url="${JOB_URL}lastSuccessfulBuild/artifact/download/clam"
   sudo -E bash -c "echo \"PrivateMirror ${clam_url}\" >> \"$fc_conf\""
 fi
