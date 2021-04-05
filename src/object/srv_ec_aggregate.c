@@ -1553,6 +1553,7 @@ agg_process_holes_ult(void *arg)
 	rc = ec_rep_out->er_status;
 	if (rc)
 		D_ERROR("remote update rpc failed: "DF_RC"\n", DP_RC(rc));
+	crt_bulk_free(ec_rep_in->er_bulk);
 out:
 	if (rpc)
 		crt_req_decref(rpc);

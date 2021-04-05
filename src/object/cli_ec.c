@@ -1146,10 +1146,9 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 					D_ASSERT(reasb_req->orr_size_fetched);
 					iod_size = 1;
 				}
-				ec_data_seg_add(recx, iod_size, sgl,
-						&iov_idx, &iov_off, oca,
-						iovs, iov_nr, sorter,
-						update);
+				ec_data_seg_add(recx, iod_size, sgl, &iov_idx,
+						&iov_off, oca, iovs, iov_nr,
+						sorter, update);
 			}
 			continue;
 		}
@@ -1170,9 +1169,8 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		}
 		ec_data_recx_add(full_recx, riod->iod_recxs, ridx,
 				 tgt_recx_idxs, oca, false);
-		ec_data_seg_add(full_recx, iod_size, sgl, &iov_idx,
-				&iov_off, oca, iovs, iov_nr, sorter,
-				false);
+		ec_data_seg_add(full_recx, iod_size, sgl, &iov_idx, &iov_off,
+				oca, iovs, iov_nr, sorter, false);
 		recx_end = recx->rx_idx + recx->rx_nr;
 		full_end = full_recx->rx_idx + full_recx->rx_nr;
 		D_ASSERT(recx_end >= full_end);
@@ -1181,9 +1179,9 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 			tmp_recx.rx_nr = recx_end - full_end;
 			ec_data_recx_add(&tmp_recx, riod->iod_recxs, ridx,
 					 tgt_recx_idxs, oca, true);
-			ec_data_seg_add(&tmp_recx, iod_size, sgl,
-					&iov_idx, &iov_off, oca, iovs,
-					iov_nr, sorter, true);
+			ec_data_seg_add(&tmp_recx, iod_size, sgl, &iov_idx,
+					&iov_off, oca, iovs, iov_nr, sorter,
+					true);
 		}
 	}
 
