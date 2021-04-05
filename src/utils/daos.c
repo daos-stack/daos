@@ -1560,7 +1560,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"shell commands:\n"
 		"	  daos             open shell for DAOS operations\n"
 		"shell (sh) options:\n"
-		"	  <pool options>   (--pool, --sys-name)\n");
+		"	  <pool/cont opts> (--pool, --sys-name, --cont [optional])\n");
 
 	} else {
 		FIRST_LEVEL_HELP();
