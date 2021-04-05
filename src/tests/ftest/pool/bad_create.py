@@ -54,7 +54,6 @@ class BadCreateTest(TestWithServers):
         setidlist = self.params.get("setname", '/run/createtests/setnames/*')
         if setidlist[0] == 'NULLPTR':
             group = None
-            self.cancel("skipping this test until DAOS-1991 is fixed")
         else:
             group = setidlist[0]
         expected_for_param.append(setidlist[1])
