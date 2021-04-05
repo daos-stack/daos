@@ -121,7 +121,7 @@ func TestConfigHasEnvVar(t *testing.T) {
 
 func TestConstructedConfig(t *testing.T) {
 	var numaNode uint = 8
-	var bypass bool = false
+	var bypass bool = true
 
 	goldenPath := "testdata/full.golden"
 
