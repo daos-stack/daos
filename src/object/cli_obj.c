@@ -206,6 +206,7 @@ obj_layout_free(struct dc_object *obj)
 	if (obj->cob_shards->do_open_count == 0)
 		layout = obj->cob_shards;
 	obj->cob_shards = NULL;
+	obj->cob_shards_nr = 0;
 	D_SPIN_UNLOCK(&obj->cob_spin);
 
 	if (layout != NULL)
@@ -794,7 +795,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	struct daos_oclass_attr	*oca;
 	int			 rc = 0;
 
-	if (epoch != NULL)
+	if (epoch != NULL && !obj_auxi->req_reasbed)
 		reasb_req->orr_epoch = *epoch;
 	reasb_req->orr_size_set = 0;
 	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetch) {

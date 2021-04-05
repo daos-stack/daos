@@ -333,6 +333,20 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		}
 
 		_, err = ur.getMSResponse()
+		// If the request specifies that the error is retryable,
+		// check to see if it also defines its own retry logic
+		// and run that if so. Otherwise, let the usual retry
+		// logic below handle the error.
+		if req.canRetry(err, try) {
+			err := req.onRetry(tryCtx, try)
+			if err == nil {
+				return ur, nil
+			}
+			if err != errNoRetryHandler {
+				return nil, err
+			}
+		}
+
 		switch e := err.(type) {
 		case *system.ErrNotLeader:
 			// If we sent the request to a non-leader MS replica,
@@ -356,12 +370,10 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 				req.SetHostList(e.Replicas)
 			}
 		default:
-			// If the request defines its own retry logic for the error, run
-			// that logic and break out early.
+			// In the case that the request specifies that the error
+			// is retryable, but doesn't define its own retry logic,
+			// just break out so it can be tried again as usual.
 			if req.canRetry(err, try) {
-				if err := req.onRetry(tryCtx, try); err != nil {
-					return ur, nil
-				}
 				break
 			}
 
