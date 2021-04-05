@@ -63,10 +63,11 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	rc = ds_obj_ec_aggregate(cont, epr, dss_ult_yield,
 				 (void *)cont->sc_agg_req, is_current);
 	if (rc) {
+		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN,
+			 DB_ANY, DLOG_ERR,
+			 "EC aggregation returned: "DF_RC"\n", DP_RC(rc));
 		if (rc == -DER_NOTLEADER)
 			return -DER_SHUTDOWN;
-		D_ERROR("EC aggregation returned: "DF_RC"\n",
-			DP_RC(rc));
 	}
 
 	if (dss_ult_exiting(cont->sc_agg_req))
