@@ -69,10 +69,11 @@ class SCMConfigTest(TestWithServers):
 
             if exception is None:
                 self.log.error("dmg was expected to fail")
-                self.fail("Dmg command completed successfully when it was
+                self.fail("Dmg command completed successfully when it was"
                           "expected to fail")
 
-            self.log.info("Storage prepare fails as expected: {}".format(error))
+            self.log.info("Storage prepare fails as expected: "
+                          "{}".format(error))
         else:
             self.fail("Detected dcpm not specified")
 
