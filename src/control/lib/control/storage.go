@@ -272,7 +272,7 @@ type (
 
 // addHostResponse is responsible for validating the given HostResponse
 // and adding it to the StoragePrepareResp.
-func (ssp *StoragePrepareResp) addHostResponse(hr *HostResponse) (err error) {
+func (spr *StoragePrepareResp) addHostResponse(hr *HostResponse) (err error) {
 	pbResp, ok := hr.Message.(*ctlpb.StoragePrepareResp)
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
@@ -280,31 +280,29 @@ func (ssp *StoragePrepareResp) addHostResponse(hr *HostResponse) (err error) {
 
 	hs := new(HostStorage)
 	if pbResp.GetNvme().GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
-		if pbErr := pbResp.GetNvme().GetState().GetError(); pbErr != "" {
-			if err := ssp.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
-				return err
-			}
+		pbErr := pbResp.GetNvme().GetState().GetError()
+		if err := spr.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
+			return err
 		}
 	}
 
-	switch pbResp.GetScm().GetState().GetStatus() {
-	case ctlpb.ResponseStatus_CTL_SUCCESS:
-		if err := convert.Types(pbResp.GetScm().GetNamespaces(), &hs.ScmNamespaces); err != nil {
-			return ssp.addHostError(hr.Addr, err)
+	if pbResp.GetScm().GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
+		pbErr := pbResp.GetScm().GetState().GetError()
+		if err := spr.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
+			return err
+		}
+	} else {
+		err := convert.Types(pbResp.GetScm().GetNamespaces(), &hs.ScmNamespaces)
+		if err != nil {
+			return spr.addHostError(hr.Addr, err)
 		}
 		hs.RebootRequired = pbResp.GetScm().GetRebootrequired()
-	default:
-		if pbErr := pbResp.GetScm().GetState().GetError(); pbErr != "" {
-			if err := ssp.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
-				return err
-			}
-		}
 	}
 
-	if ssp.HostStorage == nil {
-		ssp.HostStorage = make(HostStorageMap)
+	if spr.HostStorage == nil {
+		spr.HostStorage = make(HostStorageMap)
 	}
-	return ssp.HostStorage.Add(hr.Addr, hs)
+	return spr.HostStorage.Add(hr.Addr, hs)
 }
 
 // StoragePrepare concurrently performs storage preparation steps across
@@ -359,7 +357,7 @@ type (
 
 // addHostResponse is responsible for validating the given HostResponse
 // and adding it to the StorageFormatResp.
-func (ssp *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
+func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 	pbResp, ok := hr.Message.(*ctlpb.StorageFormatResp)
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
@@ -385,7 +383,7 @@ func (ssp *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 			})
 		default:
 			if err := ctlStateToErr(nvmeFmtResult.GetState()); err != nil {
-				if err := ssp.addHostError(hr.Addr, err); err != nil {
+				if err := sfr.addHostError(hr.Addr, err); err != nil {
 					return err
 				}
 			}
@@ -405,17 +403,17 @@ func (ssp *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 			})
 		default:
 			if err := ctlStateToErr(scmFmtResult.GetState()); err != nil {
-				if err := ssp.addHostError(hr.Addr, err); err != nil {
+				if err := sfr.addHostError(hr.Addr, err); err != nil {
 					return err
 				}
 			}
 		}
 	}
 
-	if ssp.HostStorage == nil {
-		ssp.HostStorage = make(HostStorageMap)
+	if sfr.HostStorage == nil {
+		sfr.HostStorage = make(HostStorageMap)
 	}
-	return ssp.HostStorage.Add(hr.Addr, hs)
+	return sfr.HostStorage.Add(hr.Addr, hs)
 }
 
 // checkFormatReq performs some validation to determine whether or not the
@@ -495,19 +493,19 @@ func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageForm
 		return nil, err
 	}
 
-	spr := new(StorageFormatResp)
+	sfr := new(StorageFormatResp)
 	for _, hostResp := range ur.Responses {
 		if hostResp.Error != nil {
-			if err := spr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+			if err := sfr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
 				return nil, err
 			}
 			continue
 		}
 
-		if err := spr.addHostResponse(hostResp); err != nil {
+		if err := sfr.addHostResponse(hostResp); err != nil {
 			return nil, err
 		}
 	}
 
-	return spr, nil
+	return sfr, nil
 }
