@@ -1265,6 +1265,10 @@ d_hhash_link_lookup(struct d_hhash *hhash, uint64_t key)
 	if (d_hhash_key_isptr(key)) {
 		struct d_hlink *hlink = (struct d_hlink *)key;
 
+		if (hlink == NULL) {
+			D_ERROR("NULL PTR type key.\n");
+			return NULL;
+		}
 		if (!d_hhash_is_ptrtype(hhash)) {
 			D_ERROR("invalid PTR type key being lookup in a "
 				"non ptr-based htable.\n");

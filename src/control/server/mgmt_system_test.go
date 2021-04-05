@@ -1619,7 +1619,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 	}
 }
 
-func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
+func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilReq         bool
 		ranks          string
@@ -1646,7 +1646,7 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 			mResps: []*control.HostResponse{
 				{
 					Addr: common.MockHostAddr(1).String(),
-					Message: &mgmtpb.SystemResetFormatResp{
+					Message: &mgmtpb.SystemEraseResp{
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "something bad",
@@ -1660,7 +1660,7 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				},
 				{
 					Addr: common.MockHostAddr(2).String(),
-					Message: &mgmtpb.SystemResetFormatResp{
+					Message: &mgmtpb.SystemEraseResp{
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, State: stateString(system.MemberStateAwaitFormat),
@@ -1691,7 +1691,6 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 					State: stateString(system.MemberStateAwaitFormat),
 				},
 			},
-
 			expMembers: system.Members{
 				mockMember(t, 0, 1, "stopped"),
 				mockMember(t, 1, 1, "awaitformat"),
@@ -1706,11 +1705,10 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
 			},
-			ranks: "0-1,4-9",
 			mResps: []*control.HostResponse{
 				{
 					Addr: common.MockHostAddr(1).String(),
-					Message: &mgmtpb.SystemResetFormatResp{
+					Message: &mgmtpb.SystemEraseResp{
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "couldn't reset",
@@ -1740,7 +1738,6 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
 			},
-			expAbsentRanks: "4-9",
 		},
 		"filtered and oversubscribed hosts": {
 			members: system.Members{
@@ -1749,11 +1746,10 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
 			},
-			hosts: "10.0.0.[2-5]",
 			mResps: []*control.HostResponse{
 				{
 					Addr: common.MockHostAddr(2).String(),
-					Message: &mgmtpb.SystemResetFormatResp{
+					Message: &mgmtpb.SystemEraseResp{
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Errored: true, Msg: "couldn't reset",
@@ -1783,7 +1779,6 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "awaitformat"),
 			},
-			expAbsentHosts: "10.0.0.[3-5]",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1792,15 +1787,14 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 
 			cs := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
 
-			req := &mgmtpb.SystemResetFormatReq{
-				Sys:   build.DefaultSystemName,
-				Ranks: tc.ranks, Hosts: tc.hosts,
+			req := &mgmtpb.SystemEraseReq{
+				Sys: build.DefaultSystemName,
 			}
 			if tc.nilReq {
 				req = nil
 			}
 
-			gotResp, gotErr := cs.SystemResetFormat(context.TODO(), req)
+			gotResp, gotErr := cs.SystemErase(context.TODO(), req)
 			common.ExpectError(t, gotErr, tc.expErrMsg, name)
 			if tc.expErrMsg != "" {
 				return
@@ -1812,8 +1806,6 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
 			checkMembers(t, tc.expMembers, cs.membership)
-			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
-			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 		})
 	}
 }
