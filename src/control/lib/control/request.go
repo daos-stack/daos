@@ -70,6 +70,10 @@ type (
 	}
 )
 
+var (
+	errNoRetryHandler = errors.New("request has not set a retry handler")
+)
+
 // request is an embeddable struct to provide basic functionality
 // common to all request types.
 type request struct {
@@ -140,7 +144,7 @@ func (r *request) canRetry(_ error, _ uint) bool {
 // calling retry, in order to avoid wasting effort on a request
 // that does not implement its own retry logic.
 func (r *request) onRetry(_ context.Context, _ uint) error {
-	return errors.New("request is not retryable")
+	return errNoRetryHandler
 }
 
 // retryAfter implements the retrier interface and always returns
@@ -214,5 +218,5 @@ func (r *retryableRequest) onRetry(ctx context.Context, cur uint) error {
 		return r.retryFn(ctx, cur)
 	}
 
-	return nil
+	return errNoRetryHandler
 }
