@@ -8,6 +8,7 @@ package server
 
 import (
 	"fmt"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -40,18 +42,48 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 	return rs
 }
 
+// TODO: de-duplicate logic to populate prepare request from server config after
+//       DAOS-7002 is completed
+func updateNvmePrepareReq(req *bdev.PrepareRequest, cfg *config.Server) {
+	if req.HugePageCount == 0 {
+		req.HugePageCount = minHugePageCount
+		if cfgHasBdev(cfg) {
+			// The config value is intended to be per-engine, so we
+			// need to adjust based on the number of engines.
+			req.HugePageCount = cfg.NrHugepages * len(cfg.Engines)
+		}
+	}
+	if req.TargetUser == "" {
+		if runningUser, err := user.Current(); err == nil {
+			req.TargetUser = runningUser.Username
+		}
+	}
+	if req.PCIAllowlist == "" {
+		req.PCIAllowlist = strings.Join(cfg.BdevInclude, " ")
+	}
+	req.PCIBlocklist = strings.Join(cfg.BdevExclude, " ")
+	req.DisableVFIO = cfg.DisableVFIO
+	req.DisableVMD = cfg.DisableVMD || cfg.DisableVFIO || !iommuDetected()
+}
+
 // doNvmePrepare issues prepare request and returns response.
-func (c *ControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) *ctlpb.PrepareNvmeResp {
-	c.log.Debugf("performing nvme prep %v", req)
-
-	_, err := c.NvmePrepare(bdev.PrepareRequest{
-		HugePageCount: int(req.GetNrhugepages()),
-		TargetUser:    req.GetTargetuser(),
-		PCIAllowlist:  req.GetPciwhitelist(),
-		ResetOnly:     req.GetReset_(),
-	})
-
+func (c *ControlService) doNvmePrepare(pbReq *ctlpb.PrepareNvmeReq) *ctlpb.PrepareNvmeResp {
+	c.log.Debugf("performing nvme prep %v", pbReq)
 	pnr := new(ctlpb.PrepareNvmeResp)
+
+	req := bdev.PrepareRequest{
+		HugePageCount: int(pbReq.GetNrhugepages()),
+		TargetUser:    pbReq.GetTargetuser(),
+		PCIAllowlist:  pbReq.GetPciwhitelist(),
+		ResetOnly:     pbReq.GetReset_(),
+		// Default to minimum necessary for scan to work correctly.
+	}
+
+	if !req.ResetOnly {
+		updateNvmePrepareReq(&req, c.srvCfg)
+	}
+
+	_, err := c.NvmePrepare(req)
 	pnr.State = newResponseState(err, ctlpb.ResponseStatus_CTL_ERR_NVME, "")
 
 	return pnr
