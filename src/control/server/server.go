@@ -299,9 +299,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 
 			// Start the system db after instance 0's SCM is
 			// ready.
-			var once sync.Once
-			engine.OnStorageReady(func(ctx context.Context) (err error) {
-				once.Do(func() {
+			var onceStorageReady sync.Once
+			engine.OnStorageReady(func(_ context.Context) (err error) {
+				onceStorageReady.Do(func() {
+					// NB: We use the outer context rather than
+					// the closure context in order to avoid
+					// tying the db to the instance.
 					err = errors.Wrap(sysdb.Start(ctx),
 						"failed to start system db",
 					)

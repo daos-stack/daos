@@ -206,6 +206,7 @@ obj_layout_free(struct dc_object *obj)
 	if (obj->cob_shards->do_open_count == 0)
 		layout = obj->cob_shards;
 	obj->cob_shards = NULL;
+	obj->cob_shards_nr = 0;
 	D_SPIN_UNLOCK(&obj->cob_spin);
 
 	if (layout != NULL)
@@ -794,7 +795,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	struct daos_oclass_attr	*oca;
 	int			 rc = 0;
 
-	if (epoch != NULL)
+	if (epoch != NULL && !obj_auxi->req_reasbed)
 		reasb_req->orr_epoch = *epoch;
 	reasb_req->orr_size_set = 0;
 	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetch) {
@@ -3865,6 +3866,11 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 rc;
 
+	D_DEBUG(DB_CSUM, "obj: %p, args: %p, obj_auxi: %p, csummer: %p, "
+			 "csum_type: %d, csum_enabled: %s\n",
+		obj, args, obj_auxi, csummer,
+		cont_props.dcp_csum_type,
+		cont_props.dcp_csum_enabled ? "Yes" : "No");
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return 0;
 
@@ -5404,10 +5410,6 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	struct pl_map_attr	attr;
 	int			rc;
 
-	/** TODO - unsupported for now */
-	if (cid == OC_UNKNOWN)
-		return -DER_INVAL;
-
 	/** select the oclass */
 	poh = dc_cont_hdl2pool_hdl(coh);
 	if (daos_handle_is_inval(poh))
@@ -5423,8 +5425,13 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
 		attr.pa_domain_nr, attr.pa_target_nr);
 
-	rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr,
-				 &cid);
+	/** TODO - unsupported for now */
+	if (cid == OC_UNKNOWN)
+		rc = dc_set_oclass(coh, attr.pa_domain_nr, attr.pa_target_nr,
+				   ofeats, hints, &cid);
+	else
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
+					 attr.pa_target_nr, &cid);
 	if (rc)
 		return rc;
 

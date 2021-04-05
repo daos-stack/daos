@@ -1,7 +1,6 @@
 #!/usr/bin/python
 '''
   (C) Copyright 2018-2021 Intel Corporation.
-
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import traceback
@@ -34,10 +33,8 @@ class ContainerAttributeTest(TestWithServers):
     @staticmethod
     def create_data_set():
         """Create the large attribute dictionary.
-
         Returns:
             dict: a large attribute dictionary
-
         """
         data_set = {}
         for index in range(1024):
@@ -90,9 +87,7 @@ class ContainerAttributeTest(TestWithServers):
     def test_container_large_attributes(self):
         """
         Test ID: DAOS-1359
-
         Test description: Test large randomly created container attribute.
-
         :avocado: tags=container,container_attr,attribute,large_conattribute
         """
         self.add_pool()
@@ -103,9 +98,9 @@ class ContainerAttributeTest(TestWithServers):
 
         try:
             self.container.container.set_attr(data=attr_dict)
-            size, buf = self.container.container.list_attr()
-
-            self.verify_list_attr(attr_dict, size, buf)
+            # skip step due to DAOS-6880
+            #size, buf = self.container.container.list_attr()
+            #self.verify_list_attr(attr_dict, size, buf)
 
             results = self.container.container.get_attr(list(attr_dict.keys()))
             self.verify_get_attr(attr_dict, results)
@@ -144,9 +139,9 @@ class ContainerAttributeTest(TestWithServers):
                 break
         try:
             self.container.container.set_attr(data=attr_dict)
-            size, buf = self.container.container.list_attr()
-
-            self.verify_list_attr(attr_dict, size, buf)
+            # skip step due to DAOS-6880
+            #size, buf = self.container.container.list_attr()
+            #self.verify_list_attr(attr_dict, size, buf)
 
             # Request something that doesn't exist
             if name[0] is not None and b"Negative" in name[0]:
@@ -169,7 +164,6 @@ class ContainerAttributeTest(TestWithServers):
     def test_container_attribute_asyn(self):
         """
         Test basic container attribute tests.
-
         :avocado: tags=all,small,full_regression,container,async_conattribute
         """
         global GLOB_SIGNAL
@@ -206,14 +200,15 @@ class ContainerAttributeTest(TestWithServers):
                 self.fail("RC not as expected after set_attr First {0}"
                           .format(GLOB_RC))
 
-            GLOB_SIGNAL = threading.Event()
-            size, buf = self.container.container.list_attr(cb_func=cb_func)
-            GLOB_SIGNAL.wait()
-            if GLOB_RC != 0 and expected_result in ['PASS']:
-                self.fail("RC not as expected after list_attr First {0}"
-                          .format(GLOB_RC))
-            if expected_result in ['PASS']:
-                self.verify_list_attr(attr_dict, size, buf, mode="async")
+            # skip-step due to DAOS-6880
+            #GLOB_SIGNAL = threading.Event()
+            #size, buf = self.container.container.list_attr(cb_func=cb_func)
+            #GLOB_SIGNAL.wait()
+            #if GLOB_RC != 0 and expected_result in ['PASS']:
+            #    self.fail("RC not as expected after list_attr First {0}"
+            #              .format(GLOB_RC))
+            #if expected_result in ['PASS']:
+            #    self.verify_list_attr(attr_dict, size, buf, mode="async")
 
             # Request something that doesn't exist
             if name[0] is not None and b"Negative" in name[0]:

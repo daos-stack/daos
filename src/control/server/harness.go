@@ -169,10 +169,8 @@ func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *even
 		}()
 	}
 
-	for _, srv := range instances {
-		// start first time then relinquish control to instance
-		go srv.Run(ctx, cfg.RecreateSuperblocks)
-		srv.startLoop <- true
+	for _, ei := range instances {
+		ei.Run(ctx, cfg.RecreateSuperblocks)
 	}
 
 	<-ctx.Done()

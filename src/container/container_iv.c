@@ -356,8 +356,7 @@ cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf,
-		sizeof(root_hdl));
+	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 
 	uuid_copy(iv_entry->cont_uuid, civ_key->cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
@@ -549,7 +548,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 out:
 	if (rc < 0 && rc != -DER_IVCB_FORWARD)
-		D_ERROR("failed to insert: rc "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_NONEXIST, DB_ANY, DLOG_ERR,
+			 "failed to insert: rc "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -645,7 +645,7 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = entry_size;
 	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL, retry);
 	if (rc)
-		D_CDEBUG(rc != -DER_NOTLEADER, DLOG_ERR, DB_MGMT,
+		D_CDEBUG(rc == -DER_NOTLEADER, DB_MGMT, DLOG_ERR,
 			 DF_UUID" iv fetch failed "DF_RC"\n",
 			 DP_UUID(key_uuid), DP_RC(rc));
 
@@ -1317,4 +1317,3 @@ out:
 
 	return rc;
 }
-

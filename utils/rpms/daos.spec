@@ -7,8 +7,8 @@
 %global __python %{__python3}
 
 Name:          daos
-Version:       1.1.3
-Release:       5%{?relval}%{?dist}
+Version:       1.1.4
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -26,8 +26,11 @@ BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
+%if ("%{?compiler_args}" == "COMPILER=covc")
+BuildRequires: bullseye
+%endif
 %if (0%{?rhel} >= 7)
-BuildRequires: argobots-devel >= 1.0rc1
+BuildRequires: argobots-devel >= 1.1
 BuildRequires: json-c-devel
 BuildRequires: boost-python36-devel
 %else
@@ -219,20 +222,29 @@ This is the package needed to build software with the DAOS library.
       USE_INSTALLED=all      \
       CONF_DIR=%{conf_dir}   \
       PREFIX=%{buildroot}    \
-     %{?scons_args}
+     %{?scons_args}          \
+     %{?compiler_args}
+
+%if ("%{?compiler_args}" == "COMPILER=covc")
+mv test.cov{,-build}
+%endif
 
 %install
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
       --no-rpath                      \
-      --install-sandbox=%{buildroot} \
-      %{buildroot}%{_prefix}         \
-      %{buildroot}%{conf_dir}        \
+      --install-sandbox=%{buildroot}  \
+      %{buildroot}%{_prefix}          \
+      %{buildroot}%{conf_dir}         \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{?scons_args}
+      %{?scons_args}                  \
+      %{?compiler_args}
 
+%if ("%{?compiler_args}" == "COMPILER=covc")
+mv test.cov-build %{buildroot}/usr/lib/daos/TESTING/ftest/test.cov
+%endif
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_unitdir}
@@ -346,7 +358,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
 %{_libdir}/libvos_size.so
-%{_libdir}/libdts.so
 %dir %{_libdir}/python3/site-packages/pydaos
 %dir %{_libdir}/python3/site-packages/storage_estimator
 %{_libdir}/python3/site-packages/pydaos/*.py
@@ -394,6 +405,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
+%{_libdir}/libdts.so
 
 %files devel
 %{_includedir}/*
@@ -401,6 +413,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Thu Apr 01 2021 Brian J. Murrell <brian.murrell@intel.com> 1.1.4-3
+- Update argobots to 1.1
+
+* Mon Mar 29 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.1.4-2
+- Move libdts.so to the daos-tests subpackage
+
+* Mon Mar 22 2021 Johann Lombardi <johann.lombardi@intel.com> 1.1.4-1
+- Version bump up to 1.1.4
+
 * Fri Mar 19 2021 Maureen Jean <maureen.jean@intel.com> 1.1.3-5
 - Update to python3
 

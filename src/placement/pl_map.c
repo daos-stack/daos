@@ -149,6 +149,27 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    uint32_t rebuild_ver, uint32_t *tgt_rank,
 		    uint32_t *shard_id, unsigned int array_size)
 {
+	struct daos_oclass_attr *oc_attr;
+
+	D_ASSERT(map->pl_ops != NULL);
+
+	oc_attr = daos_oclass_attr_find(md->omd_id);
+	if (daos_oclass_grp_size(oc_attr) == 1)
+		return 0;
+
+	if (!map->pl_ops->o_obj_find_rebuild)
+		return -DER_NOSYS;
+
+	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, rebuild_ver,
+					       tgt_rank, shard_id, array_size);
+}
+
+int
+pl_obj_find_drain(struct pl_map *map, struct daos_obj_md *md,
+		  struct daos_obj_shard_md *shard_md,
+		  uint32_t rebuild_ver, uint32_t *tgt_rank,
+		  uint32_t *shard_id, unsigned int array_size)
+{
 	D_ASSERT(map->pl_ops != NULL);
 
 	if (!map->pl_ops->o_obj_find_rebuild)
@@ -164,13 +185,19 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		    uint32_t reint_ver, uint32_t *tgt_rank,
 		    uint32_t *shard_id, unsigned int array_size)
 {
+	struct daos_oclass_attr *oc_attr;
+
 	D_ASSERT(map->pl_ops != NULL);
+
+	oc_attr = daos_oclass_attr_find(md->omd_id);
+	if (daos_oclass_grp_size(oc_attr) == 1)
+		return 0;
 
 	if (!map->pl_ops->o_obj_find_reint)
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_reint(map, md, shard_md, reint_ver,
-					       tgt_rank, shard_id, array_size);
+					     tgt_rank, shard_id, array_size);
 }
 
 int
@@ -199,7 +226,7 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 /* Returns whether or not a given layout contains the specified rank */
 bool
 pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
-		       uint32_t rank, uint32_t target_index)
+		       uint32_t rank, uint32_t target_index, uint32_t id_shard)
 {
 	struct pool_target *target;
 	int i;
@@ -211,7 +238,7 @@ pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
 		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
 					  &target);
 		if (rc != 0 && target->ta_comp.co_rank == rank &&
-		    target->ta_comp.co_index == target_index)
+		    target->ta_comp.co_index == target_index && i == id_shard)
 			return true; /* Found a target and rank matches */
 	}
 

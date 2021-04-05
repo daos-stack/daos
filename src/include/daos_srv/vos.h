@@ -209,18 +209,21 @@ vos_self_fini(void);
  */
 
 /**
- * Create a Versioning Object Storage Pool (VOSP) and its root object.
+ * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
+ * NULL
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
  * \param blob_sz[IN]	Size of blob for the pool
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t blob_sz);
+		daos_size_t blob_sz, unsigned int flags, daos_handle_t *poh);
 
 /**
  * Kill a VOS pool before destroy
@@ -246,19 +249,18 @@ int
 vos_pool_destroy(const char *path, uuid_t uuid);
 
 /**
- * Open a Versioning Object Storage Pool (VOSP), load its root object
- * and other internal data structures.
+ * Open a Versioning Object Storage Pool (VOSP)
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
- * \param small	[IN]	Pool is small
- *			(system memory reservation shall be small, to fit)
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  * \param poh	[OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh);
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
+	      daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
