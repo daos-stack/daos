@@ -7,9 +7,11 @@
 package server
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto"
@@ -114,7 +116,7 @@ func (srv *EngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeContr
 
 // StorageFormatSCM performs format on SCM and identifies if superblock needs
 // writing.
-func (srv *EngineInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMountResult) {
+func (srv *EngineInstance) StorageFormatSCM(ctx context.Context, reformat bool) (mResult *ctlpb.ScmMountResult) {
 	srvIdx := srv.Index()
 	needsScmFormat := reformat
 
@@ -130,9 +132,18 @@ func (srv *EngineInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMo
 	}()
 
 	if srv.isStarted() {
-		scmErr = errors.Errorf("instance %d: can't format storage of running instance",
-			srvIdx)
-		return
+		if !reformat {
+			scmErr = errors.Errorf("instance %d: can't format storage of running instance",
+				srvIdx)
+			return
+		}
+
+		srv.log.Infof("forcibly stopping instance %d prior to reformat", srvIdx)
+		if scmErr = srv.Stop(unix.SIGKILL); scmErr != nil {
+			return
+		}
+
+		srv.requestStart(ctx)
 	}
 
 	// If not reformatting, check if SCM is already formatted.
