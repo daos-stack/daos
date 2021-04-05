@@ -413,7 +413,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Mon Mar 05 2021 Dalton A. Bohning <daltonx.bohning@intel.com> - 1.3.0-9
+* Mon Apr 05 2021 Dalton A. Bohning <daltonx.bohning@intel.com> - 1.3.0-9
 - Add attr to the test dependencies
 
 * Tue Apr 02 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-8
