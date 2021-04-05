@@ -3049,6 +3049,9 @@ tgt_idx_change_retry(void **state)
 		skip();
 	}
 
+	/* Force checksums disabled. DAOS-7182 will remove this. */
+	dt_csum_type = DAOS_PROP_CO_CSUM_OFF;
+
 	if (!arg->async) {
 		if (arg->myrank == 0)
 			print_message("this test can-only run in async mode\n");
@@ -3186,6 +3189,8 @@ fetch_replica_unavail(void **state)
 	/* needs at lest 4 targets, exclude one and another 3 raft nodes */
 	if (!test_runable(arg, 4))
 		skip();
+	/* Force checksums disabled. DAOS-7182 will remove this. */
+	dt_csum_type = DAOS_PROP_CO_CSUM_OFF;
 
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
