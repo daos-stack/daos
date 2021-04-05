@@ -4,14 +4,10 @@ hosts:
     - server-B
 test_clients:
     - client-E
-eextra_servers:
+extra_servers:
   test_servers:
     - server-C
     - server-D
-setup:
-  start_servers_once: False
-  server_manager_class: "Orterun"
-  agent_manager_class:  "Orterun"
 timeout: 1000
 server_config:
   name: daos_server
