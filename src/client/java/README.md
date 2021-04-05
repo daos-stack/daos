@@ -125,7 +125,7 @@ user set Hadoop configuration before initializing Hadoop DAOS FileSystem, the us
 They are Java modules and built by Maven. Java 1.8 and Maven 3 are required to build these modules. After they are
 installed, you can change to this \<DAOS_INSTALL\>/src/client/java folder and build by below command line.
 
-    mvn -DskipITs clean install
+    mvn -DskipITs -Dgpg.skip clean install
 
 The `daos-java-<version>.jar` shades protobuf 3 dependency with its package renamed from "com.google.protobuf" to
 "com.google.protoshadebuf3".
@@ -133,14 +133,14 @@ The `daos-java-<version>.jar` shades protobuf 3 dependency with its package rena
 daos-java module depends on DAOS which is assumed being installed under /usr/local/daos. If you have different
 location, you need to set it with '-Ddaos.install.path=\<your DAOS install dir\>'. For example,
 
-    mvn -DskipITs -Ddaos.install.path=/code/daos/install clean install
+    mvn -DskipITs -Dgpg.skip -Ddaos.install.path=/code/daos/install clean install
 
 daos-java module uses protobuf 3 to serialize/deserialize complex parameters between Java and C. The corresponding Java
 code and C code are generated from src/main/resources/DunsAttribute.proto and put under src/main/java/io/daos/dfs/uns
 and src/main/native respectively. If you change DunsAttribute.proto or want to regenerate these codes, you can build
 with below command.
 
-    mvn -DskipITs -Dcompile.proto=true clean install
+    mvn -DskipITs -Dgpg.skip -Dcompile.proto=true clean install
 
 Before issuing above command, you need [protobuf 3](https://github.com/protocolbuffers/protobuf.git) and its
 [C plugin](https://github.com/protobuf-c/protobuf-c.git) installed.
@@ -148,7 +148,7 @@ Before issuing above command, you need [protobuf 3](https://github.com/protocolb
 If you have DAOS pool and DAOS container with type of posix, you can run integration test when build with below command.
 Before running it, make sure you have DAOS environment properly setup, including server and user environment variables.
 
-    mvn -Dpool_id=<your pool uuid> -Dcont_id=<your container uuid> clean install
+    mvn -Dpool_id=<your pool uuid> -Dcont_id=<your container uuid> -Dgpg.skip clean install
 
 User can go to each submodule and build it separately too.
 

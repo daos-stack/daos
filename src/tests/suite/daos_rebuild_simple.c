@@ -796,6 +796,16 @@ rebuild_sx_object_internal(void **state, uint16_t oclass)
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
+
+	print_message("lookup 100 dkeys\n");
+	for (i = 0; i < 100; i++) {
+		char buffer[32];
+
+		memset(buffer, 0, 32);
+		sprintf(dkey, "dkey_%d\n", i);
+		lookup_single(dkey, akey, 0, buffer, 32, DAOS_TX_NONE, &req);
+		assert_string_equal(buffer, rec);
+	}
 	ioreq_fini(&req);
 }
 
@@ -862,8 +872,14 @@ rebuild_small_pool_n4_setup(void **state)
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			REBUILD_SMALL_POOL_SIZE, 4, NULL);
-	if (rc)
-		return rc;
+	if (rc) {
+		/* Let's skip for this case, since it is possible there
+		 * is not enough ranks here.
+		 */
+		print_message("It can not create the pool with 4 ranks"
+			      " probably due to not enough ranks %d\n", rc);
+		return 0;
+	}
 
 	arg = *state;
 	if (dt_obj_class != DAOS_OC_UNKNOWN)
@@ -883,6 +899,9 @@ rebuild_large_snap(void **state)
 	int		tgt = DEFAULT_FAIL_TGT;
 	daos_epoch_t	snap_epoch[100];
 	int		i;
+
+	if (!test_runable(arg, 4))
+		return;
 
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);

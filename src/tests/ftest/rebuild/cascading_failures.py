@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from rebuild_test_base import RebuildTestBase
-
+from apricot import skipForTicket
 
 class CascadingFailures(RebuildTestBase):
     # pylint: disable=too-many-ancestors
@@ -13,8 +13,6 @@ class CascadingFailures(RebuildTestBase):
 
     :avocado: recursive
     """
-
-    CANCEL_FOR_TICKET = [["DAOS-2799", "targets", 8]]
 
     def __init__(self, *args, **kwargs):
         """Initialize a CascadingFailures object."""
@@ -79,6 +77,7 @@ class CascadingFailures(RebuildTestBase):
         # Populate the container with additional data during rebuild
         self.container.write_objects(obj_class=self.inputs.object_class.value)
 
+    @skipForTicket("DAOS-6728")
     def test_simultaneous_failures(self):
         """Jira ID: DAOS-842.
 
@@ -98,6 +97,7 @@ class CascadingFailures(RebuildTestBase):
         self.mode = "simultaneous"
         self.execute_rebuild_test()
 
+    @skipForTicket("DAOS-6728")
     def test_sequential_failures(self):
         """Jira ID: DAOS-843.
 
@@ -118,6 +118,7 @@ class CascadingFailures(RebuildTestBase):
         self.mode = "sequential"
         self.execute_rebuild_test()
 
+    @skipForTicket("DAOS-6728")
     def test_cascading_failures(self):
         """Jira ID: DAOS-844.
 

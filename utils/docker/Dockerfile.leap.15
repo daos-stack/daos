@@ -78,7 +78,6 @@ RUN zypper --non-interactive update && \
     python3-pyxattr  \
     python3-PyYAML \
     python3-tabulate \
-    readline-devel \
     scons \
     sg3_utils \
     valgrind-devel \
