@@ -1,8 +1,14 @@
-daos (1.1.4-3) unstable; urgency=medium
+daos (1.1.4-4) unstable; urgency=medium
   [ Maureen Jean ]
   * Change pydaos_shim_3 to pydaos_shim
 
- -- Maureen Jean <maureen.jean@intel.com> Thu, 1 Apr 2021 15:02:29 -0400
+ -- Maureen Jean <maureen.jean@intel.com> Tue, 5 Apr 2021 17:00:00 -0400
+
+daos (1.1.4-3) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Update Argobots to 1.1
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 01 Apr 2021 11:20:59 -0400
 
 daos (1.1.4-2) unstable; urgency=medium
   [ Brian J. Murrell ]
