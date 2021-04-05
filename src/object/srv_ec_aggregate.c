@@ -210,7 +210,7 @@ agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 }
 
 /* Clears the extent list of all extents completed for the processed stripe.
- * Extents the carry over to the next stripe have the prior-stripe prefix
+ * Extents that carry over to the next stripe have the prior-stripe prefix
  * trimmed.
  */
 static void
@@ -239,7 +239,6 @@ agg_clear_extents(struct ec_agg_entry *entry)
 
 		/* Check for carry-over extent. */
 		tail = agg_carry_over(entry, extent);
-		/* At most one visible extent should carry over. */
 
 		if (extent->ae_hole && tail)
 			carry_is_hole = true;
@@ -1424,6 +1423,7 @@ agg_process_holes_ult(void *arg)
 	unsigned int		 ext_tot_len = 0;
 	unsigned int		 failed_tgts_cnt = 0;
 	int			 rc = 0;
+	bool			 valid_hole = false;
 
 	/* Process extent list to find what to re-replicate -- build recx array
 	 */
@@ -1431,6 +1431,8 @@ agg_process_holes_ult(void *arg)
 				   &entry->ae_cur_stripe.as_dextents, ae_link) {
 		if (agg_extent->ae_epoch < entry->ae_par_extent.ape_epoch)
 			continue;
+		if(agg_extent->ae_hole)
+			valid_hole = true;
 		if (agg_extent->ae_recx.rx_idx - ss > last_ext_end) {
 			stripe_ud->asu_recxs[ext_cnt].rx_idx =
 				ss + last_ext_end;
@@ -1442,9 +1444,12 @@ agg_process_holes_ult(void *arg)
 		}
 		last_ext_end = agg_extent->ae_recx.rx_idx +
 			agg_extent->ae_recx.rx_nr - ss;
-		if (last_ext_end >= ss + k * len)
+		if (last_ext_end >= k * len)
 			break;
 	}
+
+	if (!valid_hole)
+		goto out;
 
 	if (last_ext_end < k * len) {
 		stripe_ud->asu_recxs[ext_cnt].rx_idx =
@@ -1461,8 +1466,7 @@ agg_process_holes_ult(void *arg)
 	iod.iod_nr = ext_cnt;
 	iod.iod_recxs = stripe_ud->asu_recxs;
 	entry->ae_sgl.sg_nr = 1;
-	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len = ext_cnt * ext_tot_len *
-								entry->ae_rsize;
+	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len =  ext_tot_len * entry->ae_rsize;
 	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len <= k * len);
 	/* Pull data via dsc_obj_fetch */
 	if (ext_cnt) {
