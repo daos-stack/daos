@@ -1624,16 +1624,16 @@ agg_process_holes(struct ec_agg_entry *entry)
 				DP_RC(rc));
 			goto ev_out;
 		}
+		/* Delete parity */
+		epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
+		epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
+		recx.rx_nr = ec_age2cs(entry);
+		recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * recx.rx_nr) |
+			      PARITY_INDICATOR;
+		rc = vos_obj_array_remove(agg_param->ap_cont_handle, entry->ae_oid,
+					  &epoch_range, &entry->ae_dkey,
+					  &entry->ae_akey, &recx);
 	}
-	/* Delete parity */
-	epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
-	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
-	recx.rx_nr = ec_age2cs(entry);
-	recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * recx.rx_nr) |
-		      PARITY_INDICATOR;
-	rc = vos_obj_array_remove(agg_param->ap_cont_handle, entry->ae_oid,
-				  &epoch_range, &entry->ae_dkey,
-				  &entry->ae_akey, &recx);
 ev_out:
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 	ABT_eventual_free(&stripe_ud.asu_eventual);
