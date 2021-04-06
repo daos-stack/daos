@@ -102,6 +102,7 @@ struct rw_cb_args {
 	daos_handle_t		coh;
 	unsigned int		*map_ver;
 	daos_iom_t		*maps;
+	crt_endpoint_t		tgt_ep;
 	struct shard_rw_args	*shard_args;
 };
 
@@ -348,7 +349,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 static int
 iom_recx_merge(daos_iom_t *dst, daos_recx_t *recx, bool iom_realloc)
 {
-	daos_recx_t	*tmpr;
+	daos_recx_t	*tmpr = NULL;
 	uint32_t	 iom_nr, i;
 
 	for (i = 0; i < dst->iom_nr_out; i++) {
@@ -595,7 +596,7 @@ csum_report_cb(const struct crt_cb_info *cb_info)
 
 /* send CSUM_REPORT to original target */
 static int
-dc_shard_csum_report(tse_task_t *task, crt_rpc_t *rpc)
+dc_shard_csum_report(tse_task_t *task, crt_endpoint_t *tgt_ep, crt_rpc_t *rpc)
 {
 	crt_rpc_t		*csum_rpc;
 	struct obj_rw_in	*orw, *csum_orw;
@@ -604,7 +605,7 @@ dc_shard_csum_report(tse_task_t *task, crt_rpc_t *rpc)
 
 	opc = opc_get(rpc->cr_opc);
 	D_ASSERT(opc == DAOS_OBJ_RPC_FETCH);
-	rc = obj_req_create(daos_task2ctx(task), &rpc->cr_ep, opc, &csum_rpc);
+	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &csum_rpc);
 	if (rc) {
 		D_ERROR("Failed to create csum report request, task %p.\n",
 			task);
@@ -780,38 +781,6 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		     reasb_req->orr_epoch.oe_value < orwo->orw_epoch))
 			reasb_req->orr_epoch.oe_value = orwo->orw_epoch;
 
-		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
-			daos_iom_t			*reply_maps;
-			struct daos_recx_ep_list	*recov_list;
-
-			/** Should have 1 map per iod */
-			D_ASSERT(orwo->orw_maps.ca_count == orw->orw_nr);
-			for (i = 0; i < orw->orw_nr; i++) {
-				reply_maps = &orwo->orw_maps.ca_arrays[i];
-				recov_list = orwo->orw_rels.ca_arrays;
-				if (recov_list != NULL) {
-					recov_list += i;
-					if (recov_list->re_nr == 0)
-						recov_list = NULL;
-				}
-				if (is_ec_obj &&
-				    reply_maps->iom_type == DAOS_IOD_ARRAY) {
-					rc = obj_ec_iom_merge(reasb_req,
-						orw->orw_oid.id_shard,
-						orw->orw_tgt_idx, reply_maps,
-						&rw_args->maps[i],
-						recov_list);
-				} else {
-					rc = daos_iom_copy(reply_maps,
-						&rw_args->maps[i]);
-				}
-				if (rc)
-					break;
-			}
-		}
-		if (rc)
-			goto out;
-
 		iods = orw->orw_iod_array.oia_iods;
 		sizes = orwo->orw_iod_sizes.ca_arrays;
 
@@ -937,11 +906,41 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		if (rc != 0)
 			goto out;
 
+		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
+			daos_iom_t			*reply_maps;
+			struct daos_recx_ep_list	*recov_list;
+
+			/** Should have 1 map per iod */
+			D_ASSERT(orwo->orw_maps.ca_count == orw->orw_nr);
+			for (i = 0; i < orw->orw_nr; i++) {
+				reply_maps = &orwo->orw_maps.ca_arrays[i];
+				recov_list = orwo->orw_rels.ca_arrays;
+				if (recov_list != NULL) {
+					recov_list += i;
+					if (recov_list->re_nr == 0)
+						recov_list = NULL;
+				}
+				if (is_ec_obj &&
+				    reply_maps->iom_type == DAOS_IOD_ARRAY) {
+					rc = obj_ec_iom_merge(reasb_req,
+							orw->orw_oid.id_shard,
+							orw->orw_tgt_idx,
+							reply_maps,
+							&rw_args->maps[i],
+							recov_list);
+				} else {
+					rc = daos_iom_copy(reply_maps,
+							   &rw_args->maps[i]);
+				}
+				if (rc)
+					goto out;
+			}
+		}
 	}
 
 out:
 	if (rc == -DER_CSUM && opc == DAOS_OBJ_RPC_FETCH)
-		dc_shard_csum_report(task, rw_args->rpc);
+		dc_shard_csum_report(task, &rw_args->tgt_ep, rw_args->rpc);
 	crt_req_decref(rw_args->rpc);
 	dc_pool_put((struct dc_pool *)rw_args->hdlp);
 
@@ -1018,6 +1017,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	tgt_ep.ep_grp = pool->dp_sys->sy_group;
 	tgt_ep.ep_tag = shard->do_target_idx;
 	tgt_ep.ep_rank = shard->do_target_rank;
+	rw_args.tgt_ep = tgt_ep;
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out_pool, rc = (int)tgt_ep.ep_rank);
 

@@ -965,6 +965,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	struct daos_oclass_attr	*oca;
 	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	d_iov_t			 iov[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
+	struct dcs_layout	 los[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
 	char			*data;
 	daos_size_t		 size;
 	int			 i;
@@ -1043,6 +1044,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		if (obj_ec_singv_one_tgt(iod->iod_size, &sgls[i], oca)) {
 			D_DEBUG(DB_REBUILD, DF_UOID" one tgt.\n",
 				DP_UOID(mrone->mo_oid));
+			los[i].cs_even_dist = 0;
 			continue;
 		}
 
@@ -1065,18 +1067,31 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 				       mrone->mo_epoch, ORF_EC,
 				       start_shard, 1,
 				       true, false, NULL);
+		los[i].cs_even_dist = 1;
+		los[i].cs_bytes = obj_ec_singv_cell_bytes(
+					mrone->mo_iods[i].iod_size, oca);
+		los[i].cs_nr = obj_ec_tgt_nr(oca);
 	}
 
 	rc = daos_csummer_csum_init_with_packed(&csummer, &csum_iov_fetch);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	tmp_csum_iov = csum_iov_fetch;
-	rc = daos_csummer_alloc_iods_csums_with_packed(
-		csummer,
-		&mrone->mo_iods[0],
-		mrone->mo_iod_num,
-		&tmp_csum_iov, &iod_csums);
+	if (DAOS_OC_IS_EC(oca)) {
+		/** Calc checksum for EC single value, since it may be striped,
+		 * and we need re-calculate the single stripe checksum.
+		 */
+		rc = daos_csummer_calc_iods(csummer, sgls, mrone->mo_iods, NULL,
+					    mrone->mo_iod_num, false, los,
+					    -1, &iod_csums);
+	} else {
+		tmp_csum_iov = csum_iov_fetch;
+		rc = daos_csummer_alloc_iods_csums_with_packed(csummer,
+							       mrone->mo_iods,
+							      mrone->mo_iod_num,
+							       &tmp_csum_iov,
+							       &iod_csums);
+	}
 	if (rc != 0) {
 		D_ERROR("unable to allocate iod csums: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1097,6 +1112,7 @@ out:
 			mrone->mo_iods[i].iod_recxs = NULL;
 	}
 
+	daos_csummer_free_ic(csummer, &iod_csums);
 	daos_iov_free(&csum_iov_fetch);
 	daos_csummer_destroy(&csummer);
 
@@ -1166,9 +1182,11 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		D_GOTO(post, rc);
 
 	rc = mrone_obj_fetch(mrone, oh, sgls, &csum_iov_fetch);
-	if (rc)
+	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed: "DF_RC"\n",
 			DP_KEY(&mrone->mo_dkey), DP_RC(rc));
+		D_GOTO(post, rc);
+	}
 
 	rc = daos_csummer_csum_init_with_packed(&csummer, &csum_iov_fetch);
 	if (rc != 0)
