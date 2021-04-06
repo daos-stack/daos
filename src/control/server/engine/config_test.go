@@ -121,7 +121,6 @@ func TestConfigHasEnvVar(t *testing.T) {
 
 func TestConstructedConfig(t *testing.T) {
 	var numaNode uint = 8
-	var bypass bool = true
 
 	goldenPath := "testdata/full.golden"
 
@@ -148,8 +147,7 @@ func TestConstructedConfig(t *testing.T) {
 		WithServiceThreadCore(8).
 		WithTargetCount(12).
 		WithHelperStreamCount(1).
-		WithPinnedNumaNode(&numaNode).
-		WithBypassHealthChk(&bypass)
+		WithPinnedNumaNode(&numaNode)
 
 	if *update {
 		outFile, err := os.Create(goldenPath)
