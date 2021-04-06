@@ -58,9 +58,8 @@ duration(void)
 }
 
 static inline void
-step_print(const char *status, const char *comment, ...)
+step_print(const char *status, const char *comment, va_list ap)
 {
-	va_list	ap;
 	char	timing[8];
 	int	i;
 
@@ -70,9 +69,7 @@ step_print(const char *status, const char *comment, ...)
 	for (i = strlen(timing); i < 7; i++)
 		printf(" ");
 	printf("%s  ", timing);
-	va_start(ap, comment);
 	vprintf(comment, ap);
-	va_end(ap);
 	printf("\n");
 }
 
