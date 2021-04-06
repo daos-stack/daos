@@ -92,9 +92,12 @@ func (ei *EngineInstance) NeedsScmFormat() (bool, error) {
 }
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
-func (ei *EngineInstance) NotifyStorageReady() {
+func (ei *EngineInstance) NotifyStorageReady(ctx context.Context) {
 	go func() {
-		ei.storageReady <- true
+		select {
+		case <-ctx.Done():
+		case ei.storageReady <- true:
+		}
 	}()
 }
 
