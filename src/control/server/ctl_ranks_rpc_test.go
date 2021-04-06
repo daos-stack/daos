@@ -738,7 +738,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 
 				// mimic srv.run, set "ready" on startLoop rx
 				go func(s *EngineInstance, startFails bool) {
-					<-s.startLoop
+					<-s.startRequested
 					if startFails {
 						return
 					}
@@ -861,7 +861,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 
 				// mimic srv.run, set "ready" on startLoop rx
 				go func(s *EngineInstance, startFails bool) {
-					<-s.startLoop
+					<-s.startRequested
 					t.Logf("instance %d: start signal received", s.Index())
 					if startFails {
 						return
