@@ -8,26 +8,11 @@
  */
 #include <semaphore.h>
 #include <cart/api.h>
+#include <unistd.h>
 
 #include "crt_internal.h"
-#include "tests_common.h "
+#include "tests_common.h"
 
-#error hhhethere
-
-/* Global Macro definitions */
-#define DBG_PRINT(x...)							\
-	do {								\
-	
-		if (opts.is_server)					\
-			fprintf(stderr, "SRV [rank=%d pid=%d]\t",       \
-			opts.self_rank,					\
-			opts.mypid);					\
-		else							\
-			fprintf(stderr, "CLI [rank=%d pid=%d]\t",       \
-			opts.self_rank,					\
-			opts.mypid);					\
-		fprintf(stderr, x);					\
-	} while (0)
 
 /* Global structures */
 struct test_options opts = { .is_initialized = false };
@@ -38,7 +23,6 @@ struct wfr_status {
 	int	rc;
 	int	num_ctx;
 };
-
 
 /* Functions */
 void
@@ -179,9 +163,9 @@ tc_sync_timedwait(struct wfr_status *wfrs, int sec, int line_number)
 }
 
 int
-tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
-		  int tag, int total_ctx, double ping_timeout,
-		  double total_timeout)
+tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp,
+		  d_rank_list_t *rank_list, int tag, int total_ctx,
+		  double ping_timeout, double total_timeout)
 {
 	struct wfr_status		ws;
 	struct timespec			t1, t2;
@@ -556,5 +540,6 @@ tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg)
 cleanup:
 	crt_req_decref(rpc_req);
 exit:
+	D_INFO("Return code %d\n", rc);
 	return rc;
-	D_INFO(x);						INT
+}

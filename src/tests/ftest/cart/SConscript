@@ -61,24 +61,21 @@ TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
                        'no_pmix_group_version.c']
 FAULT_STATUS_TEST = 'fault_status.c'
 
+##############################
+# Create cart test library
+##############################
 def build_internal_library():
     """Build test internal lirary"""
-    Import('env', 'prereqs', 'cart_lib', 'gurt_lib',  'CART_VERSION')
 
-    ##############################
-    # Create cart test library
-    ##############################
+    Import('env', 'prereqs', 'cart_lib', 'gurt_lib',  'CART_VERSION')
     denv = env.Clone()
-    denv.Append(CPPDEFINES=['-foobar'])
-    prereqs.require(denv, 'hwloc')
+    prereqs.require(denv, 'mercury', headers_only=True)
+    #denv.AppendUnique(CPPPATH=['#/src/cart'])
+    #denv.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('.').path])
 
     cart_test_lib  = daos_build.library(denv, 'cart_test', TEST_LIB_SRC,
                                          SHLIBVERSION=CART_VERSION)
-    denv.Append(CPPDEFINES=['-foobar2'])
-
-    denv.Requires(cart_test_lib, [gurt_lib])
-    denv.InstallVersionedLib('$PREFIX/lib64/', cart_test_lib,
-                             SHLIBVERSION=CART_VERSION)
+    denv.Install('$PREFIX/lib64/', cart_test_lib)
     Default(cart_test_lib)
     Export('cart_test_lib')
 
@@ -86,12 +83,11 @@ def scons():
     """scons function"""
 
     Import('env', 'prereqs', 'cart_lib', 'gurt_lib', 'CART_VERSION')
-    Import('tbuild')
 
-    # build library for linkage
-    if tbuild.match('lib')
-        build_internal_library()
-        return
+    ##############################
+    # Build library for linkage
+    ##############################
+    build_internal_library()
 
     ##############################
     # Create test programs
@@ -100,8 +96,9 @@ def scons():
     tenv = env.Clone()
 
     tenv.AppendUnique(CPPPATH=['#/src/cart/src/cart'])
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'cart_test'])
     prereqs.require(tenv, 'crypto', 'mercury')
+    tenv.AppendUnique(LIBPATH=[Dir('.')])
 
     tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
     # Compile all of the tests

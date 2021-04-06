@@ -90,14 +90,15 @@ def scons():
     # Then the DAOS I/O Engine executable
     SConscript('engine/SConscript')
 
-    # Build utilities
-    SConscript('utils/SConscript')
-
     # Build the control plane components
     SConscript('control/SConscript')
 
     # Build test
     SConscript('tests/SConscript')
+
+    # Build utilities
+    SConscript('utils/SConscript')
+
 
     if not env.GetOption('clean') and not env.GetOption('help'):
 
