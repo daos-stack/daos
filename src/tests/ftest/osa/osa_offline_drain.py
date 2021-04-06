@@ -73,11 +73,6 @@ class OSAOfflineDrain(OSAUtils):
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
             pool[val].get_params(self)
-            # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].scm_size.value /
-                                           num_pool)
-            pool[val].nvme_size.value = int(pool[val].nvme_size.value /
-                                            num_pool)
             pool[val].create()
             self.pool = pool[val]
             self.pool.set_property("reclaim", "disabled")
@@ -96,10 +91,6 @@ class OSAOfflineDrain(OSAUtils):
                 self.pool = pool[val]
                 # If we are testing using multiple pools, reintegrate
                 # the rank back and then drain.
-                if val > 0:
-                    output = self.dmg_command.pool_drain(self.pool.uuid,
-                                                         rank, t_string)
-                    self.print_and_assert_on_rebuild_failure(output)
                 self.pool.display_pool_daos_space("Pool space: Beginning")
                 pver_begin = self.get_pool_version()
                 self.log.info("Pool Version at the beginning %s", pver_begin)
@@ -107,8 +98,14 @@ class OSAOfflineDrain(OSAUtils):
                     self.pool.set_property("reclaim", "time")
                     self.delete_extra_container(self.pool)
                     self.simple_drain_reintegrate_loop(rank)
+                if (self.test_during_rebuild is True and val == 0):
+                    # Exclude rank 3
+                    output = self.dmg_command.pool_exclude(self.pool.uuid, "3")
+                    self.is_rebuild_done(time_interval=3,
+                                         wait_for_rebuild_to_complete=False)
                 output = self.dmg_command.pool_drain(self.pool.uuid,
                                                      rank, t_string)
+                time.sleep(5)
                 self.print_and_assert_on_rebuild_failure(output)
 
                 pver_drain = self.get_pool_version()
@@ -116,6 +113,14 @@ class OSAOfflineDrain(OSAUtils):
                 # Check pool version incremented after pool drain
                 self.assertTrue(pver_drain > (pver_begin + 1),
                                 "Pool Version Error:  After drain")
+                if num_pool > 1:
+                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
+                                                               rank, t_string)
+                    self.print_and_assert_on_rebuild_failure(output)
+                if (self.test_during_rebuild is True and val == 0):
+                    # Reintegrate rank 3
+                    output = self.dmg_command.pool_reintegrate(self.pool.uuid, "3")
+                    self.print_and_assert_on_rebuild_failure(output)
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
@@ -147,7 +152,7 @@ class OSAOfflineDrain(OSAUtils):
         without enabling checksum in container properties.
 
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_drain_daily
+        :avocado: tags=osa,osa_drain,offline_drain_daily
         :avocado: tags=offline_drain_without_csum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -155,25 +160,13 @@ class OSAOfflineDrain(OSAUtils):
         self.log.info("Offline Drain : Without Checksum")
         self.run_offline_drain_test(1, data=True)
 
-    def test_osa_offline_drain_multiple_pools(self):
-        """Test ID: DAOS-7159
-        Test Description: Validate Offline Drain
-        with multiple pools
-
-        :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_drain_daily
-        :avocado: tags=offline_drain_multiple_pools
-        """
-        self.log.info("Offline Drain : Multiple Pools")
-        self.run_offline_drain_test(5, data=True)
-
     def test_osa_offline_drain_during_aggregation(self):
         """Test ID: DAOS-7159
         Test Description: Validate Offline Drain
         during aggregation
 
         :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_drain_daily
+        :avocado: tags=osa,osa_drain,offline_drain_daily
         :avocado: tags=offline_drain_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
@@ -187,7 +180,7 @@ class OSAOfflineDrain(OSAUtils):
         with different object class
 
         :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_drain_daily
+        :avocado: tags=osa,osa_drain,offline_drain_daily
         :avocado: tags=offline_drain_oclass
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -195,3 +188,29 @@ class OSAOfflineDrain(OSAUtils):
         self.log.info("Offline Drain : Oclass")
         for oclass in self.test_oclass:
             self.run_offline_drain_test(1, data=True, oclass=oclass)
+
+    def test_osa_offline_drain_multiple_pools(self):
+        """Test ID: DAOS-7159
+        Test Description: Validate Offline Drain
+        with multiple pools
+
+        :avocado: tags=all,full_regression,hw,medium,ib2
+        :avocado: tags=osa,osa_drain,offline_drain_full
+        :avocado: tags=offline_drain_multiple_pools
+        """
+        self.log.info("Offline Drain : Multiple Pools")
+        self.run_offline_drain_test(2, data=True)
+
+    def test_osa_offline_drain_during_rebuild(self):
+        """Test ID: DAOS-7159
+        Test Description: Validate Offline Drain
+        during rebuild
+
+        :avocado: tags=all,full_regression,hw,medium,ib2
+        :avocado: tags=osa,osa_drain,offline_drain_full
+        :avocado: tags=offline_drain_during_rebuild
+        """
+        self.test_during_rebuild = self.params.get("test_with_rebuild",
+                                                   '/run/rebuild/*')
+        self.log.info("Offline Drain : During Rebuild")
+        self.run_offline_drain_test(1, data=True)
