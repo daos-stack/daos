@@ -415,10 +415,10 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 			return err;
 		}
 		errno = 0;
-		fd = open(fname, O_RDONLY);
+		fd = __real_open(fname, O_RDONLY);
 		if (fd == -1)
 			D_GOTO(out, rc = errno);
-		rsize = read(fd, iov.iov_buf, hs_reply->fsr_pool_size);
+		rsize = __real_read(fd, iov.iov_buf, hs_reply->fsr_pool_size);
 		if (rsize != hs_reply->fsr_pool_size)
 			D_GOTO(out, rc = EAGAIN);
 		unlink(fname);
