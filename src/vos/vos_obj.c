@@ -635,6 +635,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	struct vos_krec_df	*krec;
 	struct vos_rec_bundle	 rbund;
 	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
+	uint32_t		 ts_type;
 	int			 rc;
 
 	rc = key_iter_fetch_helper(oiter, &rbund, &ent->ie_key, anchor);
@@ -652,8 +653,10 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		} else {
 			ent->ie_child_type = VOS_ITER_NONE;
 		}
+		ts_type = VOS_TS_TYPE_AKEY;
 	} else {
 		ent->ie_child_type = VOS_ITER_AKEY;
+		ts_type = VOS_TS_TYPE_DKEY;
 	}
 
 	krec = rbund.rb_krec;
@@ -673,6 +676,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		/* The key has no visible subtrees so mark it covered */
 		ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
 	}
+	vos_ilog_last_update(&krec->kr_ilog, ts_type, &ent->ie_last_update);
 
 	return 0;
 }
