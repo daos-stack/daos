@@ -79,10 +79,10 @@ nvme_fault_reaction(void **state, int mode)
 	 * create the another pool which will be offline by default.
 	 */
 	if (mode == 2) {
-		char		*env;
-		int		size_gb;
-		daos_size_t		scm_size = (daos_size_t)4 << 30/*Default 4G*/;
-		daos_size_t		nvme_size;
+		char	*env;
+		int	size_gb;
+		daos_size_t	scm_size = (daos_size_t)4 << 30/*Default 4G*/;
+		daos_size_t	nvme_size;
 
 		/*Use the SCM size if set with environment */
 		env = getenv("POOL_SCM_SIZE");
@@ -95,17 +95,18 @@ nvme_fault_reaction(void **state, int mode)
 		/*NVMe size is 4x of SCM size */
 		nvme_size = scm_size * 4;
 		print_message("Creating another offline pool mode, ");
-		print_message("With size, SCM = %" PRId64 " NVMe =%" PRId64 "\n",
-			scm_size, nvme_size);
+		print_message("Size: SCM = %" PRId64 " NVMe =%" PRId64 "\n",
+			      scm_size, nvme_size);
 
 		/** create another offline pool*/
 		print_message("create another offline pool");
 		rc = dmg_pool_create(dmg_config_file,
-			geteuid(), getegid(),
-			arg->group, NULL /* tgts */,
-			scm_size, nvme_size,
-			NULL /* prop */,
-			arg->pool.svc /* svc */, offline_pool_uuid);
+				     geteuid(), getegid(),
+				     arg->group, NULL /* tgts */,
+				     scm_size, nvme_size,
+				     NULL /* prop */,
+				     arg->pool.svc /* svc */,
+				     offline_pool_uuid);
 		assert_rc_equal(rc, 0);
 	}
 
