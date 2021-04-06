@@ -1555,32 +1555,8 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	}
 }
 
-/*
- * FIXME: Replace following hack with Argobots APIs (if proper APIs are
- * exported in later Argobots version, like an API of getting function
- * address from ABT_unit.)
- */
-
-/* Update the hack code once Argobots upgraded */
-D_CASSERT(ABT_NUMVERSION == 10100201 /* 1.1rc1 */);
-
-/* Hack start */
-struct ABTI_thread_dup;
-
-struct ABTI_thread_dup {
-	struct ABTI_thread_dup *p_prev;
-	struct ABTI_thread_dup *p_next;
-	int is_in_pool;
-	uint32_t type;
-	ABT_unit unit;
-	void *p_last_xstream;
-	void *p_parent;
-	void (*f_thread)(void *);
-	void *p_arg;
-};
-
 struct sched_unit {
-	uint64_t	su_start;
+	uint64_t	 su_start;
 	void		*su_func_addr;
 };
 
@@ -1595,13 +1571,19 @@ static void
 sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit,
 		    struct sched_unit *su)
 {
-	struct ABTI_thread_dup	*td = (struct ABTI_thread_dup *)unit;
+	ABT_thread	thread;
+	void		(*thread_func)(void *);
+	int		rc;
 
 	if (!watchdog_enabled(dx))
 		return;
 
 	su->su_start = daos_getmtime_coarse();
-	su->su_func_addr = td->f_thread;
+	rc = ABT_unit_get_thread(unit, &thread);
+	D_ASSERT(rc == ABT_SUCCESS);
+	rc = ABT_thread_get_thread_func(thread, &thread_func);
+	D_ASSERT(rc == ABT_SUCCESS);
+	su->su_func_addr = thread_func;
 }
 
 static void
@@ -1625,7 +1607,7 @@ sched_watchdog_post(struct dss_xstream *dx, struct sched_unit *su)
 	/* Throttle printing a bit */
 	D_ASSERT(cur >= info->si_stats.ss_watchdog_ts);
 	if (info->si_stats.ss_last_unit == su->su_func_addr &&
-	    cur - info->si_stats.ss_watchdog_ts <= 2000)
+	    (cur - info->si_stats.ss_watchdog_ts) <= 2000)
 		return;
 
 	info->si_stats.ss_last_unit = su->su_func_addr;
@@ -1638,8 +1620,6 @@ sched_watchdog_post(struct dss_xstream *dx, struct sched_unit *su)
 
 	free(strings);
 }
-
-/* Hack end */
 
 static void
 sched_run(ABT_sched sched)
