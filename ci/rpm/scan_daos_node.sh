@@ -13,7 +13,7 @@ tar -C "/var/tmp/${lmd_src}" --strip-components=1 -xf "/var/tmp/${lmd_tarball}"
 pushd "/var/tmp/${lmd_src}"
   sudo ./install.sh
 popd
-sudo maldet --update-sigs
+sudo /usr/local/sbin/maldet --update-sigs
 
 fc_conf="/etc/freshclam.conf"
 if ! sudo grep -q 'ScriptedUpdates no' "$fc_conf"; then
