@@ -675,7 +675,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
         log.info("Killing any processes on %s that match: %s", hosts, pattern)
 
     if added_filter:
-        ps_cmd = "/usr/bin/ps x | grep -E {} | grep -vE {}".format(
+        ps_cmd = "/usr/bin/ps xa | grep -E {} | grep -vE {}".format(
             pattern, added_filter)
     else:
         ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
