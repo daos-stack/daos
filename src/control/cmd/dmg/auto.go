@@ -69,19 +69,18 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 	}
 
 	resp, err := control.ConfigGenerate(ctx, req)
+	if err != nil {
+		// includes hardware validation errors e.g. hardware across hostset differs
+		return err
+	}
 
-	if resp != nil && resp.Errors() != nil {
+	if resp.Errors() != nil {
 		// host level errors e.g. unresponsive daos_server process
 		var bld strings.Builder
 		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 			return err
 		}
 		cmd.log.Error(bld.String()) // no-op if no host level errors
-	}
-
-	// includes hardware validation errors e.g. hardware across hostset differs
-	if err != nil {
-		return err
 	}
 
 	bytes, err := yaml.Marshal(resp.ConfigOut)
