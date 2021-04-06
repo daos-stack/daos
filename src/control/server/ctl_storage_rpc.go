@@ -67,7 +67,7 @@ func updateNvmePrepareReq(req *bdev.PrepareRequest, cfg *config.Server) {
 }
 
 // doNvmePrepare issues prepare request and returns response.
-func (c *ControlService) doNvmePrepare(pbReq *ctlpb.PrepareNvmeReq) *ctlpb.PrepareNvmeResp {
+func (c *ControlService) doNvmePrepare(pbReq *ctlpb.PrepareNvmeReq) (*ctlpb.PrepareNvmeResp, error) {
 	c.log.Debugf("performing nvme prep %v", pbReq)
 	pnr := new(ctlpb.PrepareNvmeResp)
 
@@ -86,7 +86,7 @@ func (c *ControlService) doNvmePrepare(pbReq *ctlpb.PrepareNvmeReq) *ctlpb.Prepa
 	_, err := c.NvmePrepare(req)
 	pnr.State = newResponseState(err, ctlpb.ResponseStatus_CTL_ERR_NVME, "")
 
-	return pnr
+	return pnr, nil
 }
 
 // newPrepareScmResp sets protobuf SCM prepare response with results.
@@ -141,11 +141,18 @@ func (c *ControlService) StoragePrepare(ctx context.Context, req *ctlpb.StorageP
 	}
 
 	if req.Nvme != nil {
-		resp.Nvme = c.doNvmePrepare(req.Nvme)
+		respNvme, err := c.doNvmePrepare(req.Nvme)
+		if err != nil {
+			// fatal error preventing response being populated
+			return nil, err
+		}
+		resp.Nvme = respNvme
 	}
+
 	if req.Scm != nil {
 		respScm, err := c.doScmPrepare(req.Scm)
 		if err != nil {
+			// fatal error preventing response being populated
 			return nil, err
 		}
 		resp.Scm = respScm

@@ -34,19 +34,19 @@ var storageHashOpts = hashstructure.HashOptions{
 type HostStorage struct {
 	// NvmeDevices contains the set of NVMe controllers (SSDs)
 	// in this configuration.
-	NvmeDevices storage.NvmeControllers `json:"nvme_devices"`
+	NvmeDevices *storage.NvmeControllers `json:"nvme_devices"`
 
 	// ScmModules contains the set of SCM modules (persistent
 	// memory DIMMs) in this configuration.
-	ScmModules storage.ScmModules `json:"scm_modules"`
+	ScmModules *storage.ScmModules `json:"scm_modules"`
 
 	// ScmNamespaces contains the set of prepared SCM namespaces
 	// (block devices) in this configuration.
-	ScmNamespaces storage.ScmNamespaces `json:"scm_namespaces"`
+	ScmNamespaces *storage.ScmNamespaces `json:"scm_namespaces"`
 
 	// ScmMountPoints contains the set of SCM mountpoints in
 	// this configuration.
-	ScmMountPoints storage.ScmMountPoints `json:"scm_mount_points"`
+	ScmMountPoints *storage.ScmMountPoints `json:"scm_mount_points"`
 
 	// SmdInfo contains information obtained by querying the
 	// host's metadata table, if available.
@@ -190,6 +190,16 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 		}
 	}
 
+	if hs.NvmeDevices == nil {
+		hs.NvmeDevices = &storage.NvmeControllers{}
+	}
+	if hs.ScmModules == nil {
+		hs.ScmModules = &storage.ScmModules{}
+	}
+	if hs.ScmNamespaces == nil {
+		hs.ScmNamespaces = &storage.ScmNamespaces{}
+	}
+
 	if ssp.HostStorage == nil {
 		ssp.HostStorage = make(HostStorageMap)
 	}
@@ -283,25 +293,47 @@ func (spr *StoragePrepareResp) addHostResponse(hr *HostResponse) (err error) {
 	}
 
 	hs := new(HostStorage)
-	if pbResp.GetNvme().GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
-		pbErr := pbResp.GetNvme().GetState().GetError()
-		if err := spr.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
+
+	nr := pbResp.GetNvme()
+	switch {
+	case nr == nil:
+	case nr.GetState() == nil:
+		return errors.New("nvme prepare response missing state")
+	case nr.GetState().GetStatus() == ctlpb.ResponseStatus_CTL_SUCCESS:
+		// non-nil device list indicates action was performed
+		hs.NvmeDevices = &storage.NvmeControllers{}
+	default:
+		err := spr.addHostError(hr.Addr, errors.New("nvme: "+nr.GetState().GetError()))
+		if err != nil {
 			return err
 		}
 	}
 
-	if pbResp.GetScm().GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
-		pbErr := pbResp.GetScm().GetState().GetError()
-		if err := spr.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
-			return err
-		}
-	} else {
+	ns := pbResp.GetScm()
+	switch {
+	case ns == nil:
+	case ns.GetState() == nil:
+		return errors.New("scm prepare response missing state")
+	case ns.GetState().GetStatus() == ctlpb.ResponseStatus_CTL_SUCCESS:
 		err := convert.Types(pbResp.GetScm().GetNamespaces(), &hs.ScmNamespaces)
 		if err != nil {
 			return spr.addHostError(hr.Addr, err)
 		}
+		if hs.ScmNamespaces == nil {
+			hs.ScmNamespaces = &storage.ScmNamespaces{}
+		}
 		hs.RebootRequired = pbResp.GetScm().GetRebootrequired()
+	default:
+		err := spr.addHostError(hr.Addr, errors.New("scm: "+ns.GetState().GetError()))
+		if err != nil {
+			return err
+		}
 	}
+
+	// do not set defaults for HostStorage reference Fields as we do for
+	// StorageScan and StorageFormat as we want to differentiate between nil
+	// (operation not attempted) and empty slice (operation completed but no
+	// device details)
 
 	if spr.HostStorage == nil {
 		spr.HostStorage = make(HostStorageMap)
@@ -367,10 +399,18 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
 	}
 
-	hs := new(HostStorage)
+	hs := &HostStorage{
+		NvmeDevices:    &storage.NvmeControllers{},
+		ScmMountPoints: &storage.ScmMountPoints{},
+	}
+
 	for _, nr := range pbResp.GetCrets() {
-		switch nr.GetState().GetStatus() {
-		case ctlpb.ResponseStatus_CTL_SUCCESS:
+		switch {
+		case nr == nil:
+			return errors.New("nil nvme format result")
+		case nr.GetState() == nil:
+			return errors.New("nvme format result missing state")
+		case nr.GetState().GetStatus() == ctlpb.ResponseStatus_CTL_SUCCESS:
 			// If we didn't receive a PCI Address in the response,
 			// then the device wasn't formatted.
 			if nr.GetPciAddr() == "" {
@@ -381,7 +421,7 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 			if info == "" {
 				info = ctlpb.ResponseStatus_CTL_SUCCESS.String()
 			}
-			hs.NvmeDevices = append(hs.NvmeDevices, &storage.NvmeController{
+			*hs.NvmeDevices = append(*hs.NvmeDevices, &storage.NvmeController{
 				Info:    info,
 				PciAddr: nr.GetPciAddr(),
 			})
@@ -395,13 +435,17 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 	}
 
 	for _, sr := range pbResp.GetMrets() {
-		switch sr.GetState().GetStatus() {
-		case ctlpb.ResponseStatus_CTL_SUCCESS:
+		switch {
+		case sr == nil:
+			return errors.New("nil scm format result")
+		case sr.GetState() == nil:
+			return errors.New("scm format result missing state")
+		case sr.GetState().GetStatus() == ctlpb.ResponseStatus_CTL_SUCCESS:
 			info := sr.GetState().GetInfo()
 			if info == "" {
 				info = ctlpb.ResponseStatus_CTL_SUCCESS.String()
 			}
-			hs.ScmMountPoints = append(hs.ScmMountPoints, &storage.ScmMountPoint{
+			*hs.ScmMountPoints = append(*hs.ScmMountPoints, &storage.ScmMountPoint{
 				Info: info,
 				Path: sr.GetMntpoint(),
 			})

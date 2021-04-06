@@ -12,31 +12,58 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+// parseScanHostStorage retrieves device details from scan response. Modules,
+// namespaces and ctrlrs are expected to be non-nil in each HostStorage value
+func parseScanHostStorage(hs *control.HostStorage) (storage.NvmeControllers, storage.ScmModules, storage.ScmNamespaces, error) {
+	var msgErr string
+	switch {
+	case hs == nil:
+		msgErr = "is nil"
+	case hs.NvmeDevices == nil:
+		msgErr = "has nil nvme devices"
+	case hs.ScmModules == nil:
+		msgErr = "has nil scm modules"
+	case hs.ScmNamespaces == nil:
+		msgErr = "has nil scm namespaces"
+	}
+	if msgErr != "" {
+		return nil, nil, nil, errors.New("host storage " + msgErr)
+	}
+
+	return *hs.NvmeDevices, *hs.ScmModules, *hs.ScmNamespaces, nil
+}
+
 // printHostStorageMapVerbose generates a human-readable representation of the supplied
 // HostStorageMap struct and writes it to the supplied io.Writer.
 func printHostStorageMapVerbose(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	for _, key := range hsm.Keys() {
 		hss := hsm[key]
+		ctrlrs, mods, nss, err := parseScanHostStorage(hss.HostStorage)
+		if err != nil {
+			return err
+		}
+
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
-		if len(hss.HostStorage.ScmNamespaces) == 0 {
-			if err := PrintScmModules(hss.HostStorage.ScmModules, out, opts...); err != nil {
+		if len(nss) == 0 {
+			if err := PrintScmModules(mods, out, opts...); err != nil {
 				return err
 			}
 		} else {
-			if err := PrintScmNamespaces(hss.HostStorage.ScmNamespaces, out, opts...); err != nil {
+			if err := PrintScmNamespaces(nss, out, opts...); err != nil {
 				return err
 			}
 		}
 		fmt.Fprintln(out)
-		if err := PrintNvmeControllers(hss.HostStorage.NvmeDevices, out, opts...); err != nil {
+		if err := PrintNvmeControllers(ctrlrs, out, opts...); err != nil {
 			return err
 		}
 		fmt.Fprintln(out)
@@ -45,9 +72,9 @@ func printHostStorageMapVerbose(hsm control.HostStorageMap, out io.Writer, opts 
 	return nil
 }
 
-// PrintHostStorageMap generates a human-readable representation of the supplied
+// PrintStorageScanMap generates a human-readable representation of the supplied
 // HostStorageMap struct and writes it to the supplied io.Writer.
-func PrintHostStorageMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+func PrintStorageScanMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	if len(hsm) == 0 {
 		return nil
 	}
@@ -67,14 +94,19 @@ func PrintHostStorageMap(hsm control.HostStorageMap, out io.Writer, opts ...Prin
 
 	for _, key := range hsm.Keys() {
 		hss := hsm[key]
+		ctrlrs, mods, nss, err := parseScanHostStorage(hss.HostStorage)
+		if err != nil {
+			return err
+		}
+
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		row := txtfmt.TableRow{hostsTitle: hosts}
-		if len(hss.HostStorage.ScmNamespaces) == 0 {
-			row[scmTitle] = hss.HostStorage.ScmModules.Summary()
+		if len(nss) == 0 {
+			row[scmTitle] = mods.Summary()
 		} else {
-			row[scmTitle] = hss.HostStorage.ScmNamespaces.Summary()
+			row[scmTitle] = nss.Summary()
 		}
-		row[nvmeTitle] = hss.HostStorage.NvmeDevices.Summary()
+		row[nvmeTitle] = ctrlrs.Summary()
 		table = append(table, row)
 	}
 
@@ -104,15 +136,19 @@ func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) error {
 
 	for _, key := range hsm.Keys() {
 		hss := hsm[key]
+		ctrlrs, _, nss, err := parseScanHostStorage(hss.HostStorage)
+		if err != nil {
+			return err
+		}
+
 		hosts := getPrintHosts(hss.HostSet.RangedString())
 		row := txtfmt.TableRow{hostsTitle: hosts}
-		storage := hss.HostStorage
-		row[scmTitle] = humanize.Bytes(storage.ScmNamespaces.Total())
-		row[scmFreeTitle] = humanize.Bytes(storage.ScmNamespaces.Free())
-		row[scmUsageTitle] = storage.ScmNamespaces.PercentUsage()
-		row[nvmeTitle] = humanize.Bytes(storage.NvmeDevices.Total())
-		row[nvmeFreeTitle] = humanize.Bytes(storage.NvmeDevices.Free())
-		row[nvmeUsageTitle] = storage.NvmeDevices.PercentUsage()
+		row[scmTitle] = humanize.Bytes(nss.Total())
+		row[scmFreeTitle] = humanize.Bytes(nss.Free())
+		row[scmUsageTitle] = nss.PercentUsage()
+		row[nvmeTitle] = humanize.Bytes(ctrlrs.Total())
+		row[nvmeFreeTitle] = humanize.Bytes(ctrlrs.Free())
+		row[nvmeUsageTitle] = ctrlrs.PercentUsage()
 		table = append(table, row)
 	}
 
@@ -120,19 +156,21 @@ func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) error {
 	return nil
 }
 
-// PrintScmPrepareMap generates a human-readable representation of the supplied
-// HostStorageMap which is populated in response to a StoragePrepare operation.
-func PrintScmPrepareMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+// PrintStoragePrepareMap generates a human-readable representation of
+// the supplied HostStorageMap which is populated in response to
+// StoragePrepare operation.
+func PrintStoragePrepareMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) {
 	if len(hsm) == 0 {
-		return nil
+		return
 	}
 
 	hostsTitle := "Hosts"
 	scmTitle := "SCM Namespaces"
 	rebootTitle := "Reboot Required"
+	nvmeTitle := "NVMe Result"
 
-	fmt.Fprintln(out, "Prepare Results:")
-	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, rebootTitle)
+	fmt.Fprintln(out, "Storage Prepare:")
+	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, rebootTitle, nvmeTitle)
 	tablePrint.InitWriter(txtfmt.NewIndentWriter(out))
 	table := []txtfmt.TableRow{}
 
@@ -140,26 +178,58 @@ func PrintScmPrepareMap(hsm control.HostStorageMap, out io.Writer, opts ...Print
 		hss := hsm[key]
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		row := txtfmt.TableRow{hostsTitle: hosts}
-		row[scmTitle] = hss.HostStorage.ScmNamespaces.Summary()
+		scm := "N/A"
+		if hss.HostStorage.ScmNamespaces != nil {
+			scm = hss.HostStorage.ScmNamespaces.Summary()
+		}
+		row[scmTitle] = scm
 		row[rebootTitle] = fmt.Sprintf("%t", hss.HostStorage.RebootRequired)
+		nvme := "N/A"
+		if hss.HostStorage.NvmeDevices != nil {
+			nvme = "OK"
+		}
+		row[nvmeTitle] = nvme
 		table = append(table, row)
 	}
 
 	tablePrint.Format(table)
-	return nil
+}
+
+// parsePrepareHostStorage retrieves device details from prepare response.
+// Mount points and ctrlrs are expected to be non-nil in each HostStorage value
+func parseFormatHostStorage(hs *control.HostStorage) (storage.NvmeControllers, storage.ScmMountPoints, error) {
+	var msgErr string
+	switch {
+	case hs == nil:
+		msgErr = "is nil"
+	case hs.NvmeDevices == nil:
+		msgErr = "has nil nvme devices"
+	case hs.ScmMountPoints == nil:
+		msgErr = "has nil scm mount points"
+	}
+	if msgErr != "" {
+		return nil, nil, errors.New("host storage " + msgErr)
+	}
+
+	return *hs.NvmeDevices, *hs.ScmMountPoints, nil
 }
 
 func printStorageFormatMapVerbose(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	for _, key := range hsm.Keys() {
 		hss := hsm[key]
+		ctrlrs, mntpts, err := parseFormatHostStorage(hss.HostStorage)
+		if err != nil {
+			return err
+		}
+
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
-		if err := printScmMountPoints(hss.HostStorage.ScmMountPoints, out, opts...); err != nil {
+		if err := printScmMountPoints(mntpts, out, opts...); err != nil {
 			return err
 		}
 		fmt.Fprintln(out)
-		if err := printNvmeFormatResults(hss.HostStorage.NvmeDevices, out, opts...); err != nil {
+		if err := printNvmeFormatResults(ctrlrs, out, opts...); err != nil {
 			return err
 		}
 		fmt.Fprintln(out)
@@ -191,10 +261,15 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 
 	for _, key := range hsm.Keys() {
 		hss := hsm[key]
+		ctrlrs, mntpts, err := parseFormatHostStorage(hss.HostStorage)
+		if err != nil {
+			return err
+		}
+
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		row := txtfmt.TableRow{hostsTitle: hosts}
-		row[scmTitle] = fmt.Sprintf("%d", len(hss.HostStorage.ScmMountPoints))
-		row[nvmeTitle] = fmt.Sprintf("%d", len(hss.HostStorage.NvmeDevices))
+		row[scmTitle] = fmt.Sprintf("%d", len(mntpts))
+		row[nvmeTitle] = fmt.Sprintf("%d", len(ctrlrs))
 		table = append(table, row)
 	}
 

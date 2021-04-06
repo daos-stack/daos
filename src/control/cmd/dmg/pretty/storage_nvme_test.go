@@ -52,7 +52,7 @@ host1
 				&mockHostStorage{
 					"host1",
 					&control.HostStorage{
-						NvmeDevices: storage.NvmeControllers{
+						NvmeDevices: &storage.NvmeControllers{
 							controllerA,
 							controllerB,
 						},
@@ -124,7 +124,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				&mockHostStorage{
 					"host1",
 					&control.HostStorage{
-						NvmeDevices: storage.NvmeControllers{
+						NvmeDevices: &storage.NvmeControllers{
 							controllerAwTS,
 						},
 					},
@@ -241,7 +241,7 @@ host1
 				&mockHostStorage{
 					"host1",
 					&control.HostStorage{
-						NvmeDevices: storage.NvmeControllers{
+						NvmeDevices: &storage.NvmeControllers{
 							controllerA,
 							controllerB,
 						},
@@ -269,7 +269,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				&mockHostStorage{
 					"host1",
 					&control.HostStorage{
-						NvmeDevices: storage.NvmeControllers{
+						NvmeDevices: &storage.NvmeControllers{
 							controllerC,
 							controllerD,
 						},
@@ -308,7 +308,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				&mockHostStorage{
 					"host1",
 					&control.HostStorage{
-						NvmeDevices: storage.NvmeControllers{
+						NvmeDevices: &storage.NvmeControllers{
 							controllerE,
 							controllerF,
 						},

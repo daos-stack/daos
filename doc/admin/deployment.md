@@ -409,18 +409,16 @@ storage nodes via the dmg utility.
 This section addresses how to verify that PMem (Intel(R) Optane(TM) persistent
 memory) modules are correctly installed on the storage nodes and how to
 configure in interleaved mode to be used by DAOS.
-Instructions for other types of SCM may be covered in the future.
 
 Provisioning the SCM occurs by configuring PMem modules in interleaved memory
 regions (interleaved mode) in groups of modules local to a specific socket
 (NUMA), and resultant nvdimm namespaces are defined by a device identifier
 (e.g., /dev/pmem0).
 
-PMem preparation is required once per DAOS installation and
-requires the DAOS Control Servers to be running as root.
+PMem preparation is required at minimum once per DAOS installation.
 
-This step requires a reboot to enable PMem resource allocation
-changes to be read by BIOS.
+PMem preparation requires reboots to enable PMem resource allocation changes to
+be read by BIOS.
 
 PMem preparation can be performed from the management tool
 `dmg storage prepare --scm-only` or using the Control Server directly
@@ -428,88 +426,103 @@ PMem preparation can be performed from the management tool
 
 The first time the command is run, the SCM interleaved regions will be created
 as resource allocations on any available PMem modules (one region per NUMA
-node/socket). The regions are activated after BIOS reads the new resource
-allocations.
+node/socket).
+The regions are activated after BIOS reads the new resource allocations.
 Upon completion, the storage prepare command will prompt the admin to reboot
 the storage node(s) in order for the BIOS to activate the new storage
 allocations.
 The storage prepare command does not initiate the reboot itself.
 
-After running the command a reboot will be required, then the Control
-Servers will then need to be started again and the command run for a
-second time to expose the namespace device to be used by DAOS.
+After running the command a reboot will be required, then the Control Servers
+will then need to be started again and the command run for a second time to
+expose the namespace device to be used by DAOS.
 
 Example usage:
 
-- `dmg -l wolf-[118-121,130-133] -i storage prepare --scm-only`
-after running, the user should be prompted for a reboot.
-
-- `clush -w wolf-[118-121,130-133] reboot`
-
-- `clush -w wolf-[118-121,130-133] daos_server start -o utils/config/examples/daos_server_sockets.yml`
-
-- `dmg -l wolf-[118-121,130-133] -i storage prepare --scm-only`
-after running, `/dev/pmemX` devices should be available on each of the hosts.
-
-`sudo daos_server storage prepare --scm-only` should be run for a second time after
-system reboot to create the pmem kernel devices (/dev/pmemX
-namespaces created on the new SCM regions).
-
-On the second run, one namespace per region is created, and each namespace may
-take up to a few minutes to create. Details of the pmem devices will be
-displayed in JSON format on command completion.
-
-Example output from the initial call (with the SCM modules set to default MemoryMode):
-
+Run storage prepare on already prepared system which indicates state:
 ```bash
-Memory allocation goals for SCM will be changed and namespaces modified, this
-will be a destructive operation.  ensure namespaces are unmounted and SCM is
-otherwise unused.
-A reboot is required to process new memory allocation goals.
+bash-4.2$ dmg storage prepare
+Memory allocation goals for SCM will be changed and namespaces modified, this will be a destructive operation. Please ensure namespaces are unmounted and locally attached SCM & NVMe devices are not in use. Please be patient as it may take several minutes and subsequent reboot maybe required.
+Are you sure you want to continue? (yes/no)
+yes
+Storage Prepare:
+  Hosts          SCM Namespaces        Reboot Required NVMe Result
+  -----          --------------        --------------- -----------
+  wolf-[130-133] 6.4 TB (2 namespaces) false           OK
 ```
 
-Example output from the subsequent call (SCM modules configured to interleaved
-mode, and host rebooted):
-
+Run storage prepare reset to remove PMem namespaces and unbind NVMe SSDs.
 ```bash
-Memory allocation goals for SCM will be changed and namespaces modified. This
-will be a destructive operation. Ensure namespaces are unmounted and the SCM
-is otherwise unused.
-creating SCM namespace, may take a few minutes...
-creating SCM namespace, may take a few minutes...
-Persistent memory kernel devices:
-[{UUID:5d2f2517-9217-4d7d-9c32-70731c9ac11e Blockdev:pmem1 Dev:namespace1.0 NumaNode:1} {UUID:2bfe6c40-f79a-4b8e-bddf-ba81d4427b9b Blockdev:pmem0 Dev:namespace0.0 NumaNode:0}]
+bash-4.2$ dmg storage prepare --reset
+Memory allocation goals for SCM will be changed and namespaces modified, this will be a destructive operation. Please ensure namespaces are unmounted and locally attached SCM & NVMe devices are not in use. Please be patient as it may take several minutes and subsequent reboot maybe required.
+Are you sure you want to continue? (yes/no)
+yes
+Storage Prepare:
+  Hosts          SCM Namespaces     Reboot Required NVMe Result
+  -----          --------------     --------------- -----------
+  wolf-[130-133] 0 B (0 namespaces) true            OK
+```
+
+`/dev/pmemX` devices will be removed when the above command is run.
+As directed in the "Reboot Required" result column of the table, reboot the
+hosts with `clush -w wolf-[130-133] sudo reboot`.
+On reboot, memory allocation goals for PMem will be reset in BIOS.
+
+After reboot, storage scan will report details based on individual PMem
+modules rather than namespaces.
+```bash
+bash-4.2$ dmg storage scan
+Hosts    SCM Total            NVMe Total
+-----    ---------            ----------
+wolf-130 5.9 TiB (12 modules) 4.7 TB (4 controllers)
+wolf-131 5.9 TiB (12 modules) 4.7 TB (4 controllers)
+wolf-132 5.9 TiB (12 modules) 4.7 TB (4 controllers)
+wolf-133 5.9 TiB (12 modules) 4.7 TB (4 controllers)
+```
+
+Create PMem regions and `/dev/pmemX` devices after reset by running storage
+prepare on a 'clean' system.
+Reboot will be required after issuing command.
+```bash
+bash-4.2$ dmg storage prepare --scm-only
+Memory allocation goals for SCM will be changed and namespaces modified, this will be a destructive operation. Please ensure namespaces are unmounted and locally attached SCM & NVMe devices are not in use. Please be patient as it may take several minutes and subsequent reboot maybe required.
+Are you sure you want to continue? (yes/no)
+yes
+Storage Prepare:
+  Hosts          SCM Namespaces     Reboot Required NVMe Result
+  -----          --------------     --------------- -----------
+  wolf-[130-133] 0 B (0 namespaces) true            N/A
+```
+
+In order to create the PMem regions, memory allocation goals will be set on
+reboot after the storage prepare command is run.
+Reboot the hosts again with `clush -w wolf-[130-133] sudo reboot`.
+
+After reboot we still don't have PMem namespaces so storage scan reports
+individual PMem modules even though the memory allocation goals have been
+updated.
+Run storage prepare again to create the `/dev/pmemX` devices on top of the
+recently created PMem regions created on the previous reboot.
+```bash
+bash-4.2$ dmg storage scan
+Hosts    SCM Total            NVMe Total
+-----    ---------            ----------
+wolf-130 5.9 TiB (12 modules) 4.7 TB (4 controllers)
+wolf-131 5.9 TiB (12 modules) 4.7 TB (4 controllers)
+wolf-132 5.9 TiB (12 modules) 4.7 TB (4 controllers)
+wolf-133 5.9 TiB (12 modules) 4.7 TB (4 controllers)
+bash-4.2$ dmg storage prepare --scm-only
+Memory allocation goals for SCM will be changed and namespaces modified, this will be a destructive operation. Please ensure namespaces are unmounted and locally attached SCM & NVMe devices are not in use. Please be patient as it may take several minutes and subsequent reboot maybe required.
+Are you sure you want to continue? (yes/no)
+yes
+Storage Prepare:
+  Hosts          SCM Namespaces        Reboot Required NVMe Result
+  -----          --------------        --------------- -----------
+  wolf-[130-133] 6.4 TB (2 namespaces) false           N/A
 ```
 
 Upon successful creation of the pmem devices, the Intel(R) Optane(TM)
-persistent memory is configured and one can move on to the next step.
-
-If required, the pmem devices can be destroyed via the --reset option:
-
-`sudo daos_server [<app_opts>] storage prepare [--scm-only|-s] --reset [<cmd_opts>]`
-
-All namespaces are disabled and destroyed. The SCM regions are removed by
-resetting modules into "MemoryMode" through resource allocations.
-
-Note that undefined behavior may result if the namespaces/pmem kernel
-devices are mounted before running reset (as per the printed warning).
-
-A subsequent reboot is required for BIOS to read the new resource
-allocations.
-
-Example output when resetting the SCM modules:
-
-```bash
-Memory allocation goals for SCM will be changed and namespaces modified, this
-will be a destructive operation.  ensure namespaces are unmounted and SCM is
-otherwise unused.
-removing SCM namespace, may take a few minutes...
-removing SCM namespace, may take a few minutes...
-resetting SCM memory allocations
-A reboot is required to process new memory allocation goals.
-```
-
-
+persistent memory is configured to be used with DAOS.
 
 ### Storage Selection
 

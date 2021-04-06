@@ -132,7 +132,6 @@ func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts
 	for _, device := range devices {
 		row := txtfmt.TableRow{pciTitle: device.PciAddr}
 		row[resultTitle] = device.Info
-
 		table = append(table, row)
 	}
 
@@ -171,7 +170,6 @@ func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, op
 		row[fwTitle] = ctrlr.FwRev
 		row[socketTitle] = fmt.Sprint(ctrlr.SocketID)
 		row[capacityTitle] = humanize.Bytes(ctrlr.Capacity())
-
 		table = append(table, row)
 	}
 
@@ -190,12 +188,12 @@ func PrintNvmeHealthMap(hsm control.HostStorageMap, out io.Writer, opts ...Print
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
 
-		if len(hss.HostStorage.NvmeDevices) == 0 {
+		if hss.HostStorage.NvmeDevices == nil || len(*hss.HostStorage.NvmeDevices) == 0 {
 			fmt.Fprintln(out, "  No NVMe devices detected")
 			continue
 		}
 
-		for _, controller := range hss.HostStorage.NvmeDevices {
+		for _, controller := range *hss.HostStorage.NvmeDevices {
 			if err := printNvmeControllerSummary(controller, out, opts...); err != nil {
 				return err
 			}
@@ -221,12 +219,12 @@ func PrintNvmeMetaMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintCo
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
 
-		if len(hss.HostStorage.NvmeDevices) == 0 {
+		if hss.HostStorage.NvmeDevices == nil || len(*hss.HostStorage.NvmeDevices) == 0 {
 			fmt.Fprintln(out, "  No NVMe devices detected")
 			continue
 		}
 
-		for _, controller := range hss.HostStorage.NvmeDevices {
+		for _, controller := range *hss.HostStorage.NvmeDevices {
 			if err := printNvmeControllerSummary(controller, out, opts...); err != nil {
 				return err
 			}
