@@ -73,7 +73,7 @@ class SCMConfigTest(TestWithServers):
                           "expected to fail")
 
             self.log.info("Storage prepare fails as expected: "
-                          "{}".format(error))
+                          "{}".format(exception))
         else:
             self.fail("Detected dcpm not specified")
 
