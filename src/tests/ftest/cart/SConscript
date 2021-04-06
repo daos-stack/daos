@@ -73,8 +73,7 @@ def build_internal_library():
     #denv.AppendUnique(CPPPATH=['#/src/cart'])
     #denv.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('.').path])
 
-    cart_test_lib  = daos_build.library(denv, 'cart_test', TEST_LIB_SRC,
-                                         SHLIBVERSION=CART_VERSION)
+    cart_test_lib  = daos_build.library(denv, 'cart_test', TEST_LIB_SRC)
     denv.Install('$PREFIX/lib64/', cart_test_lib)
     Default(cart_test_lib)
     Export('cart_test_lib')
