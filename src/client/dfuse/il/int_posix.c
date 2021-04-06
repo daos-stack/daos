@@ -83,7 +83,6 @@ static const char * const bypass_status[] = {
 static void
 ioil_shrink_pool(struct ioil_pool *pool)
 {
-
 	if (daos_handle_is_valid(pool->iop_poh)) {
 		int rc;
 
@@ -143,7 +142,6 @@ entry_array_close(void *arg) {
 
 	DFUSE_LOG_DEBUG("entry %p closing array fd_count %d",
 			entry, entry->fd_cont->ioc_open_count);
-
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
 	dfs_release(entry->fd_dfsoh);
@@ -379,6 +377,80 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 	return rc;
 }
 
+#define NAME_LEN 128
+
+/* Connect to a pool, helper function for ioil_fetch_cont_handles().
+ *
+ * Fetch the pool open handle for a pool from a fd, do this either
+ * via ioctl if possible, or if not via a file in /tmp.
+ */
+static int
+ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
+		       struct ioil_pool *pool)
+{
+	d_iov_t	iov = {};
+	int	rc;
+	int	cmd;
+	ssize_t	rsize;
+
+	D_ALLOC(iov.iov_buf, hs_reply->fsr_pool_size);
+	if (!iov.iov_buf)
+		return ENOMEM;
+
+	/* TODO: Make the conditional on handle size */
+	if (1) {
+		char fname[NAME_LEN];
+
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
+			   DFUSE_IOCTL_REPLY_PFILE, NAME_LEN);
+
+		errno = 0;
+		rc = ioctl(fd, cmd, fname);
+		if (rc != 0) {
+			int err = errno;
+
+			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+					  err, strerror(err));
+			D_FREE(iov.iov_buf);
+			return err;
+		}
+		errno = 0;
+		fd = open(fname, O_RDONLY);
+		if (fd == -1)
+			D_GOTO(out, rc = errno);
+		rsize = read(fd, iov.iov_buf, hs_reply->fsr_pool_size);
+		if (rsize != hs_reply->fsr_pool_size)
+			D_GOTO(out, rc = EAGAIN);
+		unlink(fname);
+	} else {
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
+			   DFUSE_IOCTL_REPLY_POH, hs_reply->fsr_pool_size);
+
+		errno = 0;
+		rc = ioctl(fd, cmd, iov.iov_buf);
+		if (rc != 0) {
+			int err = errno;
+
+			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+					  err, strerror(err));
+			D_GOTO(out, rc = err);
+		}
+	}
+
+	iov.iov_buf_len = hs_reply->fsr_pool_size;
+	iov.iov_len = iov.iov_buf_len;
+
+	rc = daos_pool_global2local(iov, &pool->iop_poh);
+	if (rc) {
+		DFUSE_LOG_WARNING("Failed to use pool handle " DF_RC,
+				  DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+out:
+	D_FREE(iov.iov_buf);
+	return rc;
+}
+
 /* Connect to a pool and container
  *
  * Pool and container should already be inserted into the lists,
@@ -420,35 +492,15 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 			hs_reply.fsr_cont_size);
 
 	if (daos_handle_is_inval(pool->iop_poh)) {
-		D_ALLOC(iov.iov_buf, hs_reply.fsr_pool_size);
-		if (!iov.iov_buf)
-			return ENOMEM;
-
-		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
-			   DFUSE_IOCTL_REPLY_POH, hs_reply.fsr_pool_size);
-
-		errno = 0;
-		rc = ioctl(fd, cmd, iov.iov_buf);
-		if (rc != 0) {
-			int err = errno;
-
-			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-					  err, strerror(err));
-
-			D_FREE(iov.iov_buf);
-			return err;
-		}
-
-		iov.iov_buf_len = hs_reply.fsr_pool_size;
-		iov.iov_len = iov.iov_buf_len;
-
-		rc = daos_pool_global2local(iov, &pool->iop_poh);
-		D_FREE(iov.iov_buf);
-		if (rc) {
-			DFUSE_LOG_WARNING("Failed to use pool handle " DF_RC,
-					  DP_RC(rc));
-			return daos_der2errno(rc);
-		}
+		/* Fetch the pool handle via the ioctl or file.  Both dfuse
+		 * and the local code can return EAGAIN if the pool handle
+		 * changes in size during reading so handle this case here.
+		 */
+		rc = ioil_fetch_pool_handle(fd, &hs_reply, pool);
+		if (rc == EAGAIN)
+			rc = ioil_fetch_pool_handle(fd, &hs_reply, pool);
+		if (rc != 0)
+			return rc;
 	}
 
 	D_ALLOC(iov.iov_buf, hs_reply.fsr_cont_size);
