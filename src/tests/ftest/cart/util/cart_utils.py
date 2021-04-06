@@ -349,7 +349,10 @@ class CartTest(TestWithoutServers):
     @staticmethod
     def log_check_valgrind_memcheck(self):
         """Check valgrind memcheck log files for errors."""
+
         logparse = self.params.get("logparse", "/run/tests/*/")
+
+        memcheck_errors = 0
 
         # FIXME: logparse doesn't seem to be used in any YAML file.
         # if logparse is None or not logparse:
@@ -361,18 +364,35 @@ class CartTest(TestWithoutServers):
             self.log.info("Path does not exist")
             return
 
-        for filename in os.listdir(self.log_path):
+        xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
+        memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
+                                os.listdir(self.log_path)))
+
+        for filename in memcheck_files:
 
             log_file = os.path.join(self.log_path, filename)
-            if not os.path.isfile(log_file):
-                self.log.info("File is a Directory. Skipping.... :%s", log_file)
-                continue
 
-            self.log.info("Parsing %s", log_file)
+            file1 = open(log_file, 'r')
+            lines = file1.readlines()
+             
+            for line in lines:
+                if line.find('<error>') != -1:
+                    memcheck_errors += 1
 
-            cl = cart_logparse.LogIter(log_file)
-            c_log_test = cart_logtest.LogTest(cl)
-            c_log_test.check_log_file(strict_test)
+        if memcheck_errors > 0:
+            self.fail(
+                "Failed, found " + str(memcheck_errors) +
+                " <error> element(s) in the " +
+                " memcheck XML log file(s): [" +
+                ", ".join(memcheck_files) + "]")
+
+        # Rename the file so it's not checked again for memcheck errors
+        saved_cwd = os.getcwd()
+        os.chdir(self.log_path)
+        os.rename(filename, filename + "-checked")
+        os.chdir(saved_cwd)
+
+        return 0
 
     def launch_srv_cli_test(self, srvcmd, clicmd):
         """Launch a sever in the background and client in the foreground."""
