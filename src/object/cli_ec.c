@@ -1522,12 +1522,17 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 				  ec_recx_array->oer_pbufs[idx], cell_bytes);
 		r_sgl->sg_nr = iov_nr + obj_ec_parity_tgt_nr(oca);
 	} else {
-		/* copy the sgl */
-		rc = d_sgl_init(r_sgl, sgl->sg_nr);
-		if (rc)
-			goto out;
-		memcpy(r_sgl->sg_iovs, sgl->sg_iovs,
-		       sizeof(*sgl->sg_iovs) * sgl->sg_nr);
+		if (sgl != NULL) {
+			/* copy the sgl */
+			rc = d_sgl_init(r_sgl, sgl->sg_nr);
+			if (rc)
+				goto out;
+			memcpy(r_sgl->sg_iovs, sgl->sg_iovs,
+			       sizeof(*sgl->sg_iovs) * sgl->sg_nr);
+		} else {
+			r_sgl->sg_iovs = NULL;
+			r_sgl->sg_nr = 0;
+		}
 	}
 
 #if EC_DEBUG
@@ -1601,7 +1606,7 @@ obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 				singv_only = false;
 		}
 		/* if only with single-value, need not size_fetch */
-		if (singv_only)
+		if (singv_only && sgls != NULL)
 			reasb_req->orr_size_fetch = 0;
 	}
 
