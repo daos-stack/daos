@@ -118,7 +118,6 @@ class CascadingFailures(RebuildTestBase):
         self.mode = "sequential"
         self.execute_rebuild_test()
 
-    @skipForTicket("DAOS-6728")
     def test_cascading_failures(self):
         """Jira ID: DAOS-844.
 
