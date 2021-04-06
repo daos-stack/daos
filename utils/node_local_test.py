@@ -366,7 +366,7 @@ class DaosServer():
                         return True
         return False
 
-    def start(self):
+    def start(self, clean=True):
         """Start a DAOS server"""
 
         server_env = get_base_env(clean=True)
@@ -469,28 +469,66 @@ class DaosServer():
         # /mnt/daos exists and has data in.  It will be used as is.
         start = time.time()
 
-        cmd = ['storage', 'format']
+        error_resolutions = {
+            'system_erase': (
+                ['running system'], ['system', 'erase', '--json'],
+            ),
+            'system_stop': (
+                ['to be stopped'], ['system', 'stop', '--json'],
+            ),
+            'storage_force_format': (
+                ['already-formatted', 'raft service unavailable'],
+                ['storage', 'format', '--force', '--json']
+            )
+        }
+
+        cmd = ['storage', 'format', '--json']
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(cmd)
-            ready = False
-            if rc.returncode == 1:
-                for line in rc.stdout.decode('utf-8').splitlines():
-                    if 'format storage of running instance' in line:
-                        ready = True
-                    format_message = ('format request for already-formatted'
-                                      ' storage and reformat not specified')
-                    if format_message in line:
-                        cmd = ['storage', 'format', '--reformat']
-                for line in rc.stderr.decode('utf-8').splitlines():
-                    if 'system reformat requires the following' in line:
-                        ready = True
-            if ready:
+
+            data = json.loads(rc.stdout.decode('utf-8'))
+            print('cmd: {} data: {}'.format(cmd, data))
+
+            if rc.returncode == 0:
                 break
+            if data['error'] is not None:
+                resolved = False
+                for res in error_resolutions.values():
+                    for err_msg in res[0]:
+                        if err_msg in data['error']:
+                            cmd = res[1]
+                            resolved = True
+                            break
+                    if resolved:
+                        break
+
+                # If we don't need to start from a clean slate and the system is
+                # already running, just move on.
+                if not clean and cmd == error_resolutions['system_erase'][1]:
+                    break
+            else:
+                if data['response'] is not None and \
+                    'host_errors' in data['response']:
+                    if len(data['response']['host_errors']) == 0:
+                        break
+
+                    host_err = list(data['response']['host_errors'])[0]
+                    for err_msg in error_resolutions['storage_force_format'][0]:
+                        if err_msg in host_err:
+                            cmd = error_resolutions['storage_force_format'][1]
+                            break
+                elif cmd == error_resolutions['system_stop'][1]:
+                    cmd = error_resolutions['system_erase'][1]
+                elif cmd == error_resolutions['system_erase'][1]:
+                    cmd = error_resolutions['storage_force_format'][1]
+                elif cmd == error_resolutions['storage_force_format'][1]:
+                    break
+
             self._check_timing("format", start, self.max_start_time)
         print('Format completion in {:.2f} seconds'.format(time.time() - start))
 
-        # How wait until the system is up, basically the format to happen.
+        # Now wait until the system is up, basically the format to happen.
         while True:
             time.sleep(0.5)
             if self._check_system_state(['ready', 'joined']):
@@ -2568,7 +2606,7 @@ def main():
     # exit again.
     if args.server_valgrind:
         server = DaosServer(conf, valgrind=True)
-        server.start()
+        server.start(clean=False)
         pools = get_pool_list()
         for pool in pools:
             time.sleep(5)
@@ -2587,7 +2625,7 @@ def main():
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
         server = DaosServer(conf)
-        server.start()
+        server.start(clean=False)
         if fi_test:
             fatal_errors.add_result(test_alloc_fail_cat(server,
                                                         conf, wf_client))

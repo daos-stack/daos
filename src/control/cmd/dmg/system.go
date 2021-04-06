@@ -24,6 +24,7 @@ type SystemCmd struct {
 	Query       systemQueryCmd `command:"query" alias:"q" description:"Query DAOS system status"`
 	Stop        systemStopCmd  `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
 	Start       systemStartCmd `command:"start" alias:"r" description:"Perform start of stopped DAOS system"`
+	Erase       systemEraseCmd `command:"erase" alias:"e" description:"Erase system metadata prior to reformat"`
 	ListPools   PoolListCmd    `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
 }
 
@@ -129,6 +130,20 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 	cmd.log.Info(out.String())
 	if outErr.String() != "" {
 		cmd.log.Error(outErr.String())
+	}
+
+	return resp.Errors()
+}
+
+type systemEraseCmd struct {
+	logCmd
+	ctlInvokerCmd
+}
+
+func (cmd *systemEraseCmd) Execute(_ []string) error {
+	resp, err := control.SystemErase(context.Background(), cmd.ctlInvoker, new(control.SystemEraseReq))
+	if err != nil {
+		return err
 	}
 
 	return resp.Errors()
