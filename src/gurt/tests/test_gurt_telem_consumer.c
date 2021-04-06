@@ -62,14 +62,14 @@ test_print_metrics(void **state)
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 
 	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_STANDARD,
-			       true, true, stdout);
+			       D_TM_INCLUDE_METADATA, stdout);
 
 	d_tm_print_field_descriptors(D_TM_INCLUDE_TIMESTAMP |
 				     D_TM_INCLUDE_METADATA, stdout);
 
 	filter &= ~D_TM_DIRECTORY;
 	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_CSV,
-			       true, true, stdout);
+			       D_TM_INCLUDE_METADATA, stdout);
 }
 
 static void
