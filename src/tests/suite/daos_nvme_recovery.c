@@ -84,7 +84,7 @@ nvme_fault_reaction(void **state, int mode)
 		daos_size_t	scm_size = (daos_size_t)4 << 30/*Default 4G*/;
 		daos_size_t	nvme_size;
 
-		/*Use the SCM size if set with environment */
+		/* Use the SCM size if set with environment */
 		env = getenv("POOL_SCM_SIZE");
 		if (env) {
 			size_gb = atoi(env);
@@ -92,13 +92,13 @@ nvme_fault_reaction(void **state, int mode)
 				scm_size = (daos_size_t)size_gb << 30;
 		}
 
-		/*NVMe size is 4x of SCM size */
+		/* NVMe size is 4x of SCM size */
 		nvme_size = scm_size * 4;
 		print_message("Creating another offline pool mode, ");
 		print_message("Size: SCM = %" PRId64 " NVMe =%" PRId64 "\n",
 			      scm_size, nvme_size);
 
-		/** create another offline pool*/
+		/* create another offline pool*/
 		print_message("create another offline pool");
 		rc = dmg_pool_create(dmg_config_file,
 				     geteuid(), getegid(),
