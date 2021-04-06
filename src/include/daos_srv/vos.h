@@ -47,6 +47,16 @@ int
 vos_dtx_pin(struct dtx_handle *dth, bool persistent);
 
 /**
+ * Check whether DTX entry attached to the DTX handle is still valid or not.
+ *
+ * \param dth		[IN]	The dtx handle
+ *
+ * \return		The DTX entry status.
+ */
+int
+vos_dtx_validation(struct dtx_handle *dth);
+
+/**
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
  *
