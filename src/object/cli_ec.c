@@ -421,7 +421,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 	if (rc)
 		goto out;
 	/* init the reassembled sgl and seg sorter with max possible sg_nr */
-	if (!punch) {
+	if (!punch && sgl != NULL) {
 		rc = d_sgl_init(&reasb_req->orr_sgls[iod_idx],
 				   seg_nr + sgl->sg_nr);
 		if (rc)
@@ -1099,7 +1099,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	d_iov_t				*iovs = NULL;
 	uint32_t			 i, j, k, idx, last;
 	uint32_t			 tgt_nr, empty_nr;
-	uint32_t			 iov_idx = 0, iov_nr = sgl->sg_nr;
+	uint32_t			 iov_idx = 0, iov_nr = 0;
 	uint64_t			 iov_off = 0, recx_end, full_end;
 	uint64_t			 rec_nr, iod_size = iod->iod_size;
 	bool				 with_full_stripe;
@@ -1107,12 +1107,15 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	int				 rc = 0;
 
 	D_ASSERT(cell_rec_nr > 0);
-	if (iov_nr <= EC_INLINE_IOVS) {
-		iovs = iov_inline;
-	} else {
-		D_ALLOC_ARRAY(iovs, iov_nr);
-		if (iovs == NULL)
-			return -DER_NOMEM;
+	if (sgl != NULL) {
+		iov_nr = sgl->sg_nr;
+		if (iov_nr <= EC_INLINE_IOVS) {
+			iovs = iov_inline;
+		} else {
+			D_ALLOC_ARRAY(iovs, iov_nr);
+			if (iovs == NULL)
+				return -DER_NOMEM;
+		}
 	}
 	punch = (update && iod->iod_size == DAOS_REC_ANY);
 
