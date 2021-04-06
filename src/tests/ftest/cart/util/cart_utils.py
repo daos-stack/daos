@@ -379,18 +379,18 @@ class CartTest(TestWithoutServers):
                 if line.find('<error>') != -1:
                     memcheck_errors += 1
 
+            # Rename the file so it's not checked again for memcheck errors
+            saved_cwd = os.getcwd()
+            os.chdir(self.log_path)
+            os.rename(filename, filename + "-checked")
+            os.chdir(saved_cwd)
+
         if memcheck_errors > 0:
             self.fail(
                 "Failed, found " + str(memcheck_errors) +
                 " <error> element(s) in the " +
                 " memcheck XML log file(s): [" +
                 ", ".join(memcheck_files) + "]")
-
-        # Rename the file so it's not checked again for memcheck errors
-        saved_cwd = os.getcwd()
-        os.chdir(self.log_path)
-        os.rename(filename, filename + "-checked")
-        os.chdir(saved_cwd)
 
         return 0
 
