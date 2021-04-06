@@ -140,7 +140,7 @@ daos_tests:
     test_daos_single_rdg_tx: --csum_type=crc32
     test_daos_distributed_tx: --csum_type=crc32
     test_daos_verify_consistency: --csum_type=crc32
-    test_daos_io: --csum_type=crc32
+    test_daos_io: --csum_type=off
     test_daos_object_array: --csum_type=crc32
     test_daos_array: --csum_type=crc32
     test_daos_kv: --csum_type=crc32
