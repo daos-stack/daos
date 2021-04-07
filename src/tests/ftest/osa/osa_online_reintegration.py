@@ -173,7 +173,9 @@ class OSAOnlineReintegration(OSAUtils):
 
         Test Description: Validate Online Reintegration
 
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
         :avocado: tags=online_reintegration
         """
         # Perform reintegration testing with 1 pool.
@@ -184,7 +186,9 @@ class OSAOnlineReintegration(OSAUtils):
     def test_osa_online_reintegration_server_stop(self):
         """Test ID: DAOS-5920.
         Test Description: Validate Online Reintegration with server stop
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
         :avocado: tags=online_reintegration_srv_stop
         """
         self.run_online_reintegration_test(1, server_boot=True)
