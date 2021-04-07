@@ -368,7 +368,11 @@ class CartTest(TestWithoutServers):
         memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
                                 os.listdir(self.log_path)))
 
+        print('DEBUG log: line 370, memcheck_files  = ', memcheck_files )
+
         for filename in memcheck_files:
+
+            print('DEBUG log: line 374, filename  = ', filename )
 
             log_file = os.path.join(self.log_path, filename)
 
@@ -376,14 +380,20 @@ class CartTest(TestWithoutServers):
             lines = file1.readlines()
              
             for line in lines:
+                print('DEBUG log: line 382, line  = ', line )
                 if line.find('<error>') != -1:
                     memcheck_errors += 1
 
-            # Rename the file so it's not checked again for memcheck errors
-            saved_cwd = os.getcwd()
-            os.chdir(self.log_path)
-            os.rename(filename, filename + "-checked")
-            os.chdir(saved_cwd)
+            try:
+                saved_cwd = os.getcwd()
+                print('DEBUG log: line 388, saved_cwd  = ', saved_cwd )
+                os.chdir(self.log_path)
+                os.rename(filename, filename + "-checked")
+                os.chdir(saved_cwd)
+            except Exception as e:
+                print("Problem with getcwd, chdir, rename, chdir: ", e)
+
+        print('DEBUG log: line 391, memcheck_errors  = ', memcheck_errors )
 
         if memcheck_errors > 0:
             self.fail(
