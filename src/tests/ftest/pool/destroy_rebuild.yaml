@@ -24,5 +24,5 @@ pool:
 testparams:
   rank_to_kill:
 #    - 0    Skipped until DAOS-4891 is resolved
-    - 1
-    - 2
+    - "1"
+    - "4"
