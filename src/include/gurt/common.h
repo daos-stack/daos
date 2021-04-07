@@ -156,15 +156,15 @@ void *d_realloc(void *, size_t);
 			if (_cnt <= 1)					\
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
-					"': %zu at %p (old '" #oldptr	\
-					"':%p).\n",			\
+					"': %zu at %p old '" #oldptr	\
+					"' at %p.\n",			\
 					_esz, (newptr), (oldptr));	\
 			else						\
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
 					"': %zu * '" #cnt		\
-					"':%zu at %p (old '" #oldptr	\
-					"':%p).\n",			\
+					"':%zu at %p old '" #oldptr	\
+					"' at %p.\n",			\
 					_esz, _cnt, (newptr), (oldptr));\
 			(oldptr) = NULL;				\
 			break;						\
@@ -358,7 +358,7 @@ void d_free_string(struct d_string_buffer_t *buf);
  * struct) @type, return pointer to the embedding instance of @type.
  */
 # define container_of(ptr, type, member)		\
-	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+	((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 #endif
 
 #ifndef offsetof
@@ -546,19 +546,19 @@ d_timeinc(struct timespec *now, uint64_t ns)
 static inline double
 d_time2ms(struct timespec t)
 {
-	return (double) t.tv_sec * 1e3 + (double) t.tv_nsec / 1e6;
+	return (double)t.tv_sec * 1e3 + (double)t.tv_nsec / 1e6;
 }
 
 static inline double
 d_time2us(struct timespec t)
 {
-	return (double) t.tv_sec * 1e6 + (double) t.tv_nsec / 1e3;
+	return (double)t.tv_sec * 1e6 + (double)t.tv_nsec / 1e3;
 }
 
 static inline double
 d_time2s(struct timespec t)
 {
-	return (double) t.tv_sec + (double) t.tv_nsec / 1e9;
+	return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
 }
 
 /**

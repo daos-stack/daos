@@ -485,7 +485,7 @@ class LogTest():
                 # there are more than two fields to work with.
                 non_trace_lines += 1
                 if line.is_calloc():
-                    pointer = line.get_field(-1).rstrip('.')
+                    pointer = line.calloc_pointer()
                     if pointer in regions:
                         show_line(regions[pointer], 'NORMAL',
                                   'new allocation seen for same pointer')
@@ -493,7 +493,7 @@ class LogTest():
                     regions[pointer] = line
                     memsize.add(line.calloc_size())
                 elif line.is_free():
-                    pointer = line.get_field(-1).rstrip('.')
+                    pointer = line.free_pointer()
                     # If a pointer is freed then automatically remove the
                     # descriptor
                     if pointer in active_desc:
@@ -514,8 +514,7 @@ class LogTest():
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
                 elif line.is_realloc():
-                    new_pointer = line.get_field(-3)
-                    old_pointer = line.get_field(-1)[:-2].split(':')[-1]
+                    (new_pointer, old_pointer) = line.realloc_pointers()
                     if new_pointer != '(nil)' and old_pointer != '(nil)':
                         memsize.subtract(regions[old_pointer].calloc_size())
                     regions[new_pointer] = line

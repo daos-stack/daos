@@ -337,15 +337,25 @@ class LogLine():
         """Returns True if line is a allocation point"""
         return self.get_field(2).startswith('alloc(')
 
+    def calloc_pointer(self):
+        """Returns the memory address allocated"""
+        return self.get_field(-1).rstrip('.')
+
     def is_realloc(self):
         """Returns True if line is a call to"""
         return self.get_field(2) == 'realloc'
+
+    def realloc_pointers(self):
+        """Returns a tuple of old and new memory addresses"""
+        new_pointer = self.get_field(-5)
+        old_pointer = self.get_field(-1).rstrip('.')
+        return (new_pointer, old_pointer)
 
     def calloc_size(self):
         """Returns the size of the allocation"""
         if self.get_field(5) == '*':
             if self.is_realloc():
-                field = -5
+                field = -7
             else:
                 field = -3
             count = int(self.get_field(field).split(':')[-1])
@@ -356,6 +366,9 @@ class LogLine():
         """Returns True if line is a call to free"""
         return self.get_field(2) == 'free'
 
+    def free_pointer(self):
+        """Return the memory address freed"""
+        return self.get_field(-1).rstrip('.')
 
 # pylint: disable=too-many-branches
 class StateIter():
