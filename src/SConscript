@@ -48,6 +48,7 @@ def scons():
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('include')])
     il_env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
+    il_env.AppendUnique(CPPPATH=[Dir('include')])
     generate_daos_version_header(env)
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include'), 'include/%s' % header)
