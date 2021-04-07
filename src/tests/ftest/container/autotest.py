@@ -6,6 +6,7 @@
 """
 from apricot import TestWithServers
 
+
 class ContainerAutotestTest(TestWithServers):
     # pylint: disable=too-few-public-methods
     """Tests container autotest.
@@ -23,7 +24,7 @@ class ContainerAutotestTest(TestWithServers):
     def test_container_autotest(self):
         """Test container autotest.
 
-        :avocado: tags=all,full_regression,daily,hw,quick,autotest
+        :avocado: tags=all,full_regression,daily,hw,small,quick,autotest
         """
         # Create a pool
         self.log.info("Create a pool")
