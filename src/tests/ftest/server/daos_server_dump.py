@@ -61,18 +61,21 @@ class DaosServerDumpTest(TestWithServers):
         print("===== ps -ef | grep -E daos_engine | grep -vE '\<(grep|defunct)\>' ======")
         ret_codes = pcmd(self.hostlist_servers, r"ps -ef | grep -E daos_engine | grep -vE '\<(grep|defunct)\>'")
 
-        return_codes = stop_processes(self.hostlist_servers, r"daos_engine",
+        ret_codes = stop_processes(self.hostlist_servers, r"daos_engine",
                            added_filter=r"'\<(grep|defunct)\>'",
                            send_sigusr2=True)
-        if 1 in return_codes:
+        if 1 in ret_codes:
             print(
                 "Stopped daos_engine processes on {}".format(
-                    str(return_codes[1])))
-        if 0 in return_codes:
+                    str(ret_codes[1])))
+        if 0 in ret_codes:
             print(
                 "No daos_engine processes found on {}".format(
-                    str(return_codes[0])))
+                    str(ret_codes[0])))
 
+        # DEBUG check /tmp to find any dump file
+        print("===== ls -l /tmp ======")
+        ret_codes = pcmd(self.hostlist_servers, r"ls -l /tmp")
         # XXX may need to check for one file per engine...
         ret_codes = pcmd(self.hostlist_servers, r"ls /tmp/daos_dump\*.txt")
         # Report any failures
