@@ -51,7 +51,7 @@ daos_tests:
     test_daos_nvme_recovery_2: DAOS_Nvme_Recovery_2
     test_daos_nvme_recovery_3: DAOS_Nvme_Recovery_3
     test_daos_nvme_recovery_4: DAOS_Nvme_Recovery_4
-    test_daos_nvme_recovery_4: DAOS_Nvme_Recovery_5
+    test_daos_nvme_recovery_5: DAOS_Nvme_Recovery_5
   daos_test:
     test_daos_nvme_recovery_1: N
     test_daos_nvme_recovery_2: N
