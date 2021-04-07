@@ -418,12 +418,17 @@ class LogTest():
                         # that fail during shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
+                    # Disable checking for a number of conditions, either because
+                    # these errors/lines are badly formatted or because they're
+                    # intermittent and we don't want noise in the test results.
                     if line.fac == 'external':
                         show = False
-                    if show and server_shutdown and line.get_msg().endswith(
+                    elif show and server_shutdown and line.get_msg().endswith(
                             "DER_SHUTDOWN(-2017): 'Service should shut down'"):
                         show = False
-                    if show:
+                    elif show and line.function == 'rdb_stop':
+                        show = False
+                    elif show:
                         # Allow WARNING or ERROR messages, but anything higher
                         # like assert should trigger a failure.
                         if line.level < cart_logparse.LOG_LEVELS['ERR']:
