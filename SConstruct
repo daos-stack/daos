@@ -395,6 +395,7 @@ def scons(): # pylint: disable=too-many-locals
         il_env = env.Clone()
     else:
         il_env = env.Clone()
+        il_env['CC'] = 'gcc'
         run_checks(env)
         run_checks(il_env)
 
