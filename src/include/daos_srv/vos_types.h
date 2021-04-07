@@ -66,6 +66,14 @@ D_CASSERT(sizeof(struct dtx_entry) ==
 	  offsetof(struct dtx_entry, dte_mbs) +
 	  sizeof(struct dtx_memberships *));
 
+/** Pool open flags (for vos_pool_create and vos_pool_open) */
+enum vos_pool_open_flags {
+	/** Pool is small (for sys space reservation); implies VOS_POF_EXCL */
+	VOS_POF_SMALL	= (1 << 0),
+	/** Exclusive (-DER_BUSY if already opened) */
+	VOS_POF_EXCL	= (1 << 1),
+};
+
 enum vos_oi_attr {
 	/** Marks object as failed */
 	VOS_OI_FAILED		= (1U << 0),
@@ -335,9 +343,9 @@ typedef struct {
 enum {
 	/** It is unknown if the extent is covered or visible */
 	VOS_VIS_FLAG_UNKNOWN = 0,
-	/** The extent is not visible at at the requested epoch (epr_hi) */
+	/** The extent is not visible at the requested epoch (epr_hi) */
 	VOS_VIS_FLAG_COVERED = (1 << 0),
-	/** The extent is not visible at at the requested epoch (epr_hi) */
+	/** The extent is visible at the requested epoch (epr_hi) */
 	VOS_VIS_FLAG_VISIBLE = (1 << 1),
 	/** The extent represents only a portion of the in-tree extent */
 	VOS_VIS_FLAG_PARTIAL = (1 << 2),
@@ -360,6 +368,8 @@ typedef struct {
 			daos_epoch_t		ie_punch;
 			/** If applicable, non-zero if object is punched */
 			daos_epoch_t		ie_obj_punch;
+			/** Last update timestamp */
+			daos_epoch_t		ie_last_update;
 			union {
 				/** key value */
 				daos_key_t	ie_key;
