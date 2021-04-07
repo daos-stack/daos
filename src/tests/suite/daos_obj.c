@@ -590,7 +590,7 @@ set_pool_reclaim_strategy(void **state, void const *const strategy[])
 {
 	test_arg_t *arg = *state;
 	int rc;
-	char const *const names[] = {"reclaim"};
+	char const *const names[] = {strdup("reclaim")};
 	size_t const in_sizes[] = {strlen(strategy[0])};
 	int			 n = (int) ARRAY_SIZE(names);
 
@@ -680,8 +680,8 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 	daos_pool_info_t pinfo;
 	daos_size_t	 nvme_initial_size;
 	daos_size_t	 nvme_current_size;
-	void const *const aggr_disabled[] = {"disabled"};
-	void const *const aggr_set_time[] = {"time"};
+	void const *const aggr_disabled[] = {strdup("disabled")};
+	void const *const aggr_set_time[] = {strdup("time")};
 
 	/* Disabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(state, aggr_disabled);
@@ -894,8 +894,8 @@ io_rewritten_array_with_mixed_size(void **state)
 	int			total_run_time = 20;
 	daos_size_t		nvme_initial_size;
 	daos_size_t		nvme_current_size;
-	void const *const aggr_disabled[] = {"disabled"};
-	void const *const aggr_set_time[] = {"time"};
+	void const *const aggr_disabled[] = {strdup("disabled")};
+	void const *const aggr_set_time[] = {strdup("time")};
 
 	/* choose random object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);

@@ -95,14 +95,14 @@ co_attribute(void **state)
 	daos_event_t	 ev;
 	int		 rc;
 
-	char const *const names[] = { "AVeryLongName", "Name" };
+	char const *const names[] = { strdup("AVeryLongName"), strdup("Name") };
 	size_t const name_sizes[] = {
 				strlen(names[0]) + 1,
 				strlen(names[1]) + 1,
 	};
 	void const *const in_values[] = {
-				"value",
-				"this is a long value"
+				strdup("value"),
+				strdup("this is a long value")
 	};
 	size_t const in_sizes[] = {
 				strlen(in_values[0]),
