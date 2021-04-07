@@ -424,6 +424,10 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 	// TODO: perform bdev format in parallel
 	for _, srv := range instances {
+		if len(srv.bdevConfig().DeviceList) == 0 {
+			continue
+		}
+
 		if instanceErrored[srv.Index()] {
 			// if scm errored, indicate skipping bdev format
 			if len(srv.bdevConfig().DeviceList) > 0 {
@@ -451,7 +455,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 			srv.log.Errorf(msgFormatErr, srv.Index())
 			continue
 		}
-		srv.NotifyStorageReady(ctx)
+		srv.NotifyStorageReady()
 	}
 
 	return resp, nil
