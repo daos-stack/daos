@@ -316,8 +316,12 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 				Log:          log,
 			}
 
-			netDetails, gotHostErrs, gotErr := getNetworkDetails(context.TODO(), req)
+			netDetails, gotErr := getNetworkDetails(context.TODO(), req)
 			common.CmpErr(t, tc.expErr, gotErr)
+			var gotHostErrs *HostErrorsResp
+			if cge, ok := gotErr.(*ConfigGenerateError); ok {
+				gotHostErrs = &cge.HostErrorsResp
+			}
 			cmpHostErrs(t, tc.expHostErrs, gotHostErrs)
 			if tc.expErr != nil {
 				return
@@ -513,9 +517,13 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				Log:       log,
 			}
 
-			storageDetails, gotHostErrs, gotErr := getStorageDetails(
+			storageDetails, gotErr := getStorageDetails(
 				context.TODO(), req, tc.engineCount)
 			common.CmpErr(t, tc.expErr, gotErr)
+			var gotHostErrs *HostErrorsResp
+			if cge, ok := gotErr.(*ConfigGenerateError); ok {
+				gotHostErrs = &cge.HostErrorsResp
+			}
 			cmpHostErrs(t, tc.expHostErrs, gotHostErrs)
 			if tc.expErr != nil {
 				return
