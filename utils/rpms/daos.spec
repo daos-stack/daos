@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
