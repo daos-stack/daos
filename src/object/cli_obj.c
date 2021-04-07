@@ -3517,8 +3517,11 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 		}
 	}
 
+	usgls = obj_auxi->reasb_req.orr_usgls;
+	if (usgls == NULL)
+		return;
+
 	if (size_all_zero) {
-		usgls = obj_auxi->reasb_req.orr_usgls;
 		for (i = 0; i < iod_nr; i++)
 			usgls[i].sg_nr_out = 0;
 	} else {
