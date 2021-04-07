@@ -11,7 +11,10 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"os/user"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -20,6 +23,11 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
+)
+
+const (
+	hugePageDir    = "/dev/hugepages"
+	hugePagePrefix = "spdk"
 )
 
 type (
@@ -35,6 +43,8 @@ type (
 		binding *spdkWrapper
 		script  *spdkSetupScript
 	}
+
+	removeFn func(string) error
 )
 
 // suppressOutput is a horrible, horrible hack necessitated by the fact that
@@ -302,27 +312,56 @@ func detectVMD() ([]string, error) {
 	return vmdAddrs, nil
 }
 
-// Prepare will execute SPDK setup.sh script to rebind PCI devices as selected
-// by bdev_include and bdev_exclude white and black list filters provided in the
-// server config file. This will make the devices available though SPDK.
-func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
-	resp := &PrepareResponse{}
+// hugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
+// name begins with prefix and owner has uid equal to tgtUid.
+func hugePageWalkFunc(hugePageDir, prefix, tgtUid string, remove removeFn) filepath.WalkFunc {
+	return func(path string, info os.FileInfo, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case info == nil:
+			return errors.New("nil fileinfo")
+		case info.IsDir():
+			if path == hugePageDir {
+				return nil
+			}
+			return filepath.SkipDir // skip subdirectories
+		case !strings.HasPrefix(info.Name(), prefix):
+			return nil // skip files without prefix
+		}
 
-	if err := b.script.Prepare(req); err != nil {
-		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat == nil {
+			return errors.New("stat missing for file")
+		}
+		if strconv.Itoa(int(stat.Uid)) != tgtUid {
+			return nil // skip not owned by target user
+		}
+
+		if err := remove(path); err != nil {
+			return err
+		}
+
+		return nil
 	}
+}
 
-	if req.DisableVMD {
-		return resp, nil
-	}
+// cleanHugePages removes hugepage files with pathPrefix that are owned by the
+// user with username tgtUsr by processing directory tree with filepath.WalkFunc
+// returned from hugePageWalkFunc.
+func cleanHugePages(hugePageDir, prefix, tgtUid string) error {
+	return filepath.Walk(hugePageDir,
+		hugePageWalkFunc(hugePageDir, prefix, tgtUid, os.Remove))
+}
 
+func (b *spdkBackend) vmdPrep(req PrepareRequest) (bool, error) {
 	vmdDevs, err := detectVMD()
 	if err != nil {
-		return nil, errors.Wrap(err, "VMD could not be enabled")
+		return false, errors.Wrap(err, "VMD could not be enabled")
 	}
 
 	if len(vmdDevs) == 0 {
-		return resp, nil
+		return false, nil
 	}
 
 	vmdReq := req
@@ -330,19 +369,54 @@ func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST
 	//
 	// TODO: ignore devices not in include list
-	vmdReq.PCIWhitelist = strings.Join(vmdDevs, " ")
+	vmdReq.PCIAllowlist = strings.Join(vmdDevs, " ")
 
 	if err := b.script.Prepare(vmdReq); err != nil {
-		return nil, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
+		return false, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
 	}
 
-	resp.VmdDetected = true
 	b.log.Debugf("volume management devices detected: %v", vmdDevs)
+	return true, nil
+}
+
+// Prepare will cleanup any leftover hugepages owned by the target user and then
+// executes the SPDK setup.sh script to rebind PCI devices as selected by
+// bdev_include and bdev_exclude list filters provided in the server config file.
+// This will make the devices available though SPDK.
+func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
+	b.log.Debugf("provider backend prepare %v", req)
+	resp := &PrepareResponse{}
+
+	usr, err := user.Lookup(req.TargetUser)
+	if err != nil {
+		return nil, errors.Wrapf(err, "lookup on local host")
+	}
+
+	if err := b.script.Prepare(req); err != nil {
+		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
+	}
+
+	if !req.DisableCleanHugePages {
+		// remove hugepages matching /dev/hugepages/spdk* owned by target user
+		err := cleanHugePages(hugePageDir, hugePagePrefix, usr.Uid)
+		if err != nil {
+			return nil, errors.Wrapf(err, "clean spdk hugepages")
+		}
+	}
+
+	if !req.DisableVMD {
+		vmdDetected, err := b.vmdPrep(req)
+		if err != nil {
+			return nil, err
+		}
+		resp.VmdDetected = vmdDetected
+	}
 
 	return resp, nil
 }
 
 func (b *spdkBackend) PrepareReset() error {
+	b.log.Debugf("provider backend prepare reset")
 	return b.script.Reset()
 }
 
