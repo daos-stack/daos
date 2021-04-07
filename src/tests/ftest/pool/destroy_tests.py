@@ -4,8 +4,6 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 from server_utils import ServerFailed
 from apricot import TestWithServers, skipForTicket
 from avocado.core.exceptions import TestFail
@@ -145,8 +143,8 @@ class DestroyTests(TestWithServers):
     def test_destroy_single(self):
         """Test destroying a pool created on a single server.
 
-        :avocado: tags=all,medium,pr,daily_regression
-        :avocado: tags=pool,destroy,destroysingle
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=pool,destroy,destroy_single
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -157,8 +155,8 @@ class DestroyTests(TestWithServers):
     def test_destroy_multi(self):
         """Test destroying a pool created on two servers.
 
-        :avocado: tags=all,medium,pr,daily_regression
-        :avocado: tags=pool,destroy,destroymutli
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=pool,destroy,destroy_multi
         """
         hostlist_servers = self.hostlist_servers[:2]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -172,8 +170,8 @@ class DestroyTests(TestWithServers):
         Test destroy and recreate one right after the other multiple times
         Should fail.
 
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroysingleloop
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool,destroy,destroy_single_loop
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -195,8 +193,8 @@ class DestroyTests(TestWithServers):
     def test_destroy_multi_loop(self):
         """Test destroy on a large (relative) number of servers.
 
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroymutliloop
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool,destroy,destroy_multi_loop
         """
         hostlist_servers = self.hostlist_servers[:6]
 
@@ -215,12 +213,11 @@ class DestroyTests(TestWithServers):
                 hostlist_servers,
                 "with multiple servers - pass {}".format(counter))
 
-    @skipForTicket("DAOS-2739")
     def test_destroy_invalid_uuid(self):
         """Test destroying a pool uuid that doesn't exist.
 
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroyinvaliduuid
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool,destroy,destroy_invalid_uuid
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -232,52 +229,19 @@ class DestroyTests(TestWithServers):
         self.validate_pool_creation(hostlist_servers, setid)
 
         # Change the pool uuid
-        valid_uuid = self.pool.pool.uuid
-        self.pool.pool.set_uuid_str("81ef94d7-a59d-4a5e-935b-abfbd12f2105")
+        valid_uuid = self.pool.uuid
+        invalid_uuid = "81ef94d7-a59d-4a5e-935b-abfbd12f2105"
+        self.pool.uuid = invalid_uuid
 
         # Attempt to destroy the pool with an invalid UUID
         self.validate_pool_destroy(
-            hostlist_servers,
-            "with an invalid UUID {}".format(self.pool.pool.get_uuid_str()),
-            True)
+            hosts=hostlist_servers,
+            case="with an invalid UUID {}".format(
+                self.pool.pool.get_uuid_str()),
+            exception_expected=True)
 
-        # Restore th valid uuid to allow tearDown() to pass
-        self.log.info(
-            "Restoring the pool's valid uuid: %s", str(valid_uuid.value))
-        self.pool.pool.uuid = valid_uuid
-
-    @skipForTicket("DAOS-5545")
-    def test_destroy_invalid_group(self):
-        """Test destroying a valid pool but use the wrong server group.
-
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroyinvalidgroup
-        """
-        hostlist_servers = self.hostlist_servers[:1]
-        setid = self.params.get("setname", '/run/setnames/validsetname/')
-        badsetid = self.params.get("setname", '/run/setnames/badsetname/')
-
-        # Start servers
-        self.start_servers(self.get_group(setid, hostlist_servers))
-
-        # Create a pool
-        self.validate_pool_creation(hostlist_servers, setid)
-
-        # Change the pool server group name
-        valid_group = self.pool.pool.group
-        self.pool.pool.group = create_string_buffer(badsetid)
-
-        # Attempt to destroy the pool with an invalid server group name
-        self.validate_pool_destroy(
-            hostlist_servers,
-            "with an invalid server group name {}".format(badsetid),
-            True)
-
-        # Restore the valid pool server group name to allow tearDown() to pass
-        self.log.info(
-            "Restoring the pool's valid server group name: %s",
-            str(valid_group.value))
-        self.pool.pool.group = valid_group
+        # Restore the valid uuid to allow tearDown() to pass
+        self.pool.uuid = valid_uuid
 
     @skipForTicket("DAOS-2742")
     def test_destroy_wrong_group(self):
@@ -286,8 +250,8 @@ class DestroyTests(TestWithServers):
          Destroy a pool on group A that was created on server group B,
          should fail.
 
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroywronggroup
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool,destroy,destroy_wrong_group
         """
         group_names = [self.server_group + "_a", self.server_group + "_b"]
         group_hosts = {
@@ -334,8 +298,8 @@ class DestroyTests(TestWithServers):
         Test destroying a pool that has a connected client with force == false.
         Should fail.
 
-        :avocado: tags=all,medium,pr,daily_regression
-        :avocado: tags=pool,destroy,destroyconnected
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=pool,destroy,destroy_connected
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -384,8 +348,8 @@ class DestroyTests(TestWithServers):
         Test destroying a pool that has a connected client with force == true.
         Should pass.
 
-        :avocado: tags=all,medium,pr,daily_regression
-        :avocado: tags=pool,destroy,forcedestroyconnected
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=pool,destroy,force_destroy_connected
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -423,8 +387,8 @@ class DestroyTests(TestWithServers):
         Test destroy and recreate one right after the other multiple times
         Should fail.
 
-        :avocado: tags=all,medium,pr,daily_regression
-        :avocado: tags=pool,destroy,destroywithdata
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=pool,destroy,destroy_with_data
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -483,8 +447,8 @@ class DestroyTests(TestWithServers):
         Expect the destroy to work on the server group where the pool was
         created and expect the destroy pool to fail on the second server.
 
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroyasync
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool,destroy,destroy_async
         """
         # Start two server groups
         group_names = [self.server_group + "_a", self.server_group + "_b"]

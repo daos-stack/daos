@@ -15,9 +15,8 @@ server_config:
   name: daos_server
 timeout: 180
 pool:
-  mode: 146
   name: daos_server
-  scm_size: 1073741824
+  scm_size: 1G
   control_method: dmg
 container:
   object_qty: 1
@@ -28,7 +27,5 @@ container:
 setnames:
   validsetname:
     setname: daos_server
-  badsetname:
-    setname: complete_rubbish
   othersetname:
     setname: other_server
