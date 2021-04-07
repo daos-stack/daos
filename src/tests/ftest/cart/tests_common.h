@@ -103,5 +103,4 @@ out:
 	return rc;
 }
 
-
 #endif /* __TESTS_COMMON_H__ */

@@ -13,7 +13,6 @@
 #include "crt_internal.h"
 #include "tests_common.h"
 
-
 /* Global structures */
 struct test_options opts = { .is_initialized = false };
 
@@ -302,37 +301,6 @@ tc_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 out:
 	return rc;
 }
-
-#if 0
-static inline int
-tc_sem_timedwait(sem_t *sem, int sec, int line_number)
-{
-	struct timespec	deadline;
-	int		rc;
-
-	rc = clock_gettime(CLOCK_REALTIME, &deadline);
-	if (rc != 0) {
-		if (opts.assert_on_error)
-			D_ASSERTF(rc == 0, "clock_gettime() failed at "
-				  "line %d rc: %d\n", line_number, rc);
-		D_ERROR("clock_gettime() failed, rc = %d\n", rc);
-		D_GOTO(out, rc);
-	}
-
-	deadline.tv_sec += sec;
-	rc = sem_timedwait(sem, &deadline);
-	if (rc != 0) {
-		if (opts.assert_on_error)
-			D_ASSERTF(rc == 0, "sem_timedwait() failed at "
-				  "line %d rc: %d\n", line_number, rc);
-		D_ERROR("sem_timedwait() failed, rc = %d\n", rc);
-		D_GOTO(out, rc);
-	}
-
-out:
-	return rc;
-}
-#endif
 
 void
 tc_cli_start_basic(char *local_group_name, char *srv_group_name,
