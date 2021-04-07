@@ -216,7 +216,9 @@ class NvmePoolExtend(TestWithServers):
         """Test ID: DAOS-2086
         Test Description: NVME Pool Extend
 
-        :avocado: tags=all,full_regression,hw,large,nvme
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme,checksum
         :avocado: tags=nvme_pool_extend
         """
         self.run_nvme_pool_extend(1)
