@@ -38,27 +38,26 @@ class DestroyRebuild(TestWithServers):
         targets = self.params.get("targets", "/run/server_config/servers/*")
         ranks = self.params.get("rank_to_kill", "/run/testparams/*")
 
-        for rank in ranks:
-            # Create a pool
-            self.pool.create()
+        # Create a pool
+        self.pool.create()
 
-            # Verify the pool information before starting rebuild
-            checks = {
-                "pi_nnodes": len(self.hostlist_servers),
-                "pi_ntargets": len(self.hostlist_servers) * targets,
-                "pi_ndisabled": 0,
-            }
-            self.assertTrue(
-                self.pool.check_pool_info(**checks),
-                "Invalid pool information detected prior to rebuild")
+        # Verify the pool information before starting rebuild
+        checks = {
+            "pi_nnodes": len(self.hostlist_servers),
+            "pi_ntargets": len(self.hostlist_servers) * targets,
+            "pi_ndisabled": 0,
+        }
+        self.assertTrue(
+            self.pool.check_pool_info(**checks),
+            "Invalid pool information detected prior to rebuild")
 
-            # Start rebuild
-            self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
-            self.pool.wait_for_rebuild(True)
+        # Start rebuild
+        self.server_managers[0].stop_ranks([ranks], self.d_log, force=True)
+        self.pool.wait_for_rebuild(True)
 
-            # Destroy the pool while rebuild is active
-            self.pool.destroy()
+        # Destroy the pool while rebuild is active
+        self.pool.destroy()
 
-            self.log.info("Test Passed")
-            self.get_dmg_command().system_start(rank)
-            self.server_managers[0].update_expected_states(rank, ["joined"])
+        self.log.info("Test Passed")
+        self.get_dmg_command().system_start(ranks)
+        self.server_managers[0].update_expected_states(ranks, ["joined"])
