@@ -23,9 +23,10 @@ class EcOfflineRebuild(ErasureCodeIor):
                   EC object type class for small and large transfer sizes.
                   kill single server, Wait to finish rebuild,
                   verify all IOR read data and verified.
-
-        :avocado: tags=all,hw,large,ib2,full_regression
-        :avocado: tags=ec,ec_offline_rebuild
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=ec
+        :avocado: tags=ec_offline_rebuild
         """
         # Write IOR data set with different EC object and different sizes
         self.ior_write_dataset()
