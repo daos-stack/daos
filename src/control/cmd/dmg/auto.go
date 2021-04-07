@@ -15,7 +15,6 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
-	"github.com/pkg/errors"
 )
 
 // configCmd is the struct representing the top-level config subcommand.
@@ -66,24 +65,22 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 
 	// TODO: decide whether we want meaningful JSON output
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, errors.New("JSON output not supported"))
+		return cmd.outputJSON(new(control.ConfigGenerateResp), nil)
 	}
 
 	resp, err := control.ConfigGenerate(ctx, req)
 	if err != nil {
-		cge, ok := errors.Cause(err).(*control.ConfigGenerateError)
-		if !ok {
-			// includes hardware validation errors e.g. hardware across hostset differs
-			return err
-		}
+		// includes hardware validation errors e.g. hardware across hostset differs
+		return err
+	}
 
+	if resp.Errors() != nil {
 		// host level errors e.g. unresponsive daos_server process
 		var bld strings.Builder
-		if err := pretty.PrintResponseErrors(cge, &bld); err != nil {
+		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 			return err
 		}
-		cmd.log.Error(bld.String())
-		return err
+		cmd.log.Error(bld.String()) // no-op if no host level errors
 	}
 
 	bytes, err := yaml.Marshal(resp.ConfigOut)

@@ -57,36 +57,15 @@ type (
 
 	// ConfigGenerateResp contains the request response.
 	ConfigGenerateResp struct {
+		HostErrorsResp
 		ConfigOut *config.Server
 	}
-
-	// ConfigGenerateError implements the error interface and
-	// contains a set of host-specific errors encountered while
-	// attempting to generate a configuration.
-	ConfigGenerateError struct {
-		HostErrorsResp
-	}
 )
-
-func (cge *ConfigGenerateError) Error() string {
-	return cge.Errors().Error()
-}
-
-// GetHostErrors returns the wrapped HostErrorsMap.
-func (cge *ConfigGenerateError) GetHostErrors() HostErrorsMap {
-	return cge.HostErrors
-}
-
-// IsConfigGenerateError returns true if the provided error is a *ConfigGenerateError.
-func IsConfigGenerateError(err error) bool {
-	_, ok := errors.Cause(err).(*ConfigGenerateError)
-	return ok
-}
 
 // ConfigGenerate attempts to automatically detect hardware and generate a DAOS
 // server config file for a set of hosts with homogeneous hardware setup.
 //
-// Returns API response or error.
+// Returns API response and error.
 func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerateResp, error) {
 	req.Log.Debugf("ConfigGenerate called with request %+v", req)
 
@@ -94,14 +73,14 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, errors.New("no hosts specified")
 	}
 
-	nd, err := getNetworkDetails(ctx, req)
+	nd, hostErrs, err := getNetworkDetails(ctx, req)
 	if err != nil {
-		return nil, err
+		return checkHostErrors(hostErrs), err
 	}
 
-	sd, err := getStorageDetails(ctx, req, nd.engineCount)
+	sd, hostErrs, err := getStorageDetails(ctx, req, nd.engineCount)
 	if err != nil {
-		return nil, err
+		return checkHostErrors(hostErrs), err
 	}
 
 	ccs, err := getCPUDetails(req.Log, sd.numaSSDs, nd.numaCoreCount)
@@ -121,28 +100,36 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 	return &ConfigGenerateResp{ConfigOut: cfg}, nil
 }
 
+func checkHostErrors(hes *HostErrorsResp) *ConfigGenerateResp {
+	if hes == nil {
+		hes = &HostErrorsResp{}
+	}
+
+	return &ConfigGenerateResp{HostErrorsResp: *hes}
+}
+
 // getNetworkSet retrieves the result of network scan over host list and
 // verifies that there is only a single network set in response which indicates
 // that network hardware setup is homogeneous across all hosts.
 //
 // Return host errors, network scan results for the host set or error.
-func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostFabricSet, error) {
+func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostFabricSet, *HostErrorsResp, error) {
 	scanReq := new(NetworkScanReq)
 	scanReq.SetHostList(hostList)
 
 	scanResp, err := NetworkScan(ctx, client, scanReq)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if len(scanResp.GetHostErrors()) > 0 {
-		return nil, &ConfigGenerateError{HostErrorsResp: scanResp.HostErrorsResp}
+		return nil, &scanResp.HostErrorsResp, scanResp.Errors()
 	}
 
 	// verify homogeneous network
 	switch len(scanResp.HostFabrics) {
 	case 0:
-		return nil, errors.New("no host responses")
+		return nil, nil, errors.New("no host responses")
 	case 1: // success
 	default: // more than one means non-homogeneous hardware
 		log.Info("Heterogeneous network hardware configurations detected, " +
@@ -152,7 +139,7 @@ func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, c
 			log.Info(hns.HostSet.String())
 		}
 
-		return nil, errors.New("network hardware not consistent across hosts")
+		return nil, nil, errors.New("network hardware not consistent across hosts")
 	}
 
 	networkSet := scanResp.HostFabrics[scanResp.HostFabrics.Keys()[0]]
@@ -160,7 +147,7 @@ func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, c
 	log.Debugf("Network hardware is consistent for hosts %s:\n\t%v",
 		networkSet.HostSet, networkSet.HostFabric.Interfaces)
 
-	return networkSet, nil
+	return networkSet, nil, nil
 }
 
 // numaNetIfaceMap is an alias for a map of NUMA node ID to optimal
@@ -274,10 +261,10 @@ type networkDetails struct {
 //
 // Returns map of NUMA node ID to chosen fabric interfaces, number of engines to
 // provide mappings for, per-NUMA core count and any host errors.
-func getNetworkDetails(ctx context.Context, req ConfigGenerateReq) (*networkDetails, error) {
-	netSet, err := getNetworkSet(ctx, req.Log, req.HostList, req.Client)
+func getNetworkDetails(ctx context.Context, req ConfigGenerateReq) (*networkDetails, *HostErrorsResp, error) {
+	netSet, hostErrs, err := getNetworkSet(ctx, req.Log, req.HostList, req.Client)
 	if err != nil {
-		return nil, err
+		return nil, hostErrs, err
 	}
 
 	nd := &networkDetails{
@@ -289,18 +276,18 @@ func getNetworkDetails(ctx context.Context, req ConfigGenerateReq) (*networkDeta
 		nd.engineCount = int(netSet.HostFabric.NumaCount)
 	}
 	if nd.engineCount == 0 {
-		return nil, errors.Errorf(errNoNuma, netSet.HostSet)
+		return nil, nil, errors.Errorf(errNoNuma, netSet.HostSet)
 	}
 
 	req.Log.Debugf("engine count for generated config set to %d", nd.engineCount)
 
 	numaIfaces, err := getNetIfaces(req.Log, req.NetClass, nd.engineCount, netSet)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	nd.numaIfaces = numaIfaces
 
-	return nd, nil
+	return nd, nil, nil
 }
 
 // getStorageSet retrieves the result of storage scan over host list and
@@ -312,22 +299,22 @@ func getNetworkDetails(ctx context.Context, req ConfigGenerateReq) (*networkDeta
 // configuration to work with different combinations of SSD models.
 //
 // Return host errors, storage scan results for the host set or error.
-func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostStorageSet, error) {
+func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostErrorsResp, *HostStorageSet, error) {
 	scanReq := &StorageScanReq{NvmeBasic: true}
 	scanReq.SetHostList(hostList)
 
 	scanResp, err := StorageScan(ctx, client, scanReq)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(scanResp.GetHostErrors()) > 0 {
-		return nil, &ConfigGenerateError{HostErrorsResp: scanResp.HostErrorsResp}
+		return &scanResp.HostErrorsResp, nil, scanResp.Errors()
 	}
 
 	// verify homogeneous storage
 	switch len(scanResp.HostStorage) {
 	case 0:
-		return nil, errors.New("no host responses")
+		return nil, nil, errors.New("no host responses")
 	case 1: // success
 	default: // more than one means non-homogeneous hardware
 		log.Info("Heterogeneous storage hardware configurations detected, " +
@@ -337,7 +324,7 @@ func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, c
 			log.Info(hss.HostSet.String())
 		}
 
-		return nil, errors.New("storage hardware not consistent across hosts")
+		return nil, nil, errors.New("storage hardware not consistent across hosts")
 	}
 
 	storageSet := scanResp.HostStorage[scanResp.HostStorage.Keys()[0]]
@@ -346,7 +333,7 @@ func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, c
 		storageSet.HostSet.String(), storageSet.HostStorage.ScmNamespaces.Summary(),
 		storageSet.HostStorage.NvmeDevices.Summary())
 
-	return storageSet, nil
+	return nil, storageSet, nil
 }
 
 // numaPMemsMap is an alias for a map of NUMA node ID to slice of string sorted
@@ -431,14 +418,14 @@ func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSD
 // devices.
 //
 // Returns storage details struct or host error response and outer error.
-func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount int) (*storageDetails, error) {
+func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount int) (*storageDetails, *HostErrorsResp, error) {
 	if engineCount < 1 {
-		return nil, errors.Errorf(errInvalNrEngines, 1, engineCount)
+		return nil, nil, errors.Errorf(errInvalNrEngines, 1, engineCount)
 	}
 
-	storageSet, err := getStorageSet(ctx, req.Log, req.HostList, req.Client)
+	hostErrs, storageSet, err := getStorageSet(ctx, req.Log, req.HostList, req.Client)
 	if err != nil {
-		return nil, err
+		return nil, hostErrs, err
 	}
 
 	sd := &storageDetails{
@@ -446,10 +433,10 @@ func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount i
 		numaSSDs:  mapSSDs(storageSet.HostStorage.NvmeDevices),
 	}
 	if err := sd.validate(req.Log, engineCount, req.MinNrSSDs); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return sd, nil
+	return sd, nil, nil
 }
 
 func calcHelpers(log logging.Logger, targets, cores int) int {
