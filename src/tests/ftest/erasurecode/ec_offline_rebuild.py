@@ -24,7 +24,7 @@ class EcOfflineRebuild(ErasureCodeIor):
                   kill single server, Wait to finish rebuild,
                   verify all IOR read data and verified.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,large,ib2
         :avocado: tags=ec
         :avocado: tags=ec_offline_rebuild
         """
