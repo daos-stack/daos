@@ -7,6 +7,7 @@
 from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
+from time import sleep
 
 
 class PoolSvc(TestWithServers):
@@ -55,6 +56,42 @@ class PoolSvc(TestWithServers):
             self.log.info("Pool leader: current=%s", current_leader)
         return current_leader
 
+    def is_pool_rebuild_in_progress(self, max_retries=5, sleep_timer=5):
+        """Check if pool is in rebuild state
+
+        Args:
+            max_retries (int, optional): max number of attempts to wait for rebuild
+                status change
+            sleep_timer (int, optional): is the number of seconds to wait between
+                retries
+
+        Return:
+            bool: True if rebuild still in progress, False otherwise
+        """
+        counter = 0
+        self.pool.set_query_data()
+        self.log.info("Checking the rebuild status of pool %s ", self.pool.uuid)
+        rebuild_in_progress = True
+        while counter < max_retries:
+            rebuild = self.pool.query_data["response"]["rebuild"]
+            if not rebuild:
+                self.log.info("Rebuild no longer in progress.")
+                rebuild_in_progress = False
+            elif rebuild:
+                rebuild_state = self.pool.query_data["response"]["rebuild"]["state"]
+                if "busy" in rebuild_state:
+                    # Wait until rebuild is done
+                    self.log.info("Waiting for busy state to change.")
+                    sleep(sleep_timer)
+                if "done" in rebuild_state:
+                    self.log.info("Status changed to done.")
+                    rebuild_in_progress = False
+            if not rebuild_in_progress:
+                break
+            counter += 1
+            self.pool.set_query_data()
+        return rebuild_in_progress
+
     def test_pool_svc(self):
         """Test svc arg during pool create.
 
@@ -65,7 +102,6 @@ class PoolSvc(TestWithServers):
         """
         # parameter used in pool create
         svc_params = self.params.get("svc_params")
-
         # Setup the TestPool object
         self.add_pool(create=False)
 
@@ -130,6 +166,8 @@ class PoolSvc(TestWithServers):
                         "DaosServerManager.stop_ranks([{}])".format(
                             pool_leader))
 
+                self.is_pool_rebuild_in_progress()
+
                 # Verify the pool leader has changed
                 pool_leader = self.check_leader(pool_leader, True)
                 non_leader_ranks.remove(pool_leader)
@@ -148,7 +186,9 @@ class PoolSvc(TestWithServers):
                         "Error stopping a pool non-leader - "
                         "DaosServerManager.stop_ranks([{}])".format(non_leader))
 
+                self.is_pool_rebuild_in_progress()
                 # Verify the pool leader has not changed
                 self.check_leader(pool_leader, False)
+                self.destroy_pools(self.pool)
 
         self.log.info("Test passed!")
