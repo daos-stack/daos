@@ -436,15 +436,3 @@ class CartTest(TestWithoutServers):
             # For compatibility with cart tests, which set env vars in oretrun
             # command via -x options
             self.env = os.environ
-
-    def unset_other_env_vars(self):
-        """Unset env vars from yaml file."""
-        default_env = self.params.get("default", "/run/ENV/")
-        if default_env:
-            for kv_pair in default_env:
-                try:
-                    key = kv_pair[0][0]
-                    self.log.info("Removing key %s from environment.", key)
-                    del os.environ[key]
-                except IndexError:
-                    pass

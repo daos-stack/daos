@@ -15,7 +15,7 @@ set -ex
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ci_envs="$mydir/../parse_ci_envs.sh"
 if [ -e "${ci_envs}" ]; then
-  # shellcheck disable=SC1091
+  # shellcheck disable=SC1091,SC1090
   source "${ci_envs}"
 fi
 
@@ -39,6 +39,8 @@ EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_SCONS_OPT}${EXTERNAL_COMPILER_OPT}"
 
 rm -rf "artifacts/${TARGET}/"
 mkdir -p "artifacts/${TARGET}/"
+
+# shellcheck disable=SC2086
 DEBEMAIL="$DAOS_EMAIL" DEBFULLNAME="$DAOS_FULLNAME" \
 TOPDIR=$PWD make CHROOT_NAME="${CHROOT_NAME}" ${JOB_REPOS} \
     EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_RPM_BUILD_OPTIONS}" \
