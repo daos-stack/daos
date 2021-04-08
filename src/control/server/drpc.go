@@ -12,8 +12,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
@@ -37,6 +38,8 @@ func (dsr *daosStatusResp) String() string {
 func (dsr *daosStatusResp) Reset() {}
 
 func (dsr *daosStatusResp) ProtoMessage() {}
+
+func (dsr *daosStatusResp) ProtoReflect() protoreflect.Message { return nil }
 
 type retryableDrpcReq struct {
 	proto.Message

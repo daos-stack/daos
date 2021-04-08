@@ -45,6 +45,9 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\
 		   cmd/drpc_test/hello/drpc_test.pb.go
+GO_CONTROL_GRPC_FILES = common/proto/ctl/ctl_grpc.pb.go\
+		   common/proto/mgmt/mgmt_grpc.pb.go
+
 CTRL_SOURCE_ROOT = $(DAOS_ROOT)/src/control
 PROTO_SOURCE_DIR = $(DAOS_ROOT)/src/proto
 uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
@@ -52,7 +55,7 @@ uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 all: proto-go proto-c
 
 clean:
-	rm -f $(GO_TARGETS) $(C_TARGETS)
+	rm -f $(GO_TARGETS) $(GO_GRPC_TARGETS) $(C_TARGETS)
 
 PROTOC := $(shell which protoc 2>/dev/null)
 ifeq ($(PROTOC),)
@@ -65,22 +68,21 @@ $(PROTOC):
 	@false
 
 GOPATH ?= $(shell go env GOPATH)
-PROTOC_GEN_GO_MOD_TAG = $(shell awk '/protobuf/ {print $$2}' $(DAOS_ROOT)/src/control/go.mod)
+GOPATHSRC ?= $(GOPATH)/src
+PROTOC_GEN_GO_MOD_TAG = $(shell awk '/google\.golang\.org\/protobuf/ {print $$2}' $(DAOS_ROOT)/src/control/go.mod)
 PROTOC_GEN_GO_TAG ?= $(PROTOC_GEN_GO_MOD_TAG)
-PROTOC_GEN_GO_IMP := github.com/golang/protobuf/protoc-gen-go
+PROTOC_GEN_GO_MOD ?= google.golang.org/protobuf
+PROTOC_GEN_GO_IMP := $(PROTOC_GEN_GO_MOD)/cmd/protoc-gen-go
 PROTOC_GEN_GO := $(GOPATH)/bin/protoc-gen-go
 
 $(PROTOC_GEN_GO): $(PROTOC)
 	@echo "Installing protobuf generator for Go..."
-	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) ] &&\
-		cd $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) &&\
-		git checkout master
-	go get -u $(PROTOC_GEN_GO_IMP) &&\
-	cd $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) &&\
-	git checkout $(PROTOC_GEN_GO_TAG) &&\
-	go install $(PROTOC_GEN_GO_IMP)
+	[ ! -d $(GOPATH)/pkg/mod/$(PROTOC_GEN_GO_MOD)@$(PROTOC_GEN_GO_MOD_TAG) ] || [ ! -f $(PROTOC_GEN_GO) ] &&\
+		go get -u $(PROTOC_GEN_GO_IMP)
+		go get -u google.golang.org/grpc/cmd/protoc-gen-go-grpc
 
 GO_TARGETS = $(addprefix $(CTRL_SOURCE_ROOT)/,$(GO_CONTROL_FILES))
+GO_GRPC_TARGETS = $(addprefix $(CTRL_SOURCE_ROOT)/,$(GO_CONTROL_GRPC_FILES))
 GO_PKG_DIRS = $(call uniq,$(dir $(GO_TARGETS)))
 
 proto-go: $(PROTOC_GEN_GO) $(GO_PKG_DIRS) $(GO_TARGETS)
@@ -89,18 +91,18 @@ $(GO_PKG_DIRS):
 	mkdir -p $@
 
 $(CTRL_SOURCE_ROOT)/common/proto/%.pb.go: $(PROTO_SOURCE_DIR)/%.proto
-	protoc -I $(PROTO_SOURCE_DIR) --go_out=plugins=grpc:$(shell dirname $(dir $@)) --go_opt=paths=source_relative $<
+	protoc -I $(PROTO_SOURCE_DIR) --go_out=$(GOPATHSRC) --go-grpc_out=$(GOPATHSRC) --go-grpc_opt=require_unimplemented_servers=false $<
 
 # Some of these don't follow a regular pattern, so define
 # one-off recipes for them.
 $(CTRL_SOURCE_ROOT)/drpc/%.pb.go: $(PROTO_SOURCE_DIR)/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) --go_opt=paths=source_relative $<
+	protoc -I $(PROTO_SOURCE_DIR) --go_out=$(GOPATHSRC) --go-grpc_out=$(GOPATHSRC) --go-grpc_opt=require_unimplemented_servers=false $<
 
 $(CTRL_SOURCE_ROOT)/security/auth/%.pb.go: $(PROTO_SOURCE_DIR)/security/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) --go_opt=paths=source_relative $<
+	protoc -I $(PROTO_SOURCE_DIR) --go_out=$(GOPATHSRC) --go-grpc_out=$(GOPATHSRC) --go-grpc_opt=require_unimplemented_servers=false $<
 
 $(CTRL_SOURCE_ROOT)/cmd/drpc_test/hello/%.pb.go: $(PROTO_SOURCE_DIR)/test/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) --go_opt=paths=source_relative $<
+	protoc -I $(PROTO_SOURCE_DIR) --go_out=$(GOPATHSRC) --go-grpc_out=$(GOPATHSRC) --go-grpc_opt=require_unimplemented_servers=false $<
 
 PROTOC_GEN_C := $(shell which protoc-gen-c 2>/dev/null)
 ifeq ($(PROTOC_GEN_C),)

@@ -454,7 +454,7 @@ static const ProtobufCFieldDescriptor srv__get_pool_svc_resp__field_descriptors[
     offsetof(Srv__GetPoolSvcResp, svcreps),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
