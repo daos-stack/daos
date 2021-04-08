@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.1.4
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -368,7 +368,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/python3/site-packages/pydaos/__pycache__/*.pyc
 %{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
 %endif
-%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
+%{_libdir}/python3/site-packages/pydaos/pydaos_shim.so
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
@@ -413,6 +413,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Apr 5 2021 Maureen Jean <maureen.jean@intel.com> 1.1.4-4
+- Change pydaos_shim_3 to pydaos_shim
+
 * Thu Apr 01 2021 Brian J. Murrell <brian.murrell@intel.com> 1.1.4-3
 - Update argobots to 1.1
 
