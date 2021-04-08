@@ -10,6 +10,7 @@ import threading
 import copy
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
+from dmg_utils import check_system_query_status
 from test_utils_pool import TestPool
 from command_utils import CommandFailure
 from apricot import skipForTicket
@@ -113,7 +114,13 @@ class OSAOfflineParallelTest(OSAUtils):
         # Start the additional servers and extend the pool
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
-
+        # Give sometime for the additional server to come up.
+        for retry in range(0, 10):
+            scan_info = self.get_dmg_command().system_query()
+            if not check_system_query_status(scan_info):
+                if retry == 9:
+                    self.fail("One or more servers not in expected status")
+    
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
             self.pool = pool[val]
@@ -163,7 +170,7 @@ class OSAOfflineParallelTest(OSAUtils):
             self.assert_on_rebuild_failure()
             pver_end = self.get_pool_version()
             self.log.info("Pool Version at the End %s", pver_end)
-            self.assertTrue(pver_end == 25,
+            self.assertTrue(pver_end >= 34,
                             "Pool Version Error:  at the end")
         if data:
             self.run_ior_thread("Read", oclass, test_seq)
@@ -180,7 +187,8 @@ class OSAOfflineParallelTest(OSAUtils):
 
         Test Description: Runs multiple OSA commands in parallel.
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,offline_parallel
         :avocado: tags=offline_parallel_basic_test
         """
@@ -194,7 +202,8 @@ class OSAOfflineParallelTest(OSAUtils):
 
         Test Description: Runs multiple OSA commands in parallel.
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,offline_parallel
         :avocado: tags=offline_parallel_without_csum
         """
@@ -210,7 +219,8 @@ class OSAOfflineParallelTest(OSAUtils):
 
         Test Description: Runs multiple OSA commands in parallel.
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,offline_parallel
         :avocado: tags=offline_parallel_srv_rank_boot
         """
