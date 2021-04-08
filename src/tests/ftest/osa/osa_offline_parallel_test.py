@@ -109,7 +109,10 @@ class OSAOfflineParallelTest(OSAUtils):
             self.pool = pool[val]
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
-                self.run_mdtest_thread()
+                if oclass != "S1":
+                    self.run_mdtest_thread()
+                if self.test_during_aggregation is True:
+                    self.run_ior_thread("Write", oclass, test_seq)
 
         # Start the additional servers and extend the pool
         self.log.info("Extra Servers = %s", self.extra_servers)
@@ -120,6 +123,8 @@ class OSAOfflineParallelTest(OSAUtils):
             if not check_system_query_status(scan_info):
                 if retry == 9:
                     self.fail("One or more servers not in expected status")
+            else:
+                break
     
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
@@ -127,6 +132,8 @@ class OSAOfflineParallelTest(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
+            if self.test_during_aggregation is True and val == 0:
+                self.delete_extra_container(self.pool)
             # Create the threads here
             threads = []
             # Action dictionary with OSA dmg command parameters
@@ -174,7 +181,8 @@ class OSAOfflineParallelTest(OSAUtils):
                             "Pool Version Error:  at the end")
         if data:
             self.run_ior_thread("Read", oclass, test_seq)
-            self.run_mdtest_thread()
+            if oclass != "S1":
+                self.run_mdtest_thread()
             self.container = self.pool_cont_dict[self.pool][0]
             kwargs = {"pool": self.pool.uuid,
                       "cont": self.container.uuid}
@@ -189,10 +197,9 @@ class OSAOfflineParallelTest(OSAUtils):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,offline_parallel
-        :avocado: tags=offline_parallel_basic_test
+        :avocado: tags=osa,checksum
+        :avocado: tags=offline_parallel,offline_parallel_basic_test
         """
-        # Run the parallel offline test.
         self.log.info("Offline Parallel Test: Basic Test")
         self.run_offline_parallel_test(1, True)
 
@@ -200,34 +207,70 @@ class OSAOfflineParallelTest(OSAUtils):
         """
         JIRA ID: DAOS-7161
 
-        Test Description: Runs multiple OSA commands in parallel.
+        Test Description: Runs multiple OSA commands in parallel
+        without enabling checksum.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,offline_parallel
-        :avocado: tags=offline_parallel_without_csum
+        :avocado: tags=osa
+        :avocado: tags=offline_parallel,offline_parallel_without_csum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
         self.log.info("Offline Parallel Test: Without Checksum")
-        # Run the parallel offline test.
         self.run_offline_parallel_test(1, True)
 
     def test_osa_offline_parallel_test_rank_boot(self):
         """
         JIRA ID: DAOS-7161
 
-        Test Description: Runs multiple OSA commands in parallel.
+        Test Description: Runs multiple OSA commands in parallel
+        with a rank rebooted using system stop/start.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,offline_parallel
-        :avocado: tags=offline_parallel_srv_rank_boot
+        :avocado: tags=osa
+        :avocado: tags=offline_parallel,offline_parallel_srv_rank_boot
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
         self.server_boot = self.params.get("flags",
                                            '/run/system_stop_start/*')
         self.log.info("Offline Parallel Test: Restart a rank")
-        # Run the parallel offline test.
         self.run_offline_parallel_test(1, data=True)
+
+    @skipForTicket("DAOS-7195")
+    def test_osa_offline_parallel_test_with_aggregation(self):
+        """
+        JIRA ID: DAOS-7161
+
+        Test Description: Runs multiple OSA commands in parallel
+        with aggregation turned on.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa
+        :avocado: tags=offline_parallel,offline_parallel_with_aggregation
+        """
+        self.test_during_aggregation = self.params.get("test_with_aggregation",
+                                                       '/run/aggregation/*')
+        self.log.info("Offline Parallel Test : Aggregation")
+        self.run_offline_parallel_test(1, True)
+
+    def test_osa_offline_parallel_test_oclass(self):
+        """
+        JIRA ID: DAOS-7161
+
+        Test Description: Runs multiple OSA commands in parallel
+        with different object class.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa
+        :avocado: tags=offline_parallel,offline_parallel_oclass
+        """
+        self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
+        self.log.info("Offline Parallel Test : OClass")
+        # Presently, the script is limited and supports only one extra
+        # object class testing. We are testing S1 apart from RP_2G1.
+        self.run_offline_parallel_test(1, True, oclass=self.test_oclass[0])
