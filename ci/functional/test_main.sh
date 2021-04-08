@@ -14,7 +14,7 @@ first_node=${NODELIST%%,*}
 
 clush -B -S -o '-i ci_key' -l root -w "${first_node}" \
     "NODELIST=${NODELIST}                             \
-     REMOTE_ACCT=${REMOTE_ACCT}                       \
+     REMOTE_ACCT=${REMOTE_ACCT:-jenkins}              \
      $(cat ci/functional/setup_nfs.sh)"
 
 clush -B -S -o '-i ci_key' -l root -w "${tnodes}"      \
