@@ -14,6 +14,8 @@ orterun:
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 2 hour test
 timeout: 1H15M
+aurora: True
+mpi_module: mpich/gnu-sockets
 setup:
     start_servers: False
     start_agents: False
@@ -99,6 +101,7 @@ soak_stress:
     taskspernode:
         - 1
         - 4
+        - 8
     joblist:
         - ior_stress
 # Commandline parameters
@@ -110,7 +113,7 @@ ior_stress:
         - DFS
         - MPIIO
     test_file: daos:testFile
-    flags: -v -w -W -r -R
+    flags: -v -w -W -r -F -R
     block_size:
         - '1G'
     repetitions: 1
