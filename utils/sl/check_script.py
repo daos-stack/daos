@@ -102,8 +102,9 @@ class WrapScript():
     @staticmethod
     def write_variables(outfile, prefix, variables):
         """Add code to define fake variables for pylint"""
-        newlines = 2
+        newlines = 4
         outfile.write("# pylint: disable=invalid-name\n")
+        outfile.write("# pylint: disable=import-outside-toplevel\n")
 
         for variable in variables:
             if variable.upper() == 'PREREQS':
@@ -135,17 +136,20 @@ class WrapScript():
                 outfile.write("%s%s = None\n" % (prefix, variable))
 
         outfile.write("# pylint: enable=invalid-name\n")
+        outfile.write("# pylint: enable=import-outside-toplevel\n")
         return newlines
 
     @staticmethod
     def write_header(outfile):
         """write the header"""
         outfile.write("""# pylint: disable=wildcard-import
+# pylint: disable=import-outside-toplevel
 from __future__ import print_function
 from SCons.Script import *
 from SCons.Variables import *
-# pylint: enable=wildcard-import\n""")
-        return 5
+# pylint: enable=wildcard-import
+# pylint: enable=import-outside-toplevel\n""")
+        return 7
 
     def fix_log(self, log_file, fname):
         """Get the line number"""
@@ -219,7 +223,7 @@ def check_script(fname, *args, **kw):
     rc_file = "tmp_pylint3.rc"
     if pycmd is None:
         print("Required pylint isn't installed on this machine")
-        return 0
+        return
 
     rc_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -243,7 +247,7 @@ def check_script(fname, *args, **kw):
     except OSError as exception:
         if exception.errno == errno.ENOENT:
             print("pylint could not be found")
-            return 1
+            return
         raise
     except subprocess.CalledProcessError:
         pass
