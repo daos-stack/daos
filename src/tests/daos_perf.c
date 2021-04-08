@@ -90,6 +90,7 @@ struct pf_param {
 	int		pa_iteration;
 	/* output parameter */
 	double		pa_duration;
+
 	union {
 		/* private parameter for iteration */
 		struct {
