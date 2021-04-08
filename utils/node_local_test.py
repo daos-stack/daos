@@ -562,7 +562,7 @@ class DaosServer():
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'NORMAL'
-            entry['message'] = 'Incorrect number of engines running (%d vs %d)'.format(len(procs), 1)
+            entry['message'] = 'Incorrect number of engines running ({} vs {})'.format(len(procs), 1)
             self.conf.wf.issues.append(entry)
 
         rc = self.run_dmg(['system', 'stop'])
