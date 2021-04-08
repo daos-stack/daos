@@ -39,7 +39,7 @@ public abstract class DaosFileSource {
   protected final long fileLen;
 
   protected final ByteBuf buffer;
-  
+
   private final boolean selfManagedBuf;
 
   protected final int bufCapacity;
