@@ -1073,6 +1073,7 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
 	hg_return_t	 hg_ret;
 	int		 rc = DER_SUCCESS;
+	uint64_t	 hlc = crt_hlc_get();
 
 	D_ASSERT(rpc_priv != NULL);
 
@@ -1094,6 +1095,10 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_tgt_uri);
 	}
+
+	hlc = crt_hlc2nsec(crt_hlc_get() - hlc) / NSEC_PER_SEC;
+	if (hlc > 0)
+		D_ERROR("crt_hg_req_send() spend %lu seconds\n", hlc);
 
 	/* For any error to be reported via completion callback */
 	if (hg_ret != HG_SUCCESS) {
@@ -1212,6 +1217,7 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 	hg_context_t		*hg_context;
 	unsigned int		hg_timeout;
 	unsigned int		total = 256;
+	uint64_t		hlc = crt_hlc_get();
 
 	hg_context = hg_ctx->chc_hgctx;
 
@@ -1241,15 +1247,24 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 		hg_ret = HG_Trigger(hg_context, 0, total, &count);
 		if (hg_ret == HG_TIMEOUT) {
 			/** nothing to trigger */
+			hlc = crt_hlc2nsec(crt_hlc_get() - hlc) / NSEC_PER_SEC;
+			if (hlc > 0)
+				D_ERROR("crt_hg_progress(%ld) spend "
+					"%lu seconds\n", timeout, hlc);
 			return rc;
 		} else if (hg_ret != HG_SUCCESS) {
 			D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
 			return -DER_HG;
 		}
 
-		if (count == 0 || rc)
+		if (count == 0 || rc) {
 			/** nothing to trigger */
+			hlc = crt_hlc2nsec(crt_hlc_get() - hlc) / NSEC_PER_SEC;
+			if (hlc > 0)
+				D_ERROR("crt_hg_progress(%ld) spend "
+					"%lu seconds\n", timeout, hlc);
 			return rc;
+		}
 
 		/**
 		 * continue network progress and callback processing, but w/o
@@ -1489,6 +1504,7 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	struct crt_rpc_priv		*rpc_priv;
 	hg_return_t			hg_ret = HG_SUCCESS;
 	int				rc = 0;
+	uint64_t			hlc = crt_hlc_get();
 
 	D_ASSERT(bulk_desc != NULL);
 	D_ASSERT(bulk_desc->bd_bulk_op == CRT_BULK_PUT ||
@@ -1544,6 +1560,10 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 		D_FREE_PTR(bulk_desc_dup);
 		rc = crt_hgret_2_der(hg_ret);
 	}
+
+	hlc = crt_hlc2nsec(crt_hlc_get() - hlc) / NSEC_PER_SEC;
+	if (hlc > 0)
+		D_ERROR("crt_hg_bulk_transfer() spend %lu seconds\n", hlc);
 
 out:
 	return rc;
