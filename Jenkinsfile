@@ -964,7 +964,7 @@ pipeline {
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label 'stage_nvme3'
+                        label 'ci_nvme3'
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
