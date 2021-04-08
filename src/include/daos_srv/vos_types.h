@@ -66,6 +66,14 @@ D_CASSERT(sizeof(struct dtx_entry) ==
 	  offsetof(struct dtx_entry, dte_mbs) +
 	  sizeof(struct dtx_memberships *));
 
+/** Pool open flags (for vos_pool_create and vos_pool_open) */
+enum vos_pool_open_flags {
+	/** Pool is small (for sys space reservation); implies VOS_POF_EXCL */
+	VOS_POF_SMALL	= (1 << 0),
+	/** Exclusive (-DER_BUSY if already opened) */
+	VOS_POF_EXCL	= (1 << 1),
+};
+
 enum vos_oi_attr {
 	/** Marks object as failed */
 	VOS_OI_FAILED		= (1U << 0),
