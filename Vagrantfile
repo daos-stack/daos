@@ -34,7 +34,7 @@ Vagrant.configure("2") do |config|
 
         # Vagrant (dumbly) adds the host's name to the loopback /etc/hosts
         # entry.  https://github.com/hashicorp/vagrant/issues/7263
-        # They seem to be preferring simplicity-in-simple scnearios and
+        # They seem to be preferring simplicity-in-simple scenarios and
         # do really bad things to that end.  Things that blow up in real-
         # world complexity levels
         config.vm.provision "fix /etc/hosts",
