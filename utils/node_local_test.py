@@ -553,13 +553,16 @@ class DaosServer():
                     break
 
         if len(procs) != 1:
+            # Mark this as a warning, but not a failure.  This is currently
+            # expected when running with pre-existing data because the
+            # server is calling exec.
             entry = {}
             entry['fileName'] = os.path.basename(self._file)
             entry['directory'] = os.path.dirname(self._file)
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
-            entry['severity'] = 'ERROR'
-            entry['message'] = 'daos_engine died during testing'
+            entry['severity'] = 'NORMAL'
+            entry['message'] = 'Incorrect number of engines running (%d vs %d)'.format(len(procs), 1)
             self.conf.wf.issues.append(entry)
 
         rc = self.run_dmg(['system', 'stop'])
