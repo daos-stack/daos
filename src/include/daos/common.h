@@ -96,7 +96,7 @@ sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
 		bytes, DP_SGL_IDX(sgl_idx));
 
 	/** move to next iov if necessary */
-	if (sgl_idx->iov_offset >= sgl->sg_iovs[sgl_idx->iov_idx].iov_len) {
+	if (sgl_idx->iov_offset >= sgl->sg_iovs[sgl_idx->iov_idx].iov_buf_len) {
 		sgl_idx->iov_idx++;
 		sgl_idx->iov_offset = 0;
 		D_DEBUG(DB_TRACE, "Moving to next iov in sgl\n");
