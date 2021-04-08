@@ -60,6 +60,7 @@ nav:
         - 'MPI-IO Support': 'user/mpi-io.md'
         - 'HDF5 Support': 'user/hdf5.md'
         - 'Spark and Hadoop': 'user/spark.md'
+        - 'Data Mover': 'user/datamover.md'
     - Releases:
         - 'Release Notes v1.0': 'release/release_notes_v1_0.md'
         - 'Support Matrix': 'release/support_matrix.md'

@@ -20,7 +20,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -30,19 +32,10 @@ var (
 	defaultPoolUUID = MockUUID()
 )
 
-func createACLFile(t *testing.T, path string, acl *control.AccessControlList) {
+func createACLFile(t *testing.T, dir string, acl *control.AccessControlList) string {
 	t.Helper()
 
-	file, err := os.Create(path)
-	if err != nil {
-		t.Fatalf("Couldn't create ACL file: %v", err)
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(control.FormatACLDefault(acl))
-	if err != nil {
-		t.Fatalf("Couldn't write to file: %v", err)
-	}
+	return common.CreateTestFile(t, dir, control.FormatACLDefault(acl))
 }
 
 func createWithSystem(req *control.PoolCreateReq, system string) *control.PoolCreateReq {
@@ -73,30 +66,22 @@ func TestPoolCommands(t *testing.T) {
 	defer tmpCleanup()
 
 	// Some tests need a valid ACL file
-	testACLFile := filepath.Join(tmpDir, "test_acl.txt")
 	testACL := &control.AccessControlList{
 		Entries: []string{"A::OWNER@:rw", "A:G:GROUP@:rw"},
 	}
-	createACLFile(t, testACLFile, testACL)
+	testACLFile := createACLFile(t, tmpDir, testACL)
 
 	// An existing file with contents for tests that need to verify overwrite
-	testExistingFile := filepath.Join(tmpDir, "existing.txt")
-	createACLFile(t, testExistingFile, testACL)
+	testExistingFile := createACLFile(t, tmpDir, testACL)
 
 	// An existing file with write-only perms
-	testWriteOnlyFile := filepath.Join(tmpDir, "write.txt")
-	createACLFile(t, testWriteOnlyFile, testACL)
+	testWriteOnlyFile := createACLFile(t, tmpDir, testACL)
 	err = os.Chmod(testWriteOnlyFile, 0222)
 	if err != nil {
 		t.Fatalf("Couldn't set file writable only")
 	}
 
-	testEmptyFile := filepath.Join(tmpDir, "empty.txt")
-	empty, err := os.Create(testEmptyFile)
-	if err != nil {
-		t.Fatalf("Failed to create empty file: %s", err)
-	}
-	empty.Close()
+	testEmptyFile := common.CreateTestFile(t, tmpDir, "")
 
 	// Subdirectory with no write perms
 	testNoPermDir := filepath.Join(tmpDir, "badpermsdir")
@@ -691,5 +676,47 @@ func TestPoolGetACLToFile_Success(t *testing.T) {
 
 	if diff := cmp.Diff(expResult, result); diff != "" {
 		t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+	}
+}
+
+func TestDmg_PoolListCmd_Errors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctlCfg *control.Config
+		resp   *mgmtpb.ListPoolsResp
+		msErr  error
+		expErr error
+	}{
+		"list pools no config": {
+			resp:   &mgmtpb.ListPoolsResp{},
+			expErr: errors.New("list pools failed: no configuration loaded"),
+		},
+		"list pools success": {
+			ctlCfg: &control.Config{},
+			resp:   &mgmtpb.ListPoolsResp{},
+		},
+		"list pools ms failures": {
+			ctlCfg: &control.Config{},
+			resp:   &mgmtpb.ListPoolsResp{},
+			msErr:  errors.New("remote failed"),
+			expErr: errors.New("remote failed"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			PoolListCmd := new(PoolListCmd)
+			PoolListCmd.setInvoker(mi)
+			PoolListCmd.setLog(log)
+			PoolListCmd.setConfig(tc.ctlCfg)
+
+			gotErr := PoolListCmd.Execute(nil)
+			common.CmpErr(t, tc.expErr, gotErr)
+		})
 	}
 }

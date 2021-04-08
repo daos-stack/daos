@@ -20,7 +20,7 @@ class OSAOfflineExtend(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOfflineExtend, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",
@@ -95,8 +95,10 @@ class OSAOfflineExtend(OSAUtils):
 
         Test Description: Validate Offline Extend
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_extend,offline_extend
         """
         # Perform extend testing with 1 pool
         self.run_offline_extend_test(1, True)

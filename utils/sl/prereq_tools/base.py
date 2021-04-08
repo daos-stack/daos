@@ -77,7 +77,7 @@ class DownloadFailure(Exception):
     """
 
     def __init__(self, repo, component):
-        super(DownloadFailure, self).__init__()
+        super().__init__()
         self.repo = repo
         self.component = component
 
@@ -95,7 +95,7 @@ class ExtractionError(Exception):
     """
 
     def __init__(self, component):
-        super(ExtractionError, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -112,7 +112,7 @@ class UnsupportedCompression(Exception):
     """
 
     def __init__(self, component):
-        super(UnsupportedCompression, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -129,7 +129,7 @@ class BadScript(Exception):
     """
 
     def __init__(self, script, trace):
-        super(BadScript, self).__init__()
+        super().__init__()
         self.script = script
         self.trace = trace
 
@@ -148,7 +148,7 @@ class MissingDefinition(Exception):
     """
 
     def __init__(self, component):
-        super(MissingDefinition, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -164,7 +164,7 @@ class MissingPath(Exception):
     """
 
     def __init__(self, variable):
-        super(MissingPath, self).__init__()
+        super().__init__()
         self.variable = variable
 
     def __str__(self):
@@ -180,7 +180,7 @@ class BuildFailure(Exception):
     """
 
     def __init__(self, component):
-        super(BuildFailure, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -196,7 +196,7 @@ class MissingTargets(Exception):
     """
 
     def __init__(self, component, package):
-        super(MissingTargets, self).__init__()
+        super().__init__()
         self.component = component
         self.package = package
 
@@ -217,7 +217,7 @@ class MissingSystemLibs(Exception):
     """
 
     def __init__(self, component):
-        super(MissingSystemLibs, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -233,7 +233,7 @@ class DownloadRequired(Exception):
     """
 
     def __init__(self, component):
-        super(DownloadRequired, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -249,7 +249,7 @@ class BuildRequired(Exception):
     """
 
     def __init__(self, component):
-        super(BuildRequired, self).__init__()
+        super().__init__()
         self.component = component
 
     def __str__(self):
@@ -643,7 +643,7 @@ class PreReqComponent():
                                    PathVariable.PathIsDirCreate))
 
         bdir = self._setup_build_type()
-        self.build_type = self.__env.get("BUILD_TYPE")
+        self.target_type = self.__env.get("TTYPE_REAL")
         self.__env["BUILD_DIR"] = bdir
         ensure_dir_exists(bdir, self.__dry_run)
         self.setup_path_var('BUILD_DIR')
@@ -776,6 +776,7 @@ class PreReqComponent():
         compiler_map = {'gcc': {'CC' : 'gcc', 'CXX' : 'g++'},
                         'covc' : {'CC' : '/opt/BullseyeCoverage/bin/gcc',
                                   'CXX' : '/opt/BullseyeCoverage/bin/g++',
+                                  'CVS' : '/opt/BullseyeCoverage/bin/covselect',
                                   'COV01' : '/opt/BullseyeCoverage/bin/cov01'},
                         'clang' : {'CC' : 'clang', 'CXX' : 'clang++'},
                         'icc' : {'CC' : 'icc', 'CXX' : 'icpc'},
@@ -820,7 +821,23 @@ class PreReqComponent():
             covfile = self.__top_dir + "/test.cov"
             if os.path.isfile(covfile):
                 os.remove(covfile)
-            commands = ['$COV01 -1', '$COV01 -s']
+            commands = ['$COV01 -1',
+                        '$COV01 -s',
+                        '$CVS --add \'!**/src/cart/test/utest/\'',
+                        '$CVS --add \'!**/src/common/tests/\'',
+                        '$CVS --add \'!**/src/gurt/tests/\'',
+                        '$CVS --add \'!**/src/iosrv/tests/\'',
+                        '$CVS --add \'!**/src/mgmt/tests/\'',
+                        '$CVS --add \'!**/src/object/tests/\'',
+                        '$CVS --add \'!**/src/placement/tests/\'',
+                        '$CVS --add \'!**/src/rdb/tests/\'',
+                        '$CVS --add \'!**/src/security/tests/\'',
+                        '$CVS --add \'!**/src/utils/self_test/\'',
+                        '$CVS --add \'!**/src/utils/ctl/\'',
+                        '$CVS --add \'!**/src/vea/tests/\'',
+                        '$CVS --add \'!**/src/vos/tests/\'',
+                        '$CVS --add \'!**/src/engine/tests/\'',
+                        '$CVS --add \'!**/src/tests/\'']
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
 

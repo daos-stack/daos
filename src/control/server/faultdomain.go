@@ -53,8 +53,12 @@ func getFaultDomain(cfg *config.Server) (*system.FaultDomain, error) {
 
 func newFaultDomainFromConfig(domainStr string) (*system.FaultDomain, error) {
 	fd, err := system.NewFaultDomainFromString(domainStr)
-	if err != nil {
+	if err != nil || fd.NumLevels() == 0 {
 		return nil, config.FaultConfigFaultDomainInvalid
+	}
+	// TODO DAOS-6353: remove when multiple layers supported
+	if fd.NumLevels() != 1 {
+		return nil, config.FaultConfigTooManyLayersInFaultDomain
 	}
 	return fd, nil
 }

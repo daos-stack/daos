@@ -14,9 +14,9 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -224,7 +224,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expOut, tc.in); diff != "" {
+			if diff := cmp.Diff(tc.expOut, tc.in, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected req (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -241,6 +241,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		mgmtSvc       *mgmtSvc
 		setupMockDrpc func(_ *mgmtSvc, _ error)
 		targetCount   int
+		memberCount   int
 		req           *mgmtpb.PoolCreateReq
 		expResp       *mgmtpb.PoolCreateResp
 		expErr        error
@@ -353,15 +354,27 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 			expErr: FaultPoolInvalidRanks([]system.Rank{11, 40}),
 		},
-		"too many svc replicas": {
+		"svc replicas > max": {
 			targetCount: 1,
+			memberCount: MaxPoolServiceReps + 2,
 			req: &mgmt.PoolCreateReq{
 				Uuid:       common.MockUUID(0),
 				Totalbytes: 100 * humanize.GByte,
 				Scmratio:   0.06,
 				Numsvcreps: MaxPoolServiceReps + 2,
 			},
-			expErr: FaultPoolInvalidServiceReps,
+			expErr: FaultPoolInvalidServiceReps(uint32(MaxPoolServiceReps)),
+		},
+		"svc replicas > numRanks": {
+			targetCount: 1,
+			memberCount: MaxPoolServiceReps - 2,
+			req: &mgmt.PoolCreateReq{
+				Uuid:       common.MockUUID(0),
+				Totalbytes: 100 * humanize.GByte,
+				Scmratio:   0.06,
+				Numsvcreps: MaxPoolServiceReps - 1,
+			},
+			expErr: FaultPoolInvalidServiceReps(uint32(MaxPoolServiceReps - 2)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -394,8 +407,13 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				tc.mgmtSvc = newMgmtSvc(harness, ms, db, nil,
 					events.NewPubSub(context.Background(), log))
 			}
+
+			numMembers := tc.memberCount
+			if numMembers < 1 {
+				numMembers = 2
+			}
 			tc.mgmtSvc.log = log
-			for i := 0; i < 2; i++ {
+			for i := 0; i < numMembers; i++ {
 				if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, uint32(i), system.MemberStateJoined)); err != nil {
 					t.Fatal(err)
 				}
@@ -457,18 +475,22 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 		}
 	}
 
+	fdTree, err := mgmtSvc.membership.CompressedFaultDomainTree(0, 2, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := &mgmtpb.PoolCreateReq{
 		Sys:          build.DefaultSystemName,
 		Uuid:         common.MockUUID(),
 		Scmbytes:     100 * humanize.GiByte,
 		Nvmebytes:    10 * humanize.TByte,
-		FaultDomains: mgmtSvc.sysdb.FaultDomainTree().ToProto(),
+		FaultDomains: fdTree,
 	}
 	wantReq := new(mgmtpb.PoolCreateReq)
 	*wantReq = *req
 	wantReq.Numsvcreps = DefaultPoolServiceReps
 
-	_, err := mgmtSvc.PoolCreate(ctx, req)
+	_, err = mgmtSvc.PoolCreate(ctx, req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -708,7 +730,8 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
@@ -727,7 +750,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				if err := proto.Unmarshal(getLastMockCall(tc.mgmtSvc).Body, gotReq); err != nil {
 					t.Fatal(err)
 				}
-				if diff := cmp.Diff(tc.expDrpcReq, gotReq); diff != "" {
+				if diff := cmp.Diff(tc.expDrpcReq, gotReq, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected dRPC call (-want, +got):\n%s\n", diff)
 				}
 			}
@@ -824,7 +847,8 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -916,7 +940,8 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -983,7 +1008,7 @@ func TestListPools_Success(t *testing.T) {
 
 	cmpOpts := common.DefaultCmpOpts()
 	cmpOpts = append(cmpOpts,
-		cmpopts.SortSlices(func(a, b *mgmtpb.ListPoolsResp_Pool) bool {
+		protocmp.SortRepeated(func(a, b *mgmtpb.ListPoolsResp_Pool) bool {
 			return a.GetUuid() < b.GetUuid()
 		}),
 	)
@@ -1428,7 +1453,8 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1494,7 +1520,8 @@ func TestServer_MgmtSvc_PoolResolveID(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1877,7 +1904,8 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 
@@ -1888,7 +1916,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			}
 			tc.expReq.Uuid = tc.req.Uuid
 			gotReq.SvcRanks = nil
-			if diff := cmp.Diff(tc.expReq, gotReq); diff != "" {
+			if diff := cmp.Diff(tc.expReq, gotReq, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected dRPC call (-want, +got):\n%s\n", diff)
 			}
 		})

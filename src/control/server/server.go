@@ -135,8 +135,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
 		TargetUser:    runningUser.Username,
-		PCIWhitelist:  strings.Join(cfg.BdevInclude, " "),
-		PCIBlacklist:  strings.Join(cfg.BdevExclude, " "),
+		PCIAllowlist:  strings.Join(cfg.BdevInclude, " "),
+		PCIBlocklist:  strings.Join(cfg.BdevExclude, " "),
 		DisableVFIO:   cfg.DisableVFIO,
 		DisableVMD:    cfg.DisableVMD || cfg.DisableVFIO || iommuDisabled,
 		// TODO: pass vmd include/white list
@@ -245,6 +245,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return control.SystemJoin(ctx, rpcClient, req)
 	}
 
+	var allStarted sync.WaitGroup
+
 	for idx, engineCfg := range cfg.Engines {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the
@@ -284,8 +286,21 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		if err := harness.AddInstance(engine); err != nil {
 			return err
 		}
+
 		// Register callback to publish I/O Engine process exit events.
 		engine.OnInstanceExit(publishInstanceExitFn(eventPubSub.Publish, hostname(), engine.Index()))
+
+		var onceReady sync.Once
+		allStarted.Add(1)
+		engine.OnReady(func(_ context.Context) error {
+			// Indicate that engine has been started, only do this
+			// the first time that the engine starts as shared
+			// memory persists between engine restarts.
+			onceReady.Do(func() {
+				allStarted.Done()
+			})
+			return nil
+		})
 
 		if idx == 0 {
 			netDevClass, err = cfg.GetDeviceClassFn(engineCfg.Fabric.Interface)
@@ -299,9 +314,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 
 			// Start the system db after instance 0's SCM is
 			// ready.
-			var once sync.Once
-			engine.OnStorageReady(func(ctx context.Context) (err error) {
-				once.Do(func() {
+			var onceStorageReady sync.Once
+			engine.OnStorageReady(func(_ context.Context) (err error) {
+				onceStorageReady.Do(func() {
+					// NB: We use the outer context rather than
+					// the closure context in order to avoid
+					// tying the db to the instance.
 					err = errors.Wrap(sysdb.Start(ctx),
 						"failed to start system db",
 					)
@@ -327,6 +345,19 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			}
 		}
 	}
+
+	go func() {
+		allStarted.Wait()
+
+		if cfg.TelemetryPort == 0 {
+			return
+		}
+
+		log.Debug("starting Prometheus exporter")
+		if err := startPrometheusExporter(ctx, log, cfg.TelemetryPort, harness.Instances()); err != nil {
+			log.Errorf("failed to start prometheus exporter: %s", err)
+		}
+	}()
 
 	// Create and setup control service.
 	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, eventPubSub)
@@ -403,17 +434,10 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 			switch evt.ID {
 			case events.RASSwimRankDead:
 				// Mark the rank as unavailable for membership in
-				// new pools, etc.
-				if err := membership.MarkRankDead(system.Rank(evt.Rank)); err != nil {
-					log.Errorf("failed to mark rank %d as dead: %s", evt.Rank, err)
-					return
+				// new pools, etc. Do group update on success.
+				if err := membership.MarkRankDead(system.Rank(evt.Rank)); err == nil {
+					mgmtSvc.reqGroupUpdate(ctx)
 				}
-				// FIXME CART-944: We should be able to update the
-				// primary group in order to remove the dead rank,
-				// but for the moment this will cause problems.
-				/*if err := mgmtSvc.doGroupUpdate(ctx); err != nil {
-					log.Errorf("GroupUpdate failed: %s", err)
-				}*/
 			}
 		}))
 

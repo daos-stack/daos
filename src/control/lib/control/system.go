@@ -9,8 +9,10 @@ package control
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log"
+	"log/syslog"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize/english"
@@ -18,6 +20,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -38,6 +41,10 @@ const (
 	// SystemJoinRetryTimeout defines the amount of time a retry attempt can take. It
 	// should be set low in order to ensure that individual join attempts retry quickly.
 	SystemJoinRetryTimeout = 10 * time.Second
+)
+
+var (
+	errMSConnectionFailure = errors.Errorf("unable to contact the %s", build.ManagementServiceName)
 )
 
 type sysRequest struct {
@@ -65,23 +72,24 @@ func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	return nil
 }
 
-func (resp *sysResponse) DisplayAbsentHostsRanks() string {
-	switch {
-	case resp.AbsentHosts.Count() > 0:
-		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(resp.AbsentHosts.Count(), "host", "hosts"),
-			resp.AbsentHosts.String())
-	case resp.AbsentRanks.Count() > 0:
-		return fmt.Sprintf("\nUnknown %s: %s",
-			english.Plural(resp.AbsentRanks.Count(), "rank", "ranks"),
-			resp.AbsentRanks.String())
-	default:
-		return ""
+func (resp *sysResponse) getAbsentHostsRanksErrors() error {
+	var errMsgs []string
+
+	if resp.AbsentHosts.Count() > 0 {
+		errMsgs = append(errMsgs, "non-existent hosts "+resp.AbsentHosts.String())
 	}
+	if resp.AbsentRanks.Count() > 0 {
+		errMsgs = append(errMsgs, "non-existent ranks "+resp.AbsentRanks.String())
+	}
+
+	if len(errMsgs) > 0 {
+		return errors.New(strings.Join(errMsgs, ", "))
+	}
+
+	return nil
 }
 
 // SystemJoinReq contains the inputs for the system join request.
-// TODO: Unify this with system.JoinRequest
 type SystemJoinReq struct {
 	unaryRequest
 	msRequest
@@ -262,9 +270,11 @@ func NewEventForwarder(rpcClient UnaryInvoker, accessPts []string) *EventForward
 }
 
 // EventLogger implements the events.Handler interface and logs RAS event to
-// INFO.
+// INFO using supplied logging.Logger. In addition syslog is written to at the
+// priority level derived from the event severity.
 type EventLogger struct {
-	log logging.Logger
+	log        logging.Logger
+	sysloggers map[events.RASSeverityID]*log.Logger
 }
 
 // OnEvent implements the events.Handler interface.
@@ -276,13 +286,47 @@ func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
 	case evt.IsForwarded():
 		return // event has already been logged at source
 	}
-	// TODO: DAOS-6327 write directly to syslog
-	el.log.Info(evt.PrintRAS())
+
+	out := evt.PrintRAS()
+	el.log.Info(out)
+	if sl := el.sysloggers[evt.Severity]; sl != nil {
+		sl.Print(out)
+	}
 }
 
-// NewEventLogger returns an initialized EventLogger.
+type newSysloggerFn func(syslog.Priority, int) (*log.Logger, error)
+
+// newEventLogger returns an initialized EventLogger using the provided function
+// to populate syslog endpoints which map to event severity identifiers.
+func newEventLogger(logBasic logging.Logger, newSyslogger newSysloggerFn) *EventLogger {
+	el := &EventLogger{
+		log:        logBasic,
+		sysloggers: make(map[events.RASSeverityID]*log.Logger),
+	}
+
+	for _, sev := range []events.RASSeverityID{
+		events.RASSeverityUnknown,
+		events.RASSeverityFatal,
+		events.RASSeverityError,
+		events.RASSeverityWarn,
+		events.RASSeverityInfo,
+	} {
+		sl, err := newSyslogger(sev.SyslogPriority(), log.LstdFlags)
+		if err != nil {
+			logBasic.Errorf("failed to create syslogger with priority %s: %s",
+				sev.SyslogPriority(), err)
+			continue
+		}
+		el.sysloggers[sev] = sl
+	}
+
+	return el
+}
+
+// NewEventLogger returns an initialized EventLogger capable of writing to the
+// supplied logger in addition to syslog.
 func NewEventLogger(log logging.Logger) *EventLogger {
-	return &EventLogger{log: log}
+	return newEventLogger(log, syslog.NewLogger)
 }
 
 // SystemQueryReq contains the inputs for the system query request.
@@ -290,6 +334,8 @@ type SystemQueryReq struct {
 	unaryRequest
 	msRequest
 	sysRequest
+	retryableRequest
+	FailOnUnavailable bool // Fail without retrying if the MS is unavailable.
 }
 
 // SystemQueryResp contains the request response.
@@ -318,6 +364,12 @@ func (resp *SystemQueryResp) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Errors returns a single error combining all error messages associated with a
+// system query response.
+func (resp *SystemQueryResp) Errors() error {
+	return resp.getAbsentHostsRanksErrors()
+}
+
 // SystemQuery requests DAOS system status.
 //
 // Handles MS requests sent from management client app e.g. 'dmg' and calls into
@@ -337,7 +389,21 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemQuery(ctx, pbReq)
 	})
-	rpcClient.Debugf("DAOS system query request: %s", req)
+	req.retryTestFn = func(err error, _ uint) bool {
+		// In the case where the caller does not want the default
+		// retry behavior, return true for specific errors in order
+		// to implement our own retry behavior.
+		return req.FailOnUnavailable &&
+			(system.IsUnavailable(err) || IsConnectionError(err) ||
+				system.IsNotLeader(err) || system.IsNotReplica(err))
+	}
+	req.retryFn = func(_ context.Context, _ uint) error {
+		if req.FailOnUnavailable {
+			return system.ErrRaftUnavail
+		}
+		return nil
+	}
+	rpcClient.Debugf("DAOS system query request: %+v", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
@@ -346,6 +412,23 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 
 	resp := new(SystemQueryResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+func concatSysErrs(errSys, errRes error) error {
+	var errMsgs []string
+
+	if errSys != nil {
+		errMsgs = append(errMsgs, errSys.Error())
+	}
+	if errRes != nil {
+		errMsgs = append(errMsgs, "check results for "+errRes.Error())
+	}
+
+	if len(errMsgs) > 0 {
+		return errors.New(strings.Join(errMsgs, ", "))
+	}
+
+	return nil
 }
 
 // SystemStartReq contains the inputs for the system start request.
@@ -379,6 +462,12 @@ func (resp *SystemStartResp) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system start response.
+func (resp *SystemStartResp) Errors() error {
+	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
 }
 
 // SystemStart will perform a start after a controlled shutdown of DAOS system.
@@ -447,6 +536,12 @@ func (resp *SystemStopResp) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Errors returns a single error combining all error messages associated with a
+// system stop response.
+func (resp *SystemStopResp) Errors() error {
+	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
+}
+
 // SystemStop will perform a two-phase controlled shutdown of DAOS system and a
 // list of remaining system members on failure.
 //
@@ -509,66 +604,100 @@ func getResetRankErrors(results system.MemberResults) (map[string][]string, []st
 	return rankErrors, goodHosts, nil
 }
 
-// SystemResetFormatReq contains the inputs for the request.
-type SystemResetFormatReq struct {
-	unaryRequest
+// SystemEraseReq contains the inputs for a system erase request.
+type SystemEraseReq struct {
 	msRequest
+	unaryRequest
+	retryableRequest
 }
 
-// SystemResetFormatResp contains the request response.
-type SystemResetFormatResp struct {
+// SystemEraseResp contains the results of a system erase request.
+type SystemEraseResp struct {
+	HostErrorsResp
 	Results system.MemberResults
 }
 
-// SystemReformat will reformat and start rank after a controlled shutdown of DAOS system.
-//
-// First phase trigger format reset on each rank in membership registry, if
-// successful, putting selected harness managed instances in "awaiting format"
-// state (but not proceeding to starting the engine process runner).
-//
-// Second phase is to perform storage format on each host which, if successful,
-// will reformat storage, un-block "awaiting format" state and start the
-// engine process. SystemReformat() will only return when relevant io_server
-// processes are running and ready.
-//
-// This method handles request sent from management client app e.g. 'dmg'.
-//
-// The SystemResetFormat and StorageFormat control API requests are sent to
-// mgmt_system.go method of the same name. The triggered method uses the control
-// API to fanout to (selection or all) gRPC servers listening as part of the
-// DAOS system and retrieve results from the selected ranks hosted there.
-func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *SystemResetFormatReq) (*StorageFormatResp, error) {
-	if resetReq == nil {
-		return nil, errors.Errorf("nil %T request", resetReq)
+func (resp *SystemEraseResp) Errors() error {
+	return resp.Results.Errors()
+}
+
+// checkSystemErase queries system to interrogate membership before deciding
+// whether a system erase is appropriate.
+func checkSystemErase(ctx context.Context, rpcClient UnaryInvoker) error {
+	resp, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{FailOnUnavailable: true})
+	if err != nil {
+		// If the AP hasn't been started, it will respond as if it
+		// is not a replica.
+		if system.IsNotReplica(err) || system.IsUnavailable(err) {
+			return nil
+		}
+		return errors.Wrap(err, "System-Query command failed")
 	}
 
-	pbReq := new(mgmtpb.SystemResetFormatReq)
-	pbReq.Sys = resetReq.getSystem()
+	if len(resp.Members) == 0 {
+		return nil
+	}
 
-	resetReq.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).SystemResetFormat(ctx, pbReq)
+	aliveRanks, err := system.CreateRankSet("")
+	if err != nil {
+		return err
+	}
+	for _, member := range resp.Members {
+		if member.State()&system.AvailableMemberFilter != 0 {
+			aliveRanks.Add(member.Rank)
+		}
+	}
+	if aliveRanks.Count() > 0 {
+		return errors.Errorf(
+			"system erase requires the following %s to be stopped: %s",
+			english.Plural(aliveRanks.Count(), "rank", "ranks"),
+			aliveRanks.String())
+	}
+
+	return nil
+}
+
+// SystemErase initiates a wipe of system metadata prior to reformatting storage.
+func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseReq) (*SystemEraseResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	if err := checkSystemErase(ctx, rpcClient); err != nil {
+		return nil, err
+	}
+
+	pbReq := new(mgmtpb.SystemEraseReq)
+	pbReq.Sys = req.getSystem()
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemErase(ctx, pbReq)
 	})
-	rpcClient.Debugf("DAOS system-reset-format request: %s", resetReq)
+	req.retryTestFn = func(err error, _ uint) bool {
+		return system.IsUnavailable(err)
+	}
+	req.retryFn = func(_ context.Context, _ uint) error {
+		return system.ErrRaftUnavail
+	}
+	rpcClient.Debugf("DAOS system-erase request: %s", req)
 
-	ur, err := rpcClient.InvokeUnaryRPC(ctx, resetReq)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	// MS response will contain collated results for all ranks
-	resetResp := new(SystemResetFormatResp)
-	if err = convertMSResponse(ur, resetResp); err != nil {
-		return nil, errors.WithMessage(err, "converting MS to reformat resp")
+	resp := new(SystemEraseResp)
+	if err = convertMSResponse(ur, resp); err != nil {
+		return nil, errors.Wrap(err, "converting MS to erase resp")
 	}
 
-	resetRankErrors, hostList, err := getResetRankErrors(resetResp.Results)
+	resetRankErrors, _, err := getResetRankErrors(resp.Results)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(resetRankErrors) > 0 {
-		reformatResp := new(StorageFormatResp)
-
 		// create "X ranks failed: err..." error entries for each host address
 		// a single host maybe associated with multiple error entries in HEM
 		for msg, addrs := range resetRankErrors {
@@ -579,29 +708,20 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 			for addr, occurrences := range hostOccurrences {
 				err := errors.Errorf("%s failed: %s",
 					english.Plural(occurrences, "rank", "ranks"), msg)
-				if err := reformatResp.HostErrorsResp.addHostError(addr, err); err != nil {
+				if err := resp.HostErrorsResp.addHostError(addr, err); err != nil {
 					return nil, err
 				}
 			}
 		}
-
-		return reformatResp, nil
 	}
 
-	// all requested ranks in AwaitFormat state, trigger format
-	formatReq := &StorageFormatReq{Reformat: true}
-	formatReq.SetHostList(hostList)
-
-	rpcClient.Debugf("DAOS storage-format request: %s", formatReq)
-
-	return StorageFormat(ctx, rpcClient, formatReq)
+	return resp, nil
 }
 
 // LeaderQueryReq contains the inputs for the leader query request.
 type LeaderQueryReq struct {
 	unaryRequest
 	msRequest
-	System string
 }
 
 // LeaderQueryResp contains the status of the request and, if successful, the
@@ -616,7 +736,7 @@ type LeaderQueryResp struct {
 func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryReq) (*LeaderQueryResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).LeaderQuery(ctx, &mgmtpb.LeaderQueryReq{
-			Sys: req.System,
+			Sys: req.getSystem(),
 		})
 	})
 	rpcClient.Debugf("DAOS system leader-query request: %s", req)
