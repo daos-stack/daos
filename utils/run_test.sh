@@ -195,6 +195,14 @@ if [ -d "/mnt/daos" ]; then
     mv "${DAOS_BASE}"/test_results/xml/*.xml "${DAOS_BASE}"/test_results
     rm -rf "${DAOS_BASE}"/test_results/xml
 
+    if [ -f "/tmp/test.cov" ]; then
+        rm /tmp/test.cov
+    fi
+
+    if [ -f "${DAOS_BASE}/test.cov" ]; then
+        cp "${DAOS_BASE}"/test.cov /tmp/
+    fi
+
     # Reporting
     if [ "$failed" -eq 0 ]; then
         # spit out the magic string that the post build script looks for

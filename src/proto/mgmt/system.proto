@@ -46,21 +46,6 @@ message SystemStopResp {
 	string absenthosts = 3; // hostset missing from membership
 }
 
-// SystemResetFormatReq supplies system reset format parameters.
-message SystemResetFormatReq {
-	string sys = 1; // DAOS system name
-	string ranks = 2; // rankset to query
-	string hosts = 3; // hostset to query
-}
-
-// SystemResetFormatResp returns status of reset format attempt and results
-// of attempts to reset format of system members.
-message SystemResetFormatResp {
-	repeated shared.RankResult results = 1;
-	string absentranks = 2; // rankset missing from membership
-	string absenthosts = 3; // hostset missing from membership
-}
-
 // SystemStartReq supplies system restart parameters.
 message SystemStartReq {
 	string sys = 1; // DAOS system name
@@ -90,3 +75,11 @@ message SystemQueryResp {
 	string absenthosts = 3; // hostset missing from membership
 }
 
+// SystemEraseReq supplies system erase parameters.
+message SystemEraseReq {
+	string sys = 1;
+}
+
+message SystemEraseResp {
+	repeated shared.RankResult results = 1;
+}
