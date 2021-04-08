@@ -368,7 +368,9 @@ class CartTest(TestWithoutServers):
         memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
                                 os.listdir(self.log_path)))
 
+        print('DEBUG log: line 370, self.log_path = ', self.log_path)
         print('DEBUG log: line 370, memcheck_files  = ', memcheck_files )
+        print('DEBUG log: line 373, subprocess.check_output(["find", self.log_path]) = ', subprocess.check_output(["find", self.log_path]))
 
         for filename in memcheck_files:
 
@@ -380,7 +382,6 @@ class CartTest(TestWithoutServers):
             lines = file1.readlines()
              
             for line in lines:
-                print('DEBUG log: line 382, line  = ', line )
                 if line.find('<error>') != -1:
                     memcheck_errors += 1
 
