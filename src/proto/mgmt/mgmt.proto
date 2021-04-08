@@ -70,8 +70,8 @@ service MgmtSvc {
 	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {}
 	// Stop DAOS system (shutdown data-plane instances)
 	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {}
-	// ResetFormat DAOS system (restart data-plane instances)
-	rpc SystemResetFormat(SystemResetFormatReq) returns(SystemResetFormatResp) {}
 	// Start DAOS system (restart data-plane instances)
 	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {}
+	// Erase DAOS system database prior to reformat
+	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 }
