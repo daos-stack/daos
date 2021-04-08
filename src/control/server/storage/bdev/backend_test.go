@@ -7,7 +7,11 @@ package bdev
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -57,7 +61,7 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 	}
 }
 
-func TestBdevBackendScan(t *testing.T) {
+func TestBdev_Backend_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 
 	for name, tc := range map[string]struct {
@@ -106,7 +110,7 @@ func TestBdevBackendScan(t *testing.T) {
 	}
 }
 
-func TestBdevBackendFormat(t *testing.T) {
+func TestBdev_Backend_Format(t *testing.T) {
 	pci1 := storage.MockNvmeController(1).PciAddr
 	pci2 := storage.MockNvmeController(2).PciAddr
 	pci3 := storage.MockNvmeController(3).PciAddr
@@ -358,7 +362,7 @@ func TestBdevBackendFormat(t *testing.T) {
 	}
 }
 
-func TestBdevBackendUpdate(t *testing.T) {
+func TestBdev_Backend_Update(t *testing.T) {
 	numCtrlrs := 4
 	controllers := make(storage.NvmeControllers, 0, numCtrlrs)
 	for i := 0; i < numCtrlrs; i++ {
@@ -413,6 +417,169 @@ func TestBdevBackendUpdate(t *testing.T) {
 
 			gotErr := b.UpdateFirmware(tc.pciAddr, "/some/path", 0)
 			common.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+type mockFileInfo struct {
+	name    string
+	size    int64
+	mode    os.FileMode
+	modTime time.Time
+	isDir   bool
+	stat    *syscall.Stat_t
+}
+
+func (mfi *mockFileInfo) Name() string       { return mfi.name }
+func (mfi *mockFileInfo) Size() int64        { return mfi.size }
+func (mfi *mockFileInfo) Mode() os.FileMode  { return mfi.mode }
+func (mfi *mockFileInfo) ModTime() time.Time { return mfi.modTime }
+func (mfi *mockFileInfo) IsDir() bool        { return mfi.isDir }
+func (mfi *mockFileInfo) Sys() interface{}   { return mfi.stat }
+
+func testFileInfo(t *testing.T, name string, uid uint32) os.FileInfo {
+	t.Helper()
+
+	return &mockFileInfo{
+		name: name,
+		stat: &syscall.Stat_t{
+			Uid: uid,
+		},
+	}
+}
+
+type testWalkInput struct {
+	path   string
+	info   os.FileInfo
+	err    error
+	expErr error
+}
+
+func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
+	testDir := "/wherever"
+
+	for name, tc := range map[string]struct {
+		prefix     string
+		tgtUid     string
+		testInputs []*testWalkInput
+		removeErr  error
+		expRemoved []string
+	}{
+		"ignore subdirectory": {
+			prefix: "prefix1",
+			tgtUid: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: &mockFileInfo{
+						name: "prefix1_foo",
+						stat: &syscall.Stat_t{
+							Uid: 42,
+						},
+						isDir: true,
+					},
+					expErr: errors.New("skip this directory"),
+				},
+			},
+			expRemoved: []string{},
+		},
+		"input error propagated": {
+			testInputs: []*testWalkInput{
+				{
+					path:   filepath.Join(testDir, "prefix1_foo"),
+					info:   testFileInfo(t, "prefix1_foo", 42),
+					err:    errors.New("walk failed"),
+					expErr: errors.New("walk failed"),
+				},
+			},
+			expRemoved: []string{},
+		},
+		"nil fileinfo": {
+			testInputs: []*testWalkInput{
+				{
+					path:   filepath.Join(testDir, "prefix1_foo"),
+					info:   nil,
+					expErr: errors.New("nil fileinfo"),
+				},
+			},
+			expRemoved: []string{},
+		},
+		"nil file stat": {
+			prefix: "prefix1",
+			tgtUid: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: &mockFileInfo{
+						name: "prefix1_foo",
+						stat: nil,
+					},
+					expErr: errors.New("stat missing for file"),
+				},
+			},
+			expRemoved: []string{},
+		},
+		"prefix matching": {
+			prefix: "prefix1",
+			tgtUid: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix2_foo"),
+					info: testFileInfo(t, "prefix2_foo", 42),
+				},
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: testFileInfo(t, "prefix1_foo", 42),
+				},
+			},
+			expRemoved: []string{filepath.Join(testDir, "prefix1_foo")},
+		},
+		"uid matching": {
+			prefix: "prefix1",
+			tgtUid: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: testFileInfo(t, "prefix1_foo", 41),
+				},
+				{
+					path: filepath.Join(testDir, "prefix1_bar"),
+					info: testFileInfo(t, "prefix1_bar", 42),
+				},
+			},
+			expRemoved: []string{filepath.Join(testDir, "prefix1_bar")},
+		},
+		"remove fails": {
+			prefix: "prefix1",
+			tgtUid: "42",
+			testInputs: []*testWalkInput{
+				{
+					path:   filepath.Join(testDir, "prefix1_foo"),
+					info:   testFileInfo(t, "prefix1_foo", 42),
+					expErr: errors.New("could not remove"),
+				},
+			},
+			expRemoved: []string{},
+			removeErr:  errors.New("could not remove"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			removedFiles := make([]string, 0)
+			removeFn := func(path string) error {
+				if tc.removeErr == nil {
+					removedFiles = append(removedFiles, path)
+				}
+				return tc.removeErr
+			}
+
+			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUid, removeFn)
+			for _, ti := range tc.testInputs {
+				gotErr := testFn(ti.path, ti.info, ti.err)
+				common.CmpErr(t, ti.expErr, gotErr)
+			}
+			if diff := cmp.Diff(tc.expRemoved, removedFiles); diff != "" {
+				t.Fatalf("unexpected remove result (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
