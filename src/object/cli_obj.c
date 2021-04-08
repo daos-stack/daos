@@ -3619,7 +3619,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	    DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
 		obj_auxi->io_retry = 0;
 
-	if (pm_stale || obj_auxi->io_retry)
+	if (!obj_auxi->no_retry && (pm_stale || obj_auxi->io_retry))
 		obj_retry_cb(task, obj, obj_auxi, pm_stale);
 
 	if (!obj_auxi->io_retry) {
@@ -4079,8 +4079,10 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (obj_auxi->ec_wait_recov)
 		goto out_task;
 
-	if (args->extra_flags & DIOF_FOR_MIGRATION)
+	if (args->extra_flags & DIOF_FOR_MIGRATION) {
 		obj_auxi->flags |= ORF_FOR_MIGRATION;
+		obj_auxi->no_retry = 1;
+	}
 
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
 		obj_auxi->flags |= ORF_CHECK_EXISTENCE;
@@ -4669,6 +4671,10 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 		obj_decref(obj);
 		D_GOTO(out_task, rc);
 	}
+
+	if (args->dkey_anchor != NULL &&
+	    daos_anchor_get_flags(args->dkey_anchor) & DIOF_FOR_MIGRATION)
+		obj_auxi->no_retry = 1;
 
 	if (obj_is_ec(obj))
 		obj_auxi->is_ec_obj = 1;
