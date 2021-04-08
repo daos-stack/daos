@@ -167,7 +167,8 @@ pipeline {
                     when {
                       beforeAgent true
                       expression { ! skipStage(stage: 'python-bandit',
-		                               def_val: 'false') }
+		                                 def_val: 'false') ||
+		                        quickFunctional() }
                     }
                     agent {
                         dockerfile {
