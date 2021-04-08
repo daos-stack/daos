@@ -26,7 +26,8 @@
  */
 JNIEXPORT jlong JNICALL
 Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
-				     jclass clientClass, jstring poolId,
+				     jclass clientClass,
+				     jstring poolId,
 				     jstring serverGroup,
 				     jint flags)
 {
@@ -71,7 +72,8 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
  */
 JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosClosePool(JNIEnv *env,
-				      jclass clientClass, jlong poolHandle)
+				      jclass clientClass,
+				      jlong poolHandle)
 {
 	daos_handle_t poh;
 
@@ -97,8 +99,10 @@ Java_io_daos_DaosClient_daosClosePool(JNIEnv *env,
  */
 JNIEXPORT jlong JNICALL
 Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
-				     jclass clientClass, jlong poolHandle,
-				     jstring contUuid, jint mode)
+				     jclass clientClass,
+				     jlong poolHandle,
+				     jstring contUuid,
+				     jint mode)
 {
 	daos_handle_t poh;
 	daos_cont_info_t co_info;
@@ -149,7 +153,8 @@ Java_io_daos_DaosClient_daosCloseContainer(JNIEnv *env,
 }
 
 JNIEXPORT jlong JNICALL
-Java_io_daos_DaosClient_createEventQueue(JNIEnv *env, jclass clientClass,
+Java_io_daos_DaosClient_createEventQueue(JNIEnv *env,
+					 jclass clientClass,
 					 jint nbrOfEvents)
 {
 	daos_handle_t eqhdl;
@@ -229,9 +234,12 @@ fail:
 }
 
 JNIEXPORT void JNICALL
-Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
-		jlong eqWrapperHdl, jlong memAddress,
-		jint nbrOfEvents, jlong timeoutMs)
+Java_io_daos_DaosClient_pollCompleted(JNIEnv *env,
+				      jclass clientClass,
+				      jlong eqWrapperHdl,
+				      jlong memAddress,
+				      jint nbrOfEvents,
+				      jlong timeoutMs)
 {
 	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
 	char *buffer = (char *)memAddress;
@@ -269,8 +277,10 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 }
 
 JNIEXPORT jboolean JNICALL
-Java_io_daos_DaosClient_abortEvent(JNIEnv *env, jclass clientClass,
-		jlong eqWrapperHdl, jshort eid)
+Java_io_daos_DaosClient_abortEvent(JNIEnv *env,
+				   jclass clientClass,
+				   jlong eqWrapperHdl,
+				   jshort eid)
 {
 	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
 	daos_event_t *event = eq->events[eid];
@@ -292,8 +302,9 @@ Java_io_daos_DaosClient_abortEvent(JNIEnv *env, jclass clientClass,
 }
 
 JNIEXPORT void JNICALL
-Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
-		jlong eqWrapperHdl)
+Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env,
+					  jclass clientClass,
+					  jlong eqWrapperHdl)
 {
 	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
 	int i;
@@ -360,7 +371,8 @@ fin:
  * \param[in]	clientClass	class of DaosFsClient
  */
 JNIEXPORT void JNICALL
-Java_io_daos_DaosClient_daosFinalize(JNIEnv *env, jclass clientClass)
+Java_io_daos_DaosClient_daosFinalize(JNIEnv *env,
+				     jclass clientClass)
 {
 	int rc = daos_eq_lib_fini();
 
