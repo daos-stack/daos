@@ -166,7 +166,7 @@ pipeline {
                 stage('Python Bandit check') {
                     when {
                       beforeAgent true
-                      expression { ! skipStage() }
+                      expression { ! skipStage(def_val: 'false') }
                     }
                     agent {
                         dockerfile {
