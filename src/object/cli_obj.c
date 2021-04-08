@@ -1969,6 +1969,12 @@ check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 	return 0;
 }
 
+static inline bool
+obj_key_valid(daos_key_t *key)
+{
+	return key != NULL && key->iov_buf != NULL && key->iov_len != 0;
+}
+
 /* check if the obj request is valid */
 static int
 obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
@@ -1992,8 +1998,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 		size_fetch  = obj_auxi->reasb_req.orr_size_fetch;
 		if ((!obj_auxi->io_retry && !obj_auxi->req_reasbed) ||
 		    size_fetch) {
-			if (f_args->dkey == NULL ||
-			    f_args->dkey->iov_buf == NULL ||
+			if (!obj_key_valid(f_args->dkey) ||
 			    (f_args->nr == 0 && !check_exist)) {
 				D_ERROR("Invalid fetch parameter.\n");
 				D_GOTO(out, rc = -DER_INVAL);
@@ -2013,8 +2018,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 		daos_obj_update_t	*u_args = args;
 
 		if (!obj_auxi->io_retry && !obj_auxi->req_reasbed) {
-			if (u_args->dkey == NULL ||
-			    u_args->dkey->iov_buf == NULL || u_args->nr == 0) {
+			if (!obj_key_valid(u_args->dkey) || u_args->nr == 0) {
 				D_ERROR("Invalid update parameter.\n");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
@@ -2026,12 +2030,18 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 				D_GOTO(out, rc);
 		}
 
+		if (daos_handle_is_valid(u_args->th))
+			return 0;
+
 		oh = u_args->oh;
 		th = u_args->th;
 		break;
 	}
 	case DAOS_OBJ_RPC_PUNCH: {
 		daos_obj_punch_t *p_args = args;
+
+		if (daos_handle_is_valid(p_args->th))
+			return 0;
 
 		oh = p_args->oh;
 		th = p_args->th;
@@ -2040,14 +2050,13 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 	case DAOS_OBJ_RPC_PUNCH_DKEYS: {
 		daos_obj_punch_t *p_args = args;
 
-		if (p_args->dkey == NULL) {
-			D_ERROR("NULL dkeys\n");
-			D_GOTO(out, rc = -DER_INVAL);
-		} else if (p_args->dkey[0].iov_buf == NULL ||
-			   p_args->dkey[0].iov_len == 0) {
-			D_ERROR("invalid dkey (NULL iov_buf or iov_len.\n");
+		if (!obj_key_valid(p_args->dkey)) {
+			D_ERROR("invalid punch dkey parameter.\n");
 			D_GOTO(out, rc = -DER_INVAL);
 		}
+
+		if (daos_handle_is_valid(p_args->th))
+			return 0;
 
 		oh = p_args->oh;
 		th = p_args->th;
@@ -2056,12 +2065,23 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 
 	case DAOS_OBJ_RPC_PUNCH_AKEYS: {
 		daos_obj_punch_t *p_args = args;
+		int		  i;
 
-		if (p_args->dkey == NULL || p_args->dkey->iov_buf == NULL ||
-		    p_args->dkey->iov_len == 0) {
-			D_ERROR("NULL or invalid dkey\n");
+		if (!obj_key_valid(p_args->dkey) || p_args->akey_nr == 0) {
+			D_ERROR("invalid punch akey parameter.\n");
 			D_GOTO(out, rc = -DER_INVAL);
 		}
+
+		for (i = 0; i < p_args->akey_nr; i++) {
+			if (!obj_key_valid(&p_args->akeys[i])) {
+				D_ERROR("invalid punch akeys parameter.\n");
+				D_GOTO(out, rc = -DER_INVAL);
+			}
+		}
+
+		if (daos_handle_is_valid(p_args->th))
+			return 0;
+
 		oh = p_args->oh;
 		th = p_args->th;
 		break;
@@ -4169,17 +4189,11 @@ out_task:
 
 static int
 dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
-	      daos_obj_update_t *args)
+	      daos_obj_update_t *args, struct dc_object *obj)
 {
 	struct obj_auxi_args	*obj_auxi;
-	struct dc_object	*obj;
 	uint64_t		 dkey_hash;
 	int			 rc;
-
-	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_UPDATE, epoch, &map_ver,
-			   &obj);
-	if (rc != 0)
-		goto out_task; /* invalid parameter */
 
 	obj_task_init_common(task, DAOS_OBJ_RPC_UPDATE, map_ver, args->th,
 			     &obj_auxi, obj);
@@ -4247,9 +4261,15 @@ int
 dc_obj_update_task(tse_task_t *task)
 {
 	daos_obj_update_t	*args = dc_task_get_args(task);
+	struct dc_object	*obj = NULL;
 	struct dtx_epoch	 epoch = {0};
 	unsigned int		 map_ver = 0;
 	int			 rc;
+
+	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_UPDATE, &epoch, &map_ver,
+			   &obj);
+	if (rc != 0)
+		goto comp;
 
 	if (daos_handle_is_valid(args->th)) {
 		/* add the operation to DTX and complete immediately */
@@ -4258,7 +4278,7 @@ dc_obj_update_task(tse_task_t *task)
 	}
 
 	/* submit the update */
-	return dc_obj_update(task, &epoch, map_ver, args);
+	return dc_obj_update(task, &epoch, map_ver, args, obj);
 comp:
 	if (rc <= 0)
 		tse_task_complete(task, rc);
