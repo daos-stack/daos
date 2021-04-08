@@ -695,7 +695,7 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	if (dfs->dfs_multi_user) {
 		args.argv[5] = strndup("-oallow_other", 32);
 		if (!args.argv[5])
-			D_GOTO(err_iet, rc = -DER_NOMEM);
+			D_GOTO(err, rc = -DER_NOMEM);
 	}
 
 	fuse_ops = dfuse_get_fuse_ops();
