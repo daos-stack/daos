@@ -473,9 +473,12 @@ class DaosServer():
             except subprocess.TimeoutExpired:
                 pass
             rc = self.run_dmg(cmd)
+
             data = json.loads(rc.stdout.decode('utf-8'))
             print('cmd: {} data: {}'.format(cmd, data))
 
+            if rc.returncode == 0:
+                break
             if data['error'] is not None:
                 resolved = False
                 for res in error_resolutions.values():
