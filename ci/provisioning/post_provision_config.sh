@@ -32,10 +32,10 @@ time clush -B -S -l root -w "$NODESTRING" \
            $(cat ci/provisioning/post_provision_config_nodes_"${DISTRO}".sh)
            $(cat ci/provisioning/post_provision_config_nodes.sh)"
 
-git log --format=%s -n 1 HEAD | ssh -i ci_key -l jenkins "${NODESTRING%%,*}" \
+git log --format=%s -n 1 HEAD | ssh -i ci_key -l ${REMOTE_ACCT:-jenkins} "${NODESTRING%%,*}" \
                                     "cat >/tmp/commit_title"
 git log --pretty=format:%h --abbrev-commit --abbrev=7 |
-  ssh -i ci_key -l jenkins "${NODESTRING%%,*}" "cat >/tmp/commit_list"
+  ssh -i ci_key -l ${REMOTE_ACCT:-jenkins} "${NODESTRING%%,*}" "cat >/tmp/commit_list"
 if [ -n "${SKIPLIST_MOUNT:-wolf-2:/export/scratch}" ]; then
     ssh root@"${NODESTRING%%,*}" "mkdir /scratch && " \
                                "mount \"${SKIPLIST_MOUNT:-wolf-2:/export/scratch}\" /scratch"
