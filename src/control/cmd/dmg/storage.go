@@ -45,52 +45,52 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return err
 	}
 
-	var nReq *control.NvmePrepareReq
-	var sReq *control.ScmPrepareReq
+	req := &control.StoragePrepareReq{}
 	if prepNvme {
-		nReq = &control.NvmePrepareReq{
-			PCIWhiteList: cmd.PCIWhiteList,
+		cmd.log.Debug("setting nvme in storage prepare request")
+		req.NVMe = &control.NvmePrepareReq{
+			PCIAllowList: cmd.PCIAllowList,
 			NrHugePages:  int32(cmd.NrHugepages),
 			TargetUser:   cmd.TargetUser,
 			Reset:        cmd.Reset,
 		}
 	}
-
 	if prepScm {
+		cmd.log.Debug("setting scm in storage prepare request")
 		if cmd.jsonOutputEnabled() && !cmd.Force {
 			return errors.New("Cannot use --json without --force")
 		}
 		if err := cmd.Warn(cmd.log); err != nil {
 			return err
 		}
-
-		sReq = &control.ScmPrepareReq{Reset: cmd.Reset}
+		req.SCM = &control.ScmPrepareReq{Reset: cmd.Reset}
 	}
 
-	ctx := context.Background()
-	req := &control.StoragePrepareReq{
-		NVMe: nReq,
-		SCM:  sReq,
-	}
 	req.SetHostList(cmd.hostlist)
-	resp, err := control.StoragePrepare(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
-	}
-
+	resp, err := control.StoragePrepare(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
 
-	var bld strings.Builder
-	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, resp.Errors())
+	}
+
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
 		return err
 	}
-	if err := pretty.PrintStoragePrepareMap(resp.HostStorage, &bld); err != nil {
-		return err
+	if outErr.Len() > 0 {
+		cmd.log.Error(outErr.String())
 	}
-	cmd.log.Info(bld.String())
+
+	if prepScm {
+		var out strings.Builder
+		if err := pretty.PrintScmPrepareMap(resp.HostStorage, &out); err != nil {
+			return err
+		}
+		cmd.log.Info(out.String())
+	}
 
 	return resp.Errors()
 }
@@ -114,54 +114,42 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 		return errors.New("Cannot use --nvme-health and --nvme-meta together")
 	}
 
-	ctx := context.Background()
 	req := &control.StorageScanReq{NvmeHealth: cmd.NvmeHealth, NvmeMeta: cmd.NvmeMeta}
 	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		if cmd.Verbose {
-			cmd.log.Error("--verbose flag ignored if --json specified")
-		}
-
-		return cmd.outputJSON(resp, err)
-	}
-
+	resp, err := control.StorageScan(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
 
-	var bld strings.Builder
-	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
-	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, resp.Errors())
+	}
+
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
 		return err
 	}
-	if cmd.NvmeHealth {
-		if cmd.Verbose {
-			cmd.log.Info("--verbose flag ignored if --nvme-health specified")
-		}
-		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
+	if outErr.Len() > 0 {
+		cmd.log.Error(outErr.String())
+	}
+
+	var out strings.Builder
+	switch {
+	case cmd.NvmeHealth:
+		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &out); err != nil {
 			return err
 		}
-		cmd.log.Info(bld.String())
-
-		return resp.Errors()
-	}
-	if cmd.NvmeMeta {
-		if cmd.Verbose {
-			cmd.log.Info("--verbose flag ignored if --nvme-meta specified")
-		}
-		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &bld); err != nil {
+	case cmd.NvmeMeta:
+		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &out); err != nil {
 			return err
 		}
-		cmd.log.Info(bld.String())
-
-		return resp.Errors()
+	default:
+		verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
+		if err := pretty.PrintHostStorageMap(resp.HostStorage, &out, verbose); err != nil {
+			return err
+		}
 	}
-	if err := pretty.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
-		return err
-	}
-	cmd.log.Info(bld.String())
+	cmd.log.Info(out.String())
 
 	return resp.Errors()
 }
@@ -195,27 +183,32 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 	}
 
 	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
-	}
-
 	if err != nil {
 		return err
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, resp.Errors())
 	}
 
 	return cmd.printFormatResp(resp)
 }
 
 func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) error {
-	var bld strings.Builder
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
+		return err
+	}
+	if outErr.Len() > 0 {
+		cmd.log.Error(outErr.String())
+	}
+
+	var out strings.Builder
 	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
-	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+	if err := pretty.PrintStorageFormatMap(resp.HostStorage, &out, verbose); err != nil {
 		return err
 	}
-	if err := pretty.PrintStorageFormatMap(resp.HostStorage, &bld, verbose); err != nil {
-		return err
-	}
-	cmd.log.Info(bld.String())
+	cmd.log.Info(out.String())
 
 	return resp.Errors()
 }
@@ -245,12 +238,11 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 		}
 	}
 
-	ctx := context.Background()
 	req := &control.SmdQueryReq{
 		UUID:      cmd.UUID,
 		SetFaulty: true,
 	}
-	return cmd.makeRequest(ctx, req)
+	return cmd.makeRequest(context.Background(), req)
 }
 
 // storageReplaceCmd is the struct representing the replace storage subcommand
@@ -278,13 +270,12 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 		cmd.log.Info("NoReint is not currently implemented")
 	}
 
-	ctx := context.Background()
 	req := &control.SmdQueryReq{
 		UUID:        cmd.OldDevUUID,
 		ReplaceUUID: cmd.NewDevUUID,
 		NoReint:     cmd.NoReint,
 	}
-	return cmd.makeRequest(ctx, req)
+	return cmd.makeRequest(context.Background(), req)
 }
 
 // storageIdentifyCmd is the struct representing the identify storage subcommand.
@@ -302,10 +293,9 @@ type vmdIdentifyCmd struct {
 //
 // Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY"
 func (cmd *vmdIdentifyCmd) Execute(_ []string) error {
-	ctx := context.Background()
 	req := &control.SmdQueryReq{
 		UUID:     cmd.UUID,
 		Identify: true,
 	}
-	return cmd.makeRequest(ctx, req)
+	return cmd.makeRequest(context.Background(), req)
 }

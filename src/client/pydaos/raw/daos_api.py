@@ -6,6 +6,9 @@
 """
 # pylint: disable=pylint-too-many-lines
 
+# pylint: disable=relative-beyond-top-level
+from .. import pydaos_shim
+# pylint: enable=relative-beyond-top-level
 
 import ctypes
 import threading
@@ -20,12 +23,6 @@ from . import daos_cref
 from . import conversion
 from .. import DaosClient
 
-# pylint: disable=import-error
-if sys.version_info < (3, 0):
-    from .. import pydaos_shim_27 as pydaos_shim
-else:
-    from .. import pydaos_shim_3 as pydaos_shim
-# pylint: enable=import-error
 
 DaosObjClass = enum.Enum(
     "DaosObjClass",
@@ -36,6 +33,7 @@ DaosContPropEnum = enum.Enum(
     "DaosContPropEnum",
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("DAOS_PROP_")})
+
 
 class DaosPool():
     """A python object representing a DAOS pool."""
@@ -1302,6 +1300,7 @@ class DaosContProperties(ctypes.Structure):
         self.chksum_type = ctypes.c_uint64(100)
         self.chunk_size = ctypes.c_uint64(0)
 
+
 class DaosInputParams():
     # pylint: disable=too-few-public-methods
     """ This is a helper python method
@@ -1326,6 +1325,7 @@ class DaosInputParams():
         create container method.
         """
         return self.co_prop
+
 
 class DaosContainer():
     # pylint: disable=too-many-public-methods
@@ -1373,20 +1373,20 @@ class DaosContainer():
         # 2. Enable checksum,
         # 3. Server Verfiy
         # 4. Chunk Size Allocation.
-        if ((self.cont_input_values.type != "Unknown")
+        if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
                 and (self.cont_input_values.enable_chksum is False)):
             # Only type like posix, hdf5 defined.
             num_prop = 1
-        elif ((self.cont_input_values.type == "Unknown")
+        elif ((self.cont_input_values.type.decode("UTF-8") == "Unknown")
               and (self.cont_input_values.enable_chksum is True)):
             # Obly checksum enabled.
             num_prop = 3
-        elif ((self.cont_input_values.type != "Unknown")
+        elif ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
               and (self.cont_input_values.enable_chksum is True)):
             # Both layout and checksum properties defined
             num_prop = 4
 
-        if ((self.cont_input_values.type != "Unknown")
+        if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
                 or (self.cont_input_values.enable_chksum is True)):
             self.cont_prop = daos_cref.DaosProperty(num_prop)
         # idx index is used to increment the dpp_entried array
@@ -1395,7 +1395,7 @@ class DaosContainer():
         # dpp_entries will start with idx=0. If layer is not
         # none, checksum dpp_entries will start at idx=1.]
         idx = 0
-        if self.cont_input_values.type != "Unknown":
+        if self.cont_input_values.type.decode("UTF-8") != "Unknown":
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
             if self.cont_input_values.type in ("posix", "POSIX"):
@@ -2154,6 +2154,7 @@ class DaosSnapshot():
         if retcode != 0:
             raise Exception("Failed to destroy the snapshot. RC: {0}"
                             .format(retcode))
+
 
 class DaosContext():
     # pylint: disable=too-few-public-methods
