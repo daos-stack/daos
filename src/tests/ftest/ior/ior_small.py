@@ -34,8 +34,10 @@ class IorSmall(IorTestBase):
             All above three cases to be run with single client and
                 multiple client processes in two separate nodes.
 
-        :avocado: tags=all,pr,daily_regression,hw,large,daosio,iorsmall
-        :avocado: tags=DAOS_5610
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daosio,checksum,DAOS_5610
+        :avocado: tags=iorsmall
         """
         results = []
         cncl_tickets = []
