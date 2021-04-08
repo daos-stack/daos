@@ -122,7 +122,7 @@ class ContainerAttributeTest(TestWithServers):
 
         Test description: Test large randomly created container attribute.
 
-        :avocado: tags=container,container_attr,attribute,large_conattribute
+        :avocado: tags=container,attribute,large_conattribute
         :avocado: tags=container_attribute
         """
         self.add_pool()
