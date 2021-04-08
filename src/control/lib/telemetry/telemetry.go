@@ -43,8 +43,6 @@ const (
 	BadFloatVal = float64(BadUintVal)
 	BadIntVal   = int64(BadUintVal >> 1)
 	BadDuration = time.Duration(BadIntVal)
-	ShowMeta    = false
-	ShowTStamp  = false
 )
 
 type (
@@ -198,7 +196,7 @@ func (mb *metricBase) String() string {
 	}
 
 	go func() {
-		C.d_tm_print_node(mb.handle.shmem, mb.node, C.int(0), C.CString(""), C.D_TM_STANDARD, ShowMeta, ShowTStamp, f)
+		C.d_tm_print_node(mb.handle.shmem, mb.node, C.int(0), C.CString(""), C.D_TM_STANDARD, C.int(0), f)
 		C.fclose(f)
 	}()
 
