@@ -789,7 +789,8 @@ Java_io_daos_dfs_DaosFsClient_dfsRelease(JNIEnv *env,
  */
 JNIEXPORT jlong JNICALL
 Java_io_daos_dfs_DaosFsClient_allocateDfsDesc(JNIEnv *env,
-		jclass clientClass, jlong descBufAddress)
+					      jclass clientClass,
+					      jlong descBufAddress)
 {
 	uint64_t value64;
 	uint16_t value16;
