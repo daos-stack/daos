@@ -8,6 +8,7 @@
 from mdtest_test_base import MdtestBase
 
 class MdtestLarge(MdtestBase):
+    # pylint: disable=too-many-ancestors
     """
     Class for mdtest with large configurations
     :avocado: recursive
@@ -29,7 +30,10 @@ class MdtestLarge(MdtestBase):
             write bytes: 0 | 1K | 32K
             read bytes: 0 | 1K | 32K
             depth of hierarchical directory structure: 0 | 100
-        :avocado: tags=all,hw,perf,nvme,mdtest,mdtestlarge
+        :avocado: tags=all
+        :avocado: tags=hw
+        :avocado: tags=perf,nvme,mdtest,checksum
+        :avocado: tags=mdtestlarge
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
         self.mdtest_cmd.flags.update(mdtest_flags)

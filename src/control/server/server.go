@@ -135,8 +135,8 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
 		TargetUser:    runningUser.Username,
-		PCIWhitelist:  strings.Join(cfg.BdevInclude, " "),
-		PCIBlacklist:  strings.Join(cfg.BdevExclude, " "),
+		PCIAllowlist:  strings.Join(cfg.BdevInclude, " "),
+		PCIBlocklist:  strings.Join(cfg.BdevExclude, " "),
 		DisableVFIO:   cfg.DisableVFIO,
 		DisableVMD:    cfg.DisableVMD || cfg.DisableVFIO || iommuDisabled,
 		// TODO: pass vmd include/white list
