@@ -137,7 +137,7 @@ static int test_get_member_state(struct swim_context *ctx,
 	int rc = 0;
 
 	if (self == SWIM_ID_INVALID)
-		return -EINVAL;
+		return -DER_INVAL;
 
 	*state = g.swim_state[self][id];
 	return rc;
@@ -153,7 +153,7 @@ static int test_set_member_state(struct swim_context *ctx,
 	int i, cnt, rc = 0;
 
 	if (self_id == SWIM_ID_INVALID)
-		return -EINVAL;
+		return -DER_INVAL;
 
 	switch (state->sms_status) {
 	case SWIM_MEMBER_INACTIVE:
@@ -328,12 +328,12 @@ static void deliver_pkt(struct network_pkt *item)
 
 	if (rcv_delay > max_delay)
 		swim_net_glitch_update(ctx, self_id, rcv_delay - max_delay);
-	else if (snd_delay > max_delay)
+	if (snd_delay > max_delay)
 		swim_net_glitch_update(ctx, from_id, snd_delay - max_delay);
 
 	/* emulate RPC receive by target */
 	rc = swim_parse_message(ctx, from_id, item->np_upds, item->np_nupds);
-	if (rc == -ESHUTDOWN)
+	if (rc == -DER_SHUTDOWN)
 		swim_self_set(ctx, SWIM_ID_INVALID);
 	else if (rc)
 		fprintf(stderr, "swim_parse_message() rc=%d\n", rc);
@@ -406,9 +406,9 @@ static void *progress_thread(void *arg)
 	do {
 		for (i = 0; i < members_count; i++) {
 			rc = swim_progress(g.swim_ctx[i], timeout);
-			if (rc == -ESHUTDOWN)
+			if (rc == -DER_SHUTDOWN)
 				swim_self_set(g.swim_ctx[i], SWIM_ID_INVALID);
-			else if (rc && rc != -ETIMEDOUT)
+			else if (rc && rc != -DER_TIMEDOUT)
 				fprintf(stderr, "swim_progress() rc=%d\n", rc);
 		}
 		usleep(100);

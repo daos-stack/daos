@@ -134,7 +134,7 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 
 	rc = ctx->sc_ops->get_member_state(ctx, id, &upds[i].smu_state);
 	if (rc) {
-		SWIM_ERROR("get_member_state(): "DF_RC"\n", DP_RC(rc));
+		SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", id, DP_RC(rc));
 		D_GOTO(out_unlock, rc);
 	}
 	upds[i++].smu_id = id;
@@ -144,7 +144,8 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 		rc = ctx->sc_ops->get_member_state(ctx, self_id,
 						   &upds[i].smu_state);
 		if (rc) {
-			SWIM_ERROR("get_member_state(): "DF_RC"\n", DP_RC(rc));
+			SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", self_id,
+				   DP_RC(rc));
 			D_GOTO(out_unlock, rc);
 		}
 		upds[i++].smu_id = self_id;
@@ -175,8 +176,8 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 					item = next;
 					continue;
 				}
-				SWIM_ERROR("get_member_state(): "DF_RC"\n",
-					   DP_RC(rc));
+				SWIM_ERROR("get_member_state(%lu): "DF_RC"\n",
+					   item->si_id, DP_RC(rc));
 				D_GOTO(out_unlock, rc);
 			}
 			upds[i++].smu_id = item->si_id;
@@ -245,7 +246,7 @@ swim_member_alive(struct swim_context *ctx, swim_id_t from,
 
 	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
 	if (rc) {
-		SWIM_ERROR("get_member_state(): "DF_RC"\n", DP_RC(rc));
+		SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", id, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -292,9 +293,12 @@ swim_member_dead(struct swim_context *ctx, swim_id_t from,
 
 	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
 	if (rc) {
-		SWIM_ERROR("get_member_state(): "DF_RC"\n", DP_RC(rc));
+		SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", id, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
+	if (id_state.sms_status == SWIM_MEMBER_INACTIVE)
+		D_GOTO(out, rc = 0);
 
 	if (nr > id_state.sms_incarnation)
 		D_GOTO(update, rc = 0);
@@ -315,6 +319,7 @@ update:
 		}
 	}
 
+	SWIM_ERROR("member %lu is DEAD\n", id);
 	id_state.sms_incarnation = nr;
 	id_state.sms_status = SWIM_MEMBER_DEAD;
 	rc = swim_updates_notify(ctx, from, id, &id_state, 0);
@@ -336,9 +341,12 @@ swim_member_suspect(struct swim_context *ctx, swim_id_t from,
 
 	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
 	if (rc) {
-		SWIM_ERROR("get_member_state(): "DF_RC"\n", DP_RC(rc));
+		SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", id, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
+	if (id_state.sms_status == SWIM_MEMBER_INACTIVE)
+		D_GOTO(out, rc = 0);
 
 	if (nr > id_state.sms_incarnation)
 		D_GOTO(search, rc = 0);
@@ -393,9 +401,17 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now,
 		next = TAILQ_NEXT(item, si_link);
 		item->u.si_deadline += net_glitch_delay;
 		if (now > item->u.si_deadline) {
+			rc = ctx->sc_ops->get_member_state(ctx,
+							   item->si_id,
+							   &id_state);
+			if (rc) { /* this member was removed already */
+				TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
+				D_FREE(item);
+				D_GOTO(next_item, rc = 0);
+			}
+
 			SWIM_INFO("%lu: suspect timeout %lu\n",
 				  self_id, item->si_id);
-
 			if (item->si_from != self_id) {
 				/* let's try to confirm from gossip origin */
 				id   = item->si_id;
@@ -411,22 +427,15 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now,
 				item->si_from = from;
 				TAILQ_INSERT_TAIL(&targets, item, si_link);
 			} else {
-				rc = ctx->sc_ops->get_member_state(ctx,
-								   item->si_id,
-								   &id_state);
-				if (!rc) {
-					/* if this member has exceeded
-					 * its allowable suspicion timeout,
-					 * we mark it as dead
-					 */
-					swim_member_dead(ctx, item->si_from,
-							item->si_id,
-						      id_state.sms_incarnation);
-				} else {
-					TAILQ_REMOVE(&ctx->sc_suspects, item,
-						     si_link);
-					D_FREE(item);
-				}
+				TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
+				/* if this member has exceeded
+				 * its allowable suspicion timeout,
+				 * we mark it as dead
+				 */
+				swim_member_dead(ctx, item->si_from,
+						 item->si_id,
+						 id_state.sms_incarnation);
+				D_FREE(item);
 			}
 		}
 next_item:
@@ -559,12 +568,14 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	ctx->sc_target = SWIM_ID_INVALID;
 
 	/* delay the first ping until all things will be initialized */
-	ctx->sc_next_tick_time = swim_now_ms() + 10 * SWIM_PROTOCOL_PERIOD_LEN;
+	ctx->sc_next_tick_time = swim_now_ms() + 3 * SWIM_PROTOCOL_PERIOD_LEN;
 
 	/* set global tunable defaults */
 	swim_prot_period_len = swim_prot_period_len_default();
 	swim_suspect_timeout = swim_suspect_timeout_default();
 	swim_ping_timeout    = swim_ping_timeout_default();
+
+	ctx->sc_default_ping_timeout = swim_ping_timeout;
 
 out:
 	return ctx;
@@ -640,22 +651,15 @@ swim_net_glitch_update(struct swim_context *ctx, swim_id_t id,
 	}
 
 	if (id == self_id || id == ctx->sc_target) {
-		switch (swim_state_get(ctx)) {
-		case SCS_DPINGED:
-			ctx->sc_dping_deadline += delay;
-			break;
-		case SCS_IPINGED:
-			ctx->sc_iping_deadline += delay;
-			break;
-		default:
-			break;
-		}
+		if (swim_state_get(ctx) == SCS_PINGED)
+			ctx->sc_deadline += delay;
 	}
 
 	swim_ctx_unlock(ctx);
 
-	SWIM_ERROR("%lu: A network glitch of %lu with %lu msec delay"
-		   " is detected.\n", self_id, id, delay);
+	if (id != self_id)
+		SWIM_ERROR("%lu: A network glitch of %lu with %lu ms delay"
+			   " is detected.\n", self_id, id, delay);
 	return rc;
 }
 
@@ -707,7 +711,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 		}
 
 		swim_ctx_lock(ctx);
-		ctx_state = SCS_DEAD;
+		ctx_state = SCS_SELECT;
 		if (ctx->sc_target != SWIM_ID_INVALID) {
 			rc = ctx->sc_ops->get_member_state(ctx,
 							   ctx->sc_target,
@@ -716,8 +720,9 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				ctx->sc_target = SWIM_ID_INVALID;
 				if (rc != -DER_NONEXIST) {
 					swim_ctx_unlock(ctx);
-					SWIM_ERROR("get_member_state(): "
-						   DF_RC"\n", DP_RC(rc));
+					SWIM_ERROR("get_member_state(%lu): "
+						   DF_RC"\n", ctx->sc_target,
+						   DP_RC(rc));
 					D_GOTO(out, rc);
 				}
 			} else {
@@ -728,30 +733,37 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 		switch (ctx_state) {
 		case SCS_BEGIN:
 			if (now > ctx->sc_next_tick_time) {
-				ctx->sc_next_tick_time = now
-							 + swim_period_get();
+				uint64_t delay = target_state.sms_delay * 2;
+				uint64_t ping_timeout = swim_ping_timeout_get();
+
+				if (delay < ping_timeout ||
+				    delay > 3 * ping_timeout)
+					delay = ping_timeout;
 
 				id_target = ctx->sc_target;
 				id_sendto = ctx->sc_target;
 				send_updates = true;
-				SWIM_INFO("%lu: dping %lu => {%lu %c %lu}\n",
+				SWIM_INFO("%lu: dping %lu => {%lu %c %lu} "
+					  "delay: %u ms, timeout: %lu ms\n",
 					  ctx->sc_self, ctx->sc_self, id_sendto,
 					  SWIM_STATUS_CHARS[
 						       target_state.sms_status],
-					  target_state.sms_incarnation);
+					  target_state.sms_incarnation,
+					  target_state.sms_delay, delay);
 
-				ctx->sc_dping_deadline = now
-						      + swim_ping_timeout_get();
-				ctx_state = SCS_DPINGED;
+				ctx->sc_next_tick_time = now
+							 + swim_period_get();
+				ctx->sc_deadline = now + delay;
+				ctx_state = SCS_PINGED;
 			}
 			break;
-		case SCS_DPINGED:
+		case SCS_PINGED:
 			/* check whether the ping target from the previous
 			 * protocol tick ever successfully acked a direct
 			 * ping request
 			 */
-			ctx->sc_dping_deadline += net_glitch_delay;
-			if (now > ctx->sc_dping_deadline) {
+			ctx->sc_deadline += net_glitch_delay;
+			if (now > ctx->sc_deadline) {
 				/* no response from direct ping */
 				if (target_state.sms_status != SWIM_MEMBER_INACTIVE) {
 					/* suspect this member */
@@ -763,28 +775,8 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 					/* just goto next member,
 					 * this is not ready yet.
 					 */
-					ctx_state = SCS_DEAD;
+					ctx_state = SCS_SELECT;
 				}
-			}
-			break;
-		case SCS_IPINGED:
-			/* check whether the ping target from the previous
-			 * protocol tick ever successfully acked a indirect
-			 * ping request
-			 */
-			ctx->sc_iping_deadline += net_glitch_delay;
-			if (now > ctx->sc_iping_deadline) {
-				/* no response from indirect pings,
-				 * will be dead by suspicion timeout
-				 * if there are no gossips about it.
-				 */
-				SWIM_ERROR("%lu: iping timeout {%lu %c %lu}\n",
-					   ctx->sc_self, ctx->sc_target,
-					   SWIM_STATUS_CHARS[
-						       target_state.sms_status],
-					   target_state.sms_incarnation);
-				/* So, just goto next member. */
-				ctx_state = SCS_DEAD;
 			}
 			break;
 		case SCS_TIMEDOUT:
@@ -809,11 +801,13 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				id_sendto = item->si_id;
 				send_updates = true;
 
-				SWIM_INFO("%lu: ireq  %lu => {%lu %c %lu}\n",
+				SWIM_INFO("%lu: ireq  %lu => {%lu %c %lu} "
+					  "delay: %u ms\n",
 					  ctx->sc_self, id_sendto, id_target,
 					  SWIM_STATUS_CHARS[
 						       target_state.sms_status],
-					  target_state.sms_incarnation);
+					  target_state.sms_incarnation,
+					  target_state.sms_delay);
 
 				TAILQ_REMOVE(&ctx->sc_subgroup,
 					     item, si_link);
@@ -821,15 +815,13 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 
 				item = TAILQ_FIRST(&ctx->sc_subgroup);
 				if (item == NULL) {
-					ctx->sc_iping_deadline = now
-						  + 2 * swim_ping_timeout_get();
-					ctx_state = SCS_IPINGED;
+					/* So, just goto next member. */
+					ctx_state = SCS_SELECT;
 				}
 				break;
 			}
 			/* fall through to select a next target */
-		case SCS_ACKED:
-		case SCS_DEAD:
+		case SCS_SELECT:
 			ctx->sc_target = ctx->sc_ops->get_dping_target(ctx);
 			if (ctx->sc_target == SWIM_ID_INVALID) {
 				swim_ctx_unlock(ctx);
@@ -883,8 +875,8 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 	ctx_state = swim_state_get(ctx);
 
 	if (from == ctx->sc_target &&
-	    (ctx_state == SCS_BEGIN || ctx_state == SCS_DPINGED))
-		ctx_state = SCS_ACKED;
+	    (ctx_state == SCS_BEGIN || ctx_state == SCS_PINGED))
+		ctx_state = SCS_SELECT;
 
 	to = upds[0].smu_id; /* save first index from update */
 	for (i = 0; i < nupds; i++) {
@@ -901,9 +893,6 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 			if (id == self_id)
 				break; /* ignore alive updates for self */
 
-			if (id == ctx->sc_target && ctx_state == SCS_IPINGED)
-				ctx_state = SCS_ACKED;
-
 			swim_member_alive(ctx, from, id,
 					  upds[i].smu_state.sms_incarnation);
 			break;
@@ -916,8 +905,9 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 								   &self_state);
 				if (rc) {
 					swim_ctx_unlock(ctx);
-					SWIM_ERROR("get_member_state(): "
-						   DF_RC"\n", DP_RC(rc));
+					SWIM_ERROR("get_member_state(%lu): "
+						   DF_RC"\n", self_id,
+						   DP_RC(rc));
 					D_GOTO(out, rc);
 				}
 

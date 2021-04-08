@@ -26,6 +26,7 @@
 #include "crt_self_test.h"
 #include "crt_ctl.h"
 #include "crt_swim.h"
+#include "swim/swim_internal.h"
 
 /* A wrapper around D_TRACE_DEBUG that ensures the ptr option is a RPC */
 #define RPC_TRACE(mask, rpc, fmt, ...)					\
@@ -51,8 +52,6 @@
 			(rpc)->crp_pub.cr_ep.ep_tag,			\
 			## __VA_ARGS__);				\
 	} while (0)
-
-extern uint32_t crt_swim_rpc_timeout;
 
 #ifdef CRT_DEBUG_TRACE
 #	define CRT_ENTRY()					\

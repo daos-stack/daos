@@ -50,7 +50,6 @@ CRT_RPC_DEFINE(crt_rpc_swim,  CRT_ISEQ_RPC_SWIM, /* empty */)
 CRT_RPC_DECLARE(crt_rpc_swim_wack, CRT_ISEQ_RPC_SWIM, CRT_OSEQ_RPC_SWIM)
 CRT_RPC_DEFINE(crt_rpc_swim_wack,  CRT_ISEQ_RPC_SWIM, CRT_OSEQ_RPC_SWIM)
 
-uint32_t	 crt_swim_rpc_timeout;
 static bool	 crt_swim_should_fail;
 static uint64_t	 crt_swim_fail_delay;
 static uint64_t	 crt_swim_fail_hlc;
@@ -83,15 +82,6 @@ crt_swim_fault_init(const char *args)
 	}
 
 	D_FREE(s_saved);
-}
-
-static inline uint32_t
-crt_swim_rpc_timeout_default(void)
-{
-	unsigned int val = CRT_SWIM_RPC_TIMEOUT;
-
-	d_getenv_int("CRT_SWIM_RPC_TIMEOUT", &val);
-	return val;
 }
 
 static void crt_swim_srv_cb(crt_rpc_t *rpc_req);
@@ -130,7 +120,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 	struct crt_swim_target	*cst;
 	swim_id_t		 self_id = swim_self_get(ctx);
 	swim_id_t		 from_id = rpc_swim_input->src;
-	uint64_t		 max_delay = swim_ping_timeout_get() / 2;
+	uint64_t		 max_delay = swim_ping_timeout_get() * 2 / 3;
 	uint64_t		 hlc = crt_hlc_get();
 	uint32_t		 rcv_delay = 0;
 	uint32_t		 snd_delay = 0;
@@ -195,7 +185,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 
 	if (rcv_delay > max_delay)
 		swim_net_glitch_update(ctx, self_id, rcv_delay - max_delay);
-	else if (snd_delay > max_delay)
+	if (snd_delay > max_delay)
 		swim_net_glitch_update(ctx, from_id, snd_delay - max_delay);
 
 	if (CRT_SWIM_SHOULD_FAIL(d_fa_swim_drop_rpc, self_id)) {
@@ -216,6 +206,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 	} else if (rc) {
 		D_ERROR("swim_parse_message(): "DF_RC"\n", DP_RC(rc));
 	}
+	crt_swim_accommodate();
 
 out:
 	if (rpc_priv->crp_opc_info->coi_no_reply)
@@ -240,14 +231,11 @@ static int crt_swim_set_member_state(struct swim_context *ctx, swim_id_t id,
 
 static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 {
-	struct crt_rpc_priv	*rpc_priv = NULL;
 	struct swim_context	*ctx = cb_info->cci_arg;
 	crt_rpc_t		*rpc_req = cb_info->cci_rpc;
 	struct crt_rpc_swim_in	*rpc_swim_input = crt_req_get(rpc_req);
-	struct swim_member_state id_state;
 	swim_id_t		 self_id = swim_self_get(ctx);
 	swim_id_t		 id = rpc_req->cr_ep.ep_rank;
-	int			 rc = 0;
 
 	D_TRACE_DEBUG(DB_TRACE, rpc_req,
 		      "complete opc %#x with %zu updates %lu => %lu "
@@ -255,31 +243,9 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 		      rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
 		      rpc_swim_input->src, id, DP_RC(cb_info->cci_rc));
 
-	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
+	if (cb_info->cci_rc && id == ctx->sc_target)
+		ctx->sc_deadline = 0;
 
-	if (rpc_priv->crp_opc_info->coi_no_reply)
-		D_GOTO(out, rc);
-
-	if (cb_info->cci_rc == -DER_UNREG) /* protocol not registered */
-		D_GOTO(out, rc);
-
-	/* check for RPC with acknowledge a return code of request */
-	if (cb_info->cci_rc) {
-		rc = crt_swim_get_member_state(ctx, id, &id_state);
-		if (!rc) {
-			D_TRACE_ERROR(rpc_req,
-				      "member {%lu %c %lu} => {%lu D %lu}", id,
-				      SWIM_STATUS_CHARS[id_state.sms_status],
-				      id_state.sms_incarnation, id,
-				      (id_state.sms_incarnation + 1));
-			id_state.sms_incarnation++;
-			id_state.sms_status = SWIM_MEMBER_DEAD;
-			crt_swim_set_member_state(ctx, id, &id_state);
-		}
-		D_GOTO(out, rc);
-	}
-
-out:
 	if (crt_swim_fail_delay && crt_swim_fail_id == self_id) {
 		crt_swim_fail_hlc = crt_hlc_get() +
 				    crt_sec2hlc(crt_swim_fail_delay);
@@ -336,7 +302,9 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 	}
 
 	if (opc_idx == 0) { /* set timeout for one way RPC only */
-		rc = crt_req_set_timeout(rpc_req, crt_swim_rpc_timeout);
+		uint32_t timeout = 1 + swim_ping_timeout_get() / NSEC_PER_USEC;
+
+		rc = crt_req_set_timeout(rpc_req, timeout);
 		if (rc) {
 			D_TRACE_ERROR(rpc_req,
 				      "crt_req_set_timeout(): "DF_RC"\n",
@@ -613,8 +581,6 @@ int crt_swim_init(int crt_ctx_idx)
 		}
 	}
 
-	crt_swim_rpc_timeout = crt_swim_rpc_timeout_default();
-
 	rc = crt_proto_register(&crt_swim_proto_fmt);
 	if (rc) {
 		D_ERROR("crt_proto_register(): "DF_RC"\n", DP_RC(rc));
@@ -774,6 +740,73 @@ void crt_swim_disable_all(void)
 	if (old_ctx_idx != -1)
 		crt_unregister_progress_cb(crt_swim_progress_cb,
 					   old_ctx_idx, NULL);
+}
+
+void crt_swim_suspend_all(void)
+{
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
+	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	struct crt_swim_target	*cst;
+	swim_id_t		 self_id;
+
+	if (!crt_initialized() || !crt_is_service() ||
+	    !crt_gdata.cg_swim_inited)
+		return;
+
+	self_id = swim_self_get(csm->csm_ctx);
+	D_SPIN_LOCK(&csm->csm_lock);
+	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
+		if (cst->cst_id != self_id)
+			cst->cst_state.sms_status = SWIM_MEMBER_INACTIVE;
+	}
+	D_SPIN_UNLOCK(&csm->csm_lock);
+}
+
+/**
+ * Calculate average of network delay and set it as expected PING timeout.
+ * But limiting this timeout in range from specified by user or default to
+ * suspicion timeout divided by 3. It will be automatically increased if
+ * network glitches accrues and decreased when network communication is
+ * normalized.
+ */
+void crt_swim_accommodate(void)
+{
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
+	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	struct crt_swim_target	*cst;
+	uint64_t		 average = 0;
+	uint64_t		 count = 0;
+
+	if (!crt_initialized() || !crt_is_service() ||
+	    !crt_gdata.cg_swim_inited)
+		return;
+
+	D_SPIN_LOCK(&csm->csm_lock);
+	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
+		if (cst->cst_state.sms_delay > 0) {
+			average += cst->cst_state.sms_delay;
+			count++;
+		}
+	}
+	D_SPIN_UNLOCK(&csm->csm_lock);
+
+	if (count > 0) {
+		uint64_t ping_timeout = swim_ping_timeout_get();
+		uint64_t max_timeout = swim_suspect_timeout_get() / 3;
+		uint64_t min_timeout = csm->csm_ctx->sc_default_ping_timeout;
+
+		average = (2 * average) / count;
+		if (average < min_timeout)
+			average = min_timeout;
+		else if (average > max_timeout)
+			average = max_timeout;
+
+		if (average != ping_timeout) {
+			D_INFO("change PING timeout from %lu ms to %lu ms\n",
+			       ping_timeout, average);
+			swim_ping_timeout_set(average);
+		}
+	}
 }
 
 int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
