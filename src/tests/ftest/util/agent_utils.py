@@ -189,7 +189,8 @@ class DaosAgentManager(SubprocessManager):
         # Set default agent debug levels
         env_vars = {
             "D_LOG_MASK": "DEBUG,RPC=ERR",
-            "DD_MASK": "mgmt,io,md,epc,rebuild"
+            "DD_MASK": "mgmt,io,md,epc,rebuild",
+            "D_LOG_FILE_APPEND_PID": "1"
         }
         self.manager.assign_environment_default(EnvironmentVariables(env_vars))
 
