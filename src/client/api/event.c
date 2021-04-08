@@ -606,24 +606,15 @@ daos_eq_create(daos_handle_t *eqh)
 {
 	struct daos_eq_private	*eqx;
 	struct daos_eq		*eq;
-	crt_context_t		 eq_ctx;
 	int			rc = 0;
 
 	/** not thread-safe, but best effort */
 	if (eq_ref == 0)
 		return -DER_UNINIT;
 
-	rc = crt_context_create(&eq_ctx);
-	if (rc != 0) {
-		D_ERROR("failed to create CART context: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
 	eq = daos_eq_alloc();
-	if (eq == NULL) {
-		crt_context_destroy(eq_ctx, 1);
+	if (eq == NULL)
 		return -DER_NOMEM;
-	}
 
 	eqx = daos_eq2eqx(eq);
 
@@ -906,7 +897,6 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 		eq->eq_n_comp--;
 	}
 
-	crt_context_destroy(eqx->eqx_ctx, 1);
 	tse_sched_complete(&eqx->eqx_sched, rc, true);
 
 	/** destroy the EQ cart context only if it's not the global one */

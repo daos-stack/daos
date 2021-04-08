@@ -170,7 +170,7 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env, jclass clientClass,
 	eq->events = (daos_event_t **)malloc(
 		nbrOfEvents * sizeof(daos_event_t *));
 	eq->polled_events = (daos_event_t **)malloc(
-                nbrOfEvents * sizeof(daos_event_t *));
+		nbrOfEvents * sizeof(daos_event_t *));
 	if (eq->events == NULL || eq->polled_events == NULL) {
 		char *msg = NULL;
 
@@ -270,25 +270,25 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 
 JNIEXPORT jboolean JNICALL
 Java_io_daos_DaosClient_abortEvent(JNIEnv *env, jclass clientClass,
-                jlong eqWrapperHdl, jshort eid)
+		jlong eqWrapperHdl, jshort eid)
 {
-        event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
-        daos_event_t *event = eq->events[eid];
-        int rc;
+	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
+	daos_event_t *event = eq->events[eid];
+	int rc;
 
-        if (event->ev_error != EVENT_IN_USE) {
-                return 0;
-        }
-        rc = daos_event_abort(event);
-        event->ev_error = 0;
-        if (rc) {
-                char *msg = NULL;
+	if (event->ev_error != EVENT_IN_USE) {
+		return 0;
+	}
+	rc = daos_event_abort(event);
+	event->ev_error = 0;
+	if (rc) {
+		char *msg = NULL;
 
-                asprintf(&msg, "Failed to abort event (%d)",
-                         event->ev_debug);
-                throw_base(env, msg, rc, 1, 0);
-        }
-        return 1;
+		asprintf(&msg, "Failed to abort event (%d)",
+			 event->ev_debug);
+		throw_base(env, msg, rc, 1, 0);
+	}
+	return 1;
 }
 
 JNIEXPORT void JNICALL
@@ -319,7 +319,7 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 
 				asprintf(&msg,
 					 "Failed to finalize %d th event.",
-				         i);
+					 i);
 				throw_base(env, msg, rc, 1, 0);
 				goto fin;
 			}
