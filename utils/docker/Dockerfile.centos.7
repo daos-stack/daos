@@ -93,12 +93,14 @@ RUN echo "daos_agent:daos_agent" | chpasswd
 # Removing PyYAML 3.10 to allow pip install to upgrade
 RUN yum -y remove python36-PyYAML
 
+RUN yum -y install \
+        python3-avocado-69.2 \
+        python3-avocado-plugins-output-html-69.2
+        python3-avocado-plugins-varianter-yaml-to-mux-69.2
+
 RUN python3 -m pip install --upgrade pip
 
 RUN python3 -m pip --no-cache-dir install \
-    "avocado-framework<70.0" \
-    "avocado-framework-plugin-result-html<70.0" \
-    "avocado-framework-plugin-varianter-yaml-to-mux<70.0" \
     clustershell \
     pep8 \
     pygit2 \
