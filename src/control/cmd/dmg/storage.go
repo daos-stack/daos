@@ -45,32 +45,27 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return err
 	}
 
-	var nReq *control.NvmePrepareReq
-	var sReq *control.ScmPrepareReq
+	req := &control.StoragePrepareReq{}
 	if prepNvme {
-		nReq = &control.NvmePrepareReq{
-			PCIWhiteList: cmd.PCIWhiteList,
+		cmd.log.Debug("setting nvme in storage prepare request")
+		req.NVMe = &control.NvmePrepareReq{
+			PCIAllowList: cmd.PCIAllowList,
 			NrHugePages:  int32(cmd.NrHugepages),
 			TargetUser:   cmd.TargetUser,
 			Reset:        cmd.Reset,
 		}
 	}
-
 	if prepScm {
+		cmd.log.Debug("setting scm in storage prepare request")
 		if cmd.jsonOutputEnabled() && !cmd.Force {
 			return errors.New("Cannot use --json without --force")
 		}
 		if err := cmd.Warn(cmd.log); err != nil {
 			return err
 		}
-
-		sReq = &control.ScmPrepareReq{Reset: cmd.Reset}
+		req.SCM = &control.ScmPrepareReq{Reset: cmd.Reset}
 	}
 
-	req := &control.StoragePrepareReq{
-		NVMe: nReq,
-		SCM:  sReq,
-	}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StoragePrepare(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -89,11 +84,13 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		cmd.log.Error(outErr.String())
 	}
 
-	var out strings.Builder
-	if err := pretty.PrintStoragePrepareMap(resp.HostStorage, &out); err != nil {
-		return err
+	if prepScm {
+		var out strings.Builder
+		if err := pretty.PrintScmPrepareMap(resp.HostStorage, &out); err != nil {
+			return err
+		}
+		cmd.log.Info(out.String())
 	}
-	cmd.log.Info(out.String())
 
 	return resp.Errors()
 }
