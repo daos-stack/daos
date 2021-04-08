@@ -125,7 +125,7 @@ class OSAOfflineParallelTest(OSAUtils):
                     self.fail("One or more servers not in expected status")
             else:
                 break
-    
+
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
             self.pool = pool[val]
