@@ -8,6 +8,8 @@ import time
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
+from dmg_utils import check_system_query_status
+from apricot import skipForTicket
 
 
 class OSAOfflineExtend(OSAUtils):
@@ -30,6 +32,7 @@ class OSAOfflineExtend(OSAUtils):
                                              "/run/extra_servers/*")
         self.rank = self.params.get("rank_list", '/run/test_ranks/*')
         self.test_oclass = None
+        self.dmg_command.exit_status_exception = True
 
     def run_offline_extend_test(self, num_pool, data=False,
                                 server_boot=False, oclass=None):
@@ -52,7 +55,7 @@ class OSAOfflineExtend(OSAUtils):
             oclass.append(self.ior_cmd.dfs_oclass.value)
 
         self.log.info(oclass[0])
-        tmpfile = self.ior_cmd.test_file.value
+        # tmpfile = self.ior_cmd.test_file.value
 
         for val in range(0, num_pool):
             # Perform IOR write using the oclass list
@@ -60,21 +63,29 @@ class OSAOfflineExtend(OSAUtils):
                 index = val
             else:
                 index = 0
-            tstring = "{}".format(val)
-            self.ior_cmd.test_file.value = tmpfile.join([tstring])
+            # tstring = "{}".format(val)
+            # self.ior_cmd.test_file.value = tmpfile.join([tstring])
             pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
             pool[val].get_params(self)
             pool[val].create()
             self.pool = pool[val]
             test_seq = self.ior_test_sequence[0]
+            self.pool.set_property("reclaim", "disabled")
             if data:
                 self.run_ior_thread("Write", oclass[index], test_seq)
                 self.run_mdtest_thread()
+                if self.test_during_aggregation is True:
+                    self.run_ior_thread("Write", oclass[index], test_seq)
         # Start the additional servers and extend the pool
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
         # Give sometime for the additional server to come up.
-        time.sleep(5)
+        for retry in range(0, 10):
+            scan_info = self.get_dmg_command().system_query()
+            if not check_system_query_status(scan_info):
+                if retry == 9:
+                    self.fail("One or more servers not in expected status")
+
         for rank_index, rank_val in enumerate(self.rank):
             # If total pools less than 3, extend only a single pool.
             # If total pools >= 3  : Extend only 3 pools.
@@ -88,6 +99,9 @@ class OSAOfflineExtend(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
+            # Enable aggregation for multiple pool testing only.
+            if self.test_during_aggregation is True and (num_pool > 1):
+                self.delete_extra_container(self.pool)
             output = self.dmg_command.pool_extend(self.pool.uuid,
                                                   rank_val, scm_size,
                                                   nvme_size)
@@ -109,8 +123,8 @@ class OSAOfflineExtend(OSAUtils):
                     index = val
                 else:
                     index = 0
-                tstring = "{}".format(val)
-                self.ior_cmd.test_file.value = tmpfile.join([tstring])
+                # tstring = "{}".format(val)
+                # self.ior_cmd.test_file.value = tmpfile.join([tstring])
                 self.run_ior_thread("Read", oclass[index], test_seq)
                 self.run_mdtest_thread()
                 self.container = self.pool_cont_dict[self.pool][0]
@@ -118,7 +132,7 @@ class OSAOfflineExtend(OSAUtils):
                           "cont": self.container.uuid}
                 output = self.daos_command.container_check(**kwargs)
                 self.log.info(output)
-            self.ior_cmd.test_file.value = tmpfile
+            # self.ior_cmd.test_file.value = tmpfile
 
     def test_osa_offline_extend(self):
         """
@@ -126,9 +140,10 @@ class OSAOfflineExtend(OSAUtils):
 
         Test Description: Validate Offline Extend
 
-        :avocado: tags=all,pr,daily_regression,hw,large
-        :avocado: tags=osa,offline_extend
-        :avocado: tags=offline_extend_with_csum
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_extend,offline_extend_with_csum
         """
         self.log.info("Offline Extend Testing : With Checksum")
         self.run_offline_extend_test(1, True)
@@ -138,8 +153,9 @@ class OSAOfflineExtend(OSAUtils):
         Test Description: Validate Offline extend without
         Checksum.
 
-        :avocado: tags=all,full_regression,hw,large
-        :avocado: tags=osa,offline_extend
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=osa,osa_extend,offline_extend
         :avocado: tags=offline_extend_without_csum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -152,9 +168,10 @@ class OSAOfflineExtend(OSAUtils):
         Test Description: Validate Offline extend without
         Checksum.
 
-        :avocado: tags=all,full_regression,hw,large
-        :avocado: tags=osa,offline_extend
-        :avocado: tags=offline_extend_multiple_pools
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=ooffline_extend_multiple_pools
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -166,8 +183,9 @@ class OSAOfflineExtend(OSAUtils):
         Test Description: Validate Offline extend without
         Checksum.
 
-        :avocado: tags=all,daily_regression,hw,large
-        :avocado: tags=osa,offline_extend
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=osa,osa_extend,offline_extend
         :avocado: tags=offline_extend_oclass
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -175,5 +193,21 @@ class OSAOfflineExtend(OSAUtils):
         self.log.info("Offline Extend Testing: oclass")
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.run_offline_extend_test(4, data=True,
-                                     server_boot=False,
                                      oclass=self.test_oclass)
+
+    @skipForTicket("DAOS-7195")
+    def test_osa_offline_extend_during_aggregation(self):
+        """Test ID: DAOS-6294
+        Test Description: Extend rank while aggregation
+        is happening in parallel
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=osa,checksum,osa_extend,offline_extend
+        :avocado: tags=offline_extend_during_aggregation
+        """
+        self.test_during_aggregation = self.params.get("test_with_aggregation",
+                                                       '/run/aggregation/*')
+        self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
+        self.log.info("Offline Extend : Aggregation")
+        self.run_offline_extend_test(3, data=True, oclass=self.test_oclass)
