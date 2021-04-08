@@ -269,9 +269,8 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 }
 
 JNIEXPORT jboolean JNICALL
-Java_io_daos_DaosClient_abortEvent(JNIEnv *env,
-				   jclass clientClass,
-				   jlong eqWrapperHdl, jshort eid)
+Java_io_daos_DaosClient_abortEvent(JNIEnv *env, jclass clientClass,
+		jlong eqWrapperHdl, jshort eid)
 {
 	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
 	daos_event_t *event = eq->events[eid];
@@ -361,8 +360,7 @@ fin:
  * \param[in]	clientClass	class of DaosFsClient
  */
 JNIEXPORT void JNICALL
-Java_io_daos_DaosClient_daosFinalize(JNIEnv *env,
-					jclass clientClass)
+Java_io_daos_DaosClient_daosFinalize(JNIEnv *env, jclass clientClass)
 {
 	int rc = daos_eq_lib_fini();
 
