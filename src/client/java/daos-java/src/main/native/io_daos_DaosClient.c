@@ -269,7 +269,8 @@ Java_io_daos_DaosClient_pollCompleted(JNIEnv *env, jclass clientClass,
 }
 
 JNIEXPORT jboolean JNICALL
-Java_io_daos_DaosClient_abortEvent(JNIEnv *env, jclass clientClass,
+Java_io_daos_DaosClient_abortEvent(JNIEnv *env,
+				   jclass clientClass,
 				   jlong eqWrapperHdl, jshort eid)
 {
 	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
@@ -302,7 +303,7 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env, jclass clientClass,
 	daos_event_t *ev;
 
 	while (daos_eq_poll(eq->eqhdl, 1, 1000, eq->nbrOfEvents,
-		eq->polled_events)) {
+			    eq->polled_events)) {
 		count++;
 		if (count > 4) {
 			break;

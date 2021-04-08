@@ -788,7 +788,8 @@ Java_io_daos_dfs_DaosFsClient_dfsRelease(JNIEnv *env,
  * \return  pointer address of dfsDesc
  */
 JNIEXPORT jlong JNICALL
-Java_io_daos_dfs_DaosFsClient_allocateDfsDesc(JNIEnv *env, jclass clientClass,
+Java_io_daos_dfs_DaosFsClient_allocateDfsDesc(JNIEnv *env,
+					      jclass clientClass,
 					      jlong descBufAddress)
 {
 	uint64_t value64;
@@ -1019,8 +1020,7 @@ Java_io_daos_dfs_DaosFsClient_dfsWriteAsync(JNIEnv *env, jobject client,
 	int rc;
 
 	decode_dfs_desc(buf, &desc, &event, &offset, &len);
-	rc = daos_event_register_comp_cb(event,
-			update_ret_code, desc);
+	rc = daos_event_register_comp_cb(event, update_ret_code, desc);
 	if (rc) {
 		char *msg = "Failed to register dfs write callback";
 
