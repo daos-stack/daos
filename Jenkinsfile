@@ -41,12 +41,6 @@ def getuid() {
     return cached_uid
 }
 
-Boolean skip_scan_stage() {
-    return ! (target_branch == 'weekly-testing' ||
-              skipStage(stage: 'scan-centos-rpms') ||
-              quickFunctional())
-}
-
 pipeline {
     agent { label 'lightweight' }
 
@@ -937,7 +931,10 @@ pipeline {
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
-                        expression { ! skip_scan_stage() }
+                        expression { ! (target_branch == 'weekly-testing' ||
+                                        skipStage(stage: 'scan-centos-rpms'
+                                                  def_val: 'false') ||
+                                        quickFunctional()) }
                     }
                     agent {
                         label 'ci_vm1'
