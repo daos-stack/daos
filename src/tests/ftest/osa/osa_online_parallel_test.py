@@ -203,7 +203,9 @@ class OSAOnlineParallelTest(OSAUtils):
 
         Test Description: Runs multiple OSA commands/IO in parallel
 
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
         :avocado: tags=osa_parallel,online_parallel
         """
         self.run_online_parallel_test(1)
