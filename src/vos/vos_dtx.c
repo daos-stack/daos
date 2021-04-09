@@ -115,6 +115,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	       bool hit_again, int pos)
 {
 	struct dtx_share_peer	*dsp;
+	struct dtx_memberships	*mbs;
 	bool			 s_try = false;
 
 	if (dth == NULL)
@@ -167,7 +168,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	if (dth->dth_share_tbd_count >= DTX_REFRESH_MAX)
 		goto out;
 
-	D_ALLOC_PTR(dsp);
+	D_ALLOC(dsp, sizeof(*dsp) + DAE_MBS_DSIZE(dae));
 	if (dsp == NULL) {
 		D_ERROR("Hit uncommitted DTX "DF_DTI" at %d: lid=%d, "
 			"but fail to alloc DRAM.\n",
@@ -177,19 +178,22 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 
 	dsp->dsp_xid = DAE_XID(dae);
 	dsp->dsp_oid = DAE_OID(dae);
-	if (DAE_MBS_FLAGS(dae) & DMF_CONTAIN_LEADER) {
-		struct umem_instance	*umm;
-		struct dtx_daos_target	*ddt;
+	dsp->dsp_epoch = DAE_EPOCH(dae);
 
-		if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae))) {
-			ddt = DAE_MBS_INLINE(dae);
-		} else {
-			umm = vos_cont2umm(vos_hdl2cont(dth->dth_coh));
-			ddt = umem_off2ptr(umm, DAE_MBS_OFF(dae));
-		}
-		dsp->dsp_leader = ddt->ddt_id;
+	mbs = &dsp->dsp_mbs;
+	mbs->dm_tgt_cnt = DAE_TGT_CNT(dae);
+	mbs->dm_grp_cnt = DAE_GRP_CNT(dae);
+	mbs->dm_data_size = DAE_MBS_DSIZE(dae);
+	mbs->dm_flags = DAE_MBS_FLAGS(dae);
+	mbs->dm_dte_flags = DAE_FLAGS(dae);
+	if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae))) {
+		memcpy(mbs->dm_data, DAE_MBS_INLINE(dae), DAE_MBS_DSIZE(dae));
 	} else {
-		dsp->dsp_leader = PO_COMP_ID_ALL;
+		struct umem_instance	*umm;
+
+		umm = vos_cont2umm(vos_hdl2cont(dth->dth_coh));
+		memcpy(mbs->dm_data, umem_off2ptr(umm, DAE_MBS_OFF(dae)),
+		       DAE_MBS_DSIZE(dae));
 	}
 
 	d_list_add_tail(&dsp->dsp_link, &dth->dth_share_tbd_list);
@@ -1307,6 +1311,12 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			if (memcmp(&dsp->dsp_xid, &DAE_XID(dae),
 				   sizeof(struct dtx_id)) == 0)
 				return ALB_AVAILABLE_CLEAN;
+		}
+
+		d_list_for_each_entry(dsp, &dth->dth_share_abt_list, dsp_link) {
+			if (memcmp(&dsp->dsp_xid, &DAE_XID(dae),
+				   sizeof(struct dtx_id)) == 0)
+				return ALB_UNAVAILABLE;
 		}
 
 		d_list_for_each_entry(dsp, &dth->dth_share_act_list, dsp_link) {
