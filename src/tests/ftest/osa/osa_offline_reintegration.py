@@ -168,8 +168,10 @@ class OSAOfflineReintegration(OSAUtils):
         Test Description: Validate Offline Reintegration
         with multiple pools
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_daily
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=offline_reintegration_daily
         :avocado: tags=offline_reintegration_multiple_pools
         """
         self.log.info("Offline Reintegration : Multiple Pools")
@@ -180,8 +182,10 @@ class OSAOfflineReintegration(OSAUtils):
         """Test ID: DAOS-6748.
 
         Test Description: Validate Offline Reintegration with server stop
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_daily
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=offline_reintegration_daily
         :avocado: tags=offline_reintegration_srv_stop
         """
         self.log.info("Offline Reintegration : System Start/Stop")

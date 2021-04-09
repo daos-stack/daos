@@ -140,7 +140,7 @@ RUN if $QUICKBUILD; then                                                       \
         done;                                                                  \
         zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref;   \
         echo "Installing: $QUICKBUILD_DEPS";                                   \
-        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' |                               \
+        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |              \
               xargs -0 zypper --non-interactive install;                       \
         zypper clean --all;                                                    \
     fi

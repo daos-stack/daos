@@ -172,10 +172,9 @@ enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
         done;                                                                 \
         echo "Installing: $QUICKBUILD_DEPS";                                  \
-        yum clean all;                                                        \
-        echo "$QUICKBUILD_DEPS" |                                             \
-        tr '\n' '\0' | xargs -0 yum --nogpgcheck -y install;                  \
-        yum clean all;                                                        \
+        dnf clean all;                                                        \
+        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |             \
+          xargs -0 dnf -y install;                                            \
     fi
 
 ARG BULLSEYE=""

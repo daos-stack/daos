@@ -75,7 +75,7 @@ agg_rate_ctl(void *arg)
 
 static inline int
 cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		   daos_epoch_t hae, bool is_current)
+		   daos_epoch_t hae, bool is_current, bool full_scan)
 {
 	int	rc;
 
@@ -103,7 +103,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	if (cont->sc_ec_agg_eph_boundry > hae && is_current) {
 		epr->epr_hi = cont->sc_ec_agg_eph_boundry;
 		rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc,
-				   agg_rate_ctl, cont);
+				   agg_rate_ctl, cont, full_scan);
 	} else
 		rc = 2;
 
@@ -260,6 +260,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 	uint64_t		*snapshots = NULL;
 	int			snapshots_nr;
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
+	bool			full_scan = false;
 	int			i, rc;
 
 	/* Check if it's ok to start aggregation in every 2 seconds */
@@ -282,6 +283,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		 * aggregation, let's restart from 0.
 		 */
 		epoch_min = 0;
+		full_scan = true;
 		D_DEBUG(DB_EPC, "change hlc "DF_U64" > full "DF_U64"\n",
 			change_hlc, cont->sc_aggregation_full_scan_hlc);
 	} else {
@@ -377,7 +379,8 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-		rc = cont_aggregate_epr(cont, &epoch_range, 0ULL, false);
+		rc = cont_aggregate_epr(cont, &epoch_range, 0ULL, false,
+					full_scan);
 		if (rc)
 			D_GOTO(free, rc);
 		epoch_range.epr_lo = epoch_range.epr_hi + 1;
@@ -392,7 +395,8 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-	rc = cont_aggregate_epr(cont, &epoch_range, cinfo.ci_hae, true);
+	rc = cont_aggregate_epr(cont, &epoch_range, cinfo.ci_hae, true,
+				full_scan);
 out:
 	if (rc == 0 && epoch_min == 0)
 		cont->sc_aggregation_full_scan_hlc = hlc;
