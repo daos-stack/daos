@@ -162,7 +162,7 @@ fio_harasser:
         - 'randrw'
     oclass:
         - 'RP_2G1'
-mdtest_stress:
+mdtest_harasser:
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
     nodesperjob:
@@ -171,7 +171,7 @@ mdtest_stress:
     taskspernode:
         - 16
     test_dir: "/"
-    api: 
+    api:
         - 'DFS'
         - 'POSIX'
     iteration: 1

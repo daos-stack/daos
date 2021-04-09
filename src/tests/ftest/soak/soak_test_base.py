@@ -450,8 +450,11 @@ class SoakTestBase(TestWithServers):
         # Create local log directory
         os.makedirs(local_pass_dir)
         os.makedirs(self.sharedsoakdir)
-
+        # create the batch scripts
         job_script_list = self.job_setup(jobs, pools)
+        # randomize job list
+        random.seed(4)
+        random.shuffle(job_script_list)
         # Gather the job_ids
         job_id_list = self.job_startup(job_script_list)
         # Initialize the failed_job_list to job_list so that any

@@ -165,7 +165,7 @@ mdtest_smoke:
     taskspernode:
         - 1
     test_dir: "/"
-    api: 
+    api:
         - 'DFS'
         - 'POSIX'
     iteration: 1
