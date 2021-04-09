@@ -176,8 +176,8 @@ func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter g
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
 		TargetUser:    usr.Username,
-		PCIWhitelist:  strings.Join(srv.cfg.BdevInclude, " "),
-		PCIBlacklist:  strings.Join(srv.cfg.BdevExclude, " "),
+		PCIAllowlist:  strings.Join(srv.cfg.BdevInclude, " "),
+		PCIBlocklist:  strings.Join(srv.cfg.BdevExclude, " "),
 		DisableVFIO:   srv.cfg.DisableVFIO,
 		DisableVMD:    srv.cfg.DisableVMD || srv.cfg.DisableVFIO || !iommuEnabled,
 		// TODO: pass vmd include list
