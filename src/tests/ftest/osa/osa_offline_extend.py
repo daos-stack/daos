@@ -35,27 +35,22 @@ class OSAOfflineExtend(OSAUtils):
         self.dmg_command.exit_status_exception = True
 
     def run_offline_extend_test(self, num_pool, data=False,
-                                server_boot=False, oclass=None):
+                                oclass=None):
         """Run the offline extend without data.
 
         Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
-            server_boot (bool) : Perform system stop/start on a rank.
-                                 Defaults to False.
             oclass (list) : list of daos object class (eg: "RP_2G8")
         """
         # Create a pool
         pool = {}
-        tmp = server_boot
-        self.log.info(tmp)
         if oclass is None:
             oclass = []
             oclass.append(self.ior_cmd.dfs_oclass.value)
 
         self.log.info(oclass[0])
-        # tmpfile = self.ior_cmd.test_file.value
 
         for val in range(0, num_pool):
             # Perform IOR write using the oclass list
@@ -63,8 +58,6 @@ class OSAOfflineExtend(OSAUtils):
                 index = val
             else:
                 index = 0
-            # tstring = "{}".format(val)
-            # self.ior_cmd.test_file.value = tmpfile.join([tstring])
             pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
             pool[val].get_params(self)
             pool[val].create()
@@ -85,6 +78,8 @@ class OSAOfflineExtend(OSAUtils):
             if not check_system_query_status(scan_info):
                 if retry == 9:
                     self.fail("One or more servers not in expected status")
+            else:
+                break
 
         for rank_index, rank_val in enumerate(self.rank):
             # If total pools less than 3, extend only a single pool.
@@ -123,8 +118,6 @@ class OSAOfflineExtend(OSAUtils):
                     index = val
                 else:
                     index = 0
-                # tstring = "{}".format(val)
-                # self.ior_cmd.test_file.value = tmpfile.join([tstring])
                 self.run_ior_thread("Read", oclass[index], test_seq)
                 self.run_mdtest_thread()
                 self.container = self.pool_cont_dict[self.pool][0]
@@ -132,7 +125,6 @@ class OSAOfflineExtend(OSAUtils):
                           "cont": self.container.uuid}
                 output = self.daos_command.container_check(**kwargs)
                 self.log.info(output)
-            # self.ior_cmd.test_file.value = tmpfile
 
     def test_osa_offline_extend(self):
         """

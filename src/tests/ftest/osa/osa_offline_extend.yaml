@@ -9,6 +9,8 @@ extra_servers:
     - server-C
     - server-D
 timeout: 1000
+setup:
+  start_servers_once: False
 server_config:
   name: daos_server
   engines_per_host: 2
