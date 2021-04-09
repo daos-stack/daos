@@ -5489,10 +5489,45 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
 		attr.pa_domain_nr, attr.pa_target_nr);
 
-	/** TODO - unsupported for now */
+	if (cid == OC_UNKNOWN) {
+		uint64_t rf_factor;
+
+		rf_factor = dc_cont_hdl2redunfac(coh);
+		rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
+				   attr.pa_target_nr, ofeats, hints, &cid);
+	} else {
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
+					 attr.pa_target_nr, &cid);
+	}
+
+	if (rc)
+		return rc;
+
+	daos_obj_set_oid(oid, ofeats, cid, args);
+
+	return rc;
+}
+
+int
+daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
+			    daos_obj_id_t *oid, daos_ofeat_t ofeats,
+			    daos_oclass_id_t cid, daos_oclass_hints_t hints,
+			    uint32_t args)
+{
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr;
+	int			rc;
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+
 	if (cid == OC_UNKNOWN)
-		rc = dc_set_oclass(coh, attr.pa_domain_nr, attr.pa_target_nr,
-				   ofeats, hints, &cid);
+		rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
+				   attr.pa_target_nr, ofeats, hints, &cid);
 	else
 		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
 					 attr.pa_target_nr, &cid);
