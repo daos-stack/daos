@@ -53,14 +53,6 @@ class DaosServerDumpTest(TestWithServers):
             self.fail(
                 "Server start failed when it was expected to complete")
 
-        # DEBUG check cmds to find server processes to kill
-        print("===== ps -ef ======")
-        ret_codes = pcmd(self.hostlist_servers, r"ps -ef")
-        print("===== ps -ef | grep -E daos_engine ======")
-        ret_codes = pcmd(self.hostlist_servers, r"ps -ef | grep -E daos_engine")
-        print("===== ps -ef | grep -E daos_engine | grep -vE '\<(grep|defunct)\>' ======")
-        ret_codes = pcmd(self.hostlist_servers, r"ps -ef | grep -E daos_engine | grep -vE '\<(grep|defunct)\>'")
-
         ret_codes = stop_processes(self.hostlist_servers, r"daos_engine",
                            added_filter=r"'\<(grep|defunct)\>'",
                            send_sigusr2=True)
@@ -77,7 +69,7 @@ class DaosServerDumpTest(TestWithServers):
         print("===== ls -l /tmp ======")
         ret_codes = pcmd(self.hostlist_servers, r"ls -l /tmp")
         # XXX may need to check for one file per engine...
-        ret_codes = pcmd(self.hostlist_servers, r"ls /tmp/daos_dump\*.txt")
+        ret_codes = pcmd(self.hostlist_servers, r"ls /tmp/daos_dump*.txt")
         # Report any failures
         if len(ret_codes) > 1 or 0 not in ret_codes:
             failed = [
