@@ -3855,6 +3855,44 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	return 0;
 }
 
+bool
+obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
+			 uint32_t iod_nr)
+{
+	if (!props->dcp_csum_enabled && props->dcp_dedup_enabled) {
+		uint32_t	dedup_th = props->dcp_dedup_size;
+		int		i;
+		bool		candidate = false;
+
+		/**
+		 * Checksums are only enabled for dedup purpose.
+		 * Verify whether the I/O is a candidate for dedup.
+		 * If not, then no need to provide a checksum to the server
+		 */
+
+		for (i = 0; i < iod_nr; i++) {
+			daos_iod_t	*iod = &iods[i];
+			int		 j = 0;
+
+			if (iod->iod_type == DAOS_IOD_SINGLE)
+				/** dedup does not support single value yet */
+				return false;
+
+			for (j = 0; j < iod->iod_nr; j++) {
+				daos_recx_t	*recx = &iod->iod_recxs[j];
+
+				if (recx->rx_nr * iod->iod_size >= dedup_th)
+					candidate = true;
+			}
+		}
+		if (!candidate)
+			/** not a candidate for dedup, don't compute checksum */
+			return false;
+	}
+
+	return true;
+}
+
 static int
 obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 		struct obj_auxi_args *obj_auxi)
@@ -3874,36 +3912,8 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return 0;
 
-	if (!cont_props.dcp_csum_enabled && cont_props.dcp_dedup_enabled) {
-		uint32_t	dedup_th = cont_props.dcp_dedup_size;
-		int		i;
-		bool		candidate = false;
-
-		/**
-		 * Checksums are only enabled for dedup purpose.
-		 * Verify whether the I/O is a candidate for dedup.
-		 * If not, then no need to provide a checksum to the server
-		 */
-
-		for (i = 0; i < args->nr; i++) {
-			daos_iod_t	*iod = &args->iods[i];
-			int		 j = 0;
-
-			if (iod->iod_type == DAOS_IOD_SINGLE)
-				/** dedup does not support single value yet */
-				return 0;
-
-			for (j = 0; j < iod->iod_nr; j++) {
-				daos_recx_t	*recx = &iod->iod_recxs[j];
-
-				if (recx->rx_nr * iod->iod_size >= dedup_th)
-					candidate = true;
-			}
-		}
-		if (!candidate)
-			/** not a candidate for dedup, don't compute checksum */
-			return 0;
-	}
+	if (!obj_csum_dedup_candidate(&cont_props, args->iods, args->nr))
+		return 0;
 
 	/** Used to do actual checksum calculations. This prevents conflicts
 	 * between tasks
