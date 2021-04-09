@@ -39,7 +39,7 @@ tests:
         - daos_server
         - PASS
     badsetname:
-      setname:
+      systemname:
         - complete_rubbish
         - FAIL
   tgtlist: !mux
