@@ -14,19 +14,29 @@ ARG CB0
 
 # Use our own repo cache
 ARG REPO_URL=""
-ARG REPO_LEAP=""
-RUN if [ -n "${REPO_LEAP}" ]; then				                               \
+ARG REPO_DAOS=""
+ARG REPO_DISTRO=""
+
+# If a DISTRO repo is provided then use it.
+RUN if [ -n "${REPO_DISTRO}" ]; then				                           \
       rm -f /etc/zypp/repos.d/*.repo &&					                       \
-      zypper --non-interactive ar ${REPO_URL}${REPO_LEAP}/                     \
-           daos-stack-group-repo &&                                            \
-      zypper --non-interactive mr --gpgcheck-allow-unsigned                    \
-           daos-stack-group-repo;                                              \
-    fi;                                                                        \
-    zypper addlock fuse fuse-libs fuse-devel
+      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
+            ${REPO_URL}${REPO_DISTRO}/  daos-stack-distro-group-repo &&        \
+      zypper --non-interactive modifyrepo --gpgcheck-allow-unsigned-repo       \
+             daos-stack-distro-group-repo &&                                   \
+      zypper --non-interactive clean --all;                                    \
+    fi
 
-# Make sure repos are up to date
-RUN zypper --non-interactive --no-gpg-checks --gpg-auto-import-keys refresh
-
+RUN if [ -n "${REPO_DAOS}" ]; then                                             \
+      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
+             ${REPO_URL}${REPO_DAOS} daos-stack-daos-group-repo &&             \
+      zypper --non-interactive modifyrepo --no-gpgcheck                        \
+             daos-stack-daos-group-repo &&                                     \
+      zypper addlock --repo daos-stack-daos-group-repo                         \
+             'fuse<3' 'libfuse-devel<3' 'fuse-libs<3'                          \
+             'fuse-debuginfo<3' 'ompi' &&                                      \
+      zypper --non-interactive clean --all;                                    \
+    fi
 # Allow packages to change vendors
 RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
 
@@ -95,12 +105,12 @@ RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                  \
-               /etc/profile.d/lmod.sh; \
+               /etc/profile.d/lmod.sh;                                     \
     fi
 
 RUN update-ca-certificates
 RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
-    zypper --non-interactive --no-gpg-checks install --allow-unsigned-rpm \
+    zypper --non-interactive --no-gpg-checks install --allow-unsigned-rpm  \
       lua-lmod
 
 ARG UID=1000

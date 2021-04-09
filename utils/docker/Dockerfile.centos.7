@@ -14,17 +14,22 @@ ARG CB0
 
 # Need to be able to use a local repository for packages
 ARG REPO_URL=""
-ARG REPO_EL7=""
+ARG REPO_DISTRO=""
+ARG REPO_DAOS=""
 
 # Install EPEL and switch to dnf as it seems a bit faster.
-RUN yum clean all &&                                            \
-    yum -y install dnf epel-release yum-utils &&                \
-    yum clean all
+# Make sure that all the repo keys are installed.
+# A dnf update is needed here to pick up the current EPEL key
+RUN yum clean all &&                                               \
+    yum -y install dnf dnf-plugins-core epel-release yum-utils &&  \
+    dnf -y makecache &&                                            \
+    dnf -y update &&                                               \
+    dnf clean all
 
-# If a local repository is supplied, then we should use it
-# and disable using the distro repositories.
-RUN if [ -n "$REPO_URL" ]; then                                 \
-      MY_REPO="${REPO_URL}${REPO_EL7}/";                        \
+# If a local DAOS repository is supplied, then we should use it
+# This is mainly for quickbuilds
+RUN if [ -n "$REPO_DAOS" ]; then                                \
+      MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
       MY_NAME="${MY_REPO#*//}";                                 \
       MY_NAME="${MY_NAME//\//_}";                               \
       echo -e "[${MY_NAME}]\n\
@@ -33,13 +38,30 @@ baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
 exclude=fuse-3* fuse-devel-3* fuse-libs-3* fuse-debuginfo-3* ompi*\n\
-gpgcheck=0\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
-      yum clean all;                                            \
-      yum-config-manager --assumeyes --quiet                    \
+gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
+      dnf clean all;                                            \
+      dnf config-manager --assumeyes --quiet                    \
                          --disable base epel extra updates;     \
-    fi;                                                         \
-    sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/"   \
-        -i /etc/yum.conf
+    fi
+
+# If a local distro repository is supplied, then we should use it
+# and disable using the distro repositories.
+RUN if [ -n "$REPO_DISTRO" ]; then                              \
+      MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
+      MY_NAME="${MY_REPO#*//}";                                 \
+      MY_NAME="${MY_NAME//\//_}";                               \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=0\n\
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
+      dnf clean all;                                            \
+      dnf config-manager --assumeyes --quiet                    \
+                         --disable base epel extra updates;     \
+      sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
+          -i /etc/yum.conf;                                     \
+    fi
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -175,6 +197,7 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
         dnf clean all;                                                        \
         echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |             \
           xargs -0 dnf -y install;                                            \
+        dnf clean all;                                                        \
     fi
 
 ARG BULLSEYE=""

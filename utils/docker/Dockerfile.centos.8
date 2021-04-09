@@ -13,17 +13,25 @@ LABEL maintainer="daos@daos.groups.io"
 ARG CB0
 
 ARG REPO_URL
-ARG REPO_EL8=""
+ARG REPO_DAOS=""
+ARG REPO_DISTRO=""
 
 # Need to do this before switching to a alternate local repo
+# and make sure all the repo keys needed are imported
+# Need to do the update here to pick up the current GPG key
+# for EPEL
 RUN dnf clean all &&                                            \
     dnf -y install epel-release dnf-plugins-core dnf-utils &&   \
-    dnf config-manager --set-enabled powertools
+    dnf config-manager --set-enabled powertools            &&   \
+    dnf -y makecache &&                                         \
+    dnf -y update &&                                            \
+    dnf clean all
 
-# If a local repository is supplied, then we should use it
-# and disable using the distro repositories.
-RUN if [ -n "$REPO_URL" ]; then                                 \
-      MY_REPO="${REPO_URL}${REPO_EL8}/";                        \
+
+# If a local DAOS repository is supplied, then we should use it
+# This is mainly for quickbuilds
+RUN if [ -n "$REPO_DAOS" ]; then                                \
+      MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
       MY_NAME="${MY_REPO#*//}";                                 \
       MY_NAME="${MY_NAME//\//_}";                               \
       echo -e "[${MY_NAME}]\n\
@@ -31,13 +39,28 @@ name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
-gpgcheck=0\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
+gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
+      dnf clean all;                                            \
+    fi
+
+# If a local distro repository is supplied, then we should use it
+# and disable using the distro repositories.
+RUN if [ -n "$REPO_DISTRO" ]; then                              \
+      MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
+      MY_NAME="${MY_REPO#*//}";                                 \
+      MY_NAME="${MY_NAME//\//_}";                               \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=0\n\
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
       dnf clean all;                                            \
       dnf config-manager --assumeyes --quiet --disable          \
           baseos powertools epel epel-modular extras;           \
-    fi;                                                         \
-    sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/"   \
-        -i /etc/dnf/dnf.conf
+      sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
+          -i /etc/dnf/dnf.conf;                                 \
+    fi
 
 # Install basic tools to build DAOS
 # *** Keep these in as much alphbetical order as possible ***
