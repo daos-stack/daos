@@ -46,7 +46,7 @@ class OSAOfflineDrain(OSAUtils):
             self.print_and_assert_on_rebuild_failure(output)
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                        rank)
-            self.print_and_assert_on_rebuild_failure(output)    
+            self.print_and_assert_on_rebuild_failure(output)
 
     def run_offline_drain_test(self, num_pool, data=False,
                                oclass=None):
@@ -140,8 +140,10 @@ class OSAOfflineDrain(OSAUtils):
 
         Test Description: Validate Offline Drain
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_drain,offline_drain_daily
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,osa_drain,checksum
+        :avocado: tags=offline_drain,offline_drain_with_csum
         """
         self.log.info("Offline Drain : Basic Drain")
         self.run_offline_drain_test(1, True)
@@ -151,9 +153,10 @@ class OSAOfflineDrain(OSAUtils):
         Test Description: Validate Offline Drain
         without enabling checksum in container properties.
 
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_drain,offline_drain_daily
-        :avocado: tags=offline_drain_without_csum
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,osa_drain
+        :avocado: tags=offline_drain,offline_drain_without_csum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -165,9 +168,10 @@ class OSAOfflineDrain(OSAUtils):
         Test Description: Validate Offline Drain
         during aggregation
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_drain,offline_drain_daily
-        :avocado: tags=offline_drain_during_aggregation
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,osa_drain,checksum
+        :avocado: tags=offline_drain,offline_drain_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
@@ -179,9 +183,10 @@ class OSAOfflineDrain(OSAUtils):
         Test Description: Validate Offline Drain
         with different object class
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_drain,offline_drain_daily
-        :avocado: tags=offline_drain_oclass
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,osa_drain
+        :avocado: tags=offline_drain,offline_drain_oclass
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -194,9 +199,10 @@ class OSAOfflineDrain(OSAUtils):
         Test Description: Validate Offline Drain
         with multiple pools
 
-        :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_drain,offline_drain_full
-        :avocado: tags=offline_drain_multiple_pools
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,osa_drain
+        :avocado: tags=offline_drain,offline_drain_multiple_pools
         """
         self.log.info("Offline Drain : Multiple Pools")
         self.run_offline_drain_test(2, data=True)
@@ -206,9 +212,10 @@ class OSAOfflineDrain(OSAUtils):
         Test Description: Validate Offline Drain
         during rebuild
 
-        :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_drain,offline_drain_full
-        :avocado: tags=offline_drain_during_rebuild
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,osa_drain
+        :avocado: tags=offline_drain,offline_drain_during_rebuild
         """
         self.test_during_rebuild = self.params.get("test_with_rebuild",
                                                    '/run/rebuild/*')
