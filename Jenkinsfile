@@ -442,7 +442,7 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh """sudo ./daos/utils/docker/docker_nlt.sh --test xattr"""
+                        sh """sudo ./utils/docker/docker_nlt.sh --test xattr"""
                     }
                     post {
                         always {
@@ -482,7 +482,7 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh """sudo ./daos/utils/docker/docker_nlt.sh kv"""
+                        sh """sudo ./utils/docker/docker_nlt.sh kv"""
                     }
                     post {
                         always {
