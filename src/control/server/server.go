@@ -14,6 +14,7 @@ import (
 	"os/user"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -23,6 +24,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -94,8 +96,18 @@ func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Serv
 	}, nil
 }
 
+func track(msg string) (string, time.Time) {
+	return msg, time.Now()
+}
+
+func (srv *server) duration(msg string, start time.Time) {
+	srv.log.Debugf("%v: %v\n", msg, time.Since(start))
+}
+
 // createServices builds scaffolding for rpc and event services.
 func (srv *server) createServices(ctx context.Context) error {
+	defer srv.duration(track("time to create services"))
+
 	dbReplicas, err := cfgGetReplicas(srv.cfg, net.ResolveTCPAddr)
 	if err != nil {
 		return errors.Wrap(err, "retrieve replicas from config")
@@ -145,6 +157,8 @@ func (srv *server) shutdown() {
 // initNetwork resolves local address and starts TCP listener then calls
 // netInit to process network configuration.
 func (srv *server) initNetwork(ctx context.Context) error {
+	defer srv.duration(track("time to init network"))
+
 	ctlAddr, listener, err := connectServer(srv.cfg.ControlPort, net.ResolveTCPAddr, net.Listen)
 	if err != nil {
 		return err
@@ -157,11 +171,14 @@ func (srv *server) initNetwork(ctx context.Context) error {
 		return err
 	}
 	srv.netDevClass = ndc
+	srv.log.Infof("Network device class set to %q", netdetect.DevClassName(ndc))
 
 	return nil
 }
 
 func (srv *server) initStorage() error {
+	defer srv.duration(track("time to init storage"))
+
 	runningUser, err := user.Current()
 	if err != nil {
 		return errors.Wrap(err, "unable to lookup current user")
@@ -205,6 +222,8 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 // addEngines creates and adds engine instances to harness then starts
 // goroutine to execute callbacks when all engines are started.
 func (srv *server) addEngines(ctx context.Context) error {
+	defer srv.duration(track("time to add engines"))
+
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
@@ -235,6 +254,8 @@ func (srv *server) addEngines(ctx context.Context) error {
 
 // setupGrpc creates a new grpc server and registers services.
 func (srv *server) setupGrpc() error {
+	defer srv.duration(track("time to setup grpc"))
+
 	srvOpts, err := getGrpcOpts(srv.cfg.TransportConfig)
 	if err != nil {
 		return err
@@ -261,6 +282,8 @@ func (srv *server) setupGrpc() error {
 }
 
 func (srv *server) registerEvents() {
+	defer srv.duration(track("time to register events"))
+
 	registerInitialSubscriptions(srv)
 
 	srv.sysdb.OnLeadershipGained(func(ctx context.Context) error {
@@ -277,6 +300,8 @@ func (srv *server) registerEvents() {
 }
 
 func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error {
+	defer srv.duration(track("time server was listening"))
+
 	go func() {
 		_ = srv.grpcServer.Serve(srv.listener)
 	}()
