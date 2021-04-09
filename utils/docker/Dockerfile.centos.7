@@ -15,7 +15,7 @@ ARG CB0
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
-RUN yum clean all && \
+RUN yum -y install deltarpm && \
     yum -y install epel-release && \
     yum -y upgrade && \
     yum -y install \
@@ -27,6 +27,7 @@ RUN yum clean all && \
         e2fsprogs \
         file \
         flex \
+        fuse3 \
         fuse3-devel \
         gcc \
         gcc-c++ \
@@ -55,6 +56,7 @@ RUN yum clean all && \
         maven \
         nasm \
         ndctl \
+        numactl \
         numactl-devel \
         openssl-devel \
         pandoc \

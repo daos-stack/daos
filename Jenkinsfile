@@ -434,7 +434,7 @@ pipeline {
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
-                            args '--tmpfs /mnt/daos'
+                            args '--tmpfs /mnt/daos --device /dev/fuse --cap-add SYS_ADMIN'
                         }
                     }
                     steps {
@@ -442,7 +442,7 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh """sudo ./ci/unit/docker_nlt.sh"""
+                        sh """sudo ./daos/utils/docker/docker_nlt.sh --test xattr"""
                     }
                     post {
                         always {
@@ -474,7 +474,7 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7') + '"'
-                            args '--tmpfs /mnt/daos'
+                            args '--tmpfs /mnt/daos --device /dev/fuse --cap-add SYS_ADMIN'
                         }
                     }
                     steps {
@@ -482,7 +482,7 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh """sudo ./ci/unit/docker_nlt.sh"""
+                        sh """sudo ./daos/utils/docker/docker_nlt.sh kv"""
                     }
                     post {
                         always {
