@@ -1249,6 +1249,13 @@ compare_print_results(char *section_name, char *input_section_name,
 	int		 status_size = sizeof(status) /
 				       sizeof(struct status_feature);
 
+	/*
+	 * input_section_name  - user supplied section name (if specified).
+	 * section_name        - created or user supplied section name.
+	 * result_section_name - section name with "result" extension.
+	 *			 section for stored results
+	 */
+
 	D_INFO(" Section name: %s\n", section_name);
 	D_INFO(" Input Section name: %s\n", input_section_name);
 	D_INFO(" Result Section name: %s\n", result_section_name);
@@ -1259,6 +1266,8 @@ compare_print_results(char *section_name, char *input_section_name,
 		config_ret = ConfigReadFile(gbl.g_expected_infile,
 					    &cfg_expected);
 		if (config_ret != CONFIG_OK) {
+			printf("Cannot open expected file: %s\n",
+				gbl.g_expected_infile);
 			D_ERROR("Cannot open expected file: %s\n",
 				gbl.g_expected_infile);
 			D_GOTO(cleanup, ret_value = -ENOENT);
@@ -2265,7 +2274,10 @@ run_self_test(struct st_size_params all_params[],
 	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid,
 			     attach_info_path, listen /* run as server */);
 	if (ret != 0) {
-		D_ERROR("self_test_init failed; ret = %d\n", ret);
+		D_ERROR("self_test_init failed: grp_name %s, path %s, rc %d\n",
+			dest_name, attach_info_path, ret);
+		printf("self_test_init failed: grp_name %s,  path %s\n",
+		       dest_name, attach_info_path);
 		D_GOTO(cleanup_nothread, ret);
 	}
 
@@ -3252,9 +3264,6 @@ config_file_setup(char *file_name, char *section_name,
 	Config *cfg = NULL;
 	int ret = 0;
 	char *end_ptr;
-#if 0
-	int sret;
-#endif
 	ConfigRet config_ret;
 	char string[STRING_MAX_SIZE];
 	int len;
@@ -3263,8 +3272,8 @@ config_file_setup(char *file_name, char *section_name,
 	/* Read and parse configuration file */
 	config_ret = ConfigReadFile(file_name, &cfg);
 	if (config_ret != CONFIG_OK) {
-		LOG_ERR("ConfigOpenFile failed for %s", file_name);
-		D_ERROR("ConfigOpenFile failed for %s", file_name);
+		printf("ConfigOpenFile failed for: %s\n", file_name);
+		D_EMIT("ConfigOpenFile failed for: %s\n", file_name);
 		return -ENOENT;
 	}
 
@@ -3320,6 +3329,7 @@ config_file_setup(char *file_name, char *section_name,
 			/* Avoid checkpatch warning */
 			D_GOTO(cleanup, ret = -ENOMEM);
 		}
+		gbl.alloc_g_dest_name = true;
 		memcpy(gbl.g_dest_name, string, len);
 	}
 
