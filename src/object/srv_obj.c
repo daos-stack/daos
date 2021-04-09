@@ -2363,8 +2363,8 @@ again:
 	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
-					 orw->orw_tgt_max, NULL, 0,
-					 orw->orw_shard_tgts.ca_count,
+					 orw->orw_tgt_max, PO_COMP_ID_ALL,
+					 NULL, 0, orw->orw_shard_tgts.ca_count,
 					 orw->orw_shard_tgts.ca_arrays,
 					 &split_req);
 		if (rc != 0) {
@@ -4166,8 +4166,9 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 			      struct daos_shard_tgt *tgts,
 			      int tgt_cnt, int req_cnt, uint32_t *flags)
 {
-	int	rc = 0;
-	int	i;
+	struct dtx_daos_target	*ddt = &dcsh->dcsh_mbs->dm_tgts[0];
+	int			 rc = 0;
+	int			 i;
 
 	for (i = 0; i < req_cnt; i++) {
 		struct daos_cpd_sub_req		*dcsr;
@@ -4183,6 +4184,7 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 
 		rc = obj_ec_rw_req_split(dcsr->dcsr_oid, &dcu->dcu_iod_array,
 					 dcsr->dcsr_nr, dcu->dcu_start_shard, 0,
+					 ddt->ddt_id,
 					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
 					 tgt_cnt, tgts, &dcu->dcu_ec_split_req);
 		if (rc != 0) {
