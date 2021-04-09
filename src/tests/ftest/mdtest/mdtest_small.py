@@ -6,6 +6,7 @@
 '''
 
 from mdtest_test_base import MdtestBase
+from apricot import skipForTicket
 
 
 class MdtestSmall(MdtestBase):
@@ -15,6 +16,7 @@ class MdtestSmall(MdtestBase):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-7304")
     def test_mdtest_small(self):
         """Jira ID: DAOS-2493.
 

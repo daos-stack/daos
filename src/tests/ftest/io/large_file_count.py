@@ -5,8 +5,10 @@
 """
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
+from apricot import skipForTicket
 
 import write_host_file
+
 
 # pylint: disable=attribute-defined-outside-init
 class LargeFileCount(MdtestBase, IorTestBase):
@@ -79,6 +81,7 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 # container destroy
                 self.container.destroy()
 
+    @skipForTicket("DAOS-7287")
     def test_largefilecount_rc(self):
         """Jira ID: DAOS-3845.
         Test Description:
@@ -88,7 +91,10 @@ class LargeFileCount(MdtestBase, IorTestBase):
         Use Cases:
             Run IOR for 5 mints with DFS and POSIX
             Run MDTEST to create 25K files with DFS and POSIX
-        :avocado: tags=all,daosio,hw,large,rc,largefilecount_rc
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daosio
+        :avocado: tags=rc,largefilecount_rc
         """
         apis = self.params.get("api", "/run/largefilecount/*")
         num_of_files_dirs_rc = self.params.get("num_of_files_dirs_rc",
