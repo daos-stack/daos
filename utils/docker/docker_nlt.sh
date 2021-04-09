@@ -18,4 +18,4 @@ set -e
 
 ./utils/setup_daos_admin.sh
 
-./utils/node_local_test.py --no-root $@
+./utils/node_local_test.py --no-root --memcheck no --server-debug WARN $@
