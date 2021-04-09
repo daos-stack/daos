@@ -1196,6 +1196,7 @@ def archive_config_files(avocado_logs_dir, args):
 
 def archive_cov_usrlib_logs(avocado_logs_dir, args):
     """Archive daos cov files to the avocado results directory.
+
     Args:
         avocado_logs_dir (str): path to the avocado log files
         args (argparse.Namespace): command line arguments for this program
@@ -1212,7 +1213,7 @@ def archive_cov_usrlib_logs(avocado_logs_dir, args):
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     task = archive_files(destination, hosts,
-                         "/tmp/test.cov*",False, args)
+                         "/tmp/test.cov*", False, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
@@ -2113,8 +2114,10 @@ def main():
     else:
         if status & 1 == 1:
             print("Detected one or more avocado test failures!")
+            ret_code = 1
         if status & 8 == 8:
             print("Detected one or more interrupted avocado jobs!")
+            ret_code = 1
         if status & 2 == 2:
             print("ERROR: Detected one or more avocado job failures!")
             ret_code = 1
