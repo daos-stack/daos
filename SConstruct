@@ -389,15 +389,14 @@ def scons(): # pylint: disable=too-many-locals
               default=False,
               help='Download and build dependencies only, do not build daos')
 
-
-    if env['CC'] == 'gcc':
-        run_checks(env)
-        il_env = env.Clone()
-    else:
+    if env['CC'] == 'clang':
         il_env = env.Clone()
         il_env['CC'] = 'gcc'
         run_checks(env)
         run_checks(il_env)
+    else:
+        run_checks(env)
+        il_env = env.Clone()
 
     res = GetOption('deps_only')
     if res:
