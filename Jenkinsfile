@@ -932,7 +932,7 @@ pipeline {
                     when {
                         beforeAgent true
                         expression { ! (target_branch == 'weekly-testing' ||
-                                        skipStage(stage: 'scan-centos-rpms'
+                                        skipStage(stage: 'scan-centos-rpms',
                                                   def_val: 'false') ||
                                         quickFunctional()) }
                     }
