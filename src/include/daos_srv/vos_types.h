@@ -308,8 +308,10 @@ enum {
 	VOS_IT_FOR_MIGRATION	= (1 << 5),
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED		= (1 << 6),
+	/** Cleanup stale DTX entry. */
+	VOS_IT_CLEANUP_DTX	= (1 << 7),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 7) - 1,
+	VOS_IT_MASK		= (1 << 8) - 1,
 };
 
 /**
@@ -406,9 +408,9 @@ typedef struct {
 			daos_unit_oid_t		ie_dtx_oid;
 			/** The pool map version when handling DTX on server. */
 			uint32_t		ie_dtx_ver;
-			/* The DTX entry flags, see dtx_entry_flags. */
+			/** The DTX entry flags, see dtx_entry_flags. */
 			uint16_t		ie_dtx_flags;
-			/* DTX mbs flags, see dtx_mbs_flags. */
+			/** DTX mbs flags, see dtx_mbs_flags. */
 			uint16_t		ie_dtx_mbs_flags;
 			/** DTX tgt count. */
 			uint32_t		ie_dtx_tgt_cnt;
@@ -416,6 +418,8 @@ typedef struct {
 			uint32_t		ie_dtx_grp_cnt;
 			/** DTX mbs data size. */
 			uint32_t		ie_dtx_mbs_dsize;
+			/* The time when create the DTX entry. */
+			uint64_t		ie_dtx_start_time;
 			/** DTX participants information. */
 			void			*ie_dtx_mbs;
 		};
