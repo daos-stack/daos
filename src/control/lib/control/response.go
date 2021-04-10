@@ -20,6 +20,10 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
+var (
+	errNoMsResponse = errors.New("response did not contain a management service response")
+)
+
 type (
 	// HostResponse contains a single host's response to an unary RPC, or
 	// an error if the host was unable to respond successfully.
@@ -164,7 +168,7 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 	}
 
 	if len(ur.Responses) == 0 {
-		return nil, errors.New("response did not contain a management service response")
+		return nil, errNoMsResponse
 	}
 
 	// As we may have sent the request to multiple MS replicas, just pick
@@ -177,6 +181,10 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 		}
 
 		break
+	}
+
+	if msResp == nil {
+		return nil, errNoMsResponse
 	}
 
 	if msResp.Error != nil {
