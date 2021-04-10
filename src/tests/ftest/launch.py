@@ -1114,7 +1114,7 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
     print("Archiving host logs from {} in {}".format(hosts, destination))
 
     # Copy any dump files
-    task = archive_files(destination, hosts, "/tmp/daos_dump*.txt", True, args)
+    task = archive_files(destination, hosts, "/tmp/daos_dump*.txt", False, args)
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(

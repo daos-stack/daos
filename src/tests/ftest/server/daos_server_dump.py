@@ -65,9 +65,6 @@ class DaosServerDumpTest(TestWithServers):
                 "No daos_engine processes found on {}".format(
                     str(ret_codes[0])))
 
-        # DEBUG check /tmp to find any dump file
-        print("===== ls -l /tmp ======")
-        ret_codes = pcmd(self.hostlist_servers, r"ls -l /tmp")
         # XXX may need to check for one file per engine...
         ret_codes = pcmd(self.hostlist_servers, r"ls /tmp/daos_dump*.txt")
         # Report any failures
@@ -76,7 +73,6 @@ class DaosServerDumpTest(TestWithServers):
                 "{}: rc={}".format(val, key)
                 for key, val in ret_codes.items() if key != 0
             ]
-        if failed:
             self.fail(
                 "no ULT stacks dump found on following hosts: {}".format(
                 ", ".join(failed)))
