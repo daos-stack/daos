@@ -54,26 +54,42 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
 /* The age unit is second. */
 
-/* The count threshould for triggerring DTX aggregation.
- * This threshould should consider the real SCM size.
- */
-#define DTX_AGG_THRESHOLD_CNT_UPPER	(1 << 27)
-
-/* If the DTX entries are not more than this count threshould,
+/* If the DTX entries are not more than this count threshold,
  * then no need DTX aggregation.
+ *
+ * XXX: This threshold should consider the real SCM size. But
+ *	it cannot be too small; otherwise, handing resent RPC
+ *	make hit uncertain case and got failure -DER_EP_OLD.
  */
-#define DTX_AGG_THRESHOLD_CNT_LOWER	(1 << 17)
+#define DTX_AGG_THRESHOLD_CNT_LOWER	(1 << 24)
 
-/* The time threshould for triggerring DTX aggregation. If the oldest
- * DTX in the DTX table exceeds such threshould, it will trigger DTX
+/* The count threshold for triggerring DTX aggregation. */
+#define DTX_AGG_THRESHOLD_CNT_UPPER	((DTX_AGG_THRESHOLD_CNT_LOWER >> 1) * 3)
+
+/* The time threshold for triggerring DTX aggregation. If the oldest
+ * DTX in the DTX table exceeds such threshold, it will trigger DTX
  * aggregation locally.
  */
-#define DTX_AGG_THRESHOLD_AGE_UPPER	4800
+#define DTX_AGG_THRESHOLD_AGE_UPPER	1200
 
-/* If DTX aggregation is triggered, then he DTXs with older ages than
+/* If DTX aggregation is triggered, then the DTXs with older ages than
  * this threshold will be aggregated.
+ *
+ * XXX: It cannot be too small; otherwise, handing resent RPC
+ *	make hit uncertain case and got failure -DER_EP_OLD.
  */
-#define DTX_AGG_THRESHOLD_AGE_LOWER	3600
+#define DTX_AGG_THRESHOLD_AGE_LOWER	900
+
+/* The time threshold for triggerring DTX cleanup of stale entries.
+ * If the oldest active DTX exceeds such threshold, it will trigger
+ * DTX cleanup locally.
+ */
+#define DTX_CLEANUP_THRESHOLD_AGE_UPPER	240
+
+/* If DTX cleanup for stale entries is triggered, then the DTXs with
+ * older ages than this threshold will be cleanup.
+ */
+#define DTX_CLEANUP_THRESHOLD_AGE_LOWER	180
 
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
