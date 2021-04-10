@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timedelta
 import multiprocessing
 import threading
+import random
 from apricot import TestWithServers
 from general_utils import run_command, DaosTestError, get_log_file
 import slurm_utils
