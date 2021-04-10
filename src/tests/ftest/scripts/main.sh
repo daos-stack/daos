@@ -70,8 +70,8 @@ export D_LOG_FILE="$TEST_TAG_DIR/daos.log"
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
-logs_dir = $logs_prefix/ftest/avocado/job-results
-data_dir = $logs_prefix/ftest/avocado/data
+logs_dir = $logs_prefix/ftest-$(id -u)/avocado/job-results
+data_dir = $logs_prefix/ftest-$(id -u)/avocado/data
 
 [job.output]
 loglevel = DEBUG
@@ -228,8 +228,8 @@ if [ "$(lsb_release -s -i)" = "CentOS" ]; then
 fi
 
 # Clean stale job results
-if [ -d "${logs_prefix}/ftest/avocado/job-results" ]; then
-    rm -rf "${logs_prefix}/ftest/avocado/job-results"
+if [ -d "${logs_prefix}/ftest-$(id -u)/avocado/job-results" ]; then
+    rm -rf "${logs_prefix}/ftest-$(id -u)/avocado/job-results"
 fi
 
 # now run it!
@@ -244,7 +244,7 @@ fi
 # daos_test uses cmocka framework which generates a set of xml of its own.
 # Post-processing the xml files here to put them in proper categories
 # for publishing in Jenkins
-dt_xml_path="${logs_prefix}/ftest/avocado/job-results/daos_test"
+dt_xml_path="${logs_prefix}/ftest-$(id -u)/avocado/job-results/daos_test"
 FILES=("${dt_xml_path}"/*/test-results/*/data/*.xml)
 COMP="FTEST_daos_test"
 
