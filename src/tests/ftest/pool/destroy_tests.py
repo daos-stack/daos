@@ -5,7 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from server_utils import ServerFailed
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from test_utils_base import CallbackHandler
 from general_utils import create_string_buffer
@@ -243,7 +243,6 @@ class DestroyTests(TestWithServers):
         # Restore the valid uuid to allow tearDown() to pass
         self.pool.uuid = valid_uuid
 
-    @skipForTicket("DAOS-2742")
     def test_destroy_wrong_group(self):
         """Test destroying a pool.
 
@@ -439,7 +438,6 @@ class DestroyTests(TestWithServers):
             exception_detected,
             "No exception when deleting a connected pool with data")
 
-    @skipForTicket("DAOS-2742")
     def test_destroy_async(self):
         """Destroy pool asynchronously.
 
