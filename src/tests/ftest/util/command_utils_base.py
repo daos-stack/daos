@@ -347,7 +347,9 @@ class CommandWithParameters(ObjectWithParameters):
         params = []
         for name in self.get_str_param_names():
             value = str(getattr(self, name))
-            if value != "":
+            # Makito modified
+            #if value != "":
+            if value != "" and value != "True" and value != "False":
                 params.append(value)
 
         # Append the path to the command and prepend it with any other
@@ -479,6 +481,26 @@ class YamlParameters(ObjectWithParameters):
                         filename, error)) from error
             self.reset_yaml_data_updated()
         return create_yaml
+
+    # Makito added
+    def write_yaml(self, yaml_data):
+        """Write yaml to file from provided yaml data.
+
+        Args:
+            yaml_data (str): dictionary containing yaml file values.
+
+        Raises:
+            CommandFailure: if there is an error creating the yaml file
+
+        """
+        self.log.info("Writing yaml configuration file %s", self.filename)
+        try:
+            with open(self.filename, 'w') as write_file:
+                yaml.dump(yaml_data, write_file, default_flow_style=False)
+        except Exception as error:
+            raise CommandFailure(
+                "Error writing the yaml file {}: {}".format(
+                    self.filename, error))
 
     def set_value(self, name, value):
         """Set the value for a specified attribute name.

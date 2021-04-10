@@ -1,0 +1,11 @@
+hosts:
+    test_servers:
+        - server-A
+        # - server-B
+        # - server-C
+        # - server-D
+# server_config:
+#     name: daos_server
+timeout: 140
+daos_server:
+  discover_mode: True
