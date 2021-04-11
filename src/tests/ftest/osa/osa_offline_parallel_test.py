@@ -177,7 +177,7 @@ class OSAOfflineParallelTest(OSAUtils):
             self.assert_on_rebuild_failure()
             pver_end = self.get_pool_version()
             self.log.info("Pool Version at the End %s", pver_end)
-            self.assertTrue(pver_end >= 34,
+            self.assertTrue(pver_end >= 26,
                             "Pool Version Error:  at the end")
         if data:
             self.run_ior_thread("Read", oclass, test_seq)
