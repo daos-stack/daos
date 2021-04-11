@@ -101,11 +101,9 @@ class OSAOfflineDrain(OSAUtils):
                 if (self.test_during_rebuild is True and val == 0):
                     # Exclude rank 3
                     output = self.dmg_command.pool_exclude(self.pool.uuid, "3")
-                    self.is_rebuild_done(time_interval=3,
-                                         wait_for_rebuild_to_complete=False)
+                    self.pool.wait_for_rebuild(True)
                 output = self.dmg_command.pool_drain(self.pool.uuid,
                                                      rank, t_string)
-                time.sleep(5)
                 self.print_and_assert_on_rebuild_failure(output)
 
                 pver_drain = self.get_pool_version()
@@ -119,7 +117,8 @@ class OSAOfflineDrain(OSAUtils):
                     self.print_and_assert_on_rebuild_failure(output)
                 if (self.test_during_rebuild is True and val == 0):
                     # Reintegrate rank 3
-                    output = self.dmg_command.pool_reintegrate(self.pool.uuid, "3")
+                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
+                                                               "3")
                     self.print_and_assert_on_rebuild_failure(output)
 
         for val in range(0, num_pool):
