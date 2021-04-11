@@ -370,7 +370,8 @@ class CartTest(TestWithoutServers):
 
         print('DEBUG log: line 370, self.log_path = ', self.log_path)
         print('DEBUG log: line 370, memcheck_files  = ', memcheck_files )
-        print('DEBUG log: line 373, subprocess.check_output(["find", self.log_path]) = ', subprocess.check_output(["find", self.log_path]))
+        print('DEBUG log: line 373, subprocess.check_output(["find", "/var/tmp"]) = ', subprocess.check_output(["find", "/var/tmp"], shell=True))
+        print('DEBUG log: line 374, subprocess.check_output(["find", "."]) = ', subprocess.check_output(["find", "."], shell=True))
 
         for filename in memcheck_files:
 
