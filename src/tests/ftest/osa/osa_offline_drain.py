@@ -222,4 +222,3 @@ class OSAOfflineDrain(OSAUtils):
                                                    '/run/rebuild/*')
         self.log.info("Offline Drain : During Rebuild")
         self.run_offline_drain_test(1, data=True)
--
