@@ -96,10 +96,7 @@ class OSAOnlineReintegration(OSAUtils):
                 for _ in range(0, 2):
                     self.run_ior_thread("Write", oclass, test_seq)
                 self.delete_extra_container(self.pool)
-
-            # Start an IOR thread with more repetitions.
-            self.ior_cmd.get_params(self)
-            self.ior_cmd.repetitions.update("10")
+            # The following thread runs while performing osa operations.
             threads.append(threading.Thread(target=self.run_ior_thread,
                                             kwargs={"action": "Write",
                                                     "oclass": oclass,
@@ -115,9 +112,6 @@ class OSAOnlineReintegration(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            if self.test_during_aggregation is True:
-                self.delete_extra_container(self.pool)
-                time.sleep(5)
             if server_boot is False:
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                        rank)
