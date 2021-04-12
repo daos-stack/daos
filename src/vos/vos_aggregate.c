@@ -130,7 +130,7 @@ struct vos_agg_param {
 	daos_key_t		ap_akey;	/* current akey */
 	unsigned int		ap_discard:1,
 				ap_csum_err:1,
-				ap_check_ts:1;
+				ap_full_scan:1;
 	struct umem_instance	*ap_umm;
 	bool			(*ap_yield_func)(void *arg);
 	void			*ap_yield_arg;
@@ -215,13 +215,13 @@ need_aggregate(struct vos_agg_param *agg_param, vos_iter_entry_t *entry)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
 
-	D_DEBUG(DB_EPC, "check_ts:%d, hae:"DF_U64", last_update:"DF_U64", "
-		"flags:%u\n", agg_param->ap_check_ts,
+	D_DEBUG(DB_EPC, "full_scan:%d, hae:"DF_U64", last_update:"DF_U64", "
+		"flags:%u\n", agg_param->ap_full_scan,
 		cont->vc_cont_df->cd_hae, entry->ie_last_update,
 		entry->ie_vis_flags);
 
-	/* Don't skip aggregation when the aggregate EPR is loer than HAE. */
-	if (!agg_param->ap_check_ts)
+	/* Don't skip aggregation for full scan */
+	if (agg_param->ap_full_scan)
 		return true;
 
 	/* Don't skip aggregation when the obj/dkey/akey is punched */
@@ -2087,7 +2087,7 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      void (*csum_func)(void *),
-	      bool (*yield_func)(void *arg), void *yield_arg)
+	      bool (*yield_func)(void *arg), void *yield_arg, bool full_scan)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	vos_iter_param_t	 iter_param = { 0 };
@@ -2126,8 +2126,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	agg_param.ap_yield_func = yield_func;
 	agg_param.ap_yield_arg = yield_arg;
 	merge_window_init(&agg_param.ap_window, csum_func);
-	/* Only check last update timestamp when aggregating above HAE */
-	agg_param.ap_check_ts = (cont->vc_cont_df->cd_hae < epr->epr_hi);
+	/* A full scan caused by snapshot deletion */
+	agg_param.ap_full_scan = full_scan;
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
