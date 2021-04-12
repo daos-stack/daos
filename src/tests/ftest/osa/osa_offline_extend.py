@@ -165,8 +165,6 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=osa
         :avocado: tags=offline_extend,offline_extend_multiple_pools
         """
-        self.test_with_checksum = self.params.get("test_with_checksum",
-                                                  '/run/checksum/*')
         self.log.info("Offline Extend Testing: Multiple Pools")
         self.run_offline_extend_test(5, data=True)
 
@@ -180,8 +178,6 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=osa
         :avocado: tags=offline_extend,offline_extend_oclass
         """
-        self.test_with_checksum = self.params.get("test_with_checksum",
-                                                  '/run/checksum/*')
         self.log.info("Offline Extend Testing: oclass")
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.run_offline_extend_test(4, data=True,
