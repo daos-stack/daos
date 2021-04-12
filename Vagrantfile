@@ -2,8 +2,6 @@
 
 require 'etc'
 
-#system("rm -f vagrant_ssh_config")
-
 Vagrant.configure("2") do |config|
 
         # disable the default shared folder
@@ -121,7 +119,7 @@ chmod 0600 /root/.ssh/id_rsa"
                                 lv.qemuargs :value => "nvme,drive=NVME#{ss_idx},serial=nvme-#{ss_idx}"
                                 # PMEM
                                 lv.qemuargs :value => "-machine"
-                                lv.qemuargs :value => "q35,accel=kvm,nvdimm=on"
+                                lv.qemuargs :value => "pc,accel=kvm,nvdimm=on"
                                 lv.qemuargs :value => "-m"
                                 lv.qemuargs :value => "8G,slots=2,maxmem=40G"
                                 lv.qemuargs :value => "-object"
