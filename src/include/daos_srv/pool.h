@@ -253,10 +253,11 @@ int dsc_pool_close(daos_handle_t ph);
 static inline int
 ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
 {
-	int	rc;
+	int	rc = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
-	rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
+	if (last_ver < pool_map_get_version(pool->sp_map))
+		rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return rc;

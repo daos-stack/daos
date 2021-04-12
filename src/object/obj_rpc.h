@@ -160,6 +160,8 @@ enum obj_rpc_flags {
 	ORF_FOR_MIGRATION	= (1 << 14),
 	/* Force DTX refresh if hit non-committed DTX on non-leader. */
 	ORF_DTX_REFRESH		= (1 << 15),
+	/* for EC aggregate (to bypass read perm check related with RF) */
+	ORF_FOR_EC_AGG		= (1 << 16),
 };
 
 /* common for update/fetch */
@@ -578,9 +580,14 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
-		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS ||
-		opc == DAOS_OBJ_RPC_EC_AGGREGATE ||
-		opc == DAOS_OBJ_RPC_EC_REPLICATE;
+		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+}
+
+static inline bool
+obj_is_ec_agg_opc(uint32_t opc)
+{
+	return opc == DAOS_OBJ_RPC_EC_AGGREGATE ||
+	       opc == DAOS_OBJ_RPC_EC_REPLICATE;
 }
 
 static inline bool

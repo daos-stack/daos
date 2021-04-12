@@ -926,7 +926,9 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 
 	rc = system(dmg_cmd);
 	print_message(" %s rc %#x\n", dmg_cmd, rc);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
+
+	daos_cont_status_clear(arg->coh, NULL);
 }
 
 struct daos_acl *

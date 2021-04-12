@@ -83,11 +83,19 @@ class OSAOfflineReintegration(OSAUtils):
                         output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                                "5")
                         self.print_and_assert_on_rebuild_failure(output)
+                        self.daos_command.container_set_prop(
+                                    self.pool.uuid,
+                                    self.container.uuid,
+                                    "status", "healthy")
                     if self.test_during_aggregation is True:
                         self.delete_extra_container(self.pool)
                         self.simple_exclude_reintegrate_loop(rank[val])
                     output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                            rank[val])
+                    self.daos_command.container_set_prop(
+                                    self.pool.uuid,
+                                    self.container.uuid,
+                                    "status", "healthy")
                     # Check the IOR data after exclude
                     if data:
                         self.run_ior_thread("Read", oclass, test_seq)
@@ -95,6 +103,10 @@ class OSAOfflineReintegration(OSAUtils):
                     output = self.dmg_command.system_stop(ranks=rank[val],
                                                           force=True)
                     self.print_and_assert_on_rebuild_failure(output)
+                    self.daos_command.container_set_prop(
+                                    self.pool.uuid,
+                                    self.container.uuid,
+                                    "status", "healthy")
                     # Check the IOR data after system stop
                     if data and (val == 0):
                         self.run_ior_thread("Read", oclass, test_seq)

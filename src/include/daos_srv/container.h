@@ -118,6 +118,8 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_cos_list;
 	/* The pool map version for the latest DTX resync on the container. */
 	uint32_t		 sc_dtx_resync_ver;
+	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
+	uint32_t		 sc_rw_disabled:1;
 };
 
 /*
@@ -132,7 +134,7 @@ struct ds_cont_hdl {
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
-	int			sch_ref;
+	int32_t			sch_ref;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
@@ -151,6 +153,7 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
+int ds_cont_rf_check(uuid_t pool_uuid);
 
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
@@ -242,7 +245,6 @@ ds_csum_agg_recalc(void *args);
 int dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 		  unsigned int flags, daos_handle_t *coh);
 int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
-
 
 void ds_cont_tgt_ec_eph_query_ult(void *data);
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

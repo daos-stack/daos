@@ -31,12 +31,12 @@ extern "C" {
  * DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
  * factor/level requirements of the container.
  */
-#define DAOS_COO_RO	(1U << 0)
-#define DAOS_COO_RW	(1U << 1)
-#define DAOS_COO_NOSLIP	(1U << 2)
-#define DAOS_COO_FORCE	(1U << 3)
+#define DAOS_COO_RO		(1U << 0)
+#define DAOS_COO_RW		(1U << 1)
+#define DAOS_COO_NOSLIP		(1U << 2)
+#define DAOS_COO_FORCE		(1U << 3)
 
-#define DAOS_COO_NBITS	(4)
+#define DAOS_COO_NBITS	(5)
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
 
 /** Container information */
@@ -289,6 +289,25 @@ daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
  */
 int
 daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
+
+
+/**
+ * Clear container status, to clear container's DAOS_PROP_CO_STATUS property
+ * from DAOS_PROP_CO_UNCLEAN status to DAOS_PROP_CO_HEALTHY (with same purpose
+ * with "daos cont set-prop --properties=status:healthy --pool= --cont= ".
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ */
+int
+daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev);
 
 /**
  * Overwrites the container ACL with a new one.

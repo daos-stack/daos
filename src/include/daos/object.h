@@ -500,6 +500,8 @@ enum daos_io_flags {
 	DIOF_TO_SPEC_GROUP	= 0x20,
 	/* For data migration. */
 	DIOF_FOR_MIGRATION	= 0x40,
+	/* For EC aggregation. */
+	DIOF_FOR_EC_AGG		= 0x80,
 };
 
 /**
