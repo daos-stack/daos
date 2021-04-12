@@ -450,6 +450,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		if (!strcmp(value, "healthy")) {
 			entry->dpe_val =
 				DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
+							DAOS_PROP_CO_CLEAR,
 							0);
 		} else {
 			fprintf(stderr, "status prop value can only be "
