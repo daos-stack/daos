@@ -14,15 +14,15 @@ if $TEST_RPMS; then
         tar -C install/lib/daos/TESTING/ -xzf -
 fi
 
-rm -rf install/lib/daos/TESTING/ftest/avocado/job-results/*/*/html/
+rm -rf install/lib/daos/TESTING/ftest-"$(id -u)"/avocado/job-results/*/*/html/
 
 # Remove the latest avocado symlink directory to avoid inclusion in the
 # jenkins build artifacts
-rm -f install/lib/daos/TESTING/ftest/avocado/job-results/latest
+rm -f install/lib/daos/TESTING/ftest-"$(id -u)"/avocado/job-results/latest
 
 arts="$arts$(ls ./*daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
 arts="$arts$(ls -d \
-   install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && \
+   install/lib/daos/TESTING/ftest-"$(id -u)"/avocado/job-results/* 2>/dev/null)" && \
   arts="$arts"$'\n'
 if [ -n "$arts" ]; then
     # shellcheck disable=SC2046,SC2086
