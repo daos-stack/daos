@@ -95,6 +95,7 @@ class TestPool(TestDaosApiBase):
             "uid": self.uid,
             "gid": self.gid,
             "scm_size": self.scm_size.value,
+        }
         for key in ("target_list", "svcn", "nvme_size"):
             value = getattr(self, key).value
             if value is not None:
