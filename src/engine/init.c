@@ -667,8 +667,8 @@ exit_init_state:
 exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
-	dss_module_unload_all();
 	ds_iv_fini();
+	dss_module_unload_all();
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
 	} else {
@@ -702,10 +702,10 @@ server_fini(bool force)
 	D_INFO("server_init_state_fini() done\n");
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
-	dss_module_unload_all();
-	D_INFO("dss_module_unload_all() done\n");
 	ds_iv_fini();
 	D_INFO("ds_iv_fini() done\n");
+	dss_module_unload_all();
+	D_INFO("dss_module_unload_all() done\n");
 	/*
 	 * Client stuff finalization needs be done after all ULTs drained
 	 * in dss_srv_fini().
