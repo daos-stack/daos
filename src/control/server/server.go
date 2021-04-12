@@ -106,8 +106,6 @@ func (srv *server) duration(msg string, start time.Time) {
 
 // createServices builds scaffolding for rpc and event services.
 func (srv *server) createServices(ctx context.Context) error {
-	defer srv.duration(track("time to create services"))
-
 	dbReplicas, err := cfgGetReplicas(srv.cfg, net.ResolveTCPAddr)
 	if err != nil {
 		return errors.Wrap(err, "retrieve replicas from config")
@@ -222,8 +220,6 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 // addEngines creates and adds engine instances to harness then starts
 // goroutine to execute callbacks when all engines are started.
 func (srv *server) addEngines(ctx context.Context) error {
-	defer srv.duration(track("time to add engines"))
-
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
@@ -258,8 +254,6 @@ func (srv *server) addEngines(ctx context.Context) error {
 
 // setupGrpc creates a new grpc server and registers services.
 func (srv *server) setupGrpc() error {
-	defer srv.duration(track("time to setup grpc"))
-
 	srvOpts, err := getGrpcOpts(srv.cfg.TransportConfig)
 	if err != nil {
 		return err
@@ -286,8 +280,6 @@ func (srv *server) setupGrpc() error {
 }
 
 func (srv *server) registerEvents() {
-	defer srv.duration(track("time to register events"))
-
 	registerInitialSubscriptions(srv)
 
 	srv.sysdb.OnLeadershipGained(func(ctx context.Context) error {
