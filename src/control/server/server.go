@@ -192,7 +192,7 @@ func (srv *server) initStorage() error {
 }
 
 func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config) (*EngineInstance, error) {
-	// Closure to join an engine instance to a syshtem using control API.
+	// Closure to join an engine instance to a system using control API.
 	joinFn := func(ctxIn context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
 		req.SetHostList(srv.cfg.AccessPoints)
 		req.SetSystem(srv.cfg.SystemName)
@@ -242,12 +242,16 @@ func (srv *server) addEngines(ctx context.Context) error {
 		allStarted.Add(1)
 	}
 
-	allStarted.Wait()
-	for _, cb := range srv.onEnginesStarted {
-		if err := cb(ctx); err != nil {
-			srv.log.Errorf("on engines started: %s", err)
+	go func() {
+		srv.log.Debug("waiting for engines to start...")
+		allStarted.Wait()
+		srv.log.Debug("engines have started")
+		for _, cb := range srv.onEnginesStarted {
+			if err := cb(ctx); err != nil {
+				srv.log.Errorf("on engines started: %s", err)
+			}
 		}
-	}
+	}()
 
 	return nil
 }
