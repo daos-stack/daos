@@ -44,7 +44,8 @@ if [ \"\$(ulimit -c)\" != \"unlimited\" ]; then
 fi
 echo \"/var/tmp/core.%e.%t.%p\" > /proc/sys/kernel/core_pattern"
 rm -f /var/tmp/core.*
-if [ "${HOSTNAME%%.*}" != "$FIRST_NODE" ]; then
+if [ "${HOSTNAME%%.*}" != "$FIRST_NODE" ] ||
+   ! lspci | grep "Non-Volatile memory controller"; then
     if grep /mnt/daos\  /proc/mounts; then
         sudo umount /mnt/daos
     else
