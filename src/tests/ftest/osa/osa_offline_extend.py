@@ -134,7 +134,7 @@ class OSAOfflineExtend(OSAUtils):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,checksum
+        :avocado: tags=osa,checksum,osa_extend
         :avocado: tags=offline_extend,offline_extend_with_csum
         """
         self.log.info("Offline Extend Testing : With Checksum")
@@ -147,7 +147,7 @@ class OSAOfflineExtend(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa
+        :avocado: tags=osa,osa_extend
         :avocado: tags=offline_extend,offline_extend_without_csum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -162,7 +162,7 @@ class OSAOfflineExtend(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa
+        :avocado: tags=osa,osa_extend
         :avocado: tags=offline_extend,offline_extend_multiple_pools
         """
         self.log.info("Offline Extend Testing: Multiple Pools")
@@ -175,7 +175,7 @@ class OSAOfflineExtend(OSAUtils):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa
+        :avocado: tags=osa,osa_extend
         :avocado: tags=offline_extend,offline_extend_oclass
         """
         self.log.info("Offline Extend Testing: oclass")
@@ -191,7 +191,7 @@ class OSAOfflineExtend(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,checksum
+        :avocado: tags=osa,checksum,osa_extend
         :avocado: tags=offline_extend,offline_extend_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
