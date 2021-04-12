@@ -1135,7 +1135,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		return rc;
 	}
 
-	rc = bio_iod_prep(vos_ioh2desc(ioh));
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_REBUILD);
 	if (rc) {
 		D_ERROR("Prepare EIOD for "DF_UOID" error: "DF_RC"\n",
 			DP_UOID(mrone->mo_oid), DP_RC(rc));
