@@ -80,8 +80,6 @@ class OSAOfflineParallelTest(OSAUtils):
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
             oclass (str) : Daos object class (RP_2G1,etc)
-            server_boot (bool) : Perform system stop/start.
-                                 Default: False (no system stop/start)
         """
         # Create a pool
         pool = {}
@@ -210,7 +208,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel
         without enabling checksum.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa
         :avocado: tags=offline_parallel,offline_parallel_without_csum
@@ -227,7 +225,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel
         with a rank rebooted using system stop/start.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa
         :avocado: tags=offline_parallel,offline_parallel_srv_rank_boot
