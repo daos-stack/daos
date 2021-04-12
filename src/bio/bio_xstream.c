@@ -67,7 +67,6 @@ struct bio_nvme_data {
 };
 
 static struct bio_nvme_data nvme_glb;
-uint64_t io_stat_period;
 
 static int
 is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
@@ -417,10 +416,6 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 
 	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
-	env = getenv("IO_STAT_PERIOD");
-	io_stat_period = env ? atoi(env) : 0;
-	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
-
 	nvme_glb.bd_shm_id = shm_id;
 	nvme_glb.bd_mem_size = mem_size;
 
@@ -573,10 +568,6 @@ xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 	/* Wait for the completion callback done or timeout */
 	while (*inflights != 0) {
 		spdk_thread_poll(ctxt->bxc_thread, 0, 0);
-
-		/* Called by standalone VOS */
-		if (ctxt->bxc_tgt_id == -1)
-			bio_xs_io_stat(ctxt, d_timeus_secdiff(0));
 
 		/* Completion is executed */
 		if (*inflights == 0)
@@ -1763,9 +1754,6 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 		return 0;
 
 	rc = spdk_thread_poll(ctxt->bxc_thread, 0, 0);
-
-	/* Print SPDK I/O stats for each xstream */
-	bio_xs_io_stat(ctxt, now);
 
 	/* To avoid complicated race handling (init xstream and starting
 	 * VOS xstream concurrently access global device list & xstream

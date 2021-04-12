@@ -543,31 +543,37 @@ void
 bio_media_error(void *msg_arg)
 {
 	struct media_error_msg		*mem = msg_arg;
+	struct bio_dev_health		*bdh;
 	struct nvme_stats		*dev_state;
 	int				 rc;
 
-	dev_state = &mem->mem_bs->bb_dev_health.bdh_health_state;
+	bdh = &mem->mem_bs->bb_dev_health;
+	dev_state = &bdh->bdh_health_state;
 
 	switch (mem->mem_err_type) {
 	case MET_UNMAP:
 		/* Update unmap error counter */
 		dev_state->bio_unmap_errs++;
+		d_tm_inc_counter(bdh->bdh_unmap_errs, 1);
 		D_ERROR("Unmap error logged from tgt_id:%d\n", mem->mem_tgt_id);
 		break;
 	case MET_WRITE:
 		/* Update write I/O error counter */
 		dev_state->bio_write_errs++;
-		D_ERROR("Write error logged from xs_id:%d\n", mem->mem_tgt_id);
+		d_tm_inc_counter(bdh->bdh_write_errs, 1);
+		D_ERROR("Write error logged from tgt_id:%d\n", mem->mem_tgt_id);
 		break;
 	case MET_READ:
 		/* Update read I/O error counter */
 		dev_state->bio_read_errs++;
-		D_ERROR("Read error logged from xs_id:%d\n", mem->mem_tgt_id);
+		d_tm_inc_counter(bdh->bdh_read_errs, 1);
+		D_ERROR("Read error logged from tgt_id:%d\n", mem->mem_tgt_id);
 		break;
 	case MET_CSUM:
 		/* Update CSUM error counter */
 		dev_state->checksum_errs++;
-		D_ERROR("CSUM error logged from xs_id:%d\n", mem->mem_tgt_id);
+		d_tm_inc_counter(bdh->bdh_checksum_errs, 1);
+		D_ERROR("CSUM error logged from tgt_id:%d\n", mem->mem_tgt_id);
 		break;
 	}
 

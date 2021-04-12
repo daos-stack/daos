@@ -9,6 +9,8 @@
 
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 #include <spdk/bdev.h>
 
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
@@ -51,6 +53,83 @@ struct bio_dma_buffer {
 	ABT_mutex		 bdb_mutex;
 };
 
+#define BIO_PROTO_NVME_STATS_LIST					\
+	X(bdh_du_written, "commands/data_units_written",		\
+	  "number of 512b data units written to the controller",	\
+	  "512b data units")						\
+	X(bdh_du_read, "commands/data_units_read",			\
+	  "number of 512b data units read from to the controller",	\
+	  "512b data units")						\
+	X(bdh_write_cmds, "commands/host_write_cmds",			\
+	  "number of write commands completed by to the controller",	\
+	  "commands")							\
+	X(bdh_read_cmds, "commands/host_read_cmds",			\
+	  "number of read commands completed by to the controller",	\
+	  "commands")							\
+	X(bdh_ctrl_busy_time, "commands/ctrl_busy_time",		\
+	  "Amount of time the controller is busy with I/O commands",	\
+	  "minutes")							\
+	X(bdh_media_errs, "commands/media_errs",			\
+	  "Number of occurrences where the controller detected an unrecovered "\
+	  "data integrity error (e.g. ECC, CRC or LBA tag mismatch)",	\
+	  "errors")							\
+	X(bdh_read_errs, "commands/read_errs",				\
+	  "Number of I/O errors reported to the engine on read commands",      \
+	  "errors")							\
+	X(bdh_write_errs, "commands/write_errs",			\
+	  "Number of I/O errors reported to the engine on write commands",     \
+	  "errors")							\
+	X(bdh_unmap_errs, "commands/unmap_errs",			\
+	  "Number of I/O errors reported to the engine on unmap/trim commands",\
+	  "errors")							\
+	X(bdh_checksum_errs, "commands/checksum_mismatch",		\
+	  "Number of checksum mismatch detected by the engine",		\
+	  "errors")							\
+	X(bdh_power_cycles, "power_cycles",				\
+	  "Number of power cycles",					\
+	  "cycles")							\
+	X(bdh_power_on_hours, "power_on_hours",				\
+	  "Number of power-on hours cycles",				\
+	  "hours")							\
+	X(bdh_unsafe_shutdowns, "unsafe_shutdowns",			\
+	  "Number of unsafe shutdowns (no notification prior to power loss)",  \
+	  "shutdowns")							\
+	X(bdh_temp, "temperature/current",				\
+	  "Current SSD temperature",					\
+	  "kelvins")							\
+	X(bdh_temp_warn, "temperature/warn",				\
+	  "Set to 1 if temperature is above threshold",			\
+	  "")								\
+	X(bdh_temp_warn_time, "temperature/warn_time",			\
+	  "Amount of time the controller operated above warn temp threshold",  \
+	  "minutes")							\
+	X(bdh_temp_crit_time, "temperature/crit_time",			\
+	  "Amount of time the controller operated above crit temp threshold",  \
+	  "minutes")							\
+	X(bdh_percent_used, "reliability/percentage_used",		\
+	  "Estimate of the percentage of NVM subsystem life used based on the "\
+	  "actual usage and the manufacturer's prediction of NVM life",	\
+	  "%")								\
+	X(bdh_avail_spare, "reliability/available_spare",		\
+	  "Percentage of remaining spare capacity available",		\
+	  "%")								\
+	X(bdh_avail_spare_thres, "reliability/available_spare_threshold",  \
+	  "Threshold for available spare value",			\
+	  "%")								\
+	X(bdh_avail_spare_warn, "reliability/available_spare_warn",	\
+	  "Set to 1 when available spare has fallen below threshold",	\
+	  "")								\
+	X(bdh_reliability_warn, "reliability/reliability_warn",		\
+	  "Set to 1 when NVM subsystem has been degraded due to significant "  \
+	  "media-related errors",					\
+	  "")								\
+	X(bdh_read_only_warn, "read_only_warn",				\
+	  "Set to 1 when media has been placed in read-only mode",	\
+	  "")								\
+	X(bdh_volatile_mem_warn, "volatile_mem_warn",			\
+	  "Set to 1 when volatile memory backup device has failed",	\
+	  "")
+
 /*
  * SPDK device health monitoring.
  */
@@ -64,6 +143,13 @@ struct bio_dev_health {
 	void				*bdh_error_buf; /* device error logs */
 	uint64_t			 bdh_stat_age;
 	unsigned int			 bdh_inflights;
+
+	/**
+	 * NVMe statistics exported via telemetry framework
+	 */
+#define	X(field, fname, desc, unit) struct d_tm_node_t *field;
+	 BIO_PROTO_NVME_STATS_LIST
+#undef X
 };
 
 /*
@@ -101,6 +187,7 @@ struct bio_bdev {
 	 */
 	bool			 bb_faulty;
 };
+
 
 /*
  * SPDK blobstore isn't thread safe and there can be only one SPDK
@@ -144,7 +231,6 @@ struct bio_xs_context {
 	struct bio_dma_buffer	*bxc_dma_buf;
 	d_list_t		 bxc_io_ctxts;
 	struct spdk_bdev_desc	*bxc_desc; /* for io stat only, read-only */
-	uint64_t		 bxc_io_stat_age;
 };
 
 /* Per VOS instance I/O context */
@@ -271,7 +357,6 @@ struct media_error_msg {
 /* bio_xstream.c */
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
-extern uint64_t		io_stat_period;
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 		       uint64_t timeout);
 void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
@@ -302,7 +387,6 @@ void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 /* bio_monitor.c */
 int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
-void bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now);
 void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now);
 void bio_media_error(void *msg_arg);
 

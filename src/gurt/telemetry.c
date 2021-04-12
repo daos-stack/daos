@@ -1076,6 +1076,49 @@ d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 }
 
 /**
+ * Set the given counter to the specified \a value
+ *
+ * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		value	Increments the counter by this \a value
+ */
+void
+d_tm_set_counter(struct d_tm_node_t *metric, uint64_t value)
+{
+	if (unlikely(d_tm_shmem_root == NULL || metric == NULL))
+		return;
+
+	if (unlikely(metric->dtn_type != D_TM_COUNTER)) {
+		D_ERROR("Failed to set counter [%s] on item not a "
+			"counter.\n", metric->dtn_name);
+		return;
+	}
+
+	metric->dtn_metric->dtm_data.value = value;
+}
+
+/**
+ * Increment the given counter by the specified \a value
+ *
+ * \param[in,out]	metric	Pointer to the metric
+ * \param[in]		value	Increments the counter by this \a value
+ */
+void
+d_tm_inc_counter(struct d_tm_node_t *metric, uint64_t value)
+{
+
+	if (unlikely(d_tm_shmem_root == NULL || metric == NULL))
+		return;
+
+	if (unlikely(metric->dtn_type != D_TM_COUNTER)) {
+		D_ERROR("Failed to set counter [%s] on item not a "
+			"counter.\n", metric->dtn_name);
+		return;
+	}
+
+	metric->dtn_metric->dtm_data.value += value;
+}
+
+/**
  * Increment the given counter by the specified \a value
  *
  * The counter is specified either by an initialized pointer or by a fully
