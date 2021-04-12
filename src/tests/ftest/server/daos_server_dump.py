@@ -78,3 +78,7 @@ class DaosServerDumpTest(TestWithServers):
                 ", ".join(failed)))
 
         self.log.info("Test passed!")
+
+        # set stopped servers state to make teardown happy
+        self.server_managers[0].update_expected_states(
+            None, ["Joined", "Errored"])

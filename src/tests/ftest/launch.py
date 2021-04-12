@@ -962,6 +962,11 @@ def run_tests(test_files, tag_filter, args):
             return_code |= archive_config_files(avocado_logs_dir, args)
             return_code |= archive_daos_logs(
                 avocado_logs_dir, test_file, args)
+            save = args.verbose
+            args.verbose = True
+            return_code |= archive_daos_dumps(
+                avocado_logs_dir, test_file, args)
+            args.verbose = save
             return_code |= archive_cart_logs(
                 avocado_logs_dir, test_file, args)
 
@@ -1113,8 +1118,6 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
     hosts = get_hosts_from_yaml(test_files["yaml"], args)
     print("Archiving host logs from {} in {}".format(hosts, destination))
 
-    # Copy any dump files
-    task = archive_files(destination, hosts, "/tmp/daos_dump*.txt", False, args)
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
@@ -1128,6 +1131,34 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
         test_name = get_test_category(test_files["py"])
         if not check_big_files(avocado_logs_dir, task, test_name, args):
             status |= 32
+    return status
+
+def archive_daos_dumps(avocado_logs_dir, test_files, args):
+    """Archive daos log files to the avocado results directory.
+
+    Args:
+        avocado_logs_dir (str): path to the avocado log files
+        test_files (dict): a list of dictionaries of each test script/yaml file
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: status code.
+
+    """
+    # Create a subdirectory in the avocado logs directory for this test
+    destination = os.path.join(avocado_logs_dir, "latest", "daos_dumps")
+
+    # Copy any DAOS logs created on any host under test
+    hosts = get_hosts_from_yaml(test_files["yaml"], args)
+    print("Archiving host dumps from {} in {}".format(hosts, destination))
+
+    # Copy any dump files
+    task = archive_files(destination, hosts, "/tmp/daos_dump*.txt", False, args)
+
+    # Determine if the command completed successfully across all the hosts
+    status = 0
+    if not check_remote_output(task, "archive_daos_logs command"):
+        status |= 16
     return status
 
 
