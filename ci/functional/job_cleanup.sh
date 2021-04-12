@@ -10,7 +10,7 @@ if $TEST_RPMS; then
     first_node=${NODELIST%%,*}
     # scp doesn't copy symlinks, it resolves them
     ssh -i ci_key -l jenkins "${first_node}" \
-        tar -C /var/tmp/ -czf - ftest-"$(uid -u)" |
+        tar -C /var/tmp/ -czf - ftest-"$(id -u)" |
         tar -C install/lib/daos/TESTING/ -xzf -
 fi
 
