@@ -82,6 +82,7 @@ class CartTest(TestWithoutServers):
 
     def tearDown(self):
         """Tear down the test case."""
+        self.log_check_valgrind_memcheck(self)
         self.report_timeout()
         self._teardown_errors.extend(self.cleanup_processes())
         super().tearDown()
@@ -368,10 +369,20 @@ class CartTest(TestWithoutServers):
         memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
                                 os.listdir(self.log_path)))
 
+        ################################################################################
+        # START: DEBUG TRACE
+        # (It can't be '.' or cwd(), it must be some place writable.)
+        daos_test_shared_dir = os.environ['HOME']
+        if 'DAOS_TEST_SHARED_DIR' in os.environ:
+            daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
         print('DEBUG log: line 370, self.log_path = ', self.log_path)
         print('DEBUG log: line 370, memcheck_files  = ', memcheck_files )
         print('DEBUG log: line 373, subprocess.check_output(["find", "/var/tmp"]) = ', subprocess.check_output(["find", "/var/tmp"], shell=True))
-        print('DEBUG log: line 374, subprocess.check_output(["find", "."]) = ', subprocess.check_output(["find", "."], shell=True))
+        print('DEBUG log: line 375, subprocess.check_output(["find", "."]) = ', subprocess.check_output(["find", "."], shell=True))
+        print('DEBUG log: line 374, subprocess.check_output(["find", daos_test_shared_dir]) = ', subprocess.check_output(["find", daos_test_shared_dir], shell=True))
+        print('DEBUG log: line 374, subprocess.check_output(["find", os.environ["HOME"]]) = ', subprocess.check_output(["find", os.environ["HOME"]], shell=True))
+        # END: DEBUG TRACE
+        ################################################################################
 
         for filename in memcheck_files:
 
@@ -423,7 +434,7 @@ class CartTest(TestWithoutServers):
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
 
-        self.log_check_valgrind_memcheck(self)
+        #self.log_check_valgrind_memcheck(self)
 
         return 0
 
