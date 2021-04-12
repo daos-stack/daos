@@ -316,9 +316,9 @@ func (cfg *Server) WithFirmwareHelperLogFile(filePath string) *Server {
 }
 
 // WithTelemetryPort sets the port for the telemetry exporter.
-func (c *Server) WithTelemetryPort(port int) *Server {
-	c.TelemetryPort = port
-	return c
+func (cfg *Server) WithTelemetryPort(port int) *Server {
+	cfg.TelemetryPort = port
+	return cfg
 }
 
 // DefaultServer creates a new instance of configuration struct
@@ -473,35 +473,10 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}
 
-	netCtx, err := netdetect.Init(context.Background())
-	defer netdetect.CleanUp(netCtx)
-	if err != nil {
-		return err
-	}
-
 	for i, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
 		if err := engine.Validate(); err != nil {
 			return errors.Wrapf(err, "I/O Engine %d failed config validation", i)
-		}
-
-		err := cfg.validateProviderFn(netCtx, engine.Fabric.Interface, engine.Fabric.Provider)
-		if err != nil {
-			return errors.Wrapf(err, "Network device %s does not support provider %s.  The configuration is invalid.",
-				engine.Fabric.Interface, engine.Fabric.Provider)
-		}
-
-		// Check to see if the pinned NUMA node was provided in the configuration.
-		// If it was provided, validate that the NUMA node is correct for the given device.
-		// An error from engine.Fabric.GetNumaNode() means that no configuration was provided in the YML.
-		// Because this is an optional parameter, this is considered non-fatal.
-		numaNode, err := engine.Fabric.GetNumaNode()
-		if err == nil {
-			err = cfg.validateNUMAFn(netCtx, engine.Fabric.Interface, numaNode)
-			if err != nil {
-				return errors.Wrapf(err, "Network device %s on NUMA node %d is an invalid configuration.",
-					engine.Fabric.Interface, numaNode)
-			}
 		}
 	}
 
@@ -527,7 +502,6 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
 
-	var netDevClass uint32
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
 			engine.Fabric.Provider,
@@ -573,21 +547,58 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 			}
 			seenBdevSet[dev] = idx
 		}
+	}
 
-		ndc, err := cfg.GetDeviceClassFn(engine.Fabric.Interface)
-		if err != nil {
-			return err
-		}
+	return nil
+}
 
-		switch idx {
-		case 0:
-			netDevClass = ndc
-		default:
-			if ndc != netDevClass {
-				return FaultConfigInvalidNetDevClass(idx, netDevClass, ndc, engine.Fabric.Interface)
-			}
+// validateEngineFabric ensures engine configuration parameters are valid.
+//
+// In addition to validating the fabric provider, check to see if the pinned
+// NUMA node was provided in the configuration. If it was provided, validate
+// that the NUMA node is correct for the given device. An error from
+// cfgEngine.Fabric.GetNumaNode() means that no configuration was provided in
+// the YML. Because this is an optional parameter, this is considered non-fatal.
+func (cfg *Server) validateEngineFabric(ctx context.Context, cfgEngine *engine.Config) error {
+	if err := cfg.validateProviderFn(ctx, cfgEngine.Fabric.Interface, cfgEngine.Fabric.Provider); err != nil {
+		return errors.Wrapf(err, "Network device %s does not support provider %s. "+
+			"The configuration is invalid.", cfgEngine.Fabric.Interface,
+			cfgEngine.Fabric.Provider)
+	}
+
+	if numaNode, err := cfgEngine.Fabric.GetNumaNode(); err == nil {
+		if err := cfg.validateNUMAFn(ctx, cfgEngine.Fabric.Interface, numaNode); err != nil {
+			return errors.Wrapf(err, "Network device %s on NUMA node %d is an "+
+				"invalid configuration.", cfgEngine.Fabric.Interface,
+				numaNode)
 		}
 	}
 
 	return nil
+}
+
+// CheckFabric ensures engines in configuration have compatible parameter
+// values and returns fabric network device class for the configuration.
+func (cfg *Server) CheckFabric(ctx context.Context) (uint32, error) {
+	var netDevClass uint32
+	for index, engine := range cfg.Engines {
+		ndc, err := cfg.GetDeviceClassFn(engine.Fabric.Interface)
+		if err != nil {
+			return 0, err
+		}
+
+		if index == 0 {
+			netDevClass = ndc
+			if err := cfg.validateEngineFabric(ctx, engine); err != nil {
+				return 0, err
+			}
+		} else {
+			if ndc != netDevClass {
+				return 0, FaultConfigInvalidNetDevClass(index,
+					netDevClass, ndc, engine.Fabric.Interface)
+			}
+		}
+	}
+
+	return netDevClass, nil
 }

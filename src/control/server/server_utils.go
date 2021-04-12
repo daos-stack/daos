@@ -110,11 +110,13 @@ func connectServer(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*n
 }
 
 // updateFabricEnvars adjusts the engine fabric configuration.
+//
+// In the case of ofi+verbs provider, mercury uses the interface name such as
+// ib0, while OFI uses the device name such as hfi1_0 CaRT and Mercury will now
+// support the new OFI_DOMAIN environment variable so that we can specify the
+// correct device for each.
 func updateFabricEnvars(ctx context.Context, cfg *engine.Config) error {
 	if strings.HasPrefix(cfg.Fabric.Provider, "ofi+verbs") && !cfg.HasEnvVar("OFI_DOMAIN") {
-		// Mercury uses the interface name such as ib0, while OFI uses the device
-		// name such as hfi1_0 CaRT and Mercury will now support the new OFI_DOMAIN
-		// environment variable so that we can specify the correct device for each.
 		deviceAlias, err := netdetect.GetDeviceAlias(ctx, cfg.Fabric.Interface)
 		if err != nil {
 			return errors.Wrapf(err, "failed to resolve alias for %s", cfg.Fabric.Interface)
@@ -150,20 +152,14 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 			numaCount, engineCount)
 	}
 
-	var netDevClass uint32
-	for i, c := range cfg.Engines {
-		if err := updateFabricEnvars(ctx, c); err != nil {
-			return 0, errors.Wrap(err, "update fabric envars")
-		}
+	netDevClass, err := cfg.CheckFabric(ctx)
+	if err != nil {
+		return 0, errors.Wrap(err, "validate fabric config")
+	}
 
-		if i != 0 {
-			continue
-		}
-
-		// set device class based on fabric cfg of first engine
-		netDevClass, err = cfg.GetDeviceClassFn(c.Fabric.Interface)
-		if err != nil {
-			return 0, err
+	for _, engine := range cfg.Engines {
+		if err := updateFabricEnvars(ctx, engine); err != nil {
+			return 0, errors.Wrap(err, "update engine fabric envars")
 		}
 	}
 

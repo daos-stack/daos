@@ -8,6 +8,7 @@ package config
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -608,21 +609,24 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		configA *engine.Config
-		configB *engine.Config
-		expErr  error
+		configA      *engine.Config
+		configB      *engine.Config
+		expNetDevCls uint32
+		expErr       error
 	}{
 		"successful validation with matching Infiniband": {
 			configA: configA().
 				WithFabricInterface("ib1"),
 			configB: configB().
 				WithFabricInterface("ib0"),
+			expNetDevCls: netdetect.Infiniband,
 		},
-		"successful validation with mathching Ethernet": {
+		"successful validation with matching Ethernet": {
 			configA: configA().
 				WithFabricInterface("eth0"),
 			configB: configB().
 				WithFabricInterface("eth1"),
+			expNetDevCls: netdetect.Ether,
 		},
 		"mismatching net dev class with primary server as ib0 / Infiniband": {
 			configA: configA().
@@ -654,16 +658,19 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
-
-			conf := DefaultServer().
+			gotNetDevCls, gotErr := DefaultServer().
 				WithFabricProvider("test").
 				WithGetNetworkDeviceClass(getDeviceClassStub).
-				WithEngines(tc.configA, tc.configB)
+				WithEngines(tc.configA, tc.configB).
+				CheckFabric(context.Background())
 
-			gotErr := conf.Validate(log)
 			CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expNetDevCls, gotNetDevCls,
+				"unexpected config network device class")
 		})
 	}
 }
