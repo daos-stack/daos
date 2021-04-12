@@ -1267,7 +1267,7 @@ compare_print_results(char *section_name, char *input_section_name,
 					    &cfg_expected);
 		if (config_ret != CONFIG_OK) {
 			printf("Cannot open expected file: %s\n",
-				gbl.g_expected_infile);
+			       gbl.g_expected_infile);
 			D_ERROR("Cannot open expected file: %s\n",
 				gbl.g_expected_infile);
 			D_GOTO(cleanup, ret_value = -ENOENT);
