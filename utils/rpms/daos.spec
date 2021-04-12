@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       9%{?relval}%{?dist}
+Release:       10%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -205,6 +205,14 @@ Summary: The DAOS development libraries and headers
 %description devel
 This is the package needed to build software with the DAOS library.
 
+%package firmware
+Summary: The DAOS firmware management helper
+Requires: %{name}%{?_isa} = %{version}-%{release}
+Requires: %{name}-server%{?_isa} = %{version}-%{release}
+
+%description firmware
+This is the package needed to manage server storage firmware on DAOS servers.
+
 %prep
 %autosetup
 
@@ -220,6 +228,7 @@ This is the package needed to build software with the DAOS library.
       --config=force         \
       --no-rpath             \
       USE_INSTALLED=all      \
+      FIRMWARE_MGMT=yes      \
       CONF_DIR=%{conf_dir}   \
       PREFIX=%{buildroot}    \
      %{?scons_args}          \
@@ -237,6 +246,7 @@ mv test.cov{,-build}
       %{buildroot}%{_prefix}          \
       %{buildroot}%{conf_dir}         \
       USE_INSTALLED=all               \
+      FIRMWARE_MGMT=yes               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
       %{?scons_args}                  \
@@ -323,6 +333,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_server in order to invoke daos_admin
+# and/or daos_firmware
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
 %dir %{_libdir}/daos_srv
@@ -412,11 +423,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos.so
 %{_libdir}/*.a
 
+%files firmware
+# set daos_firmware to be setuid root in order to perform privileged tasks
+%attr(4750,root,daos_server) %{_bindir}/daos_firmware
+
 %changelog
-* Mon Apr 05 2021 Dalton A. Bohning <daltonx.bohning@intel.com> - 1.3.0-9
+* Mon Apr 12 2021 Dalton A. Bohning <daltonx.bohning@intel.com> - 1.3.0-10
 - Add attr to the test dependencies
 
-* Tue Apr 02 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-8
+* Tue Apr 06 2021 Kris Jacque <kristin.jacque@intel.com> 1.3.0-9
+- Add package for daos_firmware helper binary
+
+* Fri Apr 02 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-8
 - Remove unused readline-devel
 
 * Thu Apr 01 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-7
