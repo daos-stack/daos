@@ -132,15 +132,14 @@ mdtest_stress:
     api: 
         - 'DFS'
     iteration: 1
-    num_of_dir_files: 12000
+    num_of_files_dirs: 2000
     branching_factor: 1
     flags:
         - ""
         - "-u"
     write_bytes:
         - 4096
-    read_bytes: 
-        - 0
+    read_bytes:
         - 4096
     depth: 
         - 0

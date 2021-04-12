@@ -100,7 +100,6 @@ ior_stress:
         - 8
     # used for performance benchmarks
     taskspernode:
-        - 1
         - 16
         - 32
     api:
@@ -158,25 +157,24 @@ mdtest_stress:
     nodesperjob:
         - 8
     taskspernode:
-        - 32
+        - 16
     test_dir: "/"
     api: 
         - 'DFS'
         - 'POSIX'
     iteration: 1
-    num_of_dir_files: 12000
+    num_of_files_dirs: 2000
     branching_factor: 1
     flags:
         - ""
         - "-u"
     write_bytes:
         - 4096
-    read_bytes: 
-        - 0
+    read_bytes:
         - 4096
     depth: 
         - 0
-        - 20
+        - 100
     oclass:
         - 'SX'
     dfs_destroy: False

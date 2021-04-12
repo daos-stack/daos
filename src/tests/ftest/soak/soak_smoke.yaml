@@ -169,7 +169,7 @@ mdtest_smoke:
         - 'DFS'
         - 'POSIX'
     iteration: 1
-    num_of_dir_files: 12000
+    num_of_files_dirs: 100
     branching_factor: 1
     flags:
         - ""

@@ -731,6 +731,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     depth_list = self.params.get("depth", mdtest_params + "*")
     flag_list = self.params.get("flags", mdtest_params + "*")
     oclass_list = self.params.get("oclass", mdtest_params + "*")
+    num_of_files_dirs = self.params.get("num_of_files_dirs", mdtest_params + "*")
     # update IOR cmdline for each additional IOR obj
     for api in api_list:
         for write_bytes in write_bytes_list:
@@ -748,6 +749,9 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             mdtest_cmd.write_bytes.update(write_bytes)
                             mdtest_cmd.read_bytes.update(read_bytes)
                             mdtest_cmd.depth.update(depth)
+                            mdtest_cmd.flags.update(flag)
+                            mdtest_cmd.num_of_files_dirs.update(
+                                num_of_files_dirs)
                             add_containers(self, pool, oclass)
                             mdtest_cmd.set_daos_params(
                                 self.server_group, pool,

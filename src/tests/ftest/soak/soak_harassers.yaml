@@ -175,7 +175,7 @@ mdtest_harasser:
         - 'DFS'
         - 'POSIX'
     iteration: 1
-    num_of_dir_files: 12000
+    num_of_files_dirs: 1000
     branching_factor: 1
     flags:
         - ""
@@ -183,13 +183,11 @@ mdtest_harasser:
     write_bytes:
         - 4096
     read_bytes: 
-        - 0
         - 4096
     depth: 
         - 0
         - 5
     oclass:
-        - 'SX'
         - 'RP_2G1'
     dfs_destroy: False
 dfuse:
