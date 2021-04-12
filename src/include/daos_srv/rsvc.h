@@ -153,6 +153,7 @@ int ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 			  struct ds_rsvc **svcp, struct rsvc_hint *hint);
 void ds_rsvc_get(struct ds_rsvc *svc);
 void ds_rsvc_put(struct ds_rsvc *svc);
+void ds_rsvc_get_leader(struct ds_rsvc *svc);
 void ds_rsvc_put_leader(struct ds_rsvc *svc);
 void ds_rsvc_set_hint(struct ds_rsvc *svc, struct rsvc_hint *hint);
 

@@ -361,9 +361,17 @@ ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 	return 0;
 }
 
+/** Get a reference to the leader fields of \a svc. */
+void
+ds_rsvc_get_leader(struct ds_rsvc *svc)
+{
+	ds_rsvc_get(svc);
+	get_leader(svc);
+}
+
 /**
- * As a convenience for general replicated service RPC handlers, this function
- * puts svc returned by ds_rsvc_lookup_leader.
+ * Put the reference returned by ds_rsvc_lookup_leader or ds_rsvc_get_leader to
+ * the leader fields of \a svc.
  */
 void
 ds_rsvc_put_leader(struct ds_rsvc *svc)

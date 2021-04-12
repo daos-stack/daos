@@ -59,10 +59,10 @@ ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to prep shutdown %u\n", req->rank);
 
 #ifndef DRPC_TEST
-	ds_pool_disable_evict();
+	ds_pool_disable_exclude();
 #endif
 
-	/* TODO: disable auto evict and pool rebuild here */
+	/* TODO: disable auto exclude and pool rebuild here */
 	D_INFO("Service rank %d is being prepared for controlled shutdown\n",
 		req->rank);
 
