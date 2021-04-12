@@ -14,8 +14,6 @@ server_config:
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
     scm_mount: /mnt/daos0
-    interface:
-      fabric_iface: ib0
 ior:
   client_processes:
     np: 1
