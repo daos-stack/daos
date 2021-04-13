@@ -334,7 +334,10 @@ class CartTest(TestWithoutServers):
             tst_cmd += " -x D_LOG_FILE_APPEND_PID=1"
 
         tst_mod = os.getenv("CART_TEST_MODE", "native")
-        os.environ["CART_TEST_MODE"] = "memcheck"
+
+        # FIXME: Eventually this flag and others will be set in CI/Jenkins
+        # pipeline stage
+        tst_mod = "memcheck"
 
         if tst_mod == "memcheck":
             tst_cmd += tst_vgd
