@@ -496,10 +496,10 @@ class CartIvOneNodeTest(CartTest):
         # Note: due to CART-408 issue, rank 0 needs to shutdown last
         # Request each server shut down gracefully
         for rank in reversed(list(range(1, int(srv_ppn) * num_servers))):
-            clicmd += " -o shutdown -r " + str(rank)
+            clicmdt = clicmd + " -o shutdown -r " + str(rank)
             self.print("\nClient cmd : {}\n".format(clicmd))
             try:
-                subprocess.call(shlex.split(clicmd))
+                subprocess.call(shlex.split(clicmdt))
             # pylint: disable=broad-except
             except Exception as e:
                 failed = True

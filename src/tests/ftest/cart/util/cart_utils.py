@@ -16,6 +16,7 @@ import re
 
 from apricot import TestWithoutServers
 from general_utils import stop_processes
+from distutils.spawn import find_executable
 from write_host_file import write_host_file
 
 
@@ -180,6 +181,7 @@ class CartTest(TestWithoutServers):
         ofi_interface = None
         ofi_domain = None
         ofi_share_addr = None
+        server_continuous = None
 
         if "D_LOG_MASK" in os.environ:
             log_mask = os.environ.get("D_LOG_MASK")
@@ -195,6 +197,9 @@ class CartTest(TestWithoutServers):
 
         if "CRT_CTX_SHARE_ADDR" in os.environ:
             ofi_share_addr = os.environ.get("CRT_CTX_SHARE_ADDR")
+
+        if "CRT_TEST_CONT" in os.environ:
+            server_continuous = os.environ.get(""CRT_TEST_CONT"")
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
@@ -280,7 +285,7 @@ class CartTest(TestWithoutServers):
                   r"valgrind.%q\{PMIX_ID\}.memcheck " + \
                   "--fair-sched=try  --partial-loads-ok=yes " + \
                   "--leak-check=yes --gen-suppressions=all " + \
-                  "--suppressions=../etc/memcheck-cart.supp " + \
+                  "--suppressions=../../../../etc/memcheck-cart.supp " + \
                   "--show-reachable=yes "
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
@@ -333,8 +338,10 @@ class CartTest(TestWithoutServers):
             tst_cmd += " -x D_LOG_FILE_APPEND_PID=1"
 
         tst_mod = os.getenv("CART_TEST_MODE", "native")
-        if tst_mod == "memcheck":
-            tst_cmd += tst_vgd
+        #os.environ["CART_TEST_MODE"] = "memcheck"
+
+        #if tst_mod == "memcheck":
+            #tst_cmd += tst_vgd
 
         if tst_bin is not None:
             tst_cmd += " " + tst_bin
