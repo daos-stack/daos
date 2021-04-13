@@ -2331,7 +2331,7 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 
 	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont);
 	if (rc == -DER_SHUTDOWN) {
-		D_DEBUG(DB_REBUILD, DF_UUID "container is being destoryed\n",
+		D_DEBUG(DB_REBUILD, DF_UUID "container is being destroyed\n",
 			DP_UUID(cont_uuid));
 		return 0;
 	}
