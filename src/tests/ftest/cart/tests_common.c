@@ -24,6 +24,11 @@ struct wfr_status {
 };
 
 /* Functions */
+struct test_options *tc_get_opts()
+{
+	return &opts;
+}
+
 void
 tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	     bool assert_on_error)

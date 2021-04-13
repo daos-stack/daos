@@ -15,15 +15,17 @@
 
 #define DBG_PRINT(x...)							\
 	do {								\
+		struct test_options *opts;				\
+		opts = tc_get_opts();					\
 		D_INFO(x);						\
-		if (opts.is_server)					\
+		if (opts->is_server)					\
 			fprintf(stderr, "SRV [rank=%d pid=%d]\t",       \
-			opts.self_rank,					\
-			opts.mypid);					\
+			opts->self_rank,				\
+			opts->mypid);					\
 		else							\
 			fprintf(stderr, "CLI [rank=%d pid=%d]\t",       \
-			opts.self_rank,					\
-			opts.mypid);					\
+			opts->self_rank,				\
+			opts->mypid);					\
 		fprintf(stderr, x);					\
 	} while (0)
 
@@ -38,7 +40,7 @@ struct test_options {
 	int		delay_shutdown_sec;
 };
 
-extern struct test_options opts;
+struct test_options *tc_get_opts();
 
 void
 tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
@@ -79,10 +81,12 @@ tc_sem_timedwait(sem_t *sem, int sec, int line_number)
 {
 	struct timespec	deadline;
 	int		rc;
+	struct test_options *opts
 
+	opts = tc_get_opts();
 	rc = clock_gettime(CLOCK_REALTIME, &deadline);
 	if (rc != 0) {
-		if (opts.assert_on_error)
+		if (opts->assert_on_error)
 			D_ASSERTF(rc == 0, "clock_gettime() failed at "
 				  "line %d rc: %d\n", line_number, rc);
 		D_ERROR("clock_gettime() failed, rc = %d\n", rc);
@@ -92,7 +96,7 @@ tc_sem_timedwait(sem_t *sem, int sec, int line_number)
 	deadline.tv_sec += sec;
 	rc = sem_timedwait(sem, &deadline);
 	if (rc != 0) {
-		if (opts.assert_on_error)
+		if (opts->assert_on_error)
 			D_ASSERTF(rc == 0, "sem_timedwait() failed at "
 				  "line %d rc: %d\n", line_number, rc);
 		D_ERROR("sem_timedwait() failed, rc = %d\n", rc);

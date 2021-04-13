@@ -64,15 +64,12 @@ FAULT_STATUS_TEST = 'fault_status.c'
 ##############################
 # Create cart test library
 ##############################
-def build_internal_library():
-    """Build test internal lirary"""
+def build_testcommon_library():
+    """Build test internal library"""
 
     Import('env', 'prereqs', 'cart_lib', 'gurt_lib',  'CART_VERSION')
     denv = env.Clone()
     prereqs.require(denv, 'mercury', headers_only=True)
-    #denv.AppendUnique(CPPPATH=['#/src/cart'])
-    #denv.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('.').path])
-
     cart_test_lib  = daos_build.library(denv, 'cart_test', TEST_LIB_SRC)
     denv.Install('$PREFIX/lib64/', cart_test_lib)
     Default(cart_test_lib)
@@ -86,7 +83,7 @@ def scons():
     ##############################
     # Build library for linkage
     ##############################
-    build_internal_library()
+    build_testcommon_library()
 
     ##############################
     # Create test programs

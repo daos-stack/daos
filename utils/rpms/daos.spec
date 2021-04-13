@@ -413,6 +413,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Tue Apr 13 2021 Steven Bollinger <stevenx.bollinger@intel.com> 1.3.0-9
+- Add cart_test library to release
+
 * Tue Apr 02 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-8
 - Remove unused readline-devel
 
