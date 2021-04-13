@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
+from command_utils_base import CommandFailure
 
 
 class ContainerAutotestTest(TestWithServers):
@@ -14,21 +15,18 @@ class ContainerAutotestTest(TestWithServers):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize object."""
-        super().__init__(*args, **kwargs)
-
     def test_container_autotest(self):
         """Test container autotest.
 
         :avocado: tags=all,full_regression,daily,hw,small,quick,autotest
         """
-        self.pool = None
-        self.container = None
-        self.daos_cmd = None
         # Create a pool
         self.log.info("Create a pool")
         self.add_pool()
         self.daos_cmd = self.get_daos_command()
         self.log.info("Autotest start")
-        self.daos_cmd.pool_autotest(pool=self.pool.uuid)
+        try:
+            self.daos_cmd.pool_autotest(pool=self.pool.uuid)
+            self.log.info("daos pool autotest passed.")
+        except CommandFailure as e:
+            self.fail("daos pool autotest failed!")
