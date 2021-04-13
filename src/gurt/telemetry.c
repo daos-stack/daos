@@ -1078,8 +1078,8 @@ d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 /**
  * Set the given counter to the specified \a value
  *
- * \param[in,out]	metric	Pointer to the metric
- * \param[in]		value	Increments the counter by this \a value
+ * \param[in]	metric	Pointer to the metric
+ * \param[in]	value	Sets the counter to this \a value
  */
 void
 d_tm_set_counter(struct d_tm_node_t *metric, uint64_t value)
@@ -1093,14 +1093,20 @@ d_tm_set_counter(struct d_tm_node_t *metric, uint64_t value)
 		return;
 	}
 
+	if (unlikely(metric->dtn_protect))
+		D_MUTEX_LOCK(&metric->dtn_lock);
+
 	metric->dtn_metric->dtm_data.value = value;
+
+	if (unlikely(metric->dtn_protect))
+		D_MUTEX_UNLOCK(&metric->dtn_lock);
 }
 
 /**
  * Increment the given counter by the specified \a value
  *
- * \param[in,out]	metric	Pointer to the metric
- * \param[in]		value	Increments the counter by this \a value
+ * \param[in]	metric	Pointer to the metric
+ * \param[in]	value	Increments the counter by this \a value
  */
 void
 d_tm_inc_counter(struct d_tm_node_t *metric, uint64_t value)
@@ -1115,7 +1121,13 @@ d_tm_inc_counter(struct d_tm_node_t *metric, uint64_t value)
 		return;
 	}
 
+	if (unlikely(metric->dtn_protect))
+		D_MUTEX_LOCK(&metric->dtn_lock);
+
 	metric->dtn_metric->dtm_data.value += value;
+
+	if (unlikely(metric->dtn_protect))
+		D_MUTEX_UNLOCK(&metric->dtn_lock);
 }
 
 /**
