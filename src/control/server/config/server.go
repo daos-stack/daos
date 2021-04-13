@@ -564,7 +564,7 @@ func (cfg *Server) validateEngineFabric(ctx context.Context, cfgEngine *engine.C
 	numaNode, err := cfgEngine.Fabric.GetNumaNode()
 	if err != nil {
 		// as pinned_numa_node is an optional config file parameter,
-		// emor is considered non-fatal
+		// error is considered non-fatal
 		if err == engine.ErrNoPinnedNumaNode {
 			return nil
 		}
