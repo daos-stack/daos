@@ -2020,7 +2020,7 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
-			DP_UUID(arg->pool_uuid));
+		       DP_UUID(arg->pool_uuid));
 		D_GOTO(put, rc = 0);
 	}
 	d_list_for_each_entry_safe(mrone, tmp, &unpack_arg->merge_list,
