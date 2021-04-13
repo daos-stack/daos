@@ -277,3 +277,5 @@ class CartIvTwoNodeTest(CartTest):
 
         if failed:
             self.fail("Test failed.\n")
+
+        self.log_check_valgrind_memcheck()

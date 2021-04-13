@@ -36,3 +36,5 @@ class CartCtlOneNodeTest(CartTest):
         for index in range(6):
             clicmd = self.build_cmd(self.env, "test_clients", index=index)
             self.launch_test(clicmd, srv_rtn)
+
+        self.log_check_valgrind_memcheck()

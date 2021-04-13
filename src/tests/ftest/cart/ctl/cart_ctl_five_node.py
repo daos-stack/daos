@@ -38,3 +38,5 @@ class CartCtlFiveNodeTest(CartTest):
             self.launch_test(clicmd, srv_rtn)
 
         self.stop_process(srv_rtn)
+
+        self.log_check_valgrind_memcheck()

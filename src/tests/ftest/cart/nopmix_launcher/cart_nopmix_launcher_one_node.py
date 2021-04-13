@@ -39,3 +39,5 @@ class CartNoPmixLauncherOneNodeTest(CartTest):
         cmd += " {}".format(cli_arg)
 
         self.launch_test(cmd)
+
+        self.log_check_valgrind_memcheck()

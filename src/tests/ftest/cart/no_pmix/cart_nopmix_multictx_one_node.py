@@ -40,3 +40,5 @@ class CartNoPmixOneNodeTest(CartTest):
             self.fail("Test failed.\n")
 
         self.print("Finished waiting for {}".format(p))
+
+        self.log_check_valgrind_memcheck()

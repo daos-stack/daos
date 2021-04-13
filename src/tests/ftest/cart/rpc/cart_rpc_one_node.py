@@ -24,3 +24,4 @@ class CartRpcOneNodeTest(CartTest):
 
         self.launch_srv_cli_test(srvcmd, clicmd)
         self.log_check()
+        self.log_check_valgrind_memcheck()

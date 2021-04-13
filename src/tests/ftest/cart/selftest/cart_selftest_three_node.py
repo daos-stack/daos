@@ -41,3 +41,5 @@ class CartSelfThreeNodeTest(CartTest):
         # from this test.
         if not self.wait_process(srv_rtn, 5):
             self.stop_process(srv_rtn)
+
+        self.log_check_valgrind_memcheck()

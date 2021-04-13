@@ -82,7 +82,7 @@ class CartTest(TestWithoutServers):
 
     def tearDown(self):
         """Tear down the test case."""
-        self.log_check_valgrind_memcheck(self)
+        #self.log_check_valgrind_memcheck(self)
         self.report_timeout()
         self._teardown_errors.extend(self.cleanup_processes())
         super().tearDown()
@@ -347,7 +347,6 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
-    @staticmethod
     def log_check_valgrind_memcheck(self):
         """Check valgrind memcheck log files for errors."""
 
