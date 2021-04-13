@@ -553,12 +553,6 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 }
 
 // validateEngineFabric ensures engine configuration parameters are valid.
-//
-// In addition to validating the fabric provider, check to see if the pinned
-// NUMA node was provided in the configuration. If it was provided, validate
-// that the NUMA node is correct for the given device. An error from
-// cfgEngine.Fabric.GetNumaNode() means that no configuration was provided in
-// the YML. Because this is an optional parameter, this is considered non-fatal.
 func (cfg *Server) validateEngineFabric(ctx context.Context, cfgEngine *engine.Config) error {
 	if err := cfg.validateProviderFn(ctx, cfgEngine.Fabric.Interface, cfgEngine.Fabric.Provider); err != nil {
 		return errors.Wrapf(err, "Network device %s does not support provider %s. "+
@@ -566,12 +560,20 @@ func (cfg *Server) validateEngineFabric(ctx context.Context, cfgEngine *engine.C
 			cfgEngine.Fabric.Provider)
 	}
 
-	if numaNode, err := cfgEngine.Fabric.GetNumaNode(); err == nil {
-		if err := cfg.validateNUMAFn(ctx, cfgEngine.Fabric.Interface, numaNode); err != nil {
-			return errors.Wrapf(err, "Network device %s on NUMA node %d is an "+
-				"invalid configuration.", cfgEngine.Fabric.Interface,
-				numaNode)
+	// check to see if pinned numa node was provided in the engine config
+	numaNode, err := cfgEngine.Fabric.GetNumaNode()
+	if err != nil {
+		// as pinned_numa_node is an optional config file parameter,
+		// emor is considered non-fatal
+		if err == engine.ErrNoPinnedNumaNode {
+			return nil
 		}
+		return err
+	}
+	// validate that numa node is correct for the given device
+	if err := cfg.validateNUMAFn(ctx, cfgEngine.Fabric.Interface, numaNode); err != nil {
+		return errors.Wrapf(err, "Network device %s on NUMA node %d is an "+
+			"invalid configuration.", cfgEngine.Fabric.Interface, numaNode)
 	}
 
 	return nil
@@ -586,17 +588,16 @@ func (cfg *Server) CheckFabric(ctx context.Context) (uint32, error) {
 		if err != nil {
 			return 0, err
 		}
-
 		if index == 0 {
 			netDevClass = ndc
 			if err := cfg.validateEngineFabric(ctx, engine); err != nil {
 				return 0, err
 			}
-		} else {
-			if ndc != netDevClass {
-				return 0, FaultConfigInvalidNetDevClass(index,
-					netDevClass, ndc, engine.Fabric.Interface)
-			}
+			continue
+		}
+		if ndc != netDevClass {
+			return 0, FaultConfigInvalidNetDevClass(index, netDevClass,
+				ndc, engine.Fabric.Interface)
 		}
 	}
 

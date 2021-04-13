@@ -100,7 +100,7 @@ func track(msg string) (string, time.Time) {
 	return msg, time.Now()
 }
 
-func (srv *server) duration(msg string, start time.Time) {
+func (srv *server) logDuration(msg string, start time.Time) {
 	srv.log.Debugf("%v: %v\n", msg, time.Since(start))
 }
 
@@ -155,9 +155,9 @@ func (srv *server) shutdown() {
 // initNetwork resolves local address and starts TCP listener then calls
 // netInit to process network configuration.
 func (srv *server) initNetwork(ctx context.Context) error {
-	defer srv.duration(track("time to init network"))
+	defer srv.logDuration(track("time to init network"))
 
-	ctlAddr, listener, err := connectServer(srv.cfg.ControlPort, net.ResolveTCPAddr, net.Listen)
+	ctlAddr, listener, err := createListener(srv.cfg.ControlPort, net.ResolveTCPAddr, net.Listen)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func (srv *server) initNetwork(ctx context.Context) error {
 }
 
 func (srv *server) initStorage() error {
-	defer srv.duration(track("time to init storage"))
+	defer srv.logDuration(track("time to init storage"))
 
 	runningUser, err := user.Current()
 	if err != nil {
@@ -296,7 +296,7 @@ func (srv *server) registerEvents() {
 }
 
 func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error {
-	defer srv.duration(track("time server was listening"))
+	defer srv.logDuration(track("time server was listening"))
 
 	go func() {
 		_ = srv.grpcServer.Serve(srv.listener)

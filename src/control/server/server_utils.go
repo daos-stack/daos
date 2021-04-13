@@ -94,7 +94,7 @@ func iommuDetected() bool {
 	return len(dmars) > 0
 }
 
-func connectServer(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*net.TCPAddr, net.Listener, error) {
+func createListener(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*net.TCPAddr, net.Listener, error) {
 	ctlAddr, err := resolver("tcp", fmt.Sprintf("0.0.0.0:%d", ctlPort))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "unable to resolve daos_server control address")
@@ -110,12 +110,11 @@ func connectServer(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*n
 }
 
 // updateFabricEnvars adjusts the engine fabric configuration.
-//
-// In the case of ofi+verbs provider, mercury uses the interface name such as
-// ib0, while OFI uses the device name such as hfi1_0 CaRT and Mercury will now
-// support the new OFI_DOMAIN environment variable so that we can specify the
-// correct device for each.
 func updateFabricEnvars(ctx context.Context, cfg *engine.Config) error {
+	// In the case of ofi+verbs provider, mercury uses the interface name
+	// such as ib0, while OFI uses the device name such as hfi1_0 CaRT and
+	// Mercury will now support the new OFI_DOMAIN environment variable so
+	// that we can specify the correct device for each.
 	if strings.HasPrefix(cfg.Fabric.Provider, "ofi+verbs") && !cfg.HasEnvVar("OFI_DOMAIN") {
 		deviceAlias, err := netdetect.GetDeviceAlias(ctx, cfg.Fabric.Interface)
 		if err != nil {
