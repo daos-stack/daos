@@ -1318,7 +1318,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	if (rc) {
 		if (rc == -DER_SHUTDOWN) {
 			D_DEBUG(DB_REBUILD, DF_UUID "container is being"
-				" destoryed\n", DP_UUID(mrone->mo_cont_uuid));
+				" destroyed\n", DP_UUID(mrone->mo_cont_uuid));
 			rc = 0;
 		}
 		D_GOTO(out, rc);
