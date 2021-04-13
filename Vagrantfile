@@ -90,6 +90,19 @@ chown vagrant.vagrant /home/vagrant/.ssh/{id_rsa,config}
 chmod 600 /home/vagrant/.ssh/config
 cp /tmp/id_rsa /root/.ssh/.
 chmod 0600 /root/.ssh/id_rsa"
+
+        config.vm.provision "Configure NTP", type: "shell",
+                                             inline: "gw=$(ip -o route get 1.1.1.1 | cut -d\  -f3)
+                                                      ed <<EOF /etc/chrony.conf
+1i
+# This server was configured by Vagrant
+server $gw iburst
+.
+/^server/,/^$/c
+
+.
+wq
+EOF"
         #
         # Create the cluster
         #
