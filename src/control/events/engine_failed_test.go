@@ -15,7 +15,7 @@ import (
 )
 
 func TestEvents_ConvertRankDown(t *testing.T) {
-	event := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
+	event := NewEngineFailedEvent("foo", 1, 1, common.ExitStatus("test"))
 
 	pbEvent, err := event.ToProto()
 	if err != nil {

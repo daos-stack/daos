@@ -44,7 +44,7 @@ var defEvtCmpOpts = append(common.DefaultCmpOpts(),
 func TestEvents_HandleClusterEvent(t *testing.T) {
 	genericEvent := mockGenericEvent()
 	pbGenericEvent, _ := genericEvent.ToProto()
-	rankDownEvent := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
+	rankDownEvent := NewEngineFailedEvent("foo", 1, 1, common.ExitStatus("test"))
 	pbRankDownEvent, _ := rankDownEvent.ToProto()
 	psrEvent := NewPoolSvcReplicasUpdateEvent("foo", 1, common.MockUUID(), []uint32{0, 1}, 1)
 	pbPSREvent, _ := psrEvent.ToProto()

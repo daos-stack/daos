@@ -55,7 +55,7 @@ rebuild_notify_ras_end(uuid_t *pool, uint32_t map_ver, char *op_str, int op_rc)
 
 	if (op_rc != 0) {
 		ev_id = RAS_POOL_REBUILD_FAILED;
-		ev_sev = RAS_SEV_FATAL;
+		ev_sev = RAS_SEV_ERROR;
 		D_ASPRINTF(status, "failed: "DF_RC, DP_RC(op_rc));
 		if (status == NULL)
 			return -DER_NOMEM;

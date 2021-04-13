@@ -241,7 +241,7 @@ func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
 }
 
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
-	eventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
+	eventRankDown := events.NewEngineFailedEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
 		nilReq        bool

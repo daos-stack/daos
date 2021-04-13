@@ -1298,7 +1298,7 @@ func TestControl_SystemErase(t *testing.T) {
 }
 
 func TestControl_SystemNotify(t *testing.T) {
-	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
+	rasEventRankDown := events.NewEngineFailedEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
 		req     *SystemNotifyReq
@@ -1367,8 +1367,8 @@ func TestControl_SystemNotify(t *testing.T) {
 }
 
 func TestControl_EventForwarder_OnEvent(t *testing.T) {
-	rasEventRankDownFwdable := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
-	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
+	rasEventRankDownFwdable := events.NewEngineFailedEvent("foo", 0, 0, common.NormalExit)
+	rasEventRankDown := events.NewEngineFailedEvent("foo", 0, 0, common.NormalExit).
 		WithForwardable(false)
 
 	for name, tc := range map[string]struct {
@@ -1434,8 +1434,8 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 		return nil, errors.Errorf("failed to create new syslogger (prio %d)", prio)
 	}
 
-	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
-	rasEventRankDownFwded := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
+	rasEventRankDown := events.NewEngineFailedEvent("foo", 0, 0, common.NormalExit)
+	rasEventRankDownFwded := events.NewEngineFailedEvent("foo", 0, 0, common.NormalExit).
 		WithForwarded(true)
 
 	for name, tc := range map[string]struct {
