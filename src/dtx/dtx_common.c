@@ -307,14 +307,15 @@ dtx_shares_fini(struct dtx_handle *dth)
 int
 dtx_handle_reinit(struct dtx_handle *dth)
 {
+	D_ASSERT(dth->dth_ent == NULL);
+	D_ASSERT(dth->dth_pinned == 0);
+
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
 	dth->dth_local_retry = 0;
 	dth->dth_cos_done = 0;
-
-	dth->dth_ent = NULL;
 
 	dth->dth_op_seq = 0;
 	dth->dth_oid_cnt = 0;
@@ -355,6 +356,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_refs = 1;
 	dth->dth_mbs = mbs;
 
+	dth->dth_pinned = 0;
 	dth->dth_cos_done = 0;
 	dth->dth_resent = resent ? 1 : 0;
 	dth->dth_solo = solo ? 1 : 0;
@@ -610,24 +612,6 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_FORCE_REFRESH) ? true : false,
 			     (flags & DTX_RESEND) ? true : false, dth);
 
-	/* XXX: For non-solo DTX, the leader and non-leader will make each own
-	 *	local modification in parallel. If the non-leader goes so fast
-	 *	as to when non-leader has already moved to handle next requet,
-	 *	the leader may has not really started current modification yet,
-	 *	such as being blocked at bulk transfer phase. Under such case,
-	 *	it is possible that when the non-leader handles next request,
-	 *	it hits the DTX that is just prepared locally, then non-leader
-	 *	will check such DTX status with leader. But at that time, the
-	 *	DTX entry on the leader does not exist, that will misguide the
-	 *	non-leader as missed to abort such DTX. To avoid such bad case,
-	 *	the leader need to build its DTX entry in DRAM before dispatch
-	 *	current request to non-leader.
-	 */
-
-	if (rc == 0 && dtx_is_valid_handle(dth) && !dth->dth_solo &&
-	    sub_modification_cnt > 0 && !dth->dth_resent)
-		rc = vos_dtx_pin(dth, false);
-
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, leader "
 		DF_UOID", dti_cos_cnt %d, flags %x: "DF_RC"\n",
 		DP_DTI(dti), sub_modification_cnt, dth->dth_ver,
@@ -646,7 +630,8 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
 
 	if (dlh->dlh_future != ABT_FUTURE_NULL) {
 		rc = ABT_future_wait(dlh->dlh_future);
-		D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
+		D_ASSERTF(rc == ABT_SUCCESS,
+			  "ABT_future_wait failed %d.\n", rc);
 
 		ABT_future_free(&dlh->dlh_future);
 	}
@@ -675,7 +660,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	struct dtx_memberships		*mbs;
 	size_t				 size;
 	uint32_t			 flags;
+	int				 status = -1;
 	int				 rc = 0;
+	bool				 aborted = false;
 
 	D_ASSERT(cont != NULL);
 
@@ -691,10 +678,30 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
 
+	if (dth->dth_pinned || dth->dth_resent) {
+		status = vos_dtx_validation(dth);
+		if (status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE)
+			D_GOTO(out, result = 0);
+	}
+
 	if (result < 0 || rc < 0 || dth->dth_solo)
 		D_GOTO(abort, result = result < 0 ? result : rc);
 
-	if (!dth->dth_active || dth->dth_resent) {
+	switch (status) {
+	case -1:
+	case DTX_ST_PREPARED:
+		break;
+	case DTX_ST_INITED:
+		if (dth->dth_modification_cnt == 0)
+			break;
+		/* full through */
+	case DTX_ST_ABORTED:
+		D_GOTO(abort, result = -DER_INPROGRESS);
+	default:
+		D_ASSERT(0);
+	}
+
+	if ((!dth->dth_active && dth->dth_dist) || dth->dth_resent) {
 		/* We do not know whether some other participants have
 		 * some active entry for this DTX, consider distributed
 		 * transaction case, the other participants may execute
@@ -824,13 +831,20 @@ abort:
 	 * will trigger retry globally without aborting 'prepared' ones.
 	 */
 	if (result < 0 && result != -DER_AGAIN && !dth->dth_solo) {
+		/* Drop partial modification for distributed transaction. */
+		vos_dtx_cleanup(dth);
 		dte = &dth->dth_dte;
 		dtx_abort(cont, dth->dth_epoch, &dte, 1);
+		aborted = true;
 	}
 
-	vos_dtx_rsrvd_fini(dth);
 out:
-	if (!daos_is_zero_dti(&dth->dth_xid))
+	if (!daos_is_zero_dti(&dth->dth_xid)) {
+		if (result < 0 && !aborted)
+			vos_dtx_cleanup(dth);
+
+		vos_dtx_rsrvd_fini(dth);
+
 		D_DEBUG(DB_IO,
 			"Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, "
 			"%s participator(s), cos %d/%d: rc "DF_RC"\n",
@@ -841,6 +855,7 @@ out:
 			dth->dth_dti_cos_count,
 			dth->dth_cos_done ? dth->dth_dti_cos_count : 0,
 			DP_RC(result));
+	}
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
@@ -934,6 +949,11 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 			else
 				dth->dth_cos_done = 1;
 		}
+
+		/* 1. Drop partial modification for distributed transaction.
+		 * 2. Remove the pinned DTX entry.
+		 */
+		vos_dtx_cleanup(dth);
 	}
 
 	D_DEBUG(DB_IO,
@@ -1063,7 +1083,6 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-again:
 	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, true);
 	switch (rc) {
 	case DTX_ST_PREPARED:
@@ -1083,12 +1102,6 @@ again:
 			rc = -DER_EP_OLD;
 		}
 		return rc;
-	case -DER_AGAIN:
-		/* Re-index committed DTX table is not completed yet,
-		 * let's wait and retry.
-		 */
-		ABT_thread_yield();
-		goto again;
 	default:
 		return rc >= 0 ? -DER_INVAL : rc;
 	}
