@@ -77,7 +77,6 @@ nvme_fault_reaction(void **state, int mode)
 	/**
 	* If test need multiple pool with both mode offline and online
 	* create the another pool which will be offline by default.
-	* create the another pool which will be offline by default.
 	*/
 	if (mode == 2) {
 		char	*env;
