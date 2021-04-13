@@ -37,4 +37,4 @@ class CartCtlFiveNodeTest(CartTest):
             clicmd = self.build_cmd(self.env, "test_clients", index=index)
             self.launch_test(clicmd, srv_rtn)
 
-        self.stop_process(srv_rtn)()
+        self.stop_process(srv_rtn)

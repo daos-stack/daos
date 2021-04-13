@@ -276,4 +276,4 @@ class CartIvTwoNodeTest(CartTest):
             self.stop_process(srv_rtn)
 
         if failed:
-            self.fail("Test failed.\n")()
+            self.fail("Test failed.\n")

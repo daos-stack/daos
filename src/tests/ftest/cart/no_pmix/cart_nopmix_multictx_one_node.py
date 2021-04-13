@@ -39,4 +39,4 @@ class CartNoPmixOneNodeTest(CartTest):
             self.print("returning {}".format(rc))
             self.fail("Test failed.\n")
 
-        self.print("Finished waiting for {}".format(p))()
+        self.print("Finished waiting for {}".format(p))

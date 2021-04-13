@@ -20,4 +20,4 @@ class CartCoRpcTwoNodeTest(CartTest):
         :avocado: tags=all,cart,pr,daily_regression,corpc,two_node
         """
         cmd = self.build_cmd(self.env, "test_servers")
-        self.launch_test(cmd)()
+        self.launch_test(cmd)

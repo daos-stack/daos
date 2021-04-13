@@ -38,4 +38,4 @@ class CartNoPmixLauncherOneNodeTest(CartTest):
         cmd += " {}".format(cli_bin)
         cmd += " {}".format(cli_arg)
 
-        self.launch_test(cmd)()
+        self.launch_test(cmd)

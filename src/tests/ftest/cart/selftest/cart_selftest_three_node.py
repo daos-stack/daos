@@ -40,4 +40,4 @@ class CartSelfThreeNodeTest(CartTest):
         # Give few seconds for servers to fully shut down before exiting
         # from this test.
         if not self.wait_process(srv_rtn, 5):
-            self.stop_process(srv_rtn)()
+            self.stop_process(srv_rtn)
