@@ -1593,24 +1593,24 @@ def install_debuginfos():
 
     if USE_DEBUGINFO_INSTALL:
         distro_info = detect()
-        yum_args = ["--exclude", "ompi-debuginfo", "openmpi3"]
+        dnf_args = ["--exclude", "ompi-debuginfo", "openmpi3"]
         if "suse" in distro_info.name.lower():
-            yum_args.extend(["libpmemobj1", "python3"])
+            dnf_args.extend(["libpmemobj1", "python3"])
             # There are no "debug" repos
             # Packages are found within daos-stack* repos and opensuse* repos
             cmds.append(
                 ["sudo", "dnf", "debuginfo-install", "--enablerepo='*'", "-y"] +
-                yum_args + ["daos-server", "gcc"])
+                dnf_args + ["daos-server", "gcc"])
         elif "centos" in distro_info.name.lower():
-            yum_args.extend(["libpmemobj", "python36"])
+            dnf_args.extend(["libpmemobj", "python36"])
             cmds.append(
                 ["sudo", "debuginfo-install", "--enablerepo=*-debuginfo", "-y"] +
-                yum_args + ["daos-server", "gcc"])
+                dnf_args + ["daos-server", "gcc"])
         else:
             raise RuntimeError(
                 "install_debuginfos(): Unsupported distro: {}".format(
                     distro_info))
-        cmds.append(["sudo", "dnf", "-y", "install"] + yum_args)
+        cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
 
     else:
         # We're not using the yum API to install packages
@@ -1648,7 +1648,7 @@ def install_debuginfos():
             print(run_command(cmd))
         except RuntimeError as error:
             # got an error, so abort this list of commands and re-run
-            # it with a yum clean, makecache first
+            # it with a dnf clean, makecache first
             print(error)
             retry = True
             break
