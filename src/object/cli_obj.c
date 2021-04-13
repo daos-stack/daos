@@ -4558,7 +4558,7 @@ obj_ec_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		shard = first;
 	}
 out:
-	D_DEBUG(DB_IO, "get shard %d on "DF_OID"\n", shard,
+	D_DEBUG(DB_IO, "grp_idx %d, get shard %d on "DF_OID"\n", grp_idx, shard,
 		DP_OID(obj->cob_md.omd_id));
 	return shard;
 }
@@ -4621,7 +4621,8 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 			grp_idx = obj_dkey2grpidx(obj, dkey_hash, map_ver);
 		} else {
 			D_ASSERT(args->dkey_anchor != NULL);
-			grp_idx = dc_obj_anchor2shard(args->dkey_anchor);
+			grp_idx = dc_obj_anchor2shard(args->dkey_anchor) /
+				  obj_get_replicas(obj);
 		}
 
 		if (grp_idx < 0) {
