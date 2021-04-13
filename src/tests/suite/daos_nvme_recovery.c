@@ -49,7 +49,7 @@ is_nvme_enabled(test_arg_t *arg)
 
 /* Online/Offline faulty reaction */
 static void
-nvme_fault_reaction(void **state, int mode)
+nvme_fault_reaction(void **state, bool mode)
 {
 	test_arg_t		*arg = *state;
 	daos_obj_id_t		 oid;
