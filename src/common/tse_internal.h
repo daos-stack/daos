@@ -93,6 +93,8 @@ struct tse_task_cb {
 struct tse_sched_private {
 	/* lock to protect schedule status and sub task list */
 	pthread_mutex_t dsp_lock;
+	/* lock to protect sub task's dtp_comp_cb_list */
+	pthread_mutex_t dsp_comp_lock;
 
 	/* The task will be added to init list when it is initially
 	 * added to scheduler without any delay. A task with a delay
