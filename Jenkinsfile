@@ -933,7 +933,10 @@ pipeline {
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { ! (target_branch == 'weekly-testing' ||
+                                        skipStage(stage: 'scan-centos-rpms',
+                                                  def_val: 'false') ||
+                                        quickFunctional()) }
                     }
                     agent {
                         label 'ci_vm1'
