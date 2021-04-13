@@ -92,7 +92,7 @@ func checkFaultDomainCallback(path, requiredDir string) error {
 	// Must be under the required directory
 	absDir, err := filepath.Abs(requiredDir)
 	if err != nil {
-		panic(err) // shouldn't be possible
+		return err
 	}
 	absScriptPath, err := filepath.Abs(path)
 	if err != nil {
