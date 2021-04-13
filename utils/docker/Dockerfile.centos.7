@@ -235,7 +235,7 @@ ARG DAOS_DEPS_BUILD=yes
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { dnf clean all && \
-      dnf -y --nogpgcheck upgrade \
+      dnf -y upgrade \
           --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
       dnf clean all; }
 USER daos_server:daos_server
@@ -250,7 +250,7 @@ USER root:root
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST
 RUN dnf clean all && \
-    dnf -y --nogpgcheck upgrade \
+    dnf -y upgrade \
         --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
     dnf clean all
 USER daos_server:daos_server
