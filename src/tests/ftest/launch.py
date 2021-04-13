@@ -1187,8 +1187,6 @@ def archive_valgrind_logs(avocado_logs_dir, test_files, args):
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     task = archive_files(
         destination, hosts, "{}/valgrind*".format(logs_dir), True, args)
-    task = archive_files(
-        destination, hosts, "{}/*/valgrind*".format(logs_dir), True, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
