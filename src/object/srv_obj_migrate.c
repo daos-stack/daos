@@ -2437,7 +2437,7 @@ free:
 		int ret;
 
 		ret = ds_cont_child_lookup(tls->mpt_pool_uuid, arg->cont_uuid,
-					  &cont_child);
+					   &cont_child);
 		if (ret != 0 || cont_child->sc_stopping) {
 			/**
 			 * If the current container is being destroyed, let's
