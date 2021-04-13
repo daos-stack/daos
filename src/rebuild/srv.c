@@ -1294,7 +1294,8 @@ try_reschedule:
 		 * rebuild sequence, which has to be done by failure
 		 * sequence order.
 		 */
-		rgt->rgt_status.rs_done = 0;
+		if (rgt)
+			rgt->rgt_status.rs_done = 0;
 		ret = ds_rebuild_schedule(pool, task->dst_map_ver,
 					  &task->dst_tgts,
 					  task->dst_rebuild_op, 5);
