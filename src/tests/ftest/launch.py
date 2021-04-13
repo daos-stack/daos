@@ -962,11 +962,8 @@ def run_tests(test_files, tag_filter, args):
             return_code |= archive_config_files(avocado_logs_dir, args)
             return_code |= archive_daos_logs(
                 avocado_logs_dir, test_file, args)
-            save = args.verbose
-            args.verbose = True
             return_code |= archive_daos_dumps(
                 avocado_logs_dir, test_file, args)
-            args.verbose = save
             return_code |= archive_cart_logs(
                 avocado_logs_dir, test_file, args)
 
@@ -1070,7 +1067,7 @@ def clean_logs(test_yaml, args):
     host_list = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
     # also remove any ABT infos/stacks dumps
-    command += " /tmp/daos_dump*.txt"
+    command += " /tmp/daos_dump*.txt*"
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -1153,7 +1150,7 @@ def archive_daos_dumps(avocado_logs_dir, test_files, args):
     print("Archiving host dumps from {} in {}".format(hosts, destination))
 
     # Copy any dump files
-    task = archive_files(destination, hosts, "/tmp/daos_dump*.txt", False, args)
+    task = archive_files(destination, hosts, "/tmp/daos_dump*.txt*", False, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
