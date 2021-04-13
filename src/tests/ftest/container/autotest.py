@@ -17,15 +17,15 @@ class ContainerAutotestTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize object."""
         super().__init__(*args, **kwargs)
-        self.pool = None
-        self.container = None
-        self.daos_cmd = None
 
     def test_container_autotest(self):
         """Test container autotest.
 
         :avocado: tags=all,full_regression,daily,hw,small,quick,autotest
         """
+        self.pool = None
+        self.container = None
+        self.daos_cmd = None
         # Create a pool
         self.log.info("Create a pool")
         self.add_pool()
