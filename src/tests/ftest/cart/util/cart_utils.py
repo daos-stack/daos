@@ -276,10 +276,16 @@ class CartTest(TestWithoutServers):
 
         index = kwargs.get('index', None)
 
+        # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
+        # (It can't be '.' or cwd(), it must be some place writable.)
+        self.daos_test_shared_dir = os.environ['HOME']
+        if 'DAOS_TEST_SHARED_DIR' in os.environ:
+            self.daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
+
         tst_vgd = " valgrind --xml=yes " + \
-                  "--xml-file={}/".format(self.log_path) + \
+                  "--xml-file={}/".format(self.daos_test_shared_dir) + \
                   r"valgrind.%q\{PMIX_ID\}.memcheck " + \
-                  "--fair-sched=try  --partial-loads-ok=yes " + \
+                  "--fair-sched=try --partial-loads-ok=yes " + \
                   "--leak-check=yes --gen-suppressions=all " + \
                   "--suppressions=/etc/daos/memcheck-cart.supp " + \
                   "--show-reachable=yes "
@@ -303,16 +309,14 @@ class CartTest(TestWithoutServers):
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
         logparse = self.params.get("logparse", "/run/tests/*/")
 
-        # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
-        # (It can't be '.' or cwd(), it must be some place writable.)
-        daos_test_shared_dir = os.environ['HOME']
-        if 'DAOS_TEST_SHARED_DIR' in os.environ:
-            daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
-
         if tst_slt is not None:
-            hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_slt)
+            hostfile = write_host_file(tst_host,
+                                       self.daos_test_shared_dir,
+                                       tst_slt)
         else:
-            hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_ppn)
+            hostfile = write_host_file(tst_host,
+                                       self.daos_test_shared_dir,
+                                       tst_ppn)
 
         mca_flags = "--mca btl self,tcp "
 
@@ -350,6 +354,7 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
+    @staticmethod
     def log_check_valgrind_memcheck(self):
         """Check valgrind memcheck log files for errors."""
 
@@ -362,14 +367,14 @@ class CartTest(TestWithoutServers):
         #     return
 
         strict_test = False
-        self.log.info("Parsing log path %s", self.log_path)
-        if not os.path.exists(self.log_path):
+        self.log.info("Parsing log path %s", self.daos_test_shared_dir)
+        if not os.path.exists(self.daos_test_shared_dir):
             self.log.info("Path does not exist")
             return
 
         xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
         memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
-                                os.listdir(self.log_path)))
+                                os.listdir(self.daos_test_shared_dir)))
 
         ################################################################################
         # START: DEBUG TRACE
@@ -377,12 +382,12 @@ class CartTest(TestWithoutServers):
         daos_test_shared_dir = os.environ['HOME']
         if 'DAOS_TEST_SHARED_DIR' in os.environ:
             daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
-        print('DEBUG log: line 370, self.log_path = ', self.log_path)
+        print('DEBUG log: line 370, self.daos_test_shared_dir = ', self.daos_test_shared_dir)
         print('DEBUG log: line 370, memcheck_files  = ', memcheck_files )
-        print('DEBUG log: line 373, subprocess.check_output(["find", "/var/tmp"]) = ', subprocess.check_output(["find", "/var/tmp"], shell=True))
-        print('DEBUG log: line 375, subprocess.check_output(["find", "."]) = ', subprocess.check_output(["find", "."], shell=True))
-        print('DEBUG log: line 374, subprocess.check_output(["find", daos_test_shared_dir]) = ', subprocess.check_output(["find", daos_test_shared_dir], shell=True))
-        print('DEBUG log: line 374, subprocess.check_output(["find", os.environ["HOME"]]) = ', subprocess.check_output(["find", os.environ["HOME"]], shell=True))
+        print('DEBUG log: line 373 , subprocess.check_output("find /var/tmp")               = ' , subprocess.check_output("find /var/tmp; exit 0;"               , shell=True))
+        print('DEBUG log: line 375 , subprocess.check_output("find .")                      = ' , subprocess.check_output("find .; exit 0;"                      , shell=True))
+        print('DEBUG log: line 374 , subprocess.check_output("find" + daos_test_shared_dir) = ' , subprocess.check_output("find; exit 0;" + daos_test_shared_dir , shell=True))
+        print('DEBUG log: line 374 , subprocess.check_output("find" + os.environ["HOME"])   = ' , subprocess.check_output("find; exit 0;" + os.environ["HOME"]   , shell=True))
         # END: DEBUG TRACE
         ################################################################################
 
@@ -390,7 +395,7 @@ class CartTest(TestWithoutServers):
 
             print('DEBUG log: line 374, filename  = ', filename )
 
-            log_file = os.path.join(self.log_path, filename)
+            log_file = os.path.join(self.daos_test_shared_dir, filename)
 
             file1 = open(log_file, 'r')
             lines = file1.readlines()
@@ -402,7 +407,7 @@ class CartTest(TestWithoutServers):
             try:
                 saved_cwd = os.getcwd()
                 print('DEBUG log: line 388, saved_cwd  = ', saved_cwd )
-                os.chdir(self.log_path)
+                os.chdir(self.daos_test_shared_dir)
                 os.rename(filename, filename + "-checked")
                 os.chdir(saved_cwd)
             except Exception as e:
@@ -436,7 +441,7 @@ class CartTest(TestWithoutServers):
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
 
-        #self.log_check_valgrind_memcheck(self)
+        self.log_check_valgrind_memcheck(self)
 
         return 0
 

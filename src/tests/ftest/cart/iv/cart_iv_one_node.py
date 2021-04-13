@@ -525,6 +525,4 @@ class CartIvOneNodeTest(CartTest):
             self.stop_process(srv_rtn)
 
         if failed:
-            self.fail("Test failed.\n")
-
-        self.log_check_valgrind_memcheck()
+            self.fail("Test failed.\n")()

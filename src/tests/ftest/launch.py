@@ -1183,8 +1183,8 @@ def archive_valgrind_logs(avocado_logs_dir, test_files, args):
     hosts = get_hosts_from_yaml(test_files["yaml"], args)
     print("Archiving host logs from {} in {}".format(hosts, destination))
 
-    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+    # Copy any log files written to the DAOS_TEST_SHARED_DIR directory
+    logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME'])
     task = archive_files(
         destination, hosts, "{}/valgrind*".format(logs_dir), True, args)
 

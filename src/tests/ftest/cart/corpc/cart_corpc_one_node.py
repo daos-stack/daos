@@ -21,5 +21,3 @@ class CartCoRpcOneNodeTest(CartTest):
         """
         cmd = self.build_cmd(self.env, "test_servers")
         self.launch_test(cmd)
-
-        self.log_check_valgrind_memcheck()

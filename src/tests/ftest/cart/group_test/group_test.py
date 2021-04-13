@@ -20,6 +20,4 @@ class GroupTest(CartTest):
         :avocado: tags=all,cart,pr,daily_regression,group_test,one_node
         """
         cmd = self.build_cmd(self.env, "test_servers")
-        self.launch_test(cmd)
-
-        self.log_check_valgrind_memcheck()
+        self.launch_test(cmd)()
