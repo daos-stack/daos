@@ -166,7 +166,7 @@ void
 ds_iv_ns_get(struct ds_iv_ns *ns)
 {
 	ns->iv_refcount++;
-	D_DEBUG(DB_MGMT, DF_UUID" ns ref %u\n",
+	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 }
 
@@ -174,7 +174,7 @@ void
 ds_iv_ns_put(struct ds_iv_ns *ns)
 {
 	ns->iv_refcount--;
-	D_DEBUG(DB_MGMT, DF_UUID" ns ref %u\n",
+	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 	if (ns->iv_refcount == 1)
 		ABT_eventual_set(ns->iv_done_eventual, NULL, 0);
@@ -853,6 +853,7 @@ ds_iv_fini(void)
 	struct ds_iv_class	*class_tmp;
 
 	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
+		d_list_del_init(&ns->iv_ns_link);
 		iv_ns_destroy_internal(ns);
 	}
 

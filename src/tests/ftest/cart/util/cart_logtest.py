@@ -423,6 +423,8 @@ class LogTest():
                     if show and server_shutdown and line.get_msg().endswith(
                             "DER_SHUTDOWN(-2017): 'Service should shut down'"):
                         show = False
+                    if show and line.function == 'sched_watchdog_post':
+                        show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
                         # like assert should trigger a failure.

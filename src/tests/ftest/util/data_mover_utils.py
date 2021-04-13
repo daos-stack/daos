@@ -190,17 +190,27 @@ class Dcp(DcpCommand):
             if src_pool or src_cont:
                 self.log.info(
                     "Converting --daos-src-pool to daos://pool/cont/path")
-                src_path = "daos://{}/{}/{}".format(
-                    src_pool, src_cont, src_path)
-                self.src_path.update(src_path)
+                new_path = "daos://"
+                if src_pool:
+                    new_path += str(src_pool) + "/"
+                if src_cont:
+                    new_path += str(src_cont) + "/"
+                if src_path:
+                    new_path += str(src_path).lstrip("/")
+                self.src_path.update(new_path)
                 self.daos_src_pool.update(None)
                 self.daos_src_cont.update(None)
             if dst_pool or dst_cont:
                 self.log.info(
                     "Converting --daos-dst-pool to daos://pool/cont/path")
-                dst_path = "daos://{}/{}/{}".format(
-                    dst_pool, dst_cont, dst_path)
-                self.dst_path.update(dst_path)
+                new_path = "daos://"
+                if dst_pool:
+                    new_path += str(dst_pool) + "/"
+                if dst_cont:
+                    new_path += str(dst_cont) + "/"
+                if dst_path:
+                    new_path += str(dst_path).lstrip("/")
+                self.dst_path.update(new_path)
                 self.daos_dst_pool.update(None)
                 self.daos_dst_cont.update(None)
         if self.has_bufsize:
@@ -344,6 +354,185 @@ class Dsync(DsyncCommand):
 
         return out
 
+class DserializeCommand(ExecutableCommand):
+    """Defines an object representing a daos-serialize command."""
+
+    def __init__(self, namespace, command):
+        """Create a daos-serialize Command object."""
+        super().__init__(namespace, command)
+
+        # daos-serialize options
+
+        # path to output serialized hdf5 files
+        self.output_path = FormattedParameter("--output-path {}")
+        # verbose output
+        self.verbose = FormattedParameter("--verbose", False)
+        # quiet output
+        self.quiet = FormattedParameter("--quiet", False)
+        # print help/usage
+        self.print_usage = FormattedParameter("--help", False)
+        # source path
+        self.src_path = BasicParameter(None)
+
+    def get_param_names(self):
+        """Overriding the original get_param_names."""
+
+        param_names = super().get_param_names()
+
+        # move key=src_path to the end
+        param_names.sort(key='src_path'.__eq__)
+
+        return param_names
+
+    def set_dserialize_params(self, src_path=None, out_path=None,
+                              display=True):
+        """Set common daos-serialize params.
+
+        Args:
+            src_path (str, optional): The source path formatted as
+                daos://<pool>/<cont>
+            out_path (str, optional): The output POSIX path to store
+                the HDF5 file(s)
+            display (bool, optional): print updated params. Defaults to True.
+
+        """
+        if src_path:
+            self.src_path.update(src_path,
+                                 "src_path" if display else None)
+        if out_path:
+            self.output_path.update(out_path,
+                                    "output_path" if display else None)
+
+
+class Dserialize(DserializeCommand):
+    """Class defining an object of type DserializeCommand."""
+
+    def __init__(self, hosts, timeout=30):
+        """Create a daos-serialize object."""
+        super().__init__(
+            "/run/dserialize/*", "daos-serialize")
+
+        # set params
+        self.timeout = timeout
+        self.hosts = hosts
+
+    def run(self, tmp, processes):
+        # pylint: disable=arguments-differ
+        """Run the command.
+
+        Args:
+            tmp (str): path for hostfiles
+            processes: Number of processes for the command
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: In case run command fails
+
+        """
+        self.log.info('Starting daos-serialize')
+
+        # Get job manager cmd
+        mpirun = Mpirun(self, mpitype="mpich")
+        mpirun.assign_hosts(self.hosts, tmp)
+        mpirun.assign_processes(processes)
+        mpirun.exit_status_exception = self.exit_status_exception
+
+        # run the command
+        out = mpirun.run()
+
+        return out
+
+class DdeserializeCommand(ExecutableCommand):
+    """Defines an object representing a daos-deserialize command."""
+
+    def __init__(self, namespace, command):
+        """Create a daos-deserialize Command object."""
+        super().__init__(namespace, command)
+
+        # daos-deserialize options
+
+        # pool uuid for containers
+        self.pool = FormattedParameter("--pool {}")
+        # verbose output
+        self.verbose = FormattedParameter("--verbose", False)
+        # quiet output
+        self.quiet = FormattedParameter("--quiet", False)
+        # print help/usage
+        self.print_usage = FormattedParameter("--help", False)
+        # source path
+        self.src_path = BasicParameter(None)
+
+    def get_param_names(self):
+        """Overriding the original get_param_names."""
+
+        param_names = super().get_param_names()
+
+        # move key=src_path to the end
+        param_names.sort(key='src_path'.__eq__)
+
+        return param_names
+
+    def set_ddeserialize_params(self, src_path=None, pool=None,
+                                display=True):
+        """Set common daos-deserialize params.
+
+        Args:
+            src_path (str, optional): Either a list of paths to each HDF5
+                file, or the path to the directory containing the file(s).
+            pool (str, optional): The pool uuid.
+            display (bool, optional): print updated params. Defaults to True.
+
+        """
+        if src_path:
+            self.src_path.update(src_path,
+                                 "src_path" if display else None)
+        if pool:
+            self.pool.update(pool,
+                             "pool" if display else None)
+
+class Ddeserialize(DdeserializeCommand):
+    """Class defining an object of type DdeserializeCommand."""
+
+    def __init__(self, hosts, timeout=30):
+        """Create a daos-deserialize object."""
+        super().__init__(
+            "/run/ddeserialize/*", "daos-deserialize")
+
+        # set params
+        self.timeout = timeout
+        self.hosts = hosts
+
+    def run(self, tmp, processes):
+        # pylint: disable=arguments-differ
+        """Run the command.
+
+        Args:
+            tmp (str): path for hostfiles
+            processes: Number of processes for the command
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: In case run command fails
+
+        """
+        self.log.info('Starting daos-deserialize')
+
+        # Get job manager cmd
+        mpirun = Mpirun(self, mpitype="mpich")
+        mpirun.assign_hosts(self.hosts, tmp)
+        mpirun.assign_processes(processes)
+        mpirun.exit_status_exception = self.exit_status_exception
+
+        # run the command
+        out = mpirun.run()
+
+        return out
 
 class FsCopy():
     """Class defining an object of type FsCopy.
@@ -395,3 +584,52 @@ class FsCopy():
         self.log.info("Starting daos filesystem copy")
 
         return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst)
+
+class ContClone():
+    """Class defining an object of type ContClone.
+       Allows interfacing with daos container copy in a similar
+       manner to DcpCommand.
+    """
+
+    def __init__(self, daos_cmd, log):
+        """Create a ContClone object.
+
+        Args:
+            daos_cmd (DaosCommand): daos command to issue the cont clone
+                command.
+            log (TestLogger): logger to log messages
+
+        """
+        self.src = None
+        self.dst = None
+        self.daos_cmd = daos_cmd
+        self.log = log
+
+    def set_cont_clone_params(self, src=None, dst=None):
+        """Set the daos container clone params.
+
+        Args:
+            src (str, optional): the src, formatted as /<pool>/<cont>
+            dst (str, optional): the dst, formatted as /<pool>/<cont>
+
+        """
+        if src:
+            self.src = src
+        if dst:
+            self.dst = dst
+
+    def run(self):
+        # pylint: disable=arguments-differ
+        """Run the daos container clone command.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: In case daos container clone run command fails.
+
+        """
+        self.log.info("Starting daos container clone")
+
+        return self.daos_cmd.container_clone(src=self.src, dst=self.dst)

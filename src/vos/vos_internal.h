@@ -136,6 +136,8 @@ struct vos_pool {
 	/** number of openers */
 	int			vp_opened:30;
 	int			vp_dying:1;
+	/** exclusive handle (see VOS_POF_EXCL) */
+	int			vp_excl:1;
 	/** caller specifies pool is small (for sys space reservation) */
 	bool			vp_small;
 	/** UUID of vos pool */
@@ -184,7 +186,7 @@ struct vos_container {
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */
 	daos_handle_t		vc_dtx_committed_hdl;
-	/** The root of the B+ tree for ative DTXs. */
+	/** The root of the B+ tree for active DTXs. */
 	struct btr_root		vc_dtx_active_btr;
 	/** The root of the B+ tree for committed DTXs. */
 	struct btr_root		vc_dtx_committed_btr;
