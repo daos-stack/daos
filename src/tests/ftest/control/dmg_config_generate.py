@@ -65,8 +65,14 @@ class ConfigGenerate(TestWithServers):
         pmem_info = data[host]["scm"]
         nvme_info = data[host]["nvme"]
 
+        self.log.debug("## pmem_info = {}".format(pmem_info))
+        self.log.debug("## nvme_info = {}".format(nvme_info))
+
         interface = os.environ.get("OFI_INTERFACE")
         pmem_sockets = set(pmem_info[p]["socket"] for p in pmem_info)
+
+        self.log.debug("## interface = {}".format(interface))
+        self.log.debug("## pmem_sockets = {}".format(pmem_sockets))
 
         # Get nvmes that match with pmem socket.
         # The dict would look like so: {'0': ['0000:5e:00.0', '0000:5f:00.0']}
@@ -74,10 +80,13 @@ class ConfigGenerate(TestWithServers):
         for nvme in nvme_info:
             if nvme_info[nvme]["socket"] in sockets_info:
                 sockets_info[nvme_info[nvme]["socket"]].append(nvme)
+        
+        self.log.debug("## sockets_info = {}".format(sockets_info))
+        self.log.debug("## sockets_info values = {}".format(sockets_info.values()))
 
         return {
             "pmem": len(sockets_info),
-            "nvme": len(sockets_info.values()[0]),
+            "nvme": len(list(sockets_info.values())[0]),
             "net": interface
         }
 
@@ -134,13 +143,18 @@ class ConfigGenerate(TestWithServers):
             nvme (str): Minimum number of NVMe devices required per storage host
             net (str): Network class preferred (default: best-available)
         """
+        self.log.debug("## run_test 1")
         self._start_servers = True
+        self.log.debug("## run_test 2")
         self.server_managers[-1].manager.job.discover_pmem.value = pmem
+        self.log.debug("## run_test 3")
         self.server_managers[-1].manager.job.discover_nvme.value = nvme
         self.server_managers[-1].manager.job.discover_net.value = net
 
         # Start up the servers in discovery mode and generate config with dmg
+        self.log.debug("## run_test 4")
         self.start_server_managers()
+        self.log.debug("## run_test 5")
 
         # Verify generated config file
         self.verify_config(pmem, nvme, net)
@@ -163,6 +177,7 @@ class ConfigGenerate(TestWithServers):
         :avocado: tags=all,small,hw,full_regression,config_generate
         :avocado: tags=config_generate_1
         """
+        self.log.debug("## Starting test")
         self.run_test(None, None, None)
 
     # def test_dmg_config_generate_2(self):

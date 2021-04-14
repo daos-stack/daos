@@ -12,7 +12,8 @@ import time
 from avocado import fail_on
 
 from command_utils_base import \
-    CommandFailure, FormattedParameter, CommandWithParameters, CommonConfig
+    CommandFailure, FormattedParameter, CommandWithParameters, CommonConfig, \
+    BasicParameter
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list
@@ -104,6 +105,7 @@ class DaosServerCommand(YamlCommand):
         self._exe_names.append("daos_engine")
 
         # Discover mode
+        self.log.debug("## server_utils.py DaosServerCommand.__init__() 1")
         self.generated_yaml = None
         self.discover_mode = BasicParameter(False, False)
         self.discover_pmem = BasicParameter(None)
@@ -688,11 +690,13 @@ class DaosServerManager(SubprocessManager):
     def start(self):
         """Start the server through the job manager."""
         # Prepare the servers
+        self.log.debug("## server_utils.py start 1")
         self.prepare()
 
         # Start the servers and wait for them to be ready for storage format
         # Makito updated
         #self.detect_format_ready()
+        self.log.debug("## server_utils.py start 2")
         self.detect_start_mode("format")
 
         # Format storage and wait for server to change ownership
@@ -703,6 +707,7 @@ class DaosServerManager(SubprocessManager):
         self.dmg.storage_format(timeout=40)
 
         # Wait for all the engines to start
+        self.log.debug("## server_utils.py start 3")
         self.detect_engine_start()
 
         return True
@@ -710,13 +715,16 @@ class DaosServerManager(SubprocessManager):
     def discover(self):
         """Start the server through the job manager."""
         # Create the empty file
+        self.log.debug("## server_utils.py discover 1")
         original_config = self.manager.job.yaml.filename
         config_file = ".".join([original_config, "discovery"])
         pcmd(self._hosts, "touch {}".format(config_file))
         self.manager.job.config.value = config_file
 
         # Start the servers and wait for them to be ready for storage format
+        self.log.debug("## server_utils.py discover 2")
         self.detect_start_mode("discover")
+        self.log.debug("## server_utils.py discover 3")
 
         self.generated_yaml = self.dmg.config_generate(
             self.get_config_value("access_points"),
@@ -724,6 +732,7 @@ class DaosServerManager(SubprocessManager):
             self.manager.job.discover_nvme,
             self.manager.job.discover_net)
 
+        self.log.debug("## server_utils.py discover 4")
         messages = self.stop_server_processes()
         if messages:
             raise ServerFailed(
@@ -733,6 +742,7 @@ class DaosServerManager(SubprocessManager):
         self.manager.job.yaml.filename = original_config
         self.manager.job.yaml.write_yaml(self.generated_yaml)
         self.manager.job.config.value = self.manager.job.yaml.filename
+        self.log.debug("## server_utils.py discover 5")
 
     def stop(self):
         """Stop the server through the runner."""

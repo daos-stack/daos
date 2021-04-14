@@ -554,6 +554,7 @@ class TestWithServers(TestWithoutServers):
     def setUp(self):
         """Set up each test case."""
         super().setUp()
+        self.log.debug("## test.py - TestWithServers.setUp() 1")
 
         # Support starting agents/servers once per test for all test variants
         self.start_agents_once = self.params.get(
@@ -673,6 +674,7 @@ class TestWithServers(TestWithoutServers):
 
         # Start the servers
         if self.setup_start_servers:
+            self.log.debug("## test.py - TestWithServers.setUp() 2")
             self.start_servers()
 
         # Setup a job manager command for running the test command
@@ -763,6 +765,7 @@ class TestWithServers(TestWithoutServers):
                 servers
 
         """
+        self.log.debug("## test.py - start_servers 1")
         if server_groups is None:
             server_groups = {
                 self.server_group: {
@@ -775,13 +778,18 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(server_groups, dict):
             for group, info in list(server_groups.items()):
+                self.log.debug(
+                    "## test.py - start_servers 2. group = {}".format(group))
                 self.add_server_manager(group)
+                self.log.debug(
+                    "## test.py - start_servers 3. group = {}".format(group))
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
                     info["hosts"],
                     self.hostfile_servers_slots,
                     info["access_points"])
+            self.log.debug("## test.py - start_servers 4")
             self.start_server_managers()
 
     def get_config_file(self, name, command, path=None):
@@ -868,6 +876,7 @@ class TestWithServers(TestWithoutServers):
                 files to use with the Systemctl job manager class.
 
         """
+        self.log.debug("## test.py - add_server_manager 1")
         if group is None:
             group = self.server_group
         if svr_config_file is None and self.server_manager_class == "Systemctl":
@@ -898,6 +907,7 @@ class TestWithServers(TestWithoutServers):
             svr_cert_dir = self.workdir
             dmg_cert_dir = self.workdir
 
+        self.log.debug("## test.py - add_server_manager 2")
         self.server_managers.append(
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
@@ -949,6 +959,7 @@ class TestWithServers(TestWithoutServers):
     @fail_on(CommandFailure)
     def start_server_managers(self):
         """Start the daos_server processes on each specified list of hosts."""
+        self.log.debug("## test.py start_server_managers Start")
         self.log.info("-" * 100)
         start_servers = True
         if self.start_servers_once:
@@ -964,6 +975,7 @@ class TestWithServers(TestWithoutServers):
             self.log.info("--- STARTING SERVERS ---")
             self._start_manager_list("server", self.server_managers)
         self.log.info("-" * 100)
+        self.log.debug("## test.py start_server_managers End")
 
     def check_running(self, name, manager_list, prepare_dmg=False,
                       set_expected=False):
@@ -1012,12 +1024,16 @@ class TestWithServers(TestWithoutServers):
             name (str): manager name
             manager_list (list): list of SubprocessManager objects to start
         """
+        self.log.debug(
+            "## test.py - _start_manager_list 1: List = {}".format(
+                manager_list))
         # We probably want to do this parallel if end up with multiple managers
         for manager in manager_list:
             self.log.info(
                 "Starting %s: group=%s, hosts=%s, config=%s",
                 name, manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
+            self.log.debug("## test.py - _start_manager_list 2")
             manager.start()
 
     def tearDown(self):
