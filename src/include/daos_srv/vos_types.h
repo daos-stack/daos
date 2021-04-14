@@ -238,6 +238,7 @@ enum {
 	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
 	/** replay punch (underwrite) */
 	VOS_OF_REPLAY_PC		= (1 << 15),
+	VOS_OF_CORRUPT			= (1 << 16),
 };
 
 /** Mask for any conditionals passed to to the fetch */
