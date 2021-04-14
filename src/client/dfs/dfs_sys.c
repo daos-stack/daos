@@ -705,8 +705,8 @@ dfs_sys_utimens(dfs_sys_t *dfs_sys, const char *path,
 }
 
 int
-dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, struct stat *buf,
-	     int flags)
+dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
+	     struct stat *buf)
 {
 	int		rc;
 	struct sys_path	sys_path;

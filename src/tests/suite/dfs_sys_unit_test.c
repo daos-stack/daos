@@ -291,7 +291,7 @@ dfs_sys_test_open_stat(void **state)
 	assert_int_equal(mode & S_IFMT, S_IFDIR);
 	rc = dfs_sys_close(obj);
 	assert_int_equal(rc, 0);
-	rc = dfs_sys_stat(dfs_sys_mt, "/", &stbuf, 0);
+	rc = dfs_sys_stat(dfs_sys_mt, "/", 0, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_mode & S_IFMT, S_IFDIR);
 
@@ -305,7 +305,7 @@ dfs_sys_test_open_stat(void **state)
 	assert_int_equal(mode & S_IFMT, S_IFDIR);
 	rc = dfs_sys_close(obj);
 	assert_int_equal(rc, 0);
-	rc = dfs_sys_stat(dfs_sys_mt, dir1, &stbuf, 0);
+	rc = dfs_sys_stat(dfs_sys_mt, dir1, 0, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_mode & S_IFMT, S_IFDIR);
 
@@ -326,7 +326,7 @@ dfs_sys_test_open_stat(void **state)
 	assert_int_equal(mode & S_IFMT, S_IFREG);
 	rc = dfs_sys_close(obj);
 	assert_int_equal(rc, 0);
-	rc = dfs_sys_stat(dfs_sys_mt, file1, &stbuf, 0);
+	rc = dfs_sys_stat(dfs_sys_mt, file1, 0, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_mode & S_IFMT, S_IFREG);
 
@@ -338,12 +338,12 @@ dfs_sys_test_open_stat(void **state)
 	assert_int_equal(mode & S_IFMT, S_IFREG);
 	rc = dfs_sys_close(obj);
 	assert_int_equal(rc, 0);
-	rc = dfs_sys_stat(dfs_sys_mt, sym1, &stbuf, 0);
+	rc = dfs_sys_stat(dfs_sys_mt, sym1, 0, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_mode & S_IFMT, S_IFREG);
 
 	/** Stat sym1 itself */
-	rc = dfs_sys_stat(dfs_sys_mt, sym1, &stbuf, O_NOFOLLOW);
+	rc = dfs_sys_stat(dfs_sys_mt, sym1, O_NOFOLLOW, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_mode & S_IFMT, S_IFLNK);
 
@@ -412,7 +412,7 @@ setattr_hlpr(const char *path, bool no_follow)
 		sflags |= O_NOFOLLOW;
 
 	/** Get current times */
-	rc = dfs_sys_stat(dfs_sys_mt, path, &stbuf, sflags);
+	rc = dfs_sys_stat(dfs_sys_mt, path, sflags, &stbufs);
 	assert_int_equal(rc, 0);
 
 	/** Increment times */
@@ -426,7 +426,7 @@ setattr_hlpr(const char *path, bool no_follow)
 	assert_int_equal(rc, 0);
 
 	/** Check new times are set */
-	rc = dfs_sys_stat(dfs_sys_mt, path, &stbuf, sflags);
+	rc = dfs_sys_stat(dfs_sys_mt, path, sflags, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_atim.tv_sec, times[0].tv_sec);
 	assert_int_equal(stbuf.st_mtim.tv_sec, times[1].tv_sec);
@@ -444,7 +444,7 @@ setattr_hlpr(const char *path, bool no_follow)
 	assert_int_equal(rc, 0);
 
 	/** Check new times are set */
-	rc = dfs_sys_stat(dfs_sys_mt, path, &stbuf, sflags);
+	rc = dfs_sys_stat(dfs_sys_mt, path, sflags, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_atim.tv_sec, times[0].tv_sec);
 	assert_int_equal(stbuf.st_mtim.tv_sec, times[1].tv_sec);

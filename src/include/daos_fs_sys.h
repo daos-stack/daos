@@ -176,14 +176,14 @@ dfs_sys_utimens(dfs_sys_t *dfs_sys, const char *path,
  *
  * \param[in]	dfs_sys Pointer to the mounted file system.
  * \param[in]	path	Link path of object.
- * \param[out]	stbuf	Stat struct with the members above filled.
  * \param[in]	flags	Stat flags (O_NOFOLLOW).
+ * \param[out]	stbuf	Stat struct with the members above filled.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, struct stat *buf,
-	     int flags);
+dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
+	     struct stat *stbuf);
 /**
  * Create a file or directory.
  *
