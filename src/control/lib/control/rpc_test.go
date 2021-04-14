@@ -188,17 +188,29 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				}
 			}
 
+			testDeadline, ok := t.Deadline()
+			if !ok {
+				panic("no deadline")
+			}
+			// Set a deadline a bit before the overall test deadline so that we can
+			// dump the stack if we have stuck goroutines.
+			checkDeadline := testDeadline.Add(-1 * time.Second)
+
 			// Explicitly clean up before checking for stragglers.
 			cancel()
+
 			// Give things a little bit of time to settle down before checking for
 			// any lingering goroutines.
 			time.Sleep(250 * time.Millisecond)
-			goRoutinesAtEnd := runtime.NumGoroutine()
-			if goRoutinesAtEnd > goRoutinesAtStart {
+			for goRoutinesAtEnd := runtime.NumGoroutine(); goRoutinesAtEnd > goRoutinesAtStart; goRoutinesAtEnd = runtime.NumGoroutine() {
+				time.Sleep(250 * time.Millisecond)
 				t.Errorf("expected final goroutine count to be <= %d, got %d\n", goRoutinesAtStart, goRoutinesAtEnd)
-				// Dump the stack to see which goroutines are lingering
-				if err := unix.Kill(os.Getpid(), unix.SIGABRT); err != nil {
-					t.Fatal(err)
+
+				if time.Now().After(checkDeadline) {
+					// Dump the stack to see which goroutines are lingering
+					if err := unix.Kill(os.Getpid(), unix.SIGABRT); err != nil {
+						t.Fatal(err)
+					}
 				}
 			}
 		})
