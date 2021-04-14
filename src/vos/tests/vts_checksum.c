@@ -445,6 +445,7 @@ mark_sv_corrupted(void **state)
 	/** clean up */
 	d_sgl_fini(&sgl, true);
 }
+
 static void
 mark_extent_corrupted(void **state)
 {
