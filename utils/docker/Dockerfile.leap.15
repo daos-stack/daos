@@ -109,9 +109,6 @@ RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
     fi
 
 RUN update-ca-certificates
-RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
-    zypper --non-interactive --no-gpg-checks install --allow-unsigned-rpm  \
-      lua-lmod
 
 ARG UID=1000
 

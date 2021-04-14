@@ -21,10 +21,11 @@ ARG REPO_DAOS=""
 # Make sure that all the repo keys are installed.
 # A dnf update is needed here to pick up the current EPEL key
 RUN yum clean all &&                                               \
-    yum -y install dnf dnf-plugins-core epel-release yum-utils &&  \
+    yum -y install dnf dnf-plugins-core epel-release &&            \
     dnf -y makecache &&                                            \
     dnf -y update &&                                               \
-    dnf clean all
+    dnf clean all &&                                               \
+    yum clean all
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
