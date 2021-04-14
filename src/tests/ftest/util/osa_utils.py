@@ -66,11 +66,22 @@ class OSAUtils(MdtestBase, IorTestBase):
         """Get the rebuild status.
 
         Returns:
-            str: reuild status
+            str: rebuild status
 
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
         return data["response"]["rebuild"]["status"]
+
+    @fail_on(CommandFailure)
+    def get_rebuild_state(self):
+        """Get the rebuild state.
+
+        Returns:
+            str: rebuild state
+
+        """
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return data["response"]["rebuild"]["state"]
 
     @fail_on(CommandFailure)
     def is_rebuild_done(self, time_interval,
