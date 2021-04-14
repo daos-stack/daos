@@ -146,69 +146,6 @@
                   <arg value="./find_java_home.sh"/>
                 </exec>
                 <echo message="Java home is ${java-home}" />
-                <!--<exec executable="bash" outputproperty="daos-build-dir-include" failonerror="true">
-                  <arg value="./find_build_paths.sh"/>
-                  <arg value="${daos.install.path}"/>
-                  <arg value="SL_PREFIX"/>
-                  <arg value="true"/>
-                  <arg value="include"/>
-                </exec>
-                <echo message="Daos Build Dir include is ${daos-build-dir-include}" />
-                <exec executable="bash" outputproperty="daos-build-dir-lib64" failonerror="true">
-                  <arg value="./find_build_paths.sh"/>
-                  <arg value="${daos.install.path}"/>
-                  <arg value="SL_PREFIX"/>
-                  <arg value="true"/>
-                  <arg value="lib64"/>
-                </exec>
-                <echo message="Daos Build Dir include is ${daos-build-dir-lib64}" />
-                <exec executable="bash" outputproperty="protobufc-build-dir-include" failonerror="true">
-                  <arg value="./find_build_paths.sh"/>
-                  <arg value="${daos.install.path}"/>
-                  <arg value="SL_PROTOBUFC_PREFIX"/>
-                  <arg value="true"/>
-                  <arg value="include"/>
-                </exec>
-                <echo message="Protobufc Build Dir is ${protobufc-build-dir-include}" />
-                <exec executable="bash" outputproperty="protobufc-build-dir-lib" failonerror="true">
-                  <arg value="./find_build_paths.sh"/>
-                  <arg value="${daos.install.path}"/>
-                  <arg value="SL_PROTOBUFC_PREFIX"/>
-                  <arg value="true"/>
-                  <arg value="lib"/>
-                </exec>
-                <echo message="Protobufc Build Dir is ${protobufc-build-dir-lib}" />
-                <exec executable="bash" outputproperty="sl-prefix" failonerror="true">
-                  <arg value="./find_build_paths.sh"/>
-                  <arg value="${daos.install.path}"/>
-                  <arg value="SL_PREFIX"/>
-                  <arg value="${in-tree}"/>
-                  <arg value="None"/>
-                </exec>
-                <echo message="SL_PREFIX is ${sl-prefix}" />
-                <exec executable="bash" outputproperty="sl-protobufc-prefix" failonerror="true">
-                  <arg value="./find_build_paths.sh"/>
-                  <arg value="${daos.install.path}"/>
-                  <arg value="SL_PROTOBUFC_PREFIX"/>
-                  <arg value="${in-tree}"/>
-                  <arg value="None"/>
-                </exec>
-                <echo message="SL_PROTOBUFC_PREFIX is ${sl-protobufc-prefix}" />-->
-
-                <!--<exec executable="bash" outputproperty="sl-protobufc-prefix" failonerror="true">
-                  <arg value="./find_build_paths.sh"/>
-                  <arg value="${daos.install.path}"/>
-                  <arg value="SL_PROTOBUFC_PREFIX"/>
-                  <arg value="${in-tree}"/>
-                </exec>
-                <echo message="SL_PROTOBUFC_PREFIX is ${sl-protobufc-prefix}" />-->
-                
-                <!--<ac:if xmlns:ac="antlib:net.sf.antcontrib">
-                  <ac:equals arg1="1" arg2="1"/>
-                  <ac:then>
-                    <echo message="acif worked"/>
-                  </ac:then>
-                </ac:if>-->
                 <ac:if xmlns:ac="antlib:net.sf.antcontrib">
                     <ac:equals arg1="${in-tree}" arg2="true"/>
                     <ac:then>
@@ -219,9 +156,6 @@
                         <arg value="${in-tree}"/>
                       </exec>
                       <echo message="Daos Build Dir is ${daos-build-dir}" />
-                      <!--<property name="sl-prefix">
-                        <value>abc</value>
-                      </property>-->
                       <exec executable="bash" outputproperty="protobufc-build-dir" failonerror="true">
                         <arg value="./find_build_paths.sh"/>
                         <arg value="${daos.install.path}"/>
@@ -229,9 +163,6 @@
                         <arg value="${in-tree}"/>
                       </exec>
                       <echo message="Protobufc Build Dir is ${protobufc-build-dir}" />
-                      <!--<property name="sl-protobufc-prefix">
-                        <value>abc</value>
-                      </property>-->
                     </ac:then>
                     <ac:else>
                       <exec executable="bash" outputproperty="sl-prefix" failonerror="true">
@@ -241,9 +172,6 @@
                         <arg value="${in-tree}"/>
                       </exec>
                       <echo message="SL_PREFIX is ${sl-prefix}" />
-                      <!--<property name="daos-build-dir">
-                        <value>abc</value>
-                      </property>-->
                       <exec executable="bash" outputproperty="sl-protobufc-prefix" failonerror="true">
                         <arg value="./find_build_paths.sh"/>
                         <arg value="${daos.install.path}"/>
@@ -251,9 +179,6 @@
                         <arg value="${in-tree}"/>
                       </exec>
                       <echo message="SL_PROTOBUFC_PREFIX is ${sl-protobufc-prefix}" />
-                      <!--<property name="protobufc-build-dir">
-                        <value>abc</value>
-                      </property>-->
                     </ac:else>
                 </ac:if>
                 <delete file="${project.basedir}/src/main/native/include/io_daos_dfs_DaosFsClient_DaosFsClientBuilder.h"/>
@@ -304,26 +229,6 @@
                   <arg value="-I${sl-protobufc-prefix}/include/"/>
                   <arg value="-I${daos-build-dir}/include"/>
                   <arg value="-I${protobufc-build-dir}"/>
-                  <!--<if>
-                    <equals arg1="${in-tree}" arg2="true"/>
-                    <then>
-                      <arg value="-I${sl-prefix}/include/"/>
-                      <arg value="-I${sl-protobufc-prefix}/protobuf-c/"/>
-                    </then>
-                    <else>
-                      <arg value="-I${sl-prefix}/include/"/>
-                      <arg value="-I${sl-protobufc-prefix}/include/"/>
-                    </else>
-                  </if>-->
-<!--                  <arg value="-I${sl-prefix}/../../../../src/include/" if="${in-tree}"/> -->
-<!--                  <arg value="-I${sl-prefix}/include/" if="${in-tree}"/>
-                  <arg value="-I${sl-prefix}/include/" unless="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/protobuf-c/" if="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/include/" unless="${in-tree}"/>  -->
-                  <!-- <arg value="-I${sl-prefix}/../../../../src/include/" if:true="${in-tree}"/>
-                  <arg value="-I${sl-prefix}/include/" unless:true="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/protobuf-c/" if:true="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/include/" unless:true="${in-tree}"/> -->
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/io_daos_obj_DaosObjClient.c"/>
                   <arg value="-o${native.build.path}/io_daos_obj_DaosObjClient.o"/>
@@ -343,17 +248,6 @@
                   <arg value="-I${protobufc-build-dir}"/>
                   <arg value="-I${sl-prefix}/include/"/>
                   <arg value="-I${sl-protobufc-prefix}/include/"/>
-<!--                  <arg value="-I${sl-prefix}/../../../../src/include/" if="${in-tree}"/> -->
-                  <!--<arg value="-I${sl-prefix}/include/" if="${in-tree}"/>
-                  <arg value="-I${sl-prefix}/include/" unless="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/protobuf-c/" if="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/include/" unless="${in-tree}"/>-->
-<!--
-                  <arg value="-I${sl-prefix}/../../../../src/include/" if:true="${in-tree}"/>
-                  <arg value="-I${sl-prefix}/include/" unless:true="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/protobuf-c/" if:true="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/include/" unless:true="${in-tree}"/>
--->
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/io_daos_dfs_DaosFsClient.c"/>
                   <arg value="-o${native.build.path}/io_daos_dfs_DaosFsClient.o"/>
@@ -373,17 +267,6 @@
                   <arg value="-I${protobufc-build-dir}"/>
                   <arg value="-I${sl-prefix}/include/"/>
                   <arg value="-I${sl-protobufc-prefix}/include/"/>
-<!--                  <arg value="-I${sl-prefix}/../../../../src/include/" if="${in-tree}"/>  -->
-                  <!--<arg value="-I${sl-prefix}/include/" if="${in-tree}"/>
-                  <arg value="-I${sl-prefix}/include/" unless="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/protobuf-c/" if="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/include/" unless="${in-tree}"/>-->
-<!--
-                  <arg value="-I${sl-prefix}/../../../../src/include/" if:true="${in-tree}"/>
-                  <arg value="-I${sl-prefix}/include/" unless:true="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/protobuf-c/" if:true="${in-tree}"/>
-                  <arg value="-I${sl-protobufc-prefix}/include/" unless:true="${in-tree}"/>
--->
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/DunsAttribute.pb-c.c"/>
                   <arg value="-o${native.build.path}/DunsAttribute.pb-c.o"/>
@@ -402,21 +285,11 @@
                   <arg value="${native.build.path}/io_daos_DaosClient.o"/>
                   <arg value="${native.build.path}/io_daos_obj_DaosObjClient.o"/>
                   <arg value="-L${sl-prefix}/lib"/>
-                  <!--<arg value="-L${sl-prefix}/common" if="${in-tree}"/>
-                  <arg value="-L${sl-prefix}/lib64" unless="${in-tree}"/>
-                  <arg value="-L${sl-protobufc-prefix}/protobuf-c/.libs" if="${in-tree}"/>
-                  <arg value="-L${sl-protobufc-prefix}/lib" unless="${in-tree}"/>-->
                   <arg value="-L${daos-build-dir}/common"/>
                   <arg value="-L${daos-build-dir}/client/api/"/>
                   <arg value="-L${protobufc-build-dir}/protobuf-c/.libs/"/>
                   <arg value="-L${sl-prefix}/lib64"/>
                   <arg value="-L${sl-protobufc-prefix}/lib"/>
-<!--
-                  <arg value="-L${sl-prefix}/common" if:true="${in-tree}"/>
-                  <arg value="-L${sl-prefix}/lib64" unless:true="${in-tree}"/>
-                  <arg value="-L${sl-protobufc-prefix}/protobuf-c/.libs" if:true="${in-tree}"/>
-                  <arg value="-L${sl-protobufc-prefix}/lib" unless:true="${in-tree}"/>
--->
                   <arg value="-L/usr/lib"/>
                   <arg value="-L/usr/lib64"/>
                   <arg value="-L/usr/local/lib"/>
