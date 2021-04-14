@@ -95,7 +95,7 @@ class TestPool(TestDaosApiBase):
             "uid": self.uid,
             "gid": self.gid,
             "scm_size": self.scm_size.value,
-            "group": self.name.value}
+        }
         for key in ("target_list", "svcn", "nvme_size"):
             value = getattr(self, key).value
             if value is not None:
@@ -111,11 +111,6 @@ class TestPool(TestDaosApiBase):
             self._log_method("dmg.pool_create", kwargs)
             data = self.dmg.pool_create(**kwargs)
             if self.dmg.result.exit_status == 0:
-                # Populate the empty DaosPool object with the properties of the
-                # pool created with dmg pool create.
-                if self.name.value:
-                    self.pool.group = create_string_buffer(self.name.value)
-
                 # Convert the string of service replicas from the dmg command
                 # output into an ctype array for the DaosPool object using the
                 # same technique used in DaosPool.create().
