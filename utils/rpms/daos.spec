@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       10%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -293,28 +293,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files
 %defattr(-, root, root, -)
-# you might think libvio.so goes in the server RPM but
-# the 2 tools following it need it
-%{_libdir}/daos_srv/libbio.so
 # you might think libdaos_tests.so goes in the tests RPM but
 # the 4 tools following it need it
-%{_libdir}/libdaos_tests.so
 %{_sysconfdir}/ld.so.conf.d/daos.conf
-%{_bindir}/io_conf
-%{_bindir}/jump_pl_map
-%{_bindir}/ring_pl_map
-%{_bindir}/pl_bench
-%{_bindir}/rdbt
-%{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
 %{_sysconfdir}/daos/memcheck-cart.supp
 %dir %{_sysconfdir}/daos
-%{_sysconfdir}/daos/vos_size_input.yaml
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
-%{_libdir}/libdaos_common_pmem.so
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
@@ -348,6 +336,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/librsvc.so
 %{_libdir}/daos_srv/libsecurity.so
 %{_libdir}/daos_srv/libvos_srv.so
+%{_libdir}/daos_srv/libvos_size.so
+%{_libdir}/daos_srv/libvos.so
+%{_libdir}/daos_srv/libbio.so
+%{_libdir}/libdaos_common_pmem.so
+%{_sysconfdir}/daos/vos_size_input.yaml
+%{_bindir}/daos_storage_estimator.py
+%{_libdir}/python3/site-packages/storage_estimator/*.py
+%dir %{_libdir}/python3/site-packages/storage_estimator
+%dir %{_libdir}/python3/site-packages/storage_estimator/__pycache__
+%{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
@@ -360,7 +358,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
 %{_bindir}/dfuse_hl
-%{_bindir}/daos_storage_estimator.py
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
@@ -368,16 +365,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
-%{_libdir}/libvos_size.so
 %dir %{_libdir}/python3/site-packages/pydaos
-%dir %{_libdir}/python3/site-packages/storage_estimator
 %{_libdir}/python3/site-packages/pydaos/*.py
-%{_libdir}/python3/site-packages/storage_estimator/*.py
 %if (0%{?rhel} >= 7)
 %dir %{_libdir}/python3/site-packages/pydaos/__pycache__
-%dir %{_libdir}/python3/site-packages/storage_estimator/__pycache__
 %{_libdir}/python3/site-packages/pydaos/__pycache__/*.pyc
-%{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
 %endif
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim.so
 %dir %{_libdir}/python3/site-packages/pydaos/raw
@@ -401,11 +393,17 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/*_test*
 %{_bindir}/jobtest
 %exclude %{_bindir}/self_test
+%{_libdir}/libdaos_tests.so
+%{_bindir}/jump_pl_map
+%{_bindir}/ring_pl_map
+%{_bindir}/pl_bench
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/evt_ctl
+%{_bindir}/io_conf
+%{_bindir}/rdbt
 %{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
@@ -428,6 +426,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Wed Apr 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.3.0-11
+- Remove storage_estimator and io_conf from client packages to remove
+  any client side dependence on bio and vos (and and PMDK/SPDK)
+
 * Mon Apr 12 2021 Dalton A. Bohning <daltonx.bohning@intel.com> - 1.3.0-10
 - Add attr to the test dependencies
 
