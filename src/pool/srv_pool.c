@@ -4057,21 +4057,6 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 
 	replace_failed_replicas(svc, map);
 
-	if (opc == POOL_ADD_IN) {
-		/*
-		 * If we are setting ranks from UP -> UPIN, schedule a reclaim
-		 * operation to garbage collect any unreachable data moved
-		 * during reintegration/addition
-		 */
-		rc = ds_rebuild_schedule(svc->ps_pool, map_version, tgts,
-					 RB_OP_RECLAIM, 0);
-		if (rc != 0) {
-			D_ERROR("failed to schedule reclaim rc: "DF_RC"\n",
-				DP_RC(rc));
-			goto out_map_buf;
-		}
-	}
-
 out_map_buf:
 	pool_buf_free(map_buf);
 out_map:
