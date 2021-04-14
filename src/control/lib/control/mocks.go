@@ -33,6 +33,7 @@ type (
 	// MockInvokerConfig defines the configured responses
 	// for a MockInvoker.
 	MockInvokerConfig struct {
+		Sys              string
 		UnaryError       error
 		UnaryResponse    *UnaryResponse
 		UnaryResponseSet []*UnaryResponse
@@ -69,6 +70,10 @@ func (mi *MockInvoker) Debug(msg string) {
 
 func (mi *MockInvoker) Debugf(fmtStr string, args ...interface{}) {
 	mi.log.Debugf(fmtStr, args...)
+}
+
+func (mi *MockInvoker) GetSystem() string {
+	return mi.cfg.Sys
 }
 
 func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {

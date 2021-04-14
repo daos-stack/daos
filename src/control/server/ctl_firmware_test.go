@@ -2,7 +2,7 @@
 // (C) Copyright 2020-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
-// +build firmware
+//
 
 package server
 
@@ -502,7 +502,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 
 			common.CmpErr(t, tc.expErr, err)
 
-			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -822,7 +822,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 
 			common.CmpErr(t, tc.expErr, err)
 
-			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})

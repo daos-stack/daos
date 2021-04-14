@@ -576,7 +576,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	}
 
 	srv_iov = &sgl->sg_iovs[0];
-	rc = bio_iod_prep(vos_ioh2desc(ioh));
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO);
 	if (rc)
 		goto end;
 
@@ -643,7 +643,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	}
 
 	dst_iov = &sgl->sg_iovs[0];
-	rc = bio_iod_prep(vos_ioh2desc(ioh));
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO);
 	if (rc)
 		goto end;
 
@@ -841,10 +841,7 @@ io_obj_cache_test(void **state)
 	assert_int_equal(rc, 0);
 
 	uuid_generate_time_safe(pool_uuid);
-	rc = vos_pool_create(po_name, pool_uuid, VPOOL_16M, 0);
-	assert_rc_equal(rc, 0);
-
-	rc = vos_pool_open(po_name, pool_uuid, false /* small */, &l_poh);
+	rc = vos_pool_create(po_name, pool_uuid, VPOOL_16M, 0, 0, &l_poh);
 	assert_rc_equal(rc, 0);
 
 	rc = vos_cont_create(l_poh, ctx->tc_co_uuid);
@@ -1396,10 +1393,7 @@ pool_cont_same_uuid(void **state)
 	uuid_generate(pool_uuid);
 	uuid_copy(co_uuid, pool_uuid);
 
-	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_16M, 0);
-	assert_rc_equal(ret, 0);
-
-	ret = vos_pool_open(arg->fname, pool_uuid, false /* small */, &poh);
+	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_16M, 0, 0, &poh);
 	assert_rc_equal(ret, 0);
 
 	ret = vos_cont_create(poh, co_uuid);
@@ -1409,7 +1403,7 @@ pool_cont_same_uuid(void **state)
 	assert_rc_equal(ret, 0);
 
 	poh = DAOS_HDL_INVAL;
-	ret = vos_pool_open(arg->fname, pool_uuid, false /* small */, &poh);
+	ret = vos_pool_open(arg->fname, pool_uuid, 0, &poh);
 	assert_rc_equal(ret, 0);
 
 	ret = vos_cont_open(poh, co_uuid, &coh);

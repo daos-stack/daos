@@ -129,7 +129,8 @@ struct vos_agg_param {
 	daos_key_t		ap_dkey;	/* current dkey */
 	daos_key_t		ap_akey;	/* current akey */
 	unsigned int		ap_discard:1,
-				ap_csum_err:1;
+				ap_csum_err:1,
+				ap_full_scan:1;
 	struct umem_instance	*ap_umm;
 	bool			(*ap_yield_func)(void *arg);
 	void			*ap_yield_arg;
@@ -209,15 +210,43 @@ reset_agg_pos(vos_iter_type_t type, struct vos_agg_param *agg_param)
 	}
 }
 
+static inline bool
+need_aggregate(struct vos_agg_param *agg_param, vos_iter_entry_t *entry)
+{
+	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+
+	D_DEBUG(DB_EPC, "full_scan:%d, hae:"DF_U64", last_update:"DF_U64", "
+		"flags:%u\n", agg_param->ap_full_scan,
+		cont->vc_cont_df->cd_hae, entry->ie_last_update,
+		entry->ie_vis_flags);
+
+	/* Don't skip aggregation for full scan */
+	if (agg_param->ap_full_scan)
+		return true;
+
+	/* Don't skip aggregation when the obj/dkey/akey is punched */
+	if (entry->ie_vis_flags & VOS_VIS_FLAG_COVERED)
+		return true;
+
+	D_ASSERT(entry->ie_last_update != 0);
+	return entry->ie_last_update >= cont->vc_cont_df->cd_hae;
+}
+
 static int
 vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	    struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	D_ASSERT(agg_param != NULL);
 	if (daos_unit_oid_compare(agg_param->ap_oid, entry->ie_oid)) {
-		agg_param->ap_oid = entry->ie_oid;
-		reset_agg_pos(VOS_ITER_DKEY, agg_param);
-		reset_agg_pos(VOS_ITER_AKEY, agg_param);
+		if (need_aggregate(agg_param, entry)) {
+			agg_param->ap_oid = entry->ie_oid;
+			reset_agg_pos(VOS_ITER_DKEY, agg_param);
+			reset_agg_pos(VOS_ITER_AKEY, agg_param);
+		} else {
+			D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
+				DP_UOID(agg_param->ap_oid));
+			*acts |= VOS_ITER_CB_SKIP;
+		}
 	} else {
 		/*
 		 * When recursive vos_iterate() yield in sub tree, re-probe
@@ -249,8 +278,14 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	D_ASSERT(agg_param != NULL);
 	if (vos_agg_key_compare(agg_param->ap_dkey, entry->ie_key)) {
-		agg_param->ap_dkey = entry->ie_key;
-		reset_agg_pos(VOS_ITER_AKEY, agg_param);
+		if (need_aggregate(agg_param, entry)) {
+			agg_param->ap_dkey = entry->ie_key;
+			reset_agg_pos(VOS_ITER_AKEY, agg_param);
+		} else {
+			D_DEBUG(DB_EPC, "Skip untouched dkey: "DF_KEY"\n",
+				DP_KEY(&entry->ie_key));
+			*acts |= VOS_ITER_CB_SKIP;
+		}
 	} else {
 		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" aggregation on re-probe\n",
 			DP_KEY(&entry->ie_key));
@@ -326,7 +361,13 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	D_ASSERT(agg_param != NULL);
 	if (vos_agg_key_compare(agg_param->ap_akey, entry->ie_key)) {
-		agg_param->ap_akey = entry->ie_key;
+		if (need_aggregate(agg_param, entry)) {
+			agg_param->ap_akey = entry->ie_key;
+		} else {
+			D_DEBUG(DB_EPC, "Skip untouched akey: "DF_KEY"\n",
+				DP_KEY(&entry->ie_key));
+			*acts |= VOS_ITER_CB_SKIP;
+		}
 	} else {
 		D_DEBUG(DB_EPC, "Skip akey: "DF_KEY" aggregation on re-probe\n",
 			DP_KEY(&entry->ie_key));
@@ -2046,7 +2087,7 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      void (*csum_func)(void *),
-	      bool (*yield_func)(void *arg), void *yield_arg)
+	      bool (*yield_func)(void *arg), void *yield_arg, bool full_scan)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	vos_iter_param_t	 iter_param = { 0 };
@@ -2085,6 +2126,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	agg_param.ap_yield_func = yield_func;
 	agg_param.ap_yield_arg = yield_arg;
 	merge_window_init(&agg_param.ap_window, csum_func);
+	/* A full scan caused by snapshot deletion */
+	agg_param.ap_full_scan = full_scan;
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
