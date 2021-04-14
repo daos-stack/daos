@@ -86,7 +86,7 @@ dfs_sys_test_mount(void **state)
  * Verify that we can access and use the underlying dfs_t.
  */
 static void
-dfs_sys_test_get_dfs(void **state)
+dfs_sys_test_sys2base(void **state)
 {
 	test_arg_t	*arg = *state;
 	dfs_t		*dfs;
@@ -96,7 +96,7 @@ dfs_sys_test_get_dfs(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	rc = dfs_sys_get_dfs_obj(dfs_sys_mt, &dfs);
+	rc = dfs_sys2base(dfs_sys_mt, &dfs);
 	assert_int_equal(rc, 0);
 	rc = dfs_query(dfs, &attr);
 	assert_int_equal(rc, 0);
@@ -714,8 +714,8 @@ dfs_sys_test_xattr(void **state)
 static const struct CMUnitTest dfs_sys_unit_tests[] = {
 	{ "DFS_SYS_UNIT_TEST1:  DFS Sys mount / umount",
 	  dfs_sys_test_mount, async_disable, test_case_teardown},
-	{ "DFS_SYS_UNIT_TEST2:  DFS Sys get_dfs_obj",
-	  dfs_sys_test_get_dfs, async_disable, test_case_teardown},
+	{ "DFS_SYS_UNIT_TEST2:  DFS Sys2base",
+	  dfs_sys_test_sys2base, async_disable, test_case_teardown},
 	{ "DFS_SYS_UNIT_TEST3:  DFS Sys create / remove",
 	  dfs_sys_test_create_remove, async_disable, test_case_teardown},
 	{ "DFS_SYS_UNIT_TEST4:  DFS Sys access / chmod",

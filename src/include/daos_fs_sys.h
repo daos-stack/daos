@@ -12,7 +12,7 @@
  * of the DFS API that is more similar to the equivalent
  * POSIX libraries. While the DFS Sys API stands on its own,
  * the DFS API can be used directly by getting the DFS Object
- * with dfs_sys_get_dfs_obj().
+ * with dfs_sys2base().
  */
 
 #include <dirent.h>
@@ -95,7 +95,7 @@ dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_get_dfs_obj(dfs_sys_t *dfs_sys, dfs_t **dfs);
+dfs_sys2base(dfs_sys_t *dfs_sys, dfs_t **dfs);
 
 /**
  * Check access permissions on a path. Similar to Linux access(2).

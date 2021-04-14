@@ -551,7 +551,7 @@ err_mount:
 }
 
 int
-dfs_sys_get_dfs_obj(dfs_sys_t *dfs_sys, dfs_t **_dfs)
+dfs_sys2base(dfs_sys_t *dfs_sys, dfs_t **_dfs)
 {
 	if (dfs_sys == NULL)
 		return EINVAL;
