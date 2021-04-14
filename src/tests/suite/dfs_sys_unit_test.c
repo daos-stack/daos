@@ -412,7 +412,7 @@ setattr_hlpr(const char *path, bool no_follow)
 		sflags |= O_NOFOLLOW;
 
 	/** Get current times */
-	rc = dfs_sys_stat(dfs_sys_mt, path, sflags, &stbufs);
+	rc = dfs_sys_stat(dfs_sys_mt, path, sflags, &stbuf);
 	assert_int_equal(rc, 0);
 
 	/** Increment times */
