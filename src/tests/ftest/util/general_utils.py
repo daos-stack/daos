@@ -835,7 +835,7 @@ def get_remote_file_size(host, file_name):
     return int(result.stdout_text)
 
 
-def error_count(error, hostlist, log_file, pattern="ERR"):
+def error_count(error, hostlist, log_file, pattern='\" ERR \"'):
     """Count the number of specific ERRORs found in the log file.
 
     This function also returns a count of the other ERRORs from same log file.
@@ -868,7 +868,6 @@ def error_count(error, hostlist, log_file, pattern="ERR"):
                     other_error_count += 1
 
     return requested_error_count, other_error_count
-
 
 def get_module_class(name, module):
     """Get the class object in the specified module by its name.

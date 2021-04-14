@@ -97,8 +97,6 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	       int count, bool drop_cos);
-int dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
-	      struct dtx_entry **dtes, int count);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 

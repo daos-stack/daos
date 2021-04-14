@@ -131,8 +131,12 @@ class DaosCommandBase(CommandWithSubCommand):
             """Get the dmg network sub command object."""
             if self.sub_command.value == "create":
                 self.sub_command_class = self.CreateSubCommand()
+            elif self.sub_command.value == "clone":
+                self.sub_command_class = self.CloneSubCommand()
             elif self.sub_command.value == "destroy":
                 self.sub_command_class = self.DestroySubCommand()
+            elif self.sub_command.value == "check":
+                self.sub_command_class = self.CheckSubCommand()
             elif self.sub_command.value == "list-objects":
                 self.sub_command_class = self.ListObjectsSubCommand()
             elif self.sub_command.value == "query":
@@ -225,6 +229,15 @@ class DaosCommandBase(CommandWithSubCommand):
                 #           input file containing ACL
                 self.acl_file = FormattedParameter("--acl-file={}", None)
 
+        class CloneSubCommand(CommonContainerSubCommand):
+            """Defines an object for the daos container clone command."""
+
+            def __init__(self):
+                """Create a daos container clone command object."""
+                super().__init__("clone")
+                self.src = FormattedParameter("--src={}")
+                self.dst = FormattedParameter("--dst={}")
+
         class DestroySubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container destroy command."""
 
@@ -246,6 +259,15 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container query command object."""
                 super().__init__("query")
+
+        class CheckSubCommand(CommonContainerSubCommand):
+            """Defines an object for the daos container check command."""
+
+            def __init__(self):
+                """Create a daos container check command object."""
+                super(
+                    DaosCommandBase.ContainerSubCommand.CheckSubCommand,
+                    self).__init__("check")
 
         class GetAclSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container get-acl command."""

@@ -217,6 +217,7 @@ def set_test_environment(args):
 
     # Update PATH
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
+    os.environ["COVFILE"] = "/tmp/test.cov"
 
     # Python paths required for functional testing
     set_python_environment()
@@ -976,6 +977,9 @@ def run_tests(test_files, tag_filter, args):
             if not process_the_cores(avocado_logs_dir, test_file["yaml"], args):
                 return_code |= 256
 
+    if args.jenkinslog:
+        return_code |= archive_cov_usrlib_logs(avocado_logs_dir, args)
+
     return return_code
 
 
@@ -1190,6 +1194,31 @@ def archive_config_files(avocado_logs_dir, args):
         status = 16
     return status
 
+def archive_cov_usrlib_logs(avocado_logs_dir, args):
+    """Archive daos cov files to the avocado results directory.
+    Args:
+        avocado_logs_dir (str): path to the avocado log files
+        args (argparse.Namespace): command line arguments for this program
+    Returns:
+        int: status code.
+    """
+    # Create a subdirectory in the avocado logs directory for this test
+    destination = os.path.join(avocado_logs_dir, "daos_covs_usrlib")
+
+    # Copy any DAOS covs created on all hosts
+    hosts = list(args.test_servers)
+    hosts.append(socket.gethostname().split(".")[0])
+    print("Archiving host covs from {} in {}".format(hosts, destination))
+
+    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
+    task = archive_files(destination, hosts,
+                         "/tmp/test.cov*",False, args)
+
+    # Determine if the command completed successfully across all the hosts
+    status = 0
+    if not check_remote_output(task, "archive_daos_covs command"):
+        status |= 16
+    return status
 
 def archive_files(destination, hosts, source_files, cart, args):
     """Archive all of the remote files to the destination directory.
