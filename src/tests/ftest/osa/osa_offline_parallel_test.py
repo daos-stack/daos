@@ -53,7 +53,9 @@ class OSAOfflineParallelTest(OSAUtils):
         dmg = copy.copy(self.dmg_command)
         try:
             if action == "reintegrate":
-                time.sleep(60)
+                text = "Waiting for rebuild to complete"
+                time.sleep(3)
+                self.print_and_assert_on_rebuild_failure(text)
                 # For each action, read the values from the
                 # dictionary.
                 # example {"exclude" : {"puuid": self.pool, "rank": rank
@@ -105,10 +107,14 @@ class OSAOfflineParallelTest(OSAUtils):
             pool[val].create()
             pool_uuid.append(pool[val].uuid)
             self.pool = pool[val]
+            self.pool.set_property("reclaim", "disabled")
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
                 if oclass != "S1":
                     self.run_mdtest_thread()
+                # if self.test_during_aggregation is set,
+                # Create another container and run the IOR
+                # command using the second container.
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
 
@@ -130,6 +136,8 @@ class OSAOfflineParallelTest(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
+            # If we need to trigger aggregation on pool 1, delete
+            # the second container which has IOR data.
             if self.test_during_aggregation is True and val == 0:
                 self.delete_extra_container(self.pool)
             # Create the threads here
@@ -199,9 +207,9 @@ class OSAOfflineParallelTest(OSAUtils):
         :avocado: tags=offline_parallel,offline_parallel_basic_test
         """
         self.log.info("Offline Parallel Test: Basic Test")
-        self.run_offline_parallel_test(1, True)
+        self.run_offline_parallel_test(1, data=True)
 
-    def test_osa_offline_parallel_test_no_csum(self):
+    def test_osa_offline_parallel_test_without_csum(self):
         """
         JIRA ID: DAOS-7161
 
@@ -216,7 +224,7 @@ class OSAOfflineParallelTest(OSAUtils):
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
         self.log.info("Offline Parallel Test: Without Checksum")
-        self.run_offline_parallel_test(1, True)
+        self.run_offline_parallel_test(1, data=True)
 
     def test_osa_offline_parallel_test_rank_boot(self):
         """
@@ -253,7 +261,7 @@ class OSAOfflineParallelTest(OSAUtils):
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
         self.log.info("Offline Parallel Test : Aggregation")
-        self.run_offline_parallel_test(1, True)
+        self.run_offline_parallel_test(1, data=True)
 
     def test_osa_offline_parallel_test_oclass(self):
         """
@@ -271,4 +279,5 @@ class OSAOfflineParallelTest(OSAUtils):
         self.log.info("Offline Parallel Test : OClass")
         # Presently, the script is limited and supports only one extra
         # object class testing. We are testing S1 apart from RP_2G1.
-        self.run_offline_parallel_test(1, True, oclass=self.test_oclass[0])
+        self.run_offline_parallel_test(1, data=True,
+                                       oclass=self.test_oclass[0])
