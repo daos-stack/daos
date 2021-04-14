@@ -501,28 +501,12 @@ static void
 update_targets_ult(void *arg)
 {
 	struct update_targets_arg	*uta = arg;
-	struct d_tgt_list		 tgt_list;
-	d_rank_list_t			 svc;
-	int				 rc;
+	int				 rc = -DER_INVAL;
 
-	svc.rl_ranks = &uta->uta_pl_rank;
-	svc.rl_nr = 1;
-
-	tgt_list.tl_nr = uta->uta_nr;
-	tgt_list.tl_ranks = uta->uta_ranks;
-	tgt_list.tl_tgts = uta->uta_tgts;
-
-	if (uta->uta_reint)
-		rc = dsc_pool_tgt_reint(uta->uta_pool_id, NULL /* grp */,
-					&svc, &tgt_list);
-	else
-		rc = dsc_pool_tgt_exclude(uta->uta_pool_id, NULL /* grp */,
-					  &svc, &tgt_list);
-	if (rc)
-		D_ERROR(DF_UUID": %s targets failed. "DF_RC"\n",
-			DP_UUID(uta->uta_pool_id),
-			uta->uta_reint ? "Reint" : "Exclude",
-			DP_RC(rc));
+	D_ERROR(DF_UUID": %s targets failed. "DF_RC"\n",
+		DP_UUID(uta->uta_pool_id),
+		uta->uta_reint ? "Reint" : "Exclude",
+		DP_RC(rc));
 
 	free_update_targets_arg(uta);
 }

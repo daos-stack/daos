@@ -43,9 +43,6 @@ const struct daos_task_api dc_funcs[] = {
 	/** Pool */
 	{dc_pool_connect, sizeof(daos_pool_connect_t)},
 	{dc_pool_disconnect, sizeof(daos_pool_disconnect_t)},
-	{dc_pool_exclude, sizeof(daos_pool_update_t)},
-	{dc_pool_exclude_out, sizeof(daos_pool_update_t)},
-	{dc_pool_reint, sizeof(daos_pool_update_t)},
 	{dc_pool_query, sizeof(daos_pool_query_t)},
 	{dc_pool_query_target, sizeof(daos_pool_query_target_t)},
 	{dc_pool_list_attr, sizeof(daos_pool_list_attr_t)},

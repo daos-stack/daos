@@ -854,11 +854,13 @@ err:
 	return rc;
 }
 
+/*
 static void
 pool_svc_get(struct pool_svc *svc)
 {
 	ds_rsvc_get(&svc->ps_rsvc);
 }
+*/
 
 static void
 pool_svc_put(struct pool_svc *svc)
@@ -871,6 +873,7 @@ struct ds_pool_evict_arg {
 	d_rank_t	rank;
 };
 
+/*
 static void
 pool_evict_rank_ult(void *data)
 {
@@ -885,6 +888,7 @@ pool_evict_rank_ult(void *data)
 	pool_svc_put(arg->svc);
 	D_FREE_PTR(arg);
 }
+*/
 
 /* Disable all pools eviction */
 void
@@ -899,6 +903,7 @@ ds_pool_enable_evict(void)
 	pool_disable_evict = false;
 }
 
+/*
 static int
 pool_evict_rank(struct pool_svc *svc, d_rank_t rank)
 {
@@ -923,16 +928,21 @@ out:
 		D_ERROR("evict ult failed: rc %d\n", rc);
 	return rc;
 }
+*/
 
 static void
 ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		     enum crt_event_type type, void *arg)
 {
-	daos_prop_t		prop = { 0 };
-	struct daos_prop_entry	*entry;
-	struct pool_svc		*svc = arg;
-	int			rc = 0;
+//	daos_prop_t		prop = { 0 };
+//	struct daos_prop_entry	*entry;
+//	struct pool_svc		*svc = arg;
+//	int			rc = 0;
 
+	D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u/%d\n",
+		src, type, pool_disable_evict);
+	return;
+#if 0
 	/* Only used for evict the rank for the moment */
 	if ((src != CRT_EVS_SWIM && src != CRT_EVS_GRPMOD) ||
 	    type != CRT_EVT_DEAD || pool_disable_evict) {
@@ -958,6 +968,7 @@ out:
 		D_ERROR("pool "DF_UUID" event %d failed: rc %d\n",
 			DP_UUID(svc->ps_uuid), src, rc);
 	daos_prop_fini(&prop);
+#endif
 }
 
 static void
@@ -1114,11 +1125,15 @@ out:
 static int
 pool_svc_check_node_status(struct pool_svc *svc)
 {
-	struct pool_domain	*doms;
-	int			doms_cnt;
-	int			i;
-	int			rc = 0;
+//	struct pool_domain	*doms;
+//	int			doms_cnt;
+//	int			i;
+//	int			rc = 0;
 
+	D_DEBUG(DB_REBUILD, DF_UUID" disable swim evict.\n",
+			DP_UUID(svc->ps_uuid));
+		return 0;
+#if 0
 	if (pool_disable_evict) {
 		D_DEBUG(DB_REBUILD, DF_UUID" disable swim evict.\n",
 			DP_UUID(svc->ps_uuid));
@@ -1161,6 +1176,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 		}
 	}
 	return rc;
+#endif
 }
 
 static int
@@ -3254,93 +3270,7 @@ ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 		uint32_t rank, struct pool_target_id_list *target_list,
 		pool_comp_state_t state)
 {
-	int				rc;
-	struct rsvc_client		client;
-	crt_endpoint_t			ep;
-	struct dss_module_info		*info = dss_get_module_info();
-	crt_rpc_t			*rpc;
-	struct pool_target_addr_list	list;
-	struct pool_add_in		*in;
-	struct pool_add_out		*out;
-	crt_opcode_t			opcode;
-	int i = 0;
-
-	rc = rsvc_client_init(&client, ranks);
-	if (rc != 0)
-		return rc;
-
-rechoose:
-
-	ep.ep_grp = NULL; /* primary group */
-	rsvc_client_choose(&client, &ep);
-
-	switch (state) {
-	case PO_COMP_ST_DOWN:
-		opcode = POOL_EXCLUDE;
-		break;
-	case PO_COMP_ST_UP:
-		opcode = POOL_REINT;
-		break;
-	case PO_COMP_ST_DRAIN:
-		opcode = POOL_DRAIN;
-		break;
-	default:
-		D_GOTO(out_client, rc = -DER_INVAL);
-	}
-
-	rc = pool_req_create(info->dmi_ctx, &ep, opcode, &rpc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool req: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		D_GOTO(out_client, rc);
-	}
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->pti_op.pi_uuid, pool_uuid);
-
-	rc = pool_target_addr_list_alloc(target_list->pti_number, &list);
-	if (rc) {
-		D_ERROR(DF_UUID": pool_target_addr_list_alloc failed, rc %d.\n",
-			DP_UUID(pool_uuid), rc);
-		D_GOTO(out_rpc, rc);
-	}
-
-	/* pool_update rpc requires an addr list. */
-	for (i = 0; i < target_list->pti_number; i++) {
-		list.pta_addrs[i].pta_target = target_list->pti_ids[i].pti_id;
-		list.pta_addrs[i].pta_rank = rank;
-	}
-
-	in->pti_addr_list.ca_arrays = list.pta_addrs;
-	in->pti_addr_list.ca_count = (size_t)list.pta_number;
-
-	rc = dss_rpc_send(rpc);
-	out = crt_reply_get(rpc);
-	D_ASSERT(out != NULL);
-
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-		out->pto_op.po_rc, &out->pto_op.po_hint);
-	if (rc == RSVC_CLIENT_RECHOOSE) {
-		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
-		D_GOTO(rechoose, rc);
-	}
-
-	rc = out->pto_op.po_rc;
-	if (rc != 0) {
-		D_ERROR(DF_UUID": Failed to set targets to %s state: "DF_RC"\n",
-			DP_UUID(pool_uuid),
-			state == PO_COMP_ST_DOWN ? "DOWN" :
-			state == PO_COMP_ST_UP ? "UP" : "UNKNOWN",
-			DP_RC(rc));
-		D_GOTO(out_rpc, rc);
-	}
-
-out_rpc:
-	crt_req_decref(rpc);
-out_client:
-	rsvc_client_fini(&client);
-	return rc;
+	return -DER_INVAL;
 }
 
 /**
@@ -4266,19 +4196,22 @@ out_svc:
 	return rc;
 }
 
+/*
 int
 ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE_OUT,
 				       NULL, NULL, false, NULL, NULL);
 }
-
+*/
+/*
 int
 ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE,
 				       NULL, NULL, false, NULL, NULL);
 }
+*/
 
 int
 ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
@@ -4344,15 +4277,15 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 		D_GOTO(out, rc);
 
 	switch (opc) {
-	case POOL_EXCLUDE:
-		op = RB_OP_FAIL;
-		break;
-	case POOL_DRAIN:
-		op = RB_OP_DRAIN;
-		break;
-	case POOL_REINT:
-		op = RB_OP_REINT;
-		break;
+//	case POOL_EXCLUDE:
+//		op = RB_OP_FAIL;
+//		break;
+//	case POOL_DRAIN:
+//		op = RB_OP_DRAIN;
+//		break;
+//	case POOL_REINT:
+//		op = RB_OP_REINT;
+//		break;
 	case POOL_EXTEND:
 		op = RB_OP_EXTEND;
 		break;
@@ -4613,6 +4546,7 @@ out:
 	pool_target_addr_list_free(&inval_list_out);
 }
 
+/*
 int
 ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank)
 {
@@ -4637,6 +4571,7 @@ ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank)
 
 	return rc;
 }
+*/
 
 struct evict_iter_arg {
 	uuid_t *eia_hdl_uuids;

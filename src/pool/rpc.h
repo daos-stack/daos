@@ -48,26 +48,14 @@
 	X(POOL_QUERY_INFO,						\
 		0, &CQF_pool_query_info,				\
 		ds_pool_query_info_handler, NULL),			\
-	X(POOL_EXCLUDE,							\
-		0, &CQF_pool_exclude,					\
-		ds_pool_update_handler, NULL),				\
-	X(POOL_DRAIN,							\
-		0, &CQF_pool_drain,					\
-		ds_pool_update_handler, NULL),				\
 	X(POOL_EXTEND,							\
 		0, &CQF_pool_extend,					\
 		ds_pool_extend_handler, NULL),				\
 	X(POOL_EVICT,							\
 		0, &CQF_pool_evict,					\
 		ds_pool_evict_handler, NULL),				\
-	X(POOL_REINT,							\
-		0, &CQF_pool_add,					\
-		ds_pool_update_handler, NULL),				\
 	X(POOL_ADD_IN,							\
 		0, &CQF_pool_add_in,					\
-		ds_pool_update_handler, NULL),				\
-	X(POOL_EXCLUDE_OUT,						\
-		0, &CQF_pool_exclude_out,				\
 		ds_pool_update_handler, NULL),				\
 	X(POOL_SVC_STOP,						\
 		0, &CQF_pool_svc_stop,					\
@@ -308,10 +296,6 @@ CRT_RPC_DECLARE(pool_extend, DAOS_ISEQ_POOL_EXTEND,
 CRT_RPC_DECLARE(pool_add, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_add_in, DAOS_ISEQ_POOL_TGT_UPDATE,
-		DAOS_OSEQ_POOL_TGT_UPDATE)
-CRT_RPC_DECLARE(pool_exclude, DAOS_ISEQ_POOL_TGT_UPDATE,
-		DAOS_OSEQ_POOL_TGT_UPDATE)
-CRT_RPC_DECLARE(pool_drain, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)

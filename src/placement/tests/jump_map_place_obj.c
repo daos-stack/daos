@@ -920,11 +920,11 @@ jtc_snapshot_layout_targets(struct jm_test_ctx *ctx)
 		s_new, ctx.new.out_nr); \
 	} while (0)
 
-#define UP	POOL_REINT
+#define UP	0 /*POOL_REINT*/
 #define UPIN	POOL_ADD_IN
-#define DOWN	POOL_EXCLUDE
-#define DOWNOUT	POOL_EXCLUDE_OUT
-#define DRAIN	POOL_DRAIN
+#define DOWN	0 /*POOL_EXCLUDE*/
+#define DOWNOUT	0 /*POOL_EXCLUDE_OUT */
+#define DRAIN	0 /*POOL_DRAIN*/
 
 /*
  * ------------------------------------------------

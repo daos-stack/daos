@@ -1239,7 +1239,7 @@ done:
 		if (task->dst_tgts.pti_number <= 0 ||
 		    rgt->rgt_status.rs_errno != 0)
 			goto iv_stop;
-
+/*
 		if (task->dst_rebuild_op == RB_OP_FAIL
 		    || task->dst_rebuild_op == RB_OP_DRAIN) {
 			rc = ds_pool_tgt_exclude_out(pool->sp_uuid,
@@ -1248,7 +1248,7 @@ done:
 				" as DOWNOUT: "DF_RC"\n",
 				task->dst_tgts.pti_ids[0].pti_id,
 				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
-		} else if (task->dst_rebuild_op == RB_OP_REINT ||
+		} else */if (task->dst_rebuild_op == RB_OP_REINT ||
 			   task->dst_rebuild_op == RB_OP_EXTEND) {
 			rc = ds_pool_tgt_add_in(pool->sp_uuid, &task->dst_tgts);
 			D_DEBUG(DB_REBUILD, "mark added target %d of "DF_UUID
