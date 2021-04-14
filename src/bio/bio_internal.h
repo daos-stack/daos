@@ -96,7 +96,7 @@ struct bio_dma_buffer {
 	  "shutdowns")							\
 	X(bdh_temp, "temperature/current",				\
 	  "Current SSD temperature",					\
-	  "kelvins")							\
+	  "kelvin")							\
 	X(bdh_temp_warn, "temperature/warn",				\
 	  "Set to 1 if temperature is above threshold",			\
 	  "")								\
