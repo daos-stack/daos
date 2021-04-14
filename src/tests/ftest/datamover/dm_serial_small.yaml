@@ -3,9 +3,7 @@ hosts:
         - server-A
     test_clients:
         - server-B
-timeouts:
-    test_dm_obj_small_dcp: 120
-    test_dm_obj_small_cont_clone: 90
+timeout: 180
 server_config:
     name: daos_server
 pool:
@@ -15,7 +13,10 @@ pool:
     control_method: dmg
 container:
     control_method: API
-dcp:
+dserialize:
+    client_processes:
+        np: 3
+ddeserialize:
     client_processes:
         np: 3
 dataset:
