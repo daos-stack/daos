@@ -56,6 +56,11 @@ mem_pin_workaround(void)
 		D_WARN("Failed to disable malloc fastbins: %d (%s)\n",
 		       errno, strerror(errno));
 
+	/* Lock all pages */
+	rc = mlockall(MCL_CURRENT | MCL_FUTURE);
+	if (rc)
+		D_ERROR("Failed to mlockall(); errno=%d\n", errno);
+
 	D_DEBUG(DB_ALL, "Memory pinning workaround enabled\n");
 exit:
 	return crt_rc;
