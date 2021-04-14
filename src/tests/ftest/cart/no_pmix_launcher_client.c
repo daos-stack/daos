@@ -16,7 +16,7 @@
 #include <semaphore.h>
 #include <cart/api.h>
 
-#include "tests_common.h"
+#include "crt_utils.h"
 #include "no_pmix_launcher_common.h"
 
 static int
@@ -66,7 +66,7 @@ int main(int argc, char **argv)
 	int			tag;
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(0, 20, false, true);
+	crtu_test_init(0, 20, false, true);
 
 	rc = d_log_init();
 	assert(rc == 0);
@@ -111,9 +111,9 @@ int main(int argc, char **argv)
 	DBG_PRINT("Client starting with cfg_file=%s\n", grp_cfg_file);
 
 	/* load group info from a config file and delete file upon return */
-	rc = tc_load_group_from_file(grp_cfg_file, crt_ctx, grp, -1, true);
+	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx, grp, -1, true);
 	if (rc != 0) {
-		D_ERROR("tc_load_group_from_file() failed; rc=%d\n", rc);
+		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
@@ -141,8 +141,8 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	rc = tc_wait_for_ranks(crt_ctx, grp, rank_list, NUM_SERVER_CTX - 1,
-			    NUM_SERVER_CTX, 5, 150);
+	rc = crtu_wait_for_ranks(crt_ctx, grp, rank_list, NUM_SERVER_CTX - 1,
+				 NUM_SERVER_CTX, 5, 150);
 	if (rc != 0) {
 		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 		assert(0);
@@ -181,7 +181,7 @@ int main(int argc, char **argv)
 			input->test_data = iov;
 
 			rc = crt_req_send(rpc, rpc_handle_reply, &sem);
-			tc_sem_timedwait(&sem, 10, __LINE__);
+			crtu_sem_timedwait(&sem, 10, __LINE__);
 			DBG_PRINT("Ping response from %d:%d\n", rank, tag);
 		}
 	}
@@ -206,7 +206,7 @@ int main(int argc, char **argv)
 		}
 
 		rc = crt_req_send(rpc, rpc_handle_reply, &sem);
-		tc_sem_timedwait(&sem, 10, __LINE__);
+		crtu_sem_timedwait(&sem, 10, __LINE__);
 		DBG_PRINT("RPC response received from rank=%d\n", rank);
 	}
 

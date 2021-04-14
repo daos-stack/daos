@@ -264,7 +264,8 @@ int test_run(void)
 						fprintf(stdout, " %4u", delay);
 					}
 					delay = g.swim_state[i][i].sms_delay;
-					fprintf(stdout, " %3u:%u\n", davg, delay);
+					fprintf(stdout, " %3u:%u\n",
+						davg, delay);
 				}
 			}
 
