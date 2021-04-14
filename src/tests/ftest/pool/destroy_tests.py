@@ -79,7 +79,6 @@ class DestroyTests(TestWithServers):
         # Create a pool
         self.log.info("Create a pool")
         self.add_pool(create=False)
-        self.pool.name.value = group_name
         self.pool.create()
         self.log.info("Pool UUID is %s", self.pool.uuid)
 
@@ -298,7 +297,6 @@ class DestroyTests(TestWithServers):
 
         self.log.info("Create a pool in server group %s", group_names[0])
         self.add_pool(create=False)
-        self.pool.name.value = group_names[0]
         self.pool.create()
         self.log.info("Pool UUID is %s", self.pool.uuid)
 
@@ -495,7 +493,6 @@ class DestroyTests(TestWithServers):
         self.start_servers(group_hosts)
 
         self.add_pool(create=False)
-        self.pool.name.value = group_names[0]
         self.pool.create()
         self.log.info("Pool UUID is %s on server_group %s",
                       self.pool.uuid, group_names[0])
@@ -530,7 +527,6 @@ class DestroyTests(TestWithServers):
         # Destroy pool with callback while stopping other server
         # Create new pool on server_group_a
         self.add_pool(create=False)
-        self.pool.name.value = group_names[0]
         self.pool.create()
         self.log.info("Pool UUID is %s on server_group %s",
                       self.pool.uuid, group_names[0])
