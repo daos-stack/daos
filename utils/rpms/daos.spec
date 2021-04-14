@@ -344,8 +344,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_storage_estimator.py
 %{_libdir}/python3/site-packages/storage_estimator/*.py
 %dir %{_libdir}/python3/site-packages/storage_estimator
+%if (0%{?rhel} >= 7)
 %dir %{_libdir}/python3/site-packages/storage_estimator/__pycache__
 %{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
+%endif
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
@@ -367,17 +369,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdfs_internal.so
 %dir %{_libdir}/python3/site-packages/pydaos
 %{_libdir}/python3/site-packages/pydaos/*.py
-%if (0%{?rhel} >= 7)
-%dir %{_libdir}/python3/site-packages/pydaos/__pycache__
-%{_libdir}/python3/site-packages/pydaos/__pycache__/*.pyc
-%endif
-%{_libdir}/python3/site-packages/pydaos/pydaos_shim.so
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
+%dir %{_libdir}/python3/site-packages/pydaos/__pycache__
+%{_libdir}/python3/site-packages/pydaos/__pycache__/*.pyc
 %dir %{_libdir}/python3/site-packages/pydaos/raw/__pycache__
 %{_libdir}/python3/site-packages/pydaos/raw/__pycache__/*.pyc
 %endif
+%{_libdir}/python3/site-packages/pydaos/pydaos_shim.so
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos_control.yml
