@@ -34,6 +34,8 @@ print_usage(const char *prog_name)
 	       "\tDisplay data in CSV format\n"
 	       "--meta, -M\n"
 	       "\tDisplay associated metric metadata\n"
+	       "--type, -T\n"
+	       "\tDisplay metric type\n"
 	       "--help, -h\n"
 	       "\tThis help text\n\n"
 	       "Customize the displayed data by specifying one or more "
@@ -59,8 +61,9 @@ main(int argc, char **argv)
 	struct d_tm_node_t	*node = NULL;
 	uint64_t		*shmem_root = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
-	bool			show_timestamp = true;
 	bool			show_meta = false;
+	bool			show_when_read = false;
+	bool			show_type = false;
 	int			srv_idx = 0;
 	int			iteration = 0;
 	int			num_iter = 1;
@@ -86,11 +89,12 @@ main(int argc, char **argv)
 			{"path", required_argument, NULL, 'p'},
 			{"delay", required_argument, NULL, 'D'},
 			{"meta", no_argument, NULL, 'M'},
+			{"type", no_argument, NULL, 'T'},
 			{"help", no_argument, NULL, 'h'},
 			{NULL, 0, NULL, 0}
 		};
 
-		opt = getopt_long_only(argc, argv, "S:cCTdtsgi:p:D:Mh",
+		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MTh",
 				       long_options, NULL);
 		if (opt == -1)
 			break;
@@ -125,6 +129,9 @@ main(int argc, char **argv)
 			break;
 		case 'M':
 			show_meta = true;
+			break;
+		case 'T':
+			show_type = true;
 			break;
 		case 'D':
 			delay = atoi(optarg);
@@ -164,18 +171,20 @@ main(int argc, char **argv)
 	else
 		filter |= D_TM_DIRECTORY;
 
-	if (show_timestamp)
+
+	if (show_when_read)
 		extra_descriptors |= D_TM_INCLUDE_TIMESTAMP;
 	if (show_meta)
 		extra_descriptors |= D_TM_INCLUDE_METADATA;
+	if (show_type)
+		extra_descriptors |= D_TM_INCLUDE_TYPE;
 
 	if (format == D_TM_CSV)
 		d_tm_print_field_descriptors(extra_descriptors, stdout);
 
 	while ((num_iter == 0) || (iteration < num_iter)) {
-		d_tm_print_my_children(shmem_root, root, 0, filter, dirname,
-				       format, show_meta, show_timestamp,
-				       stdout);
+		d_tm_print_my_children(shmem_root, root, 0, filter, NULL,
+				       format, extra_descriptors, stdout);
 		iteration++;
 		sleep(delay);
 		if (format == D_TM_STANDARD)

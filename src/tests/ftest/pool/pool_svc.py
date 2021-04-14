@@ -30,7 +30,17 @@ class PoolSvc(TestWithServers):
 
         """
         self.pool.set_query_data()
-        current_leader = int(self.pool.query_data["leader"])
+        try:
+            current_leader = int(self.pool.query_data["response"]["leader"])
+        except KeyError as error:
+            self.log.error("self.pool.query_data: %s", self.pool.query_data)
+            self.fail(
+                "Error obtaining [\"response\"][\"leader\"] from dmg pool "
+                "query: {}".format(error))
+        except ValueError as error:
+            self.fail(
+                "Error converting dmg pool query pool leader {} into an "
+                "integer: {}".format(self.pool.query_data, error))
         if previous_leader is not None:
             self.log.info(
                 "Pool leader: previous=%s, current=%s",

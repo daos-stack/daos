@@ -28,9 +28,10 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 	struct timespec		tms;
 	uint64_t		val;
 	time_t			clk;
-	char			*shortDesc;
-	char			*longDesc;
+	char			*desc;
+	char			*units;
 	char			*name;
+	int			options = 0;
 	int			rc;
 
 	node = root;
@@ -61,6 +62,9 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 		if (name == NULL)
 			return;
 
+		d_tm_get_metadata(&desc, &units, shmem_root,
+				  nodelist->dtnl_node, NULL);
+
 		switch (nodelist->dtnl_node->dtn_type) {
 		case D_TM_DIRECTORY:
 			fprintf(stdout, "Directory: %-20s\n", name);
@@ -73,7 +77,8 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_counter(val, name, D_TM_STANDARD, stdout);
+			d_tm_print_counter(val, name, D_TM_STANDARD, units,
+					   options, stdout);
 			break;
 		case D_TM_TIMESTAMP:
 			rc = d_tm_get_timestamp(&clk, shmem_root,
@@ -83,7 +88,8 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_timestamp(&clk, name, D_TM_STANDARD, stdout);
+			d_tm_print_timestamp(&clk, name, D_TM_STANDARD, options,
+					     stdout);
 			break;
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
@@ -97,7 +103,8 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			}
 			d_tm_print_timer_snapshot(&tms, name,
 						  nodelist->dtnl_node->dtn_type,
-						  D_TM_STANDARD, stdout);
+						  D_TM_STANDARD, options,
+						  stdout);
 			break;
 		case D_TM_DURATION | D_TM_CLOCK_REALTIME:
 		case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
@@ -111,7 +118,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			}
 			d_tm_print_duration(&tms, &stats, name,
 					    nodelist->dtnl_node->dtn_type,
-					    D_TM_STANDARD, stdout);
+					    D_TM_STANDARD, options, stdout);
 			break;
 		case D_TM_GAUGE:
 			rc = d_tm_get_gauge(&val, &stats, shmem_root,
@@ -122,7 +129,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 				break;
 			}
 			d_tm_print_gauge(val, &stats, name, D_TM_STANDARD,
-					 stdout);
+					 units, options, stdout);
 			break;
 		default:
 			printf("Item: %s has unknown type: 0x%x\n",
@@ -130,14 +137,11 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			break;
 		}
 
-		if (show_meta) {
-			d_tm_get_metadata(&shortDesc, &longDesc, shmem_root,
-					  nodelist->dtnl_node, NULL);
-			d_tm_print_metadata(shortDesc, longDesc, D_TM_STANDARD,
+		if (show_meta)
+			d_tm_print_metadata(desc, units, D_TM_STANDARD,
 					    stdout);
-			D_FREE_PTR(shortDesc);
-			D_FREE_PTR(longDesc);
-		}
+		D_FREE_PTR(desc);
+		D_FREE_PTR(units);
 
 		if (nodelist->dtnl_node->dtn_type != D_TM_DIRECTORY)
 			printf("\n");
@@ -178,7 +182,7 @@ main(int argc, char **argv)
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 	show_meta = true;
 	d_tm_print_my_children(shmem_root, root, 0, filter, NULL,
-			       D_TM_STANDARD, show_meta, false, stdout);
+			       D_TM_STANDARD, D_TM_INCLUDE_METADATA, stdout);
 
 	sprintf(dirname, "manually added");
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |

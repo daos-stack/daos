@@ -7,7 +7,7 @@
 
 
 import uuid
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
 from command_utils_base import CommandFailure
 from test_utils_pool import TestPool
@@ -58,7 +58,7 @@ class EvictTests(TestWithServers):
         """Check if pool handle still exists.
 
         Args:
-            test_param (str): either invalid UUID or bad server name
+            test_param (str): invalid UUID
 
         Returns:
             True or False, depending if the handle exists or not
@@ -76,7 +76,7 @@ class EvictTests(TestWithServers):
         """Connect to pool, connect and try to evict with a bad param.
 
         Args:
-            test_param (str): either invalid UUID or bad server name
+            test_param (str): invalid UUID
 
         Returns:
             TestPool (bool)
@@ -86,16 +86,10 @@ class EvictTests(TestWithServers):
         self.pool = self.connected_pool(self.hostlist_servers)
 
         self.log.info(
-            "Pool UUID: %s\n Pool handle: %s\n Server group: %s\n",
-            self.pool.uuid, self.pool.pool.handle.value, self.pool.name)
+            "Pool UUID: %s\n Pool handle: %s\n",
+            self.pool.uuid, self.pool.pool.handle.value,)
 
-        if test_param == "BAD_SERVER_NAME":
-            # Attempt to evict pool with invalid server group name
-            # set the server group name directly
-            self.pool.pool.group = create_string_buffer(test_param)
-            self.log.info(
-                "Evicting pool with invalid Server Group Name: %s", test_param)
-        elif test_param == "invalid_uuid":
+        if test_param == "invalid_uuid":
             # Attempt to evict pool with invalid UUID
             bogus_uuid = self.pool.uuid
             # in case uuid4() generates pool.uuid
@@ -120,11 +114,7 @@ class EvictTests(TestWithServers):
             self.log.info("Check if pool handle still exist")
             return self.pool_handle_exist(test_param)
         finally:
-            # Restore the valid server group name or uuid
-            if "BAD_SERVER_NAME" in test_param:
-                self.pool.pool.group = create_string_buffer(self.server_group)
-            else:
-                self.pool.pool.set_uuid_str(self.pool.uuid)
+            self.pool.pool.set_uuid_str(self.pool.uuid)
 
         # if here then pool-evict did not raise an exception as expected
         # restore the valid server group name and check if valid pool
@@ -243,18 +233,6 @@ class EvictTests(TestWithServers):
                         "{} != {}".format(
                             count+1, pool[count].uuid, c_uuid_to_str(
                                 pool_info.pi_uuid)))
-
-    @skipForTicket("DAOS-5545")
-    def test_evict_bad_server_name(self):
-        """
-        Test evicting a pool using an invalid server group name.
-
-        :avocado: tags=all,pool,pr,daily_regression,full_regression,small
-        :avocado: tags=poolevict
-        :avocado: tags=poolevict_bad_server_name,DAOS_5610
-        """
-        test_param = self.params.get("server_name", '/run/badparams/*')
-        self.assertTrue(self.evict_badparam(test_param))
 
     def test_evict_bad_uuid(self):
         """
