@@ -357,7 +357,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
 %{_libdir}/libvos_size.so
-%{_libdir}/libcart_test.so
+%{_libdir}/libcart_utils.so
 %dir %{_libdir}/python3/site-packages/pydaos
 %dir %{_libdir}/python3/site-packages/storage_estimator
 %{_libdir}/python3/site-packages/pydaos/*.py
@@ -413,8 +413,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Tue Apr 13 2021 Steven Bollinger <stevenx.bollinger@intel.com> 1.3.0-9
-- Add cart_test library to release
+* Tue Apr 14 2021 Steven Bollinger <stevenx.bollinger@intel.com> 1.3.0-9
+- Add cart_utils library to release
 
 * Tue Apr 02 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-8
 - Remove unused readline-devel

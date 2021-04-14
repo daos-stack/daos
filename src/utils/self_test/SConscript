@@ -13,18 +13,18 @@ SELF_TEST = 'self_test.c'
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs', 'cart_lib', 'gurt_lib', 'cart_test_lib')
+    Import('env', 'prereqs', 'cart_lib', 'gurt_lib', 'cart_utils_lib')
     tenv = env.Clone()
 
     prereqs.require(tenv, 'pmdk')
     tenv.AppendUnique(CPPPATH=['#/src/cart', '#/src/tests/ftest/cart'])
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'cart_test'])
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'cart_utils'])
     prereqs.require(tenv, 'mercury')
-    tenv.AppendUnique(LIBPATH=[Dir('../../tests/ftest/cart')])
+    tenv.AppendUnique(LIBPATH=[Dir('../../cart')])
     tenv.AppendUnique(FLAGS='-pthread')
 
     self_test = daos_build.program(tenv, SELF_TEST)
-    tenv.Requires(self_test, [cart_lib, gurt_lib, cart_test_lib])
+    tenv.Requires(self_test, [cart_lib, gurt_lib, cart_utils_lib])
     tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
 
 if __name__ == "SCons.Script":
