@@ -44,7 +44,7 @@ struct test_options *crtu_get_opts();
 
 void
 crtu_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
-	     bool assert_on_error);
+	       bool assert_on_error);
 
 void
 crtu_set_shutdown_delay(int delay_sec);
@@ -56,23 +56,25 @@ void *
 crtu_progress_fn(void *data);
 
 int
-crtu_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
-		  int tag, int total_ctx, double ping_timeout,
-		  double total_timeout);
+crtu_wait_for_ranks(crt_context_t ctx, crt_group_t *grp,
+		    d_rank_list_t *rank_list,
+		    int tag, int total_ctx, double ping_timeout,
+		    double total_timeout);
 int
 crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
-			crt_group_t *grp, d_rank_t my_rank, bool delete_file);
+			  crt_group_t *grp, d_rank_t my_rank,
+			  bool delete_file);
 
 void
 crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
-		   crt_group_t **grp, d_rank_list_t **rank_list,
-		   crt_context_t *crt_ctx, pthread_t *progress_thread,
-		   unsigned int total_srv_ctx, bool use_cfg,
-		   crt_init_options_t *init_opt);
+		     crt_group_t **grp, d_rank_list_t **rank_list,
+		     crt_context_t *crt_ctx, pthread_t *progress_thread,
+		     unsigned int total_srv_ctx, bool use_cfg,
+		     crt_init_options_t *init_opt);
 void
 crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
-		   pthread_t *progress_thread, crt_group_t **grp,
-		   uint32_t *grp_size, crt_init_options_t *init_opt);
+		     pthread_t *progress_thread, crt_group_t **grp,
+		     uint32_t *grp_size, crt_init_options_t *init_opt);
 int
 crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg);
 

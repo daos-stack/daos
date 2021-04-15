@@ -277,25 +277,34 @@ parse_args(int argc, char **argv)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (strcmp(argv[1], "get_uri_cache") == 0)
+	if (strcmp(argv[1], "get_uri_cache") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_GET_URI_CACHE;
-	else if (strcmp(argv[1], "list_ctx") == 0)
+	} else if (strcmp(argv[1], "list_ctx") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_LIST_CTX;
-	else if (strcmp(argv[1], "get_hostname") == 0)
+	} else if (strcmp(argv[1], "get_hostname") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_GET_HOSTNAME;
-	else if (strcmp(argv[1], "get_pid") == 0)
+	} else if (strcmp(argv[1], "get_pid") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_GET_PID;
-	else if (strcmp(argv[1], "enable_fi") == 0)
+	} else if (strcmp(argv[1], "enable_fi") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_ENABLE_FI;
-	else if (strcmp(argv[1], "disable_fi") == 0)
+	} else if (strcmp(argv[1], "disable_fi") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_DISABLE_FI;
-	else if (strcmp(argv[1], "set_fi_attr") == 0)
+	} else if (strcmp(argv[1], "set_fi_attr") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_SET_FI_ATTR;
-	else if (strcmp(argv[1], "set_log") == 0)
+	} else if (strcmp(argv[1], "set_log") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_LOG_SET;
-	else if (strcmp(argv[1], "add_log_msg") == 0)
+	} else if (strcmp(argv[1], "add_log_msg") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_LOG_ADD_MSG;
-	else {
+	} else {
 		print_usage_msg("Invalid command\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -571,8 +580,8 @@ ctl_init()
 	}
 
 	crtu_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
-			   &rank_list, &ctl_gdata.cg_crt_ctx,
-			   &ctl_gdata.cg_tid, 1, true, NULL);
+			     &rank_list, &ctl_gdata.cg_crt_ctx,
+			     &ctl_gdata.cg_tid, 1, true, NULL);
 
 	rc = sem_init(&ctl_gdata.cg_num_reply, 0, 0);
 	D_ASSERTF(rc == 0, "Could not initialize semaphore. rc %d\n", rc);
@@ -585,7 +594,7 @@ ctl_init()
 	 */
 	if (!ctl_gdata.cg_no_wait_for_ranks) {
 		rc = crtu_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
-				       0, 1, 5, 150);
+					 0, 1, 5, 150);
 		if (rc != 0) {
 			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 			D_GOTO(out, rc);

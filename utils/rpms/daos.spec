@@ -429,7 +429,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Tue Apr 14 2021 Steven Bollinger <stevenx.bollinger@intel.com> 1.3.0-9
+* Tue Apr 14 2021 Steven Bollinger <stevenx.bollinger@intel.com> 1.3.0-11
 - Add cart_utils library to release
 
 * Mon Apr 12 2021 Dalton A. Bohning <daltonx.bohning@intel.com> - 1.3.0-10
