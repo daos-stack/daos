@@ -312,15 +312,13 @@ populate_health_stats(struct bio_dev_health *bdh)
 
 	/** temperature */
 	dev_state->warn_temp_time	= page->warning_temp_time;
-	(void)d_tm_set_gauge(&bdh->bdh_temp_warn_time, page->warning_temp_time,
-			     NULL);
+	d_tm_set_counter(bdh->bdh_temp_warn_time, page->warning_temp_time);
 	dev_state->crit_temp_time	= page->critical_temp_time;
-	d_tm_set_counter(&bdh->bdh_temp_crit_time, page->critical_temp_time,
-			 NULL);
+	d_tm_set_counter(bdh->bdh_temp_crit_time, page->critical_temp_time);
 	dev_state->temperature		= page->temperature;
-	d_tm_set_counter(bdh->bdh_temp, page->temperature);
+	(void)d_tm_set_gauge(&bdh->bdh_temp, page->temperature, NULL);
 	dev_state->temp_warn		= cw.bits.temperature ? true : false;
-	(void)d_tm_set_gauge(&bdh->bdh_temp_warn, dev_state->temp_warn, NULL);
+	(void)d_tm_set_gauge(&bdh->bdh_temp_warn, dev_state->temp_warn, null);
 
 	/** reliability */
 	d_tm_set_counter(bdh->bdh_avail_spare, page->available_spare);
