@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       9%{?relval}%{?dist}
+Release:       10%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -184,6 +184,7 @@ Requires: python3-tabulate
 Requires: fio
 Requires: dbench
 Requires: lbzip2
+Requires: attr
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
@@ -429,6 +430,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Mon Apr 12 2021 Dalton A. Bohning <daltonx.bohning@intel.com> - 1.3.0-10
+- Add attr to the test dependencies
+
 * Tue Apr 06 2021 Kris Jacque <kristin.jacque@intel.com> 1.3.0-9
 - Add package for daos_firmware helper binary
 
