@@ -288,7 +288,6 @@ struct evt_entry_in {
 	uint32_t		ei_inob;
 	/** Address of record to insert */
 	bio_addr_t		ei_addr;
-	bool			ei_corrupted;
 };
 
 enum evt_visibility {

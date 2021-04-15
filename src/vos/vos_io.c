@@ -1474,7 +1474,8 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
 	ent.ei_addr.ba_dedup = false;	/* Don't make this flag persistent */
-	ent.ei_corrupted = ioc->ic_corrupt;
+	if (ioc->ic_corrupt)
+		BIO_ADDR_SET_CORRUPTED(&ent.ei_addr);
 
 	if (ioc->ic_remove)
 		return evt_remove_all(toh, &ent.ei_rect.rc_ex, &ioc->ic_epr);

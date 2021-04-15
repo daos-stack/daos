@@ -405,17 +405,37 @@ update_fetch_csum_for_array_10(void **state)
 	});
 }
 
+#define assert_iov_equal(a, b) \
+	do {\
+	assert_int_equal((a).iov_len, (b).iov_len); \
+	assert_int_equal((a).iov_buf_len, (b).iov_buf_len); \
+	assert_memory_equal((a).iov_buf, (b).iov_buf, (a).iov_buf_len); \
+	} while (0)
+
+#define assert_sgl_equal(a, b) \
+	do { \
+		assert_int_equal((a).sg_nr_out, (b).sg_nr_out); \
+		assert_int_equal((a).sg_nr, (b).sg_nr); \
+		int __i; \
+		for (__i = 0; __i < (a).sg_nr_out; __i++) \
+			assert_iov_equal((a).sg_iovs[__i], (b).sg_iovs[__i]); \
+	} while (0)
+
+
 static void
 mark_sv_corrupted(void **state)
 {
-	struct extent_key	 k = {0};
-	daos_iod_t		 iod = {0};
-	d_sg_list_t		 sgl = {0};
-	int			 rc = 0;
+	struct extent_key	k = {0};
+	daos_iod_t		iod = {0};
+	d_sg_list_t		sgl = {0};
+	d_sg_list_t		sgl_fetch = {0};
+	int			rc = 0;
 
 	/** setup */
 	extent_key_from_test_args(&k, *state);
 	dts_sgl_init_with_strings(&sgl, 1, "Going to be corrupted!!");
+	dts_sgl_alloc_single_iov(&sgl_fetch, daos_sgl_buf_size(&sgl));
+
 
 	iod.iod_name = k.akey;
 	iod.iod_size = daos_sgl_buf_size(&sgl);
@@ -425,25 +445,27 @@ mark_sv_corrupted(void **state)
 	assert_success(vos_obj_update(k.container_hdl, k.object_id, 1, 0, 0,
 				      &k.dkey, 1, &iod, NULL, &sgl));
 
-	/** reset sgl and fetch just to sanity check that it works before
+	/**
+	 * fetch just to sanity check that it works before
 	 * marking as corrupted
 	 */
-	memset(sgl.sg_iovs[0].iov_buf, 0, sgl.sg_iovs[0].iov_buf_len);
 	assert_success(vos_obj_fetch(k.container_hdl, k.object_id, 1, 0,
-				     &k.dkey, 1, &iod, &sgl));
+				     &k.dkey, 1, &iod, &sgl_fetch));
+	assert_sgl_equal(sgl, sgl_fetch);
 
 	/** Mark as corrupted using the corrupt flag */
 	assert_success(vos_obj_update(k.container_hdl, k.object_id, 1, 0,
 				      VOS_OF_CORRUPT,
-				      &k.dkey, 1, &iod, NULL, &sgl));
+				      &k.dkey, 1, &iod, NULL, NULL));
 
 	/** now should return a checksum error */
-	rc = vos_obj_fetch(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod,
-			   &sgl);
+	rc = vos_obj_fetch(k.container_hdl, k.object_id, 2, 0, &k.dkey, 1, &iod,
+			   &sgl_fetch);
 	assert_int_equal(-DER_CSUM, rc);
 
 	/** clean up */
 	d_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl_fetch, true);
 }
 
 static void
@@ -453,11 +475,13 @@ mark_extent_corrupted(void **state)
 	daos_iod_t		iod = {0};
 	daos_recx_t		recx;
 	d_sg_list_t		sgl;
+	d_sg_list_t		sgl_fetch = {0};
 	int			rc;
 
 	/** setup */
 	extent_key_from_test_args(&k, *state);
 	dts_sgl_init_with_strings(&sgl, 1, "Going to be corrupted!!");
+	dts_sgl_alloc_single_iov(&sgl_fetch, daos_sgl_buf_size(&sgl));
 
 	recx.rx_nr = daos_sgl_buf_size(&sgl);
 	recx.rx_idx = 0;
@@ -470,25 +494,26 @@ mark_extent_corrupted(void **state)
 	assert_success(vos_obj_update(k.container_hdl, k.object_id, 1, 0, 0,
 				      &k.dkey, 1, &iod, NULL, &sgl));
 
-	/** reset sgl and fetch just to sanity check that it works before
+	/** fetch just to sanity check that it works before
 	 * marking as corrupted
 	 */
-	memset(sgl.sg_iovs[0].iov_buf, 0, sgl.sg_iovs[0].iov_buf_len);
 	assert_success(vos_obj_fetch(k.container_hdl, k.object_id, 1, 0,
-				     &k.dkey, 1, &iod, &sgl));
+				     &k.dkey, 1, &iod, &sgl_fetch));
+	assert_sgl_equal(sgl, sgl_fetch);
 
 	/** Mark as corrupted using the corrupt flag */
 	assert_success(vos_obj_update(k.container_hdl, k.object_id, 1, 0,
 				      VOS_OF_CORRUPT,
-				      &k.dkey, 1, &iod, NULL, &sgl));
+				      &k.dkey, 1, &iod, NULL, NULL));
 
 	/** now should return a checksum error */
 	rc = vos_obj_fetch(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod,
-			   &sgl);
+			   &sgl_fetch);
 	assert_int_equal(-DER_CSUM, rc);
 
 	/** clean up */
 	d_sgl_fini(&sgl, true);
+	d_sgl_fini(&sgl_fetch, true);
 }
 
 /**

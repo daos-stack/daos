@@ -1910,8 +1910,6 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent,
 
 	dst_desc->dc_ex_addr = ent->ei_addr;
 	dst_desc->dc_ver = ent->ei_ver;
-	if (ent->ei_corrupted)
-		BIO_ADDR_SET_CORRUPTED(&dst_desc->dc_ex_addr);
 	evt_desc_csum_fill(tcx, dst_desc, ent, csum_bufp);
 
 	return 0;
@@ -2879,8 +2877,6 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		desc->dc_ex_addr = ent->ei_addr;
 		evt_desc_csum_fill(tcx, desc, ent, csum_bufp);
 		desc->dc_ver = ent->ei_ver;
-		if (ent->ei_corrupted)
-			BIO_ADDR_SET_CORRUPTED(&desc->dc_ex_addr);
 	} else {
 		nd->tn_child[i] = in_off;
 	}
