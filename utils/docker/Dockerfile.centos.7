@@ -14,19 +14,19 @@ ARG REPO_URL=""
 ARG REPO_DISTRO=""
 ARG REPO_DAOS=""
 
-# Make sure EPEL is installed with its key
-RUN yum clean all &&                                            \
-    yum -y install epel-release &&                              \
-    yum -y upgrade epel-release &&                              \
-    yum clean all
-
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
 # If a local distro repository is supplied, then we should use it
 # and disable using the distro repositories.
-# The epel-release package must be installed and updated before this step
+# The Docker image starts out with the DISTRO provided GPG keys
+# on the disk, but not installed.  These must be isntalled before
+# adding any repo that needs GPG keys but does not provide meta
+# data for installing those keys.  Then the epel-release
+# package must be installed and the GPG key it provides must be
+# installed.
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
+      rpm --import /etc/pki/rpm-gpg/* ;                         \
       MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
       MY_NAME="${MY_REPO#*//}";                                 \
       MY_NAME="${MY_NAME//\//_}";                               \
@@ -36,9 +36,12 @@ baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
+      yum -y install --disablerepo=extras                       \
+             dnf dnf-pluins-core epel-release-7-11;             \
+      rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7;         \
       yum -y install dnf dnf-plugins-core;                      \
       dnf config-manager --assumeyes --quiet                    \
-                         --disable base extra epel updates;     \
+                         --disable base extras epel updates;    \
       yum clean all;                                            \
       dnf clean all;                                            \
       sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
@@ -58,7 +61,6 @@ enabled=1\n\
 repo_gpgcheck=0\n\
 exclude=fuse-3* fuse-devel-3* fuse-libs-3* fuse-debuginfo-3* ompi*\n\
 gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
-      yum clean all;                                            \
     fi
 
 # Install OS updates and package.  Include basic tools and daos dependencies
@@ -69,7 +71,7 @@ gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
 RUN yum clean all && \
-    yum -y install dnf && \
+    yum -y install dnf epel-release && \
     yum clean all && \
     dnf -y upgrade && \
     dnf -y install \

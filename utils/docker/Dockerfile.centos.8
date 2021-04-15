@@ -13,25 +13,19 @@ ARG REPO_URL
 ARG REPO_DAOS=""
 ARG REPO_DISTRO=""
 
-# Need to do this before switching to a alternate local repo
-# and make sure all the repo keys needed are imported
-# Need to do the update here to pick up the current GPG key
-# for EPEL
-# Note that the version of Nexus 3 OSS edition does not fully
-# support CentOS 8 repositories, so it is not possible to totally
-# isolate us from the external repos at this time.
-RUN dnf clean all &&                                            \
-    dnf -y install epel-release dnf-plugins-core dnf-utils &&   \
-    dnf config-manager --set-enabled powertools            &&   \
-    dnf -y update epel-release &&                               \
-    dnf clean all
-
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
 # If a local distro repository is supplied, then we should use it
 # and disable using the distro repositories that can be mirrored.
+# The Docker image starts out with the DISTRO provided GPG keys
+# on the disk, but not installed.  These must be isntalled before
+# adding any repo that needs GPG keys but does not provide meta
+# data for installing those keys.  Then the epel-release
+# package must be installed and the GPG key it provides must be
+# installed.
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
+      rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
       MY_NAME="${MY_REPO#*//}";                                 \
       MY_NAME="${MY_NAME//\//_}";                               \
@@ -42,10 +36,16 @@ enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
       dnf clean all;                                            \
+      dnf list --showduplicates epel-release dnf-plugins-core dnf-utils; \
+      dnf -y install --disablerepo extras --disablerepo baseos  \
+          epel-release-8-8.el8 dnf-plugins-core dnf-utils;      \
+      rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;         \
       dnf config-manager --assumeyes --quiet --disable          \
           baseos powertools epel epel-modular extras;           \
       sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
           -i /etc/dnf/dnf.conf;                                 \
+      dnf -y update epel-release;                               \
+      dnf clean all;                                            \
     fi
 
 # If a local DAOS repository is supplied, then we should use it
@@ -60,7 +60,6 @@ baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
-      dnf clean all;                                            \
     fi
 
 
