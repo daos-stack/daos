@@ -8,9 +8,10 @@ Vagrant.configure("2") do |config|
         # disable the default shared folder
         config.vm.synced_folder ".", "/vagrant", disabled: true
         # but share the user's daoshome
-        config.vm.synced_folder ".", File.dirname(__FILE__), type: "nfs", 
-                  nfs_version: 4,
-                  nfs_udp: false
+        # can't do this if user's daoshome is NFS mounted
+        #config.vm.synced_folder ".", File.dirname(__FILE__), type: "nfs", 
+        #          nfs_version: 4,
+        #          nfs_udp: false
 
         config.vm.provider :libvirt do |libvirt, override|
                 override.vm.box = "centos/7"
@@ -151,7 +152,9 @@ __EOF"
         config.trigger.after :up, type: :command do |trigger|
                 trigger.run = {inline: 'bash -c "set -x; vagrant ssh-config > vagrant_ssh_config; ' +
                                                 'if ! grep \"^Include ' + ENV['PWD'] + '/vagrant_ssh_config\" ' + ENV['HOME'] + '/.ssh/config; then' +
+                                                '    echo \"# Added by ' + __FILE__\" >> ' + ENV['HOME'] + '/.ssh/config; ' +
                                                 '    echo \"Include ' + ENV['PWD'] + '/vagrant_ssh_config\" >> ' + ENV['HOME'] + '/.ssh/config; ' +
+                                                '    echo \"# Added by ' + __FILE__\" >> ' + ENV['HOME'] + '/.ssh/config; ' +
                                                 'fi"'}
         end
 end
