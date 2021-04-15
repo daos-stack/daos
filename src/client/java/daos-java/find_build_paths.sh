@@ -4,7 +4,6 @@ daos_install_path=$1
 var=$2
 in_tree=$3
 build_vars=../../../../.build_vars_.sh
-build_dir=../../../../../build/
 if [ ! -f "${build_vars}" ]
 then
   if [ "$var" = "SL_PREFIX" ]

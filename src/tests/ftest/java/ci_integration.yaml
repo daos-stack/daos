@@ -1,17 +1,15 @@
 hosts:
     test_servers:
-      - boro-14
-#      - server-A
+      - server-A
     test_clients:
-      - boro-14
-#      - client-B
+      - client-B
 timeout: 600
 server_config:
     name: daos_server
     servers:
         log_mask: INFO
-#        scm_class: dcpm
-#        scm_list: ["/dev/pmem0"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
     mode: 146 # 146 is RW
     name: daos_server
