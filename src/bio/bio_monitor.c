@@ -318,7 +318,7 @@ populate_health_stats(struct bio_dev_health *bdh)
 	dev_state->temperature		= page->temperature;
 	(void)d_tm_set_gauge(&bdh->bdh_temp, page->temperature, NULL);
 	dev_state->temp_warn		= cw.bits.temperature ? true : false;
-	(void)d_tm_set_gauge(&bdh->bdh_temp_warn, dev_state->temp_warn, null);
+	(void)d_tm_set_gauge(&bdh->bdh_temp_warn, dev_state->temp_warn, NULL);
 
 	/** reliability */
 	d_tm_set_counter(bdh->bdh_avail_spare, page->available_spare);
@@ -634,6 +634,7 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 		return 0;
 	}
 #define X(field, fname, desc, unit, type)				\
+	memset(binfo, 0, sizeof(*binfo));				\
 	rc = fill_in_traddr(binfo, bdev_name);				\
 	if (rc || binfo->bdi_traddr == NULL) {				\
 		D_WARN("Failed to extract %s addr: "DF_RC"\n",		\

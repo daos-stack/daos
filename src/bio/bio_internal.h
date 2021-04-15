@@ -56,10 +56,10 @@ struct bio_dma_buffer {
 #define BIO_PROTO_NVME_STATS_LIST					\
 	X(bdh_du_written, "commands/data_units_written",		\
 	  "number of 512b data units written to the controller",	\
-	  "512b data units", D_TM_COUNTER)				\
+	  "data units", D_TM_COUNTER)					\
 	X(bdh_du_read, "commands/data_units_read",			\
 	  "number of 512b data units read from to the controller",	\
-	  "512b data units", D_TM_COUNTER)				\
+	  "data units", D_TM_COUNTER)					\
 	X(bdh_write_cmds, "commands/host_write_cmds",			\
 	  "number of write commands completed by to the controller",	\
 	  "commands", D_TM_COUNTER)					\
@@ -70,17 +70,16 @@ struct bio_dma_buffer {
 	  "Amount of time the controller is busy with I/O commands",	\
 	  "minutes", D_TM_COUNTER)					\
 	X(bdh_media_errs, "commands/media_errs",			\
-	  "Number of occurrences where the controller detected an unrecovered "\
-	  "data integrity error (e.g. ECC, CRC or LBA tag mismatch)",	\
+	  "Number of unrecovered data integrity error",			\
 	  "errors", D_TM_COUNTER)					\
 	X(bdh_read_errs, "commands/read_errs",				\
-	  "Number of I/O errors reported to the engine on read commands",      \
+	  "Number of errors reported to the engine on read commands",      \
 	  "errors", D_TM_COUNTER)					\
 	X(bdh_write_errs, "commands/write_errs",			\
-	  "Number of I/O errors reported to the engine on write commands",     \
+	  "Number of errors reported to the engine on write commands",     \
 	  "errors", D_TM_COUNTER)					\
 	X(bdh_unmap_errs, "commands/unmap_errs",			\
-	  "Number of I/O errors reported to the engine on unmap/trim commands",\
+	  "Number of errors reported to the engine on unmap/trim commands",\
 	  "errors", D_TM_COUNTER)					\
 	X(bdh_checksum_errs, "commands/checksum_mismatch",		\
 	  "Number of checksum mismatch detected by the engine",		\
@@ -94,29 +93,29 @@ struct bio_dma_buffer {
 	X(bdh_unsafe_shutdowns, "unsafe_shutdowns",			\
 	  "Number of unsafe shutdowns (no notification prior to power loss)",  \
 	  "shutdowns", D_TM_COUNTER)					\
-	X(bdh_temp, "temperature/current",				\
+	X(bdh_temp, "temp/current",					\
 	  "Current SSD temperature",					\
 	  "kelvin", D_TM_GAUGE)						\
-	X(bdh_temp_warn, "temperature/warn",				\
+	X(bdh_temp_warn, "temp/warn",					\
 	  "Set to 1 if temperature is above threshold",			\
 	  "", D_TM_GAUGE)						\
-	X(bdh_temp_warn_time, "temperature/warn_time",			\
+	X(bdh_temp_warn_time, "temp/warn_time",				\
 	  "Amount of time the controller operated above warn temp threshold",  \
 	  "minutes", D_TM_COUNTER)					\
-	X(bdh_temp_crit_time, "temperature/crit_time",			\
+	X(bdh_temp_crit_time, "temp/crit_time",				\
 	  "Amount of time the controller operated above crit temp threshold",  \
 	  "minutes", D_TM_COUNTER)					\
 	X(bdh_percent_used, "reliability/percentage_used",		\
 	  "Estimate of the percentage of NVM subsystem life used based on the "\
 	  "actual usage and the manufacturer's prediction of NVM life",	\
 	  "%", D_TM_COUNTER)						\
-	X(bdh_avail_spare, "reliability/available_spare",		\
+	X(bdh_avail_spare, "reliability/avail_spare",			\
 	  "Percentage of remaining spare capacity available",		\
 	  "%", D_TM_COUNTER)						\
-	X(bdh_avail_spare_thres, "reliability/available_spare_threshold",  \
+	X(bdh_avail_spare_thres, "reliability/avail_spare_threshold",	\
 	  "Threshold for available spare value",			\
 	  "%", D_TM_COUNTER)						\
-	X(bdh_avail_spare_warn, "reliability/available_spare_warn",	\
+	X(bdh_avail_spare_warn, "reliability/avail_spare_warn",		\
 	  "Set to 1 when available spare has fallen below threshold",	\
 	  "", D_TM_GAUGE)						\
 	X(bdh_reliability_warn, "reliability/reliability_warn",		\
