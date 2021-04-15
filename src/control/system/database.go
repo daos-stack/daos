@@ -492,7 +492,7 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 		// excluded should be omitted from the group map. If a member
 		// is actually down, it will be marked dead by swim and moved
 		// into the evicted state eventually.
-		if srv.state&ExcludedMemberFilter > 0 {
+		if srv.state&ExcludedMemberFilter != 0 {
 			continue
 		}
 		// Quick sanity-check: Don't include members that somehow have

@@ -38,12 +38,12 @@ const (
 	MemberStateStopped MemberState = 0x0020
 	// MemberStateEvicted indicates rank has been automatically evicted from DAOS system.
 	MemberStateEvicted MemberState = 0x0040
-	// MemberStateExcluded indicates that the rank has been administratively excluded.
-	MemberStateExcluded MemberState = 0x0080
 	// MemberStateErrored indicates the process stopped with errors.
-	MemberStateErrored MemberState = 0x0100
+	MemberStateErrored MemberState = 0x0080
 	// MemberStateUnresponsive indicates the process is not responding.
-	MemberStateUnresponsive MemberState = 0x0200
+	MemberStateUnresponsive MemberState = 0x0100
+	// MemberStateExcluded indicates that the rank has been administratively excluded.
+	MemberStateExcluded MemberState = 0x0200
 
 	// ExcludedMemberFilter defines the state(s) to be used when determining
 	// whether or not a member should be excluded from CaRT group map updates.

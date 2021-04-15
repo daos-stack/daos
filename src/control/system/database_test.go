@@ -741,11 +741,17 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			// This is a bit fragile, but I don't see a better way to maintain
 			// this list. We'll just need to keep it updated as the states change.
 			members: membersWithStates(
-				MemberStateUnknown, MemberStateAwaitFormat,
-				MemberStateStarting, MemberStateReady, MemberStateJoined,
-				MemberStateStopping, MemberStateStopped,
-				MemberStateEvicted, MemberStateExcluded,
-				MemberStateErrored, MemberStateUnresponsive,
+				MemberStateUnknown,      // rank 0
+				MemberStateAwaitFormat,  // rank 1, excluded
+				MemberStateStarting,     // rank 2
+				MemberStateReady,        // rank 3
+				MemberStateJoined,       // rank 4
+				MemberStateStopping,     // rank 5
+				MemberStateStopped,      // rank 6
+				MemberStateEvicted,      // rank 7, excluded
+				MemberStateExcluded,     // rank 8, excluded
+				MemberStateErrored,      // rank 9
+				MemberStateUnresponsive, // rank 10
 			),
 			expGroupMap: &GroupMap{
 				Version: 11,
