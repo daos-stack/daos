@@ -1373,20 +1373,20 @@ class DaosContainer():
         # 2. Enable checksum,
         # 3. Server Verfiy
         # 4. Chunk Size Allocation.
-        if ((self.cont_input_values.type != "Unknown")
+        if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
                 and (self.cont_input_values.enable_chksum is False)):
             # Only type like posix, hdf5 defined.
             num_prop = 1
-        elif ((self.cont_input_values.type == "Unknown")
+        elif ((self.cont_input_values.type.decode("UTF-8") == "Unknown")
               and (self.cont_input_values.enable_chksum is True)):
             # Obly checksum enabled.
             num_prop = 3
-        elif ((self.cont_input_values.type != "Unknown")
+        elif ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
               and (self.cont_input_values.enable_chksum is True)):
             # Both layout and checksum properties defined
             num_prop = 4
 
-        if ((self.cont_input_values.type != "Unknown")
+        if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
                 or (self.cont_input_values.enable_chksum is True)):
             self.cont_prop = daos_cref.DaosProperty(num_prop)
         # idx index is used to increment the dpp_entried array
@@ -1395,13 +1395,14 @@ class DaosContainer():
         # dpp_entries will start with idx=0. If layer is not
         # none, checksum dpp_entries will start at idx=1.]
         idx = 0
-        if self.cont_input_values.type != "Unknown":
+        if self.cont_input_values.type.decode("UTF-8") != "Unknown":
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
-            if self.cont_input_values.type in ("posix", "POSIX"):
+            if self.cont_input_values.type.decode(
+                    "UTF-8") in ("posix", "POSIX"):
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value)
-            elif self.cont_input_values.type == "hdf5":
+            elif self.cont_input_values.type.decode("UTF-8") == "hdf5":
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value)
             else:
