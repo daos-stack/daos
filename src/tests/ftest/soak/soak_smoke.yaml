@@ -7,16 +7,18 @@ hosts:
         - server-D
 # servers if a server partition is defined
     # server_partition: daos_server
-    client_partition: daos_client
-    # client_reservation: daos-test
+    client_partition: normal
+    client_reservation: daos-test
 orterun:
     allow_run_as_root: True
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 24 Min test
 timeout: 30M
+aurora: True
+mpi_module: mpich/gnu-sockets
 setup:
-    start_servers: True
-    start_agents: True
+    start_servers: False
+    start_agents: False
 server_config:
     name: daos_server
     provider: ofi+sockets
@@ -99,7 +101,6 @@ smoke:
     joblist:
         - ior_smoke
         - fio_smoke
-        - daos_racer
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -149,20 +150,6 @@ fio_smoke:
     oclass:
         - 'SX'
         - 'RP_2G1'
-daos_racer:
-  runtime: 120
-  container:
-      type: POSIX
-      control_method: daos
-      oclass: 'SX'
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_direct_io: True
-hdf5_vol:
-    plugin_path: "/usr/lib64/mpich/lib"
-events:
-    - "mce: [Hardware Error]: Machine check events logged"
-    - "Package temperature above threshold"
-monitor:
-    - "/usr/bin/free -h"
-    - "/usr/bin/vmstat -w"

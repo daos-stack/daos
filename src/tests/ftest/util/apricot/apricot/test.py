@@ -407,11 +407,11 @@ class TestWithoutServers(Test):
         """Set up run before each test."""
         super().setUp()
         if not load_mpi("openmpi"):
-            self.fail("Failed to load openmpi")
+            self.log.info("Failed to load openmpi")
 
         self.orterun = find_executable('orterun')
         if self.orterun is None:
-            self.fail("Could not find orterun")
+            self.log.info("Could not find orterun")
 
         # hardware tests segfault in MPI_Init without this option
         self.client_mca = "--mca btl_openib_warn_default_gid_prefix 0"

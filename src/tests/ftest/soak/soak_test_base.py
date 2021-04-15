@@ -21,7 +21,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
-    create_racer_cmdline, run_event_check, run_monitor_check
+    run_event_check, run_monitor_check
 
 
 class SoakTestBase(TestWithServers):
@@ -60,6 +60,7 @@ class SoakTestBase(TestWithServers):
         self.all_failed_harassers = None
         self.soak_errors = None
         self.check_errors = None
+        self.aurora = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -488,11 +489,13 @@ class SoakTestBase(TestWithServers):
         self.test_name = self.params.get("name", test_param + "*")
         self.nodesperjob = self.params.get("nodesperjob", test_param + "*")
         self.taskspernode = self.params.get("taskspernode", test_param + "*")
+        self.aurora = self.params.get("aurora", "/run/*", False)
         single_test_pool = self.params.get(
             "single_test_pool", test_param + "*", True)
-        self.dmg_command.copy_certificates(
-            get_log_file("daosCA/certs"), self.hostlist_clients)
-        self.dmg_command.copy_configuration(self.hostlist_clients)
+        if not self.aurora:
+            self.dmg_command.copy_certificates(
+                get_log_file("daosCA/certs"), self.hostlist_clients)
+            self.dmg_command.copy_configuration(self.hostlist_clients)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         rank = self.params.get("rank", "/run/container_reserved/*")
