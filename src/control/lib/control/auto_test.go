@@ -37,8 +37,8 @@ var (
 	engineCfgWithSSDs = func(t *testing.T, numa int) *engine.Config {
 		var pciAddrs []string
 		for _, c := range MockServerScanResp(t, "withSpaceUsage").Nvme.Ctrlrs {
-			if int(c.Socketid) == numa {
-				pciAddrs = append(pciAddrs, c.Pciaddr)
+			if int(c.SocketId) == numa {
+				pciAddrs = append(pciAddrs, c.PciAddr)
 			}
 		}
 

@@ -8,8 +8,10 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
@@ -17,20 +19,138 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+func TestControl_StorageMap(t *testing.T) {
+	for name, tc := range map[string]struct {
+		hss       []*HostStorage
+		expHsmLen int
+		expErr    error
+	}{
+		"matching zero values": {
+			hss: []*HostStorage{
+				{},
+				{},
+			},
+			expHsmLen: 1,
+		},
+		"matching empty values": {
+			hss: []*HostStorage{
+				{
+					NvmeDevices:   storage.NvmeControllers{},
+					ScmNamespaces: storage.ScmNamespaces{},
+				},
+				{
+					NvmeDevices:   storage.NvmeControllers{},
+					ScmNamespaces: storage.ScmNamespaces{},
+				},
+			},
+			expHsmLen: 1,
+		},
+		"mismatch non-empty nvme devices": {
+			hss: []*HostStorage{
+				{
+					NvmeDevices:   storage.NvmeControllers{},
+					ScmNamespaces: storage.ScmNamespaces{},
+				},
+				{
+					NvmeDevices:   storage.NvmeControllers{},
+					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
+				},
+			},
+			expHsmLen: 2,
+		},
+		// NOTE: current implementation does not distinguish between nil
+		//       and empty slices when hashing during HostStorageMap.Add
+		// "mismatch nil and empty nvme devices": {
+		// 	hss: []*HostStorage{
+		// 		{
+		// 			NvmeDevices:   storage.NvmeControllers{},
+		// 			ScmNamespaces: storage.ScmNamespaces{},
+		// 		},
+		// 		{
+		// 			NvmeDevices:   nil,
+		// 			ScmNamespaces: storage.ScmNamespaces{},
+		// 		},
+		// 	},
+		// 	expHsmLen: 2,
+		// },
+		"mismatch reboot required": {
+			hss: []*HostStorage{
+				{
+					NvmeDevices:    storage.NvmeControllers{},
+					ScmNamespaces:  storage.ScmNamespaces{storage.MockScmNamespace(0)},
+					RebootRequired: false,
+				},
+				{
+					NvmeDevices:    storage.NvmeControllers{},
+					ScmNamespaces:  storage.ScmNamespaces{storage.MockScmNamespace(0)},
+					RebootRequired: true,
+				},
+			},
+			expHsmLen: 2,
+		},
+		"mismatch nvme capacity": {
+			hss: []*HostStorage{
+				{
+					NvmeDevices: storage.NvmeControllers{
+						&storage.NvmeController{
+							Namespaces: []*storage.NvmeNamespace{
+								&storage.NvmeNamespace{
+									Size: uint64(humanize.TByte),
+								},
+							},
+						},
+					},
+					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+				},
+				{
+					NvmeDevices: storage.NvmeControllers{
+						&storage.NvmeController{
+							Namespaces: []*storage.NvmeNamespace{
+								&storage.NvmeNamespace{
+									Size: uint64(humanize.TByte * 2),
+								},
+							},
+						},
+					},
+					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+				},
+			},
+			expHsmLen: 2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			hsm := make(HostStorageMap)
+
+			for i, hs := range tc.hss {
+				gotErr := hsm.Add(fmt.Sprintf("h%d", i), hs)
+				common.CmpErr(t, tc.expErr, gotErr)
+				if tc.expErr != nil {
+					return
+				}
+			}
+
+			common.AssertEqual(t, tc.expHsmLen, len(hsm), "unexpected number of keys in map")
+		})
+	}
+}
+
 func TestControl_StorageScan(t *testing.T) {
 	var (
-		standardScan       = MockServerScanResp(t, "standard")
-		withNamespacesScan = MockServerScanResp(t, "withNamespace")
-		withSpaceUsageScan = MockServerScanResp(t, "withSpaceUsage")
-		noNVMEScan         = MockServerScanResp(t, "noNVME")
-		noSCMScan          = MockServerScanResp(t, "noSCM")
-		noStorageScan      = MockServerScanResp(t, "noStorage")
-		scmScanFailed      = MockServerScanResp(t, "scmFailed")
-		nvmeScanFailed     = MockServerScanResp(t, "nvmeFailed")
-		bothScansFailed    = MockServerScanResp(t, "bothFailed")
+		standard       = MockServerScanResp(t, "standard")
+		withNamespaces = MockServerScanResp(t, "withNamespace")
+		withSpaceUsage = MockServerScanResp(t, "withSpaceUsage")
+		noNvme         = MockServerScanResp(t, "noNvme")
+		noScm          = MockServerScanResp(t, "noScm")
+		noStorage      = MockServerScanResp(t, "noStorage")
+		scmFailed      = MockServerScanResp(t, "scmFailed")
+		nvmeFailed     = MockServerScanResp(t, "nvmeFailed")
+		bothFailed     = MockServerScanResp(t, "bothFailed")
+		nvmeBasicA     = MockServerScanResp(t, "nvmeBasicA")
+		nvmeBasicB     = MockServerScanResp(t, "nvmeBasicB")
 	)
 	for name, tc := range map[string]struct {
 		mic         *MockInvokerConfig
@@ -61,7 +181,7 @@ func TestControl_StorageScan(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr:    ",",
-							Message: standardScan,
+							Message: standard,
 						},
 					},
 				},
@@ -109,14 +229,14 @@ func TestControl_StorageScan(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr:    "host1",
-							Message: scmScanFailed,
+							Message: scmFailed,
 						},
 					},
 				},
 			},
 			expResponse: &StorageScanResp{
 				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "scm scan failed"}),
-				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", scmScanFailed}),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", scmFailed}),
 			},
 		},
 		"nvme scan error": {
@@ -125,14 +245,14 @@ func TestControl_StorageScan(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr:    "host1",
-							Message: nvmeScanFailed,
+							Message: nvmeFailed,
 						},
 					},
 				},
 			},
 			expResponse: &StorageScanResp{
 				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "nvme scan failed"}),
-				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", noNVMEScan}),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", noNvme}),
 			},
 		},
 		"scm and nvme scan error": {
@@ -141,7 +261,7 @@ func TestControl_StorageScan(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr:    "host1",
-							Message: bothScansFailed,
+							Message: bothFailed,
 						},
 					},
 				},
@@ -151,7 +271,7 @@ func TestControl_StorageScan(t *testing.T) {
 					&MockHostError{"host1", "nvme scan failed"},
 					&MockHostError{"host1", "scm scan failed"},
 				),
-				HostStorage: MockHostStorageMap(t, &MockStorageScan{"host1", noStorageScan}),
+				HostStorage: MockHostStorageMap(t, &MockStorageScan{"host1", noStorage}),
 			},
 		},
 		"no storage": {
@@ -160,14 +280,14 @@ func TestControl_StorageScan(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr:    "host1",
-							Message: noStorageScan,
+							Message: noStorage,
 						},
 					},
 				},
 			},
 			expResponse: &StorageScanResp{
 				HostErrorsResp: MockHostErrorsResp(t),
-				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", noStorageScan}),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", noStorage}),
 			},
 		},
 		"single host": {
@@ -176,14 +296,14 @@ func TestControl_StorageScan(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr:    "host1",
-							Message: standardScan,
+							Message: standard,
 						},
 					},
 				},
 			},
 			expResponse: &StorageScanResp{
 				HostErrorsResp: MockHostErrorsResp(t),
-				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", standardScan}),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", standard}),
 			},
 		},
 		"single host with namespace": {
@@ -192,14 +312,14 @@ func TestControl_StorageScan(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr:    "host1",
-							Message: withNamespacesScan,
+							Message: withNamespaces,
 						},
 					},
 				},
 			},
 			expResponse: &StorageScanResp{
 				HostErrorsResp: MockHostErrorsResp(t),
-				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", withNamespacesScan}),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", withNamespaces}),
 			},
 		},
 		"single host with space utilization": {
@@ -208,14 +328,14 @@ func TestControl_StorageScan(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr:    "host1",
-							Message: withSpaceUsageScan,
+							Message: withSpaceUsage,
 						},
 					},
 				},
 			},
 			expResponse: &StorageScanResp{
 				HostErrorsResp: MockHostErrorsResp(t),
-				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", withSpaceUsageScan}),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", withSpaceUsage}),
 			},
 		},
 		"two hosts same scan": {
@@ -224,7 +344,7 @@ func TestControl_StorageScan(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr:    "host1",
-							Message: standardScan,
+							Message: standard,
 						},
 						{
 							Addr: "host2",
@@ -237,7 +357,7 @@ func TestControl_StorageScan(t *testing.T) {
 			},
 			expResponse: &StorageScanResp{
 				HostErrorsResp: MockHostErrorsResp(t),
-				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1,host2", standardScan}),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1,host2", standard}),
 			},
 		},
 		"two hosts different scans": {
@@ -246,11 +366,11 @@ func TestControl_StorageScan(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr:    "host1",
-							Message: noNVMEScan,
+							Message: noNvme,
 						},
 						{
 							Addr:    "host2",
-							Message: noSCMScan,
+							Message: noScm,
 						},
 					},
 				},
@@ -258,8 +378,31 @@ func TestControl_StorageScan(t *testing.T) {
 			expResponse: &StorageScanResp{
 				HostErrorsResp: MockHostErrorsResp(t),
 				HostStorage: MockHostStorageMap(t,
-					&MockStorageScan{"host1", noNVMEScan},
-					&MockStorageScan{"host2", noSCMScan},
+					&MockStorageScan{"host1", noNvme},
+					&MockStorageScan{"host2", noScm},
+				),
+			},
+		},
+		"two hosts different nvme capacity": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr:    "host1",
+							Message: nvmeBasicA,
+						},
+						{
+							Addr:    "host2",
+							Message: nvmeBasicB,
+						},
+					},
+				},
+			},
+			expResponse: &StorageScanResp{
+				HostErrorsResp: MockHostErrorsResp(t),
+				HostStorage: MockHostStorageMap(t,
+					&MockStorageScan{"host1", nvmeBasicA},
+					&MockStorageScan{"host2", nvmeBasicB},
 				),
 			},
 		},
@@ -391,9 +534,7 @@ func TestControl_StorageFormat(t *testing.T) {
 										},
 										{
 											Mntpoint: "/mnt/2",
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
+											State:    &ctlpb.ResponseState{},
 										},
 									},
 									Crets: []*ctlpb.NvmeControllerResult{
@@ -403,7 +544,8 @@ func TestControl_StorageFormat(t *testing.T) {
 											},
 										},
 										{
-											Pciaddr: "2",
+											PciAddr: "2",
+											State:   &ctlpb.ResponseState{},
 										},
 									},
 								},
@@ -431,23 +573,17 @@ func TestControl_StorageFormat(t *testing.T) {
 									Mrets: []*ctlpb.ScmMountResult{
 										{
 											Mntpoint: "/mnt/1",
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
+											State:    &ctlpb.ResponseState{},
 										},
 										{
 											Mntpoint: "/mnt/2",
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
+											State:    &ctlpb.ResponseState{},
 										},
 									},
 									Crets: []*ctlpb.NvmeControllerResult{
 										{
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
-											Pciaddr: "1",
+											State:   &ctlpb.ResponseState{},
+											PciAddr: "1",
 										},
 										{
 											State: &ctlpb.ResponseState{
@@ -481,29 +617,21 @@ func TestControl_StorageFormat(t *testing.T) {
 									Mrets: []*ctlpb.ScmMountResult{
 										{
 											Mntpoint: "/mnt/1",
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
+											State:    &ctlpb.ResponseState{},
 										},
 										{
 											Mntpoint: "/mnt/2",
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
+											State:    &ctlpb.ResponseState{},
 										},
 									},
 									Crets: []*ctlpb.NvmeControllerResult{
 										{
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
-											Pciaddr: "1",
+											State:   &ctlpb.ResponseState{},
+											PciAddr: "1",
 										},
 										{
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
-											Pciaddr: "2",
+											State:   &ctlpb.ResponseState{},
+											PciAddr: "2",
 										},
 									},
 								},
@@ -530,29 +658,21 @@ func TestControl_StorageFormat(t *testing.T) {
 									Mrets: []*ctlpb.ScmMountResult{
 										{
 											Mntpoint: "/mnt/1",
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
+											State:    &ctlpb.ResponseState{},
 										},
 										{
 											Mntpoint: "/mnt/2",
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
+											State:    &ctlpb.ResponseState{},
 										},
 									},
 									Crets: []*ctlpb.NvmeControllerResult{
 										{
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
-											Pciaddr: "1",
+											State:   &ctlpb.ResponseState{},
+											PciAddr: "1",
 										},
 										{
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
-											Pciaddr: "2",
+											State:   &ctlpb.ResponseState{},
+											PciAddr: "2",
 										},
 									},
 								},
@@ -563,29 +683,21 @@ func TestControl_StorageFormat(t *testing.T) {
 									Mrets: []*ctlpb.ScmMountResult{
 										{
 											Mntpoint: "/mnt/1",
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
+											State:    &ctlpb.ResponseState{},
 										},
 										{
 											Mntpoint: "/mnt/2",
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
+											State:    &ctlpb.ResponseState{},
 										},
 									},
 									Crets: []*ctlpb.NvmeControllerResult{
 										{
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
-											Pciaddr: "1",
+											State:   &ctlpb.ResponseState{},
+											PciAddr: "1",
 										},
 										{
-											State: &ctlpb.ResponseState{
-												Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-											},
-											Pciaddr: "2",
+											State:   &ctlpb.ResponseState{},
+											PciAddr: "2",
 										},
 									},
 								},

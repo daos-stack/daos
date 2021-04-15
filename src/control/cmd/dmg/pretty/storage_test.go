@@ -41,14 +41,18 @@ func mockHostStorageMap(t *testing.T, hosts ...*mockHostStorage) control.HostSto
 
 func TestControl_PrintStorageScanResponse(t *testing.T) {
 	var (
-		standardScan      = control.MockServerScanResp(t, "standard")
-		withNamespaceScan = control.MockServerScanResp(t, "withNamespace")
-		noNVMEScan        = control.MockServerScanResp(t, "noNVME")
-		noSCMScan         = control.MockServerScanResp(t, "noSCM")
-		noStorageScan     = control.MockServerScanResp(t, "noStorage")
-		scmScanFailed     = control.MockServerScanResp(t, "scmFailed")
-		nvmeScanFailed    = control.MockServerScanResp(t, "nvmeFailed")
-		bothScansFailed   = control.MockServerScanResp(t, "bothFailed")
+		standard      = control.MockServerScanResp(t, "standard")
+		withNamespace = control.MockServerScanResp(t, "withNamespace")
+		noNvme        = control.MockServerScanResp(t, "noNvme")
+		noScm         = control.MockServerScanResp(t, "noScm")
+		noStorage     = control.MockServerScanResp(t, "noStorage")
+		scmFailed     = control.MockServerScanResp(t, "scmFailed")
+		nvmeFailed    = control.MockServerScanResp(t, "nvmeFailed")
+		bothFailed    = control.MockServerScanResp(t, "bothFailed")
+		nvmeA         = control.MockServerScanResp(t, "nvmeA")
+		nvmeB         = control.MockServerScanResp(t, "nvmeB")
+		nvmeBasicA    = control.MockServerScanResp(t, "nvmeBasicA")
+		nvmeBasicB    = control.MockServerScanResp(t, "nvmeBasicB")
 	)
 
 	for name, tc := range map[string]struct {
@@ -85,7 +89,7 @@ Errors:
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: scmScanFailed,
+							Message: scmFailed,
 						},
 					},
 				},
@@ -96,9 +100,9 @@ Errors:
   ----- -----           
   host1 scm scan failed 
 
-Hosts SCM Total       NVMe Total         
------ ---------       ----------         
-host1 0 B (0 modules) 1 B (1 controller) 
+Hosts SCM Total       NVMe Total            
+----- ---------       ----------            
+host1 0 B (0 modules) 2.0 TB (1 controller) 
 `,
 		},
 		"nvme scan error": {
@@ -107,7 +111,7 @@ host1 0 B (0 modules) 1 B (1 controller)
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: nvmeScanFailed,
+							Message: nvmeFailed,
 						},
 					},
 				},
@@ -118,9 +122,9 @@ Errors:
   ----- -----            
   host1 nvme scan failed 
 
-Hosts SCM Total      NVMe Total          
------ ---------      ----------          
-host1 1 B (1 module) 0 B (0 controllers) 
+Hosts SCM Total          NVMe Total          
+----- ---------          ----------          
+host1 954 MiB (1 module) 0 B (0 controllers) 
 `,
 		},
 		"scm and nvme scan error": {
@@ -129,11 +133,11 @@ host1 1 B (1 module) 0 B (0 controllers)
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1:1",
-							Message: bothScansFailed,
+							Message: bothFailed,
 						},
 						{
 							Addr:    "host2:1",
-							Message: bothScansFailed,
+							Message: bothFailed,
 						},
 					},
 				},
@@ -156,7 +160,7 @@ host[1-2] 0 B (0 modules) 0 B (0 controllers)
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: noStorageScan,
+							Message: noStorage,
 						},
 					},
 				},
@@ -173,15 +177,15 @@ host1 0 B (0 modules) 0 B (0 controllers)
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: standardScan,
+							Message: standard,
 						},
 					},
 				},
 			},
 			expPrintStr: `
-Hosts SCM Total      NVMe Total         
------ ---------      ----------         
-host1 1 B (1 module) 1 B (1 controller) 
+Hosts SCM Total          NVMe Total            
+----- ---------          ----------            
+host1 954 MiB (1 module) 2.0 TB (1 controller) 
 `,
 		},
 		"single host with namespace": {
@@ -190,15 +194,15 @@ host1 1 B (1 module) 1 B (1 controller)
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: withNamespaceScan,
+							Message: withNamespace,
 						},
 					},
 				},
 			},
 			expPrintStr: `
-Hosts SCM Total         NVMe Total         
------ ---------         ----------         
-host1 1 B (1 namespace) 1 B (1 controller) 
+Hosts SCM Total            NVMe Total            
+----- ---------            ----------            
+host1 1.0 TB (1 namespace) 2.0 TB (1 controller) 
 `,
 		},
 		"two hosts same scan": {
@@ -207,19 +211,19 @@ host1 1 B (1 namespace) 1 B (1 controller)
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: standardScan,
+							Message: standard,
 						},
 						{
 							Addr:    "host2",
-							Message: standardScan,
+							Message: standard,
 						},
 					},
 				},
 			},
 			expPrintStr: `
-Hosts     SCM Total      NVMe Total         
------     ---------      ----------         
-host[1-2] 1 B (1 module) 1 B (1 controller) 
+Hosts     SCM Total          NVMe Total            
+-----     ---------          ----------            
+host[1-2] 954 MiB (1 module) 2.0 TB (1 controller) 
 `,
 		},
 		"two hosts different scans": {
@@ -228,33 +232,123 @@ host[1-2] 1 B (1 module) 1 B (1 controller)
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: noNVMEScan,
+							Message: noNvme,
 						},
 						{
 							Addr:    "host2",
-							Message: noSCMScan,
+							Message: noScm,
 						},
 					},
 				},
 			},
 			expPrintStr: `
-Hosts SCM Total       NVMe Total          
------ ---------       ----------          
-host1 1 B (1 module)  0 B (0 controllers) 
-host2 0 B (0 modules) 1 B (1 controller)  
+Hosts SCM Total          NVMe Total            
+----- ---------          ----------            
+host1 954 MiB (1 module) 0 B (0 controllers)   
+host2 0 B (0 modules)    2.0 TB (1 controller) 
 `,
 		},
-		"1024 hosts same scan": {
+		"multiple hosts same scan": {
 			mic: &control.MockInvokerConfig{
 				UnaryResponse: &control.UnaryResponse{
 					Responses: control.MockHostResponses(t,
-						1024, "host%000d", standardScan),
+						1024, "host%000d", nvmeA),
 				},
 			},
 			expPrintStr: `
-Hosts        SCM Total      NVMe Total         
------        ---------      ----------         
-host[0-1023] 1 B (1 module) 1 B (1 controller) 
+Hosts        SCM Total             NVMe Total             
+-----        ---------             ----------             
+host[0-1023] 3.0 TB (2 namespaces) 8.0 TB (4 controllers) 
+`,
+		},
+		"multiple hosts differing ssd pci addresses": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: nvmeA,
+						},
+						{
+							Addr:    "host2",
+							Message: nvmeB,
+						},
+						{
+							Addr:    "host3",
+							Message: nvmeA,
+						},
+						{
+							Addr:    "host4",
+							Message: nvmeB,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts     SCM Total             NVMe Total             
+-----     ---------             ----------             
+host[1,3] 3.0 TB (2 namespaces) 8.0 TB (4 controllers) 
+host[2,4] 3.0 TB (2 namespaces) 8.0 TB (4 controllers) 
+`,
+		},
+		"multiple hosts differing ssd serial model and fw": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: nvmeA,
+						},
+						{
+							Addr:    "host2",
+							Message: nvmeBasicA,
+						},
+						{
+							Addr:    "host3",
+							Message: nvmeA,
+						},
+						{
+							Addr:    "host4",
+							Message: nvmeBasicA,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts     SCM Total             NVMe Total             
+-----     ---------             ----------             
+host[1,3] 3.0 TB (2 namespaces) 8.0 TB (4 controllers) 
+host[2,4] 3.0 TB (2 namespaces) 4.0 TB (2 controllers) 
+`,
+		},
+		"multiple hosts differing ssd capacity": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: nvmeBasicA,
+						},
+						{
+							Addr:    "host2",
+							Message: nvmeBasicB,
+						},
+						{
+							Addr:    "host3",
+							Message: nvmeBasicA,
+						},
+						{
+							Addr:    "host4",
+							Message: nvmeBasicB,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts     SCM Total             NVMe Total             
+-----     ---------             ----------             
+host[1,3] 3.0 TB (2 namespaces) 4.0 TB (2 controllers) 
+host[2,4] 3.0 TB (2 namespaces) 4.2 TB (2 controllers) 
 `,
 		},
 	} {
@@ -262,10 +356,9 @@ host[0-1023] 1 B (1 module) 1 B (1 controller)
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ctx := context.TODO()
 			mi := control.NewMockInvoker(log, tc.mic)
 
-			resp, err := control.StorageScan(ctx, mi, &control.StorageScanReq{})
+			resp, err := control.StorageScan(context.TODO(), mi, &control.StorageScanReq{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -287,14 +380,16 @@ host[0-1023] 1 B (1 module) 1 B (1 controller)
 
 func TestControl_PrintStorageScanResponseVerbose(t *testing.T) {
 	var (
-		standardScan      = control.MockServerScanResp(t, "standard")
-		withNamespaceScan = control.MockServerScanResp(t, "withNamespace")
-		noNVMEScan        = control.MockServerScanResp(t, "noNVME")
-		noSCMScan         = control.MockServerScanResp(t, "noSCM")
-		noStorageScan     = control.MockServerScanResp(t, "noStorage")
-		scmScanFailed     = control.MockServerScanResp(t, "scmFailed")
-		nvmeScanFailed    = control.MockServerScanResp(t, "nvmeFailed")
-		bothScansFailed   = control.MockServerScanResp(t, "bothFailed")
+		standard      = control.MockServerScanResp(t, "standard")
+		withNamespace = control.MockServerScanResp(t, "withNamespace")
+		noNvme        = control.MockServerScanResp(t, "noNvme")
+		noScm         = control.MockServerScanResp(t, "noScm")
+		noStorage     = control.MockServerScanResp(t, "noStorage")
+		scmFailed     = control.MockServerScanResp(t, "scmFailed")
+		nvmeFailed    = control.MockServerScanResp(t, "nvmeFailed")
+		bothFailed    = control.MockServerScanResp(t, "bothFailed")
+		nvmeBasicA    = control.MockServerScanResp(t, "nvmeBasicA")
+		nvmeBasicB    = control.MockServerScanResp(t, "nvmeBasicB")
 	)
 
 	for name, tc := range map[string]struct {
@@ -331,7 +426,7 @@ Errors:
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: scmScanFailed,
+							Message: scmFailed,
 						},
 					},
 				},
@@ -349,7 +444,7 @@ host1
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         1 B      
+0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -359,7 +454,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: nvmeScanFailed,
+							Message: nvmeFailed,
 						},
 					},
 				},
@@ -375,7 +470,7 @@ host1
 -----
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            1 B      
+1             1         1               1          1            954 MiB  
 
 	No NVMe devices found
 
@@ -387,11 +482,11 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1:1",
-							Message: bothScansFailed,
+							Message: bothFailed,
 						},
 						{
 							Addr:    "host2:1",
-							Message: bothScansFailed,
+							Message: bothFailed,
 						},
 					},
 				},
@@ -418,11 +513,11 @@ host[1-2]
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: noStorageScan,
+							Message: noStorage,
 						},
 						{
 							Addr:    "host2",
-							Message: noStorageScan,
+							Message: noStorage,
 						},
 					},
 				},
@@ -443,7 +538,7 @@ host[1-2]
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: standardScan,
+							Message: standard,
 						},
 					},
 				},
@@ -454,11 +549,11 @@ host1
 -----
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            1 B      
+1             1         1               1          1            954 MiB  
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         1 B      
+0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -468,7 +563,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: withNamespaceScan,
+							Message: withNamespace,
 						},
 					},
 				},
@@ -479,11 +574,11 @@ host1
 -----
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
-pmem0         0         1 B      
+pmem0         0         1.0 TB   
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         1 B      
+0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -493,11 +588,11 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: standardScan,
+							Message: standard,
 						},
 						{
 							Addr:    "host2",
-							Message: standardScan,
+							Message: standard,
 						},
 					},
 				},
@@ -508,11 +603,11 @@ host[1-2]
 ---------
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            1 B      
+1             1         1               1          1            954 MiB  
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         1 B      
+0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -522,11 +617,11 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: noNVMEScan,
+							Message: noNvme,
 						},
 						{
 							Addr:    "host2",
-							Message: noSCMScan,
+							Message: noScm,
 						},
 					},
 				},
@@ -537,7 +632,7 @@ host1
 -----
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            1 B      
+1             1         1               1          1            954 MiB  
 
 	No NVMe devices found
 
@@ -548,7 +643,7 @@ host2
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         1 B      
+0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -556,7 +651,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 			mic: &control.MockInvokerConfig{
 				UnaryResponse: &control.UnaryResponse{
 					Responses: control.MockHostResponses(t,
-						1024, "host%000d", standardScan),
+						1024, "host%000d", standard),
 				},
 			},
 			expPrintStr: `
@@ -565,11 +660,11 @@ host[0-1023]
 ------------
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            1 B      
+1             1         1               1          1            954 MiB  
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         1 B      
+0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -579,19 +674,19 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host-0001",
-							Message: noSCMScan,
+							Message: noScm,
 						},
 						{
 							Addr:    "host-0002",
-							Message: noSCMScan,
+							Message: noScm,
 						},
 						{
 							Addr:    "host-0003",
-							Message: noSCMScan,
+							Message: noScm,
 						},
 						{
 							Addr:    "host-0004",
-							Message: noSCMScan,
+							Message: noScm,
 						},
 					},
 				},
@@ -604,7 +699,7 @@ host-[0001-0004]
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         1 B      
+0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -614,19 +709,19 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host-j-0001",
-							Message: noSCMScan,
+							Message: noScm,
 						},
 						{
 							Addr:    "host-j-0002",
-							Message: noSCMScan,
+							Message: noScm,
 						},
 						{
 							Addr:    "host-j-0003",
-							Message: noSCMScan,
+							Message: noScm,
 						},
 						{
 							Addr:    "host-j-0004",
-							Message: noSCMScan,
+							Message: noScm,
 						},
 					},
 				},
@@ -639,7 +734,59 @@ host-j-[0001-0004]
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         1 B      
+0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+
+`,
+		},
+		"multiple hosts differing ssd capacity only": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: nvmeBasicA,
+						},
+						{
+							Addr:    "host2",
+							Message: nvmeBasicB,
+						},
+						{
+							Addr:    "host3",
+							Message: nvmeBasicA,
+						},
+						{
+							Addr:    "host4",
+							Message: nvmeBasicB,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+---------
+host[1,3]
+---------
+SCM Namespace Socket ID Capacity 
+------------- --------- -------- 
+pmem0         0         1.0 TB   
+pmem1         1         2.0 TB   
+
+NVMe PCI     Model FW Revision Socket ID Capacity 
+--------     ----- ----------- --------- -------- 
+0000:80:00.1                   1         2.0 TB   
+0000:80:00.4                   0         2.0 TB   
+
+---------
+host[2,4]
+---------
+SCM Namespace Socket ID Capacity 
+------------- --------- -------- 
+pmem0         0         1.0 TB   
+pmem1         1         2.0 TB   
+
+NVMe PCI     Model FW Revision Socket ID Capacity 
+--------     ----- ----------- --------- -------- 
+0000:80:00.1                   1         2.1 TB   
+0000:80:00.4                   0         2.1 TB   
 
 `,
 		},
@@ -673,9 +820,9 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 
 func TestControl_PrintStorageUsageScanResponse(t *testing.T) {
 	var (
-		withSpaceUsageScan = control.MockServerScanResp(t, "withSpaceUsage")
-		noStorageScan      = control.MockServerScanResp(t, "noStorage")
-		bothScansFailed    = control.MockServerScanResp(t, "bothFailed")
+		withSpaceUsage = control.MockServerScanResp(t, "withSpaceUsage")
+		noStorage      = control.MockServerScanResp(t, "noStorage")
+		bothFailed     = control.MockServerScanResp(t, "bothFailed")
 	)
 
 	for name, tc := range map[string]struct {
@@ -712,11 +859,11 @@ Errors:
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1:1",
-							Message: bothScansFailed,
+							Message: bothFailed,
 						},
 						{
 							Addr:    "host2:1",
-							Message: bothScansFailed,
+							Message: bothFailed,
 						},
 					},
 				},
@@ -739,7 +886,7 @@ host[1-2] 0 B       0 B      N/A      0 B        0 B       N/A
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: noStorageScan,
+							Message: noStorage,
 						},
 					},
 				},
@@ -756,7 +903,7 @@ host1 0 B       0 B      N/A      0 B        0 B       N/A
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: withSpaceUsageScan,
+							Message: withSpaceUsage,
 						},
 					},
 				},
