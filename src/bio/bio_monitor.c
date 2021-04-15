@@ -312,13 +312,15 @@ populate_health_stats(struct bio_dev_health *bdh)
 
 	/** temperature */
 	dev_state->warn_temp_time	= page->warning_temp_time;
-	d_tm_set_counter(bdh->bdh_temp_warn_time, page->warning_temp_time);
+	(void)d_tm_set_gauge(&bdh->bdh_temp_warn_time, page->warning_temp_time,
+			     NULL);
 	dev_state->crit_temp_time	= page->critical_temp_time;
-	d_tm_set_counter(bdh->bdh_temp_crit_time, page->critical_temp_time);
+	d_tm_set_counter(&bdh->bdh_temp_crit_time, page->critical_temp_time,
+			 NULL);
 	dev_state->temperature		= page->temperature;
 	d_tm_set_counter(bdh->bdh_temp, page->temperature);
 	dev_state->temp_warn		= cw.bits.temperature ? true : false;
-	d_tm_set_counter(bdh->bdh_temp_warn, dev_state->temp_warn);
+	(void)d_tm_set_gauge(&bdh->bdh_temp_warn, dev_state->temp_warn, NULL);
 
 	/** reliability */
 	d_tm_set_counter(bdh->bdh_avail_spare, page->available_spare);
@@ -326,20 +328,21 @@ populate_health_stats(struct bio_dev_health *bdh)
 			 page->available_spare_threshold);
 	dev_state->avail_spare_warn	= cw.bits.available_spare ? true
 								  : false;
-	d_tm_set_counter(bdh->bdh_avail_spare_warn,
-			 dev_state->avail_spare_warn);
+	(void)d_tm_set_gauge(&bdh->bdh_avail_spare_warn,
+			     dev_state->avail_spare_warn, NULL);
 	dev_state->dev_reliability_warn	= cw.bits.device_reliability ? true
 								     : false;
-	d_tm_set_counter(bdh->bdh_reliability_warn,
-			 dev_state->dev_reliability_warn);
+	(void)d_tm_set_gauge(&bdh->bdh_reliability_warn,
+			     dev_state->dev_reliability_warn, NULL);
 
 	/** various critical warnings */
 	dev_state->read_only_warn	= cw.bits.read_only ? true : false;
-	d_tm_set_counter(bdh->bdh_read_only_warn, dev_state->read_only_warn);
+	(void)d_tm_set_gauge(&bdh->bdh_read_only_warn,
+			     dev_state->read_only_warn, NULL);
 	dev_state->volatile_mem_warn	= cw.bits.volatile_memory_backup ? true
 									: false;
-	d_tm_set_counter(bdh->bdh_volatile_mem_warn,
-			 dev_state->volatile_mem_warn);
+	(void)d_tm_set_gauge(&bdh->bdh_volatile_mem_warn,
+			     dev_state->volatile_mem_warn, NULL);
 
 	/** number of error log entries, internal use */
 	dev_state->err_log_entries = page->num_error_info_log_entries[0];
@@ -581,6 +584,7 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 	uint32_t			 cp_sz;
 	uint32_t			 ep_sz;
 	uint32_t			 ep_buf_sz;
+	struct bio_dev_info		*binfo;
 	int				 rc;
 
 	D_ASSERT(bb != NULL);
@@ -625,17 +629,33 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 	D_ASSERT(channel != NULL);
 	bb->bb_dev_health.bdh_io_channel = channel;
 
-	/** register DAOS sensors to export NVMe stats */
-#define X(field, fname, desc, unit)					\
-	rc = d_tm_add_metric(&bb->bb_dev_health.field, D_TM_COUNTER,	\
-			     desc, unit, "/nvme/%s/%s", bdev_name,	\
-			     fname);					\
-	if (rc)								\
-		D_WARN("Failed to create %s sensor: "DF_RC"\n",		\
-		       fname, DP_RC(rc));
+	/** register DAOS metrics to export NVMe stats */
+	D_ALLOC_PTR(binfo);
+	if (binfo == NULL) {
+		D_WARN("Failed to allocate binfo\n");
+		return 0;
+	}
+#define X(field, fname, desc, unit, type)				\
+	rc = fill_in_traddr(binfo, bdev_name);				\
+	if (rc || binfo->bdi_traddr == NULL) {				\
+		D_WARN("Failed to extract %s addr: "DF_RC"\n",		\
+		       bdev_name, DP_RC(rc));				\
+	} else {							\
+		rc = d_tm_add_metric(&bb->bb_dev_health.field,		\
+				     type,				\
+				     desc,				\
+				     unit,				\
+				     "/nvme/%s/%s",			\
+				     binfo->bdi_traddr,			\
+				     fname);				\
+		if (rc)							\
+			D_WARN("Failed to create %s sensor for %s: "	\
+			       DF_RC"\n", fname, bdev_name, DP_RC(rc));	\
+	}
 
 	BIO_PROTO_NVME_STATS_LIST
 #undef X
+	D_FREE(binfo);
 
 	return 0;
 

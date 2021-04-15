@@ -56,79 +56,79 @@ struct bio_dma_buffer {
 #define BIO_PROTO_NVME_STATS_LIST					\
 	X(bdh_du_written, "commands/data_units_written",		\
 	  "number of 512b data units written to the controller",	\
-	  "512b data units")						\
+	  "512b data units", D_TM_COUNTER)				\
 	X(bdh_du_read, "commands/data_units_read",			\
 	  "number of 512b data units read from to the controller",	\
-	  "512b data units")						\
+	  "512b data units", D_TM_COUNTER)				\
 	X(bdh_write_cmds, "commands/host_write_cmds",			\
 	  "number of write commands completed by to the controller",	\
-	  "commands")							\
+	  "commands", D_TM_COUNTER)					\
 	X(bdh_read_cmds, "commands/host_read_cmds",			\
 	  "number of read commands completed by to the controller",	\
-	  "commands")							\
+	  "commands", D_TM_COUNTER)					\
 	X(bdh_ctrl_busy_time, "commands/ctrl_busy_time",		\
 	  "Amount of time the controller is busy with I/O commands",	\
-	  "minutes")							\
+	  "minutes", D_TM_COUNTER)					\
 	X(bdh_media_errs, "commands/media_errs",			\
 	  "Number of occurrences where the controller detected an unrecovered "\
 	  "data integrity error (e.g. ECC, CRC or LBA tag mismatch)",	\
-	  "errors")							\
+	  "errors", D_TM_COUNTER)					\
 	X(bdh_read_errs, "commands/read_errs",				\
 	  "Number of I/O errors reported to the engine on read commands",      \
-	  "errors")							\
+	  "errors", D_TM_COUNTER)					\
 	X(bdh_write_errs, "commands/write_errs",			\
 	  "Number of I/O errors reported to the engine on write commands",     \
-	  "errors")							\
+	  "errors", D_TM_COUNTER)					\
 	X(bdh_unmap_errs, "commands/unmap_errs",			\
 	  "Number of I/O errors reported to the engine on unmap/trim commands",\
-	  "errors")							\
+	  "errors", D_TM_COUNTER)					\
 	X(bdh_checksum_errs, "commands/checksum_mismatch",		\
 	  "Number of checksum mismatch detected by the engine",		\
-	  "errors")							\
+	  "errors", D_TM_COUNTER)					\
 	X(bdh_power_cycles, "power_cycles",				\
 	  "Number of power cycles",					\
-	  "cycles")							\
+	  "cycles", D_TM_COUNTER)					\
 	X(bdh_power_on_hours, "power_on_hours",				\
 	  "Number of power-on hours cycles",				\
-	  "hours")							\
+	  "hours", D_TM_COUNTER)					\
 	X(bdh_unsafe_shutdowns, "unsafe_shutdowns",			\
 	  "Number of unsafe shutdowns (no notification prior to power loss)",  \
-	  "shutdowns")							\
+	  "shutdowns", D_TM_COUNTER)					\
 	X(bdh_temp, "temperature/current",				\
 	  "Current SSD temperature",					\
-	  "kelvin")							\
+	  "kelvin", D_TM_GAUGE)						\
 	X(bdh_temp_warn, "temperature/warn",				\
 	  "Set to 1 if temperature is above threshold",			\
-	  "")								\
+	  "", D_TM_GAUGE)						\
 	X(bdh_temp_warn_time, "temperature/warn_time",			\
 	  "Amount of time the controller operated above warn temp threshold",  \
-	  "minutes")							\
+	  "minutes", D_TM_COUNTER)					\
 	X(bdh_temp_crit_time, "temperature/crit_time",			\
 	  "Amount of time the controller operated above crit temp threshold",  \
-	  "minutes")							\
+	  "minutes", D_TM_COUNTER)					\
 	X(bdh_percent_used, "reliability/percentage_used",		\
 	  "Estimate of the percentage of NVM subsystem life used based on the "\
 	  "actual usage and the manufacturer's prediction of NVM life",	\
-	  "%")								\
+	  "%", D_TM_COUNTER)						\
 	X(bdh_avail_spare, "reliability/available_spare",		\
 	  "Percentage of remaining spare capacity available",		\
-	  "%")								\
+	  "%", D_TM_COUNTER)						\
 	X(bdh_avail_spare_thres, "reliability/available_spare_threshold",  \
 	  "Threshold for available spare value",			\
-	  "%")								\
+	  "%", D_TM_COUNTER)						\
 	X(bdh_avail_spare_warn, "reliability/available_spare_warn",	\
 	  "Set to 1 when available spare has fallen below threshold",	\
-	  "")								\
+	  "", D_TM_GAUGE)						\
 	X(bdh_reliability_warn, "reliability/reliability_warn",		\
 	  "Set to 1 when NVM subsystem has been degraded due to significant "  \
 	  "media-related errors",					\
-	  "")								\
+	  "", D_TM_GAUGE)						\
 	X(bdh_read_only_warn, "read_only_warn",				\
 	  "Set to 1 when media has been placed in read-only mode",	\
-	  "")								\
+	  "", D_TM_GAUGE)						\
 	X(bdh_volatile_mem_warn, "volatile_mem_warn",			\
 	  "Set to 1 when volatile memory backup device has failed",	\
-	  "")
+	  "", D_TM_GAUGE)
 
 /*
  * SPDK device health monitoring.
@@ -147,7 +147,7 @@ struct bio_dev_health {
 	/**
 	 * NVMe statistics exported via telemetry framework
 	 */
-#define	X(field, fname, desc, unit) struct d_tm_node_t *field;
+#define	X(field, fname, desc, unit, type) struct d_tm_node_t *field;
 	 BIO_PROTO_NVME_STATS_LIST
 #undef X
 };
@@ -400,6 +400,7 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 
 /* bio_device.c */
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
+int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
 /*
  * FIXME copied from spdk_internal/event.h, should be removed once they are
