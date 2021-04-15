@@ -1632,8 +1632,11 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 
 	/* load VOS container on demand for rebuild */
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
-	if (rc)
+	if (rc) {
+		D_ERROR("Can not find the container "DF_UUID"/"DF_UUID"\n",
+			DP_UUID(pool_uuid), DP_UUID(cont_uuid));
 		D_GOTO(failed, rc);
+	}
 
 	/* load csummer on demand for rebuild if not already loaded */
 	rc = ds_cont_csummer_init(coc);
