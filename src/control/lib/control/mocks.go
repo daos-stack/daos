@@ -303,16 +303,11 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
 			t.Fatal(err)
 		}
-	case "withNamespace":
+	case "pmemSingle":
 		if err := convert.Types(nss(0), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-	case "withNamespaces":
-		// verify out of order namespace ids
-		if err := convert.Types(nss(1, 0), &ssr.Scm.Namespaces); err != nil {
-			t.Fatal(err)
-		}
-	case "withNamespacesNumaZero":
+	case "pmemDupNuma":
 		ns1 := storage.MockScmNamespace(1)
 		ns1.NumaNode = 0
 		scmNamespaces := storage.ScmNamespaces{
@@ -322,7 +317,20 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-	case "withSingleSSD":
+	case "pmemA":
+		// verify out of order namespace ids
+		if err := convert.Types(nss(1, 0), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+	case "pmemB":
+		ns := nss(0, 1)
+		for _, n := range ns {
+			n.Size += uint64(humanize.GByte * 100)
+		}
+		if err := convert.Types(ns, &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeSingle":
 		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
@@ -363,7 +371,6 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 			c.Model = ""
 			c.FwRev = ""
 			c.Serial = ""
-			// modify nvme controller namespace capacity
 			c.Namespaces[0].Size += uint64(humanize.GByte * 100)
 		}
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {

@@ -41,18 +41,20 @@ func mockHostStorageMap(t *testing.T, hosts ...*mockHostStorage) control.HostSto
 
 func TestControl_PrintStorageScanResponse(t *testing.T) {
 	var (
-		standard      = control.MockServerScanResp(t, "standard")
-		withNamespace = control.MockServerScanResp(t, "withNamespace")
-		noNvme        = control.MockServerScanResp(t, "noNvme")
-		noScm         = control.MockServerScanResp(t, "noScm")
-		noStorage     = control.MockServerScanResp(t, "noStorage")
-		scmFailed     = control.MockServerScanResp(t, "scmFailed")
-		nvmeFailed    = control.MockServerScanResp(t, "nvmeFailed")
-		bothFailed    = control.MockServerScanResp(t, "bothFailed")
-		nvmeA         = control.MockServerScanResp(t, "nvmeA")
-		nvmeB         = control.MockServerScanResp(t, "nvmeB")
-		nvmeBasicA    = control.MockServerScanResp(t, "nvmeBasicA")
-		nvmeBasicB    = control.MockServerScanResp(t, "nvmeBasicB")
+		standard   = control.MockServerScanResp(t, "standard")
+		pmemSingle = control.MockServerScanResp(t, "pmemSingle")
+		noNvme     = control.MockServerScanResp(t, "noNvme")
+		noScm      = control.MockServerScanResp(t, "noScm")
+		noStorage  = control.MockServerScanResp(t, "noStorage")
+		scmFailed  = control.MockServerScanResp(t, "scmFailed")
+		nvmeFailed = control.MockServerScanResp(t, "nvmeFailed")
+		bothFailed = control.MockServerScanResp(t, "bothFailed")
+		nvmeA      = control.MockServerScanResp(t, "nvmeA")
+		nvmeB      = control.MockServerScanResp(t, "nvmeB")
+		nvmeBasicA = control.MockServerScanResp(t, "nvmeBasicA")
+		nvmeBasicB = control.MockServerScanResp(t, "nvmeBasicB")
+		pmemA      = control.MockServerScanResp(t, "pmemA")
+		pmemB      = control.MockServerScanResp(t, "pmemB")
 	)
 
 	for name, tc := range map[string]struct {
@@ -194,7 +196,7 @@ host1 954 MiB (1 module) 2.0 TB (1 controller)
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: withNamespace,
+							Message: pmemSingle,
 						},
 					},
 				},
@@ -351,6 +353,36 @@ host[1,3] 3.0 TB (2 namespaces) 4.0 TB (2 controllers)
 host[2,4] 3.0 TB (2 namespaces) 4.2 TB (2 controllers) 
 `,
 		},
+		"multiple hosts differing pmem capacity": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: pmemA,
+						},
+						{
+							Addr:    "host2",
+							Message: pmemB,
+						},
+						{
+							Addr:    "host3",
+							Message: pmemA,
+						},
+						{
+							Addr:    "host4",
+							Message: pmemB,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Hosts     SCM Total             NVMe Total            
+-----     ---------             ----------            
+host[1,3] 3.0 TB (2 namespaces) 2.0 TB (1 controller) 
+host[2,4] 3.2 TB (2 namespaces) 2.0 TB (1 controller) 
+`,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -380,16 +412,16 @@ host[2,4] 3.0 TB (2 namespaces) 4.2 TB (2 controllers)
 
 func TestControl_PrintStorageScanResponseVerbose(t *testing.T) {
 	var (
-		standard      = control.MockServerScanResp(t, "standard")
-		withNamespace = control.MockServerScanResp(t, "withNamespace")
-		noNvme        = control.MockServerScanResp(t, "noNvme")
-		noScm         = control.MockServerScanResp(t, "noScm")
-		noStorage     = control.MockServerScanResp(t, "noStorage")
-		scmFailed     = control.MockServerScanResp(t, "scmFailed")
-		nvmeFailed    = control.MockServerScanResp(t, "nvmeFailed")
-		bothFailed    = control.MockServerScanResp(t, "bothFailed")
-		nvmeBasicA    = control.MockServerScanResp(t, "nvmeBasicA")
-		nvmeBasicB    = control.MockServerScanResp(t, "nvmeBasicB")
+		standard   = control.MockServerScanResp(t, "standard")
+		pmemSingle = control.MockServerScanResp(t, "pmemSingle")
+		noNvme     = control.MockServerScanResp(t, "noNvme")
+		noScm      = control.MockServerScanResp(t, "noScm")
+		noStorage  = control.MockServerScanResp(t, "noStorage")
+		scmFailed  = control.MockServerScanResp(t, "scmFailed")
+		nvmeFailed = control.MockServerScanResp(t, "nvmeFailed")
+		bothFailed = control.MockServerScanResp(t, "bothFailed")
+		nvmeBasicA = control.MockServerScanResp(t, "nvmeBasicA")
+		nvmeBasicB = control.MockServerScanResp(t, "nvmeBasicB")
 	)
 
 	for name, tc := range map[string]struct {
@@ -563,7 +595,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: withNamespace,
+							Message: pmemSingle,
 						},
 					},
 				},

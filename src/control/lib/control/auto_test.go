@@ -358,11 +358,11 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 	hostRespOneScanFail := dualHostResp("standard", "bothFailed")
 	hostRespScanFail := dualHostRespSame("bothFailed")
 	hostRespNoScmNs := dualHostRespSame("standard")
-	hostRespOneWithScmNs := dualHostResp("withNamespace", "standard")
-	hostRespWithScmNs := dualHostRespSame("withNamespace")
-	hostRespWithScmNss := dualHostRespSame("withNamespaces")
-	hostRespWithScmNssNumaZero := dualHostRespSame("withNamespacesNumaZero")
-	hostRespWithSingleSSD := dualHostRespSame("withSingleSSD")
+	hostRespOneWithScmNs := dualHostResp("pmemSingle", "standard")
+	hostRespWithScmNs := dualHostRespSame("pmemSingle")
+	hostRespWithScmNss := dualHostRespSame("pmemA")
+	hostRespWithScmNssNumaZero := dualHostRespSame("pmemDupNuma")
+	hostRespWithSingleSSD := dualHostRespSame("nvmeSingle")
 	hostRespWithSSDs := dualHostRespSame("withSpaceUsage")
 
 	for name, tc := range map[string]struct {

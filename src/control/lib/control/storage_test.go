@@ -141,7 +141,7 @@ func TestControl_StorageMap(t *testing.T) {
 func TestControl_StorageScan(t *testing.T) {
 	var (
 		standard       = MockServerScanResp(t, "standard")
-		withNamespaces = MockServerScanResp(t, "withNamespace")
+		pmemA          = MockServerScanResp(t, "pmemA")
 		withSpaceUsage = MockServerScanResp(t, "withSpaceUsage")
 		noNvme         = MockServerScanResp(t, "noNvme")
 		noScm          = MockServerScanResp(t, "noScm")
@@ -306,20 +306,20 @@ func TestControl_StorageScan(t *testing.T) {
 				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", standard}),
 			},
 		},
-		"single host with namespace": {
+		"single host with namespaces": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: &UnaryResponse{
 					Responses: []*HostResponse{
 						{
 							Addr:    "host1",
-							Message: withNamespaces,
+							Message: pmemA,
 						},
 					},
 				},
 			},
 			expResponse: &StorageScanResp{
 				HostErrorsResp: MockHostErrorsResp(t),
-				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", withNamespaces}),
+				HostStorage:    MockHostStorageMap(t, &MockStorageScan{"host1", pmemA}),
 			},
 		},
 		"single host with space utilization": {
