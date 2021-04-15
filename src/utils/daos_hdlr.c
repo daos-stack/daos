@@ -2554,6 +2554,11 @@ err_file:
 	if (dst_file_dfs->obj != NULL || dst_file_dfs->fd != -1)
 		file_close(dst_file_dfs, filename);
 out:
+	if (rc != 0) {
+		D_FREE(next_path);
+		D_FREE(next_dpath);
+	}
+
 	/* don't try to closedir on something that is not a directory,
 	 * otherwise always close it before returning
 	 */
@@ -2563,11 +2568,6 @@ out:
 			fprintf(stderr, "Could not close '%s': %d\n",
 				dir_name, rc);
 		}
-	}
-
-	if (rc != 0) {
-		D_FREE(next_path);
-		D_FREE(next_dpath);
 	}
 
 	D_FREE(filename);
