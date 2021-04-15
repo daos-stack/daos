@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       11%{?relval}%{?dist}
+Release:       12%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -124,7 +124,6 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: spdk-tools
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
@@ -167,7 +166,12 @@ This is the package needed to run a DAOS client
 
 %package tests
 Summary: The DAOS test suite
+#This is a bit messy and needs some cleanup.  In theory,
+#we should have client tests and server tests in separate
+#packages but some binaries need libraries from both at
+#present.
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
+Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %if (0%{?rhel} >= 7)
 Requires: python36
 Requires: python36-distro
@@ -195,7 +199,6 @@ This is the package needed to run the DAOS test suite
 # Requires: libdaos.so.0()(64bit)
 %if (0%{?suse_version} >= 1500)
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
-Requires: %{name}%{?_isa} = %{version}-%{release}
 %endif
 Summary: The DAOS development libraries and headers
 
@@ -204,7 +207,6 @@ This is the package needed to build software with the DAOS library.
 
 %package firmware
 Summary: The DAOS firmware management helper
-Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: %{name}-server%{?_isa} = %{version}-%{release}
 
 %description firmware
@@ -298,6 +300,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
+%{_libdir}/*.so.*
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
@@ -355,7 +358,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
 %{_bindir}/dfuse_hl
-%{_libdir}/*.so.*
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
 %{_libdir}/libduns.so
@@ -421,6 +423,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Thu Apr 15 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.3.0-12
+- Remove client package dependency from server, add server package to tests
+
 * Wed Apr 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.3.0-11
 - Remove storage_estimator and io_conf from client packages to remove
   any client side dependence on bio and vos (and and PMDK/SPDK)
