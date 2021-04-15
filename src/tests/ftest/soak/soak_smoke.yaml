@@ -60,9 +60,10 @@ pool_reserved:
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    oclass: SX
     control_method: daos
 container_reserved:
-    oclass: OC_RP_2G1
+    oclass: OC_SX
     akey_size: 5
     dkey_size: 5
     data_size: 4096
@@ -123,7 +124,6 @@ ior_smoke:
     segment_count: 1
     dfs_oclass:
         - 'SX'
-        - 'RP_2G1'
 fio_smoke:
     # maximum timeout for a single job in test in minutes
     names:
@@ -149,7 +149,6 @@ fio_smoke:
             - 'randrw'
         oclass:
             - 'SX'
-            - 'RP_2G1'
 daos_racer:
     runtime: 120
     container:
