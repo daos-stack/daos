@@ -142,6 +142,7 @@ const (
 	ServerConfigOverlappingBdevDeviceList
 	ServerConfigFaultDomainInvalid
 	ServerConfigFaultCallbackNotFound
+	ServerConfigFaultCallbackInsecure
 	ServerConfigFaultCallbackBadPerms
 	ServerConfigFaultCallbackFailed
 	ServerConfigBothFaultPathAndCb

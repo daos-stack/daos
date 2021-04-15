@@ -1333,8 +1333,14 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, mrone->mo_cont_uuid,
 				       &cont);
-	if (rc)
+	if (rc) {
+		if (rc == -DER_SHUTDOWN) {
+			D_DEBUG(DB_REBUILD, DF_UUID "container is being"
+				" destroyed\n", DP_UUID(mrone->mo_cont_uuid));
+			rc = 0;
+		}
 		D_GOTO(out, rc);
+	}
 
 	rc = dsc_pool_open(tls->mpt_pool_uuid, tls->mpt_poh_uuid, 0,
 			   NULL, tls->mpt_pool->spc_pool->sp_map,
@@ -1450,7 +1456,7 @@ migrate_one_ult(void *arg)
 				      mrone->mo_pool_tls_version);
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
-			DP_UUID(mrone->mo_pool_uuid));
+		       DP_UUID(mrone->mo_pool_uuid));
 		goto out;
 	}
 
@@ -1803,7 +1809,11 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 		iod_eph_total);
 
 	tls = migrate_pool_tls_lookup(iter_arg->pool_uuid, iter_arg->version);
-	D_ASSERT(tls != NULL);
+	if (tls == NULL || tls->mpt_fini) {
+		D_WARN("some one abort the rebuild "DF_UUID"\n",
+		       DP_UUID(iter_arg->pool_uuid));
+		D_GOTO(put, rc = 0);
+	}
 	if (iod_eph_total == 0 || tls->mpt_version <= version ||
 	    tls->mpt_fini) {
 		D_DEBUG(DB_REBUILD, "No need eph_total %d version %u"
@@ -1903,7 +1913,8 @@ free:
 		migrate_one_destroy(mrone);
 	}
 put:
-	migrate_pool_tls_put(tls);
+	if (tls)
+		migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -1991,7 +2002,11 @@ migrate_obj_punch_one(void *data)
 	int			rc;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
-	D_ASSERT(tls != NULL);
+	if (tls == NULL || tls->mpt_fini) {
+		D_WARN("some one abort the rebuild "DF_UUID"\n",
+		       DP_UUID(arg->pool_uuid));
+		D_GOTO(put, rc = 0);
+	}
 	D_DEBUG(DB_REBUILD, "tls %p "DF_UUID" version %d punch "DF_UOID"\n",
 		tls, DP_UUID(tls->mpt_pool_uuid), arg->version,
 		DP_UOID(arg->oid));
@@ -2005,7 +2020,9 @@ migrate_obj_punch_one(void *data)
 	if (rc)
 		D_ERROR(DF_UOID" migrate punch failed: "DF_RC"\n",
 			DP_UOID(arg->oid), DP_RC(rc));
-	migrate_pool_tls_put(tls);
+put:
+	if (tls)
+		migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -2019,7 +2036,11 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 	int			rc = 0;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
-	D_ASSERT(tls != NULL);
+	if (tls == NULL || tls->mpt_fini) {
+		D_WARN("some one abort the rebuild "DF_UUID"\n",
+		       DP_UUID(arg->pool_uuid));
+		D_GOTO(put, rc = 0);
+	}
 	d_list_for_each_entry_safe(mrone, tmp, &unpack_arg->merge_list,
 				   mo_list) {
 		/* Recover the OID (with correct shard) after merging IOD
@@ -2041,7 +2062,9 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 		tls->mpt_generated_ult++;
 	}
 
-	migrate_pool_tls_put(tls);
+put:
+	if (tls)
+		migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -2184,9 +2207,12 @@ retry:
 			/* DER_DATA_LOSS means it can not find any replicas
 			 * to rebuild the data, see obj_list_common.
 			 */
-			if (rc == -DER_DATA_LOSS) {
+			/* If the container is being destroyed, it may return
+			 * -DER_NONEXIST, see obj_ioc_init().
+			 */
+			if (rc == -DER_DATA_LOSS || rc == -DER_NONEXIST) {
 				D_DEBUG(DB_REBUILD, "No replicas for "DF_UOID
-					"\n", DP_UOID(arg->oid));
+					" %d\n", DP_UOID(arg->oid), rc);
 				num = 0;
 				rc = 0;
 			}
@@ -2322,9 +2348,13 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 	int rc;
 
 	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont);
-	if (rc == DER_NONEXIST) {
-		return DER_SUCCESS;
-	} else if (rc != 0) {
+	if (rc == -DER_SHUTDOWN) {
+		D_DEBUG(DB_REBUILD, DF_UUID "container is being destroyed\n",
+			DP_UUID(cont_uuid));
+		return 0;
+	}
+
+	if (rc != 0) {
 		D_ERROR("Failed to open cont to clear obj before migrate; pool="
 			DF_UUID" cont="DF_UUID"\n",
 			DP_UUID(tls->mpt_pool_uuid), DP_UUID(cont_uuid));
@@ -2332,9 +2362,7 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 	}
 
 	rc = vos_obj_delete(cont->sc_hdl, *oid);
-	if (rc == DER_NONEXIST) {
-		return DER_SUCCESS;
-	} else if (rc != 0) {
+	if (rc != 0) {
 		D_ERROR("Migrate failed to destroy object prior to "
 			"reintegration: pool/object "DF_UUID"/"DF_UOID
 			" rc: "DF_RC"\n", DP_UUID(tls->mpt_pool_uuid),
@@ -2375,7 +2403,11 @@ migrate_obj_ult(void *data)
 	int			 rc;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
-	D_ASSERT(tls != NULL);
+	if (tls == NULL || tls->mpt_fini) {
+		D_WARN("some one abort the rebuild "DF_UUID"\n",
+		       DP_UUID(arg->pool_uuid));
+		D_GOTO(free, rc = 0);
+	}
 
 	if (tls->mpt_del_local_objs) {
 		/* Destroy this object ID locally prior to migration */
@@ -2418,6 +2450,27 @@ free:
 		tls->mpt_obj_count++;
 
 	tls->mpt_obj_executed_ult++;
+	if (rc == -DER_NONEXIST) {
+		struct ds_cont_child *cont_child = NULL;
+		int ret;
+
+		ret = ds_cont_child_lookup(tls->mpt_pool_uuid, arg->cont_uuid,
+					   &cont_child);
+		if (ret != 0 || cont_child->sc_stopping) {
+			/**
+			 * If the current container is being destroyed, let's
+			 * ignore the -DER_NONEXIST failure.
+			 */
+			D_DEBUG(DB_REBUILD, DF_UUID" status %d:%d\n",
+				DP_UUID(arg->cont_uuid), ret,
+				cont_child ? cont_child->sc_stopping : 0);
+			rc = 0;
+		}
+
+		if (cont_child)
+			ds_cont_child_put(cont_child);
+	}
+
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
 	D_DEBUG(DB_REBUILD, "stop migrate obj "DF_UOID" for shard %u: "
