@@ -211,42 +211,54 @@ dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
 	/** first set a reasonable default based on RF & RDD hint (if set) */
 	switch (rf_factor) {
 	case DAOS_PROP_CO_REDUN_RF0:
-		if (rdd == DAOS_OCH_RDD_RP)
+		if (rdd == DAOS_OCH_RDD_RP) {
 			cid = OC_RP_2GX;
-		else if (rdd == DAOS_OCH_RDD_EC)
-			cid = OC_EC_2P1G1;
-		else
+		} else if (rdd == DAOS_OCH_RDD_EC) {
+			if (domain_nr >= 10)
+				cid = OC_EC_8P1GX;
+			else if (domain_nr >= 6)
+				cid = OC_EC_4P1GX;
+			else
+				cid = OC_EC_2P1GX;
+		} else {
 			cid = OC_SX;
+		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF1:
-		if (rdd == DAOS_OCH_RDD_EC)
-			cid = OC_EC_2P1G1;
-		else
+		if (rdd == DAOS_OCH_RDD_EC) {
+			if (domain_nr >= 10)
+				cid = OC_EC_8P1GX;
+			else if (domain_nr >= 6)
+				cid = OC_EC_4P1GX;
+			else
+				cid = OC_EC_2P1GX;
+		} else {
 			cid = OC_RP_2GX;
+		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF2:
-		if (rdd == DAOS_OCH_RDD_EC)
-			cid = OC_EC_2P2G1;
-		else
+		if (rdd == DAOS_OCH_RDD_EC) {
+			if (domain_nr >= 10)
+				cid = OC_EC_8P2GX;
+			else if (domain_nr >= 6)
+				cid = OC_EC_4P2GX;
+			else
+				cid = OC_EC_2P2GX;
+		} else {
 			cid = OC_RP_3GX;
+		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF3:
+		/** EC not supported here */
+		cid = OC_RP_4GX;
+		break;
 	case DAOS_PROP_CO_REDUN_RF4:
-		return -DER_INVAL;
+		/** EC not supported here */
+		cid = OC_RP_6GX;
+		break;
 	}
 
-	/*
-	 * If there are no sharding hints, we can return.
-	 * TODO - since all EC classes are only G1, no need to check sharding.
-	 * hint for that.
-	 */
-	if (shd == 0 || cid == OC_EC_2P2G1 || cid == OC_EC_2P1G1) {
-		oc = oclass_fit_max(cid, domain_nr, target_nr);
-		if (oc)
-			*oc_id_p = oc->oc_id;
-
-		return oc ? 0 : -DER_NONEXIST;
-	}
+	/** we have determined the resilience part, now set the grp size */
 
 	oc = oclass_ident2cl(cid);
 	if (!oc)
@@ -257,7 +269,14 @@ dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
 
 	/** adjust the group size based on the sharding hint */
 	switch (shd) {
+	case 0:
 	case DAOS_OCH_SHD_DEF:
+		if (ofeats & DAOS_OF_ARRAY || ofeats & DAOS_OF_ARRAY_BYTE ||
+		    ofeats & DAOS_OF_KV_FLAT)
+			ca.ca_grp_nr = DAOS_OBJ_GRP_MAX;
+		else
+			ca.ca_grp_nr = 1;
+		break;
 	case DAOS_OCH_SHD_MAX:
 		ca.ca_grp_nr = DAOS_OBJ_GRP_MAX;
 		break;

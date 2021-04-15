@@ -253,7 +253,7 @@ rebuild_status_completed_lookup(const uuid_t pool_uuid)
 	return rs;
 }
 
-int
+static int
 rebuild_status_completed_update(const uuid_t pool_uuid,
 				struct daos_rebuild_status *rs)
 {
