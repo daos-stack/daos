@@ -129,7 +129,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         """
         start_time = 0
         finish_time = 0
-        while int(finish_time - start_time) > loop_time:
+        while int(finish_time - start_time) < loop_time:
             start_time = time.time()
             output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                    rank)
@@ -137,6 +137,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                        rank)
             self.print_and_assert_on_rebuild_failure(output)
+            finish_time = time.time()
 
     @fail_on(DaosApiError)
     def write_single_object(self):

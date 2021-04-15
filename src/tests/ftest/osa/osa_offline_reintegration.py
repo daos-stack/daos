@@ -155,7 +155,7 @@ class OSAOfflineReintegration(OSAUtils):
         without enabling checksum in container properties.
 
         :avocado: tags=all,pr,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_daily
+        :avocado: tags=osa,offline_reintegration
         :avocado: tags=offline_reintegration_without_csum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -171,7 +171,7 @@ class OSAOfflineReintegration(OSAUtils):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=offline_reintegration_daily
+        :avocado: tags=offline_reintegration
         :avocado: tags=offline_reintegration_multiple_pools
         """
         self.log.info("Offline Reintegration : Multiple Pools")
@@ -185,7 +185,7 @@ class OSAOfflineReintegration(OSAUtils):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=offline_reintegration_daily
+        :avocado: tags=offline_reintegration
         :avocado: tags=offline_reintegration_srv_stop
         """
         self.log.info("Offline Reintegration : System Start/Stop")
@@ -197,7 +197,7 @@ class OSAOfflineReintegration(OSAUtils):
         is happening in parallel
 
         :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full
+        :avocado: tags=osa,offline_reintegration
         :avocado: tags=offline_reintegrate_during_rebuild
         """
         self.loop_test_cnt = self.params.get("iterations",
@@ -213,7 +213,7 @@ class OSAOfflineReintegration(OSAUtils):
         with different object class
 
         :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full
+        :avocado: tags=osa,offline_reintegration
         :avocado: tags=offline_reintegration_oclass
         """
         self.log.info("Offline Reintegration : Object Class")
@@ -228,7 +228,7 @@ class OSAOfflineReintegration(OSAUtils):
         is happening in parallel
 
         :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full
+        :avocado: tags=osa,offline_reintegration
         :avocado: tags=offline_reintegrate_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
