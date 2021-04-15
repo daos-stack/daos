@@ -721,7 +721,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
 
     """
     commands = []
-    mdtest_params = "/run/" + job_spec + "/*"
+    mdtest_params = "/run/" + job_spec + "/"
     mpi_module = self.params.get(
         "mpi_module", "/run/*", default="mpi/mpich-x86_64")
     # IOR job specs with a list of parameters; update each value
@@ -730,7 +730,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     read_bytes_list = self.params.get("read_bytes", mdtest_params + "*")
     depth_list = self.params.get("depth", mdtest_params + "*")
     flag = self.params.get("flags", mdtest_params + "*")
-    oclass_list = self.params.get("oclass", mdtest_params + "*")
+    oclass_list = self.params.get("dfs_oclass", mdtest_params + "*")
     num_of_files_dirs = self.params.get(
         "num_of_files_dirs", mdtest_params + "*")
     # update IOR cmdline for each additional IOR obj
@@ -756,6 +756,8 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.set_daos_params(
                             self.server_group, pool,
                             self.container[-1].uuid)
+                        mdtest_cmd.dfs_oclass.update(oclass)
+                        mdtest_cmd.dfs_dir_oclass.update(oclass)
                         env = mdtest_cmd.get_default_env("srun")
                         sbatch_cmds = [
                             "module load -q {}".format(mpi_module)]

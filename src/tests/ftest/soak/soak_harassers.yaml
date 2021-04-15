@@ -164,21 +164,22 @@ fio_harasser:
         - 'RP_2G1'
 mdtest_harasser:
     # maximum timeout for a single job in test in minutes
-    job_timeout: 10
+    job_timeout: 20
     nodesperjob:
         - 1
+        - 4
         - 8
     taskspernode:
+        - 4
         - 16
     test_dir: "/"
     api:
         - 'DFS'
         - 'POSIX'
     iteration: 1
-    num_of_files_dirs: 20000
+    num_of_files_dirs: 1000
     pre_iter: 10
-    flags:
-        - "-L -F -N 1 -P -v"
+    flags: '-L -F -N 1 -P -v'
     write_bytes:
         - 4096
     read_bytes: 
@@ -186,7 +187,9 @@ mdtest_harasser:
     depth: 
         - 20
         - 5
-    oclass:
+    dfs_oclass:
+        - 'RP_2G1'
+    dfs_dir_oclass:
         - 'RP_2G1'
     dfs_destroy: False
 dfuse:
