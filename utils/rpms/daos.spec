@@ -103,11 +103,6 @@ BuildRequires: libpsm_infinipath1
 %endif
 %endif
 %endif
-%if (0%{?suse_version} >= 1500)
-Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
-%else
-Requires: libpmem >= 1.8, libpmemobj >= 1.8
-%endif
 Requires: protobuf-c
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -135,8 +130,10 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl < 02.00.00.3809
+Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
 %else
 Requires: ipmctl > 02.00.00.3816
+Requires: libpmem >= 1.8, libpmemobj >= 1.8
 %endif
 Requires: hwloc
 Requires: mercury = %{mercury_version}
@@ -293,8 +290,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files
 %defattr(-, root, root, -)
-# you might think libdaos_tests.so goes in the tests RPM but
-# the 4 tools following it need it
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
