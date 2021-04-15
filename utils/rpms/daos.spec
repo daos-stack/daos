@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       12%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -423,9 +423,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Thu Apr 15 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.3.0-12
-- Remove client package dependency from server, add server package to tests
-
 * Wed Apr 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.3.0-11
 - Remove storage_estimator and io_conf from client packages to remove
   any client side dependence on bio and vos (and and PMDK/SPDK)
