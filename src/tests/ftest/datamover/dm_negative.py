@@ -277,7 +277,7 @@ class DmNegativeTest(DataMoverTestBase):
         cont2 = self.create_cont(pool2)
 
         # Start dfuse on pool2/cont2
-        self.start_dfuse(self.dfuse_hosts, pool2, cont2)
+        self.start_dfuse(self.dfuse_hosts, pool2, cont2)
 
         # Try to copy. For now, we expect this to just abort.
         self.run_datamover(
