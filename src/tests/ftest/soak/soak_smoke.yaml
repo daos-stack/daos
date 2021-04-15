@@ -170,14 +170,12 @@ mdtest_smoke:
         - 'POSIX'
     iteration: 1
     num_of_files_dirs: 100
-    branching_factor: 1
+    pre_iter: 10
     flags:
-        - ""
-        - "-u"
+        - "-L -F -N 1 -P -v"
     write_bytes:
         - 4096
     read_bytes: 
-        - 0
         - 4096
     depth: 
         - 0

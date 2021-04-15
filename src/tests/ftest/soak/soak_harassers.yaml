@@ -175,17 +175,16 @@ mdtest_harasser:
         - 'DFS'
         - 'POSIX'
     iteration: 1
-    num_of_files_dirs: 1000
-    branching_factor: 1
+    num_of_files_dirs: 20000
+    pre_iter: 10
     flags:
-        - ""
-        - "-u"
+        - "-L -F -N 1 -P -v"
     write_bytes:
         - 4096
     read_bytes: 
         - 4096
     depth: 
-        - 0
+        - 20
         - 5
     oclass:
         - 'RP_2G1'
