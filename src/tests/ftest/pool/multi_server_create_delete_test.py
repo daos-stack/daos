@@ -28,7 +28,10 @@ class MultiServerCreateDeleteTest(TestWithServers):
 
         Destroy the pool and verify that the directory is deleted.
 
-        :avocado: tags=all,pool,full_regression,small,multitarget
+        :avocado: tags=all,full_regression
+        :avocado: tags=small
+        :avocado: tags=pool,multitarget
+        :avocado: tags=multiserver_create_delete
         """
         # Create a dmg command object
         dmg = self.get_dmg_command()
