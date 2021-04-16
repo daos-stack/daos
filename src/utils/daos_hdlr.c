@@ -2563,10 +2563,14 @@ out:
 	 * otherwise always close it before returning
 	 */
 	if (S_ISDIR(st_dir_name.st_mode) && (src_dir != NULL)) {
-		rc = file_closedir(src_file_dfs, src_dir);
-		if (rc != 0) {
+		int close_rc;
+
+		close_rc = file_closedir(src_file_dfs, src_dir);
+		if (close_rc != 0) {
 			fprintf(stderr, "Could not close '%s': %d\n",
-				dir_name, rc);
+				dir_name, close_rc);
+			if (rc == 0)
+				rc = close_rc;
 		}
 	}
 
