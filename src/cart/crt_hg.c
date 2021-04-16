@@ -713,8 +713,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
 
-	crt_ctx = (struct crt_context *)HG_Context_get_data(
-			hg_info->context);
+	crt_ctx = HG_Context_get_data(hg_info->context);
 	if (unlikely(crt_ctx == NULL)) {
 		D_ERROR("HG_Context_get_data failed.\n");
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
@@ -755,7 +754,6 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		 */
 		crt_hg_reply_error_send(&rpc_tmp, -DER_UNREG);
 		crt_hg_unpack_cleanup(proc);
-
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
@@ -790,8 +788,10 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
 	if (unlikely(rc != 0)) {
 		D_ERROR("crt_rpc_priv_init rc=%d, opc=%#x\n", rc, opc);
-		crt_hg_reply_error_send(rpc_priv, -DER_MISC);
+		crt_hg_reply_error_send(&rpc_tmp, -DER_MISC);
+		crt_hg_unpack_cleanup(proc);
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
+		D_FREE(rpc_priv);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 
@@ -836,14 +836,11 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 			  "failed to invoke RPC handler, rc: %d, opc: %#x\n",
 			  rc, opc);
 		crt_hg_reply_error_send(rpc_priv, rc);
+		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
 decref:
-	/* If rpc call back is customized, then it might be handled
-	 * asynchronously, Let's hold the RPC, and the real handler
-	 * (crt_handle_rpc()) will release it
-	 */
-	if (rc != 0 || !crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub))
+	if (rc != 0)
 		RPC_DECREF(rpc_priv);
 out:
 	return hg_ret;

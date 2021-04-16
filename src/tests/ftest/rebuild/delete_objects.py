@@ -18,21 +18,9 @@ class RebuildDeleteObjects(RebuildTestBase):
     :avocado: recursive
     """
 
-    CANCEL_FOR_TICKET = [
-        [
-            "DAOS-6751",
-            "test_method_name", "test_rebuild_delete_records",
-            "record_qty", 1
-        ],
-        [
-            "DAOS-6865",
-            "rank", 4
-        ],
-    ]
-
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildDeleteObjects object."""
-        super(RebuildDeleteObjects, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.punched_indices = None
         self.punched_qty = 0
         self.punch_type = None
@@ -76,7 +64,7 @@ class RebuildDeleteObjects(RebuildTestBase):
                 self.punch_type, self.punched_qty, expected_qty))
 
         # Read objects from the last transaction
-        super(RebuildDeleteObjects, self).verify_container_data(txn)
+        super().verify_container_data(txn)
 
     def test_rebuild_delete_objects(self):
         """JIRA ID: DAOS-2572.
@@ -90,7 +78,9 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,large,full_regression,rebuild,rebuilddeleteobject
+        :avocado: tags=all,full_regression
+        :avocado: tags=large
+        :avocado: tags=rebuild,delete_objects,rebuilddeleteobject
         """
         self.punch_type = "object"
         self.execute_rebuild_test()
@@ -107,7 +97,9 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,large,full_regression,rebuild,rebuilddeleterecord
+        :avocado: tags=all,full_regression
+        :avocado: tags=large
+        :avocado: tags=rebuild,delete_objects,rebuilddeleterecord
         """
         self.punch_type = "record"
         self.execute_rebuild_test()

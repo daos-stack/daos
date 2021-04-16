@@ -284,10 +284,13 @@ def load_conf(args):
     ofh.close()
     return NLTConf(conf, args)
 
-def get_base_env():
+def get_base_env(clean=False):
     """Return the base set of env vars needed for DAOS"""
 
-    env = os.environ.copy()
+    if clean:
+        env = OrderedDict()
+    else:
+        env = os.environ.copy()
     env['DD_MASK'] = 'all'
     env['DD_SUBSYS'] = 'all'
     env['D_LOG_MASK'] = 'DEBUG'
@@ -357,34 +360,10 @@ class DaosServer():
                         return True
         return False
 
-    def start(self):
+    def start(self, clean=True):
         """Start a DAOS server"""
 
-        daos_server = os.path.join(self.conf['PREFIX'], 'bin', 'daos_server')
-
-        self_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Create a server yaml file.  To do this open and copy the
-        # nlt_server.yaml file in the current directory, but overwrite
-        # the server log file with a temporary file so that multiple
-        # server runs do not overwrite each other.
-        scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
-
-        scyaml = yaml.safe_load(scfd)
-        scyaml['engines'][0]['log_file'] = self.server_log.name
-        if self.conf.args.server_debug:
-            scyaml['control_log_mask'] = 'ERROR'
-            scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
-        scyaml['control_log_file'] = self.control_log.name
-
-        self._yaml_file = tempfile.NamedTemporaryFile(
-            prefix='nlt-server-config-',
-            suffix='.yaml')
-
-        self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
-        self._yaml_file.flush()
-
-        server_env = get_base_env()
+        server_env = get_base_env(clean=True)
 
         if self.valgrind:
             valgrind_args = ['--fair-sched=yes',
@@ -412,11 +391,37 @@ class DaosServer():
             server_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
                                                 server_env['PATH'])
 
+        daos_server = os.path.join(self.conf['PREFIX'], 'bin', 'daos_server')
+
+        self_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Create a server yaml file.  To do this open and copy the
+        # nlt_server.yaml file in the current directory, but overwrite
+        # the server log file with a temporary file so that multiple
+        # server runs do not overwrite each other.
+        scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
+
+        scyaml = yaml.safe_load(scfd)
+        scyaml['engines'][0]['log_file'] = self.server_log.name
+        if self.conf.args.server_debug:
+            scyaml['control_log_mask'] = 'ERROR'
+            scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
+        scyaml['control_log_file'] = self.control_log.name
+
+        for (key, value) in server_env.items():
+            scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
+
+        self._yaml_file = tempfile.NamedTemporaryFile(
+            prefix='nlt-server-config-',
+            suffix='.yaml')
+
+        self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
+        self._yaml_file.flush()
+
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
                'start', '-t' '4', '--insecure', '-d', self.agent_dir]
 
-        server_env['DAOS_DISABLE_REQ_FWD'] = '1'
-        self._sp = subprocess.Popen(cmd, env=server_env)
+        self._sp = subprocess.Popen(cmd)
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
@@ -431,8 +436,7 @@ class DaosServer():
         if not self.conf.args.server_debug:
             agent_cmd.append('--debug')
 
-        self._agent = subprocess.Popen(agent_cmd,
-                                       env=os.environ.copy())
+        self._agent = subprocess.Popen(agent_cmd)
         self.conf.agent_dir = self.agent_dir
         self.running = True
 
@@ -445,28 +449,66 @@ class DaosServer():
         start = time.time()
         max_start_time = 30
 
-        cmd = ['storage', 'format']
+        error_resolutions = {
+            'system_erase': (
+                ['running system'], ['system', 'erase', '--json'],
+            ),
+            'system_stop': (
+                ['to be stopped'], ['system', 'stop', '--json'],
+            ),
+            'storage_force_format': (
+                ['already-formatted', 'raft service unavailable'],
+                ['storage', 'format', '--force', '--json']
+            )
+        }
+
+        cmd = ['storage', 'format', '--json']
         while True:
             time.sleep(0.5)
             rc = self.run_dmg(cmd)
-            ready = False
-            if rc.returncode == 1:
-                for line in rc.stdout.decode('utf-8').splitlines():
-                    if 'format storage of running instance' in line:
-                        ready = True
-                    format_message = ('format request for already-formatted'
-                                      ' storage and reformat not specified')
-                    if format_message in line:
-                        cmd = ['storage', 'format', '--reformat']
-                for line in rc.stderr.decode('utf-8').splitlines():
-                    if 'system reformat requires the following' in line:
-                        ready = True
-            if ready:
+
+            data = json.loads(rc.stdout.decode('utf-8'))
+            print('cmd: {} data: {}'.format(cmd, data))
+
+            if rc.returncode == 0:
                 break
+            if data['error'] is not None:
+                resolved = False
+                for res in error_resolutions.values():
+                    for err_msg in res[0]:
+                        if err_msg in data['error']:
+                            cmd = res[1]
+                            resolved = True
+                            break
+                    if resolved:
+                        break
+
+                # If we don't need to start from a clean slate and the system is
+                # already running, just move on.
+                if not clean and cmd == error_resolutions['system_erase'][1]:
+                    break
+            else:
+                if data['response'] is not None and \
+                    'host_errors' in data['response']:
+                    if len(data['response']['host_errors']) == 0:
+                        break
+
+                    host_err = list(data['response']['host_errors'])[0]
+                    for err_msg in error_resolutions['storage_force_format'][0]:
+                        if err_msg in host_err:
+                            cmd = error_resolutions['storage_force_format'][1]
+                            break
+                elif cmd == error_resolutions['system_stop'][1]:
+                    cmd = error_resolutions['system_erase'][1]
+                elif cmd == error_resolutions['system_erase'][1]:
+                    cmd = error_resolutions['storage_force_format'][1]
+                elif cmd == error_resolutions['storage_force_format'][1]:
+                    break
+
             self._check_timing("format", start, max_start_time)
         print('Format completion in {:.2f} seconds'.format(time.time() - start))
 
-        # How wait until the system is up, basically the format to happen.
+        # Now wait until the system is up, basically the format to happen.
         while True:
             time.sleep(0.5)
             if self._check_system_state(['ready', 'joined']):
@@ -2536,7 +2578,7 @@ def main():
     # exit again.
     if args.mode == 'server-valgrind':
         server = DaosServer(conf, valgrind=True)
-        server.start()
+        server.start(clean=False)
         pools = get_pool_list()
         for pool in pools:
             cmd = ['pool', 'list-containers', '--pool', pool]
@@ -2552,7 +2594,7 @@ def main():
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
         server = DaosServer(conf)
-        server.start()
+        server.start(clean=False)
         if fi_test:
             fatal_errors.add_result(test_alloc_fail_cat(server,
                                                         conf, wf_client))

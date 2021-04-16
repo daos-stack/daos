@@ -32,6 +32,8 @@ struct bio_dma_chunk {
 	unsigned int	 bdc_pg_idx;
 	/* Being used by how many I/O descriptors */
 	unsigned int	 bdc_ref;
+	/* Chunk type */
+	unsigned int	 bdc_type;
 };
 
 /*
@@ -41,7 +43,8 @@ struct bio_dma_chunk {
 struct bio_dma_buffer {
 	d_list_t		 bdb_idle_list;
 	d_list_t		 bdb_used_list;
-	struct bio_dma_chunk	*bdb_cur_chk;
+	struct bio_dma_chunk	*bdb_cur_chk[BIO_CHK_TYPE_MAX];
+	unsigned int		 bdb_used_cnt[BIO_CHK_TYPE_MAX];
 	unsigned int		 bdb_tot_cnt;
 	unsigned int		 bdb_active_iods;
 	ABT_cond		 bdb_wait_iods;
@@ -196,6 +199,7 @@ struct bio_desc {
 	/* Inflight SPDK DMA transfers */
 	unsigned int		 bd_inflights;
 	int			 bd_result;
+	unsigned int		 bd_chk_type;
 	/* Flags */
 	unsigned int		 bd_buffer_prep:1,
 				 bd_update:1,
@@ -268,7 +272,8 @@ struct media_error_msg {
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 extern uint64_t		io_stat_period;
-void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
+int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
+		       uint64_t timeout);
 void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 		       void *event_ctx);
 struct spdk_thread *init_thread(void);

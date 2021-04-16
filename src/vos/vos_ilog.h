@@ -199,7 +199,8 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
 int
 vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 		   const daos_epoch_range_t *epr, bool discard,
-		   daos_epoch_t punched, struct vos_ilog_info *info);
+		   const struct vos_punch_record *parent_punch,
+		   struct vos_ilog_info *info);
 
 /* #define ILOG_TRACE */
 #ifdef ILOG_TRACE
@@ -327,5 +328,8 @@ vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog);
  */
 void
 vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type);
+
+void
+vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc);
 
 #endif /* __VOS_ILOG_H__ */
