@@ -615,11 +615,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self._set_dsync_params(src_type, src_path, src_pool, src_cont,
                                    dst_type, dst_path, dst_pool, dst_cont)
         elif self.tool == "DSERIAL":
-            assert src_type in (None, "DAOS", "DAOS_UUID")
-            assert src_path is None
-            assert dst_type in (None, "DAOS", "DAOS_UUID")
-            assert dst_path is None
-            assert dst_cont is None
+            assert src_type in (None, "DAOS", "DAOS_UUID") #nosec
+            assert src_path is None #nosec
+            assert dst_type in (None, "DAOS", "DAOS_UUID") #nosec
+            assert dst_path is None #nosec
+            assert dst_cont is None #nosec
             self._set_dserial_params(src_pool, src_cont, dst_pool)
         elif self.tool == "FS_COPY":
             self._set_fs_copy_params(src_type, src_path, src_pool, src_cont,
