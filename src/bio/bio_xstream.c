@@ -1221,7 +1221,6 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	bool			 assigned = false;
 	int			 rc;
 
-	D_ASSERT(ctxt->bxc_desc == NULL);
 	D_ASSERT(ctxt->bxc_blobstore == NULL);
 	D_ASSERT(ctxt->bxc_io_channel == NULL);
 
@@ -1346,15 +1345,6 @@ retry:
 		goto out;
 	}
 
-	/* generic read only descriptor (currently used for IO stats) */
-	rc = spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb,
-				NULL, &ctxt->bxc_desc);
-	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, %d\n", d_bdev->bb_name, rc);
-		rc = daos_errno2der(-rc);
-		goto out;
-	}
-
 out:
 	D_ASSERT(dev_info != NULL);
 	smd_dev_free_info(dev_info);
@@ -1389,11 +1379,6 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			bio_fini_health_monitoring(ctxt->bxc_blobstore);
 
 		ctxt->bxc_blobstore = NULL;
-	}
-
-	if (ctxt->bxc_desc != NULL) {
-		spdk_bdev_close(ctxt->bxc_desc);
-		ctxt->bxc_desc = NULL;
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);

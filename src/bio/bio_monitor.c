@@ -650,6 +650,7 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 		if (rc)							\
 			D_WARN("Failed to create %s sensor for %s: "	\
 			       DF_RC"\n", fname, bdev_name, DP_RC(rc));	\
+		D_FREE(b_info->bdi_traddr);				\
 	}
 
 	BIO_PROTO_NVME_STATS_LIST

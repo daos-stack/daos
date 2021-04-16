@@ -2229,6 +2229,7 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 
 failure:
 	D_MUTEX_UNLOCK(&d_tm_add_lock);
+	*node = NULL;
 	D_ERROR("Failed to add metric [%s]: " DF_RC "\n", path, DP_RC(rc));
 	return rc;
 }

@@ -92,12 +92,6 @@ teardown_xstream(void *arg)
 		return;
 	}
 
-	/* Close open desc for io stats */
-	if (xs_ctxt->bxc_desc != NULL) {
-		spdk_bdev_close(xs_ctxt->bxc_desc);
-		xs_ctxt->bxc_desc = NULL;
-	}
-
 	/* Put the io channel */
 	if (xs_ctxt->bxc_io_channel != NULL) {
 		spdk_bs_free_io_channel(xs_ctxt->bxc_io_channel);
@@ -254,19 +248,6 @@ setup_xstream(void *arg)
 	d_bdev = bbs->bb_dev;
 	D_ASSERT(d_bdev != NULL);
 	D_ASSERT(d_bdev->bb_name != NULL);
-
-	/* Acquire open desc for io stats as the last step of xs setup */
-	if (xs_ctxt->bxc_desc == NULL) {
-		rc = spdk_bdev_open_ext(d_bdev->bb_name, false,
-					bio_bdev_event_cb, NULL,
-					&xs_ctxt->bxc_desc);
-		if (rc != 0) {
-			D_ERROR("Failed to open bdev %s, for %p, %d\n",
-				d_bdev->bb_name, bbs, rc);
-			return;
-		}
-		D_ASSERT(xs_ctxt->bxc_desc != NULL);
-	}
 }
 
 static void
@@ -360,10 +341,6 @@ bs_loaded:
 	D_ASSERT(is_server_started());
 	for (i = 0; i < bbs->bb_ref; i++) {
 		struct bio_xs_context	*xs_ctxt = bbs->bb_xs_ctxts[i];
-
-		/* Setup for the xsteam is done */
-		if (xs_ctxt->bxc_desc != NULL)
-			continue;
 
 		D_ASSERT(xs_ctxt->bxc_thread != NULL);
 		spdk_thread_send_msg(xs_ctxt->bxc_thread, setup_xstream,
