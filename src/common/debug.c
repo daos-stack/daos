@@ -22,6 +22,7 @@ static pthread_mutex_t dd_lock = PTHREAD_MUTEX_INITIALIZER;
 DAOS_FOREACH_DB(D_LOG_INSTANTIATE_DB, DAOS_FOREACH_DB)
 DAOS_FOREACH_LOG_FAC(D_LOG_INSTANTIATE_FAC, DAOS_FOREACH_DB)
 
+static d_log_id_cb_t	log_id_cb;
 /* debug bit groups */
 #define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC | DB_CSUM)
 
@@ -122,6 +123,12 @@ daos_debug_fini(void)
 	D_MUTEX_UNLOCK(&dd_lock);
 }
 
+void
+daos_debug_set_id_cb(d_log_id_cb_t cb)
+{
+	log_id_cb = cb;
+}
+
 /** Initialize debug system */
 int
 daos_debug_init(char *logfile)
@@ -143,8 +150,8 @@ daos_debug_init(char *logfile)
 		logfile = NULL;
 	}
 
-
-	rc = d_log_init_adv("DAOS", logfile, flags, DLOG_ERR, DLOG_CRIT);
+	rc = d_log_init_adv("DAOS", logfile, flags, DLOG_ERR, DLOG_CRIT,
+			    log_id_cb);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
 			DP_RC(rc));
