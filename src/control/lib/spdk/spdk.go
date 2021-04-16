@@ -49,7 +49,6 @@ func Rc2err(label string, rc C.int) error {
 // EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
-	MemSize        int      // size in MiB to be allocated to SPDK proc
 	PciIncludeList []string // restrict SPDK device access
 	DisableVMD     bool     // flag if VMD devices should not be included
 }
@@ -58,10 +57,6 @@ func (o *EnvOptions) toC(log logging.Logger) (*C.struct_spdk_env_opts, func(), e
 	opts := new(C.struct_spdk_env_opts)
 
 	C.spdk_env_opts_init(opts)
-
-	if o.MemSize > 0 {
-		opts.mem_size = C.int(o.MemSize)
-	}
 
 	// quiet DPDK EAL logging by setting log level to ERROR
 	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))

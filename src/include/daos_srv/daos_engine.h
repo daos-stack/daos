@@ -41,7 +41,7 @@ extern const char	*dss_socket_dir;
 /** NVMe shm_id for enabling SPDK multi-process mode */
 extern int		 dss_nvme_shm_id;
 
-/** NVMe mem_size for SPDK memory allocation when using primary mode */
+/** NVMe mem_size for SPDK memory allocation when using primary mode (in MB) */
 extern int		 dss_nvme_mem_size;
 
 /** I/O Engine instance index */

@@ -368,12 +368,13 @@ void bio_register_ract_ops(struct bio_reaction_ops *ops);
  * \param[IN] nvme_conf		NVMe config file
  * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
  * \param[IN] mem_size		SPDK memory alloc size when using primary mode
+ * \paran[IN] tgt_nr		Number of threads
  * \param[IN] db		persistent database to store SMD data
  *
  * \return		Zero on success, negative value on error
  */
 int bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-		  struct sys_db *db);
+		  int tgt_nr, struct sys_db *db);
 
 /**
  * Global NVMe finilization.

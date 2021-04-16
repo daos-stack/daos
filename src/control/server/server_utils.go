@@ -216,6 +216,17 @@ func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter g
 		}
 	}
 
+	for _, engineCfg := range srv.cfg.Engines {
+		// Calculate mem_size per I/O engine (in MB)
+		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines);
+		engineCfg.MemSize *= (hugePages.PageSizeKb >> 10);
+		// TODO: Warn if hugepages are not enough to sustain average
+		// I/O workload (~1GB)
+		if ((engineCfg.MemSize / engineCfg.TargetCount) < 1024) {
+			srv.log.Debugf("Not enough hugepages are allocated!")
+		}
+	}
+
 	return nil
 }
 

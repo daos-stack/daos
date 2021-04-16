@@ -56,13 +56,11 @@ type (
 		pbin.ForwardableRequest
 		Class      storage.BdevClass
 		DeviceList []string
-		MemSize    int // size MiB memory to be used by SPDK proc
 		DisableVMD bool
 	}
 
 	// DeviceFormatRequest designs the parameters for a device-specific format.
 	DeviceFormatRequest struct {
-		MemSize int // size MiB memory to be used by SPDK proc
 		Device  string
 		Class   storage.BdevClass
 	}
