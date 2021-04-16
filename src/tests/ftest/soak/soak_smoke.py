@@ -24,6 +24,8 @@ class SoakSmoke(SoakTestBase):
         various jobs defined in the soak yaml.  It will run for no more than
         20 min
 
+        :avocado: tags=hw,large
+        :avocado: tags=soak
         :avocado: tags=soak_smoke
         """
         test_param = "/run/smoke/"

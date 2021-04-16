@@ -22,7 +22,9 @@ class SoakStress(SoakTestBase):
         various jobs defined in the soak yaml
         This test will run soak_stress for 48 hours.
 
-        :avocado: tags=soak,soak_stress_48h
+        :avocado: tags=hw,large
+        :avocado: tags=soak
+        :avocado: tags=soak_stress_48h
         """
         test_param = "/run/soak_stress/"
         self.run_soak(test_param)

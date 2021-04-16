@@ -97,13 +97,18 @@ soak_harassers:
     joblist:
         - ior_harasser
         - fio_harasser
+    # one harrasser is run during each pass of soak jobs
     harasserlist:
         #- snapshot
         #- exclude_reintegrate
         - exclude_reintegrate-offline
+        #- server-stop_server-start-offline
+        #- server-stop_server-start
+        #- server-stop_server-reintegrate-offline
         #- server-stop_server-reintegrate
     harasser_to: 600
-    enable_drain: False
+    # drain rank from all pools before stopping server
+    enable_drain: True
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -173,4 +178,3 @@ monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
     - "ps -C daos_engine -o %mem,%cpu,cmd"
-    - "ps -C daos_server -o %mem,%cpu,cmd"

@@ -199,6 +199,11 @@ class SoakTestBase(TestWithServers):
             name = "SVR_STOP"
             params = (self, pool, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "server-start":
+            method = launch_server_stop_start
+            name = "SVR_START"
+            params = (self, pool, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "server-reintegrate":
             method = launch_server_stop_start
             name = "SVR_REINTEGRATE"
