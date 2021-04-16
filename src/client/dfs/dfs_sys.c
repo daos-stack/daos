@@ -1220,16 +1220,6 @@ out:
 }
 
 int
-dfs_sys_opunch(dfs_sys_t *dfs_sys, dfs_obj_t *obj,
-	       daos_off_t offset, daos_off_t len)
-{
-	if (dfs_sys == NULL)
-		return EINVAL;
-
-	return dfs_punch(dfs_sys->dfs, obj, offset, len);
-}
-
-int
 dfs_sys_remove(dfs_sys_t *dfs_sys, const char *path, bool force,
 	       daos_obj_id_t *oid)
 {

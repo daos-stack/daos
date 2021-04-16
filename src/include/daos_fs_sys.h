@@ -406,20 +406,6 @@ dfs_sys_punch(dfs_sys_t *dfs_sys, const char *path,
 	      daos_off_t offset, daos_off_t len);
 
 /**
- * Similar to dfs_sys_punch but on an open object.
- *
- * \param[in]	dfs_sys Pointer to the mounted file system.
- * \param[in]	obj	Opened file object.
- * \param[in]	offset	offset of file to punch at.
- * \param[in]	len	number of bytes to punch.
- *
- * \return		0 on success, errno code on failure.
- */
-int
-dfs_sys_opunch(dfs_sys_t *dfs_sys, dfs_obj_t *obj,
-	       daos_off_t offset, daos_off_t len);
-
-/**
  * Remove an object identified by path. If object is a directory and is
  * non-empty; this will fail unless force option is true. If object is a
  * symlink, the symlink is removed.
