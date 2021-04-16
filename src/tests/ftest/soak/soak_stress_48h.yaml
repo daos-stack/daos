@@ -165,7 +165,7 @@ mdtest_stress:
         - 'DFS'
         - 'POSIX'
     iteration: 1
-    num_of_files_dirs: 20000
+    num_of_files_dirs: 10000
     branching_factor: 1
     flags: '-L -F -N 1 -P -v'
     write_bytes:
@@ -192,4 +192,3 @@ monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
     - "ps -C daos_engine -o %mem,%cpu,cmd"
-    - "ps -C daos_server -o %mem,%cpu,cmd"

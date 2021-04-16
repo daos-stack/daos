@@ -145,4 +145,3 @@ monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
     - "ps -C daos_engine -o %mem,%cpu,cmd"
-    - "ps -C daos_server -o %mem,%cpu,cmd"
