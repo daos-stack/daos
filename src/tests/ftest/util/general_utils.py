@@ -643,7 +643,7 @@ def convert_list(value, separator=","):
 
 
 def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
-                   send_sigusr2=False):
+                   dump_ult_stacks=False):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
@@ -652,8 +652,9 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to 60
             seconds.
-        added_filter (,optional): negative filter to better identify processes.
-        send_sigusr2 (bool, optional): whether SIGUSR2 should be sent before
+        added_filter (str, optional): negative filter to better identify
+            processes.
+        dump_ult_stacks (bool, optional): whether SIGUSR2 should be sent before
             any other sigs, to dump all ULTs stacks of servers.
 
 

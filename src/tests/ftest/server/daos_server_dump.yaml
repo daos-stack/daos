@@ -8,7 +8,7 @@ hosts:
     - server-D
     - server-E
     - server-F
-timeout: 360
+timeout: 140
 server_config:
   name: daos_server
   servers:
