@@ -55,8 +55,8 @@ def scons():
     prereqs.require(fenv, 'fuse')
     dfuse_hl_src = ['dfuse_hl.c']
     libraries += ['fuse3']
-    dfuse_hl = daos_build.program(fenv, 'dfuse_hl', dfuse_hl_src,
-                                  LIBS=libraries)
+    daos_build.program(fenv, 'dfuse_hl', dfuse_hl_src,
+                       LIBS=libraries)
 
 if __name__ == "SCons.Script":
     scons()
