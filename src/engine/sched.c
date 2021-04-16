@@ -592,7 +592,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct vos_pool_space	 vps = { 0 };
-	uint64_t		 scm_left;
+	uint64_t		 scm_left, nvme_left;
 	struct pressure_ratio	*pr;
 	int			 orig_pressure, rc;
 
@@ -625,9 +625,17 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	else
 		scm_left = 0;
 
+	if (NVME_TOTAL(&vps) == 0)      /* NVMe not enabled */
+		nvme_left = UINT64_MAX;
+	else if (NVME_FREE(&vps) > NVME_SYS(&vps))
+		nvme_left = NVME_FREE(&vps) - NVME_SYS(&vps);
+	else
+		nvme_left = 0;
+
 	orig_pressure = spi->spi_space_pressure;
 	for (pr = &pressure_gauge[0]; pr->pr_free != 0; pr++) {
-		if (scm_left > (SCM_TOTAL(&vps) * pr->pr_free / 100))
+		if (scm_left > (SCM_TOTAL(&vps) * pr->pr_free / 100) &&
+		    nvme_left > (NVME_TOTAL(&vps) * pr->pr_free / 100))
 			break;
 	}
 	spi->spi_space_pressure = pr->pr_pressure;
