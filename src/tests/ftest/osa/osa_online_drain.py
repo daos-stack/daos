@@ -102,7 +102,7 @@ class OSAOnlineDrain(OSAUtils):
                             "Pool Version Error:  After drain")
             # Wait to finish the threads
             for thrd in threads:
-                thrd.join(timeout=20)
+                thrd.join()
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
