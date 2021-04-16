@@ -209,7 +209,7 @@ class CartIvTwoNodeTest(CartTest):
 
         actions = [
             # Fetch, expect fail, no variable yet
-            {"operation": "fetch", "rank": 0, "key": (0, 42), "return_code": -1,
+            {"operation": "fetch", "rank": 1, "key": (0, 42), "return_code": -1,
              "expected_value": ""},
             # Add variable 0:42
             {"operation": "update", "rank": 0, "key": (0, 42),
@@ -224,7 +224,8 @@ class CartIvTwoNodeTest(CartTest):
              "expected_value": ""},
         ]
 
-        time.sleep(2)
+        # Wait for servers to come up
+        time.sleep(10)
 
         failed = False
 
@@ -268,7 +269,8 @@ class CartIvTwoNodeTest(CartTest):
             failed = True
             self.print("Exception in launching client : {}".format(e))
 
-        time.sleep(2)
+        # Give some time for completion before forcing servers shut down 
+        time.sleep(5)
 
         # Stop the server if it is still running
         if self.check_process(srv_rtn):

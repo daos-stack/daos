@@ -16,9 +16,8 @@ import re
 
 from apricot import TestWithoutServers
 from general_utils import stop_processes
-from distutils.spawn import find_executable
 from write_host_file import write_host_file
-
+from distutils.spawn import find_executable
 
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
@@ -199,7 +198,7 @@ class CartTest(TestWithoutServers):
             ofi_share_addr = os.environ.get("CRT_CTX_SHARE_ADDR")
 
         if "CRT_TEST_CONT" in os.environ:
-            server_continuous = os.environ.get(""CRT_TEST_CONT"")
+            server_continuous = os.environ.get("CRT_TEST_CONT")
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
@@ -226,6 +225,9 @@ class CartTest(TestWithoutServers):
 
         if ofi_share_addr is not None:
             env += " -x CRT_CTX_SHARE_ADDR={!s}".format(ofi_share_addr)
+
+        if server_continuous is not None:
+            env += " -x CRT_TEST_CONT={!s}".format(server_continuous)
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
         env += " -x COVFILE=/tmp/test.cov"
@@ -277,6 +279,7 @@ class CartTest(TestWithoutServers):
     def build_cmd(self, env, host, **kwargs):
         """Build a command string."""
         tst_cmd = ""
+        tst_cont = None
 
         index = kwargs.get('index', None)
 
@@ -328,6 +331,11 @@ class CartTest(TestWithoutServers):
 
         tst_cmd += env
 
+        tst_cont = os.getenv("CRT_TEST_CONT", "0")
+        if tst_cont is not None:
+            if tst_cont == "1":
+               tst_cmd += " --continuous"
+
         if tst_ctx is not None:
             tst_cmd += " -x CRT_CTX_NUM=" + tst_ctx
 
@@ -338,10 +346,8 @@ class CartTest(TestWithoutServers):
             tst_cmd += " -x D_LOG_FILE_APPEND_PID=1"
 
         tst_mod = os.getenv("CART_TEST_MODE", "native")
-        #os.environ["CART_TEST_MODE"] = "memcheck"
-
-        #if tst_mod == "memcheck":
-            #tst_cmd += tst_vgd
+        if tst_mod == "memcheck":
+            tst_cmd += tst_vgd
 
         if tst_bin is not None:
             tst_cmd += " " + tst_bin
