@@ -173,6 +173,9 @@ func createScmFormatRequest(class Class, scmCfg ScmConfig, force bool) (*ScmForm
 
 // ScmNeedsFormat returns true if SCM is found to require formatting.
 func (p *Provider) ScmNeedsFormat() (bool, error) {
+	// Don't perform a SCM scan.
+	return false, nil
+
 	cfg, err := p.GetScmConfig()
 	if err != nil {
 		return false, err
@@ -197,6 +200,8 @@ func (p *Provider) ScmNeedsFormat() (bool, error) {
 
 // FormatScm formats SCM based on provider config and force flag.
 func (p *Provider) FormatScm(force bool) error {
+	// Don't scan anything.
+	return nil
 	cfg, err := p.GetScmConfig()
 	if err != nil {
 		return err
