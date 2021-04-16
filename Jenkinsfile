@@ -885,7 +885,7 @@ pipeline {
                     agent {
                         label 'ci_vm9'
                     }
-                    environment { 
+                    environment {
                         CART_TEST_MODE = 'memcheck'
                     }
                     steps {
