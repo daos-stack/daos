@@ -80,7 +80,7 @@ if [ -d "/mnt/daos" ]; then
     if [ -z "$RUN_TEST_VALGRIND" ]; then
         # Tests that do not run valgrind
         COMP="UTEST_client"
-        run_test src/client/storage_estimator/common/tests/storage_estimator.sh
+        run_test src/vos/storage_estimator/common/tests/storage_estimator.sh
         COMP="UTEST_rdb"
         run_test src/rdb/raft_tests/raft_tests.py
         go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"
