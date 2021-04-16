@@ -3363,7 +3363,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else {
-		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER,
+			 DLOG_INFO, DLOG_ERR,
 			 "ivo_on_update failed with rc = "DF_RC"\n",
 			 DP_RC(rc));
 
