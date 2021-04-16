@@ -92,7 +92,6 @@ func (ei *EngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeContro
 	res, err := p.Format(bdev.FormatRequest{
 		Class:      cfg.Class,
 		DeviceList: cfg.DeviceList,
-		MemSize:    cfg.MemSize,
 	})
 	if err != nil {
 		results = append(results, ei.newCret("", err))

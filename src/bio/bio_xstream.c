@@ -28,10 +28,10 @@
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
 #define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
 /* DMA buffer parameters */
-#define DAOS_DMA_CHUNK_MB	8		/* 8MB DMA chunks */
-#define DAOS_DMA_CHUNK_CNT_INIT	32		/* Per-xstream init chunks */
-#define DAOS_DMA_CHUNK_CNT_MAX	128		/* Per-xstream max chunks */
-#define DAOS_NVME_MAX_CTRLRS	1024		/* Max read from nvme_conf */
+#define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
+#define DAOS_DMA_CHUNK_CNT_INIT	32	/* Per-xstream init chunks */
+#define DAOS_DMA_MIN_UB_BUF_MB	1024	/* 1GB min upperbound DMA buffer */
+#define DAOS_NVME_MAX_CTRLRS	1024	/* Max read from nvme_conf */
 
 /* Max inflight blob IOs per io channel */
 #define BIO_BS_MAX_CHANNEL_OPS	(4096)
@@ -300,8 +300,7 @@ bio_spdk_env_init(void)
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos";
-	if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY)
-		opts.mem_size = nvme_glb.bd_mem_size;
+	opts.mem_size = nvme_glb.bd_mem_size;
 
 	rc = populate_whitelist(&opts);
 	if (rc != 0)
@@ -337,11 +336,24 @@ bio_spdk_env_init(void)
 
 int
 bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-	      struct sys_db *db)
+	      int tgt_nr, struct sys_db *db)
 {
 	char		*env;
 	int		rc, fd;
 	uint64_t	size_mb = DAOS_DMA_CHUNK_MB;
+
+	D_ASSERT(tgt_nr > 0);
+	D_ASSERT(mem_size > 0);
+	/*
+	 * Hugepages are not enough to sustain average I/O workload
+	 * (~1GB per xstream).
+	 */
+	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
+		D_ERROR("Per-xstream DMA buffer upperbound limit < 1GB!\n");
+		D_DEBUG(DB_MGMT, "mem_size:%d, DMA upper bound:%dMB\n",
+			mem_size, (mem_size / tgt_nr));
+		return -DER_INVAL;
+	}
 
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
@@ -400,7 +412,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
 	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
-	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
+	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
 
 	env = getenv("VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "MALLOC") == 0) {

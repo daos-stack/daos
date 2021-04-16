@@ -172,6 +172,7 @@ type Config struct {
 	EnvVars           []string      `yaml:"env_vars,omitempty"`
 	EnvPassThrough    []string      `yaml:"env_pass_through,omitempty"`
 	Index             uint32        `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
+	MemSize		  int		`yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r,nonzero"`
 }
 
 // NewConfig returns an I/O Engine config.

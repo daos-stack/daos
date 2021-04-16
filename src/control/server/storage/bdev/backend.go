@@ -199,7 +199,6 @@ func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*Form
 
 func (b *spdkBackend) formatNvme(req FormatRequest) (*FormatResponse, error) {
 	spdkOpts := &spdk.EnvOptions{
-		MemSize:        req.MemSize,
 		PciIncludeList: req.DeviceList,
 		DisableVMD:     b.IsVMDDisabled(),
 	}
