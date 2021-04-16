@@ -15,6 +15,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+type getHugePageInfoFn func() (*hugePageInfo, error)
+
 type hugePageInfo struct {
 	Total      int
 	Free       int
