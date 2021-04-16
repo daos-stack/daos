@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosContainer, DaosApiError
 from avocado.core.exceptions import TestFail
 from test_utils_pool import TestPool
@@ -37,7 +37,7 @@ class Permission(TestWithServers):
         Test Description:
             Test pool connections with specific permissions.
 
-        :avocado: tags=pool,permission,connectpermission
+        :avocado: tags=all,daily_regression,pool,permission,connectpermission
         """
         # parameter used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
@@ -81,6 +81,7 @@ class Permission(TestWithServers):
                     "Test was expected to pass but it failed at " +
                     "pool.connect.\n")
 
+    @skipForTicket("DAOS-7221")
     def test_filemodification(self):
         """Test ID: DAOS-???.
 
@@ -88,7 +89,7 @@ class Permission(TestWithServers):
             Test whether file modification happens as expected under different
             permission levels.
 
-        :avocado: tags=pool,permission,filemodification
+        :avocado: tags=all,daily_regression,pool,permission,filemodification
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
