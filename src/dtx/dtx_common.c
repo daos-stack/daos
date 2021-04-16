@@ -272,6 +272,7 @@ static void
 dtx_shares_init(struct dtx_handle *dth)
 {
 	D_INIT_LIST_HEAD(&dth->dth_share_cmt_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_abt_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count = 0;
@@ -287,6 +288,11 @@ dtx_shares_fini(struct dtx_handle *dth)
 		return;
 
 	while ((dsp = d_list_pop_entry(&dth->dth_share_cmt_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		D_FREE(dsp);
+
+	while ((dsp = d_list_pop_entry(&dth->dth_share_abt_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
 		D_FREE(dsp);
