@@ -11,7 +11,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"os/user"
 	"sync"
 	"syscall"
 	"time"
@@ -177,14 +176,14 @@ func (srv *server) initNetwork(ctx context.Context) error {
 func (srv *server) initStorage() error {
 	defer srv.logDuration(track("time to init storage"))
 
-	runningUser, err := user.Current()
+	/*runningUser, err := user.Current()
 	if err != nil {
 		return errors.Wrap(err, "unable to lookup current user")
 	}
 
 	if err := prepBdevStorage(srv, runningUser, iommuDetected(), getHugePageInfo); err != nil {
 		return err
-	}
+	}*/
 
 	return srv.ctlSvc.Setup()
 }
