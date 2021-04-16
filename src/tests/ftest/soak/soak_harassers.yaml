@@ -182,13 +182,13 @@ mdtest_harasser:
         - 'DFS'
         - 'POSIX'
     iteration: 1
-    num_of_files_dirs: 1000
+    num_of_files_dirs: 100000
     pre_iter: 10
     flags: '-L -F -N 1 -P -v'
     write_bytes:
-        - 4096
+        - 3901
     read_bytes: 
-        - 4096
+        - 3901
     depth: 
         - 20
         - 5

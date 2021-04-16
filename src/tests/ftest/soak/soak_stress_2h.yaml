@@ -136,9 +136,9 @@ mdtest_stress:
     pre_iter: 10
     flags: '-L -F -N 1 -P -v'
     write_bytes:
-        - 4096
+        - 3901
     read_bytes: 
-        - 4096
+        - 3901
     depth: 
         - 5
     dfs_oclass:

@@ -157,6 +157,8 @@ mdtest_stress:
     # maximum timeout for a single job in test in minutes
     job_timeout: 20
     nodesperjob:
+        - 1
+        - 4
         - 8
     taskspernode:
         - 16
@@ -165,16 +167,16 @@ mdtest_stress:
         - 'DFS'
         - 'POSIX'
     iteration: 1
-    num_of_files_dirs: 10000
+    num_of_files_dirs: 200000
     branching_factor: 1
     flags: '-L -F -N 1 -P -v'
     write_bytes:
-        - 4096
+        - 3901
     read_bytes:
-        - 4096
+        - 3901
     depth: 
         - 20
-        - 5
+        - 0
     dfs_oclass:
         - 'SX'
     dfs_dir_oclass:
