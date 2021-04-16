@@ -8,7 +8,7 @@ import os
 from apricot import TestWithServers
 import check_for_pool
 
-RESULT_PASS = "PASS"
+RESULT_PASS = "PASS" # nosec
 RESULT_FAIL = "FAIL"
 
 
