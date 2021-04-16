@@ -46,6 +46,7 @@ func (cmd *leaderQueryCmd) Execute(_ []string) (errOut error) {
 
 	ctx := context.Background()
 	req := new(control.LeaderQueryReq)
+	req.SetSystem(cmd.config.SystemName)
 
 	resp, err := control.LeaderQuery(ctx, cmd.ctlInvoker, req)
 	if err != nil {
@@ -92,7 +93,6 @@ func (cmd *rankListCmd) validateHostsRanks() (outHosts *hostlist.HostSet, outRan
 // systemQueryCmd is the struct representing the command to query system status.
 type systemQueryCmd struct {
 	logCmd
-	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
 	rankListCmd
@@ -152,7 +152,6 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
 type systemStopCmd struct {
 	logCmd
-	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
 	rankListCmd
@@ -199,7 +198,6 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 // systemStartCmd is the struct representing the command to start system.
 type systemStartCmd struct {
 	logCmd
-	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
 	rankListCmd

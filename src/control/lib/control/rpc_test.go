@@ -36,7 +36,6 @@ type testRequest struct {
 	toMS     bool
 	HostList []string
 	Deadline time.Time
-	Sys      string
 }
 
 func (tr *testRequest) isMSRequest() bool {
@@ -57,10 +56,6 @@ func (tr *testRequest) SetTimeout(to time.Duration) {
 
 func (tr *testRequest) getDeadline() time.Time {
 	return tr.Deadline
-}
-
-func (tr *testRequest) SetSystem(sys string) {
-	tr.Sys = sys
 }
 
 func (tr *testRequest) getRPC() unaryRPC {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
@@ -20,6 +21,16 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+func listWithSystem(req *control.ListPoolsReq, sysName string) *control.ListPoolsReq {
+	req.SetSystem(sysName)
+	return req
+}
+
+func queryWithSystem(req *control.LeaderQueryReq, sysName string) *control.LeaderQueryReq {
+	req.SetSystem(sysName)
+	return req
+}
 
 func TestDmg_SystemCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
@@ -196,7 +207,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"leader query",
 			"system leader-query",
 			strings.Join([]string{
-				printRequest(t, &control.LeaderQueryReq{}),
+				printRequest(t, queryWithSystem(&control.LeaderQueryReq{}, build.DefaultSystemName)),
 			}, " "),
 			nil,
 		},
@@ -204,7 +215,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system list-pools with default config",
 			"system list-pools",
 			strings.Join([]string{
-				printRequest(t, &control.ListPoolsReq{}),
+				printRequest(t, listWithSystem(&control.ListPoolsReq{}, build.DefaultSystemName)),
 			}, " "),
 			nil,
 		},

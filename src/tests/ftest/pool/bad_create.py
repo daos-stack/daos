@@ -105,6 +105,7 @@ class BadCreateTest(TestWithServers):
         self.pool.uid = uid
         self.pool.gid = gid
         self.pool.scm_size.value = size
+        self.pool.name.value = group
 
         try:
             self.pool.create()
