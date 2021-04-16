@@ -5,22 +5,14 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-import uuid
 import threading
 
-from itertools import product
-from avocado import fail_on
-from apricot import TestWithServers, skipForTicket
 from test_utils_pool import TestPool
-from ior_utils import IorCommand
-from job_manager_utils import Mpirun
+from osa_utils import OSAUtils
 from write_host_file import write_host_file
-from command_utils import CommandFailure
-from mpio_utils import MpioUtils
-import queue
 
 
-class NvmePoolExtend(TestWithServers):
+class NvmePoolExtend(OSAUtils):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -37,15 +29,8 @@ class NvmePoolExtend(TestWithServers):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*')
-        self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
-        self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
-        self.ior_daos_oclass = self.params.get("obj_class",
-                                               '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get(
-            "obj_class", '/run/ior/iorflags/*')
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",
                                              "/run/extra_servers/*")
@@ -53,121 +38,40 @@ class NvmePoolExtend(TestWithServers):
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
         self.pool = None
-        self.out_queue = queue.Queue()
-        self.container_info = {}
 
-    @fail_on(CommandFailure)
-    def get_pool_version(self):
-        """Get the pool version.
-
-        Returns:
-            int: pool_version_value
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["version"])
-
-    def ior_thread(self, pool, oclass, api, test, flags, results):
-        """Start threads and wait until all threads are finished.
-        Args:
-            pool (object): pool
-            oclass (str): IOR object class
-            API (str): IOR API
-            test (list): IOR test sequence
-            flags (str): IOR flags
-            results (queue): queue for returning thread results
-        """
-        processes = self.params.get("slots", "/run/ior/clientslots/*")
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
-        self.pool = pool
-        # Define the parameters for the ior_runner_thread method
-        ior_cmd = IorCommand()
-        ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool)
-        ior_cmd.dfs_oclass.update(oclass)
-        ior_cmd.api.update(api)
-        ior_cmd.transfer_size.update(test[0])
-        ior_cmd.block_size.update(test[1])
-        ior_cmd.flags.update(flags)
-        if "-w" in flags:
-            self.container_info["{}{}{}"
-                                .format(oclass,
-                                        api,
-                                        test[0])] = str(uuid.uuid4())
-
-        # Define the job manager for the IOR command
-        manager = Mpirun(ior_cmd, mpitype="mpich")
-        key = "".join([oclass, api, str(test[0])])
-        manager.job.dfs_cont.update(self.container_info[key])
-        env = ior_cmd.get_default_env(str(manager))
-        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        manager.assign_processes(processes)
-        manager.assign_environment(env, True)
-
-        # run IOR Command
-        try:
-            manager.run()
-        except CommandFailure as _error:
-            results.put("FAIL")
-
-    def run_ior_thread(self, action, oclass, api, test):
-        """Start the IOR thread for either writing or
-        reading data to/from a container.
-        Args:
-            action (str): Start the IOR thread with Read or
-                          Write
-            oclass (str): IOR object class
-            API (str): IOR API
-            test (list): IOR test sequence
-            flags (str): IOR flags
-        """
-        if action == "Write":
-            flags = self.ior_w_flags
-        else:
-            flags = self.ior_r_flags
-
-        # Add a thread for these IOR arguments
-        process = threading.Thread(target=self.ior_thread,
-                                   kwargs={"pool": self.pool,
-                                           "oclass": oclass,
-                                           "api": api,
-                                           "test": test,
-                                           "flags": flags,
-                                           "results":
-                                           self.out_queue})
-        # Launch the IOR thread
-        process.start()
-        # Wait for the thread to finish
-        process.join()
-
-    def run_nvme_pool_extend(self, num_pool):
+    def run_nvme_pool_extend(self, num_pool, oclass=None):
         """Run Pool Extend
         Args:
-            int : total pools to create for testing purposes.
+            num_pool (int) : total pools to create for testing purposes.
+            oclass (str) : object class (eg: RP_2G8,etc)
+                           Defaults to None.
         """
         pool = {}
         total_servers = len(self.hostlist_servers) * 2
         self.log.info("Total Daos Servers (Initial): %d", total_servers)
+        if oclass is None:
+            oclass = self.ior_cmd.dfs_oclass.value
 
         for val in range(0, num_pool):
             # Create a pool
             pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
             pool[val].get_params(self)
-            # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].scm_size.value /
-                                           num_pool)
-            pool[val].nvme_size.value = int(pool[val].nvme_size.value /
-                                            num_pool)
             pool[val].create()
+            pool[val].set_property("reclaim", "disabled")
 
         for val in range(0, num_pool):
+            threads = []
             self.pool = pool[val]
-            for oclass, api, test in product(self.ior_dfs_oclass,
-                                             self.ior_apis,
-                                             self.ior_test_sequence):
-                self.run_ior_thread("Write", oclass, api, test)
+            for test in self.ior_test_sequence:
+                threads.append(threading.Thread(target=self.run_ior_thread,
+                                                kwargs={"action": "Write",
+                                                        "oclass": oclass,
+                                                        "test": test}))
+                # Launch the IOR threads
+                for thrd in threads:
+                    self.log.info("Thread : %s", thrd)
+                    thrd.start()
+                    time.sleep(1)
 
                 scm_pool_size = self.pool.scm_size
                 nvme_pool_size = self.pool.nvme_size
@@ -184,22 +88,17 @@ class NvmePoolExtend(TestWithServers):
                 output = self.dmg_command.pool_extend(self.pool.uuid,
                                                       "6, 7", scm_pool_size,
                                                       nvme_pool_size)
-                self.log.info(output)
-                fail_count = 0
-                while fail_count <= 20:
-                    pver_extend = self.get_pool_version()
-                    time.sleep(15)
-                    fail_count += 1
-                    if pver_extend > pver_begin:
-                        break
-
+                self.print_and_assert_on_rebuild_failure(output)
+                pver_extend = self.get_pool_version()
                 self.log.info("Pool Version after extend %s", pver_extend)
                 # Check pool version incremented after pool extend
                 self.assertTrue(pver_extend > pver_begin,
                                 "Pool Version Error:  After extend")
-
+                # Wait to finish the threads
+                for thrd in threads:
+                    thrd.join()
                 # Verify the data after pool extend
-                self.run_ior_thread("Read", oclass, api, test)
+                self.run_ior_thread("Read", oclass, test)
                 # Get the pool space at the end of the test
                 display_string = "Pool{} space at the End".format(val)
                 self.pool = pool[val]
@@ -211,14 +110,13 @@ class NvmePoolExtend(TestWithServers):
                                                       "6, 7")
                 self.log.info(output)
 
-    @skipForTicket("DAOS-5869")
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086
         Test Description: NVME Pool Extend
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=nvme,checksum
+        :avocado: tags=nvme,checksum,nvme_osa
         :avocado: tags=nvme_pool_extend
         """
         self.run_nvme_pool_extend(1)
