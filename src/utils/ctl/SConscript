@@ -13,8 +13,6 @@ SRC = ['cart_ctl.c']
 def scons():
     """scons function"""
     Import('env', 'prereqs', 'cart_lib', 'gurt_lib', 'cart_utils_lib')
-
-    #tenv = env.Clone()
     tenv = env.Clone(LIBS=[])
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'cart_utils'])
     prereqs.require(tenv, 'mercury')
