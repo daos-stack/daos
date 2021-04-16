@@ -129,7 +129,7 @@ class PoolSvc(TestWithServers):
                         "DaosServerManager.stop_ranks([{}])".format(
                             pool_leader))
 
-                self.pool.wait_for_rebuild(False, interval=1)
+                self.pool.wait_for_rebuild(to_start=False, interval=1)
 
                 # Verify the pool leader has changed
                 pool_leader = self.check_leader(pool_leader, True)
@@ -149,7 +149,7 @@ class PoolSvc(TestWithServers):
                         "Error stopping a pool non-leader - "
                         "DaosServerManager.stop_ranks([{}])".format(non_leader))
 
-                self.pool.wait_for_rebuild(False, interval=1)
+                self.pool.wait_for_rebuild(to_start=False, interval=1)
                 # Verify the pool leader has not changed
                 self.check_leader(pool_leader, False)
                 self.destroy_pools(self.pool)
