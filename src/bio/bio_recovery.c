@@ -202,7 +202,7 @@ setup_xstream(void *arg)
 	struct bio_blobstore	*bbs;
 	struct bio_bdev		*d_bdev;
 	struct bio_io_context	*ioc;
-	int			 rc, closed_blobs = 0;
+	int			 closed_blobs = 0;
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (!is_server_started()) {
