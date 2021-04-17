@@ -8,11 +8,8 @@
 FROM fedora:latest
 MAINTAINER daos-stack <daos@daos.groups.io>
 
-# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
-ARG CB0
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
 
 # Install Python Bandit scanner.
-RUN dnf -y upgrade && dnf -y install bandit && dnf clean all
-
-ARG CACHEBUST
-RUN dnf -y upgrade && dnf clean all
+RUN dnf -y install bandit

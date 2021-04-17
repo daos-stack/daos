@@ -9,7 +9,7 @@ from pydaos.raw import DaosContainer, DaosApiError
 from avocado.core.exceptions import TestFail
 from test_utils_pool import TestPool
 
-RESULT_PASS = "PASS"  # nosec
+RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
 
 
