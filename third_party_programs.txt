@@ -1,7 +1,7 @@
 This file contains the list of third party software ("third party programs") contained in the Intel software and their required notice
-and/or license terms. This third party software, even if included with the distribution of the Intel software, may be governed by 
-separate license terms, including without limitation, third party license terms, other Intel software license terms, and open source 
-software license terms. These separate license terms govern your use of the third party programs as set forth in the 
+and/or license terms. This third party software, even if included with the distribution of the Intel software, may be governed by
+separate license terms, including without limitation, third party license terms, other Intel software license terms, and open source
+software license terms. These separate license terms govern your use of the third party programs as set forth in the
 "third-party-programs.txt" or other similarly-named text file.
 
 
@@ -117,7 +117,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	https://github.com/pmem/pmdk/blob/master/LICENSE
 	Copyright 2014-2020, Intel Corporation
 
-	Portable Hardware Locality (hwloc) (BSD 3-clause "New" or "Revised" License)	
+	Portable Hardware Locality (hwloc) (BSD 3-clause "New" or "Revised" License)
 	https://www.open-mpi.org/projects/hwloc/
 	https://www.open-mpi.org/projects/hwloc/license.php
 	Copyright © 2004-2006 The Trustees of Indiana University and Indiana University Research and Technology Corporation.  All rights reserved.
@@ -152,7 +152,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	https://github.com/intel/isa-l/blob/master/LICENSE
 	Copyright(c) 2011-2017 Intel Corporation All rights reserved.
 
---------------------------------------------------------------------------------------------------------	
+--------------------------------------------------------------------------------------------------------
 
 BSD 3-Clause "New" or "Revised" License
 
@@ -1408,7 +1408,7 @@ conditions either of that version or of any later version published by
 the Free Software Foundation.  If the Library does not specify a
 license version number, you may choose any version ever published by
 the Free Software Foundation.
-
+
   14. If you wish to incorporate parts of the Library into other free
 programs whose distribution conditions are incompatible with these,
 write to the author to ask for permission.  For software which is
@@ -1442,7 +1442,7 @@ SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
 DAMAGES.
 
                      END OF TERMS AND CONDITIONS
-
+
            How to Apply These Terms to Your New Libraries
 
   If you develop a new library, and you want it to be of the greatest
