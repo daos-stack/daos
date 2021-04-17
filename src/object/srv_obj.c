@@ -1735,7 +1735,7 @@ out:
 	dss_rpc_cntr_enter(DSS_RC_OBJ);
 	/** increment active request counter and start the chrono */
 	tls = obj_tls_get();
-	(void)d_tm_increment_gauge(&tls->ot_op_active[opc], 1, NULL);
+	d_tm_increment_gauge(tls->ot_op_active[opc], 1);
 	ioc->ioc_start_time = daos_get_ntime();
 	ioc->ioc_began = 1;
 	return rc;
@@ -1763,12 +1763,12 @@ static inline void
 obj_update_sensors(struct obj_io_context *ioc, int err)
 {
 	struct obj_tls		*tls = obj_tls_get();
-	struct d_tm_node_t	**lat;
+	struct d_tm_node_t	*lat;
 	uint32_t		opc = ioc->ioc_opc;
 	uint64_t		time;
 
-	(void)d_tm_decrement_gauge(&tls->ot_op_active[opc], 1, NULL);
-	(void)d_tm_increment_counter(&tls->ot_op_total[opc], 1, NULL);
+	d_tm_decrement_gauge(tls->ot_op_active[opc], 1);
+	d_tm_increment_counter(tls->ot_op_total[opc], 1);
 
 	if (unlikely(err != 0))
 		return;
@@ -1783,19 +1783,19 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_TGT_UPDATE:
-		(void)d_tm_increment_counter(&tls->ot_update_bytes,
-					     ioc->ioc_io_size, NULL);
-		lat = &tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
+		d_tm_increment_counter(tls->ot_update_bytes,
+				       ioc->ioc_io_size);
+		lat = tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	case DAOS_OBJ_RPC_FETCH:
-		(void)d_tm_increment_counter(&tls->ot_fetch_bytes,
-					     ioc->ioc_io_size, NULL);
-		lat = &tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
+		d_tm_increment_counter(tls->ot_fetch_bytes,
+				       ioc->ioc_io_size);
+		lat = tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	default:
-		lat = &tls->ot_op_lat[opc];
+		lat = tls->ot_op_lat[opc];
 	}
-	(void)d_tm_set_gauge(lat, time, NULL);
+	d_tm_set_gauge(lat, time);
 }
 
 static void
@@ -2384,7 +2384,7 @@ again:
 		daos_epoch_t	e = 0;
 		struct obj_tls  *tls = obj_tls_get();
 
-		(void)d_tm_increment_counter(&tls->ot_update_resent, 1, NULL);
+		d_tm_increment_counter(tls->ot_update_resent, 1);
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2490,8 +2490,7 @@ again:
 			orw->orw_epoch = crt_hlc_get();
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
-			(void)d_tm_increment_counter(&tls->ot_update_restart, 1,
-						     NULL);
+			d_tm_increment_counter(tls->ot_update_restart, 1);
 			goto again;
 		}
 
