@@ -188,6 +188,8 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 		  e_req->rank, swim_seq,
 		  e_req->exp_status);
 
+	D_FREE(swim_seq);
+
 	e_reply = crt_reply_get(rpc_req);
 
 	/* If we got past the previous assert, then we've succeeded */
