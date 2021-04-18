@@ -43,15 +43,22 @@ type (
 	// a gRPC method and returns a protobuf response or error.
 	unaryRPC func(context.Context, *grpc.ClientConn) (proto.Message, error)
 
-	// unaryRPCGetter defines the interface to be implemented by
-	// requests that can invoke a gRPC method.
+	// unaryRPCGetter defines the interface to be implemented by requests
+	// that can invoke a gRPC method.
 	unaryRPCGetter interface {
 		getRPC() unaryRPC
+	}
+
+	// sysGetter defines an interface to be implemented by clients that can
+	// retrieve the system name field.
+	sysGetter interface {
+		GetSystem() string
 	}
 
 	// UnaryInvoker defines an interface to be implemented by clients
 	// capable of invoking a unary RPC (1 response for 1 request).
 	UnaryInvoker interface {
+		sysGetter
 		debugLogger
 		InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryResponse, error)
 		InvokeUnaryRPCAsync(ctx context.Context, req UnaryRequest) (HostResponseChan, error)
@@ -140,6 +147,12 @@ func DefaultClient() *Client {
 // existing Client.
 func (c *Client) SetConfig(cfg *Config) {
 	c.config = cfg
+}
+
+// GetConfig retrieves the system name from the client configuration and
+// implements the sysGetter interface.
+func (c *Client) GetSystem() string {
+	return c.config.SystemName
 }
 
 func (c *Client) Debug(msg string) {
