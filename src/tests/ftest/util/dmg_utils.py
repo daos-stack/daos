@@ -355,7 +355,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("storage", "scan"), nvme_health=True)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
-                    target_list=None, svcn=None, group=None, acl_file=None):
+                    target_list=None, svcn=None, acl_file=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -371,9 +371,6 @@ class DmgCommand(DmgCommandBase):
                 identifiers (ranks) for the DAOS pool
             svcn (str, optional): Number of pool service replicas. Defaults to
                 None, in which case the default value is set by the server.
-            group (str, optional): DAOS system group name in which to create the
-                pool. Defaults to None, in which case "daos_server" is used by
-                default.
             acl_file (str, optional): ACL file. Defaults to None.
 
         Raises:
@@ -391,7 +388,6 @@ class DmgCommand(DmgCommandBase):
             "scm_size": scm_size,
             "nvme_size": nvme_size,
             "nsvc": svcn,
-            "sys": group,
             "acl_file": acl_file
         }
         if target_list is not None:
@@ -840,13 +836,11 @@ class DmgCommand(DmgCommandBase):
                 data[rank] = info[1].strip()
         return data
 
-    def pool_evict(self, pool, sys=None):
+    def pool_evict(self, pool):
         """Evict a pool.
 
         Args:
             pool (str):  UUID of DAOS pool to evict connection to
-            sys (str, optional): DAOS system that the pools connections be
-                evicted from. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -856,7 +850,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool evict command fails.
 
         """
-        return self._get_result(("pool", "evict"), pool=pool, sys=sys)
+        return self._get_result(("pool", "evict"), pool=pool)
 
     def config_generate(self, access_points=None, num_pmem=None, num_nvme=None,
                         net_class=None):
