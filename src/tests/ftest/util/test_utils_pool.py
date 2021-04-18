@@ -786,3 +786,14 @@ class TestPool(TestDaosApiBase):
         status = True
 
         return status
+
+    @fail_on(CommandFailure)
+    def get_pool_version(self):
+        """Get the pool version.
+
+        Returns:
+            int: pool_version_value
+
+        """
+        data = self.dmg.pool_query(self.uuid)
+        return int(data["response"]["version"])

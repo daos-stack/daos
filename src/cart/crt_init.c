@@ -391,6 +391,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				addr_env);
 		}
 
+		if (strcmp(addr_env, "ofi+sockets") == 0) {
+			D_INFO("Overriding to use ofi+tcp;ofi_rxm\n");
+			addr_env = "ofi+tcp;ofi_rxm";
+		}
+
 		provider_found = false;
 		for (plugin_idx = 0; crt_na_dict[plugin_idx].nad_str != NULL;
 		     plugin_idx++) {
@@ -421,7 +426,7 @@ do_init:
 		     crt_gdata.cg_na_plugin == CRT_NA_OFI_VERBS ||
 		     crt_gdata.cg_na_plugin == CRT_NA_OFI_TCP_RXM) &&
 		    crt_gdata.cg_sep_mode) {
-			D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
+			D_INFO("set CRT_CTX_SHARE_ADDR as 1 is invalid "
 			       "for current provider, ignore it.\n");
 			crt_gdata.cg_sep_mode = false;
 		}
@@ -432,7 +437,7 @@ do_init:
 
 			srx_env = getenv("FI_OFI_RXM_USE_SRX");
 			if (srx_env == NULL) {
-				D_WARN("FI_OFI_RXM_USE_SRX not set, set=1\n");
+				D_INFO("FI_OFI_RXM_USE_SRX not set, set=1\n");
 				setenv("FI_OFI_RXM_USE_SRX", "1", true);
 			}
 		}
