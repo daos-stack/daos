@@ -28,6 +28,8 @@ struct sched_stats {
 	uint64_t	ss_relax_time;	/* CPU relax time (ms) */
 	uint64_t	ss_busy_ts;	/* Last busy timestamp (ms) */
 	uint64_t	ss_print_ts;	/* Last stats print timestamp (ms) */
+	uint64_t	ss_watchdog_ts;	/* Last watchdog print ts (ms) */
+	void		*ss_last_unit;	/* Last executed unit */
 };
 
 struct sched_info {
@@ -166,6 +168,7 @@ extern bool sched_prio_disabled;
 extern unsigned int sched_stats_intvl;
 extern unsigned int sched_relax_intvl;
 extern unsigned int sched_relax_mode;
+extern unsigned int sched_unit_runtime_max;
 
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);
