@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@add-cart-ftest-with-valgrind-stage") _
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -879,6 +879,29 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
+                stage('Functional on CentOS 7 with Valgrind') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label 'ci_vm9'
+                    }
+                    environment {
+                        CART_TEST_MODE = 'memcheck'
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_function: 'runTestFunctionalV2',
+                                       test_tag: 'cart'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional on CentOS 7 with Valgrind')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
