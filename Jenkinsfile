@@ -893,8 +893,7 @@ pipeline {
                     steps {
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2',
-                                       test_tag: 'cart'
+                                       test_function: 'runTestFunctionalV2'
                     }
                     post {
                         always {
