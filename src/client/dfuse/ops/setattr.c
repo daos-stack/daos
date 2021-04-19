@@ -29,8 +29,10 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		bool set_gid = to_set & FUSE_SET_ATTR_GID;
 		bool set_both = set_gid && set_uid;
 
-		if (!ie->ie_dfs->dfs_multi_user)
+		if (!ie->ie_dfs->dfs_multi_user) {
+			DFUSE_TRA_INFO(ie, "File uid/gid support not enabled");
 			D_GOTO(err, rc = ENOTSUP);
+		}
 
 		if (!set_both) {
 			rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj,
@@ -58,7 +60,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 			D_GOTO(reply, 0);
 		}
 
-		/* Fall through and do the set of the setattr here */
+		/* Fall through and do the rest of the setattr here */
 	}
 
 	if (to_set & FUSE_SET_ATTR_MODE) {

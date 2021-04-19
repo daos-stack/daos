@@ -20,8 +20,8 @@ dcp:
         np: 3
 dataset:
     num_objs: 10
-    num_dkeys_per_obj: 10
-    num_akeys_array_per_dkey: 5
-    num_akeys_single_per_dkey: 5
+    num_dkeys: 10
+    num_akeys_single: 5
+    num_akeys_array: 5
     akey_sizes: [1, 512, 1024]
     akey_extents: [32, 16, 8, 4, 2]
