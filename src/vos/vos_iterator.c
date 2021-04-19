@@ -444,6 +444,23 @@ vos_iter_delete(daos_handle_t ih, void *args)
 }
 
 int
+vos_iter_corrupt(daos_handle_t ih)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
+	int			 rc = 0;
+
+	if (iter->it_type == VOS_ITER_SINGLE)
+		rc = dbtree_iter_corrupt(oiter->it_hdl);
+	else if (iter->it_type == VOS_ITER_RECX)
+		rc = evt_iter_corrupt(oiter->it_hdl);
+	else
+		D_ASSERT(0);
+
+	return rc;
+}
+
+int
 vos_iter_empty(daos_handle_t ih)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);

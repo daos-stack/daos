@@ -917,6 +917,18 @@ int
 vos_iter_delete(daos_handle_t ih, void *args);
 
 /**
+ * Mark the current record at the current cursor as being corrupt. This function
+ * will call into the btree/evtree for them to update the bio_addr with the
+ * appropriate flag to indicate the bio_addr references corrupt data.
+ *
+ * \param ih	[IN]	Iterator open handle.
+ *
+ * \return		Zero on Success
+ */
+int
+vos_iter_corrupt(daos_handle_t ih);
+
+/**
  * If the iterator has any element. The condition provided to vos_iter_prepare
  * will not be taken into account, so even if there is no element can match
  * the iterator condition, but the function still returns false if there is
