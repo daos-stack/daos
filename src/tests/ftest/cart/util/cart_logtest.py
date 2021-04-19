@@ -291,7 +291,7 @@ class LogTest():
                        show_memleaks=True,
                        leak_wf=None):
         """Check a single log file for consistency"""
-
+        to_raise = None
         for pid in self._li.get_pids():
             if wf:
                 wf.reset_pending()
@@ -299,10 +299,16 @@ class LogTest():
                 self.rpc_reporting(pid)
                 if wf:
                     wf.reset_pending()
-            self._check_pid_from_log_file(pid,
-                                          abort_on_warning,
-                                          leak_wf,
-                                          show_memleaks=show_memleaks)
+            try:
+              self._check_pid_from_log_file(pid,
+                                abort_on_warning,
+                                leak_wf,
+                                show_memleaks=show_memleaks)
+            except LogCheckError as error:
+              if to_raise is None:
+                 to_raise = error
+        if to_raise:
+           raise to_raise
 
     def check_dfuse_io(self):
         """Parse dfuse i/o"""
@@ -428,7 +434,9 @@ class LogTest():
                         show = False
                     elif show and line.function == 'rdb_stop':
                         show = False
-                    elif show:
+                    elif show and line.function == 'sched_watchdog_post':
+                        show = False
+                    if show:
                         # Allow WARNING or ERROR messages, but anything higher
                         # like assert should trigger a failure.
                         if line.level < cart_logparse.LOG_LEVELS['ERR']:

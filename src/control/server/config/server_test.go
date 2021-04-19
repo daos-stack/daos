@@ -8,6 +8,8 @@ package config
 
 import (
 	"bufio"
+	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -19,6 +21,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -606,21 +609,24 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		configA *engine.Config
-		configB *engine.Config
-		expErr  error
+		configA      *engine.Config
+		configB      *engine.Config
+		expNetDevCls uint32
+		expErr       error
 	}{
 		"successful validation with matching Infiniband": {
 			configA: configA().
 				WithFabricInterface("ib1"),
 			configB: configB().
 				WithFabricInterface("ib0"),
+			expNetDevCls: netdetect.Infiniband,
 		},
-		"successful validation with mathching Ethernet": {
+		"successful validation with matching Ethernet": {
 			configA: configA().
 				WithFabricInterface("eth0"),
 			configB: configB().
 				WithFabricInterface("eth1"),
+			expNetDevCls: netdetect.Ether,
 		},
 		"mismatching net dev class with primary server as ib0 / Infiniband": {
 			configA: configA().
@@ -652,16 +658,52 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			gotNetDevCls, gotErr := DefaultServer().
+				WithFabricProvider("test").
+				WithGetNetworkDeviceClass(getDeviceClassStub).
+				WithEngines(tc.configA, tc.configB).
+				CheckFabric(context.Background())
+
+			CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expNetDevCls, gotNetDevCls,
+				"unexpected config network device class")
+		})
+	}
+}
+
+func TestServerConfig_SaveActiveConfig(t *testing.T) {
+	testDir, cleanup := CreateTestDir(t)
+	defer cleanup()
+
+	t.Logf("test dir: %s", testDir)
+
+	for name, tc := range map[string]struct {
+		cfgPath   string
+		expLogOut string
+	}{
+		"successful write": {
+			cfgPath:   testDir,
+			expLogOut: fmt.Sprintf("config saved to %s/%s", testDir, configOut),
+		},
+		"missing directory": {
+			cfgPath:   filepath.Join(testDir, "non-existent/"),
+			expLogOut: "could not be saved",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			conf := DefaultServer().
-				WithFabricProvider("test").
-				WithGetNetworkDeviceClass(getDeviceClassStub).
-				WithEngines(tc.configA, tc.configB)
+			cfg := DefaultServer().WithSocketDir(tc.cfgPath)
 
-			gotErr := conf.Validate(log)
-			CmpErr(t, tc.expErr, gotErr)
+			cfg.SaveActiveConfig(log)
+
+			common.AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
+				fmt.Sprintf("expected %q in %q", tc.expLogOut, buf.String()))
 		})
 	}
 }
