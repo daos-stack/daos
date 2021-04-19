@@ -446,15 +446,9 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	ABT_eventual_free(&p_arg->eventual);
 	/* After RDMA is done, corrupt the server data */
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
-		struct obj_rw_in	*orw = crt_req_get(rpc);
-		struct ds_pool		*pool;
 		struct bio_sglist	*fbsgl;
 		d_sg_list_t		 fsgl;
 		int			*fbuffer;
-
-		pool = ds_pool_lookup(orw->orw_pool_uuid);
-		if (pool == NULL)
-			return -DER_NONEXIST;
 
 		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
 		fbsgl = vos_iod_sgl_at(ioh, 0);
@@ -462,7 +456,6 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
 		*fbuffer += 0x2;
 		d_sgl_fini(&fsgl, false);
-		ds_pool_put(pool);
 	}
 	return rc;
 }
