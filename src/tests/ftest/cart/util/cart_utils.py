@@ -17,7 +17,6 @@ import re
 from apricot import TestWithoutServers
 from general_utils import stop_processes
 from write_host_file import write_host_file
-from distutils.spawn import find_executable
 
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
@@ -290,7 +289,6 @@ class CartTest(TestWithoutServers):
                   "--leak-check=yes --gen-suppressions=all " + \
                   "--suppressions=../etc/memcheck-cart.supp " + \
                   "--show-reachable=yes "
-                  #"--suppressions=../../../../etc/memcheck-cart.supp " + 
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
         _tst_arg = self.params.get("{}_arg".format(host), "/run/tests/*/")
