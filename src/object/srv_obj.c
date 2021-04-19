@@ -135,7 +135,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 		orwo->orw_epoch = epoch;
 	}
 
-	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, epoch "DF_U64
+	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, epoch "DF_X64
 		", status %d\n", rpc, opc_get(rpc->cr_opc),
 		ioc->ioc_map_ver, orwo->orw_epoch, status);
 
@@ -484,7 +484,7 @@ obj_set_reply_sizes(crt_rpc_t *rpc, daos_iod_t *iods, int iod_nr)
 
 	if (iod_nr <= 0) {
 		D_ERROR("rpc %p contains invalid sizes count %d for "
-			DF_UOID" with epc "DF_U64".\n",
+			DF_UOID" with epc "DF_X64".\n",
 			rpc, iod_nr, DP_UOID(orw->orw_oid), orw->orw_epoch);
 		return -DER_INVAL;
 	}
@@ -511,7 +511,7 @@ out:
 	orwo->orw_iod_sizes.ca_arrays = sizes;
 
 	D_DEBUG(DB_TRACE, "rpc %p set sizes count as %d for "
-		DF_UOID" with epc "DF_U64".\n",
+		DF_UOID" with epc "DF_X64".\n",
 		rpc, iod_nr, DP_UOID(orw->orw_oid), orw->orw_epoch);
 
 	return 0;
@@ -596,7 +596,7 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *split_iods, uint64_t *split_offs)
 	int			rc = 0;
 
 	D_DEBUG(DB_TRACE, "opc %d oid "DF_UOID" dkey "DF_KEY
-		" tgt/xs %d/%d epc "DF_U64".\n",
+		" tgt/xs %d/%d epc "DF_X64".\n",
 		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		DP_KEY(&orw->orw_dkey),
 		dss_get_module_info()->dmi_tgt_id,
@@ -1277,7 +1277,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	}
 	dkey = (daos_key_t *)&orw->orw_dkey;
 	D_DEBUG(DB_IO,
-		"opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_U64".\n",
+		"opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64".\n",
 		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
 		tag, orw->orw_epoch);
 
@@ -2058,7 +2058,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DB_IO,
 		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
-		DF_U64", pmv %u/%u dti "DF_DTI".\n",
+		DF_X64", pmv %u/%u dti "DF_DTI".\n",
 		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(dkey),
 		dss_get_module_info()->dmi_tgt_id,
 		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
@@ -2259,7 +2259,7 @@ process_epoch(uint64_t *epoch, uint64_t *epoch_first, uint32_t *flags)
 	if (epoch_first != NULL && *epoch_first == 0)
 		*epoch_first = *epoch;
 
-	D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", *epoch);
+	D_DEBUG(DB_IO, "overwrite epoch "DF_X64"\n", *epoch);
 	return PE_OK_LOCAL;
 }
 
@@ -2298,7 +2298,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DB_IO,
 		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
-		DF_U64", pmv %u/%u dti "DF_DTI".\n",
+		DF_X64", pmv %u/%u dti "DF_DTI".\n",
 		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(&orw->orw_dkey),
 		dss_get_module_info()->dmi_tgt_id,
 		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
@@ -2783,7 +2783,7 @@ out:
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_ev = anchors->ia_sv;
 
-	D_DEBUG(DB_IO, ""DF_UOID" iterate "DF_U64"-"DF_U64" type %d tag %d"
+	D_DEBUG(DB_IO, ""DF_UOID" iterate "DF_X64"-"DF_X64" type %d tag %d"
 		" rc %d\n", DP_UOID(oei->oei_oid), param.ip_epr.epr_lo,
 		param.ip_epr.epr_hi, type, dss_get_module_info()->dmi_tgt_id,
 		rc);
@@ -3241,7 +3241,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	if (opi->opi_dkeys.ca_count == 0)
 		D_DEBUG(DB_TRACE,
 			"punch obj %p oid "DF_UOID" tag/xs %d/%d epc "
-			DF_U64", pmv %u/%u dti "DF_DTI".\n",
+			DF_X64", pmv %u/%u dti "DF_DTI".\n",
 			rpc, DP_UOID(opi->opi_oid),
 			dss_get_module_info()->dmi_tgt_id,
 			dss_get_module_info()->dmi_xs_id, opi->opi_epoch,
@@ -3251,7 +3251,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		D_DEBUG(DB_TRACE,
 			"punch key %p oid "DF_UOID" dkey "
 			DF_KEY" tag/xs %d/%d epc "
-			DF_U64", pmv %u/%u dti "DF_DTI".\n",
+			DF_X64", pmv %u/%u dti "DF_DTI".\n",
 			rpc, DP_UOID(opi->opi_oid),
 			DP_KEY(&opi->opi_dkeys.ca_arrays[0]),
 			dss_get_module_info()->dmi_tgt_id,
@@ -3530,7 +3530,7 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 	else
 		oso->oso_epoch = min(epoch, osi->osi_epoch);
 
-	D_DEBUG(DB_IO, "obj_sync start: "DF_UOID", epc "DF_U64"\n",
+	D_DEBUG(DB_IO, "obj_sync start: "DF_UOID", epc "DF_X64"\n",
 		DP_UOID(osi->osi_oid), oso->oso_epoch);
 
 	rc = obj_ioc_begin(osi->osi_map_ver, osi->osi_pool_uuid,
@@ -3546,7 +3546,7 @@ out:
 	obj_reply_set_status(rpc, rc);
 	obj_ioc_end(&ioc, rc);
 
-	D_DEBUG(DB_IO, "obj_sync stop: "DF_UOID", epc "DF_U64", rd = %d\n",
+	D_DEBUG(DB_IO, "obj_sync stop: "DF_UOID", epc "DF_X64", rd = %d\n",
 		DP_UOID(osi->osi_oid), oso->oso_epoch, rc);
 
 	rc = crt_reply_send(rpc);

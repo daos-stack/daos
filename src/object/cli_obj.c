@@ -1601,6 +1601,12 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 	D_INIT_LIST_HEAD(&task_list);
 	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
 		recov_task = &fail_info->efi_recov_tasks[i];
+		/* Set client hlc as recovery epoch only for the case that
+		 * singv recovery without fetch from server ahead - when
+		 * some targets un-available.
+		 */
+		if (recov_task->ert_epoch == DAOS_EPOCH_MAX)
+			recov_task->ert_epoch = crt_hlc_get();
 		rc = dc_tx_local_open(coh, recov_task->ert_epoch, 0, &th);
 		if (rc) {
 			D_ERROR("task %p "DF_OID" dc_tx_local_open failed "
@@ -1754,7 +1760,7 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 {
 	struct umem_attr	uma;
 	daos_handle_t		bth;
-	d_iov_t		key;
+	d_iov_t			key;
 	int			idx;
 	bool			overlapped;
 	struct btr_root		broot = { 0 };
@@ -2308,10 +2314,16 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 
 	rc = obj_shards_2_fwtgts(obj, map_ver, bit_map, shard_idx,
 				 shard_cnt, grp_nr, flags, obj_auxi);
-	if (rc != 0 && rc != -DER_SHARDS_OVERLAP)
-		D_ERROR("opc %d "DF_OID", obj_shards_2_fwtgts failed "
-			""DF_RC"\n", opc, DP_OID(obj->cob_md.omd_id),
-			DP_RC(rc));
+	if (rc != 0) {
+		if (rc != -DER_SHARDS_OVERLAP && rc != -DER_BAD_TARGET)
+			D_ERROR("opc %d "DF_OID", obj_shards_2_fwtgts failed "
+				DF_RC"\n", opc, DP_OID(obj->cob_md.omd_id),
+				DP_RC(rc));
+		else
+			D_DEBUG(DB_IO, "opc %d "DF_OID", obj_shards_2_fwtgts "
+				DF_RC"\n", opc, DP_OID(obj->cob_md.omd_id),
+				DP_RC(rc));
+	}
 out:
 	return rc;
 }
