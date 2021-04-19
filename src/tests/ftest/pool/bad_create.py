@@ -28,7 +28,9 @@ class BadCreateTest(TestWithServers):
         Test Description:
             Pass bad parameters to pool create.
 
-        :avocado: tags=all,pool,full_regression,tiny,badcreate
+        :avocado: tags=all,full_regression
+        :avocado: tags=tiny
+        :avocado: tags=pool,badcreate
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -54,7 +56,6 @@ class BadCreateTest(TestWithServers):
         setidlist = self.params.get("setname", '/run/createtests/setnames/*')
         if setidlist[0] == 'NULLPTR':
             group = None
-            self.cancel("skipping this test until DAOS-1991 is fixed")
         else:
             group = setidlist[0]
         expected_for_param.append(setidlist[1])
@@ -104,7 +105,6 @@ class BadCreateTest(TestWithServers):
         self.pool.uid = uid
         self.pool.gid = gid
         self.pool.scm_size.value = size
-        self.pool.name.value = group
 
         try:
             self.pool.create()

@@ -189,8 +189,9 @@ struct rebuild_task {
 	d_list_t			dst_list;
 	uuid_t				dst_pool_uuid;
 	struct pool_target_id_list	dst_tgts;
-	uint32_t			dst_map_ver;
 	daos_rebuild_opc_t		dst_rebuild_op;
+	uint64_t			dst_schedule_time;
+	uint32_t			dst_map_ver;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
@@ -198,9 +199,6 @@ struct rebuild_task {
  */
 struct rebuild_pool_tls {
 	uuid_t		rebuild_pool_uuid;
-	uuid_t		rebuild_poh_uuid;
-	uuid_t		rebuild_coh_uuid;
-	daos_handle_t	rebuild_pool_hdl;
 	daos_handle_t	rebuild_tree_hdl; /*hold objects being rebuilt */
 	d_list_t	rebuild_pool_list;
 	uint64_t	rebuild_pool_obj_count;
@@ -334,9 +332,6 @@ rgt_put(struct rebuild_global_pool_tracker *rgt);
 struct rebuild_global_pool_tracker *
 rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver);
 
-int
-rebuild_status_completed_update(const uuid_t pool_uuid,
-				struct daos_rebuild_status *rs);
 int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *master_rpt,
 			     struct rebuild_iv *iv);

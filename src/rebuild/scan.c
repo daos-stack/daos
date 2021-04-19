@@ -228,8 +228,7 @@ rebuild_objects_send_ult(void *data)
 				    DAOS_INTENT_MIGRATION,
 				    false, rebuild_cont_send_cb, &arg);
 		if (rc < 0) {
-			D_ERROR("dbtree iterate failed: rc "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("dbtree iterate failed: "DF_RC"\n", DP_RC(rc));
 			break;
 		}
 		ABT_thread_yield();
@@ -288,8 +287,8 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 	d_iov_set(&val_iov, &val, sizeof(struct rebuild_obj_val));
 	oid.id_shard = shard; /* Convert the OID to rebuilt one */
 	rc = obj_tree_insert(tls->rebuild_tree_hdl, co_uuid, oid, &val_iov);
-	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u rc %d\n",
-		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, rc);
+	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u: "DF_RC"\n",
+		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, DP_RC(rc));
 
 	return rc;
 }
@@ -406,10 +405,8 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 						 *tgts, *shards,
 						 max_shards);
 		} else if (rebuild_op == RB_OP_DRAIN) {
-			rc = pl_obj_find_rebuild(map, md, NULL,
-						 rebuild_ver,
-						 *tgts, *shards,
-						 max_shards);
+			rc = pl_obj_find_drain(map, md, NULL, rebuild_ver,
+					       *tgts, *shards, max_shards);
 		} else if (rebuild_op == RB_OP_REINT) {
 			rc = pl_obj_find_reint(map, md, NULL,
 					       rebuild_ver,
@@ -525,7 +522,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			D_GOTO(out, rc);
 
 		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
-						      layout, myrank, mytarget);
+						      layout, myrank, mytarget,
+						      oid.id_shard);
 		if (!still_needed) {
 			struct rebuild_pool_tls *tls;
 
@@ -590,24 +588,11 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		rc = pool_map_find_target(map->pl_poolmap, tgts[i], &target);
 		D_ASSERT(rc == 1);
 
-		/* During rebuild test, it will manually exclude some target to
-		 * trigger the rebuild, then later add it back, so some objects
-		 * might exist on some illegal target, so they might use its
-		 * "own" target as the spare target, let's skip these object
-		 * now. When we have better support from CART exclude/addback,
-		 * myrank should always not equal to tgt_rebuild. XXX
-		 */
-		if (myrank != target->ta_comp.co_rank) {
-			rc = rebuild_object_insert(rpt, tgts[i], shards[i],
-						   arg->co_uuid,
-						   oid, ent->ie_epoch);
-			if (rc)
-				D_GOTO(out, rc);
-		} else {
-			D_DEBUG(DB_REBUILD, "rebuild skip "DF_UOID".\n",
-				DP_UOID(oid));
-			rc = 0;
-		}
+		rc = rebuild_object_insert(rpt, tgts[i], shards[i],
+					   arg->co_uuid,
+					   oid, ent->ie_epoch);
+		if (rc)
+			D_GOTO(out, rc);
 	}
 
 out:
@@ -647,8 +632,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
 	if (rc != 0) {
-		D_ERROR("Open container "DF_UUID" failed: rc = %d\n",
-			DP_UUID(entry->ie_couuid), rc);
+		D_ERROR("Open container "DF_UUID" failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
 		return rc;
 	}
 
@@ -661,6 +646,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
+	param.ip_flags |= VOS_IT_PUNCHED;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
 			 rebuild_obj_scan_cb, NULL, arg, &dth);
@@ -668,8 +654,9 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_cont_close(coh);
 
 	*acts |= VOS_ITER_CB_YIELD;
-	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" iterate cont done: rc %d\n",
-		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid), rc);
+	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
+		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid),
+		DP_RC(rc));
 
 	return rc;
 }
@@ -747,8 +734,8 @@ out:
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
 
-	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
-		DP_UUID(rpt->rt_pool_uuid), rc);
+	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: "DF_RC"\n",
+		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	return rc;
 }
 
@@ -787,15 +774,15 @@ rebuild_scan_leader(void *data)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UUID" sent objects to initiator %d\n",
-		DP_UUID(rpt->rt_pool_uuid), rc);
+	D_DEBUG(DB_REBUILD, DF_UUID" sent objects to initiator: "DF_RC"\n",
+		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 out:
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
-	D_DEBUG(DB_REBUILD, DF_UUID"scan leader done %d\n",
-		DP_UUID(rpt->rt_pool_uuid), rc);
+	D_DEBUG(DB_REBUILD, DF_UUID"scan leader done: "DF_RC"\n",
+		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	rpt_put(rpt);
 }
 

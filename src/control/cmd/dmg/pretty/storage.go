@@ -120,9 +120,9 @@ func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) error {
 	return nil
 }
 
-// PrintStoragePrepareMap generates a human-readable representation of the supplied
+// PrintScmPrepareMap generates a human-readable representation of the supplied
 // HostStorageMap which is populated in response to a StoragePrepare operation.
-func PrintStoragePrepareMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+func PrintScmPrepareMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	if len(hsm) == 0 {
 		return nil
 	}

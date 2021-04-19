@@ -291,7 +291,7 @@ class LogTest():
                        show_memleaks=True,
                        leak_wf=None):
         """Check a single log file for consistency"""
-
+        to_raise = None
         for pid in self._li.get_pids():
             if wf:
                 wf.reset_pending()
@@ -299,10 +299,16 @@ class LogTest():
                 self.rpc_reporting(pid)
                 if wf:
                     wf.reset_pending()
-            self._check_pid_from_log_file(pid,
-                                          abort_on_warning,
-                                          leak_wf,
-                                          show_memleaks=show_memleaks)
+            try:
+              self._check_pid_from_log_file(pid,
+                                abort_on_warning,
+                                leak_wf,
+                                show_memleaks=show_memleaks)
+            except LogCheckError as error:
+              if to_raise is None:
+                 to_raise = error
+        if to_raise:
+           raise to_raise
 
     def check_dfuse_io(self):
         """Parse dfuse i/o"""
@@ -350,6 +356,7 @@ class LogTest():
         err_count = 0
         warnings_strict = False
         warnings_mode = False
+        server_shutdown = False
 
         regions = OrderedDict()
         memsize = hwm_counter()
@@ -376,6 +383,9 @@ class LogTest():
             except AttributeError:
                 pass
             if abort_on_warning:
+                if not server_shutdown and \
+                   line.fac != 'external' and line.function == 'server_fini':
+                    server_shutdown = True
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
                     if self.hide_fi_calls:
@@ -415,6 +425,11 @@ class LogTest():
                         if line.rpc_opcode == '0xfe000000':
                             show = False
                     if line.fac == 'external':
+                        show = False
+                    if show and server_shutdown and line.get_msg().endswith(
+                            "DER_SHUTDOWN(-2017): 'Service should shut down'"):
+                        show = False
+                    if show and line.function == 'sched_watchdog_post':
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
@@ -543,7 +558,7 @@ class LogTest():
         # once this is stable.
         lost_memory = False
         if show_memleaks:
-            for (_, line) in regions.items():
+            for (_, line) in list(regions.items()):
                 pointer = line.get_field(-1).rstrip('.')
                 if pointer in active_desc:
                     show_line(line, 'NORMAL', 'descriptor not freed')
@@ -554,12 +569,12 @@ class LogTest():
                 lost_memory = True
 
         if active_desc:
-            for (_, line) in active_desc.items():
+            for (_, line) in list(active_desc.items()):
                 show_line(line, 'NORMAL', 'desc not deregistered')
             raise ActiveDescriptors()
 
         if active_rpcs:
-            for (_, line) in active_rpcs.items():
+            for (_, line) in list(active_rpcs.items()):
                 show_line(line, 'NORMAL', 'rpc not deregistered')
         if error_files or err_count:
             raise LogError()
@@ -690,6 +705,7 @@ def run():
     parser.add_argument('--dfuse',
                         help='Summarise dfuse I/O',
                         action='store_true')
+    parser.add_argument('--warnings', action='store_true')
     parser.add_argument('file', help='input file')
     args = parser.parse_args()
     try:
@@ -709,7 +725,7 @@ def run():
         test_iter.check_dfuse_io()
     else:
         try:
-            test_iter.check_log_file(False)
+            test_iter.check_log_file(args.warnings)
         except LogError:
             print('Errors in log file, ignoring')
         except NotAllFreed:

@@ -466,7 +466,7 @@ tgt_vos_create_one(void *varg)
 		return rc;
 
 	rc = vos_pool_create(path, (unsigned char *)vpa->vpa_uuid,
-			     vpa->vpa_scm_size, vpa->vpa_nvme_size);
+			     vpa->vpa_scm_size, vpa->vpa_nvme_size, 0, NULL);
 	if (rc)
 		D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
 			DP_UUID(vpa->vpa_uuid), path, rc);
@@ -683,6 +683,18 @@ out:
 }
 
 int
+ds_mgmt_tgt_create_post_reply(crt_rpc_t *rpc, void *priv)
+{
+	struct mgmt_tgt_create_out	*tc_out;
+
+	tc_out = crt_reply_get(rpc);
+	D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
+	D_FREE(tc_out->tc_ranks.ca_arrays);
+
+	return 0;
+}
+
+int
 ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 			      void *priv)
 {
@@ -727,7 +739,7 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 		return -DER_NOMEM;
 	}
 
-	for (i = 0; i < ret_uuids_nr + tc_uuids_nr; i++) {
+	for (i = 0; i < new_uuids_nr; i++) {
 		if (i < ret_uuids_nr) {
 			uuid_copy(new_uuids[i], ret_uuids[i]);
 			new_ranks[i] = ret_ranks[i];

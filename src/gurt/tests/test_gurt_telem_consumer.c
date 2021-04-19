@@ -14,9 +14,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
-#include <math.h>
-#include "wrap_cmocka.h"
 #include "tests_lib.h"
+#include "wrap_cmocka.h"
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_consumer.h"
 
@@ -54,10 +53,23 @@ static void
 test_print_metrics(void **state)
 {
 	struct d_tm_node_t	*node;
+	int			filter;
 
 	node = d_tm_find_metric(shmem_root, "gurt");
 	assert_non_null(node);
-	d_tm_print_my_children(shmem_root, node, 0, stdout);
+
+	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
+		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
+
+	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_STANDARD,
+			       D_TM_INCLUDE_METADATA, stdout);
+
+	d_tm_print_field_descriptors(D_TM_INCLUDE_TIMESTAMP |
+				     D_TM_INCLUDE_METADATA, stdout);
+
+	filter &= ~D_TM_DIRECTORY;
+	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_CSV,
+			       D_TM_INCLUDE_METADATA, stdout);
 }
 
 static void
@@ -70,10 +82,10 @@ test_verify_object_count(void **state)
 	assert_non_null(node);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_COUNTER);
-	assert_int_equal(num, 3);
+	assert_int_equal(num, 19);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_GAUGE);
-	assert_int_equal(num, 2);
+	assert_int_equal(num, 5);
 
 	num = d_tm_count_metrics(shmem_root, node, D_TM_DURATION);
 	assert_int_equal(num, 2);
@@ -87,7 +99,7 @@ test_verify_object_count(void **state)
 	num = d_tm_count_metrics(shmem_root, node,
 				 D_TM_COUNTER | D_TM_GAUGE | D_TM_DURATION |
 				 D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT);
-	assert_int_equal(num, 10);
+	assert_int_equal(num, 29);
 }
 
 static void
@@ -221,8 +233,8 @@ test_gauge_stats(void **state)
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(val, 20);
-	assert_int_equal(stats.dtm_min.min_int, 2);
-	assert_int_equal(stats.dtm_max.max_int, 20);
+	assert_int_equal(stats.dtm_min, 2);
+	assert_int_equal(stats.dtm_max, 20);
 	assert(stats.mean - 11.0 < STATS_EPSILON);
 	assert(stats.std_dev - 5.89379 < STATS_EPSILON);
 
@@ -239,11 +251,10 @@ test_duration_stats(void **state)
 			       "gurt/tests/telem/duration-stats");
 	assert_rc_equal(rc, DER_SUCCESS);
 
-	assert_int_equal(stats.sample_size, 5);
-	assert(stats.dtm_min.min_float - 1.125 < STATS_EPSILON);
-	assert(stats.dtm_max.max_float - 5.6 < STATS_EPSILON);
-	assert(stats.mean - 3.25 < STATS_EPSILON);
-	assert(stats.std_dev - 1.74329 < STATS_EPSILON);
+	assert_int_equal(stats.dtm_min, 1125000);
+	assert_int_equal(stats.dtm_max, 5600000);
+	assert(stats.mean - 3250000 < STATS_EPSILON);
+	assert(stats.std_dev - 1743290.71012 < STATS_EPSILON);
 
 	/**
 	 * This duration was initialized with one good interval, and one
@@ -253,6 +264,295 @@ test_duration_stats(void **state)
 			       "gurt/tests/telem/interval");
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(stats.sample_size, 1);
+}
+
+static void
+test_histogram_stats(void **state)
+{
+	uint64_t	val;
+	int		rc;
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m1/bucket 0");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 3);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m1/bucket 1");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 5);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m1/bucket 2");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 2);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m1/bucket 3");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 0);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m1/bucket 4");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 4);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m1/bucket 5");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 0);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m1/bucket 6");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 0);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m1/bucket 7");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 0);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m1/bucket 8");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 0);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m1/bucket 9");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 1);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m2/bucket 0");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 3);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m2/bucket 1");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 4);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m2/bucket 2");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 2);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m2/bucket 3");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 3);
+
+	rc = d_tm_get_counter(&val, shmem_root, NULL,
+			      "gurt/tests/telem/test_gauge_m2/bucket 4");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(val, 4);
+}
+
+static void
+test_histogram_metadata(void **state)
+{
+	char	*desc;
+	char	*units;
+	int	rc;
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m1/bucket 0");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 0 [0 .. 4]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m1/bucket 1");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 1 [5 .. 9]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m1/bucket 2");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 2 [10 .. 14]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m1/bucket 3");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 3 [15 .. 19]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m1/bucket 4");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 4 [20 .. 24]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m1/bucket 5");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 5 [25 .. 29]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m1/bucket 6");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 6 [30 .. 34]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m1/bucket 7");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 7 [35 .. 39]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m1/bucket 8");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 8 [40 .. 44]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m1/bucket 9");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc,
+			    "histogram bucket 9 [45 .. 18446744073709551615]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m2/bucket 0");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 0 [0 .. 2047]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m2/bucket 1");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 1 [2048 .. 6143]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m2/bucket 2");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 2 [6144 .. 14335]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m2/bucket 3");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc, "histogram bucket 3 [14336 .. 30719]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+	rc = d_tm_get_metadata(&desc, &units, shmem_root, NULL,
+			       "gurt/tests/telem/test_gauge_m2/bucket 4");
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_string_equal(desc,
+			    "histogram bucket 4 [30720 .. "
+			    "18446744073709551615]");
+	free(desc);
+	assert_string_equal(units, "elements");
+	free(units);
+
+}
+
+static void
+test_histogram_bucket_data(void **state)
+{
+	struct d_tm_histogram_t	histogram;
+	struct d_tm_bucket_t	bucket;
+	struct d_tm_node_t	*node;
+	int			rc;
+
+	node = d_tm_find_metric(shmem_root, "gurt/tests/telem/test_gauge_m1");
+	assert_non_null(node);
+
+	rc = d_tm_get_num_buckets(&histogram, shmem_root, node);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	assert_int_equal(histogram.dth_num_buckets, 10);
+	assert_int_equal(histogram.dth_initial_width, 5);
+	assert_int_equal(histogram.dth_value_multiplier, 1);
+
+	rc = d_tm_get_bucket_range(&bucket, 0, shmem_root, node);
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(bucket.dtb_min, 0);
+	assert_int_equal(bucket.dtb_max, 4);
+
+	rc = d_tm_get_bucket_range(&bucket, 1, shmem_root, node);
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(bucket.dtb_min, 5);
+	assert_int_equal(bucket.dtb_max, 9);
+
+	rc = d_tm_get_bucket_range(&bucket, 2, shmem_root, node);
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(bucket.dtb_min, 10);
+	assert_int_equal(bucket.dtb_max, 14);
+
+	rc = d_tm_get_bucket_range(&bucket, 10, shmem_root, node);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	node = d_tm_find_metric(shmem_root, "gurt/tests/telem/test_gauge_m2");
+	assert_non_null(node);
+
+	rc = d_tm_get_num_buckets(&histogram, shmem_root, node);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	assert_int_equal(histogram.dth_num_buckets, 5);
+	assert_int_equal(histogram.dth_initial_width, 2048);
+	assert_int_equal(histogram.dth_value_multiplier, 2);
+
+	rc = d_tm_get_bucket_range(&bucket, 0, shmem_root, node);
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(bucket.dtb_min, 0);
+	assert_int_equal(bucket.dtb_max, 2047);
+
+	rc = d_tm_get_bucket_range(&bucket, 1, shmem_root, node);
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(bucket.dtb_min, 2048);
+	assert_int_equal(bucket.dtb_max, 6143);
+
+	rc = d_tm_get_bucket_range(&bucket, 2, shmem_root, node);
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(bucket.dtb_min, 6144);
+	assert_int_equal(bucket.dtb_max, 14335);
+
+	rc = d_tm_get_bucket_range(&bucket, 3, shmem_root, node);
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(bucket.dtb_min, 14336);
+	assert_int_equal(bucket.dtb_max, 30719);
+
+	rc = d_tm_get_bucket_range(&bucket, 4, shmem_root, node);
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(bucket.dtb_min, 30720);
+	assert_true(bucket.dtb_max == UINT64_MAX);
+
+	rc = d_tm_get_bucket_range(&bucket, 5, shmem_root, node);
+	assert_rc_equal(rc, -DER_INVAL);
 }
 
 static int
@@ -277,6 +577,9 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_timer_snapshot),
 		cmocka_unit_test(test_gauge_stats),
 		cmocka_unit_test(test_duration_stats),
+		cmocka_unit_test(test_histogram_stats),
+		cmocka_unit_test(test_histogram_metadata),
+		cmocka_unit_test(test_histogram_bucket_data),
 		cmocka_unit_test(test_shmem_removed),
 	};
 

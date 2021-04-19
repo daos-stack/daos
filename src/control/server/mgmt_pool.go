@@ -187,9 +187,6 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		reqRanks := system.RanksFromUint32(req.GetRanks())
 		// Create a RankSet to sort/dedupe the ranks.
 		reqRanks = system.RankSetFromRanks(reqRanks).Ranks()
-		if err != nil {
-			return nil, err
-		}
 
 		if invalid := system.CheckRankMembership(allRanks, reqRanks); len(invalid) > 0 {
 			return nil, FaultPoolInvalidRanks(invalid)
@@ -247,8 +244,11 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, FaultPoolInvalidServiceReps(maxSvcReps)
 	}
 
-	// I/O Engine needs the fault domain tree for placement purposes
-	req.FaultDomains = svc.sysdb.FaultDomainTree().ToProto()
+	// IO engine needs the fault domain tree for placement purposes
+	req.FaultDomains, err = svc.membership.CompressedFaultDomainTree(req.Ranks...)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := svc.calculateCreateStorage(req); err != nil {
 		return nil, err
@@ -502,8 +502,12 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolExtend dispatch, req:%+v\n", req)
 
-	// the I/O Engine needs the domain tree for placement purposes
-	req.FaultDomains = svc.sysdb.FaultDomainTree().ToProto()
+	// the IO engine needs the domain tree for placement purposes
+	fdTree, err := svc.membership.CompressedFaultDomainTree(req.Ranks...)
+	if err != nil {
+		return nil, err
+	}
+	req.FaultDomains = fdTree
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 

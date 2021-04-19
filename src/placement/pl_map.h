@@ -119,9 +119,9 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		       bool spare_avail, d_list_t **current,
-		       d_list_t *remap_list, bool for_reint,
+		       d_list_t *remap_list, uint32_t allow_status,
 		       struct failed_shard *f_shard,
-		       struct pl_obj_shard *l_shard);
+		       struct pl_obj_shard *l_shard, bool *extending);
 
 int
 spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
