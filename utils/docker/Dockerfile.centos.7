@@ -34,7 +34,7 @@ enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
       yum -y install --disablerepo=extras                       \
-             dnf dnf-pluins-core epel-release-7-11;             \
+             dnf dnf-plugins-core epel-release-7-11;             \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7;         \
       yum clean all;                                            \
       dnf clean all;                                            \
