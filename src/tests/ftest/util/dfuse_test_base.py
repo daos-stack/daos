@@ -19,7 +19,7 @@ class DfuseTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
-        super(DfuseTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dfuse = None
 
     def stop_job_managers(self):
@@ -29,7 +29,7 @@ class DfuseTestBase(TestWithServers):
             list: a list of exceptions raised stopping the agents
 
         """
-        error_list = super(DfuseTestBase, self).stop_job_managers()
+        error_list = super().stop_job_managers()
         try:
             self.stop_dfuse()
         except CommandFailure as error:

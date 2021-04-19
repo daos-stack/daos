@@ -22,8 +22,10 @@ extern "C" {
 
 #include <dirent.h>
 
-/** Maximum Path length */
-#define DFS_MAX_PATH		NAME_MAX
+/** Maximum Name length */
+#define DFS_MAX_NAME		NAME_MAX
+/** Maximum PATH length */
+#define DFS_MAX_PATH		PATH_MAX
 /** Maximum file size */
 #define DFS_MAX_FSIZE		(~0ULL)
 
@@ -423,12 +425,12 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  * User callback defined for dfs_readdir_size.
  */
 typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
-			       void *_udata);
+			       void *arg);
 
 /**
  * Same as dfs_readdir, but this also adds a buffer size limitation when
  * enumerating. On every entry, it issues a user defined callback. If size
- * limitation is reached, function returns -DER_KEY2BIG.
+ * limitation is reached, function returns E2BIG
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened directory object.
@@ -441,13 +443,13 @@ typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
  *			[out]: Actual number of entries enumerated.
  * \param[in]	size	Max buffer size to be used internally before breaking.
  * \param[in]	op	Optional callback to be issued on every entry.
- * \param[in]	udata	Pointer to user data to be passed to \a op.
+ * \param[in]	arg	Pointer to user data to be passed to \a op.
  *
  * \return		0 on success, errno code on failure.
  */
 int
 dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
-	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *udata);
+	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *arg);
 
 /**
  * Provide a function for large directories to split an anchor to be able to
