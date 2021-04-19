@@ -187,7 +187,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 out_dfs:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
 out_dfp:
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfs->dfs_dfp->dfp_entry);
+	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 out_err:
 	return rc;
 }
@@ -197,13 +197,13 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*ie = NULL;
+	struct dfuse_inode_entry	*ie;
 	int				rc;
 	char				out[DUNS_MAX_XATTR_LEN];
 	char				*outp = &out[0];
 	daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
 
-	DFUSE_TRA_DEBUG(fs_handle,
+	DFUSE_TRA_DEBUG(parent,
 			"Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
@@ -250,6 +250,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 out_release:
 	dfs_release(ie->ie_obj);
 out_free:
+	D_FREE(ie);
 	if (rc == ENOENT && parent->ie_dfs->dfs_ndentry_timeout > 0) {
 		struct fuse_entry_param entry = {};
 
@@ -259,5 +260,4 @@ out_free:
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	}
-	D_FREE(ie);
 }

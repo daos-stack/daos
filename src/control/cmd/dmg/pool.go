@@ -45,6 +45,7 @@ type PoolCmd struct {
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
 type PoolCreateCmd struct {
 	logCmd
+	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
 	GroupName  string  `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
@@ -58,7 +59,6 @@ type PoolCreateCmd struct {
 	ScmSize    string  `short:"s" long:"scm-size" description:"Per-server SCM allocation for DAOS pool (manual)"`
 	NVMeSize   string  `short:"n" long:"nvme-size" description:"Per-server NVMe allocation for DAOS pool (manual)"`
 	RankList   string  `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
-	Sys        string  `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
 }
 
 // Execute is run when PoolCreateCmd subcommand is activated
@@ -138,10 +138,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			"%s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(req.ScmBytes),
 			humanize.Bytes(req.NvmeBytes), ratio*100)
 	}
-	req.SetSystem(cmd.Sys)
 
-	ctx := context.Background()
-	resp, err := control.PoolCreate(ctx, cmd.ctlInvoker, req)
+	resp, err := control.PoolCreate(context.Background(), cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, err)
@@ -178,11 +176,9 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		return errors.New("no configuration loaded")
 	}
 
-	ctx := context.Background()
 	req := new(control.ListPoolsReq)
-	req.SetSystem(cmd.config.SystemName)
 
-	resp, err := control.ListPools(ctx, cmd.ctlInvoker, req)
+	resp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
@@ -203,8 +199,9 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 // poolCmd is the base struct for all pool commands that work with existing pools.
 type poolCmd struct {
 	logCmd
-	jsonOutputCmd
+	cfgCmd
 	ctlInvokerCmd
+	jsonOutputCmd
 	ID   string `long:"pool" required:"1" description:"Unique ID of DAOS pool"`
 	UUID string
 }
@@ -220,10 +217,11 @@ func (cmd *poolCmd) resolveID() error {
 		return nil
 	}
 
-	ctx := context.Background()
-	resp, err := control.PoolResolveID(ctx, cmd.ctlInvoker, &control.PoolResolveIDReq{
+	req := &control.PoolResolveIDReq{
 		HumanID: cmd.ID,
-	})
+	}
+
+	resp, err := control.PoolResolveID(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return errors.Wrap(err, "failed to resolve pool ID into UUID")
 	}
@@ -249,8 +247,7 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 
 	req := &control.PoolDestroyReq{UUID: cmd.UUID, Force: cmd.Force}
 
-	ctx := context.Background()
-	err := control.PoolDestroy(ctx, cmd.ctlInvoker, req)
+	err := control.PoolDestroy(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -263,7 +260,6 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 // PoolEvictCmd is the struct representing the command to evict a DAOS pool.
 type PoolEvictCmd struct {
 	poolCmd
-	Sys string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that the pools connections be evicted from."`
 }
 
 // Execute is run when PoolEvictCmd subcommand is activated
@@ -275,10 +271,8 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 	}
 
 	req := &control.PoolEvictReq{UUID: cmd.UUID}
-	req.SetSystem(cmd.Sys)
 
-	ctx := context.Background()
-	err := control.PoolEvict(ctx, cmd.ctlInvoker, req)
+	err := control.PoolEvict(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -310,8 +304,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 
 	req := &control.PoolExcludeReq{UUID: cmd.UUID, Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
 
-	ctx := context.Background()
-	err := control.PoolExclude(ctx, cmd.ctlInvoker, req)
+	err := control.PoolExclude(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -344,8 +337,7 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 
 	req := &control.PoolDrainReq{UUID: cmd.UUID, Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
 
-	ctx := context.Background()
-	err := control.PoolDrain(ctx, cmd.ctlInvoker, req)
+	err := control.PoolDrain(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -400,8 +392,7 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 	}
 	// END TEMP SECTION
 
-	ctx := context.Background()
-	err = control.PoolExtend(ctx, cmd.ctlInvoker, req)
+	err = control.PoolExtend(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -434,8 +425,7 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 
 	req := &control.PoolReintegrateReq{UUID: cmd.UUID, Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
 
-	ctx := context.Background()
-	err := control.PoolReintegrate(ctx, cmd.ctlInvoker, req)
+	err := control.PoolReintegrate(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -460,8 +450,7 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 		UUID: cmd.UUID,
 	}
 
-	ctx := context.Background()
-	resp, err := control.PoolQuery(ctx, cmd.ctlInvoker, req)
+	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, err)
@@ -502,8 +491,7 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 		req.SetNumber(numVal)
 	}
 
-	ctx := context.Background()
-	resp, err := control.PoolSetProp(ctx, cmd.ctlInvoker, req)
+	resp, err := control.PoolSetProp(context.Background(), cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, err)
@@ -534,8 +522,7 @@ func (cmd *PoolGetACLCmd) Execute(args []string) error {
 
 	req := &control.PoolGetACLReq{UUID: cmd.UUID}
 
-	ctx := context.Background()
-	resp, err := control.PoolGetACL(ctx, cmd.ctlInvoker, req)
+	resp, err := control.PoolGetACL(context.Background(), cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp.ACL, err)
@@ -614,8 +601,7 @@ func (cmd *PoolOverwriteACLCmd) Execute(args []string) error {
 		ACL:  acl,
 	}
 
-	ctx := context.Background()
-	resp, err := control.PoolOverwriteACL(ctx, cmd.ctlInvoker, req)
+	resp, err := control.PoolOverwriteACL(context.Background(), cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp.ACL, err)
@@ -668,8 +654,7 @@ func (cmd *PoolUpdateACLCmd) Execute(args []string) error {
 		ACL:  acl,
 	}
 
-	ctx := context.Background()
-	resp, err := control.PoolUpdateACL(ctx, cmd.ctlInvoker, req)
+	resp, err := control.PoolUpdateACL(context.Background(), cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp.ACL, err)
@@ -704,8 +689,7 @@ func (cmd *PoolDeleteACLCmd) Execute(args []string) error {
 		Principal: cmd.Principal,
 	}
 
-	ctx := context.Background()
-	resp, err := control.PoolDeleteACL(ctx, cmd.ctlInvoker, req)
+	resp, err := control.PoolDeleteACL(context.Background(), cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp.ACL, err)

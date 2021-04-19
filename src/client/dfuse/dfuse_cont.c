@@ -54,6 +54,7 @@ dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
 			DFUSE_TRA_ERROR(parent,
 					"dfs_cont_create() failed: (%d)",
 					rc);
+			D_FREE(dfc);
 			D_GOTO(err, rc);
 		}
 	}
