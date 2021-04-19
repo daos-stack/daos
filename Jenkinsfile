@@ -166,7 +166,9 @@ pipeline {
                 stage('Python Bandit check') {
                     when {
                       beforeAgent true
-                      expression { ! skipStage() }
+                      expression { ! (skipStage(stage: 'python-bandit',
+		                                 def_val: 'false') ||
+		                        quickFunctional()) }
                     }
                     agent {
                         dockerfile {
@@ -931,7 +933,10 @@ pipeline {
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { ! (target_branch == 'weekly-testing' ||
+                                        skipStage(stage: 'scan-centos-rpms',
+                                                  def_val: 'false') ||
+                                        quickFunctional()) }
                     }
                     agent {
                         label 'ci_vm1'
@@ -964,7 +969,7 @@ pipeline {
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label 'stage_nvme3'
+                        label 'ci_nvme3'
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
