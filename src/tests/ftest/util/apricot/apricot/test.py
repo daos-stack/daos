@@ -1254,6 +1254,10 @@ class TestWithServers(TestWithoutServers):
         # Stop any test jobs that may still be running
         self._teardown_errors.extend(self.stop_job_managers())
 
+        # Report space usage
+        self.log.info(run_command("dmg storage query usage",
+                                 raise_exception=False).stdout_text)
+
         # Destroy any containers first
         self._teardown_errors.extend(self.destroy_containers(self.container))
 

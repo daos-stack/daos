@@ -70,7 +70,7 @@ monitor_cmd() {
     if ! time "$@"; then
         return "${PIPESTATUS[0]}"
     fi
-    ((duration = SECONDS - start))
+    ((duration = SECONDS - start)) || true
     if [ "$duration" -gt "$threshold" ]; then
         send_mail "Command exceeded ${threshold}s in $STAGE_NAME" \
                     "Command:  $*\nReal time: $duration"

@@ -213,7 +213,10 @@ class ZeroConfigTest(TestWithServers):
             or unset. The test expects that the server will have two interfaces
             available: hfi_0 and hfi_1.
 
-        :avocado: tags=all,daily_regression,hw,small,zero_config,env_set
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,small,ib2
+        :avocado: tags=zero_config
+        :avocado: tags=env_set
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
 

@@ -96,7 +96,8 @@ post_provision_config_nodes() {
     time dnf -y repolist
     # the group repo is always on the test image
     #add_group_repo
-    #add_local_repo
+    # local repo won't be configured on Vagrant test nodes
+    add_local_repo
 
     # CORCI-1096
     # workaround until new snapshot images are produced

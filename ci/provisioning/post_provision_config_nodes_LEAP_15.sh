@@ -2,6 +2,7 @@
 
 REPOS_DIR=/etc/dnf/repos.d
 DISTRO_NAME=leap15
+LSB_RELEASE=lsb-release
 EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
 
 bootstrap_dnf() {
@@ -108,6 +109,7 @@ post_provision_config_nodes() {
     fi
 
     # shellcheck disable=SC2001
+    # shellcheck disable=SC2086
     if ! rpm -q "$(echo "$INST_RPMS" |
                    sed -e 's/--exclude [^ ]*//'                 \
                        -e 's/[^ ]*-daos-[0-9][0-9]*//g')"; then

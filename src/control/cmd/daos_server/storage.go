@@ -48,6 +48,12 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		}
 	}
 
+	// FIXME: Short term hack to work with non-Optane NVRAM
+	// This will need to be formalized either in this file (i.e. check the
+	// NVRAM for Optane and skip if not), or adjust all of the callers to
+	// not prep SCM if they determine the NVRAM is not Optane.
+	prepScm = false
+
 	// This is a little ugly, but allows for easier unit testing.
 	// FIXME: With the benefit of hindsight, it seems apparent
 	// that we should have made these Execute() methods thin

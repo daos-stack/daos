@@ -94,8 +94,11 @@ class _env_module(): # pylint: disable=invalid-name
                 unload += value
 
         for to_load in load:
+            print("Trying to load {}".format(to_load))
             if self._module_func('is-loaded', to_load)[0]:
+                print("is-loaded")
                 return True
+            print("not is-loaded")
 
         for to_unload in unload:
             if self._module_func('is-loaded', to_unload)[0]:
@@ -106,6 +109,7 @@ class _env_module(): # pylint: disable=invalid-name
                self._module_func('load', to_load)[0]:
                 print("Loaded %s" % to_load)
                 return True
+            print("is-avail: %s" % self._module_func('is-avail', to_load)[0])
 
         return False
 

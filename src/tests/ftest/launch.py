@@ -621,7 +621,7 @@ def get_test_list(tags):
         print("Running with Avocado {}".format(version))
         if version >= 83.0:
             command = ["avocado", "list"]
-        elif version >= 82.0:
+        elif version >= 80.0:
             command = ["avocado", "--paginator=off", "list"]
         else:
             command = ["avocado", "list", "--paginator=off"]
@@ -2170,7 +2170,7 @@ def main():
         "\tExample command: launch.py -s pool"
     ]
     parser = ArgumentParser(
-        prog="launcher.py",
+        prog="launch.py",
         formatter_class=RawDescriptionHelpFormatter,
         description="\n".join(description))
     parser.add_argument(

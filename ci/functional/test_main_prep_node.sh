@@ -31,4 +31,5 @@ done
 if ! grep /mnt/share /proc/mounts; then
     mkdir -p /mnt/share
     mount "$FIRST_NODE":/export/share /mnt/share
+    chown "${REMOTE_ACCT:-jenkins}" /mnt/share
 fi
