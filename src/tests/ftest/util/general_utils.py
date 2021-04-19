@@ -669,7 +669,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
     """
     result = {}
     log = getLogger()
-    if send_sigusr2 is True:
+    if dump_ult_stacks is True:
         log.info("First dumping ULT stacks, then Killing any processes on %s "
                  "that match: %s", hosts, pattern)
     else:
@@ -682,7 +682,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
         ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
 
     if hosts is not None:
-        if send_sigusr2 is True:
+        if dump_ult_stacks is True:
             commands_part1 = [
                 "rc=0",
                 "if " + ps_cmd,

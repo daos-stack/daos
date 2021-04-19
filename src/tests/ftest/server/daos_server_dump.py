@@ -55,7 +55,7 @@ class DaosServerDumpTest(TestWithServers):
 
         ret_codes = stop_processes(self.hostlist_servers, r"daos_engine",
                            added_filter=r"'\<(grep|defunct)\>'",
-                           send_sigusr2=True)
+                           dump_ult_stacks=True)
         if 1 in ret_codes:
             print(
                 "Stopped daos_engine processes on {}".format(

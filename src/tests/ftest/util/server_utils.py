@@ -970,7 +970,7 @@ class DaosServerManager(SubprocessManager):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
         """Try to dump all server's ULTs stacks before kill."""
-        result = stop_processes(self._hosts, regex, send_sigusr2=True)
+        result = stop_processes(self._hosts, regex, dump_ult_stacks=True)
         if 0 in result and len(result) == 1:
             print(
                 "No remote {} server processes killed (none found), "
