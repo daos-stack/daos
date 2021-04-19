@@ -139,13 +139,13 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 const (
 	groupUpdateInterval = 500 * time.Millisecond
 	batchJoinInterval   = 250 * time.Millisecond
-	joinRespTimeout     = 10 * time.Millisecond
 )
 
 type (
 	batchJoinRequest struct {
 		mgmtpb.JoinReq
 		peerAddr *net.TCPAddr
+		joinCtx  context.Context
 		respCh   chan *batchJoinResponse
 	}
 
@@ -217,12 +217,11 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 
 			svc.log.Debugf("sending %d join responses", len(joinReqs))
 			for i, req := range joinReqs {
-				ctx, cancel := context.WithTimeout(parent, joinRespTimeout)
-				defer cancel()
-
 				select {
-				case <-ctx.Done():
-					svc.log.Errorf("failed to send join response: %s", ctx.Err())
+				case <-parent.Done():
+					svc.log.Errorf("joinLoop shut down before response sent: %s", parent.Err())
+				case <-req.joinCtx.Done():
+					svc.log.Errorf("failed to send join response: %s", req.joinCtx.Err())
 				case req.respCh <- joinResps[i]:
 				}
 			}
@@ -388,6 +387,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	bjr := &batchJoinRequest{
 		JoinReq:  *req,
 		peerAddr: replyAddr,
+		joinCtx:  ctx,
 		respCh:   make(chan *batchJoinResponse),
 	}
 
