@@ -269,7 +269,7 @@ class CartIvTwoNodeTest(CartTest):
             failed = True
             self.print("Exception in launching client : {}".format(e))
 
-        # Give some time for completion before forcing servers shut down 
+        # Give some time for completion before forcing servers shut down
         time.sleep(5)
 
         # Stop the server if it is still running

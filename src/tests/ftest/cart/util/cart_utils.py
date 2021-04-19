@@ -289,7 +289,9 @@ class CartTest(TestWithoutServers):
                   "--fair-sched=try  --partial-loads-ok=yes " + \
                   "--leak-check=yes --gen-suppressions=all " + \
                   "--suppressions=../../../../etc/memcheck-cart.supp " + \
+                  "--suppressions=../etc/memcheck-cart.supp " + \
                   "--show-reachable=yes "
+                  #"--suppressions=../../../../etc/memcheck-cart.supp " + 
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
         _tst_arg = self.params.get("{}_arg".format(host), "/run/tests/*/")
