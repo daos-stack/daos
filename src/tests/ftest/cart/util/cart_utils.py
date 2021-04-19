@@ -335,7 +335,7 @@ class CartTest(TestWithoutServers):
         tst_cont = os.getenv("CRT_TEST_CONT", "0")
         if tst_cont is not None:
             if tst_cont == "1":
-               tst_cmd += " --continuous"
+                tst_cmd += " --continuous"
 
         if tst_ctx is not None:
             tst_cmd += " -x CRT_CTX_NUM=" + tst_ctx
