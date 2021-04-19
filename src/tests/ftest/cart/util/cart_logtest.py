@@ -300,15 +300,15 @@ class LogTest():
                 if wf:
                     wf.reset_pending()
             try:
-              self._check_pid_from_log_file(pid,
-                                abort_on_warning,
-                                leak_wf,
-                                show_memleaks=show_memleaks)
+                self._check_pid_from_log_file(pid,
+                                              abort_on_warning,
+                                              leak_wf,
+                                              show_memleaks=show_memleaks)
             except LogCheckError as error:
-              if to_raise is None:
-                 to_raise = error
+                if to_raise is None:
+                    to_raise = error
         if to_raise:
-           raise to_raise
+            raise to_raise
 
     def check_dfuse_io(self):
         """Parse dfuse i/o"""
@@ -424,9 +424,10 @@ class LogTest():
                         # that fail during shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
-                    # Disable checking for a number of conditions, either because
-                    # these errors/lines are badly formatted or because they're
-                    # intermittent and we don't want noise in the test results.
+                    # Disable checking for a number of conditions, either
+                    # because these errors/lines are badly formatted or because
+                    # they're intermittent and we don't want noise in the test
+                    # results.
                     if line.fac == 'external':
                         show = False
                     elif show and server_shutdown and line.get_msg().endswith(
