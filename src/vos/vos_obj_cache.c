@@ -254,6 +254,9 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	if (obj->obj_df) {
 		D_DEBUG(DB_TRACE, "looking up object ilog");
+		if (create || intent == DAOS_INTENT_PUNCH)
+			vos_ilog_ts_ignore(vos_obj2umm(obj),
+					   &obj->obj_df->vo_ilog);
 		tmprc = vos_ilog_ts_add(ts_set, &obj->obj_df->vo_ilog,
 					&oid, sizeof(oid));
 		D_ASSERT(tmprc == 0); /* Non-zero only valid for akey */

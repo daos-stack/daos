@@ -196,7 +196,7 @@ __dump_ranklist(const char *msg, d_rank_list_t *rl)
 }
 
 static void
-__verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size)
+__verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size, int line)
 {
 	uint32_t	grp_size;
 	d_rank_list_t	*rank_list;
@@ -217,39 +217,40 @@ __verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size)
 
 	rc = crt_group_size(grp, &grp_size);
 	if (rc != 0) {
-		D_ERROR("crt_group_size() failed; rc=%d\n", rc);
+		D_ERROR("Line:%d crt_group_size() failed; rc=%d\n", line, rc);
 		assert(0);
 	}
 
 	if (grp_size != size) {
-		D_ERROR("group_size expected=%d got=%d\n",
-			size, grp_size);
+		D_ERROR("Line:%d group_size expected=%d got=%d\n",
+			line, size, grp_size);
 		assert(0);
 	}
 
 	rc = crt_group_ranks_get(grp, &rank_list);
 	if (rc != 0) {
-		D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
+		D_ERROR("Line:%d crt_group_ranks_get() failed; rc=%d\n",
+			line, rc);
 		assert(0);
 	}
 
 	if (rank_list->rl_nr != size) {
-		D_ERROR("rank_list size expected=%d got=%d\n",
-			size, rank_list->rl_nr);
-
+		D_ERROR("Line:%d rank_list size expected=%d got=%d\n",
+			line, size, rank_list->rl_nr);
 		assert(0);
 	}
 
 	rc = d_rank_list_dup_sort_uniq(&sorted_list, rank_list);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup_sort_uniq() failed; rc=%d\n", rc);
+		D_ERROR("Line:%d d_rank_list_dup_sort_uniq() failed; rc=%d\n",
+			line, rc);
 		assert(0);
 	}
 
 	for (i = 0; i < size; i++) {
 		if (sorted_list->rl_ranks[i] != exp_sorted->rl_ranks[i]) {
-			D_ERROR("rank_list[%d] expected=%d got=%d\n",
-				i, sorted_list->rl_ranks[i],
+			D_ERROR("Line:%d rank_list[%d] expected=%d got=%d\n",
+				line, i, sorted_list->rl_ranks[i],
 				exp_sorted->rl_ranks[i]);
 			__dump_ranklist("Expected\n", exp_sorted);
 			__dump_ranklist("Actual\n", sorted_list);
@@ -266,7 +267,8 @@ __verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size)
 	do {						\
 		d_rank_t __exp[] = {list};		\
 		__verify_ranks(grp, __exp,		\
-				ARRAY_SIZE(__exp));	\
+				ARRAY_SIZE(__exp),	\
+				__LINE__);	\
 	} while (0)
 
 static void
@@ -333,6 +335,12 @@ int main(int argc, char **argv)
 	grp = crt_group_lookup(NULL);
 	if (!grp) {
 		D_ERROR("Failed to lookup group\n");
+		assert(0);
+	}
+
+	rc = crt_group_auto_rank_remove(grp, true);
+	if (rc != 0) {
+		D_ERROR("crt_group_auto_rank_remove() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
@@ -424,7 +432,7 @@ int main(int argc, char **argv)
 			assert(0);
 		}
 
-		__verify_ranks(sec_grp1, sec_ranks, i + 1);
+		__verify_ranks(sec_grp1, sec_ranks, i + 1, __LINE__);
 	}
 
 	/* Verify primary to secondary and secondary to primary conversion */
@@ -484,10 +492,10 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	/* Add non-existent primary rank - Negative test */
+	/* Add existing secondary rank with bogus primary one */
 	rc = crt_group_secondary_rank_add(sec_grp1, 50, 15);
-	if (rc != -DER_OOG) {
-		D_ERROR("Expected -DER_OOG got %d\n", rc);
+	if (rc != -DER_EXIST) {
+		D_ERROR("Expected -DER_EXIST got %d\n", rc);
 		assert(0);
 	}
 

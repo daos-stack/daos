@@ -49,7 +49,7 @@ crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
 		D_ERROR("Empty log message\n");
 		rc = -DER_INVAL;
 	} else {
-		D_INFO("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
+		D_EMIT("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
 		       in_args->log_msg);
 	}
 
@@ -802,7 +802,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	char *fill_uri = NULL;
 
 	if (ul_in->ul_tag != ul_out->ul_tag) {
-		if (crt_provider_is_contig_ep(ctx->provider) == false) {
+		if (crt_provider_is_contig_ep(ctx->cc_provider) == false) {
 			rc = crt_issue_uri_lookup(lookup_rpc->cr_ctx,
 						  lookup_rpc->cr_ep.ep_grp,
 						  ul_in->ul_rank, 0,
@@ -1576,7 +1576,9 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	rpc_priv->crp_hdl_reuse = NULL;
 	rpc_priv->crp_srv = srv_flag;
 	rpc_priv->crp_ul_retry = 0;
-	/* initialize as 1, so user can cal crt_req_decref to destroy new req */
+	/**
+	 * initialized to 1, so user can call crt_req_decref to destroy new req
+	 */
 	rpc_priv->crp_refcount = 1;
 
 	rpc_priv->crp_pub.cr_opc = opc;
@@ -1689,6 +1691,12 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 					crt_ctx->cc_rpc_cb_arg);
 	} else {
 		rpc_priv->crp_opc_info->coi_rpc_cb(&rpc_priv->crp_pub);
+		/*
+		 * Correspond to crt_rpc_handler_common -> crt_rpc_priv_init's
+		 * set refcount as 1.
+		 */
+		if (rpc_priv->crp_srv)
+			RPC_DECREF(rpc_priv);
 	}
 
 out:

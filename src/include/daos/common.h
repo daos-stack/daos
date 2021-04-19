@@ -23,6 +23,12 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
+#ifdef DAOS_HAS_VALGRIND
+#include <valgrind/valgrind.h>
+#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
+#else
+#define DAOS_ON_VALGRIND 0
+#endif
 
 #include <daos_errno.h>
 #include <daos/debug.h>
@@ -35,6 +41,7 @@
 #include <daos_security.h>
 #include <daos/profile.h>
 #include <daos/dtx.h>
+#include <daos/cmd_parser.h>
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -72,6 +79,57 @@ struct daos_sgl_idx {
 	uint32_t	iov_idx; /** index of iov */
 	daos_off_t	iov_offset; /** byte offset of iov buf */
 };
+
+#define DF_SGL_IDX "{idx: %d, offset: "DF_U64"}"
+#define DP_SGL_IDX(i) (i)->iov_idx, (i)->iov_offset
+
+/*
+ * add bytes to the sgl index offset. If the new offset is greater than or
+ * equal to the indexed iov len, move the index to the next iov in the sgl.
+ */
+static inline void
+sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
+{
+	sgl_idx->iov_offset += bytes;
+	D_DEBUG(DB_TRACE, "Moving sgl index formward by %lu bytes."
+			  "Idx: "DF_SGL_IDX"\n",
+		bytes, DP_SGL_IDX(sgl_idx));
+
+	/** move to next iov if necessary */
+	if (sgl_idx->iov_offset >= sgl->sg_iovs[sgl_idx->iov_idx].iov_buf_len) {
+		sgl_idx->iov_idx++;
+		sgl_idx->iov_offset = 0;
+		D_DEBUG(DB_TRACE, "Moving to next iov in sgl\n");
+	}
+	D_DEBUG(DB_TRACE, "Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+}
+
+static inline void *
+sgl_indexed_byte(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx)
+{
+	D_DEBUG(DB_TRACE, "Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+	if (sgl_idx->iov_idx > sgl->sg_nr_out - 1) {
+		D_DEBUG(DB_TRACE, "Index too high. Returning NULL\n");
+		return NULL;
+	}
+	return sgl->sg_iovs[sgl_idx->iov_idx].iov_buf + sgl_idx->iov_offset;
+}
+
+/*
+ * If the byte count will exceed the current indexed iov, then move to
+ * the next.
+ */
+static inline void
+sgl_test_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
+{
+	D_DEBUG(DB_TRACE, "Before Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+	if (sgl_idx->iov_offset + bytes >
+	    sgl->sg_iovs[sgl_idx->iov_idx].iov_len) {
+		sgl_idx->iov_idx++;
+		sgl_idx->iov_offset = 0;
+	}
+	D_DEBUG(DB_TRACE, "After Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+}
 
 /*
  * Each thread has DF_UUID_MAX number of thread-local buffers for UUID strings.
@@ -186,6 +244,12 @@ daos_getntime_coarse(void)
 }
 
 static inline uint64_t
+daos_getmtime_coarse(void)
+{
+	return daos_getntime_coarse() / NSEC_PER_MSEC;
+}
+
+static inline uint64_t
 daos_getutime(void)
 {
 	struct timespec tv;
@@ -261,7 +325,8 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
 /** get remaining space in an iov, assuming that iov_len is used and
  * iov_buf_len is total in buf
  */
-#define daos_iov_remaining(iov) ((iov).iov_buf_len - (iov).iov_len)
+#define daos_iov_remaining(iov) ((iov).iov_buf_len > (iov).iov_len ? \
+				(iov).iov_buf_len - (iov).iov_len : 0)
 /**
  * Move sgl forward from iov_idx/iov_off, with move_dist distance. It is
  * caller's responsibility to check the boundary.
@@ -361,6 +426,7 @@ int daos_sgl_processor(d_sg_list_t *sgl, bool check_buf,
 
 char *daos_str_trimwhite(char *str);
 int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
+int daos_iov_alloc(d_iov_t *iov, daos_size_t size, bool set_full);
 void daos_iov_free(d_iov_t *iov);
 bool daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2);
 void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
@@ -507,7 +573,7 @@ daos_crt_network_error(int err)
 	return err == -DER_HG || err == -DER_ADDRSTR_GEN ||
 	       err == -DER_PMIX || err == -DER_UNREG ||
 	       err == -DER_UNREACH || err == -DER_CANCELED ||
-	       err == -DER_NOREPLY;
+	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
 #define daos_rank_list_dup		d_rank_list_dup
@@ -645,7 +711,6 @@ enum {
 #define DAOS_DTX_STALE_PM		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x39)
 #define DAOS_DTX_FAIL_IO		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3a)
 #define DAOS_DTX_START_EPOCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3b)
-#define DAOS_DTX_NO_INPROGRESS		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3c)
 #define DAOS_DTX_NO_BATCHED_CMT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3d)
 #define DAOS_DTX_NO_COMMITTABLE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3e)
 #define DAOS_DTX_MISS_COMMIT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3f)
@@ -659,6 +724,7 @@ enum {
 #define DAOS_DTX_SPEC_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x45)
 #define DAOS_DTX_SRV_RESTART		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x46)
 #define DAOS_DTX_NO_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x47)
+#define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
@@ -688,6 +754,9 @@ enum {
 #define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x91)
 #define DAOS_VOS_NON_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x92)
 #define DAOS_VOS_AGG_BLOCKED		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x93)
+
+#define DAOS_VOS_GC_CONT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x94)
+#define DAOS_VOS_GC_CONT_NULL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x95)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
@@ -832,5 +901,14 @@ daos_anchor_is_zero(daos_anchor_t *anchor)
 
 /* default debug log file */
 #define DAOS_LOG_DEFAULT	"/tmp/daos.log"
+
+#ifdef NEED_EXPLICIT_BZERO
+/* Secure memory scrub */
+static inline void
+explicit_bzero(void *s, size_t count) {
+	memset(s, 0, count);
+	asm volatile("" :  : "r"(s) : "memory");
+}
+#endif /* NEED_EXPLICIT_BZERO */
 
 #endif /* __DAOS_COMMON_H__ */

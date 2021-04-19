@@ -284,7 +284,7 @@ func (nch *NvmeHealth) TempC() float32 {
 
 // TempF returns controller temperature in degrees Fahrenheit.
 func (nch *NvmeHealth) TempF() float32 {
-	return nch.TempC()*(9/5) + 32
+	return (nch.TempC() * (9.0 / 5.0)) + 32.0
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.
