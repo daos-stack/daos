@@ -29,7 +29,7 @@
 
 /**
  * DAOS server threading model:
- * 1) a set of "target XS (xstream) set" per server (dss_tgt_nr)
+ * 1) a set of "target XS (xstream) set" per engine (dss_tgt_nr)
  * There is a "-c" option of daos_server to set the number.
  * For DAOS pool, one target XS set per VOS target to avoid extra lock when
  * accessing VOS file.
@@ -51,7 +51,7 @@
  *		Acceleration of EC/checksum/compress (on 2nd offload XS if
  *		dss_tgt_offload_xs_nr is 2, or on 1st offload XS).
  *
- * 2) one "system XS set" per server (dss_sys_xs_nr)
+ * 2) one "system XS set" per engine (dss_sys_xs_nr)
  * The system XS set (now only one - the XS 0) is for some system level tasks:
  *	RPC server for:
  *		drpc listener,
@@ -72,7 +72,7 @@
 #define DRPC_XS_NR	(1)
 /** Number of offload XS */
 unsigned int	dss_tgt_offload_xs_nr;
-/** Number of target (XS set) per server */
+/** Number of target (XS set) per engine */
 unsigned int	dss_tgt_nr;
 /** Number of system XS */
 unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
@@ -339,7 +339,7 @@ dss_srv_handler(void *arg)
 		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
 
 	/* initialize xstream-local storage */
-	dtc = dss_tls_init(DAOS_SERVER_TAG);
+	dtc = dss_tls_init(DAOS_SERVER_TAG, dx->dx_xs_id, dx->dx_tgt_id);
 	if (dtc == NULL) {
 		D_ERROR("failed to initialize TLS\n");
 		goto signal;
@@ -522,11 +522,19 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 		D_ERROR("Can not allocate execution stream.\n");
 		return NULL;
 	}
+	dx->dx_stopping = ABT_FUTURE_NULL;
+	dx->dx_shutdown = ABT_FUTURE_NULL;
+
+	rc = ABT_future_create(1, NULL, &dx->dx_stopping);
+	if (rc != 0) {
+		D_ERROR("failed to allocate 'stopping' future\n");
+		D_GOTO(err_free, rc = dss_abterr2der(rc));
+	}
 
 	rc = ABT_future_create(1, NULL, &dx->dx_shutdown);
 	if (rc != 0) {
-		D_ERROR("failed to allocate future\n");
-		D_GOTO(err_free, rc = dss_abterr2der(rc));
+		D_ERROR("failed to allocate 'shutdown' future\n");
+		D_GOTO(err_future, rc = dss_abterr2der(rc));
 	}
 
 	dx->dx_cpuset = hwloc_bitmap_dup(cpus);
@@ -545,7 +553,10 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	return dx;
 
 err_future:
-	ABT_future_free(&dx->dx_shutdown);
+	if (dx->dx_shutdown != ABT_FUTURE_NULL)
+		ABT_future_free(&dx->dx_shutdown);
+	if (dx->dx_stopping != ABT_FUTURE_NULL)
+		ABT_future_free(&dx->dx_stopping);
 err_free:
 	D_FREE(dx);
 	return NULL;
@@ -711,6 +722,14 @@ dss_xstreams_fini(bool force)
 	rc = bio_nvme_ctl(BIO_CTL_NOTIFY_STARTED, &started);
 	D_ASSERT(rc == 0);
 
+	/* Notify all xstreams to reject new ULT creation first */
+	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
+		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL)
+			continue;
+		ABT_future_set(dx->dx_stopping, dx);
+	}
+
 	/** Stop & free progress ULTs */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
@@ -725,6 +744,7 @@ dss_xstreams_fini(bool force)
 		ABT_thread_join(dx->dx_progress);
 		ABT_thread_free(&dx->dx_progress);
 		ABT_future_free(&dx->dx_shutdown);
+		ABT_future_free(&dx->dx_stopping);
 	}
 
 	/** Wait for each execution stream to complete */
@@ -880,6 +900,8 @@ dss_xstreams_init(void)
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));
 
+	d_getenv_int("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
+
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
 		"%d cores total detected starting %d main xstreams\n",
@@ -946,8 +968,7 @@ out:
  */
 
 static void *
-dss_srv_tls_init(const struct dss_thread_local_storage *dtls,
-		 struct dss_module_key *key)
+dss_srv_tls_init(int xs_id, int tgt_id)
 {
 	struct dss_module_info *info;
 
@@ -957,8 +978,7 @@ dss_srv_tls_init(const struct dss_thread_local_storage *dtls,
 }
 
 static void
-dss_srv_tls_fini(const struct dss_thread_local_storage *dtls,
-		     struct dss_module_key *key, void *data)
+dss_srv_tls_fini(void *data)
 {
 	struct dss_module_info *info = (struct dss_module_info *)data;
 
@@ -1176,7 +1196,7 @@ dss_srv_init(void)
 	xstream_data.xd_init_step = XD_INIT_TLS_REG;
 
 	/* initialize xstream-local storage */
-	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG);
+	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG, 0, -1);
 	if (!xstream_data.xd_dtc)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;

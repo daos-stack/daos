@@ -81,6 +81,7 @@ class MultipleContainerDelete(IorTestBase):
         """
         if self.pool is not None:
             scm_index, ssd_index = 0, 1
+            self.pool.connect()
             pool_info = self.pool.pool.pool_query()
             scm_fs = pool_info.pi_space.ps_space.s_free[scm_index]
             ssd_fs = pool_info.pi_space.ps_space.s_free[ssd_index]

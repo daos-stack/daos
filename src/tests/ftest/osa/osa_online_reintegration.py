@@ -14,13 +14,7 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from apricot import skipForTicket
-
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+import queue
 
 
 class OSAOnlineReintegration(OSAUtils):
@@ -35,7 +29,7 @@ class OSAOnlineReintegration(OSAUtils):
 
     def setUp(self):
         """Set up for test case."""
-        super(OSAOnlineReintegration, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
@@ -60,26 +54,22 @@ class OSAOnlineReintegration(OSAUtils):
             self.daos_racer.get_environment(self.server_managers[0]))
         self.daos_racer.run()
 
-    def run_online_reintegration_test(self, num_pool, racer=False):
+    def run_online_reintegration_test(self, num_pool, racer=False,
+                                      server_boot=False):
         """Run the Online reintegration without data.
 
         Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
-                some data in pool. Defaults to False.
+                          some data in pool. Defaults to False.
+            server_boot (bool) : Perform system stop/start on a rank.
+                                 Defults to False.
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
         pool = {}
         pool_uuid = []
-        target_list = []
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
-
-        # Exclude target : random two targets  (target idx : 0-7)
-        n = random.randint(0, 6)
-        target_list.append(n)
-        target_list.append(n+1)
-        t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Exclude one rank : other than rank 0.
         rank = random.randint(1, exclude_servers)
@@ -128,8 +118,15 @@ class OSAOnlineReintegration(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                   rank, t_string)
+            if server_boot is False:
+                output = self.dmg_command.pool_exclude(self.pool.uuid,
+                                                       rank)
+            else:
+                output = self.dmg_command.system_stop(ranks=rank)
+                self.pool.wait_for_rebuild(True)
+                self.log.info(output)
+                output = self.dmg_command.system_start(ranks=rank)
+
             self.log.info(output)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
@@ -138,11 +135,12 @@ class OSAOnlineReintegration(OSAUtils):
 
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
+            # pver_exclude should be greater than
+            # pver_begin + 8 targets.
+            self.assertTrue(pver_exclude > (pver_begin + 8),
                             "Pool Version Error:  After exclude")
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                       rank,
-                                                       t_string)
+                                                       rank)
             self.log.info(output)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
@@ -175,9 +173,22 @@ class OSAOnlineReintegration(OSAUtils):
 
         Test Description: Validate Online Reintegration
 
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
-        :avocado: tags=online_reintegration,DAOS_5610
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=online_reintegration
         """
         # Perform reintegration testing with 1 pool.
         for pool_num in range(1, 2):
             self.run_online_reintegration_test(pool_num)
+
+    @skipForTicket("DAOS-6766, DAOS-6783")
+    def test_osa_online_reintegration_server_stop(self):
+        """Test ID: DAOS-5920.
+        Test Description: Validate Online Reintegration with server stop
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=online_reintegration_srv_stop
+        """
+        self.run_online_reintegration_test(1, server_boot=True)

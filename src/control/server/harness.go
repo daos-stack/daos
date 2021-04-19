@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	defaultRequestTimeout = 3 * time.Second
-	defaultStartTimeout   = 10 * defaultRequestTimeout
+	rankReqTimeout   = 10 * time.Second
+	rankStartTimeout = 3 * rankReqTimeout
 )
 
 // EngineHarness is responsible for managing Engine instances.
@@ -43,9 +43,8 @@ func NewEngineHarness(log logging.Logger) *EngineHarness {
 	return &EngineHarness{
 		log:              log,
 		instances:        make([]*EngineInstance, 0),
-		started:          atm.NewBool(false),
-		rankReqTimeout:   defaultRequestTimeout,
-		rankStartTimeout: defaultStartTimeout,
+		rankReqTimeout:   rankReqTimeout,
+		rankStartTimeout: rankStartTimeout,
 	}
 }
 
@@ -93,20 +92,20 @@ func (h *EngineHarness) FilterInstancesByRankSet(ranks string) ([]*EngineInstanc
 }
 
 // AddInstance adds a new Engine instance to be managed.
-func (h *EngineHarness) AddInstance(srv *EngineInstance) error {
+func (h *EngineHarness) AddInstance(ei *EngineInstance) error {
 	if h.isStarted() {
 		return errors.New("can't add instance to already-started harness")
 	}
 
 	h.Lock()
 	defer h.Unlock()
-	srv.setIndex(uint32(len(h.instances)))
+	ei.setIndex(uint32(len(h.instances)))
 
-	h.instances = append(h.instances, srv)
+	h.instances = append(h.instances, ei)
 	return nil
 }
 
-// CallDrpc calls the supplied dRPC method on a managed I/O server instance.
+// CallDrpc calls the supplied dRPC method on a managed I/O Engine instance.
 func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
 	if !h.isStarted() {
 		return nil, FaultHarnessNotStarted
@@ -142,38 +141,38 @@ func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *even
 		return errors.New("can't start: harness already started")
 	}
 
+	if cfg == nil {
+		return errors.New("nil cfg supplied to Start()")
+	}
+
 	// Now we want to block any RPCs that might try to mess with storage
-	// (format, firmware update, etc) before attempting to start I/O engines
+	// (format, firmware update, etc) before attempting to start I/O Engines
 	// which are using the storage.
 	h.started.SetTrue()
 	defer h.started.SetFalse()
 
 	instances := h.Instances()
 
-	if cfg != nil {
-		drpcSetupReq := &drpcServerSetupReq{
-			log:     h.log,
-			sockDir: cfg.SocketDir,
-			engines: instances,
-			tc:      cfg.TransportConfig,
-			sysdb:   db,
-			events:  ps,
-		}
-		// Single daos_server dRPC server to handle all engine requests
-		if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
-			return errors.WithMessage(err, "dRPC server setup")
-		}
-		defer func() {
-			if err := drpcCleanup(cfg.SocketDir); err != nil {
-				h.log.Errorf("error during dRPC cleanup: %s", err)
-			}
-		}()
+	drpcSetupReq := &drpcServerSetupReq{
+		log:     h.log,
+		sockDir: cfg.SocketDir,
+		engines: instances,
+		tc:      cfg.TransportConfig,
+		sysdb:   db,
+		events:  ps,
 	}
+	// Single daos_server dRPC server to handle all engine requests
+	if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
+		return errors.WithMessage(err, "dRPC server setup")
+	}
+	defer func() {
+		if err := drpcCleanup(cfg.SocketDir); err != nil {
+			h.log.Errorf("error during dRPC cleanup: %s", err)
+		}
+	}()
 
-	for _, srv := range instances {
-		// start first time then relinquish control to instance
-		go srv.Run(ctx, cfg.RecreateSuperblocks)
-		srv.startLoop <- true
+	for _, ei := range instances {
+		ei.Run(ctx, cfg.RecreateSuperblocks)
 	}
 
 	<-ctx.Done()
@@ -189,9 +188,9 @@ func (h *EngineHarness) readyRanks() []system.Rank {
 	defer h.RUnlock()
 
 	ranks := make([]system.Rank, 0)
-	for _, srv := range h.instances {
-		if srv.hasSuperblock() && srv.isReady() {
-			ranks = append(ranks, *srv.getSuperblock().Rank)
+	for _, ei := range h.instances {
+		if ei.hasSuperblock() && ei.isReady() {
+			ranks = append(ranks, *ei.getSuperblock().Rank)
 		}
 	}
 

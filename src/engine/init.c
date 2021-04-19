@@ -62,7 +62,7 @@ int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
 int			dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
-/** IO server instance index */
+/** I/O Engine instance index */
 unsigned int		dss_instance_idx;
 
 /** HW topology */
@@ -94,6 +94,7 @@ dss_self_rank(void)
 
 	rc = crt_group_rank(NULL /* grp */, &rank);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+
 	return rank;
 }
 
@@ -459,7 +460,8 @@ static void
 dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
-	static struct d_tm_node_t	*dead_rank_ctr;
+	static struct d_tm_node_t	*dead_ranks;
+	static struct d_tm_node_t	*last_ts;
 	int				 rc = 0;
 
 	/* We only care about dead ranks for now */
@@ -469,8 +471,8 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		return;
 	}
 
-	d_tm_increment_counter(&dead_rank_ctr, "cart",
-			       "swim_rank_dead_events", NULL);
+	(void)d_tm_increment_counter(&dead_ranks, 1, "events/dead_ranks");
+	(void)d_tm_record_timestamp(&last_ts, "events/last_event_ts");
 
 	rc = ds_notify_swim_rank_dead(rank);
 	if (rc)
@@ -478,18 +480,38 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 			src, type, DP_RC(rc));
 }
 
+static void
+server_id_cb(uint32_t *tid, uint64_t *uid)
+{
+	if (uid != NULL)
+		ABT_self_get_thread_id(uid);
+
+	if (tid != NULL) {
+		struct dss_thread_local_storage *dtc;
+		struct dss_module_info *dmi;
+
+		dtc = dss_tls_get();
+		if (dtc == NULL)
+			return;
+
+		dmi = dss_get_module_info();
+		*tid = dmi->dmi_xs_id;
+	}
+}
+
 static int
 server_init(int argc, char *argv[])
 {
-	static struct d_tm_node_t	*startup_dur;
-	static struct d_tm_node_t	*started_ts;
-	uint64_t			 bound;
-	int64_t				 diff;
-	unsigned int			 ctx_nr;
-	int				 rc;
+	uint64_t	bound;
+	int64_t		diff;
+	unsigned int	ctx_nr;
+	int		rc;
 
 	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
 
+	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
+
+	daos_debug_set_id_cb(server_id_cb);
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
@@ -499,21 +521,27 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		goto exit_debug_init;
 
-	d_tm_mark_duration_start(&startup_dur, D_TM_CLOCK_REALTIME,
-				 "server", "startup_duration", NULL);
+	/** Report timestamp when engine was started */
+	(void)d_tm_record_timestamp(NULL, "started_at");
+
+	rc = drpc_init();
+	if (rc != 0) {
+		D_ERROR("Failed to initialize dRPC: "DF_RC"\n", DP_RC(rc));
+		goto exit_telemetry_init;
+	}
 
 	rc = register_dbtree_classes();
 	if (rc != 0)
-		D_GOTO(exit_telemetry_init, rc);
+		D_GOTO(exit_drpc_fini, rc);
 
 	/** initialize server topology data */
 	rc = dss_topo_init();
 	if (rc != 0)
-		D_GOTO(exit_telemetry_init, rc);
+		D_GOTO(exit_drpc_fini, rc);
 
 	rc = abt_init(argc, argv);
 	if (rc != 0)
-		goto exit_telemetry_init;
+		goto exit_drpc_fini;
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
@@ -530,6 +558,31 @@ server_init(int argc, char *argv[])
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");
+
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
+		rc = daos_init();
+		if (rc) {
+			D_ERROR("daos_init (client) failed, rc: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(exit_crt, rc);
+		}
+		D_INFO("Client stack enabled\n");
+	} else {
+		rc = daos_hhash_init();
+		if (rc) {
+			D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(exit_crt, rc);
+		}
+		rc = pl_init();
+		if (rc != 0) {
+			daos_hhash_fini();
+			goto exit_crt;
+		}
+		D_INFO("handle hash table and placement initialized\n");
+	}
+	/* server-side uses D_HTYPE_PTR handle */
+	d_hhash_set_ptrtype(daos_ht.dht_hhash);
 
 	ds_iv_init();
 
@@ -559,45 +612,18 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_loaded, rc);
 	}
 
-	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
-
 	D_INFO("Service initialized\n");
-
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
-		rc = daos_init();
-		if (rc) {
-			D_ERROR("daos_init (client) failed, rc: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(exit_srv_init, rc);
-		}
-		D_INFO("Client stack enabled\n");
-	} else {
-		rc = daos_hhash_init();
-		if (rc) {
-			D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(exit_srv_init, rc);
-		}
-		rc = pl_init();
-		if (rc != 0) {
-			daos_hhash_fini();
-			goto exit_srv_init;
-		}
-		D_INFO("handle hash table and placement initialized\n");
-	}
-	/* server-side uses D_HTYPE_PTR handle */
-	d_hhash_set_ptrtype(daos_ht.dht_hhash);
 
 	rc = server_init_state_init();
 	if (rc != 0) {
 		D_ERROR("failed to init server init state: "DF_RC"\n",
 			DP_RC(rc));
-		goto exit_daos_fini;
+		goto exit_srv_init;
 	}
 
-	rc = drpc_init();
+	rc = drpc_notify_ready();
 	if (rc != 0) {
-		D_ERROR("Failed to initialize dRPC: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to notify daos_server: "DF_RC"\n", DP_RC(rc));
 		goto exit_init_state;
 	}
 
@@ -629,23 +655,23 @@ server_init(int argc, char *argv[])
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
-		goto exit_drpc_fini;
+		goto exit_init_state;
 	D_INFO("Modules successfully set up\n");
 
 	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
 	if (rc)
-		D_GOTO(exit_drpc_fini, rc);
+		D_GOTO(exit_init_state, rc);
 
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
 
-	d_tm_mark_duration_end(&startup_dur, NULL);
+	/** Report timestamp when engine was open for business */
+	(void)d_tm_record_timestamp(NULL, "servicing_at");
 
-	d_tm_record_timestamp(&started_ts, "server", "started_at", NULL);
+	/** Report rank */
+	(void)d_tm_increment_counter(NULL, dss_self_rank(), "rank");
 
-	d_tm_set_gauge(NULL, dss_self_rank(), "server", "rank", NULL);
-
-	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
+	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
 		DAOS_VERSION, getpid(), dss_self_rank(), dss_tgt_nr,
 		dss_tgt_offload_xs_nr, dss_core_offset, dss_hostname);
@@ -655,27 +681,27 @@ server_init(int argc, char *argv[])
 
 	return 0;
 
-exit_drpc_fini:
-	drpc_fini();
 exit_init_state:
 	server_init_state_fini();
-exit_daos_fini:
+exit_srv_init:
+	dss_srv_fini(true);
+exit_mod_loaded:
+	ds_iv_fini();
+	dss_module_unload_all();
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
 	} else {
 		pl_fini();
 		daos_hhash_fini();
 	}
-exit_srv_init:
-	dss_srv_fini(true);
-exit_mod_loaded:
-	dss_module_unload_all();
-	ds_iv_fini();
+exit_crt:
 	crt_finalize();
 exit_mod_init:
 	dss_module_fini(true);
 exit_abt_init:
 	abt_fini();
+exit_drpc_fini:
+	drpc_fini();
 exit_telemetry_init:
 	d_tm_fini();
 exit_debug_init:
@@ -691,12 +717,14 @@ server_fini(bool force)
 	D_INFO("unregister event callbacks done\n");
 	dss_module_cleanup_all();
 	D_INFO("dss_module_cleanup_all() done\n");
-	drpc_fini();
-	D_INFO("drpc_fini() done\n");
 	server_init_state_fini();
 	D_INFO("server_init_state_fini() done\n");
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
+	ds_iv_fini();
+	D_INFO("ds_iv_fini() done\n");
+	dss_module_unload_all();
+	D_INFO("dss_module_unload_all() done\n");
 	/*
 	 * Client stuff finalization needs be done after all ULTs drained
 	 * in dss_srv_fini().
@@ -708,16 +736,14 @@ server_fini(bool force)
 		daos_hhash_fini();
 	}
 	D_INFO("daos_fini() or pl_fini() done\n");
-	dss_module_unload_all();
-	D_INFO("dss_module_unload_all() done\n");
-	ds_iv_fini();
-	D_INFO("ds_iv_fini() done\n");
 	crt_finalize();
 	D_INFO("crt_finalize() done\n");
 	dss_module_fini(force);
 	D_INFO("dss_module_fini() done\n");
 	abt_fini();
 	D_INFO("abt_fini() done\n");
+	drpc_fini();
+	D_INFO("drpc_fini() done\n");
 	d_tm_fini();
 	D_INFO("d_tm_fini() done\n");
 	daos_debug_fini();

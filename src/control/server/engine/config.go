@@ -15,11 +15,13 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const (
-	maxHelperStreamCount = 2
-)
+const maxHelperStreamCount = 2
 
-// StorageConfig encapsulates an I/O server's storage configuration.
+// ErrNoPinnedNumaNode error indicates no NUMA node has been pinned in this
+// engine's configuration.
+var ErrNoPinnedNumaNode = errors.New("pinned NUMA node was not configured")
+
+// StorageConfig encapsulates an I/O Engine's storage configuration.
 type StorageConfig struct {
 	SCM  storage.ScmConfig  `yaml:",inline"`
 	Bdev storage.BdevConfig `yaml:",inline"`
@@ -71,7 +73,7 @@ func (fc *FabricConfig) GetNumaNode() (uint, error) {
 	if fc.PinnedNumaNode != nil {
 		return *fc.PinnedNumaNode, nil
 	}
-	return 0, errors.New("pinned NUMA node was not configured")
+	return 0, ErrNoPinnedNumaNode
 }
 
 // Validate ensures that the configuration meets minimum standards.
@@ -88,6 +90,32 @@ func (fc *FabricConfig) Validate() error {
 	return nil
 }
 
+// cleanEnvVars scrubs the supplied slice of environment
+// variables by removing all variables not included in the
+// allow list.
+func cleanEnvVars(in, allowed []string) (out []string) {
+	allowedMap := make(map[string]struct{})
+	for _, key := range allowed {
+		allowedMap[key] = struct{}{}
+	}
+
+	for _, pair := range in {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
+			continue
+		}
+		if _, found := allowedMap[kv[0]]; !found {
+			continue
+		}
+		out = append(out, pair)
+	}
+
+	return
+}
+
+// mergeEnvVars merges and deduplicates two slices of environment
+// variables. Conflicts are resolved by taking the value from the
+// second list.
 func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	mergeMap := make(map[string]string)
 	for _, pair := range curVars {
@@ -125,7 +153,7 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	return
 }
 
-// Config encapsulates an I/O server's configuration.
+// Config encapsulates an I/O Engine's configuration.
 type Config struct {
 	Rank              *system.Rank  `yaml:"rank,omitempty"`
 	Modules           string        `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
@@ -139,10 +167,11 @@ type Config struct {
 	Storage           StorageConfig `yaml:",inline"`
 	Fabric            FabricConfig  `yaml:",inline"`
 	EnvVars           []string      `yaml:"env_vars,omitempty"`
+	EnvPassThrough    []string      `yaml:"env_pass_through,omitempty"`
 	Index             uint32        `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 }
 
-// NewConfig returns an I/O server config.
+// NewConfig returns an I/O Engine config.
 func NewConfig() *Config {
 	return &Config{
 		HelperStreamCount: maxHelperStreamCount,
@@ -163,13 +192,13 @@ func (c *Config) Validate() error {
 }
 
 // CmdLineArgs returns a slice of command line arguments to be
-// supplied when starting an I/O server instance.
+// supplied when starting an I/O Engine instance.
 func (c *Config) CmdLineArgs() ([]string, error) {
 	return parseCmdTags(c, shortFlagTag, joinShortArgs, nil)
 }
 
 // CmdLineEnv returns a slice of environment variables to be
-// supplied when starting an I/O server instance.
+// supplied when starting an I/O Engine instance.
 func (c *Config) CmdLineEnv() ([]string, error) {
 	tagEnv, err := parseCmdTags(c, envTag, joinEnvVars, nil)
 	if err != nil {
@@ -196,6 +225,14 @@ func (c *Config) HasEnvVar(name string) bool {
 func (c *Config) WithEnvVars(newVars ...string) *Config {
 	c.EnvVars = mergeEnvVars(c.EnvVars, newVars)
 
+	return c
+}
+
+// WithEnvPassThrough sets a list of environment variable
+// names that will be allowed to pass through into the
+// engine subprocess environment.
+func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
+	c.EnvPassThrough = allowList
 	return c
 }
 
@@ -229,7 +266,7 @@ func (c *Config) WithScmClass(scmClass string) *Config {
 	return c
 }
 
-// WithScmMountPath sets the path to the device used for SCM storage.
+// WithScmMountPoint sets the path to the device used for SCM storage.
 func (c *Config) WithScmMountPoint(scmPath string) *Config {
 	c.Storage.SCM.MountPoint = scmPath
 	return c
@@ -278,7 +315,7 @@ func (c *Config) WithBdevConfigPath(cfgPath string) *Config {
 	return c
 }
 
-// WithModules sets the list of I/O server modules to be loaded.
+// WithModules sets the list of I/O Engine modules to be loaded.
 func (c *Config) WithModules(mList string) *Config {
 	c.Modules = mList
 	return c
@@ -302,7 +339,7 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 	return c
 }
 
-// WithPinnedNumaNode sets the NUMA node affinity for the I/O server instance
+// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
 func (c *Config) WithPinnedNumaNode(numa *uint) *Config {
 	c.Fabric.PinnedNumaNode = numa
 	return c

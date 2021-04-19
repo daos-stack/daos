@@ -28,6 +28,8 @@ struct sched_stats {
 	uint64_t	ss_relax_time;	/* CPU relax time (ms) */
 	uint64_t	ss_busy_ts;	/* Last busy timestamp (ms) */
 	uint64_t	ss_print_ts;	/* Last stats print timestamp (ms) */
+	uint64_t	ss_watchdog_ts;	/* Last watchdog print ts (ms) */
+	void		*ss_last_unit;	/* Last executed unit */
 };
 
 struct sched_info {
@@ -48,6 +50,7 @@ struct sched_info {
 struct dss_xstream {
 	char			dx_name[DSS_XS_NAME_LEN];
 	ABT_future		dx_shutdown;
+	ABT_future		dx_stopping;
 	hwloc_cpuset_t		dx_cpuset;
 	ABT_xstream		dx_xstream;
 	ABT_pool		dx_pools[DSS_POOL_CNT];
@@ -165,6 +168,7 @@ extern bool sched_prio_disabled;
 extern unsigned int sched_stats_intvl;
 extern unsigned int sched_relax_intvl;
 extern unsigned int sched_relax_mode;
+extern unsigned int sched_unit_runtime_max;
 
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);
@@ -173,6 +177,23 @@ int sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 		      void (*func)(void *), void *arg);
 void sched_stop(struct dss_xstream *dx);
 
+
+static inline bool
+sched_xstream_stopping(void)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	ABT_bool		 state;
+	int			 rc;
+
+	/* ULT creation from main thread which doesn't have dss_xstream */
+	if (dx == NULL)
+		return false;
+
+	rc = ABT_future_test(dx->dx_stopping, &state);
+	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	return state == ABT_TRUE;
+}
+
 static inline int
 sched_create_task(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		  ABT_task *task, unsigned int flags)
@@ -180,6 +201,9 @@ sched_create_task(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
+
+	if (sched_xstream_stopping())
+		return -DER_SHUTDOWN;
 
 	/* Avoid bumping busy ts for internal periodically created tasks */
 	if (!(flags & DSS_ULT_FL_PERIODIC))
@@ -199,6 +223,9 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 
+	if (sched_xstream_stopping())
+		return -DER_SHUTDOWN;
+
 	/* Avoid bumping busy ts for internal periodically created ULTs */
 	if (!(flags & DSS_ULT_FL_PERIODIC))
 		/* Atomic integer assignment from different xstream */
@@ -210,7 +237,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 
 /* tls.c */
 void dss_tls_fini(struct dss_thread_local_storage *dtls);
-struct dss_thread_local_storage *dss_tls_init(int tag);
+struct dss_thread_local_storage *dss_tls_init(int tag, int xs_id, int tgt_id);
 
 /* server_iv.c */
 void ds_iv_init(void);

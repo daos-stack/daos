@@ -30,7 +30,7 @@ degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
 	if (!test_runable(arg, 6))
 		return;
 
-	oid = dts_oid_gen(OC_EC_4P2G1, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	if (write_type == PARTIAL_UPDATE)
@@ -108,6 +108,12 @@ static void
 degrade_full_partial_fail_2data(void **state)
 {
 	int shards[2];
+
+	/*
+	 * Skipping test because of DAOS-6755, which seems to be related to EC
+	 * aggregation
+	 */
+	skip();
 
 	shards[0] = 0;
 	shards[1] = 3;
@@ -296,7 +302,11 @@ degrade_small_sub_setup(void **state)
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			DEGRADE_SMALL_POOL_SIZE, 6, NULL);
-	return rc;
+	if (rc)
+		print_message("It can not create the pool with 6 ranks"
+			      " probably due to not enough ranks %d\n", rc);
+
+	return 0;
 }
 
 /** create a new pool/container for each test */

@@ -2,7 +2,7 @@
 // (C) Copyright 2020-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
-// +build firmware
+//
 
 package server
 
@@ -16,7 +16,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -503,7 +502,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 
 			common.CmpErr(t, tc.expErr, err)
 
-			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -518,7 +517,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 	for name, tc := range map[string]struct {
 		bmbc           *bdev.MockBackendConfig
 		smbc           *scm.MockBackendConfig
-		serversRunning bool
+		enginesRunning bool
 		noRankEngines  bool
 		req            ctlpb.FirmwareUpdateReq
 		expErr         error
@@ -529,7 +528,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				Type:         ctlpb.FirmwareUpdateReq_SCM,
 				FirmwarePath: "/some/path",
 			},
-			serversRunning: true,
+			enginesRunning: true,
 			expErr:         FaultInstancesNotStopped("firmware update", 0),
 		},
 		"IO engines running with no rank": {
@@ -537,7 +536,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				Type:         ctlpb.FirmwareUpdateReq_SCM,
 				FirmwarePath: "/some/path",
 			},
-			serversRunning: true,
+			enginesRunning: true,
 			noRankEngines:  true,
 			expErr:         errors.New("unidentified server rank is running"),
 		},
@@ -805,9 +804,9 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, tc.bmbc, tc.smbc, nil)
 			for i := 0; i < 2; i++ {
-				runner := engine.NewTestRunner(&engine.TestRunnerConfig{
-					Running: atm.NewBool(tc.serversRunning),
-				}, engine.NewConfig())
+				rCfg := new(engine.TestRunnerConfig)
+				rCfg.Running.Store(tc.enginesRunning)
+				runner := engine.NewTestRunner(rCfg, engine.NewConfig())
 				instance := NewEngineInstance(log, nil, nil, nil, runner)
 				if !tc.noRankEngines {
 					instance._superblock = &Superblock{}
@@ -823,7 +822,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 
 			common.CmpErr(t, tc.expErr, err)
 
-			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})

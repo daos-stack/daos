@@ -121,7 +121,7 @@ dc_obj_verify_fetch(struct dc_obj_verify_args *dova)
 	shard = dc_obj_anchor2shard(&dova->dkey_anchor);
 	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &cursor->dkey, 1,
 				      DIOF_TO_SPEC_SHARD, iod, &dova->fetch_sgl,
-				      NULL, &shard, NULL, NULL, &task);
+				      NULL, &shard, NULL, NULL, NULL, &task);
 	if (rc == 0)
 		rc = dc_task_schedule(task, true);
 
@@ -642,7 +642,7 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 	int		rc = 0;
 	int		i;
 
-	rc = dc_tx_local_open(obj->cob_coh, epoch, DAOS_TF_RDONLY, &th);
+	rc = dc_tx_local_open(obj->cob_coh, epoch, 0, &th);
 	if (rc != 0) {
 		D_ERROR("dc_tx_local-open failed: "DF_RC"\n", DP_RC(rc));
 		return rc;

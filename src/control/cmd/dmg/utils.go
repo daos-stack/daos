@@ -16,8 +16,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
-	"github.com/daos-stack/daos/src/control/lib/txtfmt"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // hostsByPort takes slice of address patterns and returns a HostGroups mapping
@@ -80,34 +78,6 @@ func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
 	}
 
 	return buf.String()
-}
-
-// tabulateRankGroups is a helper function representing rankgroups in a tabular form.
-func tabulateRankGroups(groups system.RankGroups, titles ...string) (string, error) {
-	if len(titles) < 2 {
-		return "", errors.New("insufficient number of column titles")
-	}
-	groupTitle := titles[0]
-	columnTitles := titles[1:]
-
-	formatter := txtfmt.NewTableFormatter(titles...)
-	var table []txtfmt.TableRow
-
-	for _, result := range groups.Keys() {
-		row := txtfmt.TableRow{groupTitle: groups[result].RangedString()}
-
-		summary := strings.Split(result, rowFieldSep)
-		if len(summary) != len(columnTitles) {
-			return "", errors.New("unexpected summary format")
-		}
-		for i, title := range columnTitles {
-			row[title] = summary[i]
-		}
-
-		table = append(table, row)
-	}
-
-	return formatter.Format(table), nil
 }
 
 // errIncompatFlags accepts a base flag and a set of incompatible

@@ -24,6 +24,8 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+#include "gurt/telemetry_common.h"
+#include "gurt/telemetry_producer.h"
 
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
@@ -714,7 +716,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 				in->cci_op.ci_uuid));
 		D_GOTO(out_kvs, rc = -DER_NOMEM);
 	}
-	pm_ver = pool_map_get_version(pool_hdl->sph_pool->sp_map);
+	pm_ver = ds_pool_get_version(pool_hdl->sph_pool);
 	rc = cont_create_prop_prepare(prop_dup, in->cci_prop, pm_ver);
 	if (rc != 0) {
 		D_ERROR(DF_CONT" cont_create_prop_prepare failed: "DF_RC"\n",
@@ -1430,25 +1432,20 @@ cont_status_set_unclean(struct rdb_tx *tx, struct ds_pool *pool,
 {
 	daos_prop_t		 tmp_prop = { 0 };
 	struct daos_prop_entry	*pentry;
-	struct daos_prop_entry	 entry;
+	uint32_t		 pm_ver;
 	int			 rc;
-
-	entry.dpe_type = DAOS_PROP_CO_STATUS;
-	entry.dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_UNCLEAN,
-				pool_map_get_version(pool->sp_map));
-	tmp_prop.dpp_nr = 1;
-	tmp_prop.dpp_entries = &entry;
-
-	rc = cont_prop_write(tx, &cont->c_prop, &tmp_prop);
-	if (rc) {
-		D_ERROR(DF_UUID": failed to cont_prop_write "DF_RC"\n",
-			DP_UUID(cont->c_uuid), DP_RC(rc));
-		return rc;
-	}
 
 	pentry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
 	D_ASSERT(pentry != NULL);
-	pentry->dpe_val = entry.dpe_val;
+	pm_ver = ds_pool_get_version(pool);
+	pentry->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_UNCLEAN, pm_ver);
+	tmp_prop.dpp_nr = 1;
+	tmp_prop.dpp_entries = pentry;
+
+	rc = cont_prop_write(tx, &cont->c_prop, &tmp_prop);
+	if (rc)
+		D_ERROR(DF_UUID": failed to cont_prop_write "DF_RC"\n",
+			DP_UUID(cont->c_uuid), DP_RC(rc));
 
 	return rc;
 }
@@ -1458,12 +1455,11 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	  crt_rpc_t *rpc)
 {
 	struct cont_open_in    *in = crt_req_get(rpc);
+	struct cont_open_out   *out = crt_reply_get(rpc);
 	d_iov_t			key;
 	d_iov_t			value;
 	daos_prop_t	       *prop = NULL;
 	struct container_hdl	chdl;
-	struct pool_map		*pmap;
-	struct cont_open_out   *out = crt_reply_get(rpc);
 	char			zero = 0;
 	int			rc, rc1;
 	struct ownership	owner;
@@ -1483,6 +1479,11 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	d_iov_set(&value, &chdl, sizeof(chdl));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != -DER_NONEXIST) {
+		D_DEBUG(DF_DSMS, DF_CONT"/"DF_UUID": "
+				 "Container handle already open.\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->coi_op.ci_uuid),
+			DP_UUID(in->coi_op.ci_hdl));
 		if (rc == 0 && chdl.ch_flags != in->coi_flags) {
 			D_ERROR(DF_CONT": found conflicting container handle\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
@@ -1526,12 +1527,12 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* Determine pool meets container redundancy factor requirements */
 	is_healthy = cont_status_is_healthy(prop, &stat_pm_ver);
+	out->coo_op.co_map_version = stat_pm_ver;
 	if (is_healthy) {
 		int	rf;
 
 		rf = daos_cont_prop2redunfac(prop);
-		pmap = pool_hdl->sph_pool->sp_map;
-		rc = pool_map_rf_verify(pmap, stat_pm_ver, rf);
+		rc = ds_pool_rf_verify(pool_hdl->sph_pool, stat_pm_ver, rf);
 		if (rc == -DER_RF) {
 			rc1 = cont_status_set_unclean(tx, pool_hdl->sph_pool,
 						      cont, prop);
@@ -1545,6 +1546,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 			is_healthy = false;
 		} else if (rc) {
+			daos_prop_free(prop);
 			goto out;
 		}
 	}
@@ -1604,15 +1606,18 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		goto out;
 
-	/**
-	 * Put requested properties in output.
-	 * the allocated prop will be freed after rpc replied in
-	 * ds_cont_op_handler.
-	 */
-	rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop);
-	out->coo_prop = prop;
 
 out:
+	if (rc == 0) {
+		/**
+		 * Put requested properties in output.
+		 * the allocated prop will be freed after rpc replied in
+		 * ds_cont_op_handler.
+		 */
+		rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop);
+		out->coo_prop = prop;
+
+	}
 	if (rc != 0 && cont_hdl_opened)
 		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
 					      in->coi_op.ci_hdl,
@@ -1640,6 +1645,16 @@ cont_close_recs(crt_context_t ctx, struct cont_svc *svc,
 		rc = cont_iv_capability_invalidate(
 				svc->cs_pool->sp_iv_ns,
 				recs[i].tcr_hdl, CRT_IV_SYNC_EAGER);
+		if (rc == -DER_SHUTDOWN) {
+			/* If one of rank is being stopped, it may
+			 * return -DER_SHUTDOWN, which can be ignored
+			 * during capability invalidate.
+			 */
+			D_DEBUG(DF_DSMS, DF_CONT"/"DF_UUID" fail %d",
+				DP_CONT(svc->cs_pool_uuid, NULL),
+				DP_UUID(recs[i].tcr_hdl), rc);
+			rc = 0;
+		}
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -2173,7 +2188,7 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
 	D_ASSERT(entry != NULL);
 	rf = daos_cont_prop2redunfac(prop);
-	rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
+	rc = ds_pool_rf_verify(pool, last_ver, rf);
 	if (rc == -DER_RF) {
 		rc = cont_status_set_unclean(tx, pool, cont, prop);
 		if (rc) {
@@ -2192,7 +2207,7 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
 		D_ASSERT(entry != NULL);
 		iv_entry = daos_prop_entry_get(iv_prop, DAOS_PROP_CO_STATUS);
-		D_ASSERT(entry != NULL);
+		D_ASSERT(iv_entry != NULL);
 		iv_entry->dpe_val = entry->dpe_val;
 		rc = cont_iv_prop_update(pool->sp_iv_ns, in->cqi_op.ci_uuid,
 					 iv_prop);
@@ -2441,7 +2456,7 @@ set_prop_co_status_pre_process(struct ds_pool *pool, struct cont *cont,
 	daos_prop_val_2_co_status(entry->dpe_val, &co_status);
 	D_ASSERT(co_status.dcs_status == DAOS_PROP_CO_HEALTHY ||
 		 co_status.dcs_status == DAOS_PROP_CO_UNCLEAN);
-	co_status.dcs_pm_ver = pool_map_get_version(pool->sp_map);
+	co_status.dcs_pm_ver = ds_pool_get_version(pool);
 	entry->dpe_val = daos_prop_co_status_2_val(&co_status);
 	D_DEBUG(DF_DSMS, DF_CONT" updating co_status - status %s, pm_ver %d.\n",
 		DP_CONT(pool->sp_uuid, cont->c_uuid),
@@ -2994,20 +3009,34 @@ static int
 cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		  struct cont *cont, crt_rpc_t *rpc)
 {
-	struct cont_op_in      *in = crt_req_get(rpc);
-	d_iov_t			key;
-	d_iov_t			value;
-	struct container_hdl	hdl;
-	int			rc;
+	struct d_tm_node_t	*op_open_ctr = NULL;
+	struct d_tm_node_t	*op_close_ctr = NULL;
+	struct d_tm_node_t	*op_destroy_ctr = NULL;
+	struct d_tm_node_t	*open_cont_gauge = NULL;
+	struct cont_op_in	*in = crt_req_get(rpc);
+	d_iov_t			 key;
+	d_iov_t			 value;
+	struct container_hdl	 hdl;
+	int			 rc;
 
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_OPEN:
+		d_tm_increment_counter(&op_open_ctr, 1,
+				       "container/ops/open/total");
+		d_tm_increment_gauge(&open_cont_gauge, 1,
+				     "container/ops/open/active");
 		rc = cont_open(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_CLOSE:
+		d_tm_increment_counter(&op_close_ctr, 1,
+				       "container/ops/close/total");
+		d_tm_decrement_gauge(&open_cont_gauge, 1,
+				     "container/ops/open/active");
 		rc = cont_close(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_DESTROY:
+		d_tm_increment_counter(&op_destroy_ctr, 1,
+				       "container/ops/destroy/total");
 		rc = cont_destroy(tx, pool_hdl, cont, rpc);
 		break;
 	default:

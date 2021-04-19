@@ -487,6 +487,123 @@ struct cont_open_args {
 	daos_handle_t		*hdlp;
 };
 
+struct pmap_refresh_cb_arg {
+	struct dc_pool		*pra_pool;
+	uint32_t		 pra_pm_ver;
+	uint32_t		 pra_retry_nr;
+};
+
+static int
+pmap_refresh_cb(tse_task_t *task, void *data)
+{
+	struct pmap_refresh_cb_arg	*cb_arg;
+	struct dc_pool			*pool;
+	uint32_t			 pm_ver;
+	uint64_t			 delay;
+	int				 rc = task->dt_result;
+
+	cb_arg = (struct pmap_refresh_cb_arg *)data;
+	pool = cb_arg->pra_pool;
+	if (rc)
+		goto out;
+
+	pm_ver = dc_pool_get_version(pool);
+	if (pm_ver < cb_arg->pra_pm_ver) {
+		if (cb_arg->pra_retry_nr > 10) {
+			/* basically this is impossible, or there is system
+			 * issue. Return EAGAIN just for code integrality.
+			 */
+			rc = -DER_AGAIN;
+			D_ERROR(DF_UUID": pmap_refresh cannot get required "
+				"version (%d:%d), try again later "DF_RC"\n",
+				DP_UUID(pool->dp_pool), pm_ver,
+				cb_arg->pra_pm_ver, DP_RC(rc));
+			goto out;
+		}
+		if (cb_arg->pra_retry_nr > 3)
+			delay = cb_arg->pra_retry_nr * 10;
+		else
+			delay = 0;
+
+		rc = tse_task_reinit_with_delay(task, delay);
+		if (rc) {
+			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), resched"
+				" failed, "DF_RC"\n", DP_UUID(pool->dp_pool),
+				pm_ver, cb_arg->pra_pm_ver, DP_RC(rc));
+			goto out;
+		}
+
+		rc = dc_task_reg_comp_cb(task, pmap_refresh_cb, cb_arg,
+					 sizeof(*cb_arg));
+		if (rc) {
+			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), failed "
+				"to reg_comp_cb, "DF_RC"\n",
+				DP_UUID(pool->dp_pool), pm_ver,
+				cb_arg->pra_pm_ver, DP_RC(rc));
+			goto out;
+		}
+
+		cb_arg->pra_retry_nr++;
+		D_DEBUG(DB_TRACE, DF_UUID": pmap_refresh version (%d:%d), "
+			"in %d retry\n", DP_UUID(pool->dp_pool), pm_ver,
+			cb_arg->pra_pm_ver, cb_arg->pra_retry_nr);
+		return rc;
+	}
+out:
+	if (rc)
+		D_ERROR(DF_UUID": pmap_refresh(task %p) failed, "DF_RC"\n",
+			DP_UUID(pool->dp_pool), task, DP_RC(rc));
+	dc_pool_put(pool);
+	return rc;
+}
+
+static int
+pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
+{
+	struct dc_pool			*pool;
+	struct pmap_refresh_cb_arg	 cb_arg;
+	tse_sched_t			*sched;
+	daos_pool_query_t		*pargs;
+	tse_task_t			*ptask = NULL;
+	int				 rc;
+
+	pool = dc_hdl2pool(poh);
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	sched = (task != NULL) ? tse_task2sched(task) : NULL;
+	rc = dc_task_create(dc_pool_query, sched, NULL, &ptask);
+	if (rc != 0)
+		goto out;
+
+	pargs = dc_task_get_args(ptask);
+	pargs->poh = poh;
+	cb_arg.pra_pool = pool;
+	cb_arg.pra_pm_ver = pm_ver;
+	cb_arg.pra_retry_nr = 0;
+	rc = dc_task_reg_comp_cb(ptask, pmap_refresh_cb, &cb_arg,
+				 sizeof(cb_arg));
+	if (rc != 0)
+		goto out;
+
+	if (task) {
+		rc = dc_task_depend(task, 1, &ptask);
+		if (rc != 0)
+			goto out;
+	}
+
+	rc = dc_task_schedule(ptask, true);
+	return rc;
+
+out:
+	if (rc) {
+		dc_pool_put(pool);
+		if (ptask)
+			dc_task_decref(ptask);
+	}
+	return rc;
+}
+
 static int
 cont_open_complete(tse_task_t *task, void *data)
 {
@@ -494,6 +611,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	struct cont_open_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->coa_pool;
 	struct dc_cont		*cont = daos_task_get_priv(task);
+	uint32_t		 cli_pm_ver;
 	bool			 put_cont = true;
 	int			 rc = task->dt_result;
 
@@ -514,9 +632,21 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	rc = out->coo_op.co_rc;
 	if (rc != 0) {
-		D_DEBUG(DF_DSMC, DF_CONT": failed to open container: %d\n",
-			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
+		D_DEBUG(DF_DSMC, DF_CONT": failed to open container: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
+	}
+
+	cont->dc_min_ver = out->coo_op.co_map_version;
+	cli_pm_ver = dc_pool_get_version(pool);
+	if (cli_pm_ver < cont->dc_min_ver) {
+		rc = pmap_refresh(task, arg->hdl, cont->dc_min_ver);
+		if (rc) {
+			D_ERROR(DF_CONT": pmap_refresh fail "DF_RC"\n",
+				DP_CONT(pool->dp_pool, cont->dc_uuid),
+				DP_RC(rc));
+			goto out;
+		}
 	}
 
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
@@ -536,13 +666,16 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
 	rc = dc_cont_props_init(cont);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("container props failed to initialize");
+		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 		D_GOTO(out, rc);
+	}
 
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
-	dc_cont_hdl_link(cont);
-	dc_cont2hdl(cont, arg->hdlp);
+	dc_cont_hdl_link(cont); /* +1 ref */
+	dc_cont2hdl(cont, arg->hdlp); /* +1 ref */
 
 	D_DEBUG(DF_DSMC, DF_CONT": opened: cookie="DF_X64" hdl="DF_UUID
 		" master\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
@@ -713,12 +846,12 @@ cont_close_complete(tse_task_t *task, void *data)
 	dc_cont_hdl_unlink(cont);
 	dc_cont_put(cont);
 
-	daos_csummer_destroy(&cont->dc_csummer);
-
 	/* Remove the container from pool container list */
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
 	d_list_del_init(&cont->dc_po_list);
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
+
+	daos_csummer_destroy(&cont->dc_csummer);
 
 out:
 	crt_req_decref(arg->rpc);
@@ -751,8 +884,8 @@ dc_cont_close(tse_task_t *task)
 	/* Check if there are not objects opened for this container */
 	D_RWLOCK_RDLOCK(&cont->dc_obj_list_lock);
 	if (!d_list_empty(&cont->dc_obj_list)) {
-		D_ERROR("cannot close container, object not closed.\n");
 		D_RWLOCK_UNLOCK(&cont->dc_obj_list_lock);
+		D_ERROR("cannot close container, object not closed.\n");
 		D_GOTO(err_cont, rc = -DER_BUSY);
 	}
 	cont->dc_closing = 1;
@@ -795,7 +928,7 @@ dc_cont_close(tse_task_t *task)
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_pool, rc);
+		goto err_pool;
 	}
 
 	in = crt_req_get(rpc);
@@ -1474,7 +1607,7 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		/** pool map update task */
 		rc = dc_task_create(dc_pool_query, sched, NULL, &ptask);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out, rc);
 
 		pargs = dc_task_get_args(ptask);
 		pargs->poh = arg->coaa_cont->dc_pool_hdl;
@@ -1650,6 +1783,10 @@ struct dc_cont_glob {
 	uint32_t	dcg_csum_chunksize;
 	uint32_t        dcg_dedup_th;
 	uint32_t	dcg_redun_fac;
+	/** minimal required pool map version, as a fence to make sure after
+	 * cont_open/g2l client-side pm_ver >= pm_ver@cont_create.
+	 */
+	uint32_t	dcg_min_ver;
 	uint32_t	dcg_csum_srv_verify:1,
 			dcg_dedup_enabled:1,
 			dcg_dedup_verify:1;
@@ -1725,6 +1862,7 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_compress_type	= cont->dc_props.dcp_compress_type;
 	cont_glob->dcg_encrypt_type	= cont->dc_props.dcp_encrypt_type;
 	cont_glob->dcg_redun_fac	= cont->dc_props.dcp_redun_fac;
+	cont_glob->dcg_min_ver		= cont->dc_min_ver;
 
 	dc_pool_put(pool);
 out_cont:
@@ -1764,6 +1902,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 {
 	struct dc_pool *pool;
 	struct dc_cont *cont;
+	uint32_t	pm_ver;
 	int		rc = 0;
 
 	D_ASSERT(cont_glob != NULL);
@@ -1777,7 +1916,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 		D_ERROR("pool_hdl mismatch, in pool: "DF_UUID", in cont_glob: "
 			DF_UUID"\n", DP_UUID(pool->dp_pool_hdl),
 			DP_UUID(cont_glob->dcg_pool_hdl));
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out_pool, rc = -DER_INVAL);
 	}
 
 	cont = dc_cont_alloc(cont_glob->dcg_uuid);
@@ -1791,11 +1930,10 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
 	if (pool->dp_disconnecting) {
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
+		dc_cont_free(cont);
 		D_ERROR("pool connection being invalidated\n");
-		D_GOTO(out_cont, rc = -DER_NO_HDL);
+		D_GOTO(out_pool, rc = -DER_NO_HDL);
 	}
-
-	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
@@ -1809,18 +1947,33 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_props.dcp_compress_type = cont_glob->dcg_compress_type;
 	cont->dc_props.dcp_encrypt_type	 = cont_glob->dcg_encrypt_type;
 	cont->dc_props.dcp_redun_fac	 = cont_glob->dcg_redun_fac;
+	cont->dc_min_ver		 = cont_glob->dcg_min_ver;
 	rc = dc_cont_props_init(cont);
 	if (rc != 0)
 		D_GOTO(out_cont, rc);
 
-	dc_cont_hdl_link(cont);
-	dc_cont2hdl(cont, coh);
+	pm_ver = dc_pool_get_version(pool);
+	if (pm_ver < cont->dc_min_ver) {
+		rc = pmap_refresh(NULL, poh, cont->dc_min_ver);
+		if (rc) {
+			D_ERROR("pool: "DF_UUID" pamp_refresh failed, "
+				DF_RC"\n", DP_UUID(pool->dp_pool_hdl),
+				DP_RC(rc));
+			goto out_cont;
+		}
+	}
+
+	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
+	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
+	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
+
+	dc_cont_hdl_link(cont); /* +1 ref */
+	dc_cont2hdl(cont, coh); /* +1 ref */
 
 	D_DEBUG(DF_DSMC, DF_UUID": opened "DF_UUID": cookie="DF_X64" hdl="
 		DF_UUID" slave\n", DP_UUID(pool->dp_pool),
 		DP_UUID(cont->dc_uuid), coh->cookie,
 		DP_UUID(cont->dc_cont_hdl));
-
 out_cont:
 	dc_cont_put(cont);
 out_pool:
@@ -1979,7 +2132,7 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode,
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		cont_req_cleanup(CLEANUP_POOL, args);
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 	in = crt_req_get(args->cra_rpc);
@@ -2058,13 +2211,8 @@ dc_cont_list_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
-	rc = daos_rpc_send(cb_args.cra_rpc, task);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	return daos_rpc_send(cb_args.cra_rpc, task);
 
-	return rc;
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to list container attributes: "DF_RC"\n",
@@ -2216,13 +2364,8 @@ dc_cont_get_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
-	rc = daos_rpc_send(cb_args.cra_rpc, task);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	return daos_rpc_send(cb_args.cra_rpc, task);
 
-	return rc;
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to get container attributes: "DF_RC"\n",
@@ -2275,13 +2418,8 @@ dc_cont_set_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
-	rc = daos_rpc_send(cb_args.cra_rpc, task);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	return daos_rpc_send(cb_args.cra_rpc, task);
 
-	return rc;
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to set container attributes: "DF_RC"\n",
@@ -2318,23 +2456,22 @@ dc_cont_del_attr(tse_task_t *task)
 	in->cadi_count = args->n;
 	rc = attr_bulk_create(args->n, (char **)args->names, NULL, NULL,
 			      daos_task2ctx(task), CRT_BULK_RO, &in->cadi_bulk);
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	if (rc != 0) {
+		cont_req_cleanup(CLEANUP_RPC, &cb_args);
+		D_GOTO(out, rc);
+	}
 
 	cb_args.cra_bulk = in->cadi_bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	if (rc != 0) {
+		cont_req_cleanup(CLEANUP_BULK, &cb_args);
+		D_GOTO(out, rc);
+	}
 
 	crt_req_addref(cb_args.cra_rpc);
-	rc = daos_rpc_send(cb_args.cra_rpc, task);
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	return daos_rpc_send(cb_args.cra_rpc, task);
 
-	return rc;
-cleanup:
-	cont_req_cleanup(CLEANUP_BULK, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to del container attributes: "DF_RC"\n",
@@ -2400,17 +2537,13 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	rc = tse_task_register_comp_cb(task, cont_epoch_op_req_complete,
 				       &arg, sizeof(arg));
 	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &arg.eoa_req);
+		cont_req_cleanup(CLEANUP_RPC, &arg.eoa_req);
 		goto out;
 	}
 
 	crt_req_addref(arg.eoa_req.cra_rpc);
-	rc = daos_rpc_send(arg.eoa_req.cra_rpc, task);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &arg.eoa_req);
-		goto out;
-	}
-	return rc;
+	return daos_rpc_send(arg.eoa_req.cra_rpc, task);
+
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc, *epoch, rc);
@@ -2537,12 +2670,12 @@ dc_cont_list_snap(tse_task_t *task)
 		*args->nr = 0;
 
 	rc = cont_req_prepare(args->coh, CONT_SNAP_LIST,
-			     daos_task2ctx(task), &cb_args);
+			      daos_task2ctx(task), &cb_args);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	D_DEBUG(DF_DSMC, DF_CONT": listing snapshots: hdl="
-			 DF_UUID "; size=%d\n",
+			 DF_UUID": size=%d\n",
 		DP_CONT(cb_args.cra_pool->dp_pool_hdl,
 			cb_args.cra_cont->dc_uuid),
 		DP_UUID(cb_args.cra_cont->dc_cont_hdl), *args->nr);
@@ -2577,13 +2710,8 @@ dc_cont_list_snap(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
-	rc = daos_rpc_send(cb_args.cra_rpc, task);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	return daos_rpc_send(cb_args.cra_rpc, task);
 
-	return rc;
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to list container snapshots: "DF_RC"\n",

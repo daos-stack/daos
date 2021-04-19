@@ -324,7 +324,7 @@ typedef struct {
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
-static inline void
+static inline void  __attribute__ ((deprecated))
 daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 		     daos_oclass_id_t cid, uint32_t args)
 {
@@ -346,6 +346,64 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
 	oid->hi |= hdr;
 }
+
+#define DAOS_OCH_RDD_BITS	4
+#define DAOS_OCH_SHD_BITS	6
+#define DAOS_OCH_RDD_SHIFT	0
+#define DAOS_OCH_SHD_SHIFT	DAOS_OCH_RDD_BITS
+#define DAOS_OCH_RDD_MAX_VAL	((1ULL << DAOS_OCH_RDD_BITS) - 1)
+#define DAOS_OCH_SHD_MAX_VAL	((1ULL << DAOS_OCH_SHD_BITS) - 1)
+#define DAOS_OCH_RDD_MASK	(DAOS_OCH_RDD_MAX_VAL << DAOS_OCH_RDD_SHIFT)
+#define DAOS_OCH_SHD_MASK	(DAOS_OCH_SHD_MAX_VAL << DAOS_OCH_SHD_SHIFT)
+
+/** Flags for oclass hints */
+enum {
+	/** Flags to control OC Redundancy */
+	DAOS_OCH_RDD_DEF	= (1 << 0),	/** Default - use RF prop */
+	DAOS_OCH_RDD_NO		= (1 << 1),	/** No redundancy */
+	DAOS_OCH_RDD_RP		= (1 << 2),	/** Replication */
+	DAOS_OCH_RDD_EC		= (1 << 3),	/** Erasure Code */
+	/** Flags to control OC Sharding */
+	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default: Use MAX for array &
+						 * flat KV; 1 grp for others.
+						 */
+	DAOS_OCH_SHD_TINY	= (1 << 5),	/** <= 4 grps */
+	DAOS_OCH_SHD_REG	= (1 << 6),	/** max(128, 25%) */
+	DAOS_OCH_SHD_HI		= (1 << 7),	/** max(256, 50%) */
+	DAOS_OCH_SHD_EXT	= (1 << 8),	/** max(1024, 80%) */
+	DAOS_OCH_SHD_MAX	= (1 << 9),	/** 100% */
+};
+
+/**
+ * Generate a DAOS object ID by encoding the private DAOS bits of the object
+ * address space. This allows the user to either select an object class
+ * manually, or ask DAOS to generate one based on some hints provided.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in,out]
+ *		oid	[in]: Object ID with low 96 bits set and unique inside
+ *			the container.
+ *			[out]: Fully populated DAOS object identifier with the
+ *			the low 96 bits untouched and the DAOS private bits
+ *			(the high 32 bits) encoded.
+ * \param[in]	ofeats	Feature bits specific to object
+ * \param[in]	cid	Class Identifier. This setting is for advanced users who
+ *			are knowledgeable on the specific oclass being set and
+ *			what that means for the object in the current system and
+ *			the container it's in.
+ *			Setting this to 0 (unknown) will check if there are any
+ *			hints specified and use an oclass accordingly. If there
+ *			are no hints specified we use the container properties
+ *			to select the object class.
+ * \param[in]   hints	Optional hints to select oclass with redundancy type
+ *			and sharding. This will be ignored if cid is not
+ *			OC_UNKNOWN (0).
+ * \param[in]	args	Reserved.
+ */
+int
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
+		      daos_ofeat_t ofeats, daos_oclass_id_t cid,
+		      daos_oclass_hints_t hints, uint32_t args);
 
 /**
  * Open an DAOS object.
@@ -418,7 +476,7 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Optional transaction handle to punch dkeys in.
  *			Use DAOS_TX_NONE for an independent transaction.
- * \param[in]	flags	Punch flags (currently ignored).
+ * \param[in]	flags	Punch flags (conditional ops).
  * \param[in]	nr	number of dkeys to punch.
  * \param[in]	dkeys	Array of dkeys to punch.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -445,7 +503,7 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Optional transaction handle to punch akeys in.
  *			Use DAOS_TX_NONE for an independent transaction.
- * \param[in]	flags	Punch flags (currently ignored).
+ * \param[in]	flags	Punch flags (conditional ops).
  * \param[in]	dkey	dkey to punch akeys from.
  * \param[in]	nr	number of akeys to punch.
  * \param[in]	akeys	Array of akeys to punch.
@@ -501,7 +559,7 @@ daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
  * \param[in]	th	Optional transaction handle to fetch with.
  *			Use DAOS_TX_NONE for an independent transaction.
  *
- * \param[in]	flags	Fetch flags (currently ignored).
+ * \param[in]	flags	Fetch flags (conditional ops).
  *
  * \param[in]	dkey	Distribution key associated with the fetch operation.
  *
@@ -564,7 +622,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	th	Optional transaction handle to update with.
  *			Use DAOS_TX_NONE for an independent transaction.
  *
- * \param[in]	flags	Update flags (currently ignored).
+ * \param[in]	flags	Update flags (conditional ops).
  *
  * \param[in]	dkey	Distribution key associated with the update operation.
  *

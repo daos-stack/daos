@@ -16,7 +16,7 @@
 /** MAX number of data cells */
 #define OBJ_EC_MAX_K		(64)
 /** MAX number of parity cells */
-#define OBJ_EC_MAX_P		(16)
+#define OBJ_EC_MAX_P		(8)
 #define OBJ_EC_MAX_M		(OBJ_EC_MAX_K + OBJ_EC_MAX_P)
 /** Length of target bitmap */
 #define OBJ_TGT_BITMAP_LEN						\
@@ -416,12 +416,13 @@ obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
 static inline void
 obj_io_desc_fini(struct obj_io_desc *oiod)
 {
-	if (oiod != NULL) {
-		oiod->oiod_nr = 0;
-		oiod->oiod_tgt_idx = 0;
-		oiod->oiod_flags = 0;
-		D_FREE(oiod->oiod_siods);
-	}
+	if (oiod == NULL)
+		return;
+
+	oiod->oiod_nr = 0;
+	oiod->oiod_tgt_idx = 0;
+	oiod->oiod_flags = 0;
+	D_FREE(oiod->oiod_siods);
 }
 
 /* translate the queried VOS shadow list to daos extents */
@@ -656,7 +657,8 @@ int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 struct obj_rw_in;
 int obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			uint32_t iod_nr, uint32_t start_shard,
-			uint32_t max_shard, void *tgt_map, uint32_t map_size,
+			uint32_t max_shard, uint32_t leader_id,
+			void *tgt_map, uint32_t map_size,
 			uint32_t tgt_nr, struct daos_shard_tgt *tgts,
 			struct obj_ec_split_req **split_req);
 void obj_ec_split_req_fini(struct obj_ec_split_req *req);
