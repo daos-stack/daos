@@ -33,7 +33,7 @@ message PoolCreateReq {
 	repeated uint32 ranks = 12; // target ranks (manual config)
 	uint64 scmbytes = 13; // SCM size in bytes (manual config)
 	uint64 nvmebytes = 14; // NVMe size in bytes (manual config)
-	string policy = 15; // tier placement policy (manual config)
+	uint32 policy = 15; // tier placement policy (manual config)
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
@@ -43,7 +43,7 @@ message PoolCreateResp {
 	repeated uint32 tgt_ranks = 3; // pool target ranks
 	uint64 scm_bytes = 4; // total SCM allocated to pool
 	uint64 nvme_bytes = 5; // total NVMe allocated to pool
-	string policy = 6;
+	uint32 policy = 6;
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.

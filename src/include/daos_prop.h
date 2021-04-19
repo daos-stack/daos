@@ -336,9 +336,6 @@ struct daos_prop_entry {
 #define DAOS_PROP_ENTRIES_MAX_NR	(128)
 /** max length for pool/container label */
 #define DAOS_PROP_LABEL_MAX_LEN		(256)
-/** max length for pool tiering policy name */
-#define DAOS_PROP_POLICY_MAX_LEN	(64)
-
 
 /** daos properties, for pool or container */
 typedef struct {

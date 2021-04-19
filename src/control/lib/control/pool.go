@@ -112,9 +112,7 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 
 	out.Uuid = uuid.New().String()
 
-	if in.Policy == "" {
-		out.Policy = "default"
-	}
+	out.Policy = in.Policy
 
 	return
 }
@@ -138,7 +136,7 @@ type (
 		Ranks     []system.Rank
 		ScmBytes  uint64
 		NvmeBytes uint64
-		Policy    string
+		Policy    uint32
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -148,7 +146,7 @@ type (
 		TgtRanks  []uint32 `json:"tgt_ranks"`
 		ScmBytes  uint64   `json:"scm_bytes"`
 		NvmeBytes uint64   `json:"nvme_bytes"`
-		Policy    string   `json:"policy"`
+		Policy    uint32   `json:"policy"`
 	}
 )
 

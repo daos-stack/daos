@@ -184,15 +184,14 @@ out:
 
 static int
 create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
-		  char *label, const char **ace_list, size_t ace_nr, const char *policy)
+		  char *label, const char **ace_list, size_t ace_nr, uint32_t policy)
 {
 	char		*out_owner = NULL;
 	char		*out_owner_grp = NULL;
 	char		*out_label = NULL;
-	char 		*out_policy = NULL;
 	struct daos_acl	*out_acl = NULL;
 	daos_prop_t	*new_prop = NULL;
-	uint32_t	entries = 0;
+	uint32_t	entries = 1; /* one for the policy */
 	uint32_t	idx = 0;
 	int		rc = 0;
 
@@ -223,19 +222,6 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 	if (label != NULL && *label != '\0') {
 		D_ASPRINTF(out_label, "%s", label);
 		if (out_label == NULL)
-			D_GOTO(err_out, rc = -DER_NOMEM);
-
-		entries++;
-	}
-
-	if (policy != NULL && *policy != '\0') {
-		if (!is_policy_name_valid(policy)) {
-			D_ERROR("Invalid policy name: %s\n", policy);
-			D_GOTO(err_out, rc = -DER_INVAL);
-		}
-
-		D_ASPRINTF(out_policy, "%s", policy);
-		if (out_policy == NULL)
 			D_GOTO(err_out, rc = -DER_NOMEM);
 
 		entries++;
@@ -274,11 +260,10 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		idx++;
 	}
 
-	if (out_policy != NULL) {
-		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POLICY;
-		new_prop->dpp_entries[idx].dpe_str = out_policy;
-		idx++;
-	}
+	/* pool tiering policy */
+	new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POLICY;
+	new_prop->dpp_entries[idx].dpe_val = policy;
+	idx++;
 
 	*out_prop = new_prop;
 
@@ -290,7 +275,6 @@ err_out:
 	D_FREE(out_label);
 	D_FREE(out_owner_grp);
 	D_FREE(out_owner);
-	D_FREE(out_policy);
 	return rc;
 }
 

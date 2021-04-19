@@ -27,6 +27,7 @@
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
+#include <daos/policy.h>
 
 #include "daos_types.h"
 #include "daos_api.h"
@@ -94,6 +95,25 @@ pool_decode_props(daos_prop_t *props)
 		rc = -DER_INVAL;
 	} else {
 		D_PRINT("label:\t\t\t%s\n", entry->dpe_str);
+	}
+
+	entry = daos_prop_entry_get(props, DAOS_PROP_PO_POLICY);
+	if (entry == NULL) {
+		fprintf(stderr, "policy property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("policy:\t\t\t");
+		switch(entry->dpe_val) {
+		case TIER_POLICY_DEFAULT:
+			D_PRINT("default\n");
+			break;
+		case TIER_POLICY_IO_SIZE:
+			D_PRINT("IO size\n");
+			break;
+		case TIER_POLICY_WRITE_INTENSIVITY:
+			D_PRINT("write intesivity\n");
+			break;
+		}
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_SPACE_RB);
@@ -174,13 +194,7 @@ pool_decode_props(daos_prop_t *props)
 		daos_acl_dump(entry->dpe_val_ptr);
 	}
 
-	entry = daos_prop_entry_get(props, DAOS_PROP_PO_POLICY);
-	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(stderr, "policy property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("policy:\t\t%s\n", entry->dpe_str);
-	}
+
 
 
 	return rc;

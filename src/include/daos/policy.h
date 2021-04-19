@@ -17,12 +17,13 @@
  * tier placement policy
  */
 typedef enum tier_policy {
+        TIER_POLICY_NOT_EXIST = -1,
         TIER_POLICY_DEFAULT,
         TIER_POLICY_IO_SIZE,
         TIER_POLICY_WRITE_INTENSIVITY,
         TIER_POLICY_MAX
 } tier_policy_t;
 
-bool is_policy_name_valid(const char *name);
+int get_policy_index(const char *name);
 
 #endif

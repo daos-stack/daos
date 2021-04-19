@@ -62,6 +62,22 @@ type PoolCreateCmd struct {
 	Policy     string  `short:"P" long:"policy" default:"default" description:"Pool tiering policy"`
 }
 
+func ParsePolicy(stringPolicy string) (policy uint32, err error) {
+
+	var policyMap = map[string]uint32{
+		"default": 0,
+		"io_size": 1,
+	}
+
+	var p, found = policyMap[stringPolicy]
+
+	if !found {
+		return 0, errors.New("Policy " + stringPolicy + " does not exist")
+	}
+
+	return p, nil
+}
+
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
 	if cmd.Size != "" && (cmd.ScmSize != "" || cmd.NVMeSize != "") {
@@ -77,7 +93,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		UserGroup:  cmd.GroupName,
 		Name:       cmd.PoolName,
 		NumSvcReps: cmd.NumSvcReps,
-		Policy:     cmd.Policy,
+		//Policy:     cmd.Policy,
 	}
 
 	if cmd.ACLFile != "" {
@@ -90,6 +106,11 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	req.Ranks, err = system.ParseRanks(cmd.RankList)
 	if err != nil {
 		return errors.Wrap(err, "parsing rank list")
+	}
+
+	req.Policy, err = ParsePolicy(cmd.Policy)
+	if err != nil {
+		return errors.Wrap(err, "parsing policy")
 	}
 
 	if cmd.Size != "" {

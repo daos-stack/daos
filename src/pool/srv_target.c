@@ -325,6 +325,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
+	pool->sp_policy = TIER_POLICY_DEFAULT; /* default tiering policy */
 
 	uuid_unparse_lower(key, group_id);
 	rc = crt_group_secondary_create(group_id, NULL /* primary_grp */,
@@ -1291,11 +1292,39 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	aggregate_pool_space(&out_result->tqo_space, &out_source->tqo_space);
 	return 0;
 }
+static int
+update_vos_prop_on_targets(void *in)
+{
+	struct ds_pool 			*pool = (struct ds_pool *)in;
+	struct ds_pool_child 		*child = NULL;
+	vos_ctl_set_policy_param 	param;
+	int 				ret = 0;
+
+	child = ds_pool_child_lookup(pool->sp_uuid);
+	if (child == NULL)
+		return 0; //no child created yet?
+
+	param.policy_index = pool->sp_policy;
+	param.policy_io_size_high = param.policy_io_size_low = 0;
+
+	// D_FATAL("=== Setting Policy on xsid %d, policy index %d\n",
+	// 	dss_get_module_info()->dmi_xs_id, param.policy_index);
+	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &param);
+
+	ds_pool_child_put(child);
+
+	return ret;
+}
 
 int
 ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_reclaim = iv_prop->pip_reclaim;
-	return 0;
+	pool->sp_policy = iv_prop->pip_policy;
+	//D_FATAL("=== Property update policy index %d\n", iv_prop->pip_policy);
+
+	int ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
+
+	return ret;
 }

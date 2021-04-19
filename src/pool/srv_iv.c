@@ -166,9 +166,7 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 			}
 			break;
 		case DAOS_PROP_PO_POLICY:
-			D_ASSERT(strlen(prop_entry->dpe_str) <=
-							DAOS_PROP_POLICY_MAX_LEN);
-			strcpy(iv_prop->pip_policy, prop_entry->dpe_str);
+			iv_prop->pip_policy = prop_entry->dpe_val;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -265,14 +263,7 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			}
 			break;
 		case DAOS_PROP_PO_POLICY:
-			D_ASSERT(strlen(iv_prop->pip_label) <=
-				 DAOS_PROP_POLICY_MAX_LEN);
-			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_label,
-				  DAOS_PROP_POLICY_MAX_LEN);
-			if (prop_entry->dpe_str)
-				policy_alloc = prop_entry->dpe_str;
-			else
-				D_GOTO(out, rc = -DER_NOMEM);
+			prop_entry->dpe_val = iv_prop->pip_policy;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);

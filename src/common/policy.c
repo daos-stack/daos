@@ -13,19 +13,19 @@
 #include <daos/policy.h>
 
 
-/* policy name to index mapping table */
-static const char* policy_names[TIER_POLICY_MAX] = {
-        [TIER_POLICY_DEFAULT] = "default",
-        [TIER_POLICY_IO_SIZE] = "io_size",
-        [TIER_POLICY_WRITE_INTENSIVITY] = "write_intensivity",
-};
+// /* policy name to index mapping table */
+// static const char* policy_names[TIER_POLICY_MAX] = {
+//         [TIER_POLICY_DEFAULT] = "default",
+//         [TIER_POLICY_IO_SIZE] = "io_size",
+//         [TIER_POLICY_WRITE_INTENSIVITY] = "write_intensivity",
+// };
 
-bool is_policy_name_valid(const char *name)
-{
-        for (int i = 0; i < TIER_POLICY_MAX; i++) {
-                if (strncmp(name, policy_names[i], DAOS_PROP_POLICY_MAX_LEN) == 0)
-                        return true;
-        }
+// int get_policy_index(const char *name)
+// {
+//         for (int i = 0; i < TIER_POLICY_MAX; i++) {
+//                 if (strncmp(name, policy_names[i], DAOS_PROP_POLICY_MAX_LEN) == 0)
+//                         return i;
+//         }
 
-        return false;
-}
+//         return TIER_POLICY_NOT_EXIST;
+// }

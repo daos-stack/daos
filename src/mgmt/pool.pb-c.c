@@ -1363,11 +1363,11 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     "policy",
     15,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     offsetof(Mgmt__PoolCreateReq, policy),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -1475,11 +1475,11 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     "policy",
     6,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     offsetof(Mgmt__PoolCreateResp, policy),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },

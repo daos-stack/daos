@@ -21,6 +21,7 @@
 #include <daos_srv/vos_types.h>
 #include <daos_pool.h>
 #include <daos_security.h>
+#include <daos/policy.h>
 
 /*
  * Pool object
@@ -34,6 +35,7 @@ struct ds_pool {
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	uint64_t		sp_reclaim;
+	tier_policy_t		sp_policy; 	/* pool tiering policy */
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;

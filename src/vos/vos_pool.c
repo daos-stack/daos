@@ -27,6 +27,8 @@
 #include <string.h>
 #include <fcntl.h>
 
+#include <daos_pool.h>
+
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -702,6 +704,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
+
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
@@ -713,8 +716,7 @@ failed:
 }
 
 int
-vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
-	      daos_handle_t *poh)
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *poh)
 {
 	struct vos_pool_df	*pool_df;
 	struct vos_pool		*pool = NULL;
@@ -889,7 +891,7 @@ vos_pool_space_sys_set(daos_handle_t poh, daos_size_t *space_sys)
 }
 
 int
-vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
+vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void* param)
 {
 	struct vos_pool		*pool;
 
@@ -911,6 +913,15 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 		if (pool->vp_vea_info != NULL)
 			vea_flush(pool->vp_vea_info, false);
 		break;
+	case VOS_PO_CTL_SET_POLICY:
+		if (param == NULL) {
+			return -DER_INVAL;
+		} else {
+			vos_ctl_set_policy_param *p = (vos_ctl_set_policy_param*)param;
+			pool->vp_policy = p->policy_index;
+			//D_FATAL(" === Setting policy on xsid %d\n");
+			//add parameters if policy needs them (static func)
+		}
 	}
 
 	return 0;
