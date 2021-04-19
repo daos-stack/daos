@@ -1822,6 +1822,23 @@ out:
 	return 0;
 }
 
+static int
+btr_rec_corrupt(struct btr_context *tcx)
+{
+	struct btr_record *rec;
+	char		   sbuf[BTR_PRINT_BUF];
+
+	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
+
+	D_DEBUG(DB_TRACE, "Marking record corrupted: %s\n",
+		btr_rec_string(tcx, rec, true, sbuf, BTR_PRINT_BUF));
+
+	if (!btr_ops(tcx)->to_rec_corrupt)
+		return -DER_NO_PERM;
+
+	return btr_ops(tcx)->to_rec_corrupt(&tcx->tc_tins, rec);
+}
+
 /**
  * create a new record, insert it into tree leaf node.
  */
@@ -3631,6 +3648,34 @@ dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 	}
 
 	return 0;
+}
+
+int
+dbtree_iter_corrupt(daos_handle_t ih)
+{
+	struct btr_context  *tcx;
+	struct btr_record   *rec;
+	int		     rc;
+
+	tcx = btr_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	rc = btr_iter_is_ready(&tcx->tc_itr);
+	if (rc != 0)
+		return rc;
+
+	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
+	if (rec == NULL)
+		return -DER_AGAIN; /* invalid cursor */
+
+	rc = btr_tx_begin(tcx);
+	if (rc != DER_SUCCESS)
+		return rc;
+	rc = btr_rec_corrupt(tcx);
+	rc = btr_tx_end(tcx, rc);
+
+	return rc;
 }
 
 /**

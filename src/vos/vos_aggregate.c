@@ -177,7 +177,7 @@ agg_del_entry(daos_handle_t ih, struct umem_instance *umm,
 
 	mark_yield(&entry->ie_biov.bi_addr, acts);
 
-	rc = vos_iter_delete(ih, NULL);
+	rc = vos_iter_process(ih, VOS_ITER_PROC_OP_DELETE, NULL);
 	if (rc != 0)
 		rc = umem_tx_abort(umm, rc);
 	else

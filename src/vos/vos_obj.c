@@ -1794,6 +1794,27 @@ exit:
 			 "Failed to delete iter entry: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
+static int
+obj_iter_corrupt(struct vos_obj_iter *oiter)
+{
+	struct umem_instance	*umm;
+	int			 rc = 0;
+
+	umm = vos_obj2umm(oiter->it_obj);
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		goto exit;
+
+	rc = dbtree_iter_corrupt(oiter->it_hdl);
+
+	rc = umem_tx_end(umm, rc);
+exit:
+	if (rc != 0)
+		D_CDEBUG(rc == -DER_TX_BUSY, DB_TRACE, DLOG_ERR,
+			 "Failed to delete iter entry: "DF_RC"\n", DP_RC(rc));
+	return rc;
+}
 
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
@@ -1866,23 +1887,33 @@ exit:
 }
 
 static int
-vos_obj_iter_delete(struct vos_iterator *iter, void *args)
+vos_obj_iter_process(struct vos_iterator *iter, vos_iter_proc_op op,
+		     void *args)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
-	switch (iter->it_type) {
+	switch (op) {
+	case VOS_ITER_PROC_OP_DELETE:
+		switch (iter->it_type) {
+		default:
+			D_ASSERT(0);
+			return -DER_INVAL;
+		case VOS_ITER_DKEY:
+		case VOS_ITER_AKEY:
+		case VOS_ITER_SINGLE:
+			return obj_iter_delete(oiter, args);
+		case VOS_ITER_RECX:
+			return evt_iter_delete(oiter->it_hdl, NULL);
+		}
+	case VOS_ITER_PROC_OP_MARK_CORRUPT:
+		if (iter->it_type == VOS_ITER_SINGLE)
+			return obj_iter_corrupt(oiter);
+		else if (iter->it_type == VOS_ITER_RECX)
+			return evt_iter_corrupt(oiter->it_hdl);
 	default:
 		D_ASSERT(0);
-		return -DER_INVAL;
-
-	case VOS_ITER_DKEY:
-	case VOS_ITER_AKEY:
-	case VOS_ITER_SINGLE:
-		return obj_iter_delete(oiter, args);
-
-	case VOS_ITER_RECX:
-		return evt_iter_delete(oiter->it_hdl, NULL);
 	}
+	return 0;
 }
 
 static int
@@ -1915,7 +1946,7 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_next		= vos_obj_iter_next,
 	.iop_fetch		= vos_obj_iter_fetch,
 	.iop_copy		= vos_obj_iter_copy,
-	.iop_delete		= vos_obj_iter_delete,
+	.iop_process		= vos_obj_iter_process,
 	.iop_empty		= vos_obj_iter_empty,
 };
 /**
