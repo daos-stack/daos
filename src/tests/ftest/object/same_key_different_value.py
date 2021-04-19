@@ -8,7 +8,7 @@
 
 import traceback
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosContainer, DaosApiError
 
 
@@ -35,6 +35,7 @@ class SameKeyDifferentValue(TestWithServers):
             self.log.info(traceback.format_exc())
             self.fail("Test failed during setup.\n")
 
+    @skipForTicket("DAOS-7220")
     def test_single_to_array_value(self):
         """
         Jira ID: DAOS-2218
@@ -52,7 +53,8 @@ class SameKeyDifferentValue(TestWithServers):
                Trigger aggregation
                Insert same akey,dkey under same object with array value
                Result: should either pass or return -1001 ERR
-        :avocado: tags=object,samekeydifferentvalue,singletoarray,vm,small
+        :avocado: tags=all,daily_regression,object,samekeydifferentvalue
+        :avocado: tags=singletoarray,vm,small
         """
 
         # define akey,dkey, single value data and array value data
@@ -139,6 +141,7 @@ class SameKeyDifferentValue(TestWithServers):
             except DaosApiError as excp:
                 self.fail("Failed to write to akey/dkey or punch the object")
 
+    @skipForTicket("DAOS-7220")
     def test_array_to_single_value(self):
         """
         Jira ID: DAOS-2218
@@ -156,7 +159,8 @@ class SameKeyDifferentValue(TestWithServers):
                Trigger aggregation
                Insert same akey,dkey under same object with single value
                Result: should either pass or return -1001 ERR
-        :avocado: tags=object,samekeydifferentvalue,arraytosingle,vm,small
+        :avocado: tags=all,daily_regression,object,samekeydifferentvalue
+        :avocado: tags=arraytosingle,vm,small
         """
 
         # define akey,dkey, single value data and array value data
