@@ -45,7 +45,7 @@ class BasicSnapshot(TestWithServers):
             Verify the snapshot is still available and the contents remain in
             their original state.
 
-        :avocado: tags=snap,basicsnap
+        :avocado: tags=all,daily_regression,snap,basicsnap
         """
         # Set up the pool and container.
         try:

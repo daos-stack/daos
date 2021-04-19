@@ -47,7 +47,7 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 func updateNvmePrepareReq(req *bdev.PrepareRequest, cfg *config.Server) {
 	if req.HugePageCount == 0 {
 		req.HugePageCount = minHugePageCount
-		if cfgHasBdev(cfg) {
+		if cfgHasBdevs(cfg) {
 			// The config value is intended to be per-engine, so we
 			// need to adjust based on the number of engines.
 			req.HugePageCount = cfg.NrHugepages * len(cfg.Engines)

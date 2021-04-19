@@ -405,7 +405,7 @@ dfuse_pool_open(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(dfp, "Failed to create hash table: "DF_RC,
 				DP_RC(rc));
-		D_GOTO(err_disconnect, rc);
+		D_GOTO(err_disconnect, rc = daos_der2errno(rc));
 	}
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_pool_table,
