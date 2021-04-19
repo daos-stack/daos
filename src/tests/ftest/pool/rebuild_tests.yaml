@@ -12,7 +12,7 @@ timeout: 600
 server_config:
   name: daos_server
   servers:
-    targets: 8
+    targets: 2
 pool:
   mode: 511
   name: daos_server
@@ -39,12 +39,13 @@ container:
       record_qty: 1
     ten_records:
       record_qty: 10
+  debug: True
 testparams:
   ranks: !mux
     rank1:
       rank: 1
-    rank4:
-      rank: 4
+    rank2:
+      rank: 2
     rank3:
       rank: 3
   quantity: 2

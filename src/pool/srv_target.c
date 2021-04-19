@@ -192,7 +192,7 @@ pool_child_add_one(void *varg)
 		return rc;
 	}
 
-	rc = vos_pool_open(path, arg->pla_uuid, false, &child->spc_hdl);
+	rc = vos_pool_open(path, arg->pla_uuid, 0, &child->spc_hdl);
 
 	D_FREE(path);
 
@@ -1138,7 +1138,6 @@ update_child_map(void *data)
 	if (child == NULL)
 		return -DER_NONEXIST;
 
-	ds_rebuild_pool_map_update(pool);
 	child->spc_map_version = pool->sp_map_version;
 	ds_pool_child_put(child);
 	return 0;

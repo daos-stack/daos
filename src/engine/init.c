@@ -460,7 +460,7 @@ static void
 dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
-	static struct d_tm_node_t	*dead_rank_cnt;
+	static struct d_tm_node_t	*dead_ranks;
 	static struct d_tm_node_t	*last_ts;
 	int				 rc = 0;
 
@@ -471,13 +471,32 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		return;
 	}
 
-	d_tm_increment_counter(&dead_rank_cnt, 1, "events/dead_rank_cnt");
-	d_tm_record_timestamp(&last_ts, "events/last_event_ts");
+	(void)d_tm_increment_counter(&dead_ranks, 1, "events/dead_ranks");
+	(void)d_tm_record_timestamp(&last_ts, "events/last_event_ts");
 
 	rc = ds_notify_swim_rank_dead(rank);
 	if (rc)
 		D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
 			src, type, DP_RC(rc));
+}
+
+static void
+server_id_cb(uint32_t *tid, uint64_t *uid)
+{
+	if (uid != NULL)
+		ABT_self_get_thread_id(uid);
+
+	if (tid != NULL) {
+		struct dss_thread_local_storage *dtc;
+		struct dss_module_info *dmi;
+
+		dtc = dss_tls_get();
+		if (dtc == NULL)
+			return;
+
+		dmi = dss_get_module_info();
+		*tid = dmi->dmi_xs_id;
+	}
 }
 
 static int
@@ -490,6 +509,9 @@ server_init(int argc, char *argv[])
 
 	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
 
+	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
+
+	daos_debug_set_id_cb(server_id_cb);
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
@@ -500,7 +522,7 @@ server_init(int argc, char *argv[])
 		goto exit_debug_init;
 
 	/** Report timestamp when engine was started */
-	d_tm_record_timestamp(NULL, "started_at");
+	(void)d_tm_record_timestamp(NULL, "started_at");
 
 	rc = drpc_init();
 	if (rc != 0) {
@@ -590,8 +612,6 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_loaded, rc);
 	}
 
-	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
-
 	D_INFO("Service initialized\n");
 
 	rc = server_init_state_init();
@@ -646,10 +666,10 @@ server_init(int argc, char *argv[])
 	D_INFO("Service fully up\n");
 
 	/** Report timestamp when engine was open for business */
-	d_tm_record_timestamp(NULL, "servicing_at");
+	(void)d_tm_record_timestamp(NULL, "servicing_at");
 
 	/** Report rank */
-	d_tm_increment_counter(NULL, dss_self_rank(), "rank");
+	(void)d_tm_increment_counter(NULL, dss_self_rank(), "rank");
 
 	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
@@ -666,8 +686,8 @@ exit_init_state:
 exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
-	dss_module_unload_all();
 	ds_iv_fini();
+	dss_module_unload_all();
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
 	} else {
@@ -701,10 +721,10 @@ server_fini(bool force)
 	D_INFO("server_init_state_fini() done\n");
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
-	dss_module_unload_all();
-	D_INFO("dss_module_unload_all() done\n");
 	ds_iv_fini();
 	D_INFO("ds_iv_fini() done\n");
+	dss_module_unload_all();
+	D_INFO("dss_module_unload_all() done\n");
 	/*
 	 * Client stuff finalization needs be done after all ULTs drained
 	 * in dss_srv_fini().

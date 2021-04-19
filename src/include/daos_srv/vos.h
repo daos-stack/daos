@@ -47,6 +47,16 @@ int
 vos_dtx_pin(struct dtx_handle *dth, bool persistent);
 
 /**
+ * Check whether DTX entry attached to the DTX handle is still valid or not.
+ *
+ * \param dth		[IN]	The dtx handle
+ *
+ * \return		The DTX entry status.
+ */
+int
+vos_dtx_validation(struct dtx_handle *dth);
+
+/**
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
  *
@@ -209,18 +219,21 @@ vos_self_fini(void);
  */
 
 /**
- * Create a Versioning Object Storage Pool (VOSP) and its root object.
+ * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
+ * NULL
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
  * \param blob_sz[IN]	Size of blob for the pool
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t blob_sz);
+		daos_size_t blob_sz, unsigned int flags, daos_handle_t *poh);
 
 /**
  * Kill a VOS pool before destroy
@@ -246,19 +259,18 @@ int
 vos_pool_destroy(const char *path, uuid_t uuid);
 
 /**
- * Open a Versioning Object Storage Pool (VOSP), load its root object
- * and other internal data structures.
+ * Open a Versioning Object Storage Pool (VOSP)
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
- * \param small	[IN]	Pool is small
- *			(system memory reservation shall be small, to fit)
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  * \param poh	[OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh);
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
+	      daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
@@ -380,13 +392,14 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  * \param csum_func  [IN]	Pointer to csum recalculation function
  * \param yield_func [IN]	Pointer to customized yield function
  * \param yield_arg  [IN]	Argument of yield function
+ * \param full_scan  [IN]	Full scan for snapshot deletion
  *
  * \return			Zero on success, negative value if error
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
-	      void *yield_arg);
+	      void *yield_arg, bool full_scan);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -663,12 +676,13 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * Finish the fetch operation and release the responding resources.
  *
  * \param ioh	[IN]	The I/O handle created by \a vos_fetch_begin
+ * \param size	[OUT]	The total IO size for the fetch.
  * \param err	[IN]	Errno of the current fetch, zero if there is no error.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_fetch_end(daos_handle_t ioh, int err);
+vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
 
 /**
  * Prepare IO sink buffers for the specified arrays of the given
@@ -712,13 +726,14 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param err	[IN]	Errno of the current update, zero if there is no error.
  *			All updates will be dropped if this function is called
  *			for \a vos_update_begin with a non-zero error code.
+ * \param size	[OUT]	The total IO size for the update.
  * \param dth	[IN]	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
-	       struct dtx_handle *dth);
+	       daos_size_t *size, struct dtx_handle *dth);
 
 /**
  * Get the recx/epoch list.

@@ -31,6 +31,7 @@ class DaosVol(VolTestBase):
               h5daos_test_map
               h5daos_test_map_parallel
               h5daos_test_oclass
+              h5daos_test_metadata_parallel
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,small
@@ -58,6 +59,7 @@ class DaosVol(VolTestBase):
               h5daos_test_map
               h5daos_test_map_parallel
               h5daos_test_oclass
+              h5daos_test_metadata_parallel
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
