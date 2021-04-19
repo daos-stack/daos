@@ -27,7 +27,7 @@ def configure_lustre(denv):
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     denv = env.Clone()
 
@@ -50,13 +50,6 @@ def scons():
 
     duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
     denv.Install('$PREFIX/lib64/', duns)
-
-    fenv = denv.Clone()
-    prereqs.require(fenv, 'fuse')
-    dfuse_hl_src = ['dfuse_hl.c']
-    libraries += ['fuse3']
-    daos_build.program(fenv, 'dfuse_hl', dfuse_hl_src,
-                       LIBS=libraries)
 
 if __name__ == "SCons.Script":
     scons()
