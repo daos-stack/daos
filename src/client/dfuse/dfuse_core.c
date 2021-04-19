@@ -737,13 +737,13 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 
 	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
 	if (rc != 0)
-		D_GOTO(err_eq, rc);
+		D_GOTO(err_ie_remove, rc);
 
 	fs_handle->dpi_shutdown = false;
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err_eq, rc);
+		D_GOTO(err_ie_remove, rc);
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
