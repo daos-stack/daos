@@ -213,6 +213,7 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 				if leader, _, _ := db.LeaderQuery(); leader != "" {
 					break
 				}
+				time.Sleep(250 * time.Millisecond)
 			}
 
 			gotResp, gotErr := mgmtSvc.LeaderQuery(context.TODO(), tc.req)

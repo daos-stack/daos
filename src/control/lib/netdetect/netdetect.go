@@ -281,8 +281,8 @@ func Init(parent context.Context) (context.Context, error) {
 	}
 
 	ndc.deviceScanCfg, err = initDeviceScan(ndc.topology)
-	log.Debugf("initDeviceScan completed.  Depth %d, numObj %d, systemDeviceNames %v, hwlocDeviceNames %v",
-		ndc.deviceScanCfg.depth, ndc.deviceScanCfg.numObj, ndc.deviceScanCfg.systemDeviceNames, ndc.deviceScanCfg.hwlocDeviceNames)
+	log.Debugf("network detection, system names: %v, hwloc names %v",
+		ndc.deviceScanCfg.systemDeviceNames, ndc.deviceScanCfg.hwlocDeviceNames)
 	if err != nil {
 		cleanUp(ndc.topology)
 		return nil, err
@@ -910,7 +910,6 @@ func convertLibFabricToMercury(provider string) (string, error) {
 // that are either not known or static in the test environment
 func ValidateProviderStub(ctx context.Context, device string, provider string) error {
 	// Call the full function to get the results without generating any hard errors
-	log.Debugf("Calling ValidateProviderConfig with %s, %s", device, provider)
 	err := ValidateProviderConfig(ctx, device, provider)
 	if err != nil {
 		log.Debugf("ValidateProviderConfig (device: %s, provider %s) returned error: %v", device, provider, err)
@@ -961,7 +960,6 @@ func ValidateProviderConfig(ctx context.Context, device string, provider string)
 		return errors.New("device required")
 	}
 
-	log.Debugf("Input provider string: %s", provider)
 	// convert the Mercury provider string into a libfabric provider string
 	// to aid in matching it against the libfabric providers
 	libfabricProviderList, err := convertMercuryToLibFabric(provider)
@@ -992,7 +990,6 @@ func ValidateProviderConfig(ctx context.Context, device string, provider string)
 	}
 
 	hfiDeviceCount := getHFIDeviceCount(ndc.deviceScanCfg.hwlocDeviceNames)
-	log.Debugf("There are %d hfi1 devices in the system", hfiDeviceCount)
 
 	// iterate over the libfabric records that match this provider
 	// and look for one that has a matching device name
@@ -1070,7 +1067,6 @@ func ValidateNUMAStub(ctx context.Context, device string, numaNode uint) error {
 func ValidateNUMAConfig(ctx context.Context, device string, numaNode uint) error {
 	var err error
 
-	log.Debugf("Validate network config for numaNode: %d", numaNode)
 	if device == "" {
 		return errors.New("device required")
 	}
@@ -1099,7 +1095,6 @@ func ValidateNUMAConfig(ctx context.Context, device string, numaNode uint) error
 	if deviceAffinity.NUMANode != numaNode {
 		return errors.Errorf("The NUMA node for device %s does not match the provided value %d.", device, numaNode)
 	}
-	log.Debugf("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
 	return nil
 }
 
