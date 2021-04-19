@@ -115,6 +115,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	       bool hit_again, int pos)
 {
 	struct dtx_share_peer	*dsp;
+	struct dtx_memberships	*mbs;
 	bool			 s_try = false;
 
 	if (dth == NULL)
@@ -167,7 +168,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	if (dth->dth_share_tbd_count >= DTX_REFRESH_MAX)
 		goto out;
 
-	D_ALLOC_PTR(dsp);
+	D_ALLOC(dsp, sizeof(*dsp) + DAE_MBS_DSIZE(dae));
 	if (dsp == NULL) {
 		D_ERROR("Hit uncommitted DTX "DF_DTI" at %d: lid=%d, "
 			"but fail to alloc DRAM.\n",
@@ -177,19 +178,22 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 
 	dsp->dsp_xid = DAE_XID(dae);
 	dsp->dsp_oid = DAE_OID(dae);
-	if (DAE_MBS_FLAGS(dae) & DMF_CONTAIN_LEADER) {
-		struct umem_instance	*umm;
-		struct dtx_daos_target	*ddt;
+	dsp->dsp_epoch = DAE_EPOCH(dae);
 
-		if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae))) {
-			ddt = DAE_MBS_INLINE(dae);
-		} else {
-			umm = vos_cont2umm(vos_hdl2cont(dth->dth_coh));
-			ddt = umem_off2ptr(umm, DAE_MBS_OFF(dae));
-		}
-		dsp->dsp_leader = ddt->ddt_id;
+	mbs = &dsp->dsp_mbs;
+	mbs->dm_tgt_cnt = DAE_TGT_CNT(dae);
+	mbs->dm_grp_cnt = DAE_GRP_CNT(dae);
+	mbs->dm_data_size = DAE_MBS_DSIZE(dae);
+	mbs->dm_flags = DAE_MBS_FLAGS(dae);
+	mbs->dm_dte_flags = DAE_FLAGS(dae);
+	if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae))) {
+		memcpy(mbs->dm_data, DAE_MBS_INLINE(dae), DAE_MBS_DSIZE(dae));
 	} else {
-		dsp->dsp_leader = PO_COMP_ID_ALL;
+		struct umem_instance	*umm;
+
+		umm = vos_cont2umm(vos_hdl2cont(dth->dth_coh));
+		memcpy(mbs->dm_data, umem_off2ptr(umm, DAE_MBS_OFF(dae)),
+		       DAE_MBS_DSIZE(dae));
 	}
 
 	d_list_add_tail(&dsp->dsp_link, &dth->dth_share_tbd_list);
@@ -197,10 +201,12 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 
 out:
 	D_DEBUG(DB_IO,
-		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p, lid=%d, %x, "
-		"may need %s retry.\n", hit_again ? "Repeat" : "First",
-		DP_DTI(&DAE_XID(dae)), pos, dth, DAE_LID(dae), DAE_FLAGS(dae),
-		s_try ? "server" :
+		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (force %s, "
+		"dist %s), lid=%d, flags %x/%x, may need %s retry.\n",
+		hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
+		dth, dth != NULL && dth->dth_force_refresh ? "yes" : "no",
+		dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
+		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" :
 		(dth != NULL && dth->dth_local_retry) ? "local" : "client");
 
 	return -DER_INPROGRESS;
@@ -208,16 +214,33 @@ out:
 
 static void
 dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
-		    bool evict)
+		    struct dtx_handle *dth, bool evict)
 {
 	D_FREE(dae->dae_records);
 
 	if (evict) {
-		int	i;
+		daos_unit_oid_t	*oids;
+		int		 count;
+		int		 i;
 
-		for (i = 0; i < dae->dae_oid_cnt; i++)
+		if (dth != NULL) {
+			if (dth->dth_oid_array != NULL) {
+				D_ASSERT(dth->dth_oid_cnt > 0);
+
+				count = dth->dth_oid_cnt;
+				oids = dth->dth_oid_array;
+			} else {
+				count = 1;
+				oids = &dth->dth_leader_oid;
+			}
+		} else {
+			count = dae->dae_oid_cnt;
+			oids = dae->dae_oids;
+		}
+
+		for (i = 0; i < count; i++)
 			vos_obj_evict_by_oid(vos_obj_cache_current(), cont,
-					     dae->dae_oids[i]);
+					     oids[i]);
 	}
 
 	if (dae->dae_oids != NULL && dae->dae_oids != &dae->dae_oid_inline &&
@@ -280,7 +303,7 @@ dtx_act_ent_free(struct btr_instance *tins, struct btr_record *rec,
 		D_ASSERT(dae != NULL);
 		*(struct vos_dtx_act_ent **)args = dae;
 	} else if (dae != NULL) {
-		dtx_act_ent_cleanup(tins->ti_priv, dae, true);
+		dtx_act_ent_cleanup(tins->ti_priv, dae, NULL, true);
 	}
 
 	return 0;
@@ -1099,12 +1122,17 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	DAE_FLAGS(dae) = dth->dth_flags;
 	DAE_VER(dae) = dth->dth_ver;
 
-	D_ASSERT(dth->dth_mbs != NULL);
-
-	DAE_TGT_CNT(dae) = dth->dth_mbs->dm_tgt_cnt;
-	DAE_GRP_CNT(dae) = dth->dth_mbs->dm_grp_cnt;
-	DAE_MBS_DSIZE(dae) = dth->dth_mbs->dm_data_size;
-	DAE_MBS_FLAGS(dae) = dth->dth_mbs->dm_flags;
+	if (dth->dth_mbs != NULL) {
+		DAE_TGT_CNT(dae) = dth->dth_mbs->dm_tgt_cnt;
+		DAE_GRP_CNT(dae) = dth->dth_mbs->dm_grp_cnt;
+		DAE_MBS_DSIZE(dae) = dth->dth_mbs->dm_data_size;
+		DAE_MBS_FLAGS(dae) = dth->dth_mbs->dm_flags;
+	} else {
+		DAE_TGT_CNT(dae) = 1;
+		DAE_GRP_CNT(dae) = 1;
+		DAE_MBS_DSIZE(dae) = 0;
+		DAE_MBS_FLAGS(dae) = 0;
+	}
 
 	if (dbd != NULL) {
 		D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
@@ -1277,14 +1305,21 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	    DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 		return ALB_UNAVAILABLE;
 
-	if (!(DAE_FLAGS(dae) & DTE_LEADER) &&
-	    !(DAE_MBS_FLAGS(dae) & DMF_SRDG_REP) && dth != NULL) {
+	if (dth != NULL && !(DAE_FLAGS(dae) & DTE_LEADER) &&
+	    (!(DAE_MBS_FLAGS(dae) & DMF_SRDG_REP) ||
+	     dth->dth_force_refresh)) {
 		struct dtx_share_peer	*dsp;
 
 		d_list_for_each_entry(dsp, &dth->dth_share_cmt_list, dsp_link) {
 			if (memcmp(&dsp->dsp_xid, &DAE_XID(dae),
 				   sizeof(struct dtx_id)) == 0)
 				return ALB_AVAILABLE_CLEAN;
+		}
+
+		d_list_for_each_entry(dsp, &dth->dth_share_abt_list, dsp_link) {
+			if (memcmp(&dsp->dsp_xid, &DAE_XID(dae),
+				   sizeof(struct dtx_id)) == 0)
+				return ALB_UNAVAILABLE;
 		}
 
 		d_list_for_each_entry(dsp, &dth->dth_share_act_list, dsp_link) {
@@ -1389,6 +1424,78 @@ vos_dtx_get(void)
 	return DAE_LID(dae);
 }
 
+int
+vos_dtx_validation(struct dtx_handle *dth)
+{
+	struct vos_dtx_act_ent	*dae;
+	int			 rc = 0;
+
+	D_ASSERT(dtx_is_valid_handle(dth));
+
+	dae = dth->dth_ent;
+
+	/* During current ULT waiting for some event, such as bulk data
+	 * transfer, some other has aborted the pre-allocated DTX entry.
+	 * Under such case, return DTX_ST_ABORTED for retry by client.
+	 *
+	 * It is also possible that the DTX has been committed by other
+	 * (for resend), then return DTX_ST_COMMITTED.
+	 *
+	 * More cases, the DTX entry is aborted by other during current
+	 * ULT waiting. Then the DTX entry is recreated on the same (or
+	 * not) cache slot.
+	 */
+
+	if (dae == NULL /* resentc case */ ||
+	    !daos_dti_equal(&dth->dth_xid, &DAE_XID(dae))) {
+		struct vos_container	*cont;
+		d_iov_t			 kiov;
+		d_iov_t			 riov;
+
+		cont = vos_hdl2cont(dth->dth_coh);
+		D_ASSERT(cont != NULL);
+
+		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
+		d_iov_set(&riov, NULL, 0);
+
+		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
+		if (rc == 0) {
+			D_DEBUG(DB_IO, "DTX "DF_DTI" is committed by race(1)\n",
+				DP_DTI(&dth->dth_xid));
+			return DTX_ST_COMMITTED;
+		}
+
+		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+		if (rc != 0) {
+			D_DEBUG(DB_IO, "DTX "DF_DTI" is aborted by race(1)\n",
+				DP_DTI(&dth->dth_xid));
+			return DTX_ST_ABORTED;
+		}
+
+		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+	}
+
+	if (dae->dae_committed) {
+		D_DEBUG(DB_IO, "DTX "DF_DTI" is committed by race(2)\n",
+			DP_DTI(&dth->dth_xid));
+		return DTX_ST_COMMITTED;
+	}
+
+	if (dae->dae_aborted) {
+		D_DEBUG(DB_IO, "DTX "DF_DTI" is aborted by race(2)\n",
+			DP_DTI(&dth->dth_xid));
+		return DTX_ST_ABORTED;
+	}
+
+	if (dae->dae_committable)
+		return DTX_ST_COMMITTABLE;
+
+	if (dae->dae_prepared)
+		return DTX_ST_PREPARED;
+
+	return DTX_ST_INITED;
+}
+
 /* The caller has started PMDK transaction. */
 int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
@@ -1403,13 +1510,33 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 		return 0;
 	}
 
-	/* For single participator case, we only need committed DTX
-	 * entry for handling resend case, nothing for active table.
+	/* For single participator case, we only hold committed DTX
+	 * entry for handling resend case, not trace modified target.
 	 */
 	if (dth->dth_solo) {
 		dth->dth_active = 1;
 		*tx_id = DTX_LID_COMMITTED;
 		return 0;
+	}
+
+	if (dth->dth_pinned) {
+		rc = vos_dtx_validation(dth);
+		switch (rc) {
+		case DTX_ST_INITED:
+			break;
+		case DTX_ST_PREPARED:
+		case DTX_ST_COMMITTED:
+		case DTX_ST_COMMITTABLE:
+			/* Prepared/committed (and may has been re-created
+			 * before that), return -DER_AGAIN for leader retry.
+			 */
+			D_GOTO(out, rc = -DER_AGAIN);
+		case DTX_ST_ABORTED:
+			/* Aborted, return -DER_INPROGRESS for client retry. */
+			D_GOTO(out, rc = -DER_INPROGRESS);
+		default:
+			D_ASSERT(0);
+		}
 	}
 
 	dae = dth->dth_ent;
@@ -1578,6 +1705,8 @@ vos_dtx_prepared(struct dtx_handle *dth)
 	cont = vos_hdl2cont(dth->dth_coh);
 	D_ASSERT(cont != NULL);
 
+	dae = dth->dth_ent;
+
 	if (dth->dth_solo) {
 		rc = vos_dtx_commit_internal(cont, &dth->dth_xid, 1,
 					     dth->dth_epoch, NULL, NULL, NULL);
@@ -1585,10 +1714,16 @@ vos_dtx_prepared(struct dtx_handle *dth)
 		if (rc >= 0)
 			dth->dth_sync = 1;
 
+		if (dae != NULL) {
+			vos_dtx_post_handle(cont, &dae, NULL, 1,
+					    rc < 0 ? true : false);
+			dth->dth_ent = NULL;
+			dth->dth_pinned = 0;
+		}
+
 		return rc > 0 ? 0 : rc;
 	}
 
-	dae = dth->dth_ent;
 	D_ASSERT(dae != NULL);
 
 	umm = vos_cont2umm(cont);
@@ -1790,7 +1925,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 	}
 
 	if (rc == -DER_NONEXIST && for_resent && cont->vc_reindex_cmt_dtx)
-		rc = -DER_AGAIN;
+		rc = -DER_INPROGRESS;
 
 	return rc;
 }
@@ -2058,10 +2193,10 @@ vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
 
 			if (abort) {
 				daes[i]->dae_aborted = 1;
-				dtx_act_ent_cleanup(cont, daes[i], true);
+				dtx_act_ent_cleanup(cont, daes[i], NULL, true);
 			} else {
 				daes[i]->dae_committed = 1;
-				dtx_act_ent_cleanup(cont, daes[i], false);
+				dtx_act_ent_cleanup(cont, daes[i], NULL, false);
 			}
 			DAE_FLAGS(daes[i]) &= ~DTE_CORRUPTED;
 		}
@@ -2500,52 +2635,66 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 	dth->dth_active = 0;
 	cont = vos_hdl2cont(dth->dth_coh);
 
-	if (!dth->dth_solo) {
+	if (dth->dth_pinned) {
+		/* Only keep the DTX entry (header) for handling resend RPC,
+		 * remove DTX records, purge related VOS objects from cache.
+		 */
+		dae = dth->dth_ent;
+		D_ASSERT(dae != NULL);
+
+		dtx_act_ent_cleanup(cont, dae, dth, true);
+	} else {
 		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
 		rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov,
 				   &dae);
 		if (rc != 0) {
-			D_ERROR("Fail to remove DTX entry "DF_DTI":"DF_RC"\n",
-				DP_DTI(&dth->dth_xid), DP_RC(rc));
-		} else {
-			dtx_act_ent_cleanup(cont, dae, true);
-			dth->dth_ent = NULL;
-			dtx_evict_lid(cont, dae);
+			if (rc != -DER_NONEXIST)
+				D_ERROR("Fail to remove DTX entry "DF_DTI":"
+					DF_RC"\n",
+					DP_DTI(&dth->dth_xid), DP_RC(rc));
+
+			dae = dth->dth_ent;
+			if (dae != NULL)
+				dae->dae_aborted = 1;
 		}
+
+		if (dae != NULL) {
+			dtx_act_ent_cleanup(cont, dae, dth, true);
+			if (rc == 0)
+				dtx_evict_lid(cont, dae);
+		}
+
+		dth->dth_ent = NULL;
 	}
 }
 
 void
 vos_dtx_cleanup(struct dtx_handle *dth)
 {
+	struct vos_dtx_act_ent	*dae;
 	struct vos_container	*cont;
-	daos_unit_oid_t		*oids;
-	int			 max;
-	int			 i;
 
-	if (!dtx_is_valid_handle(dth) ||
-	    (!dth->dth_active && dth->dth_ent == NULL))
+	if (!dtx_is_valid_handle(dth))
 		return;
 
+	dae = dth->dth_ent;
+	if (dae == NULL) {
+		if (!dth->dth_active)
+			return;
+	} else {
+		/* 'prepared' DTX can be either committed or aborted,
+		 * but not cleanup.
+		 */
+		if (dae->dae_prepared)
+			return;
+	}
+
+	dth->dth_pinned = 0;
 	cont = vos_hdl2cont(dth->dth_coh);
 	/** This will abort the transaction and callback to
 	 *  vos_dtx_cleanup_internal
 	 */
 	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, -DER_CANCELED);
-
-	if (dth->dth_oid_array != NULL) {
-		oids = dth->dth_oid_array;
-		max = dth->dth_oid_cnt;
-	} else if (dth->dth_touched_leader_oid) {
-		oids = &dth->dth_leader_oid;
-		max = 1;
-	} else {
-		oids = NULL;
-		max = 0;
-	}
-
-	for (i = 0; i < max; i++)
-		vos_obj_evict_by_oid(vos_obj_cache_current(), cont, oids[i]);
 }
 
 int
@@ -2556,11 +2705,10 @@ vos_dtx_pin(struct dtx_handle *dth, bool persistent)
 	bool			 began = false;
 	int			 rc;
 
-	D_ASSERT(dtx_is_valid_handle(dth));
-	D_ASSERT(dth->dth_ent == NULL);
-
-	if (dth->dth_solo)
+	if (!dtx_is_valid_handle(dth) || dth->dth_ent != NULL)
 		return 0;
+
+	D_ASSERT(dth->dth_pinned == 0);
 
 	if (persistent) {
 		struct vos_container	*cont;
@@ -2588,9 +2736,13 @@ vos_dtx_pin(struct dtx_handle *dth, bool persistent)
 	}
 
 	rc = vos_dtx_alloc(dbd, dth);
-	if (rc == 0 && persistent) {
-		dth->dth_active = 1;
-		rc = vos_dtx_prepared(dth);
+	if (rc == 0) {
+		if (persistent) {
+			dth->dth_active = 1;
+			rc = vos_dtx_prepared(dth);
+		} else {
+			dth->dth_pinned = 1;
+		}
 	}
 
 out:
