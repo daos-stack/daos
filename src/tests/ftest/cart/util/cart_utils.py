@@ -288,7 +288,6 @@ class CartTest(TestWithoutServers):
                   r"valgrind.%q\{PMIX_ID\}.memcheck " + \
                   "--fair-sched=try  --partial-loads-ok=yes " + \
                   "--leak-check=yes --gen-suppressions=all " + \
-                  "--suppressions=../../../../etc/memcheck-cart.supp " + \
                   "--suppressions=../etc/memcheck-cart.supp " + \
                   "--show-reachable=yes "
                   #"--suppressions=../../../../etc/memcheck-cart.supp " + 
