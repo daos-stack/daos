@@ -8,6 +8,8 @@ hosts:
   test_clients:
     - client-D
 timeout: 1000
+setup:
+  start_servers_once: False
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -106,4 +108,11 @@ test_obj_class:
     - RP_4G1
 aggregation:
   test_with_aggregation: True
+rebuild:
+  test_with_rebuild: True
+checksum:
+  test_with_checksum: False
+test_ranks:
+  rank_list: ["2","5"]
+
 

@@ -1101,7 +1101,7 @@ class posix_tests():
         wide_dir = tempfile.mkdtemp(dir=self.dfuse.dir)
         if count == 0:
             files = os.listdir(wide_dir)
-            assert len(files) == 0
+            assert len(files) == 0 # nosec
             return
         start = time.time()
         for idx in range(count):
@@ -1109,7 +1109,7 @@ class posix_tests():
             fd.close()
             if test_all:
                 files = os.listdir(wide_dir)
-                assert len(files) == idx + 1
+                assert len(files) == idx + 1 # nosec
         duration = time.time() - start
         rate = count / duration
         print('Created {} files in {:.1f} seconds rate {:.1f}'.format(count,
@@ -1125,7 +1125,7 @@ class posix_tests():
                                                                      rate))
         print(files)
         print(len(files))
-        assert len(files) == count
+        assert len(files) == count # nosec
 
     @needs_dfuse
     def test_open_replaced(self):
@@ -1164,7 +1164,7 @@ class posix_tests():
         os.stat(newfile)
         post = os.fstat(ofd.fileno())
         print(post)
-        assert pre.st_ino == post.st_ino
+        assert pre.st_ino == post.st_ino # nosec
         ofd.close()
 
     @needs_dfuse
@@ -1192,15 +1192,15 @@ class posix_tests():
         # This should fail as a security test.
         try:
             xattr.set(fd, 'user.dfuse.ids', b'other_value')
-            assert False
+            assert False # nosec
         except OSError as e:
-            assert e.errno == errno.EPERM
+            assert e.errno == errno.EPERM # nosec
 
         try:
             xattr.set(fd, 'user.dfuse', b'other_value')
-            assert False
+            assert False # nosec
         except OSError as e:
-            assert e.errno == errno.EPERM
+            assert e.errno == errno.EPERM # nosec
 
         xattr.set(fd, 'user.Xfuse.ids', b'other_value')
         for (key, value) in xattr.get_all(fd):
@@ -1220,7 +1220,7 @@ class posix_tests():
         for mode in modes:
             os.chmod(fname, mode)
             attr = os.stat(fname)
-            assert stat.S_IMODE(attr.st_mode) == mode
+            assert stat.S_IMODE(attr.st_mode) == mode # nosec
 
     @needs_dfuse
     def test_fchmod_replaced(self):
@@ -1248,7 +1248,7 @@ class posix_tests():
             print('Failed to fchmod() replaced file')
         ofd.close()
         nf = os.stat(fname)
-        assert stat.S_IMODE(nf.st_mode) == e_mode
+        assert stat.S_IMODE(nf.st_mode) == e_mode # nosec
 
     @needs_dfuse
     def test_uns_create(self):
@@ -1258,10 +1258,10 @@ class posix_tests():
                '--pool', self.pool, '--path', path,
                '--type', 'POSIX']
         rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
+        assert rc.returncode == 0 # nosec
         stbuf = os.stat(path)
         print(stbuf)
-        assert stbuf.st_ino < 100
+        assert stbuf.st_ino < 100 # nosec
         print(os.listdir(path))
 
     @needs_dfuse_with_cache
@@ -1272,10 +1272,10 @@ class posix_tests():
                '--pool', self.pool, '--path', path,
                '--type', 'POSIX']
         rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
+        assert rc.returncode == 0 # nosec
         stbuf = os.stat(path)
         print(stbuf)
-        assert stbuf.st_ino < 100
+        assert stbuf.st_ino < 100 # nosec
         print(os.listdir(path))
 
     def test_uns_basic(self):
@@ -1413,7 +1413,7 @@ def run_tests(dfuse):
 
     fname = os.path.join(path, 'test_file3')
 
-    rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',
+    rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64', # nosec
                          'of={}'.format(os.path.join(path, 'dd_file'))])
     print(rc)
     assert rc.returncode == 0 # nosec
@@ -1453,9 +1453,9 @@ def run_tests(dfuse):
     try:
         fd = os.open(fname, os.O_CREAT | os.O_EXCL)
         os.close(fd)
-        assert False
+        assert False # nosec
     except OSError as e:
-        assert e.errno == errno.EEXIST
+        assert e.errno == errno.EEXIST # nosec
     os.unlink(fname)
 
     # DAOS-6238
@@ -1639,7 +1639,7 @@ def set_server_fi(server):
 
     rc = subprocess.run(agent_cmd, env=cmd_env)
     print(rc)
-    assert rc.returncode == 0
+    assert rc.returncode == 0 # nosec
 
     cmd = ['set_fi_attr',
            '--cfg_path',
@@ -1669,7 +1669,7 @@ def set_server_fi(server):
     print(rc)
     vh.convert_xml()
     log_test(server.conf, log_file.name)
-    assert rc.returncode == 0
+    assert rc.returncode == 0 # nosec
     return False # fatal_errors
 
 def create_and_read_via_il(dfuse, path):
@@ -1758,8 +1758,8 @@ def run_dfuse(server, conf):
     container = str(uuid.uuid4())
     dfuse.start(v_hint='no_pool')
     print(os.statvfs(dfuse.dir))
-    subprocess.run(['df', '-h'])
-    subprocess.run(['df', '-i', dfuse.dir])
+    subprocess.run(['df', '-h'])  # nosec
+    subprocess.run(['df', '-i', dfuse.dir]) # nosec
     print('Running dfuse with nothing')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
@@ -1771,8 +1771,6 @@ def run_dfuse(server, conf):
         os.mkdir(cdir)
         #create_and_read_via_il(dfuse, cdir)
     fatal_errors.add_result(dfuse.stop())
-
-    uns_container = container
 
     container2 = str(uuid.uuid4())
     dfuse = DFuse(server, conf, pool=pools[0])
@@ -2306,10 +2304,10 @@ class AllocFailTestRun():
             # If a fault wasn't injected then check output is as expected.
             # It's not possible to log these as warnings, because there is
             # no src line to log them against, so simply assert.
-            assert self.returncode == 0
-            assert self.stderr == b''
+            assert self.returncode == 0 # nosec
+            assert self.stderr == b'' # nosec
             if self.aft.expected_stdout is not None:
-                assert self.stdout == self.aft.expected_stdout
+                assert self.stdout == self.aft.expected_stdout # nosec
             self.fault_injected = False
         if self.vh:
             self.vh.convert_xml()
@@ -2360,7 +2358,7 @@ class AllocFailTest():
             rc = self._run_cmd(None)
             rc.wait()
             self.expected_stdout = rc.stdout
-            assert not rc.fault_injected
+            assert not rc.fault_injected # nosec
 
         # Prep what the expected stdout is by running once without faults
         # enabled.

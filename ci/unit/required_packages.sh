@@ -8,7 +8,7 @@ quick_build="${2:-false}"
 pkgs="gotestsum openmpi3                 \
       hwloc-devel argobots               \
       fuse3-libs fuse3                   \
-      boost-devel                        \
+      boost-python36-devel               \
       libisa-l-devel libpmem             \
       libpmemobj protobuf-c              \
       spdk-devel libfabric-devel         \
@@ -21,7 +21,7 @@ pkgs="gotestsum openmpi3                 \
 if $quick_build; then
     read -r mercury_version < "$distro"-required-mercury-rpm-version
     pkgs="$pkgs spdk-tools mercury-$mercury_version         \
-          boost-devel libisa-l_crypto libfabric-debuginfo   \
+          libisa-l_crypto libfabric-debuginfo   \
           argobots-debuginfo protobuf-c-debuginfo"
 fi
 
