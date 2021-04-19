@@ -9,10 +9,6 @@
 FROM centos:8
 LABEL maintainer="daos@daos.groups.io"
 
-ARG REPO_URL
-ARG REPO_DAOS=""
-ARG REPO_DISTRO=""
-
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
@@ -24,6 +20,8 @@ ARG CB0
 # data for installing those keys.  Then the epel-release
 # package must be installed and the GPG key it provides must be
 # installed.
+ARG REPO_URL
+ARG REPO_DISTRO=""
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
       rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
@@ -35,8 +33,6 @@ baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
-      dnf clean all;                                            \
-      dnf list --showduplicates epel-release dnf-plugins-core dnf-utils; \
       dnf -y install --disablerepo extras --disablerepo baseos  \
           epel-release-8-8.el8 dnf-plugins-core dnf-utils;      \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;         \
@@ -44,12 +40,13 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
           baseos powertools epel epel-modular extras;           \
       sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
           -i /etc/dnf/dnf.conf;                                 \
-      dnf -y update epel-release;                               \
+      dnf -y upgrade epel-release;                              \
       dnf clean all;                                            \
     fi
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
+ARG REPO_DAOS=""
 RUN if [ -n "$REPO_DAOS" ]; then                                \
       MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
       MY_NAME="${MY_REPO#*//}";                                 \
@@ -65,7 +62,7 @@ gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
 
 # Install basic tools to build DAOS
 # *** Keep these in as much alphbetical order as possible ***
-RUN dnf clean all && \
+RUN dnf -y install epel-release && \
     dnf -y upgrade && \
     dnf -y install \
         boost-python3-devel \

@@ -9,11 +9,6 @@
 FROM centos:centos7
 LABEL maintainer="daos@daos.groups.io"
 
-# Need to be able to use a local repository for packages
-ARG REPO_URL=""
-ARG REPO_DISTRO=""
-ARG REPO_DAOS=""
-
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
@@ -25,6 +20,8 @@ ARG CB0
 # data for installing those keys.  Then the epel-release
 # package must be installed and the GPG key it provides must be
 # installed.
+ARG REPO_URL=""
+ARG REPO_DISTRO=""
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
       rpm --import /etc/pki/rpm-gpg/* ;                         \
       MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
@@ -39,17 +36,17 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
       yum -y install --disablerepo=extras                       \
              dnf dnf-pluins-core epel-release-7-11;             \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7;         \
-      yum -y install dnf dnf-plugins-core;                      \
-      dnf config-manager --assumeyes --quiet                    \
-                         --disable base extras epel updates;    \
       yum clean all;                                            \
       dnf clean all;                                            \
+      dnf config-manager --assumeyes --quiet                    \
+                         --disable base extras epel updates;    \
       sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
           -i /etc/yum.conf;                                     \
     fi
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
+ARG REPO_DAOS=""
 RUN if [ -n "$REPO_DAOS" ]; then                                \
       MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
       MY_NAME="${MY_REPO#*//}";                                 \
@@ -70,8 +67,7 @@ gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
-RUN yum clean all && \
-    yum -y install dnf epel-release && \
+RUN yum -y install dnf epel-release && \
     yum clean all && \
     dnf -y upgrade && \
     dnf -y install \
@@ -125,9 +121,9 @@ RUN yum clean all && \
         python36-paramiko \
         python36-pylint \
         python36-requests \
-        python36-requests \
         python36-tabulate \
         python36-pyxattr \
+        python36-PyYAML \
         python36-scons \
         sg3_utils \
         valgrind-devel \
@@ -135,7 +131,7 @@ RUN yum clean all && \
     dnf clean all
 
 # Install this individually because of potential conflicts
-RUN dnf clean all && dnf -y install openmpi3-devel && dnf clean all
+RUN dnf -y install openmpi3-devel && dnf clean all
 
 ARG UID=1000
 
@@ -146,23 +142,8 @@ RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 
-# Removing PyYAML 3.10 to allow pip install to upgrade
-RUN dnf -y remove python36-PyYAML
-
-RUN python3 -m pip install --upgrade pip
-
-RUN python3 -m pip --no-cache-dir install \
-    "avocado-framework<70.0" \
-    "avocado-framework-plugin-result-html<70.0" \
-    "avocado-framework-plugin-varianter-yaml-to-mux<70.0" \
-    clustershell \
-    pep8 \
-    pygit2 \
-    python-magic
-
 # Add codespell to path.
 ENV PATH=$PATH:/home/daos/.local/bin
-
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
@@ -237,8 +218,7 @@ ARG DAOS_DEPS_BUILD=yes
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { dnf clean all && \
-      dnf -y upgrade \
+    { dnf -y upgrade \
           --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
       dnf clean all; }
 USER daos_server:daos_server
@@ -252,8 +232,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 USER root:root
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST
-RUN dnf clean all && \
-    dnf -y upgrade \
+RUN dnf -y upgrade \
         --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
     dnf clean all
 USER daos_server:daos_server
