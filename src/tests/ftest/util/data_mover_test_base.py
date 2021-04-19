@@ -629,8 +629,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             assert src_path is None # nosec
             assert dst_type in (None, "DAOS", "DAOS_UUID") # nosec
             assert dst_path is None # nosec
-            self.set_cont_clone_params(src_pool, src_cont,
-                                       dst_pool, dst_cont)
+            self._set_cont_clone_params(src_pool, src_cont,
+                                        dst_pool, dst_cont)
         else:
             self.fail("Invalid tool: {}".format(str(self.tool)))
 
