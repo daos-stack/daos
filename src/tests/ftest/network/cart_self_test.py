@@ -27,7 +27,7 @@ class SelfTest(ExecutableCommand):
             path (str, optional): path to location of command binary file.
                 Defaults to "".
         """
-        super(SelfTest, self).__init__("/run/self_test/*", "self_test", path)
+        super().__init__("/run/self_test/*", "self_test", path)
 
         self.group_name = FormattedParameter("--group-name {}")
         self.endpoint = FormattedParameter("--endpoint {0}")
@@ -47,13 +47,13 @@ class CartSelfTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a CartSelfTest object."""
-        super(CartSelfTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.uri_file = None
         self.cart_env = EnvironmentVariables()
 
     def setUp(self):
         """Set up each test case."""
-        super(CartSelfTest, self).setUp()
+        super().setUp()
         share_addr = self.params.get("share_addr", "/run/test_params/*")
 
         # Configure the daos server

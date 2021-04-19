@@ -304,6 +304,7 @@ int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
 
 void ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank);
 void ds_iv_ns_stop(struct ds_iv_ns *ns);
+void ds_iv_ns_leader_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_start(struct ds_iv_ns *ns);
 void ds_iv_ns_put(struct ds_iv_ns *ns);
 void ds_iv_ns_get(struct ds_iv_ns *ns);

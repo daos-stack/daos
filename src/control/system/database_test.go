@@ -435,7 +435,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			expMembers: []*Member{
 				testMembers[0],
 			},
-			expFDTree: NewFaultDomainTree(testMembers[0].RankFaultDomain()),
+			expFDTree: NewFaultDomainTree(memberFaultDomain(testMembers[0])),
 		},
 		"update state success": {
 			startingMembers: testMembers,
@@ -459,9 +459,10 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[2],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				testMembers[1].RankFaultDomain(),
-				testMembers[2].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(testMembers[1]),
+				memberFaultDomain(testMembers[2]),
+			),
 		},
 		"update fault domain success": {
 			startingMembers: testMembers,
@@ -473,9 +474,10 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[2],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				changedFaultDomainMember.RankFaultDomain(),
-				testMembers[2].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(changedFaultDomainMember),
+				memberFaultDomain(testMembers[2]),
+			),
 		},
 		"remove success": {
 			startingMembers: testMembers,
@@ -486,8 +488,9 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[1],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				testMembers[1].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(testMembers[1]),
+			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -547,6 +550,43 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expFDTree, db.data.Members.FaultDomains, ignoreFaultDomainIDOption()); diff != "" {
 				t.Fatalf("wrong FaultDomainTree in DB (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func testMemberWithFaultDomain(rank Rank, fd *FaultDomain) *Member {
+	return NewMember(rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
+		MemberStateJoined).WithFaultDomain(fd)
+}
+
+func TestSystem_Database_memberFaultDomain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rank        Rank
+		faultDomain *FaultDomain
+		expResult   *FaultDomain
+	}{
+		"nil fault domain": {
+			expResult: MustCreateFaultDomain("rank0"),
+		},
+		"empty fault domain": {
+			rank:        Rank(2),
+			faultDomain: MustCreateFaultDomain(),
+			expResult:   MustCreateFaultDomain("rank2"),
+		},
+		"existing fault domain": {
+			rank:        Rank(1),
+			faultDomain: MustCreateFaultDomain("one", "two"),
+			expResult:   MustCreateFaultDomain("one", "two", "rank1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := testMemberWithFaultDomain(tc.rank, tc.faultDomain)
+
+			result := memberFaultDomain(m)
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

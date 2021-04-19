@@ -80,6 +80,11 @@ var (
 		"fault domain callback executed but did not generate output",
 		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
 	)
+	FaultConfigTooManyLayersInFaultDomain = serverConfigFault(
+		code.ServerConfigFaultDomainTooManyLayers,
+		"only a single fault domain layer below the root is supported",
+		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
 )
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
@@ -139,6 +144,18 @@ func FaultConfigFaultCallbackFailed(err error) *fault.Fault {
 		code.ServerConfigFaultCallbackFailed,
 		fmt.Sprintf("fault domain callback script failed during execution: %s", err.Error()),
 		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
+	)
+}
+
+// FaultConfigFaultCallbackInsecure creates a fault for the scenario where the
+// fault domain callback path doesn't meet security requirements.
+func FaultConfigFaultCallbackInsecure(requiredDir string) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigFaultCallbackInsecure,
+		"fault domain callback script does not meet security requirements",
+		fmt.Sprintf("ensure that the 'fault_cb' path is under the parent directory %q, "+
+			"not a symbolic link, does not have the setuid bit set, and does not have "+
+			"write permissions for non-owners", requiredDir),
 	)
 }
 

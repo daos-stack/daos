@@ -46,12 +46,15 @@ var (
 		fmt.Sprintf("%s instance not started or not responding on dRPC", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
 	)
-	FaultPoolInvalidServiceReps = serverFault(
+)
+
+func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {
+	return serverFault(
 		code.ServerPoolInvalidServiceReps,
-		fmt.Sprintf("pool service replicas number should be an odd number between 1 and %d", MaxPoolServiceReps),
+		fmt.Sprintf("pool service replicas number should be an odd number between 1 and %d", maxSvcReps),
 		"retry the request with a valid number of pool service replicas",
 	)
-)
+}
 
 func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
 	return serverFault(
