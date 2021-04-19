@@ -16,11 +16,9 @@ def build_vos(env, standalone):
     if standalone:
         denv.Append(CPPDEFINES={'VOS_STANDALONE' : '1'})
         denv.Append(OBJPREFIX="s_")
-        install = 'lib64'
-        offset = ".."
+        offset = "../../"
         libname = 'vos'
     else:
-        install = 'lib64/daos_srv'
         libname = 'vos_srv'
         offset = "../.."
 
@@ -31,9 +29,9 @@ def build_vos(env, standalone):
         #profiling tools will point at preprocessed file lines.
         files = denv.Preprocess(FILES)
 
-    vos = daos_build.library(denv, libname, files, install_off=offset,
+    vos = daos_build.library(denv, libname, files, install_off='../..',
                              LIBS=['vea'])
-    denv.Install('$PREFIX/' + install, vos)
+    denv.Install('$PREFIX/lib64/daos_srv', vos)
 
 def build_vos_internal(env):
     """build vos internal"""
@@ -42,12 +40,13 @@ def build_vos_internal(env):
     libraries = ['vos', 'bio', 'abt', 'daos_common_pmem', 'gurt']
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(LINKFLAGS=[r'-Wl,-rpath=\$$ORIGIN/daos_srv'])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+
 
     vos_size = daos_build.library(denv, 'vos_size', ['vos_size.c'],
-                                  LIBS=libraries)
+                                  LIBS=libraries, install_off='../..')
 
-    denv.Install('$PREFIX/lib64/', vos_size)
+    denv.Install('$PREFIX/lib64/daos_srv', vos_size)
 
 def scons():
     """Execute build"""
@@ -67,6 +66,7 @@ def scons():
     build_vos_internal(denv)
 
     SConscript('tests/SConscript', exports='denv')
+    SConscript('storage_estimator/SConscript')
 
 if __name__ == "SCons.Script":
     scons()
