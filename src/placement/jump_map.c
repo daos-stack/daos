@@ -642,12 +642,11 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	}
 	rc = 0;
 
-	if (out_list != NULL) {
+	D_INIT_LIST_HEAD(&local_list);
+	if (out_list != NULL)
 		remap_list = out_list;
-	} else {
-		D_INIT_LIST_HEAD(&local_list);
+	else
 		remap_list = &local_list;
-	}
 
 	dom_size = (struct pool_domain *)(root->do_targets) - (root) + 1;
 	D_ALLOC_ARRAY(dom_used, (dom_size / NBBY) + 1);
