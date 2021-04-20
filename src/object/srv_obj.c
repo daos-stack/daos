@@ -381,7 +381,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			if (rc)
 				break;
 
-			if (length > remote_bulk_size) {
+			if ((offset + length) > remote_bulk_size) {
 				D_DEBUG(DLOG_DBG, DF_U64 " > %zu : %d\n",
 					length,	remote_bulk_size,
 					-DER_OVERFLOW);
