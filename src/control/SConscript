@@ -193,6 +193,15 @@ def scons():
 
     AlwaysBuild([agentbin, dmgbin, drpcbin])
 
+    dbenv = denv.Clone()
+    dblibs = dbenv.subst("-L$BUILD_DIR/src/gurt "
+                         "-L$BUILD_DIR/src/cart "
+                         "-L$BUILD_DIR/src/client/dfs "
+                         "-L$BUILD_DIR/src/utils $_RPATH")
+    dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
+    daosbin = install_go_bin(dbenv, gosrc, None, "daos", "daos_new")
+    AlwaysBuild([daosbin])
+
     SConscript('lib/spdk/SConscript', exports='denv')
 
     senv = denv.Clone()
