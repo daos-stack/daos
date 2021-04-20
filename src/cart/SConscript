@@ -30,7 +30,7 @@ LIB_SRC = ['crt_utils.c']
 def build_utility_library():
     """Build cart utility library"""
 
-    Import('env', 'prereqs', 'gurt_lib')
+    Import('env', 'prereqs')
     denv = env.Clone()
     denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('include').srcnode()])
