@@ -571,10 +571,16 @@ evt_iter_corrupt(daos_handle_t ih)
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	desc = evt_node_desc_at(tcx, evt_off2node(tcx, trace->tr_node),
 				trace->tr_at);
+	rc = evt_tx_begin(tcx);
+	if (rc != DER_SUCCESS)
+		return rc;
+
+	rc = umem_tx_add(&tcx->tc_umm, trace->tr_node, sizeof(*desc));
 	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted\n");
 	BIO_ADDR_SET_CORRUPTED(&desc->dc_ex_addr);
+	rc = evt_tx_end(tcx, rc);
 
-	return 0;
+	return rc;
 }
 
 /**

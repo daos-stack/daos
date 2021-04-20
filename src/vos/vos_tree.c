@@ -752,8 +752,14 @@ static int
 svt_rec_corrupt(struct btr_instance *tins, struct btr_record *rec)
 {
 	struct vos_irec_df	*irec;
+	int			 rc;
 
 	irec = vos_rec2irec(tins, rec);
+
+	rc = umem_tx_add(&tins->ti_umm, rec->rec_off, sizeof(*irec));
+	if (rc != 0)
+		return rc;
+
 	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted\n");
 	BIO_ADDR_SET_CORRUPTED(&irec->ir_ex_addr);
 
