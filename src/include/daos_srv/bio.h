@@ -395,7 +395,7 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  * \param[IN] nvme_conf		NVMe config file
  * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
  * \param[IN] mem_size		SPDK memory alloc size when using primary mode
- * \paran[IN] tgt_nr		Number of threads
+ * \paran[IN] tgt_nr		Number of targets
  * \param[IN] db		persistent database to store SMD data
  *
  * \return		Zero on success, negative value on error
