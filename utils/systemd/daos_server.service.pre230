@@ -20,6 +20,8 @@ LimitCORE=infinity
 LimitNOFILE=infinity
 StartLimitInterval=60
 StartLimitBurst=5
+SyslogLevel=debug
+SyslogLevelPrefix=false
 
 [Install]
 WantedBy = multi-user.target
