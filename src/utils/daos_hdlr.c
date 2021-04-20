@@ -1539,6 +1539,37 @@ update_props_for_access_control(struct cmd_args_s *ap)
 	return 0;
 }
 
+static void
+cmd_args_print(struct cmd_args_s *ap)
+{
+	char	oclass[10] = {}, type[10] = {};
+
+	if (ap == NULL)
+		return;
+
+	daos_oclass_id2name(ap->oclass, oclass);
+	daos_unparse_ctype(ap->type, type);
+
+	D_INFO("\tDAOS system name: %s\n", ap->sysname);
+	D_INFO("\tpool UUID: "DF_UUIDF"\n", DP_UUID(ap->p_uuid));
+	D_INFO("\tcont UUID: "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
+
+	D_INFO("\tattr: name=%s, value=%s\n",
+		ap->attrname_str ? ap->attrname_str : "NULL",
+		ap->value_str ? ap->value_str : "NULL");
+
+	D_INFO("\tpath=%s, type=%s, oclass=%s, chunk_size="DF_U64"\n",
+		ap->path ? ap->path : "NULL",
+		type, oclass, ap->chunk_size);
+	D_INFO("\tsnapshot: name=%s, epoch="DF_U64", epoch range=%s "
+		"("DF_U64"-"DF_U64")\n",
+		ap->snapname_str ? ap->snapname_str : "NULL",
+		ap->epc,
+		ap->epcrange_str ? ap->epcrange_str : "NULL",
+		ap->epcrange_begin, ap->epcrange_end);
+	D_INFO("\toid: "DF_OID"\n", DP_OID(ap->oid));
+}
+
 /* cont_create_hdlr() - create container by UUID */
 int
 cont_create_hdlr(struct cmd_args_s *ap)
@@ -1548,6 +1579,8 @@ cont_create_hdlr(struct cmd_args_s *ap)
 	rc = update_props_for_access_control(ap);
 	if (rc != 0)
 		return rc;
+
+	cmd_args_print(ap);
 
 	/** allow creating a POSIX container without a link in the UNS path */
 	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
