@@ -774,7 +774,8 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	D_INIT_LIST_HEAD(&timeout_list);
 	ts_now = d_timeus_secdiff(0);
 
-	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+	if (!crt_is_service())
+		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	while (1) {
 		bh_node = d_binheap_root(&crt_ctx->cc_bh_timeout);
 		if (bh_node == NULL)
@@ -841,7 +842,8 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 				rpc_priv->crp_pub.cr_ep.ep_rank);
 
 	/* lookup the crt_ep_inflight (create one if not found) */
-	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+	if (!crt_is_service())
+		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	rlink = d_hash_rec_find(&crt_ctx->cc_epi_table, (void *)&ep_rank,
 				sizeof(ep_rank));
 	if (rlink == NULL) {
@@ -878,7 +880,8 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 		epi = epi_link2ptr(rlink);
 		D_ASSERT(epi->epi_ctx == crt_ctx);
 	}
-	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+	if (!crt_is_service())
+		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	/* add the RPC req to crt_ep_inflight */
 	D_MUTEX_LOCK(&epi->epi_mutex);
@@ -903,9 +906,11 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 		rpc_priv->crp_state = RPC_STATE_QUEUED;
 		rc = CRT_REQ_TRACK_IN_WAITQ;
 	} else {
-		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+		if (!crt_is_service())
+			D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 		rc = crt_req_timeout_track(rpc_priv);
-		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+		if (!crt_is_service())
+			D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 		if (rc == 0) {
 			d_list_add_tail(&rpc_priv->crp_epi_link,
 					&epi->epi_req_q);
@@ -923,9 +928,11 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* reference taken by d_hash_rec_find or "epi->epi_ref = 1" above */
-	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+	if (!crt_is_service())
+		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	d_hash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
-	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+	if (!crt_is_service())
+		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 out:
 	return rc;
