@@ -587,6 +587,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	if (ap->sysname == NULL)
 		return RC_NO_HELP;
 
+	ap->outstream = stdout;
+	ap->errstream = stderr;
+
 	if ((strcmp(argv[1], "container") == 0) ||
 	    (strcmp(argv[1], "cont") == 0)) {
 		ap->c_op = cont_op_parse(argv[2]);

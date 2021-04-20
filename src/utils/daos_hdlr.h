@@ -95,6 +95,8 @@ struct cmd_args_s {
 	daos_obj_id_t		oid;
 	daos_prop_t		*props;		/* --properties cont create */
 
+	FILE			*outstream;	/* normal output stream */
+	FILE			*errstream;	/* errors stream */
 	FILE			*ostream;	/* help_hdlr() stream */
 	char			*outfile;	/* --outfile path */
 	char			*aclfile;	/* --acl-file path */
