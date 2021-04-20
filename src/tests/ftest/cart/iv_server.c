@@ -96,6 +96,13 @@ iv_shutdown(crt_rpc_t *rpc)
 	DBG_PRINT("Received shutdown request\n");
 	DBG_PRINT("***************************\n");
 
+	/*
+	 * Avoid shutdown errors (wait for client to acknowledge)
+	 *    5 seconds require for standard test.
+	 *   15 seconds require for valgrind.
+	 */
+	tc_set_shutdown_delay(15);
+
 	if (g_my_rank == 0) {
 		rc = crt_group_config_remove(grp);
 		assert(rc == 0);

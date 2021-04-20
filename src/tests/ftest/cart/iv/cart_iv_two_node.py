@@ -224,15 +224,17 @@ class CartIvTwoNodeTest(CartTest):
              "expected_value": ""},
         ]
 
-        # Wait for servers to come up
-        time.sleep(10)
+        ###### Wait for servers to come up ######
+        # Only 32 retries allowed. May exceed this limit
+        # Not required but results in cleaner log files.
+        # Don't see the client retries
+        time.sleep(4)
 
         failed = False
 
         clicmd = self.build_cmd(self.env, "test_clients")
 
         ########## Launch Client Actions ##########
-
         try:
             self._iv_test_actions(clicmd, actions)
         except ValueError as exception:
@@ -240,7 +242,6 @@ class CartIvTwoNodeTest(CartTest):
             self.print("TEST FAILED: {}".format(exception))
 
         ########## Shutdown Servers ##########
-
         num_servers = self.get_srv_cnt("test_servers")
 
         srv_ppn = self.params.get("test_servers_ppn", '/run/tests/*/')
