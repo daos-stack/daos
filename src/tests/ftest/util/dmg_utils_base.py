@@ -111,10 +111,11 @@ class DmgCommandBase(YamlCommand):
                     DmgCommandBase.ConfigSubCommand.GenerateSubCommand,
                     self).__init__(
                         "/run/dmg/config/generate/*", "generate")
-                self.access_points = FormattedParameter("-a {}", None)
-                self.num_pmem = FormattedParameter("-p {}", None)
-                self.num_nvme = FormattedParameter("-n {}", None)
-                self.net_class = FormattedParameter("-c {}", None)
+                self.access_points = FormattedParameter(
+                    "--access-points={}", None)
+                self.num_engines = FormattedParameter("--num-engines={}", None)
+                self.min_ssds = FormattedParameter("--min-ssds={}", None)
+                self.net_class = FormattedParameter("--net-class={}", None)
 
     class ContSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg cont sub command."""

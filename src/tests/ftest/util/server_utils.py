@@ -108,8 +108,8 @@ class DaosServerCommand(YamlCommand):
         self.log.debug("## server_utils.py DaosServerCommand.__init__() 1")
         self.generated_yaml = None
         self.discover_mode = BasicParameter(False, False)
-        self.discover_pmem = BasicParameter(None)
-        self.discover_nvme = BasicParameter(None)
+        self.discover_engines = BasicParameter(None)
+        self.discover_ssds = BasicParameter(None)
         self.discover_net = BasicParameter(None)
 
     def get_sub_command_class(self):
@@ -693,6 +693,10 @@ class DaosServerManager(SubprocessManager):
         self.log.debug("## server_utils.py start 1")
         self.prepare()
 
+        # # Makito added
+        # if self.manager.job.discover_mode:
+        #     self.discover()
+
         # Start the servers and wait for them to be ready for storage format
         # Makito updated
         #self.detect_format_ready()
@@ -716,33 +720,38 @@ class DaosServerManager(SubprocessManager):
         """Start the server through the job manager."""
         # Create the empty file
         self.log.debug("## server_utils.py discover 1")
+        self.prepare()
+
         original_config = self.manager.job.yaml.filename
         config_file = ".".join([original_config, "discovery"])
-        pcmd(self._hosts, "touch {}".format(config_file))
+        pcmd(self._hosts, "sudo touch {}".format(config_file))
+        self.log.debug(
+            "## server_utils.py - Setting config file {}".format(config_file))
         self.manager.job.config.value = config_file
 
         # Start the servers and wait for them to be ready for storage format
         self.log.debug("## server_utils.py discover 2")
-        self.detect_start_mode("discover")
+        #self.detect_start_mode("discover")
+        self.detect_start_mode("format")
         self.log.debug("## server_utils.py discover 3")
 
         self.generated_yaml = self.dmg.config_generate(
             self.get_config_value("access_points"),
-            self.manager.job.discover_pmem,
-            self.manager.job.discover_nvme,
-            self.manager.job.discover_net)
+            self.manager.job.discover_engines.value,
+            self.manager.job.discover_ssds.value,
+            self.manager.job.discover_net.value)
 
         self.log.debug("## server_utils.py discover 4")
-        messages = self.stop_server_processes()
-        if messages:
-            raise ServerFailed(
-                "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
+        # messages = self.stop_server_processes()
+        # if messages:
+        #     raise ServerFailed(
+        #         "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
 
-        self.log.info("<SERVER> Writing generated config yaml")
-        self.manager.job.yaml.filename = original_config
-        self.manager.job.yaml.write_yaml(self.generated_yaml)
-        self.manager.job.config.value = self.manager.job.yaml.filename
-        self.log.debug("## server_utils.py discover 5")
+        # self.log.info("<SERVER> Writing generated config yaml")
+        # self.manager.job.yaml.filename = original_config
+        # self.manager.job.yaml.write_yaml(self.generated_yaml)
+        # self.manager.job.config.value = self.manager.job.yaml.filename
+        # self.log.debug("## server_utils.py discover 5")
 
     def stop(self):
         """Stop the server through the runner."""

@@ -100,7 +100,14 @@ class ConfigGenerate(TestWithServers):
         """
         # Get the generated values and the system storage info
         sys_info = self.get_storage_info()
-        gen_info = self.server_managers[-1].manager.job.discovered_yaml
+        #gen_info = self.server_managers[-1].manager.job.discovered_yaml
+        gen_info = self.server_managers[-1].generated_yaml
+        self.log.debug("## gen_info = {}".format(gen_info))
+
+        # self.log.debug("## verify_config - Stopping servers")
+        # self.stop_servers()
+        # self.log.debug("## verify_config - Server stopped")
+
         if gen_info and "servers" in gen_info:
             g_pmem = len(gen_info["servers"])
             g_nvme = len([x["bdev_list"] for x in gen_info["servers"]][0])
@@ -135,7 +142,14 @@ class ConfigGenerate(TestWithServers):
         else:
             self.fail("No discovered yaml info detected!")
 
-    def run_test(self, pmem, nvme, net):
+    def discover_manager(self, name, manager):
+        self.log.info(
+            "Starting %s: group=%s, hosts=%s, config=%s",
+            name, manager.get_config_value("name"), manager.hosts,
+            manager.get_config_value("filename"))
+        manager.discover()
+
+    def run_test(self, num_engines, min_ssds, net):
         """Run test.
 
         Args:
@@ -146,18 +160,33 @@ class ConfigGenerate(TestWithServers):
         self.log.debug("## run_test 1")
         self._start_servers = True
         self.log.debug("## run_test 2")
-        self.server_managers[-1].manager.job.discover_pmem.value = pmem
+        self.server_managers[-1].manager.job.discover_engines.update(num_engines)
         self.log.debug("## run_test 3")
-        self.server_managers[-1].manager.job.discover_nvme.value = nvme
-        self.server_managers[-1].manager.job.discover_net.value = net
+        self.server_managers[-1].manager.job.discover_ssds.update(min_ssds)
+        self.server_managers[-1].manager.job.discover_net.update(net)
 
         # Start up the servers in discovery mode and generate config with dmg
         self.log.debug("## run_test 4")
-        self.start_server_managers()
+        #self.start_server_managers()
+        self.log.info("-" * 100)
+        start_servers = True
+        if self.start_servers_once:
+            # Starting servers for each test variant is enabled.  The servers
+            # will still need be started if any server is down.  Since the
+            # ServerManager objects have been initialized but start() has not
+            # been called, the dmg command will need to be prepared and the
+            # expected states will need to be assigned.
+            status = self.check_running(
+                "servers", self.server_managers, True, True)
+            start_servers = status["restart"]
+        if start_servers:
+            self.log.info("--- STARTING SERVERS ---")
+            self.discover_manager("server", self.server_managers[-1])
+        self.log.info("-" * 100)
         self.log.debug("## run_test 5")
 
         # Verify generated config file
-        self.verify_config(pmem, nvme, net)
+        self.verify_config(num_engines, min_ssds, net)
 
     def test_dmg_config_generate_1(self):
         """
