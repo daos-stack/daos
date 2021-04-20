@@ -26,7 +26,7 @@
 
 /* Can support up to 16 flags for a BIO address */
 enum BIO_FLAG {
-	/* The addess is a hole */
+	/* The address is a hole */
 	BIO_FLAG_HOLE = (1 << 0),
 	BIO_FLAG_DEDUP = (1 << 1),
 };
