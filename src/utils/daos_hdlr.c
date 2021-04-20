@@ -748,7 +748,7 @@ out:
  * to its epoch number.
  */
 int
-cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname, daos_epoch_t *epoch)
+cont_list_snaps_hdlr(struct cmd_args_s *ap)
 {
 	daos_epoch_t	*epochs = NULL;
 	char		**names = NULL;
@@ -770,7 +770,7 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname, daos_epoch_t *epoch)
 		D_GOTO(out, rc);
 	}
 
-	if (snapname == NULL)
+	if (ap->snapname_str == NULL)
 		D_PRINT("Container's snapshots :\n");
 
 	if (!daos_anchor_is_eof(&anchor)) {
@@ -807,19 +807,25 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname, daos_epoch_t *epoch)
 	if (expected_count < snaps_count)
 		fprintf(stderr, "size required to gather all snapshots has raised, list has been truncated\n");
 
-	if (snapname == NULL) {
+	if (ap->snapname_str == NULL && ap->epc == 0) {
 		for (i = 0; i < min(expected_count, snaps_count); i++)
 			D_PRINT(DF_U64" %s\n", epochs[i], names[i]);
 	} else {
 		for (i = 0; i < min(expected_count, snaps_count); i++)
-			if (strcmp(snapname, names[i]) == 0) {
-				if (epoch != NULL)
-					*epoch = epochs[i];
+			if (ap->snapname_str != NULL &&
+			    strcmp(ap->snapname_str, names[i]) == 0) {
+				ap->epc = epochs[i];
+				break;
+			} else if (ap->epc == epochs[i]) {
 				break;
 			}
 		if (i == min(expected_count, snaps_count)) {
-			fprintf(stderr, "%s not found in snapshots list\n",
-				snapname);
+			if (ap->snapname_str != NULL)
+				fprintf(stderr, "%s not found in snapshots list\n",
+				ap->snapname_str);
+			else
+				fprintf(stderr, DF_U64" not found in snapshots list\n",
+					ap->epc);
 			rc = -DER_NONEXIST;
 		}
 	}
@@ -4020,7 +4026,7 @@ cont_rollback_hdlr(struct cmd_args_s *ap)
 	}
 
 	if (ap->snapname_str != NULL) {
-		rc = cont_list_snaps_hdlr(ap, ap->snapname_str, &ap->epc);
+		rc = cont_list_snaps_hdlr(ap);
 		if (rc != 0)
 			return rc;
 	}
