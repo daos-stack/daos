@@ -10,7 +10,7 @@ import uuid
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 
-RESULT_PASS = "PASS"
+RESULT_PASS = "PASS" #nosec
 RESULT_FAIL = "FAIL"
 RESULT_TO_NUM = {RESULT_PASS: 0, RESULT_FAIL: 1}
 
