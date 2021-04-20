@@ -1055,11 +1055,12 @@ obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
 			}
 
 			/* Didn't use deduped extent */
-			if (!biov->bi_addr.ba_dedup) {
-				D_ASSERT(!biov_dup->bi_addr.ba_dedup);
+			if (!BIO_ADDR_IS_DEDUP(&biov->bi_addr)) {
+				D_ASSERT(
+					!BIO_ADDR_IS_DEDUP(&biov_dup->bi_addr));
 				continue;
 			}
-			D_ASSERT(biov_dup->bi_addr.ba_dedup);
+			D_ASSERT(BIO_ADDR_IS_DEDUP(&biov_dup->bi_addr));
 
 			D_ASSERT(bio_iov2len(biov) == bio_iov2len(biov_dup));
 			rc = memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
@@ -1076,7 +1077,7 @@ obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
 			 * failed to commit.
 			 */
 			biov->bi_addr.ba_off = biov_dup->bi_addr.ba_off;
-			biov->bi_addr.ba_dedup = false;
+			BIO_ADDR_SET_NOT_DEDUP(&biov->bi_addr);
 			biov_dup->bi_addr.ba_off = UMOFF_NULL;
 
 			D_DEBUG(DB_IO, "Verify dedup extents failed, "
