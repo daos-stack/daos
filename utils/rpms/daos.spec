@@ -127,10 +127,11 @@ Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: spdk-tools
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
-Requires: (ipmctl < 02.00.00.3809 or ipmctl > 02.00.00.3816)
 %if (0%{?suse_version} >= 1500)
+Requires: ipmctl >= 02.00.00.3773
 Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
 %else
+Requires: ipmctl > 02.00.00.3816
 Requires: libpmem >= 1.8, libpmemobj >= 1.8
 %endif
 Requires: hwloc
