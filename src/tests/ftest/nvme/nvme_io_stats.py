@@ -6,9 +6,9 @@
 """
 import re
 from ior_test_base import IorTestBase
-from general_utils import get_log_file, run_task
+from general_utils import get_log_file, run_pcmd
 
-#List of NVMe statistics
+# List of NVMe statistics
 NVME_STATS = ['read_bytes',
               'read_ops',
               'write_bytes',
@@ -16,8 +16,9 @@ NVME_STATS = ['read_bytes',
               'read_latency_ticks',
               'write_latency_ticks']
 
+
 class NvmeIOStates(IorTestBase):
-    # pylint: disable=too-many-ancestors
+    # pylint: disable=too-many-ancestors,too-few-public-methods
     """Test class Description: Runs IOR with 1 server with basic parameters and
        verify NVMe IO statistics parameters getting increase.
 
@@ -40,30 +41,33 @@ class NvmeIOStates(IorTestBase):
         # run ior
         self.run_ior_with_pool()
 
-        #Get the NVMe IO statistics from server control_log file.
+        # Get the NVMe IO statistics from server control_log file.
         cmd = 'cat {}'.format(get_log_file(self.control_log))
-        task = run_task(self.hostlist_servers, cmd)
-        for _rc_code, _node in task.iter_retcodes():
-            if _rc_code == 1:
-                self.fail("Failed to run cmd {} on {}".format(cmd, _node))
-        for buf, _nodes in task.iter_buffers():
-            output_list = str(buf).split('\n')
+        results = run_pcmd(self.hostlist_servers, cmd)
+        for result in results:
+            if result["exit_status"] == 1:
+                self.fail(
+                    "Failed to run cmd {} on {}".format(cmd, result["hosts"]))
 
-        #Verify statistics are increasing for IO
-        target_stats = []
-        for _tmp in range(8):
-            target_stats.append([s for s in output_list if "tgt[{}]"
-                                 .format(_tmp) in s])
-        for stats in NVME_STATS:
-            for _tgt in range(len(target_stats)):
-                first_stats = re.findall(
-                    r'\d+', [x for x in target_stats[_tgt][0].split()
-                             if re.search(stats, x)][0])[0]
-                last_stats = re.findall(
-                    r'\d+', [x for x in  target_stats[_tgt][-1].split()
-                             if re.search(stats, x)][0])[0]
-                #Last statistic should be higher from the initial statistics
-                if int(first_stats) >= int(last_stats):
-                    self.fail('Failed: Stats {} for target {} did not increased'
-                              ' First_stat={} < Last_stat={}'
-                              .format(stats, _tgt, first_stats, last_stats))
+            # Verify statistics are increasing for IO
+            target_stats = []
+            for _tmp in range(8):
+                target_stats.append(
+                    [line for line in result["stdout"]
+                     if "tgt[{}]".format(_tmp) in line])
+            for stats in NVME_STATS:
+                for _tgt in range(len(target_stats)):
+                    first_stats = re.findall(
+                        r'\d+',
+                        [x for x in target_stats[_tgt][0].split()
+                         if re.search(stats, x)][0])[0]
+                    last_stats = re.findall(
+                        r'\d+',
+                        [x for x in target_stats[_tgt][-1].split()
+                         if re.search(stats, x)][0])[0]
+                    # Last statistic should be higher than initial statistics
+                    if int(first_stats) >= int(last_stats):
+                        self.fail(
+                            "Failed: Stats {} for target {} did not increased "
+                            "First_stat={} < Last_stat={}".format(
+                                stats, _tgt, first_stats, last_stats))

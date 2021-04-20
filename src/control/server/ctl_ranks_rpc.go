@@ -21,6 +21,7 @@ import (
 )
 
 const (
+	// instanceUpdateDelay is the polling time period
 	instanceUpdateDelay = 500 * time.Millisecond
 )
 
@@ -129,24 +130,24 @@ func (svc *ControlService) PrepShutdownRanks(ctx context.Context, req *ctlpb.Ran
 
 // memberStateResults returns system member results reflecting whether the state
 // of the given member is equivalent to the supplied desired state value.
-func (svc *ControlService) memberStateResults(instances []*EngineInstance, desiredState system.MemberState, successMsg string) (system.MemberResults, error) {
+func (svc *ControlService) memberStateResults(instances []*EngineInstance, tgtState system.MemberState, okMsg, failMsg string) (system.MemberResults, error) {
 	results := make(system.MemberResults, 0, len(instances))
 	for _, srv := range instances {
 		rank, err := srv.GetRank()
 		if err != nil {
-			svc.log.Debugf("Instance %d GetRank(): %s", srv.Index(), err)
+			svc.log.Debugf("skip MemberResult, Instance %d GetRank(): %s", srv.Index(), err)
 			continue
 		}
 
 		state := srv.LocalState()
-		if state != desiredState {
-			results = append(results, system.NewMemberResult(rank,
-				errors.Errorf("want %s, got %s", desiredState, state), state))
+		if state != tgtState {
+			results = append(results, system.NewMemberResult(rank, errors.Errorf(failMsg),
+				system.MemberStateErrored))
 			continue
 		}
 
 		results = append(results, &system.MemberResult{
-			Rank: rank, Msg: successMsg, State: state,
+			Rank: rank, Msg: okMsg, State: state,
 		})
 	}
 
@@ -183,11 +184,9 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	defer svc.events.EnableEventIDs(events.RASRankDown)
 
 	for _, srv := range instances {
-		svc.log.Debugf("%d: check started", srv.Index())
 		if !srv.isStarted() {
 			continue
 		}
-		svc.log.Debugf("%d: call Stop()", srv.Index())
 		if err := srv.Stop(signal); err != nil {
 			return nil, errors.Wrapf(err, "sending %s", signal)
 		}
@@ -201,7 +200,8 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, err
 	}
 
-	results, err := svc.memberStateResults(instances, system.MemberStateStopped, "system stop")
+	results, err := svc.memberStateResults(instances, system.MemberStateStopped, "system stop",
+		"system stop: rank failed to stop within "+svc.harness.rankReqTimeout.String())
 	if err != nil {
 		return nil, err
 	}
@@ -311,11 +311,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		if err := srv.RemoveSuperblock(); err != nil {
 			return nil, err
 		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case srv.startLoop <- true: // proceed to awaiting storage format
-		}
+		srv.requestStart(ctx)
 	}
 
 	// ignore poll results as we gather state immediately after
@@ -370,11 +366,7 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 		if srv.isStarted() {
 			continue
 		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case srv.startLoop <- true:
-		}
+		srv.requestStart(ctx)
 	}
 
 	// ignore poll results as we gather state immediately after
@@ -386,7 +378,8 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 
 	// instances will update state to "Started" through join or
 	// bootstrap in membership, here just make sure instances are "Ready"
-	results, err := svc.memberStateResults(instances, system.MemberStateReady, "system start")
+	results, err := svc.memberStateResults(instances, system.MemberStateReady, "system start",
+		"system start: rank failed to start within "+svc.harness.rankStartTimeout.String())
 	if err != nil {
 		return nil, err
 	}

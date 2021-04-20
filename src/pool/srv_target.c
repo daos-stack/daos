@@ -192,7 +192,7 @@ pool_child_add_one(void *varg)
 		return rc;
 	}
 
-	rc = vos_pool_open(path, arg->pla_uuid, false, &child->spc_hdl);
+	rc = vos_pool_open(path, arg->pla_uuid, 0, &child->spc_hdl);
 
 	D_FREE(path);
 
@@ -380,13 +380,6 @@ pool_free_ref(struct daos_llink *llink)
 
 	D_DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
-	ds_iv_ns_put(pool->sp_iv_ns);
-
-	rc = crt_group_secondary_destroy(pool->sp_group);
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
-
 	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid, 0);
 	if (rc == -DER_CANCELED)
 		D_DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
@@ -397,6 +390,13 @@ pool_free_ref(struct daos_llink *llink)
 	pl_map_disconnect(pool->sp_uuid);
 	if (pool->sp_map != NULL)
 		pool_map_decref(pool->sp_map);
+
+	ds_iv_ns_put(pool->sp_iv_ns);
+
+	rc = crt_group_secondary_destroy(pool->sp_group);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
+			DP_UUID(pool->sp_uuid), rc);
 
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
@@ -1138,7 +1138,6 @@ update_child_map(void *data)
 	if (child == NULL)
 		return -DER_NONEXIST;
 
-	ds_rebuild_pool_map_update(pool);
 	child->spc_map_version = pool->sp_map_version;
 	ds_pool_child_put(child);
 	return 0;

@@ -55,7 +55,7 @@ run_test()
 
     ((log_num += 1))
 
-    FILES=(${DAOS_BASE}/test_results/*.xml)
+    FILES=("${DAOS_BASE}"/test_results/*.xml)
 
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
                                                                   "${COMP}" \
@@ -80,7 +80,7 @@ if [ -d "/mnt/daos" ]; then
     if [ -z "$RUN_TEST_VALGRIND" ]; then
         # Tests that do not run valgrind
         COMP="UTEST_client"
-        run_test src/client/storage_estimator/common/tests/storage_estimator.sh
+        run_test src/vos/storage_estimator/common/tests/storage_estimator.sh
         COMP="UTEST_rdb"
         run_test src/rdb/raft_tests/raft_tests.py
         go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"
@@ -147,6 +147,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_principal_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/prop_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/fault_domain_tests"
 
     COMP="UTEST_client"
     run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
@@ -194,8 +195,16 @@ if [ -d "/mnt/daos" ]; then
     mv "${DAOS_BASE}"/test_results/xml/*.xml "${DAOS_BASE}"/test_results
     rm -rf "${DAOS_BASE}"/test_results/xml
 
+    if [ -f "/tmp/test.cov" ]; then
+        rm /tmp/test.cov
+    fi
+
+    if [ -f "${DAOS_BASE}/test.cov" ]; then
+        cp "${DAOS_BASE}"/test.cov /tmp/
+    fi
+
     # Reporting
-    if [ $failed -eq 0 ]; then
+    if [ "$failed" -eq 0 ]; then
         # spit out the magic string that the post build script looks for
         echo "SUCCESS! NO TEST FAILURES"
     else

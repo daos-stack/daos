@@ -58,7 +58,8 @@ bandwidth by allowing concurrent reads from different replicas.
 #### Client-side Replication
 
 Client replication is the mode that it is synchronous and fully in the client
-stack, to provide high concurrency and low latency I/O for the upper layer.
+stack, to provide high concurrency and low latency I/O for the upper layer. This
+mode is not default and is only provided for testing purposes.
 -   I/O requests against replicas are directly issued via DAOS client; there is
     no sequential guarantee on writes in the same epoch, and concurrent writes
     for a same object can arrive at different replicas in an arbitrary order.

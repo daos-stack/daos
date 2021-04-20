@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import avocado
 
@@ -156,7 +156,7 @@ class NvmeIoVerification(IorTestBase):
                 self.get_dmg_command().system_start()
 
                 # check if all servers started as expected
-                scan_info = self.get_dmg_command().get_output("system_query")
+                scan_info = self.get_dmg_command().system_query()
                 if not check_system_query_status(scan_info):
                     self.fail("One or more servers crashed")
 

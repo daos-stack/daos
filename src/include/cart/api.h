@@ -581,6 +581,28 @@ int
 crt_req_abort(crt_rpc_t *req);
 
 /**
+ * Abort all in-flight RPC requests targeting rank
+ *
+ * \param[in] rank             rank to cancel
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_rank_abort(d_rank_t rank);
+
+/**
+ * Abort all in-flight RPCs to all ranks in the group.
+ *
+ * \param[in] grp              group to cancel in. NULL for default group.
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_rank_abort_all(crt_group_t *grp);
+
+/**
+ * DEPRECATED:
+ *
  * Abort all in-flight RPC requests targeting to an endpoint.
  *
  * \param[in] ep               endpoint address
@@ -725,8 +747,11 @@ crt_ep_abort(crt_endpoint_t *ep);
 		/* process the elements of array */			\
 		for (i = 0; i < count; i++) {				\
 			rc = CRT_GEN_GET_FUNC(seq)(proc, &e_ptr[i]);	\
-			if (rc)						\
+			if (rc) {					\
+				if (proc_op == CRT_PROC_DECODE)		\
+					D_FREE(e_ptr);			\
 				D_GOTO(out, rc);			\
+			}						\
 		}							\
 		if (proc_op == CRT_PROC_FREE)				\
 			D_FREE(e_ptr);					\
@@ -1626,7 +1651,10 @@ typedef void
 
 enum crt_event_source {
 	CRT_EVS_UNKNOWN,
+	/**< Event triggered by SWIM >*/
 	CRT_EVS_SWIM,
+	/**< Event triggered by Group changes >*/
+	CRT_EVS_GRPMOD,
 };
 
 enum crt_event_type {
@@ -1984,6 +2012,19 @@ int crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t secondary_rank,
 int crt_group_secondary_create(crt_group_id_t grp_name,
 			crt_group_t *primary_grp, d_rank_list_t *ranks,
 			crt_group_t **ret_grp);
+
+/**
+ * Enable auto-rank removal on secondary group. Only applicable for primary
+ * groups.
+ *
+ * \param[in] grp               Group handle
+ *
+ * \param[in] enable		Flag to enable or disable the option
+ *
+ * \return                       DER_SUCCESS on success, negative value on
+ *                               failure.
+ */
+int crt_group_auto_rank_remove(crt_group_t *grp, bool enable);
 
 /**
  * Destroy a secondary group.
