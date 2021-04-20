@@ -353,7 +353,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	/* If passed an option to transfer file */
 	if (mmap_file) {
-		DBG_PRINT("Attemping to mmap/transer file %s\n", mmap_file);
+		DBG_PRINT("Attempting to mmap/transer file %s\n", mmap_file);
 
 		rc = d_sgl_init(&sgl, 1);
 		if (rc != 0)
@@ -473,7 +473,7 @@ print_usage(const char *msg)
 	printf("Error: %s\n", msg);
 	printf("Usage: ./dual_iface_server -i 'iface0,iface1' ");
 	printf("-d 'domain0,domain1' -p 'provider' [-f 'file_to_transfer']\n");
-	printf("\nLaunches 2 servers on specified interace/domain names that ");
+	printf("\nLaunches 2 servers on specified iface/domain names that ");
 	printf("ping each other over specified provider\n");
 	printf("NOTE: Same interface/domain name can be specified for both ");
 	printf("servers\n");
@@ -570,7 +570,8 @@ int main(int argc, char **argv)
 	printf("Provider: '%s'\n", provider);
 	printf("Interface0: '%s' Domain0: '%s'\n", iface0, domain0);
 	printf("Interface1: '%s' Domain1: '%s'\n", iface1, domain1);
-	printf("File to transfer: '%s'\n", arg_mmap_file ? arg_mmap_file : "none");
+	printf("File to transfer: '%s'\n",
+	       arg_mmap_file ? arg_mmap_file : "none");
 	printf("----------------------------------------\n\n");
 
 	/* Spawn 2 servers, each one reads and writes URIs into diff file */
