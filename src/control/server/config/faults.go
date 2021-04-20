@@ -147,6 +147,18 @@ func FaultConfigFaultCallbackFailed(err error) *fault.Fault {
 	)
 }
 
+// FaultConfigFaultCallbackInsecure creates a fault for the scenario where the
+// fault domain callback path doesn't meet security requirements.
+func FaultConfigFaultCallbackInsecure(requiredDir string) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigFaultCallbackInsecure,
+		"fault domain callback script does not meet security requirements",
+		fmt.Sprintf("ensure that the 'fault_cb' path is under the parent directory %q, "+
+			"not a symbolic link, does not have the setuid bit set, and does not have "+
+			"write permissions for non-owners", requiredDir),
+	)
+}
+
 func serverConfigFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "serverconfig",
