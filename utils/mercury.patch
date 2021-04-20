@@ -1,0 +1,13 @@
+diff --git a/src/na/na_ofi.c b/src/na/na_ofi.c
+index c6d7711..3a949b4 100644
+--- a/src/na/na_ofi.c
++++ b/src/na/na_ofi.c
+@@ -200,7 +200,7 @@ static unsigned long const na_ofi_prov_flags[] = { NA_OFI_PROV_TYPES };
+ #define NA_OFI_MAX_TAG                  UINT32_MAX
+ 
+ /* Unexpected size */
+-#define NA_OFI_UNEXPECTED_SIZE          (4096)
++#define NA_OFI_UNEXPECTED_SIZE          (65536)
+ #define NA_OFI_UNEXPECTED_TAG           (0x100000000ULL)
+ #define NA_OFI_TAG_MASK                 (0xFFFFFFFFULL)
+ 
