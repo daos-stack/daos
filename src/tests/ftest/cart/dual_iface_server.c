@@ -353,7 +353,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	/* If passed an option to transfer file */
 	if (mmap_file) {
-		DBG_PRINT("Attempting to mmap/transer file %s\n", mmap_file);
+		DBG_PRINT("Attempting to mmap/transfer file %s\n", mmap_file);
 
 		rc = d_sgl_init(&sgl, 1);
 		if (rc != 0)
