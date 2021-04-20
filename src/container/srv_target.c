@@ -239,6 +239,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 	int			snapshots_nr;
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
 	int			i, rc;
+	int			agg_print = 0;
 
 	/* Check if it's ok to start aggregation in every 2 seconds */
 	*msecs = 2ULL * 1000;
@@ -345,12 +346,25 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		D_GOTO(free, rc = 0);
 
 	*msecs = 0;
+	if (getenv("DAOS_AGG_LOG_PRINT") != NULL)
+		agg_print = 1;
+
+	if (agg_print)
+		D_PRINT(DF_CONT"[%d]: MIN: %lu; HLC: %lu\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			tgt_id, epoch_min, hlc);
+
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: %lu; HLC: %lu\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_min, hlc);
 
 	for ( ; i < snapshots_nr && snapshots[i] < epoch_max; ++i) {
 		epoch_range.epr_hi = snapshots[i];
+		if (agg_print)
+			D_PRINT(DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
+
 		D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
@@ -366,6 +380,11 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		goto out;
 
 	epoch_range.epr_hi = epoch_max;
+	if (agg_print)
+		D_PRINT(DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
+
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
@@ -374,6 +393,10 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 out:
 	if (rc == 0 && epoch_min == 0)
 		cont->sc_aggregation_full_scan_hlc = hlc;
+
+	if (agg_print)
+		D_PRINT(DF_CONT"[%d]: Aggregating finished\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id);
 
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id);
