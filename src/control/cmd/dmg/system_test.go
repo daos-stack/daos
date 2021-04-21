@@ -13,7 +13,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
@@ -21,16 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
-
-func listWithSystem(req *control.ListPoolsReq, sysName string) *control.ListPoolsReq {
-	req.SetSystem(sysName)
-	return req
-}
-
-func queryWithSystem(req *control.LeaderQueryReq, sysName string) *control.LeaderQueryReq {
-	req.SetSystem(sysName)
-	return req
-}
 
 func TestDmg_SystemCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
@@ -46,7 +35,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single rank",
 			"system query --ranks 0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":""}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":"","FailOnUnavailable":false}`,
 			}, " "),
 			nil,
 		},
@@ -54,7 +43,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple ranks",
 			"system query --ranks 0,2,4-8",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"[0,2,4-8]","Hosts":""}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"[0,2,4-8]","Hosts":"","FailOnUnavailable":false}`,
 			}, " "),
 			nil,
 		},
@@ -68,7 +57,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single host",
 			"system query --rank-hosts foo-0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"foo-0"}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"foo-0","FailOnUnavailable":false}`,
 			}, " "),
 			nil,
 		},
@@ -76,7 +65,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple hosts",
 			"system query --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
+				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","FailOnUnavailable":false}`,
 			}, " "),
 			nil,
 		},
@@ -207,7 +196,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"leader query",
 			"system leader-query",
 			strings.Join([]string{
-				printRequest(t, queryWithSystem(&control.LeaderQueryReq{}, build.DefaultSystemName)),
+				printRequest(t, &control.LeaderQueryReq{}),
 			}, " "),
 			nil,
 		},
@@ -215,7 +204,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system list-pools with default config",
 			"system list-pools",
 			strings.Join([]string{
-				printRequest(t, listWithSystem(&control.ListPoolsReq{}, build.DefaultSystemName)),
+				printRequest(t, &control.ListPoolsReq{}),
 			}, " "),
 			nil,
 		},

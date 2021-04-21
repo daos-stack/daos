@@ -2532,14 +2532,16 @@ out:
 		D_FREE(next_src_path);
 		D_FREE(next_dst_path);
 	}
-	if (src_dir != NULL) {
-		int tmp_rc;
 
-		tmp_rc = file_closedir(src_file_dfs, src_dir);
-		if (tmp_rc != 0) {
+	if (src_dir != NULL) {
+		int close_rc;
+
+		close_rc = file_closedir(src_file_dfs, src_dir);
+		if (close_rc != 0) {
 			fprintf(stderr, "Could not close '%s': %d\n",
-				src_path, tmp_rc);
-			rc = tmp_rc;
+				src_path, close_rc);
+			if (rc == 0)
+				rc = close_rc;
 		}
 	}
 	return rc;
