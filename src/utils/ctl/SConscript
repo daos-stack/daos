@@ -18,7 +18,7 @@ def scons():
     prereqs.require(tenv, 'mercury')
 
     ctl = daos_build.program(tenv, SRC)
-    tenv.Requires(ctl, [cart_lib, gurt_lib])
+    tenv.Requires(ctl, [cart_lib, gurt_lib, cart_utils_lib])
     tenv.Install(os.path.join("$PREFIX", 'bin'), ctl)
 
 if __name__ == "SCons.Script":

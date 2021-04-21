@@ -83,7 +83,7 @@ def scons():
     build_utility_library()
 
     Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
-    Import('cart_utils_lib', 'conf_dir')
+    Import('conf_dir')
 
     env.Alias('install', '$PREFIX')
 
