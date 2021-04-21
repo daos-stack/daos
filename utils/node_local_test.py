@@ -145,8 +145,9 @@ class WarningsFactory():
 
         if junit:
             test_case = junit_xml.TestCase('Startup')
-            self.ts = junit_xml.TestSuite('NLT core', test_cases=[test_case], package='NLT')
-            self.tc = junit_xml.TestCase('Sanity')
+            self.ts = junit_xml.TestSuite('NLT core', test_cases=[test_case],
+                                          package='NLT', id=1)
+            self.tc = junit_xml.TestCase('Sanity', classname='NLT.sanity')
         else:
             self.ts = None
             self.tc = None
