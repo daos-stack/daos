@@ -1457,7 +1457,7 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 		},
 		"not forwarded info event gets logged": {
 			event: events.NewGenericEvent(events.RASID(math.MaxInt32-1),
-				events.RASSeverityInfo, "DAOS generic test event",
+				events.RASSeverityNotice, "DAOS generic test event",
 				`{"people":["bill","steve","bob"]}`),
 			expShouldLog:    true,
 			expShouldLogSys: true,

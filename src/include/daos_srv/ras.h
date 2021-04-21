@@ -95,8 +95,8 @@ ras_type2str(ras_type_t type)
 typedef enum {
 	RAS_SEV_UNKNOWN = 0,
 	RAS_SEV_ERROR,
+	RAS_SEV_WARNING,
 	RAS_SEV_NOTICE,
-	RAS_SEV_INFO,
 } ras_sev_t;
 
 static inline char *
@@ -105,10 +105,10 @@ ras_sev2str(ras_sev_t severity)
 	switch (severity) {
 	case RAS_SEV_ERROR:
 		return "ERROR";
-	case RAS_SEV_NOTICE:
-		return "NOTICE";
+	case RAS_SEV_WARNING:
+		return "WARNING";
 	default:
-		return "INFO";
+		return "NOTICE";
 	}
 }
 

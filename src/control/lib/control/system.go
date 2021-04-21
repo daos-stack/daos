@@ -308,8 +308,8 @@ func newEventLogger(logBasic logging.Logger, newSyslogger newSysloggerFn) *Event
 	for _, sev := range []events.RASSeverityID{
 		events.RASSeverityUnknown,
 		events.RASSeverityError,
+		events.RASSeverityWarning,
 		events.RASSeverityNotice,
-		events.RASSeverityInfo,
 	} {
 		sl, err := newSyslogger(sev.SyslogPriority(), log.LstdFlags)
 		if err != nil {

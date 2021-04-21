@@ -90,8 +90,8 @@ type RASSeverityID uint32
 const (
 	RASSeverityUnknown RASSeverityID = C.RAS_SEV_UNKNOWN
 	RASSeverityError   RASSeverityID = C.RAS_SEV_ERROR
+	RASSeverityWarning RASSeverityID = C.RAS_SEV_WARNING
 	RASSeverityNotice  RASSeverityID = C.RAS_SEV_NOTICE
-	RASSeverityInfo    RASSeverityID = C.RAS_SEV_INFO
 )
 
 func (sev RASSeverityID) String() string {
@@ -106,9 +106,9 @@ func (sev RASSeverityID) Uint32() uint32 {
 // SyslogPriority maps RAS severity to syslog package priority.
 func (sev RASSeverityID) SyslogPriority() syslog.Priority {
 	slSev := map[RASSeverityID]syslog.Priority{
-		RASSeverityError:  syslog.LOG_ERR,
-		RASSeverityNotice: syslog.LOG_NOTICE,
-		RASSeverityInfo:   syslog.LOG_INFO,
+		RASSeverityError:   syslog.LOG_ERR,
+		RASSeverityWarning: syslog.LOG_WARNING,
+		RASSeverityNotice:  syslog.LOG_NOTICE,
 	}[sev]
 
 	return slSev | syslog.LOG_DAEMON
@@ -169,7 +169,8 @@ func New(evt *RASEvent) *RASEvent {
 		evt = &RASEvent{}
 	}
 
-	// Set defaults as necessary.
+	// set defaults
+
 	if evt.Timestamp == "" {
 		evt.Timestamp = common.FormatTime(time.Now())
 	}
@@ -187,7 +188,7 @@ func New(evt *RASEvent) *RASEvent {
 		evt.ProcID = uint64(os.Getpid())
 	}
 	if evt.Severity == RASSeverityUnknown {
-		evt.Severity = RASSeverityInfo
+		evt.Severity = RASSeverityNotice
 	}
 	evt.forwarded.SetFalse()
 	evt.forwardable.SetTrue()
