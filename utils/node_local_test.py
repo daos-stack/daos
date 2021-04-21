@@ -144,10 +144,9 @@ class WarningsFactory():
         self._flush()
 
         if junit:
-            test_case = junit_xml.TestCase('Startup')
-            self.ts = junit_xml.TestSuite('NLT core', test_cases=[test_case],
-                                          package='NLT', id=1)
-            self.tc = junit_xml.TestCase('Sanity', classname='NLT.sanity')
+            test_case = junit_xml.TestCase('Startup', classname'NLT')
+            self.ts = junit_xml.TestSuite('Node Local Testing', test_cases=[test_case],
+            self.tc = junit_xml.TestCase('Sanity', classname='NLT.Sanity')
         else:
             self.ts = None
             self.tc = None
