@@ -146,7 +146,13 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	regex_t				 regex_dead;
 	static const char		*dead_regex = ".?0*1";
 	static const char		*alive_regex = ".?0*";
-	char				*swim_seq = malloc(MAX_SWIM_STATUSES);
+	char				*swim_seq;
+
+	D_ALLOC(swim_seq, MAX_SWIM_STATUSES);
+
+	D_ASSERTF(swim_seq != NULL,
+		  "Cannot allocate %d chars for SWIM sequence.\n",
+		  MAX_SWIM_STATUSES);
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
