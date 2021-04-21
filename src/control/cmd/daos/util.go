@@ -122,7 +122,7 @@ func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(
 
 		rdr := bufio.NewReader(r)
 		for {
-			line, _, err := rdr.ReadLine()
+			line, err := rdr.ReadString('\n')
 			if err != nil {
 				if err != io.EOF {
 					printLn(fmt.Sprintf("read err: %s", err))
