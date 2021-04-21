@@ -7,5 +7,5 @@ server_config:
 pool:
   mode: 511
   name: daos_server
-  scm_size: 10000000
+  scm_size: 160000000
   control_method: dmg
