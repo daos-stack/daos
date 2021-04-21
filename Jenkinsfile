@@ -73,7 +73,7 @@ pipeline {
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: "daily_regression",
+               defaultValue: "",
                description: 'Test-tag to use for this run (i.e pr, daily_regression, full_regression, etc.')
     }
 
