@@ -473,6 +473,14 @@ ds_pool_lookup(const uuid_t uuid)
 }
 
 void
+ds_pool_get(struct ds_pool *pool)
+{
+	D_ASSERT(pool != NULL);
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	daos_lru_ref_add(&pool->sp_entry);
+}
+
+void
 ds_pool_put(struct ds_pool *pool)
 {
 	D_ASSERT(pool != NULL);
@@ -998,8 +1006,8 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	uuid_copy(hdl->sph_uuid, pic->pic_hdl);
 	hdl->sph_flags = pic->pic_flags;
 	hdl->sph_sec_capas = pic->pic_capas;
-	hdl->sph_pool = ds_pool_lookup(pool->sp_uuid);
-	D_ASSERT(hdl->sph_pool != NULL);
+	ds_pool_get(pool);
+	hdl->sph_pool = pool;
 
 	cred_iov.iov_len = pic->pic_cred_size;
 	cred_iov.iov_buf_len = pic->pic_cred_size;

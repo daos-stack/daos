@@ -251,7 +251,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 
 	rc = d_hash_rec_insert(&lcache->dlc_htable, key, key_size,
 			       &llink->ll_link, true);
-	if (rc == -DER_EXIST) {
+	if (rc) {
 		lcache->dlc_ops->lop_free_ref(llink);
 		return rc;
 	}
