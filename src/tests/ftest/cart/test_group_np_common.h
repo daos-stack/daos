@@ -154,7 +154,7 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	if (swim_status_by_rank[e_req->rank] != NULL)
 		strcpy(swim_seq, swim_status_by_rank[e_req->rank]);
 	else
-		strcpy(swim_seq, "");
+		memset(swim_seq, 0x0, MAX_SWIM_STATUSES);
 
 	/* compile and run regex's */
 	regcomp(&regex_dead, dead_regex, REG_EXTENDED);
