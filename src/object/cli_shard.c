@@ -1782,7 +1782,7 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 	daos_recx_t		*result_recx = cb_args->recx;
 	daos_recx_t		*tmp_recx;
 	daos_recx_t		 recx[2] = {0};
-	uint64_t		 end[2], result_end, tmp_end;
+	uint64_t		 end[2], tmp_end;
 	uint32_t		 tgt_idx;
 	bool			 parity_checked = false;
 	bool			 from_data_tgt;
@@ -1846,34 +1846,16 @@ re_check:
 
 	end[0] = DAOS_RECX_END(recx[0]);
 	end[1] = DAOS_RECX_END(recx[1]);
-	result_end = DAOS_RECX_PTR_END(result_recx);
 	if (get_max) {
-		if (end[1] > result_end ||
-		    end[0] > result_end) {
-			if (end[0] > end[1])
-				*result_recx = recx[0];
-			else
-				*result_recx = recx[1];
-		}
+		if (end[0] > end[1])
+			*result_recx = recx[0];
+		else
+			*result_recx = recx[1];
 	} else {
-		if (end[0] == 0) {
-			if (result_end == 0 ||
-			    (end[1] != 0 && end[1] < result_end))
-				*result_recx = recx[1];
-		} else if (end[1] == 0) {
-			if (result_end == 0 || end[0] < result_end)
-				*result_recx = recx[0];
-		} else if (end[0] > end[1]) {
-			if (result_end == 0 || end[1] < result_end)
-				*result_recx = recx[1];
-			else if (end[0] < result_end)
-				*result_recx = recx[0];
-		} else {
-			if (result_end == 0 || end[0] < result_end)
-				*result_recx = recx[0];
-			else if (end[1] < result_end)
-				*result_recx = recx[1];
-		}
+		if (end[0] < end[1])
+			*result_recx = recx[0];
+		else
+			*result_recx = recx[1];
 	}
 }
 
@@ -1955,6 +1937,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		if (first) {
 			*cur = *val;
 			cb_args->dkey->iov_len = okqo->okqo_dkey.iov_len;
+			changed = true;
 		} else if (flags & DAOS_GET_MAX) {
 			if (*val > *cur) {
 				*cur = *val;
@@ -2000,8 +1983,10 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		if (!first && !changed)
 			D_ASSERT(is_ec_obj);
 
-		obj_shard_query_recx_post(cb_args, okqi->okqi_oid.id_shard,
-					  okqo, get_max);
+		if (changed)
+			obj_shard_query_recx_post(cb_args,
+						  okqi->okqi_oid.id_shard,
+						  okqo, get_max);
 	}
 	D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
 
