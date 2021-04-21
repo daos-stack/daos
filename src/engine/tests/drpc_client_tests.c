@@ -437,9 +437,9 @@ test_drpc_verify_cluster_event_min_viable(void **state)
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);
 
-	ds_notify_ras_event(RAS_ENGINE_FAILED, "rank down", RAS_TYPE_STATE_CHANGE,
-			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
-			    NULL, NULL);
+	ds_notify_ras_event(RAS_ENGINE_FAILED, "rank down",
+			    RAS_TYPE_STATE_CHANGE, RAS_SEV_ERROR, NULL, NULL,
+			    NULL, NULL, NULL, NULL, NULL, NULL);
 	verify_cluster_event((uint32_t)RAS_ENGINE_FAILED, "rank down",
 			     (uint32_t)RAS_TYPE_STATE_CHANGE,
 			     (uint32_t)RAS_SEV_ERROR, "", mock_self_rank, "",
