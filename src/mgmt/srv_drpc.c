@@ -320,8 +320,6 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->scmbytes, req->nvmebytes,
 				 prop, req->numsvcreps, &svc);
-	if (targets != NULL)
-		d_rank_list_free(targets);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -353,6 +351,8 @@ out:
 	mgmt__pool_create_req__free_unpacked(req, &alloc.alloc);
 
 	daos_prop_free(prop);
+	if (targets != NULL)
+		d_rank_list_free(targets);
 
 	/** check for '\0' which is a static allocation from protobuf */
 	D_FREE(resp.svc_reps);
