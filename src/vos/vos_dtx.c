@@ -38,8 +38,7 @@ enum {
 	do {								\
 		D_DEBUG(DB_TRACE, "Evicting lid "DF_DTI": lid=%d\n",	\
 			DP_DTI(&DAE_XID(dae)), DAE_LID(dae));		\
-		if (!d_list_empty(&dae->dae_link))			\
-			d_list_del_init(&dae->dae_link);		\
+		d_list_del_init(&dae->dae_link);			\
 		lrua_evictx(cont->vc_dtx_array,				\
 			    DAE_LID(dae) - DTX_LID_RESERVED,		\
 			    DAE_EPOCH(dae));				\
@@ -297,9 +296,7 @@ dtx_act_ent_free(struct btr_instance *tins, struct btr_record *rec,
 
 	dae = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	rec->rec_off = UMOFF_NULL;
-
-	if (!d_list_empty(&dae->dae_link))
-		d_list_del_init(&dae->dae_link);
+	d_list_del_init(&dae->dae_link);
 
 	if (args != NULL) {
 		/* Return the record addreass (offset in DRAM).
@@ -827,8 +824,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		if (rc != 0)
 			goto out;
 
-		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-
+		dae = riov.iov_buf;
 		if (dae->dae_aborted) {
 			D_ERROR("NOT allow to commit an aborted DTX "DF_DTI"\n",
 				DP_DTI(dti));
@@ -972,8 +968,7 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 	if (rc != 0)
 		goto out;
 
-	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-
+	dae = riov.iov_buf;
 	if (dae->dae_committable || dae->dae_committed) {
 		D_ERROR("NOT allow to abort a committed DTX "DF_DTI"\n",
 			DP_DTI(dti));
@@ -1482,7 +1477,7 @@ vos_dtx_validation(struct dtx_handle *dth)
 			return DTX_ST_ABORTED;
 		}
 
-		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+		dae = riov.iov_buf;
 	}
 
 	if (dae->dae_committed) {
@@ -1879,7 +1874,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 	d_iov_set(&riov, NULL, 0);
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 	if (rc == 0) {
-		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+		dae = riov.iov_buf;
 
 		if (DAE_FLAGS(dae) & DTE_CORRUPTED)
 			return DTX_ST_CORRUPTED;

@@ -163,9 +163,14 @@ dtx_cleanup_stale(void *arg)
 			dcsca.dcsca_count = 0;
 		}
 
+		/* Use false as the "failout" parameter that should guarantee
+		 * that all the DTX entries in the check list will be handled
+		 * even if some former ones hit failure.
+		 */
 		rc = dtx_refresh_internal(cont, &count, &dcsca.dcsca_list,
 					  NULL, NULL, NULL, false);
-		D_ASSERT(count == 0);
+		D_ASSERTF(count == 0, "%d entries are not handled: "DF_RC"\n",
+			  count, DP_RC(rc));
 	}
 
 	while ((dsp = d_list_pop_entry(&dcsca.dcsca_list,

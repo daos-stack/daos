@@ -161,7 +161,7 @@ dtx_iter_next(struct vos_iterator *iter)
 
 			D_ASSERT(rec_iov.iov_len ==
 				 sizeof(struct vos_dtx_act_ent));
-			dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
+			dae = rec_iov.iov_buf;
 		}
 
 		/* Only return prepared ones. */
@@ -200,7 +200,7 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		}
 
 		D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
-		dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
+		dae = rec_iov.iov_buf;
 	}
 
 	it_entry->ie_epoch = DAE_EPOCH(dae);
