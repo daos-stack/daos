@@ -37,11 +37,13 @@ class OSAOnlineDrain(OSAUtils):
         self.pool = None
         self.dmg_command.exit_status_exception = True
 
-    def run_online_drain_test(self, num_pool, oclass=None):
+    def run_online_drain_test(self, num_pool, oclass=None, app_name="ior"):
         """Run the Online drain without data.
             Args:
              num_pool(int) : total pools to create for testing purposes.
              oclass(str) : Object class type (RP_2G1, etc)
+             app_name(str) : application to run on parallel (ior or mdtest)
+                             Defaults to ior.
         """
         # Create a pool
         pool = {}
@@ -76,10 +78,13 @@ class OSAOnlineDrain(OSAUtils):
                     self.run_ior_thread("Write", oclass, test_seq)
                 self.delete_extra_container(self.pool)
             # The following thread runs while performing osa operations.
-            threads.append(threading.Thread(target=self.run_ior_thread,
-                                            kwargs={"action": "Write",
-                                                    "oclass": oclass,
-                                                    "test": test_seq}))
+            if app_name == "ior":
+                threads.append(threading.Thread(target=self.run_ior_thread,
+                                                kwargs={"action": "Write",
+                                                        "oclass": oclass,
+                                                        "test": test_seq}))
+            else:
+                threads.append(threading.Thread(target=self.run_mdtest_thread))
 
             # Launch the IOR threads
             for thrd in threads:
@@ -171,3 +176,16 @@ class OSAOnlineDrain(OSAUtils):
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
         self.run_online_drain_test(1)
+
+    def test_osa_online_drain_mdtest(self):
+        """Test ID: DAOS-4750
+        Test Description: Validate Online drain with mdtest
+        running during the testing.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_drain,online_drain,online_drain_mdtest
+        """
+        self.log.info("Online Drain : With Mdtest")
+        self.run_online_drain_test(1, app_name="mdtest")
