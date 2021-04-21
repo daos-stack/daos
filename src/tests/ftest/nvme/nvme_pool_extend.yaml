@@ -3,17 +3,11 @@ hosts:
     - server-A
     - server-B
     - server-C
+    - server-D
   test_clients:
     - client-E
     - client-F
     - client-G
-# If we define the server under test_servers, launch.py will convert it to the
-# actual server name passed into --test_servers. If above test_servers is hosts,
-# it'll be used as one of the servers at test startup time, so use something
-# other than hosts.
-extra_servers:
-  test_servers:
-    - server-D
 timeout: 1000
 server_config:
     engines_per_host: 2
@@ -47,6 +41,7 @@ pool:
     scm_size: 100000000000
     nvme_size: 700000000000
     svcn: 4
+    target_list: [0-5]
     control_method: dmg
 container:
     type: POSIX
