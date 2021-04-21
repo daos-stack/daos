@@ -125,7 +125,7 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	nupds = SWIM_PIGGYBACK_ENTRIES + (id != self_id ? 2 : 1);
+	nupds = SWIM_PIGGYBACK_ENTRIES + (id != self_id ? 3 : 2);
 	D_ALLOC_ARRAY(upds, nupds);
 	if (upds == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -150,6 +150,14 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 		upds[i++].smu_id = self_id;
 	}
 
+	/* tell it how I think of it (e.g., SUSPECT or DEAD) */
+	rc = ctx->sc_ops->get_member_state(ctx, to, &upds[i].smu_state);
+	if (rc) {
+		SWIM_ERROR("get_member_state(): "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_unlock, rc);
+	}
+	upds[i++].smu_id = id;
+
 	item = TAILQ_FIRST(&ctx->sc_updates);
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
@@ -163,7 +171,8 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 		}
 
 		/* update with recent updates */
-		if (item->si_id != id && item->si_id != self_id) {
+		if (item->si_id != id && item->si_id != self_id &&
+		    item->si_id != to) {
 			rc = ctx->sc_ops->get_member_state(ctx, item->si_id,
 							   &upds[i].smu_state);
 			if (rc) {
@@ -908,9 +917,13 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 					  upds[i].smu_state.sms_incarnation);
 			break;
 		case SWIM_MEMBER_SUSPECT:
+		case SWIM_MEMBER_DEAD:
 			if (id == self_id) {
+				char *status_str;
+
 				/* increment our incarnation number if we are
-				 * suspected in the current incarnation
+				 * suspected/confirmed in the current
+				 * incarnation
 				 */
 				rc = ctx->sc_ops->get_member_state(ctx, self_id,
 								   &self_state);
@@ -925,11 +938,17 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 				    upds[i].smu_state.sms_incarnation)
 					break; /* already incremented */
 
-				SWIM_ERROR("{%lu %c %lu} self SUSPECT received "
+				if (upds[i].smu_state.sms_status ==
+				    SWIM_MEMBER_SUSPECT)
+					status_str = "SUSPECT";
+				else
+					status_str = "DEAD";
+				SWIM_ERROR("{%lu %c %lu} self %s received "
 					   "{%lu %c %lu} from %lu\n", self_id,
 					   SWIM_STATUS_CHARS[
 							 self_state.sms_status],
-					   self_state.sms_incarnation, self_id,
+					   self_state.sms_incarnation,
+					   status_str, self_id,
 					   SWIM_STATUS_CHARS[
 						  upds[i].smu_state.sms_status],
 					   upds[i].smu_state.sms_incarnation,
@@ -947,31 +966,12 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 				break;
 			}
 
-			swim_member_suspect(ctx, from, id,
-					    upds[i].smu_state.sms_incarnation);
-			break;
-		case SWIM_MEMBER_DEAD:
-			/* if we get an update that we are dead,
-			 * just shut down
-			 */
-			if (id == self_id) {
-				swim_ctx_unlock(ctx);
-				SWIM_ERROR("%lu: self confirmed DEAD received "
-					   "{%lu %c %lu} from %lu\n", self_id,
-					   self_id, SWIM_STATUS_CHARS[
-						  upds[i].smu_state.sms_status],
-					   upds[i].smu_state.sms_incarnation,
-					   from);
-				D_GOTO(out, rc = -DER_SHUTDOWN);
-			}
-
-			SWIM_ERROR("%lu: DEAD received {%lu %c %lu} from %lu\n",
-				   self_id, id, SWIM_STATUS_CHARS[
-						  upds[i].smu_state.sms_status],
-				   upds[i].smu_state.sms_incarnation, from);
-
-			swim_member_dead(ctx, from, id,
-					 upds[i].smu_state.sms_incarnation);
+			if (upds[i].smu_state.sms_status == SWIM_MEMBER_SUSPECT)
+				swim_member_suspect(ctx, from, id,
+					     upds[i].smu_state.sms_incarnation);
+			else
+				swim_member_dead(ctx, from, id,
+					     upds[i].smu_state.sms_incarnation);
 			break;
 		}
 	}
