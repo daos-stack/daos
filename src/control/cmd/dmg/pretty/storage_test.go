@@ -1474,6 +1474,27 @@ host1
         Device Reliability: WARNING
         Read Only: WARNING
         Volatile Memory Backup: WARNING
+      Intel Vendor SMART Attributes:
+        Program Fail Count:
+	   Normalized:%d%
+	   Raw:%d
+	Erase Fail Count:
+	   Normalized:%d%
+	   Raw:%d
+	Wear Leveling Count:
+	   Normalized:%d%
+	   Min:%d
+	   Max:%d
+	   Avg:%d
+	End-to-End Error Detection Count:%d
+	CRC Error Count:%d
+	Timed Workload, Media Wear:%d%
+	Timed Workload, Host Reads:%d
+	Timed Workload, Timer:%d
+	Thermal Throttle Status:%d%
+	Thermal Throttle Event Count:%d
+	Retry Buffer Overflow Counter:%d
+	PLL Lock Loss Count:%d
 
 `,
 				mockController.HealthStats.TempK(), mockController.HealthStats.TempC(),
@@ -1482,6 +1503,16 @@ host1
 				time.Duration(mockController.HealthStats.PowerOnHours)*time.Hour,
 				mockController.HealthStats.UnsafeShutdowns, mockController.HealthStats.MediaErrors,
 				mockController.HealthStats.ErrorLogEntries,
+				mockController.HealthStats.ProgFailCntNorm, mockController.HealthStats.ProgFailCntRaw,
+				mockController.HealthStats.EraseFailCntNorm, mockController.HealthStats.EraseFailCntRaw,
+				mockController.HealthStats.WearLevelingCntNorm, mockController.HealthStats.WearLevelingCntMin,
+				mockController.HealthStats.WearLevelingCntMax, mockController.HealthStats.WearLevelingCntAvg,
+				mockController.HealthStats.EndtoendErrCntRaw, mockController.HealthStats.CrcErrCntRaw,
+				mockController.HealthStats.MediaWearRaw, mockController.HealthStats.HostReadsRaw,
+				mockController.HealthStats.WorkloadTimerRaw,
+				mockController.HealthStats.ThermalThrottleStatus, mockController.HealthStats.ThermalThrottleEventCnt,
+				mockController.HealthStats.RetryBufferOverflowCnt,
+				mockController.HealthStats.PllLockLossCnt,
 			),
 		},
 	} {

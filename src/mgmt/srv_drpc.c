@@ -1673,6 +1673,26 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->volatile_mem_warn = stats.volatile_mem_warn;
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
+	resp->program_fail_cnt_norm = stats.program_fail_cnt_norm;
+	resp->program_fail_cnt_raw = stats.program_fail_cnt_raw;
+	resp->erase_fail_cnt_norm = stats.erase_fail_cnt_norm;
+	resp->erase_fail_cnt_raw = stats.erase_fail_cnt_raw;
+	resp->wear_leveling_cnt_norm = stats.wear_leveling_cnt_norm;
+	resp->wear_leveling_cnt_min = stats.wear_leveling_cnt_min;
+	resp->wear_leveling_cnt_max = stats.wear_leveling_cnt_max;
+	resp->wear_leveling_cnt_avg = stats.wear_leveling_cnt_avg;
+	resp->endtoend_err_cnt_raw = stats.endtoend_err_cnt_raw;
+	resp->crc_err_cnt_raw = stats.crc_err_cnt_raw;
+	resp->media_wear_raw = stats.media_wear_raw;
+	resp->host_reads_raw = stats.host_reads_raw;
+	resp->workload_timer_raw = stats.workload_timer_raw;
+	resp->thermal_throttle_status = stats.thermal_throttle_status;
+	resp->thermal_throttle_event_cnt = stats.thermal_throttle_event_cnt;
+	resp->retry_buffer_overflow_cnt = stats.retry_buffer_overflow_cnt;
+	resp->pll_lock_loss_cnt = stats.pll_lock_loss_cnt;
+	resp->nand_bytes_written = stats.nand_bytes_written;
+	resp->host_bytes_written = stats.host_bytes_written;
+
 out:
 	resp->status = rc;
 	len = ctl__bio_health_resp__get_packed_size(resp);

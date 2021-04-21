@@ -111,6 +111,51 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 		fmt.Fprintf(iw, "OK\n")
 	}
 
+	if stat.ProgFailCntNorm > 0 {
+		fmt.Fprintf(out, "Intel Vendor SMART Attributes:\n")
+		fmt.Fprintf(iw, "Program Fail Count:\n")
+		fmt.Fprintf(iw, "%s%d%s", "   Normalized:",
+			uint8(stat.ProgFailCntNorm), "%%\n")
+		fmt.Fprintf(iw, "   Raw:%d\n",
+			uint64(stat.ProgFailCntRaw))
+		fmt.Fprintf(iw, "Erase Fail Count:\n")
+		fmt.Fprintf(iw, "%s%d%s", "   Normalized:",
+			uint8(stat.EraseFailCntNorm), "%%\n")
+		fmt.Fprintf(iw, "   Raw:%d\n",
+			uint64(stat.EraseFailCntRaw))
+		fmt.Fprintf(iw, "Wear Leveling Count:\n")
+		fmt.Fprintf(iw, "%s%d%s", "   Normalized:",
+			uint8(stat.WearLevelingCntNorm), "%%\n")
+		fmt.Fprintf(iw, "   Min:%d\n",
+			uint16(stat.WearLevelingCntMin))
+		fmt.Fprintf(iw, "   Max:%d\n",
+			uint16(stat.WearLevelingCntMax))
+		fmt.Fprintf(iw, "   Avg:%d\n",
+			uint16(stat.WearLevelingCntAvg))
+		fmt.Fprintf(iw, "End-to-End Error Detection Count:%d\n",
+			uint64(stat.EndtoendErrCntRaw))
+		fmt.Fprintf(iw, "CRC Error Count:%d\n",
+			uint64(stat.CrcErrCntRaw))
+		fmt.Fprintf(iw, "%s%d%s", "Timed Workload, Media Wear:",
+			uint64(stat.MediaWearRaw), "%%\n")
+		fmt.Fprintf(iw, "Timed Workload, Host Reads:%d\n",
+			uint64(stat.HostReadsRaw))
+		fmt.Fprintf(iw, "Timed Workload, Timer:%d\n",
+			uint64(stat.WorkloadTimerRaw))
+		fmt.Fprintf(iw, "%s%d%s", "Thermal Throttle Status:",
+			uint8(stat.ThermalThrottleStatus), "%%\n")
+		fmt.Fprintf(iw, "Thermal Throttle Event Count:%d\n",
+			uint64(stat.ThermalThrottleEventCnt))
+		fmt.Fprintf(iw, "Retry Buffer Overflow Counter:%d\n",
+			uint64(stat.RetryBufferOverflowCnt))
+		fmt.Fprintf(iw, "PLL Lock Loss Count:%d\n",
+			uint64(stat.PllLockLossCnt))
+		fmt.Fprintf(iw, "NAND Bytes Written:%d\n",
+			uint64(stat.NandBytesWritten))
+		fmt.Fprintf(iw, "Host Bytes Written:%d\n",
+			uint64(stat.HostBytesWritten))
+	}
+
 	return w.Err
 }
 

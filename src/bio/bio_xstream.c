@@ -1360,6 +1360,11 @@ retry:
 				DP_RC(rc));
 			goto out;
 		}
+		/* Set the NVMe SSD PCI Vendor ID */
+		bio_set_vendor_id(bbs, d_bdev->bb_name);
+		/* Register DAOS metrics to export NVMe SSD health stats */
+		bio_export_health_stats(bbs, d_bdev->bb_name);
+		bio_export_vendor_health_stats(bbs, d_bdev->bb_name);
 
 		if (bbs->bb_state == BIO_BS_STATE_OUT)
 			goto out;
