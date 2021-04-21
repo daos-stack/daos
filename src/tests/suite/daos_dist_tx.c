@@ -2954,6 +2954,72 @@ dtx_39(void **state)
 	reintegrate_single_pool_rank(arg, kill_rank);
 }
 
+static void
+dtx_40(void **state)
+{
+	test_arg_t	*arg = *state;
+	const char	*dkey1 = "a_dkey_1";
+	char		*akeys[DTX_NC_CNT];
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	uint64_t	 data[DTX_NC_CNT] = { 0 };
+	daos_off_t	 offsets[DTX_NC_CNT];
+	daos_size_t	 rec_sizes[DTX_NC_CNT];
+	daos_size_t	 data_sizes[DTX_NC_CNT];
+	uint64_t	*data_addrs[DTX_NC_CNT];
+	uint64_t	 val;
+	int		 i;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX40: array fetch with EC\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		D_ALLOC(akeys[i], 16);
+		assert_non_null(akeys[i]);
+		dts_buf_render(akeys[i], 16);
+
+		offsets[i] = 0;
+		rec_sizes[i] = sizeof(uint64_t);
+		data_sizes[i] = sizeof(uint64_t);
+		data_addrs[i] = &data[i];
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Non-transactional update for base layout\n");
+
+	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++)
+		/* Base value: i + 1 */
+		insert_single(dkey1, akeys[i], 0, &val, sizeof(val),
+			      DAOS_TX_NONE, &req);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Triggering fetch to verify...\n");
+
+	for (i = 0; i < DTX_NC_CNT; i += IOREQ_SG_IOD_NR) {
+		lookup(dkey1, IOREQ_SG_IOD_NR, (const char **)(akeys + i),
+		       offsets + i, rec_sizes + i, (void **)&data_addrs[i],
+		       data_sizes + i, DAOS_TX_NONE, &req, false);
+		assert_int_equal(data[i], i + 1);
+	}
+
+	ioreq_fini(&req);
+	for (i = 0; i < DTX_NC_CNT; i++)
+		D_FREE(akeys[i]);
+}
+
 static test_arg_t *saved_dtx_arg;
 
 static int
@@ -3063,6 +3129,8 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_38, dtx_sub_setup, dtx_sub_teardown},
 	{"DTX39: not restart the transaction with fixed epoch",
 	 dtx_39, dtx_sub_setup, dtx_sub_teardown},
+	{"DTX40: array fetch with EC",
+	 dtx_40, dtx_sub_setup, dtx_sub_teardown},
 };
 
 static int
