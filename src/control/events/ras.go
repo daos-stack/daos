@@ -14,6 +14,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"log/syslog"
 	"os"
 	"strings"
 	"time"
@@ -104,6 +105,18 @@ func (sev RASSeverityID) Uint32() uint32 {
 	return uint32(sev)
 }
 
+// SyslogPriority maps RAS severity to syslog package priority.
+func (sev RASSeverityID) SyslogPriority() syslog.Priority {
+	slSev := map[RASSeverityID]syslog.Priority{
+		RASSeverityFatal: syslog.LOG_CRIT,
+		RASSeverityError: syslog.LOG_ERR,
+		RASSeverityWarn:  syslog.LOG_WARNING,
+		RASSeverityInfo:  syslog.LOG_INFO,
+	}[sev]
+
+	return slSev | syslog.LOG_DAEMON
+}
+
 // RASEvent describes details of a specific RAS event.
 type RASEvent struct {
 	ID           RASID           `json:"id"`
@@ -123,7 +136,8 @@ type RASEvent struct {
 	CtlOp        string          `json:"ctl_op"`
 	ExtendedInfo RASExtendedInfo `json:"extended_info"`
 
-	forwarded atm.Bool
+	forwarded   atm.Bool
+	forwardable atm.Bool
 }
 
 // IsForwarded returns true if event has been forwarded between hosts.
@@ -131,9 +145,22 @@ func (evt *RASEvent) IsForwarded() bool {
 	return evt.forwarded.Load()
 }
 
-// WithIsForwarded sets the forwarded state of this event.
-func (evt *RASEvent) WithIsForwarded(isForwarded bool) *RASEvent {
-	evt.forwarded = atm.NewBool(isForwarded)
+// WithForwarded sets the forwarded state of this event.
+func (evt *RASEvent) WithForwarded(forwarded bool) *RASEvent {
+	evt.forwarded.Store(forwarded)
+
+	return evt
+}
+
+// ShouldForward returns true if event is forwardable and has not already
+// been forwarded.
+func (evt *RASEvent) ShouldForward() bool {
+	return !evt.forwarded.Load() && evt.forwardable.Load()
+}
+
+// WithForwardable sets the forwardable state of this event.
+func (evt *RASEvent) WithForwardable(forwardable bool) *RASEvent {
+	evt.forwardable.Store(forwardable)
 
 	return evt
 }
@@ -165,6 +192,8 @@ func New(evt *RASEvent) *RASEvent {
 	if evt.Severity == RASSeverityUnknown {
 		evt.Severity = RASSeverityInfo
 	}
+	evt.forwarded.SetFalse()
+	evt.forwardable.SetTrue()
 
 	return evt
 }
@@ -246,8 +275,10 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 		ContUUID:  pbEvt.ContUuid,
 		ObjID:     pbEvt.ObjId,
 		CtlOp:     pbEvt.CtlOp,
-		forwarded: atm.NewBool(false),
 	}
+
+	evt.forwarded.SetFalse()
+	evt.forwardable.SetTrue()
 
 	switch ei := pbEvt.GetExtendedInfo().(type) {
 	case *sharedpb.RASEvent_RankStateInfo:
@@ -336,7 +367,7 @@ func (ps *PubSub) HandleClusterEvent(req *sharedpb.ClusterEventReq, forwarded bo
 	if err != nil {
 		return nil, err
 	}
-	ps.Publish(event.WithIsForwarded(forwarded))
+	ps.Publish(event.WithForwarded(forwarded))
 
 	return &sharedpb.ClusterEventResp{Sequence: req.Sequence}, nil
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -36,6 +37,10 @@ var (
 	msWaitFormat = stateString(system.MemberStateAwaitFormat)
 	msStopped    = stateString(system.MemberStateStopped)
 	msErrored    = stateString(system.MemberStateErrored)
+
+	defRankCmpOpts = append(common.DefaultCmpOpts(),
+		protocmp.IgnoreFields(&sharedpb.RankResult{}, "msg"),
+	)
 )
 
 // checkUnorderedRankResults fails if results slices contain any differing results,
@@ -44,22 +49,16 @@ var (
 func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*sharedpb.RankResult) {
 	t.Helper()
 
-	isMsgField := func(path cmp.Path) bool {
-		return path.Last().String() == ".Msg"
-	}
-	opts := append(common.DefaultCmpOpts(),
-		cmp.FilterPath(isMsgField, cmp.Ignore()))
-
 	common.AssertEqual(t, len(gotResults), len(expResults), "number of rank results")
 	for _, exp := range expResults {
 		match := false
 		for _, got := range gotResults {
-			if diff := cmp.Diff(exp, got, opts...); diff == "" {
+			if diff := cmp.Diff(exp, got, defRankCmpOpts...); diff == "" {
 				match = true
 			}
 		}
 		if !match {
-			t.Fatalf("unexpected results: %s", cmp.Diff(expResults, gotResults, opts...))
+			t.Fatalf("unexpected results: %s", cmp.Diff(expResults, gotResults, defRankCmpOpts...))
 		}
 	}
 }
@@ -294,16 +293,16 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			req:            &ctlpb.RanksReq{Ranks: "0-3"},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady, Errored: true},
-				{Rank: 2, State: msReady, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 		"force stop instances started": { // unsuccessful result for kill
 			req:            &ctlpb.RanksReq{Ranks: "0-3", Force: true},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady, Errored: true},
-				{Rank: 2, State: msReady, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 		"instances already stopped": { // successful result for kill
@@ -318,7 +317,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			req:            &ctlpb.RanksReq{Ranks: "1", Force: true},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
 			},
 		},
 		"single instance already stopped": {
@@ -402,15 +401,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			<-ctx.Done()
 			common.AssertEqual(t, 0, len(dispatched.rx), "number of events published")
 
-			// RankResult.Msg generation is tested in
-			// TestServer_CtlSvc_DrespToRankResult unit tests
-			isMsgField := func(path cmp.Path) bool {
-				return path.Last().String() == ".Msg"
-			}
-			opts := append(common.DefaultCmpOpts(),
-				cmp.FilterPath(isMsgField, cmp.Ignore()))
-
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, opts...); diff != "" {
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
@@ -747,7 +738,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 
 				// mimic srv.run, set "ready" on startLoop rx
 				go func(s *EngineInstance, startFails bool) {
-					<-s.startLoop
+					<-s.startRequested
 					if startFails {
 						return
 					}
@@ -769,15 +760,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				return
 			}
 
-			// RankResult.Msg generation is tested in
-			// TestServer_CtlSvc_DrespToRankResult unit tests
-			isMsgField := func(path cmp.Path) bool {
-				return path.Last().String() == ".Msg"
-			}
-			opts := append(common.DefaultCmpOpts(),
-				cmp.FilterPath(isMsgField, cmp.Ignore()))
-
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, opts...); diff != "" {
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -838,8 +821,8 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			instancesStopped: true,
 			startFails:       true,
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msStopped, Errored: true},
-				{Rank: 2, State: msStopped, Errored: true},
+				{Rank: 1, State: msErrored, Errored: true},
+				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
 	} {
@@ -878,7 +861,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 
 				// mimic srv.run, set "ready" on startLoop rx
 				go func(s *EngineInstance, startFails bool) {
-					<-s.startLoop
+					<-s.startRequested
 					t.Logf("instance %d: start signal received", s.Index())
 					if startFails {
 						return
@@ -908,15 +891,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 				return
 			}
 
-			// RankResult.Msg generation is tested in
-			// TestServer_CtlSvc_DrespToRankResult unit tests
-			isMsgField := func(path cmp.Path) bool {
-				return path.Last().String() == ".Msg"
-			}
-			opts := append(common.DefaultCmpOpts(),
-				cmp.FilterPath(isMsgField, cmp.Ignore()))
-
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, opts...); diff != "" {
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})

@@ -630,12 +630,12 @@ dfs_teardown(void **state)
 	rc = dfs_umount(dfs_mt);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(co_hdl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		printf("Destroyed DFS Container "DF_UUIDF"\n",
 		       DP_UUID(co_uuid));
 	}

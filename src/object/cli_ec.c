@@ -421,7 +421,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 	if (rc)
 		goto out;
 	/* init the reassembled sgl and seg sorter with max possible sg_nr */
-	if (!punch) {
+	if (!punch && sgl != NULL) {
 		rc = d_sgl_init(&reasb_req->orr_sgls[iod_idx],
 				   seg_nr + sgl->sg_nr);
 		if (rc)
@@ -1099,7 +1099,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	d_iov_t				*iovs = NULL;
 	uint32_t			 i, j, k, idx, last;
 	uint32_t			 tgt_nr, empty_nr;
-	uint32_t			 iov_idx = 0, iov_nr = sgl->sg_nr;
+	uint32_t			 iov_idx = 0, iov_nr = 0;
 	uint64_t			 iov_off = 0, recx_end, full_end;
 	uint64_t			 rec_nr, iod_size = iod->iod_size;
 	bool				 with_full_stripe;
@@ -1107,12 +1107,15 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	int				 rc = 0;
 
 	D_ASSERT(cell_rec_nr > 0);
-	if (iov_nr <= EC_INLINE_IOVS) {
-		iovs = iov_inline;
-	} else {
-		D_ALLOC_ARRAY(iovs, iov_nr);
-		if (iovs == NULL)
-			return -DER_NOMEM;
+	if (sgl != NULL) {
+		iov_nr = sgl->sg_nr;
+		if (iov_nr <= EC_INLINE_IOVS) {
+			iovs = iov_inline;
+		} else {
+			D_ALLOC_ARRAY(iovs, iov_nr);
+			if (iovs == NULL)
+				return -DER_NOMEM;
+		}
 	}
 	punch = (update && iod->iod_size == DAOS_REC_ANY);
 
@@ -1120,7 +1123,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		recx = &iod->iod_recxs[i];
 		with_full_stripe = recx_with_full_stripe(i, ec_recx_array,
 							 &full_ec_recx);
-		if (!with_full_stripe || !update) {
+		if (punch || !with_full_stripe || !update) {
 			if (reasb_req->orr_recov) {
 				D_ASSERT(!update);
 				D_ASSERT(iod->iod_nr == 1);
@@ -1132,6 +1135,8 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 			if (!reasb_req->orr_size_fetched)
 				ec_data_recx_add(recx, riod->iod_recxs, ridx,
 						 tgt_recx_idxs, oca, update);
+			if (punch)
+				continue;
 			if (!reasb_req->orr_size_fetch) {
 				/* After size query, server returns as zero
 				 * iod_size (Empty tree or all holes, DAOS array
@@ -1161,9 +1166,9 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 				  "bad recx\n");
 			ec_data_recx_add(&tmp_recx, riod->iod_recxs, ridx,
 					 tgt_recx_idxs, oca, true);
-			ec_data_seg_add(&tmp_recx, iod_size, sgl, &iov_idx,
-					&iov_off, oca, iovs, iov_nr, sorter,
-					true);
+			ec_data_seg_add(&tmp_recx, iod_size,
+					sgl, &iov_idx, &iov_off, oca,
+					iovs, iov_nr, sorter, true);
 		}
 		ec_data_recx_add(full_recx, riod->iod_recxs, ridx,
 				 tgt_recx_idxs, oca, false);
@@ -1183,7 +1188,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		}
 	}
 
-	if (update) {
+	if (update && !punch) {
 		for (i = 0; i < ec_recx_array->oer_nr; i++) {
 			full_ec_recx = &ec_recx_array->oer_recxs[i];
 			full_recx = &full_ec_recx->oer_recx;
@@ -1520,12 +1525,17 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 				  ec_recx_array->oer_pbufs[idx], cell_bytes);
 		r_sgl->sg_nr = iov_nr + obj_ec_parity_tgt_nr(oca);
 	} else {
-		/* copy the sgl */
-		rc = d_sgl_init(r_sgl, sgl->sg_nr);
-		if (rc)
-			goto out;
-		memcpy(r_sgl->sg_iovs, sgl->sg_iovs,
-		       sizeof(*sgl->sg_iovs) * sgl->sg_nr);
+		if (sgl != NULL) {
+			/* copy the sgl */
+			rc = d_sgl_init(r_sgl, sgl->sg_nr);
+			if (rc)
+				goto out;
+			memcpy(r_sgl->sg_iovs, sgl->sg_iovs,
+			       sizeof(*sgl->sg_iovs) * sgl->sg_nr);
+		} else {
+			r_sgl->sg_iovs = NULL;
+			r_sgl->sg_nr = 0;
+		}
 	}
 
 #if EC_DEBUG
@@ -1599,7 +1609,7 @@ obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 				singv_only = false;
 		}
 		/* if only with single-value, need not size_fetch */
-		if (singv_only)
+		if (singv_only && sgls != NULL)
 			reasb_req->orr_size_fetch = 0;
 	}
 

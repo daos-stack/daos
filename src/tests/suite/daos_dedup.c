@@ -157,7 +157,7 @@ setup_cont_obj(struct dedup_test_ctx *ctx,
 			    &ctx->coh, &ctx->info, NULL);
 	assert_rc_equal(0, rc);
 
-	ctx->oid = dts_oid_gen(oclass, 0, 1);
+	ctx->oid = daos_test_oid_gen(ctx->coh, oclass, 0, 0, 1);
 	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
 	assert_rc_equal(0, rc);
 }

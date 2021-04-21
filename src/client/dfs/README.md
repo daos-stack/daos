@@ -162,20 +162,10 @@ directory containing the actual value of the symlink.
 ## Access Permissions
 
 All DFS objects (files, directories, and symlinks) inherit the access
-permissions of the DFS pool that they are created with. So when a user is trying
-to access an object in the DFS namespace, their real/effective uid/gid are
-compared against those of the pool's uid and gid, which are obtained when
-connecting to the pool. The check then is done with the stored object mode and
-depending on the type of access being requested (R, W, X) and the object mode,
-access permission is determined. In the source code, this is implemented in the
-function `check_access()`.
+permissions of the DFS container that they are created with. So the permission
+checks are done on dfs_mount(). If that succeeds and the user has access to the
+container, then they will be able to access all objects in the DFS
+namespace.
 
 setuid(), setgid() programs, supplementary groups, ACLs are not supported in the
 DFS namespace.
-
-## DFUSE_HL
-
-A simple high level fuse plugin (dfuse_hl) is implemented to use the DFS API
-and functionality with existing POSIX tests and benchmarks (IOR, mdtest,
-etc.). The DFS high level fuse exposes one mounpoint as a single DFS namespace
-with a single pool and container.

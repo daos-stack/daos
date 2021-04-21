@@ -166,7 +166,7 @@ void
 ds_iv_ns_get(struct ds_iv_ns *ns)
 {
 	ns->iv_refcount++;
-	D_DEBUG(DB_MGMT, DF_UUID" ns ref %u\n",
+	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 }
 
@@ -174,7 +174,7 @@ void
 ds_iv_ns_put(struct ds_iv_ns *ns)
 {
 	ns->iv_refcount--;
-	D_DEBUG(DB_MGMT, DF_UUID" ns ref %u\n",
+	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 	if (ns->iv_refcount == 1)
 		ABT_eventual_set(ns->iv_done_eventual, NULL, 0);
@@ -182,23 +182,26 @@ ds_iv_ns_put(struct ds_iv_ns *ns)
 		ds_iv_ns_destroy(ns);
 }
 
-static struct ds_iv_ns *
-iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns)
+static int
+iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns, struct ds_iv_ns **p_ns)
 {
 	struct ds_iv_ns *ns;
 
+	*p_ns = NULL;
 	d_list_for_each_entry(ns, &ds_iv_ns_list, iv_ns_link) {
-		if (ns->iv_ns == ivns) {
-			if (!ns->iv_stop) {
-				ds_iv_ns_get(ns);
-				return ns;
-			}
+		if (ns->iv_ns != ivns)
+			continue;
+
+		if (ns->iv_stop) {
 			D_DEBUG(DB_MD, DF_UUID" stopping\n",
 				DP_UUID(ns->iv_pool_uuid));
-			return NULL;
+			return -DER_SHUTDOWN;
 		}
+		ds_iv_ns_get(ns);
+		*p_ns = ns;
+		return 0;
 	}
-	return NULL;
+	return -DER_NONEXIST;
 }
 
 static bool
@@ -256,22 +259,6 @@ iv_entry_free(struct ds_iv_entry *entry)
 	}
 
 	D_FREE(entry);
-}
-
-static int
-fetch_iv_value(struct ds_iv_entry *entry, struct ds_iv_key *key,
-	       d_sg_list_t *dst, d_sg_list_t *src, void *priv)
-{
-	struct ds_iv_class	*class = entry->iv_class;
-	int			rc;
-
-	if (class->iv_class_ops && class->iv_class_ops->ivc_ent_fetch)
-		rc = class->iv_class_ops->ivc_ent_fetch(entry, key, dst, src,
-							priv);
-	else
-		rc = daos_sgl_copy_data(dst, src);
-
-	return rc;
 }
 
 static int
@@ -389,16 +376,17 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	     d_sg_list_t *iv_value, void *priv)
 {
 	struct iv_priv_entry	*priv_entry = priv;
-	struct ds_iv_ns		*ns;
+	struct ds_iv_ns		*ns = NULL;
 	struct ds_iv_entry	*entry;
 	struct ds_iv_key	key;
 	bool			valid;
 	int			 rc;
 
 	D_ASSERT(iv_value != NULL);
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL) {
@@ -412,7 +400,7 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	}
 
 	valid = iv_entry_valid(entry, &key);
-	D_DEBUG(DB_TRACE, "FETCH: Key [%d:%d] entry %p valid %s\n", key.rank,
+	D_DEBUG(DB_MD, "FETCH: Key [%d:%d] entry %p valid %s\n", key.rank,
 		key.class_id, entry, valid ? "yes" : "no");
 
 	/* Forward the request to its parent if it is not root, and
@@ -432,9 +420,22 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 			D_GOTO(output, rc = -DER_IVCB_FORWARD);
 	}
 
-	rc = fetch_iv_value(entry, &key, iv_value, &entry->iv_value, priv);
-	if (rc == 0)
-		entry->iv_valid = true;
+	if (entry->iv_class->iv_class_ops &&
+	    entry->iv_class->iv_class_ops->ivc_ent_fetch)
+		rc = entry->iv_class->iv_class_ops->ivc_ent_fetch(entry, &key,
+								  iv_value,
+								  priv);
+	else
+		rc = daos_sgl_copy_data(iv_value, &entry->iv_value);
+
+	/* store the value of the result */
+	if (flags & CRT_IV_FLAG_PENDING_FETCH &&
+	    rc == -DER_IVCB_FORWARD) {
+		D_DEBUG(DB_MD, "[%d:%d] reset to 0 during IV aggregation.\n",
+			key.rank, key.class_id);
+		rc = 0;
+	}
+
 output:
 	ds_iv_ns_put(ns);
 	return rc;
@@ -445,15 +446,16 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value,
 		      bool invalidate, bool refresh, int ref_rc, void *priv)
 {
-	struct ds_iv_ns		*ns;
+	struct ds_iv_ns		*ns = NULL;
 	struct ds_iv_entry	*entry;
 	struct ds_iv_key	key;
 	struct iv_priv_entry	*priv_entry = priv;
 	int			rc = 0;
 
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL || priv_entry->entry == NULL) {
@@ -473,10 +475,9 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		rc = update_iv_value(entry, &key, iv_value,
 				     priv_entry ? priv_entry->priv : NULL);
 	}
-	if (rc != -DER_IVCB_FORWARD && rc != 0) {
-		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
-			 "key id %d update failed: rc = "DF_RC"\n",
-			 key.class_id, DP_RC(rc));
+	if (rc != 0) {
+		D_DEBUG(DB_MD, "key id %d update failed: rc = %d\n",
+			key.class_id, rc);
 		D_GOTO(output, rc);
 	}
 
@@ -485,7 +486,7 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	else
 		entry->iv_valid = true;
 
-	D_DEBUG(DB_TRACE, "key id %d rank %d myrank %d valid %s\n",
+	D_DEBUG(DB_MD, "key id %d rank %d myrank %d valid %s\n",
 		key.class_id, key.rank, dss_self_rank(),
 		invalidate ? "no" : "yes");
 output:
@@ -545,7 +546,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	   crt_iv_ver_t iv_ver, crt_iv_perm_t permission,
 	   d_sg_list_t *iv_value, void **priv)
 {
-	struct ds_iv_ns		*ns;
+	struct ds_iv_ns		*ns = NULL;
 	struct ds_iv_entry	*entry;
 	struct ds_iv_class	*class;
 	struct ds_iv_key	key;
@@ -553,9 +554,10 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	bool			alloc_entry = false;
 	int			rc;
 
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	/* find and prepare entry */
@@ -568,7 +570,8 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	class = entry->iv_class;
 	if (iv_value) {
-		rc = class->iv_class_ops->ivc_value_alloc(entry, iv_value);
+		rc = class->iv_class_ops->ivc_value_alloc(entry, &key,
+							  iv_value);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -610,7 +613,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	D_ASSERT(entry != NULL);
 
 	/* Let's deal with iv_value first */
-	d_sgl_fini(iv_value, false);
+	d_sgl_fini(iv_value, true);
 
 	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry,
 							priv_entry->priv);
@@ -639,9 +642,10 @@ ivc_pre_sync(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
 	struct ds_iv_class	*class;
 	int			rc = 0;
 
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL || priv_entry->entry == NULL) {
@@ -801,14 +805,26 @@ ds_iv_ns_start(struct ds_iv_ns *ns)
 }
 
 void
+ds_iv_ns_leader_stop(struct ds_iv_ns *ns)
+{
+	/* Set iv_stop on the leader, so all arriving IV requests will return
+	 * failure after this.
+	 */
+	ns->iv_stop = 1;
+}
+
+void
 ds_iv_ns_stop(struct ds_iv_ns *ns)
 {
 	ns->iv_stop = 1;
 	ds_iv_ns_put(ns);
 	if (ns->iv_refcount > 1) {
+		int rc;
+
 		D_DEBUG(DB_MGMT, DF_UUID" ns stop wait ref %u\n",
 			DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
-		ABT_eventual_wait(ns->iv_done_eventual, NULL);
+		rc = ABT_eventual_wait(ns->iv_done_eventual, NULL);
+		D_ASSERT(rc == ABT_SUCCESS);
 		D_DEBUG(DB_MGMT, DF_UUID" ns stopped\n",
 			DP_UUID(ns->iv_pool_uuid));
 	}
@@ -837,6 +853,7 @@ ds_iv_fini(void)
 	struct ds_iv_class	*class_tmp;
 
 	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
+		d_list_del_init(&ns->iv_ns_link);
 		iv_ns_destroy_internal(ns);
 	}
 
@@ -877,15 +894,20 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	cb_info->result = rc;
 
 	if (cb_info->opc == IV_FETCH && cb_info->value && rc == 0) {
-		struct ds_iv_entry	*entry;
-		struct ds_iv_key	key;
+		struct ds_iv_key key;
 
 		D_ASSERT(cb_info->ns != NULL);
-		entry = iv_class_entry_lookup(cb_info->ns, cb_info->key);
-		D_ASSERT(entry != NULL);
 		iv_key_unpack(&key, iv_key);
-		ret = fetch_iv_value(entry, &key, cb_info->value, iv_value,
-				     NULL);
+		if (iv_value->sg_iovs[0].iov_len > 0 &&
+		    cb_info->value->sg_iovs[0].iov_buf_len >=
+		    iv_value->sg_iovs[0].iov_len)
+			rc = daos_sgl_copy_data(cb_info->value, iv_value);
+		else
+			D_DEBUG(DB_MD, "key %d/%d does not"
+				" provide enough buf "DF_U64" < "
+				DF_U64"\n", key.class_id, key.rank,
+				cb_info->value->sg_iovs[0].iov_buf_len,
+				iv_value->sg_iovs[0].iov_len);
 	}
 
 	ABT_future_set(cb_info->future, &rc);
@@ -894,8 +916,8 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 
 static int
 iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
-	       d_sg_list_t *value, crt_iv_sync_t *sync, unsigned int shortcut,
-	       int opc)
+	       d_sg_list_t *value, crt_iv_sync_t *sync,
+	       unsigned int shortcut, int opc)
 {
 	struct iv_cb_info	cb_info;
 	ABT_future		future;

@@ -59,6 +59,8 @@ struct vos_io_context {
 	uint32_t		 ic_dedup_th;
 	/** dedup entries to be inserted after transaction done */
 	d_list_t		 ic_dedup_entries;
+	/** the total size of the IO */
+	uint64_t		 ic_io_size;
 	/** flags */
 	unsigned int		 ic_update:1,
 				 ic_size_fetch:1,
@@ -466,6 +468,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	if (ioc == NULL)
 		return -DER_NOMEM;
 
+	ioc->ic_io_size = 0;
 	ioc->ic_iod_nr = iod_nr;
 	ioc->ic_iods = iods;
 	ioc->ic_epr.epr_hi = dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch;
@@ -863,7 +866,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 				goto failed;
 		}
 		bio_iov_set(&biov, ent->en_addr, nr * ent_array.ea_inob);
-
+		ioc->ic_io_size += nr * ent_array.ea_inob;
 		if (ci_is_valid(&ent->en_csum)) {
 			rc = save_csum(ioc, &ent->en_csum, ent, rsize);
 			if (rc != 0)
@@ -1253,12 +1256,14 @@ out:
 }
 
 int
-vos_fetch_end(daos_handle_t ioh, int err)
+vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err)
 {
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 
 	/* NB: it's OK to use the stale ioc->ic_obj for fetch_end */
 	D_ASSERT(!ioc->ic_update);
+	if (size != NULL && err == 0)
+		*size = ioc->ic_io_size;
 	vos_ioc_destroy(ioc, false);
 	return err;
 }
@@ -1349,7 +1354,7 @@ out:
 	if (rc != 0) {
 		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
 		ioc->ic_recx_lists = NULL;
-		return vos_fetch_end(vos_ioc2ioh(ioc), rc);
+		return vos_fetch_end(vos_ioc2ioh(ioc), NULL, rc);
 	}
 	return 0;
 }
@@ -1458,7 +1463,7 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	if (csum != NULL)
 		ent.ei_csum = *csum;
-
+	ioc->ic_io_size += recx->rx_nr * rsize;
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
 	ent.ei_addr.ba_dedup = false;	/* Don't make this flag persistent */
@@ -2016,9 +2021,10 @@ update_cancel(struct vos_io_context *ioc)
 
 int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
-	       struct dtx_handle *dth)
+	       daos_size_t *size, struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent	**daes = NULL;
+	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
 	uint64_t		 time = 0;
@@ -2050,9 +2056,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		if (daes == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
 
+		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
+		if (dces == NULL)
+			D_GOTO(abort, err = -DER_NOMEM);
+
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
 					      dth->dth_dti_cos_count,
-					      0, NULL, daes);
+					      0, NULL, daes, dces);
 		if (err <= 0)
 			D_FREE(daes);
 	}
@@ -2095,12 +2105,16 @@ abort:
 	if (err == 0) {
 		vos_ts_set_upgrade(ioc->ic_ts_set);
 		if (daes != NULL) {
-			vos_dtx_post_handle(ioc->ic_cont, daes,
+			vos_dtx_post_handle(ioc->ic_cont, daes, NULL,
 					    dth->dth_dti_cos_count, false);
 			dth->dth_cos_done = 1;
 		}
 		vos_dedup_process(vos_cont2pool(ioc->ic_cont),
 				  &ioc->ic_dedup_entries, false);
+	} else if (daes != NULL) {
+		vos_dtx_post_handle(ioc->ic_cont, daes, dces,
+				    dth->dth_dti_cos_count, false);
+		dth->dth_cos_done = 0;
 	}
 
 	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0) {
@@ -2115,7 +2129,10 @@ abort:
 	VOS_TIME_END(time, VOS_UPDATE_END);
 	vos_space_unhold(vos_cont2pool(ioc->ic_cont), &ioc->ic_space_held[0]);
 
+	if (size != NULL && err == 0)
+		*size = ioc->ic_io_size;
 	D_FREE(daes);
+	D_FREE(dces);
 	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 
@@ -2200,7 +2217,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	*ioh = vos_ioc2ioh(ioc);
 	return 0;
 error:
-	vos_update_end(vos_ioc2ioh(ioc), 0, dkey, rc, dth);
+	vos_update_end(vos_ioc2ioh(ioc), 0, dkey, rc, NULL, dth);
 	return rc;
 }
 
@@ -2248,6 +2265,15 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx)
 	return bio_iod_sgl(ioc->ic_biod, idx);
 }
 
+void
+vos_set_io_csum(daos_handle_t ioh, struct dcs_iod_csums *csums)
+{
+	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
+
+	D_ASSERT(ioc != NULL);
+
+	ioc->iod_csums = csums;
+}
 /*
  * XXX Dup these two helper functions for this moment, implement
  * non-transactional umem_alloc/free() later.
@@ -2366,7 +2392,7 @@ vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	int rc, err;
 
 	D_ASSERT(sgl_nr == ioc->ic_iod_nr);
-	rc = bio_iod_prep(ioc->ic_biod);
+	rc = bio_iod_prep(ioc->ic_biod, BIO_CHK_TYPE_IO);
 	if (rc)
 		return rc;
 
@@ -2401,7 +2427,7 @@ vos_obj_update_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 				DP_RC(rc));
 	}
 
-	rc = vos_update_end(ioh, pm_ver, dkey, rc, dth);
+	rc = vos_update_end(ioh, pm_ver, dkey, rc, NULL, dth);
 	return rc;
 }
 
@@ -2445,7 +2471,7 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
 	ioc->ic_epr.epr_lo = epr->epr_lo;
 
 	rc = vos_update_end(ioh, 0 /* don't care */, (daos_key_t *)dkey, rc,
-			    NULL);
+			    NULL, NULL);
 	return rc;
 }
 
@@ -2489,7 +2515,7 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 				DP_UOID(oid), DP_RC(rc));
 	}
 
-	rc = vos_fetch_end(ioh, rc);
+	rc = vos_fetch_end(ioh, NULL, rc);
 	return rc;
 }
 

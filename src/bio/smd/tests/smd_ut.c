@@ -16,6 +16,7 @@
 #include <daos/common.h>
 #include <daos_srv/smd.h>
 #include "../smd_internal.h"
+#include <daos/tests_lib.h>
 
 #define SMD_STORAGE_PATH	"/mnt/daos"
 #define DB_LIST_NR	3
@@ -257,46 +258,46 @@ ut_device(void **state)
 
 	/* Assigned dev1 to target 0, 1, 2, dev2 to target 3 */
 	rc = smd_dev_add_tgt(dev_id1, 0);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = smd_dev_add_tgt(dev_id1, 0);
-	assert_int_equal(rc, -DER_EXIST);
+	assert_rc_equal(rc, -DER_EXIST);
 
 	for (i = 1; i < 3; i++) {
 		rc = smd_dev_add_tgt(dev_id1, i);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	rc = smd_dev_add_tgt(dev_id2, 1);
-	assert_int_equal(rc, -DER_EXIST);
+	assert_rc_equal(rc, -DER_EXIST);
 
 	rc = smd_dev_add_tgt(dev_id2, 3);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = smd_dev_set_state(dev_id2, SMD_DEV_FAULTY);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = smd_dev_get_by_id(id3, &dev_info);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	rc = smd_dev_get_by_id(dev_id1, &dev_info);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	verify_dev(dev_info, dev_id1, 1);
 
 	smd_dev_free_info(dev_info);
 
 	rc = smd_dev_get_by_tgt(4, &dev_info);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	rc = smd_dev_get_by_tgt(3, &dev_info);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	verify_dev(dev_info, dev_id2, 2);
 
 	smd_dev_free_info(dev_info);
 
 	D_INIT_LIST_HEAD(&dev_list);
 	rc = smd_dev_list(&dev_list, &dev_cnt);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(dev_cnt, 2);
 
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
@@ -341,43 +342,43 @@ ut_pool(void **state)
 
 	for (i = 0; i < 4; i++) {
 		rc = smd_pool_add_tgt(id1, i, i << 10, 100);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		rc = smd_pool_add_tgt(id2, i, i << 20, 200);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	rc = smd_pool_add_tgt(id1, 0, 5000, 100);
-	assert_int_equal(rc, -DER_EXIST);
+	assert_rc_equal(rc, -DER_EXIST);
 
 	rc = smd_pool_add_tgt(id1, 4, 4 << 10, 200);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	rc = smd_pool_get_info(id1, &pool_info);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	verify_pool(pool_info, id1, 10);
 
 	smd_pool_free_info(pool_info);
 
 	rc = smd_pool_get_info(id3, &pool_info);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	for (i = 0; i < 4; i++) {
 		rc = smd_pool_get_blob(id1, i, &blob_id);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_int_equal(blob_id, i << 10);
 
 		rc = smd_pool_get_blob(id2, i, &blob_id);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_int_equal(blob_id, i << 20);
 	}
 
 	rc = smd_pool_get_blob(id1, 5, &blob_id);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	D_INIT_LIST_HEAD(&pool_list);
 	rc = smd_pool_list(&pool_list, &pool_cnt);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(pool_cnt, 2);
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
@@ -393,18 +394,18 @@ ut_pool(void **state)
 	}
 
 	rc = smd_pool_del_tgt(id1, 5);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	for (i = 0; i < 4; i++) {
 		rc = smd_pool_del_tgt(id1, i);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		rc = smd_pool_del_tgt(id2, i);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	rc = smd_pool_get_info(id1, &pool_info);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 }
 
 static void
@@ -424,15 +425,15 @@ ut_dev_replace(void **state)
 	/* Assign pools, they were unassigned in prior pool test */
 	for (i = 0; i < 4; i++) {
 		rc = smd_pool_add_tgt(pool_id1, i, i << 10, 100);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		rc = smd_pool_add_tgt(pool_id2, i, i << 20, 200);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	D_INIT_LIST_HEAD(&pool_list);
 	rc = smd_pool_list(&pool_list, &pool_cnt);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(pool_cnt, 2);
 
 	/* Assign different blobs to dev1's targets 0, 1, 2 */
@@ -444,23 +445,23 @@ ut_dev_replace(void **state)
 
 	/* Replace dev1 with dev3 without marking dev1 as faulty */
 	rc = smd_dev_replace(dev_id1, dev_id3, &pool_list);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	rc = smd_dev_set_state(dev_id1, SMD_DEV_FAULTY);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Replace dev1 with dev2 */
 	rc = smd_dev_replace(dev_id1, dev_id2, &pool_list);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	/* Replace dev1 with dev3 */
 	rc = smd_dev_replace(dev_id1, dev_id3, &pool_list);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Verify device after replace */
 	D_INIT_LIST_HEAD(&dev_list);
 	rc = smd_dev_list(&dev_list, &dev_cnt);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(dev_cnt, 2);
 
 	d_list_for_each_entry_safe(dev_info, tmp_dev, &dev_list, sdi_link) {
@@ -479,7 +480,7 @@ ut_dev_replace(void **state)
 	d_list_for_each_entry_safe(pool_info, tmp_pool, &pool_list, spi_link) {
 		for (i = 0; i < 3; i++) {
 			rc = smd_pool_get_blob(pool_info->spi_id, i, &blob_id);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			if (i == 0)
 				assert_int_equal(blob_id, 555);
 			else if (i == 1)

@@ -10,6 +10,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
@@ -42,10 +43,12 @@ type configGenCmd struct {
 func (cmd *configGenCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
+	cmd.log.Debugf("configGenCmd input control config: %+v", cmd.config)
+
 	req := control.ConfigGenerateReq{
 		NrEngines: cmd.NrEngines,
 		MinNrSSDs: cmd.MinNrSSDs,
-		HostList:  cmd.hostlist,
+		HostList:  cmd.config.HostList,
 		Client:    cmd.ctlInvoker,
 		Log:       cmd.log,
 	}
@@ -67,6 +70,12 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 	}
 
 	resp, err := control.ConfigGenerate(ctx, req)
+	if resp == nil {
+		if err == nil {
+			return errors.New("nil response from config generate")
+		}
+		return err
+	}
 
 	if resp.Errors() != nil {
 		// host level errors e.g. unresponsive daos_server process

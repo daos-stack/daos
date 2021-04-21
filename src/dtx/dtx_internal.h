@@ -25,17 +25,18 @@
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define DTX_PROTO_SRV_RPC_LIST(X)				\
-	X(DTX_COMMIT, 0, &CQF_dtx, dtx_handler, NULL),		\
-	X(DTX_ABORT, 0, &CQF_dtx, dtx_handler, NULL),		\
-	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL),		\
-	X(DTX_REFRESH, 0, &CQF_dtx, dtx_handler, NULL)
+#define DTX_PROTO_SRV_RPC_LIST						\
+	X(DTX_COMMIT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_commit")	\
+	X(DTX_ABORT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_abort")	\
+	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL, "dtx_check")	\
+	X(DTX_REFRESH, 0, &CQF_dtx, dtx_handler, NULL, "dtx_refresh")
 
-#define X_OPC(a, b, c, d, e) a
-
+#define X(a, b, c, d, e, f) a,
 enum dtx_operation {
-	DTX_PROTO_SRV_RPC_LIST(X_OPC)
+	DTX_PROTO_SRV_RPC_LIST
+	DTX_PROTO_SRV_RPC_COUNT,
 };
+#undef X
 
 /* DTX RPC input fields */
 #define DAOS_ISEQ_DTX							\
@@ -96,9 +97,22 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	       int count, bool drop_cos);
-int dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
-	      struct dtx_entry **dtes, int count);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
+
+int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
+			 d_list_t *check_list, d_list_t *cmt_list,
+			 d_list_t *abt_list, d_list_t *act_list, bool failout);
+int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
+			  daos_epoch_t epoch, int *tgt_array, int *err);
+
+enum dtx_status_handle_result {
+	DSHR_NEED_COMMIT	= 1,
+	DSHR_NEED_RETRY		= 2,
+	DSHR_COMMITTED		= 3,
+	DSHR_ABORTED		= 4,
+	DSHR_ABORT_FAILED	= 5,
+	DSHR_CORRUPT		= 6,
+};
 
 #endif /* __DTX_INTERNAL_H__ */

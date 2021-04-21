@@ -9,7 +9,6 @@ package common
 import (
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 )
 
@@ -33,15 +32,8 @@ func GetIndex(varIdx ...int32) int32 {
 // MockUUID returns mock UUID values for use in tests.
 func MockUUID(varIdx ...int32) string {
 	idx := GetIndex(varIdx...)
-	idxStr := strconv.Itoa(int(idx))
 
-	return fmt.Sprintf("%s-%s-%s-%s-%s",
-		strings.Repeat(idxStr, 8),
-		strings.Repeat(idxStr, 4),
-		strings.Repeat(idxStr, 4),
-		strings.Repeat(idxStr, 4),
-		strings.Repeat(idxStr, 12),
-	)
+	return fmt.Sprintf("%08d-%04d-%04d-%04d-%012d", idx, idx, idx, idx, idx)
 }
 
 // MockHostAddr returns mock tcp addresses for use in tests.
@@ -72,4 +64,23 @@ func MockPCIAddrs(num int) (addrs []string) {
 	}
 
 	return
+}
+
+// MockWriter is a mock io.Writer that can be used to inject errors and check
+// values written.
+type MockWriter struct {
+	builder  strings.Builder
+	WriteErr error
+}
+
+func (w *MockWriter) Write(p []byte) (int, error) {
+	if w.WriteErr != nil {
+		return 0, w.WriteErr
+	}
+	return w.builder.Write(p)
+}
+
+// GetWritten gets the string value written using Write.
+func (w *MockWriter) GetWritten() string {
+	return w.builder.String()
 }
