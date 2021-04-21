@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
@@ -98,6 +99,17 @@ func (ei *EngineInstance) NotifyStorageReady() {
 	}()
 }
 
+// publishFormatRequiredFn returns onAwaitFormatFn which will publish an
+// event using the provided publish function to indicate that host is awaiting
+// storage format.
+func publishFormatRequiredFn(publishFn func(*events.RASEvent), hostname string, engineIdx uint32) onAwaitFormatFn {
+	return func(_ context.Context) error {
+		publishFn(events.NewEngineFormatRequiredEvent(hostname, engineIdx))
+
+		return nil
+	}
+}
+
 // awaitStorageReady blocks until instance has storage available and ready to be used.
 func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
 	idx := ei.Index()
@@ -141,6 +153,13 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 	ei.log.Infof("%s format required on instance %d", formatType, ei.Index())
 
 	ei.waitFormat.SetTrue()
+	// After we know that the instance is awaiting format, fire off
+	// any callbacks that are waiting for this state.
+	for _, fn := range ei.onAwaitFormat {
+		if err := fn(ctx); err != nil {
+			return err
+		}
+	}
 
 	select {
 	case <-ctx.Done():

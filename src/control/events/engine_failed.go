@@ -70,3 +70,17 @@ func NewEngineFailedEvent(hostname string, instanceIdx uint32, rank uint32, exit
 		},
 	})
 }
+
+// NewEngineFormatRequiredEvent creates a EngineFormatRequired event from given inputs.
+func NewEngineFormatRequiredEvent(hostname string, instanceIdx uint32) *RASEvent {
+	return New(&RASEvent{
+		Msg:      "DAOS engine requires a storage format",
+		ID:       RASEngineFormatRequired,
+		Hostname: hostname,
+		Type:     RASTypeInfoOnly,
+		Severity: RASSeverityNotice,
+		ExtendedInfo: &EngineStateInfo{
+			InstanceIdx: instanceIdx,
+		},
+	})
+}
