@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
 )
@@ -46,6 +47,20 @@ func (cmd *poolBaseCmd) resolvePool() (err error) {
 	return
 }
 
+func (cmd *poolBaseCmd) resolveAndConnect() (func(), error) {
+	if err := cmd.resolvePool(); err != nil {
+		return nil, err
+	}
+
+	if err := cmd.connectPool(); err != nil {
+		return nil, err
+	}
+
+	return func() {
+		cmd.disconnectPool()
+	}, nil
+}
+
 func (cmd *poolBaseCmd) connectPool() error {
 	sysName := cmd.SysName
 	if sysName == "" {
@@ -62,4 +77,70 @@ func (cmd *poolBaseCmd) disconnectPool() {
 	if err := daosError(rc); err != nil {
 		cmd.log.Errorf("pool disconnect failed: %s", err)
 	}
+}
+
+type poolCmd struct {
+	Containers poolContainersCmd `command:"containers" alias:"cont" description:"container operations for the specified pool"`
+}
+
+type poolContainersCmd struct {
+	List poolContainersListCmd `command:"list" description:"list containers for this pool"`
+}
+
+type poolContainersListCmd struct {
+	poolBaseCmd
+}
+
+func (cmd *poolContainersListCmd) Execute(_ []string) error {
+	extra_cont_margin := C.size_t(16)
+
+	cleanup, err := cmd.resolveAndConnect()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// First call gets the current number of containers.
+	var ncont C.daos_size_t
+	rc := C.daos_pool_list_cont(cmd.cPoolHandle, &ncont, nil, nil)
+	if err := daosError(rc); err != nil {
+		return err
+	}
+
+	// No containers.
+	if ncont == 0 {
+		return nil
+	}
+
+	var cConts *C.struct_daos_pool_cont_info
+	// Extend ncont with a safety margin to account for containers
+	// that might have been created since the first API call.
+	ncont += extra_cont_margin
+	cConts = (*C.struct_daos_pool_cont_info)(C.calloc(C.sizeof_struct_daos_pool_cont_info, ncont))
+	if cConts == nil {
+		return errors.New("malloc() failed")
+	}
+	defer C.free(unsafe.Pointer(cConts))
+
+	rc = C.daos_pool_list_cont(cmd.cPoolHandle, &ncont, cConts, nil)
+	if err := daosError(rc); err != nil {
+		return err
+	}
+
+	conts := (*[1 << 30]C.struct_daos_pool_cont_info)(unsafe.Pointer(cConts))[:ncont:ncont]
+	contUUIDs := make([]uuid.UUID, ncont)
+	for i, cont := range conts {
+		buf := C.GoBytes(unsafe.Pointer(&cont.pci_uuid[0]), C.int(len(cont.pci_uuid)))
+		contUUIDs[i] = uuid.Must(uuid.FromBytes(buf))
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(contUUIDs, nil)
+	}
+
+	for _, cont := range contUUIDs {
+		cmd.log.Infof("%s", cont)
+	}
+
+	return nil
 }
