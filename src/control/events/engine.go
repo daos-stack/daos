@@ -55,11 +55,11 @@ func EngineStateInfoToProto(rsi *EngineStateInfo) (*sharedpb.RASEvent_EngineStat
 	return pbInfo, nil
 }
 
-// NewEngineFailedEvent creates a specific EngineFailed event from given inputs.
-func NewEngineFailedEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) *RASEvent {
+// NewEngineDiedEvent creates a specific EngineDied event from given inputs.
+func NewEngineDiedEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) *RASEvent {
 	return New(&RASEvent{
 		Msg:      "DAOS engine exited unexpectedly",
-		ID:       RASEngineFailed,
+		ID:       RASEngineDied,
 		Hostname: hostname,
 		Rank:     rank,
 		Type:     RASTypeStateChange,

@@ -14,8 +14,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
-func TestEvents_ConvertRankDown(t *testing.T) {
-	event := NewEngineFailedEvent("foo", 1, 1, common.ExitStatus("test"))
+func TestEvents_ConvertEngineDied(t *testing.T) {
+	event := NewEngineDiedEvent("foo", 1, 1, common.ExitStatus("test"))
 
 	pbEvent, err := event.ToProto()
 	if err != nil {

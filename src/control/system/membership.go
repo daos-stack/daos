@@ -491,7 +491,7 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 	ei := evt.GetEngineStateInfo()
 	if ei == nil {
-		m.log.Error("no extended info in EngineFailed event received")
+		m.log.Error("no extended info in EngineDied event received")
 		return
 	}
 
@@ -525,7 +525,7 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 // OnEvent handles events on channel and updates member states accordingly.
 func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {
-	case events.RASEngineFailed:
+	case events.RASEngineDied:
 		m.handleEngineFailure(evt)
 	}
 }
