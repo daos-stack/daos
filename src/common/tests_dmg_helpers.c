@@ -259,6 +259,10 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 	}
 
 	n_svcranks = json_object_array_length(tmp);
+	if (n_svcranks <= 0) {
+		D_ERROR("unexpected svc_reps length: %d\n", n_svcranks);
+		return -DER_INVAL;
+	}
 	if (pool_info->mgpi_svc == NULL) {
 		pool_info->mgpi_svc = d_rank_list_alloc(n_svcranks);
 		if (pool_info->mgpi_svc == NULL) {
