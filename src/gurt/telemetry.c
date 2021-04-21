@@ -242,6 +242,9 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	char		tmp[D_TM_MAX_NAME_LEN];
 	int		rc = D_TM_SUCCESS;
 
+	/* telemetry disabled for this release. */
+	return rc;
+
 	if ((d_tm_shmem_root != NULL) && (d_tm_root != NULL)) {
 		D_INFO("d_tm_init already completed for id %d\n", id);
 		return rc;

@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.1.4
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -259,9 +259,8 @@ mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{_sysconfdir}/daos/bash_completion.d %{buildroot}/%{_sysconfdir}
 
 %pre server
-getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
-getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics daos_server
+getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -395,7 +394,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
-%{_bindir}/daos_metrics
 %{_sysconfdir}/daos/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
@@ -409,6 +407,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed Apr 21 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.4-6
+- Remove daos_metrics utility from 1.2 release
+
 * Wed Apr 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.1.4-5
 - Remove storage_estimator and io_conf from client packages to remove
   any client side dependence on bio and vos (and and PMDK/SPDK)
