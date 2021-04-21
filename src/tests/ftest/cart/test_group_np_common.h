@@ -146,13 +146,7 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	regex_t				 regex_dead;
 	static const char		*dead_regex = ".?0*1";
 	static const char		*alive_regex = ".?0*";
-	char				*swim_seq;
-
-	D_ALLOC(swim_seq, MAX_SWIM_STATUSES);
-
-	D_ASSERTF(swim_seq != NULL,
-		  "Cannot allocate %d chars for SWIM sequence.\n",
-		  MAX_SWIM_STATUSES);
+	char				swim_seq[MAX_SWIM_STATUSES];
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
@@ -160,7 +154,7 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	if (swim_status_by_rank[e_req->rank] != NULL)
 		strcpy(swim_seq, swim_status_by_rank[e_req->rank]);
 	else
-		memset(swim_seq, 0x0, MAX_SWIM_STATUSES);
+		strcpy(swim_seq, "");
 
 	/* compile and run regex's */
 	regcomp(&regex_dead, dead_regex, REG_EXTENDED);
@@ -192,8 +186,6 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 		  "status [%d] is as expected.\n",
 		  e_req->rank, swim_seq,
 		  e_req->exp_status);
-
-	D_FREE(swim_seq);
 
 	e_reply = crt_reply_get(rpc_req);
 
