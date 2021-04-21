@@ -1002,9 +1002,9 @@ Errors:
 			}),
 			expPrintStr: `
 Storage Prepare:
-  Hosts     SCM Namespaces     Reboot Required NVMe Result 
-  -----     --------------     --------------- ----------- 
-  host[1-2] 3 B (2 namespaces) false           OK          
+  Hosts     SCM Namespaces        Reboot Required NVMe Result 
+  -----     --------------        --------------- ----------- 
+  host[1-2] 3.0 TB (2 namespaces) false           OK          
 `,
 		},
 		"no nvme results": {
@@ -1015,9 +1015,9 @@ Storage Prepare:
 			}),
 			expPrintStr: `
 Storage Prepare:
-  Hosts     SCM Namespaces     Reboot Required NVMe Result 
-  -----     --------------     --------------- ----------- 
-  host[1-2] 3 B (2 namespaces) false           N/A         
+  Hosts     SCM Namespaces        Reboot Required NVMe Result 
+  -----     --------------        --------------- ----------- 
+  host[1-2] 3.0 TB (2 namespaces) false           N/A         
 `,
 		},
 		"no scm results": {
@@ -1046,10 +1046,10 @@ Errors:
   host2 nvme: prepare failed 
 
 Storage Prepare:
-  Hosts SCM Namespaces     Reboot Required NVMe Result 
-  ----- --------------     --------------- ----------- 
-  host1 3 B (2 namespaces) false           OK          
-  host2 3 B (2 namespaces) false           N/A         
+  Hosts SCM Namespaces        Reboot Required NVMe Result 
+  ----- --------------        --------------- ----------- 
+  host1 3.0 TB (2 namespaces) false           OK          
+  host2 3.0 TB (2 namespaces) false           N/A         
 `,
 		},
 	} {
