@@ -55,7 +55,7 @@ policy_write_intensivity(struct vos_pool *pool, daos_iod_type_t type,
 
 
 /* policy functions table */
-static const daos_media_type_t (*vos_policies[TIER_POLICY_MAX])(struct vos_pool*,
+static daos_media_type_t (*vos_policies[TIER_POLICY_MAX])(struct vos_pool*,
                                                         daos_iod_type_t,
                                                         daos_size_t) =
                    {policy_default, policy_io_size, policy_write_intensivity};
