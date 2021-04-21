@@ -418,9 +418,9 @@ test_drpc_verify_cluster_event(void **state)
 	assert_int_equal(uuid_parse(pool_str, pool), 0);
 	assert_int_equal(uuid_parse(cont_str, cont), 0);
 
-	ds_notify_ras_event(RAS_SYSTEM_STOP_FAILED, "ranks failed", RAS_TYPE_INFO,
-			    RAS_SEV_ERROR, "exhwid", &rank, "exjobid", &pool,
-			    &cont, &objid, "exctlop",
+	ds_notify_ras_event(RAS_SYSTEM_STOP_FAILED, "ranks failed",
+			    RAS_TYPE_INFO, RAS_SEV_ERROR, "exhwid", &rank,
+			    "exjobid", &pool, &cont, &objid, "exctlop",
 			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
 	verify_cluster_event((uint32_t)RAS_SYSTEM_STOP_FAILED, "ranks failed",
 			     (uint32_t)RAS_TYPE_INFO, (uint32_t)RAS_SEV_NOTICE,
