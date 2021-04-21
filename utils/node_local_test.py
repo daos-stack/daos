@@ -26,6 +26,7 @@ import argparse
 import tabulate
 import functools
 import subprocess
+import junit_xml
 import tempfile
 import pickle
 import xattr
@@ -131,7 +132,7 @@ class WarningsFactory():
 
     # Error levels supported by the reporting are LOW, NORMAL, HIGH, ERROR.
 
-    def __init__(self, filename):
+    def __init__(self, filename, junit=False):
         self._fd = open(filename, 'w')
         self.filename = filename
         self.issues = []
@@ -141,6 +142,14 @@ class WarningsFactory():
         # work in __del__
         self._file = __file__.lstrip('./')
         self._flush()
+
+        if junit:
+            test_case = junit_xml.TestCase('Startup', 'class', 1, 'out', 'err')
+            self.ts = junit_xml.TestSuite('NLT', [test_case])
+            self.tc = junit_xml.TestCase('Sanity', 'class')
+        else:
+            self.ts = None
+            self.tc = None
 
     def __del__(self):
         """Ensure the file is flushed on exit, but if it hasn't already
@@ -156,6 +165,9 @@ class WarningsFactory():
         entry['message'] = 'Tests exited without shutting down properly'
         entry['severity'] = 'ERROR'
         self.issues.append(entry)
+
+        if self.ts:
+            self.tc.add_failure_info('NLT exited abnormally')
         self.close()
 
     def explain(self, line, log_file, esignal):
@@ -263,6 +275,10 @@ class WarningsFactory():
         self._fd = None
         print('Closed JSON file {} with {} errors'.format(self.filename,
                                                           len(self.issues)))
+        if self.ts:
+            self.ts.test_cases.append(self.tc)
+            with open('nlt-junit.xml', 'w') as f:
+                junit_xml.TestSuite.to_file(f, [self.ts], prettyprint=True)
 
 def load_conf(args):
     """Load the build config file"""
@@ -2525,7 +2541,7 @@ def main():
 
     conf = load_conf(args)
 
-    wf = WarningsFactory('nlt-errors.json')
+    wf = WarningsFactory('nlt-errors.json', junit=True)
 
     wf_server = WarningsFactory('nlt-server-leaks.json')
     wf_client = WarningsFactory('nlt-client-leaks.json')
