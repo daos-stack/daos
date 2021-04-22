@@ -80,11 +80,7 @@ func (cmd *poolBaseCmd) disconnectPool() {
 }
 
 type poolCmd struct {
-	Containers poolContainersCmd `command:"containers" alias:"cont" description:"container operations for the specified pool"`
-}
-
-type poolContainersCmd struct {
-	List poolContainersListCmd `command:"list" description:"list containers for this pool"`
+	ListContainers poolContainersListCmd `command:"list-containers" alias:"list-cont" alias:"ls" description:"container operations for the specified pool"`
 }
 
 type poolContainersListCmd struct {
