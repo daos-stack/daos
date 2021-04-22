@@ -22,32 +22,38 @@ extern "C" {
 
 /** struct that has the values to make the connection from the UNS to DAOS */
 struct duns_attr_t {
-	/** Pool uuid of the container. */
+	/** IN: Pool uuid of the container. */
 	uuid_t			da_puuid;
-	/** Container uuid that is created for the path. */
+	/** IN: Container uuid that is created for the path. */
 	uuid_t			da_cuuid;
-	/** Container layout (POSIX, HDF5) */
+	/** IN: Container layout (POSIX, HDF5) */
 	daos_cont_layout_t	da_type;
-	/** Default Object Class for all objects in the container */
+	/** IN: (Optional) Object Class for all objects in the container */
 	daos_oclass_id_t	da_oclass_id;
-	/** Default Chunks size for all files in container */
+	/** IN: (Optional) Chunk size for all files in container */
 	daos_size_t		da_chunk_size;
-	/** Relative component of path.
+	/** OUT: Relative component of path from where the UNS entry is located.
 	 *
-	 * If using direct access to a POSIX container with the prefix, return
-	 * path without the prefix.
+	 * This is returned if the UNS entry is not the last entry in the path,
+	 * and the UNS library performs a reverse lookup to find a UNS entry in
+	 * the path. To check only the last entry in the path and not return
+	 * this relative path to that entry, set \a da_no_reverse_lookup. User
+	 * is responsible to free this if it is returned.
 	 */
 	char			*da_rel_path;
-	/** container properties **/
+	/** IN: (Optional Container props to be added with duns_path_create */
 	daos_prop_t		*da_props;
-	/** Path is on Lustre */
+	/** OUT: This is set to trye if path is on Lustre filesystem */
 	bool			da_on_lustre;
-	/** String does not include daos:// prefix
+	/** IN: String does not include daos:// prefix
 	 *
 	 * Path that is passed does not have daos: prefix but is direct:
 	 * (/puuid/cuuid/xyz) and does not need to parse a path UNS attrs.
+	 * This is usually set to false.
 	 */
 	bool			da_no_prefix;
+	/** IN: look only at the last entry in the path for duns_resolve_path */
+	bool			da_no_reverse_lookup;
 };
 
 /** extended attribute name that will container the UNS info */
@@ -79,7 +85,13 @@ duns_create_path(daos_handle_t poh, const char *path,
  * Retrieve the pool and container uuids from a path corresponding to a DAOS
  * location. If this was a path created with duns_create_path(), then this call
  * would return the pool, container, and type values in the \a attr struct (the
- * rest of the values are not populated.
+ * rest of the values are not populated.  By default, this call does a reverse
+ * lookup on the realpath until it finds an entry in the path that has the UNS
+ * attr. The rest of the path from that entry point is returned in \a
+ * attr.da_rel_path which the user is responsible to free.  If the entire path
+ * does not have the entry, ENODATA error is returned. To avoid doing the
+ * reverse lookup and check only that last entry, set \a
+ * attr.da_no_reverse_lookup.
  *
  * To avoid going through the UNS if the user knows the pool and container
  * uuids, a special format can be passed as a prefix for a "fast path", and this
