@@ -2358,7 +2358,7 @@ fs_copy_file(struct file_dfs *src_file_dfs,
 	void *buf		= NULL;
 
 	/* Open source file */
-	rc = file_open(src_file_dfs, src_path, src_flags, tmp_mode_file);
+	rc = file_open(src_file_dfs, src_path, src_flags);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
