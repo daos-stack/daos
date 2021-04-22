@@ -26,7 +26,7 @@ dss_engine_metrics_init(void)
 			     "Timestamp of last engine startup", NULL,
 			     "started_at");
 	if (rc != 0) {
-		D_ERROR("unable to add metric for startup timestamp: " 
+		D_ERROR("unable to add metric for startup timestamp: "
 			DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
@@ -35,7 +35,7 @@ dss_engine_metrics_init(void)
 			     "Timestamp when the engine became ready", NULL,
 			     "servicing_at");
 	if (rc != 0) {
-		D_ERROR("unable to add metric for ready timestamp: " 
+		D_ERROR("unable to add metric for ready timestamp: "
 			DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
@@ -44,7 +44,7 @@ dss_engine_metrics_init(void)
 			     "Rank ID of this engine", "",
 			     "rank");
 	if (rc != 0) {
-		D_ERROR("unable to add metric for rank ID: " 
+		D_ERROR("unable to add metric for rank ID: "
 			DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
@@ -53,7 +53,7 @@ dss_engine_metrics_init(void)
 			     "Number of dead rank events received", NULL,
 			     "events/dead_ranks");
 	if (rc != 0) {
-		D_ERROR("unable to add metric for dead ranks: " 
+		D_ERROR("unable to add metric for dead ranks: "
 			DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
@@ -62,7 +62,7 @@ dss_engine_metrics_init(void)
 			     "Timestamp of last received event", NULL,
 			     "events/last_event_ts");
 	if (rc != 0) {
-		D_ERROR("unable to add metric for last event timestamp: " 
+		D_ERROR("unable to add metric for last event timestamp: "
 			DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
@@ -82,7 +82,7 @@ dss_engine_metrics_fini(void)
 
 /**
  * Fetch the engine metrics.
- * 
+ *
  * \return pointer to the engine metrics
  */
 struct engine_metrics *

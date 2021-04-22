@@ -60,7 +60,7 @@ void test_function2(void)
  */
 void test_open_handle(void)
 {
-	static struct d_tm_node_t	*num_open_handles = NULL;
+	static struct d_tm_node_t	*num_open_handles;
 	int				rc;
 
 	if (num_open_handles == NULL) {
@@ -91,7 +91,7 @@ void test_open_handle(void)
  */
 void test_close_handle(void)
 {
-	static struct d_tm_node_t	*num_open_handles = NULL;
+	static struct d_tm_node_t	*num_open_handles;
 	int				rc;
 
 	if (num_open_handles == NULL) {
@@ -103,7 +103,7 @@ void test_close_handle(void)
 				"handle/open handles");
 		if (rc != 0) {
 			printf("d_tm_add_metric gauge failed: "DF_RC"\n",
-			DP_RC(rc));
+			       DP_RC(rc));
 			return;
 		}
 	}
@@ -135,7 +135,7 @@ void timer_snapshot(void)
 	int				snap;
 
 	for (snap = 0; snap < NUM_SNAPSHOTS; snap++) {
-		rc = d_tm_add_metric(&(t[snap]), D_TM_TIMER_SNAPSHOT,
+		rc = d_tm_add_metric(&t[snap], D_TM_TIMER_SNAPSHOT,
 				     NULL, NULL, "snapshot %d", snap);
 		if (rc != 0)
 			printf("d_tm_add_metric snapshot %d failed: "
