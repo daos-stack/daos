@@ -315,7 +315,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         return pool
 
     def create_cont(self, pool, use_dfuse_uns=False,
-                    dfuse_uns_pool=None, dfuse_uns_cont=None):
+                    dfuse_uns_pool=None, dfuse_uns_cont=None,
+                    cont_type=None):
         # pylint: disable=arguments-differ
         """Create a TestContainer object.
 
@@ -330,6 +331,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             dfuse_uns_cont (TestContainer, optional): container in the
                 dfuse mount for which to create a UNS path.
                 Default assumes dfuse is running for a specific container.
+            cont_type (str, optional): the container type.
 
         Returns:
             TestContainer: the container object
@@ -352,6 +354,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 path = join(path, dfuse_uns_cont.uuid)
             path = join(path, "uns{}".format(str(len(self.container))))
             container.path.update(path)
+
+        if cont_type:
+            container.type.update(cont_type)
 
         # Create container
         container.create()
@@ -615,20 +620,20 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self._set_dsync_params(src_type, src_path, src_pool, src_cont,
                                    dst_type, dst_path, dst_pool, dst_cont)
         elif self.tool == "DSERIAL":
-            assert src_type in (None, "DAOS", "DAOS_UUID")
-            assert src_path is None
-            assert dst_type in (None, "DAOS", "DAOS_UUID")
-            assert dst_path is None
-            assert dst_cont is None
+            assert src_type in (None, "DAOS", "DAOS_UUID") #nosec
+            assert src_path is None #nosec
+            assert dst_type in (None, "DAOS", "DAOS_UUID") #nosec
+            assert dst_path is None #nosec
+            assert dst_cont is None #nosec
             self._set_dserial_params(src_pool, src_cont, dst_pool)
         elif self.tool == "FS_COPY":
             self._set_fs_copy_params(src_type, src_path, src_pool, src_cont,
                                      dst_type, dst_path, dst_pool, dst_cont)
         elif self.tool == "CONT_CLONE":
-            assert src_type in (None, "DAOS", "DAOS_UUID")
-            assert src_path is None
-            assert dst_type in (None, "DAOS", "DAOS_UUID")
-            assert dst_path is None
+            assert src_type in (None, "DAOS", "DAOS_UUID") # nosec
+            assert src_path is None # nosec
+            assert dst_type in (None, "DAOS", "DAOS_UUID") # nosec
+            assert dst_path is None # nosec
             self._set_cont_clone_params(src_pool, src_cont,
                                         dst_pool, dst_cont)
         else:
@@ -992,7 +997,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                                              pool, None)
 
     def run_ior_with_params(self, param_type, path, pool=None, cont=None,
-                            path_suffix=None, flags=None, display=True):
+                            path_suffix=None, flags=None, display=True,
+                            display_space=False):
         """Set the ior params and run ior.
 
         Args:
@@ -1003,11 +1009,14 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             path_suffix: see set_ior_params
             flags: see set_ior_params
             display (bool, optional): print updated params. Defaults to True.
+            display_space (bool, optional): Whether to display the pool
+                space. Defaults to False.
         """
         self.set_ior_params(param_type, path, pool, cont,
                             path_suffix, flags, display)
         self.run_ior(self.get_ior_job_manager_command(), self.ior_processes,
-                     display_space=(bool(pool)), pool=pool)
+                     display_space=(display_space and bool(pool)),
+                     pool=pool)
 
     def set_mdtest_params(self, param_type, path, pool=None, cont=None,
                           flags=None, display=True):
