@@ -543,9 +543,9 @@ int
 crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req)
 {
-	int rc = 0;
-	struct crt_grp_priv *grp_priv = NULL;
+	struct crt_grp_priv	*grp_priv = NULL;
 	struct crt_rpc_priv	*rpc_priv;
+	int			 rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
@@ -556,7 +556,28 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	if (tgt_ep != NULL) {
+		struct crt_swim_membs	*csm;
+		struct crt_swim_target	*cst;
+
 		rc = check_ep(tgt_ep, &grp_priv);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		csm = &grp_priv->gp_membs_swim;
+		D_SPIN_LOCK(&csm->csm_lock);
+		D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
+			if (cst->cst_id == (swim_id_t)tgt_ep->ep_rank) {
+				if (cst->cst_state.sms_status ==
+				    SWIM_MEMBER_DEAD) {
+					D_ERROR("DEAD rank %u\n",
+						tgt_ep->ep_rank);
+					rc = -DER_OOG;
+				}
+				break;
+			}
+		}
+		D_SPIN_UNLOCK(&csm->csm_lock);
+
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}

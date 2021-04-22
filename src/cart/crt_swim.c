@@ -426,6 +426,7 @@ crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state)
 		cb_type = CRT_EVT_ALIVE;
 		break;
 	case SWIM_MEMBER_DEAD:
+		crt_rank_abort(rank);
 		cb_type = CRT_EVT_DEAD;
 		break;
 	default:
