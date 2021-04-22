@@ -344,7 +344,7 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
-    def log_check_valgrind_memcheck():
+    def log_check_valgrind_memcheck(self):
         """Check valgrind memcheck log files for errors."""
 
         memcheck_errors = 0
@@ -406,7 +406,7 @@ class CartTest(TestWithoutServers):
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
 
-        self.log_check_valgrind_memcheck()
+        self.log_check_valgrind_memcheck(self)
 
         return 0
 
