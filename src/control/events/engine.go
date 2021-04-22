@@ -7,6 +7,8 @@
 package events
 
 import (
+	"fmt"
+
 	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 )
@@ -72,9 +74,9 @@ func NewEngineDiedEvent(hostname string, instanceIdx uint32, rank uint32, exitEr
 }
 
 // NewEngineFormatRequiredEvent creates a EngineFormatRequired event from given inputs.
-func NewEngineFormatRequiredEvent(hostname string, instanceIdx uint32) *RASEvent {
+func NewEngineFormatRequiredEvent(hostname string, instanceIdx uint32, formatType string) *RASEvent {
 	return New(&RASEvent{
-		Msg:      "DAOS engine requires a storage format",
+		Msg:      fmt.Sprintf("DAOS engine %d requires a %s format", instanceIdx, formatType),
 		ID:       RASEngineFormatRequired,
 		Hostname: hostname,
 		Type:     RASTypeInfoOnly,

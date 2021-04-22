@@ -28,7 +28,7 @@ import (
 
 type (
 	systemJoinFn     func(context.Context, *control.SystemJoinReq) (*control.SystemJoinResp, error)
-	onAwaitFormatFn  func(context.Context) error
+	onAwaitFormatFn  func(context.Context, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
 	onInstanceExitFn func(context.Context, system.Rank, error) error

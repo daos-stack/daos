@@ -104,8 +104,8 @@ func (ei *EngineInstance) NotifyStorageReady() {
 // event using the provided publish function to indicate that host is awaiting
 // storage format.
 func publishFormatRequiredFn(publishFn func(*events.RASEvent), hostname string, engineIdx uint32) onAwaitFormatFn {
-	return func(_ context.Context) error {
-		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx).
+	return func(_ context.Context, formatType string) error {
+		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx, formatType).
 			WithRank(uint32(system.NilRank))
 		publishFn(evt)
 
@@ -159,7 +159,7 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 	// After we know that the instance is awaiting format, fire off
 	// any callbacks that are waiting for this state.
 	for _, fn := range ei.onAwaitFormat {
-		if err := fn(ctx); err != nil {
+		if err := fn(ctx, formatType); err != nil {
 			return err
 		}
 	}
