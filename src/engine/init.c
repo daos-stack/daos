@@ -480,6 +480,25 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 			src, type, DP_RC(rc));
 }
 
+static void
+server_id_cb(uint32_t *tid, uint64_t *uid)
+{
+	if (uid != NULL)
+		ABT_self_get_thread_id(uid);
+
+	if (tid != NULL) {
+		struct dss_thread_local_storage *dtc;
+		struct dss_module_info *dmi;
+
+		dtc = dss_tls_get();
+		if (dtc == NULL)
+			return;
+
+		dmi = dss_get_module_info();
+		*tid = dmi->dmi_xs_id;
+	}
+}
+
 static int
 server_init(int argc, char *argv[])
 {
@@ -492,6 +511,7 @@ server_init(int argc, char *argv[])
 
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
+	daos_debug_set_id_cb(server_id_cb);
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
@@ -666,8 +686,8 @@ exit_init_state:
 exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
-	dss_module_unload_all();
 	ds_iv_fini();
+	dss_module_unload_all();
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
 	} else {
@@ -701,10 +721,10 @@ server_fini(bool force)
 	D_INFO("server_init_state_fini() done\n");
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
-	dss_module_unload_all();
-	D_INFO("dss_module_unload_all() done\n");
 	ds_iv_fini();
 	D_INFO("ds_iv_fini() done\n");
+	dss_module_unload_all();
+	D_INFO("dss_module_unload_all() done\n");
 	/*
 	 * Client stuff finalization needs be done after all ULTs drained
 	 * in dss_srv_fini().

@@ -100,14 +100,14 @@ def run_client(segment_type):
     tail = ""
 
     if segment_type == "init":
-        uuid = subprocess.check_output(['uuidgen'])
+        uuid = subprocess.check_output(['uuidgen']) # nosec
         tail = " --uuid {}".format(uuid)
     elif segment_type == "update":
         segment_type = "test --update"
 
     cmd = client_prefix + segment_type + client_suffix + tail
     print("Running command:\n{}".format(cmd))
-    rc = os.system(cmd)
+    rc = os.system(cmd) # nosec
     if rc:
         raise Exception("command {} failed with return code {}\n".format(
             cmd, rc))
