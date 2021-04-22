@@ -16,7 +16,6 @@ import re
 
 from apricot import TestWithoutServers
 from general_utils import stop_processes
-from distutils.spawn import find_executable
 from write_host_file import write_host_file
 
 class CartTest(TestWithoutServers):
@@ -30,6 +29,7 @@ class CartTest(TestWithoutServers):
         self.module_init = False
         self.provider = None
         self.module = lambda *x: False
+        self.daos_test_shared_dir = None
 
     def setUp(self):
         """Set up the test case."""
@@ -82,7 +82,6 @@ class CartTest(TestWithoutServers):
 
     def tearDown(self):
         """Tear down the test case."""
-        #self.log_check_valgrind_memcheck(self)
         self.report_timeout()
         self._teardown_errors.extend(self.cleanup_processes())
         super().tearDown()
@@ -339,10 +338,6 @@ class CartTest(TestWithoutServers):
 
         tst_mod = os.getenv("CART_TEST_MODE", "native")
 
-        # FIXME: Eventually this flag and others will be set in CI/Jenkins
-        # pipeline stage
-        tst_mod = "memcheck"
-
         if tst_mod == "memcheck":
             tst_cmd += tst_vgd
 
@@ -354,19 +349,11 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
-    @staticmethod
     def log_check_valgrind_memcheck(self):
         """Check valgrind memcheck log files for errors."""
 
-        logparse = self.params.get("logparse", "/run/tests/*/")
-
         memcheck_errors = 0
 
-        # FIXME: logparse doesn't seem to be used in any YAML file.
-        # if logparse is None or not logparse:
-        #     return
-
-        strict_test = False
         self.log.info("Parsing log path %s", self.daos_test_shared_dir)
         if not os.path.exists(self.daos_test_shared_dir):
             self.log.info("Path does not exist")
@@ -376,44 +363,24 @@ class CartTest(TestWithoutServers):
         memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
                                 os.listdir(self.daos_test_shared_dir)))
 
-        ################################################################################
-        # START: DEBUG TRACE
-        # (It can't be '.' or cwd(), it must be some place writable.)
-        daos_test_shared_dir = os.environ['HOME']
-        if 'DAOS_TEST_SHARED_DIR' in os.environ:
-            daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
-        print('DEBUG log: line 370, self.daos_test_shared_dir = ', self.daos_test_shared_dir)
-        print('DEBUG log: line 370, memcheck_files  = ', memcheck_files )
-        print('DEBUG log: line 373 , subprocess.check_output("find /var/tmp")               = ' , subprocess.check_output("find /var/tmp; exit 0;"               , shell=True))
-        print('DEBUG log: line 375 , subprocess.check_output("find .")                      = ' , subprocess.check_output("find .; exit 0;"                      , shell=True))
-        print('DEBUG log: line 374 , subprocess.check_output("find" + daos_test_shared_dir) = ' , subprocess.check_output("find; exit 0;" + daos_test_shared_dir , shell=True))
-        print('DEBUG log: line 374 , subprocess.check_output("find" + os.environ["HOME"])   = ' , subprocess.check_output("find; exit 0;" + os.environ["HOME"]   , shell=True))
-        # END: DEBUG TRACE
-        ################################################################################
-
         for filename in memcheck_files:
-
-            print('DEBUG log: line 374, filename  = ', filename )
 
             log_file = os.path.join(self.daos_test_shared_dir, filename)
 
             file1 = open(log_file, 'r')
             lines = file1.readlines()
-             
+
             for line in lines:
                 if line.find('<error>') != -1:
                     memcheck_errors += 1
 
             try:
                 saved_cwd = os.getcwd()
-                print('DEBUG log: line 388, saved_cwd  = ', saved_cwd )
                 os.chdir(self.daos_test_shared_dir)
                 os.rename(filename, filename + "-checked")
                 os.chdir(saved_cwd)
-            except Exception as e:
+            except OSError as e:
                 print("Problem with getcwd, chdir, rename, chdir: ", e)
-
-        print('DEBUG log: line 391, memcheck_errors  = ', memcheck_errors )
 
         if memcheck_errors > 0:
             self.fail(
@@ -421,8 +388,6 @@ class CartTest(TestWithoutServers):
                 " <error> element(s) in the " +
                 " memcheck XML log file(s): [" +
                 ", ".join(memcheck_files) + "]")
-
-        return 0
 
     def launch_srv_cli_test(self, srvcmd, clicmd):
         """Launch a sever in the background and client in the foreground."""

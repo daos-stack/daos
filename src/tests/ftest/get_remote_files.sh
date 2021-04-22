@@ -36,8 +36,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-set -x
-
 #######################################
 # Print usage to user.
 #######################################
@@ -149,10 +147,6 @@ scp_files() {
     local rc=0
     copied=()
     # shellcheck disable=SC2045,SC2086
-
-    # Searching for valgrind memcheck files ...
-    echo "Searching for valgrind memcheck files ..."
-    find ${1}
 
     for file in $(ls -d ${1})
     do
