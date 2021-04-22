@@ -21,10 +21,6 @@ from write_host_file import write_host_file
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
 
-    # Woraround for attribute-defined-outside-init pylint bug
-    #   See https://github.com/PyCQA/pylint/issues/2981
-    daos_test_shared_dir: TestWithoutServers
-
     def __init__(self, *args, **kwargs):
         """Initialize a CartTest object."""
         super().__init__(*args, **kwargs)
@@ -33,7 +29,6 @@ class CartTest(TestWithoutServers):
         self.module_init = False
         self.provider = None
         self.module = lambda *x: False
-        self.daos_test_shared_dir = None
 
     def setUp(self):
         """Set up the test case."""
@@ -170,9 +165,8 @@ class CartTest(TestWithoutServers):
 
         # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
         # (It can't be '.' or cwd(), it must be some place writable.)
-        daos_test_shared_dir = os.environ['HOME']
-        if 'DAOS_TEST_SHARED_DIR' in os.environ:
-            daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
         log_file = os.path.join(log_path, log_dir,
@@ -279,11 +273,8 @@ class CartTest(TestWithoutServers):
 
         index = kwargs.get('index', None)
 
-        # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
-        # (It can't be '.' or cwd(), it must be some place writable.)
-        self.daos_test_shared_dir = os.environ['HOME']
-        if 'DAOS_TEST_SHARED_DIR' in os.environ:
-            self.daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
 
         tst_vgd = " valgrind --xml=yes " + \
                   "--xml-file={}/".format(self.daos_test_shared_dir) + \
