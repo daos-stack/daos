@@ -305,11 +305,11 @@ class CartTest(TestWithoutServers):
 
         if tst_slt is not None:
             hostfile = write_host_file(tst_host,
-                                       self.daos_test_shared_dir,
+                                       daos_test_shared_dir,
                                        tst_slt)
         else:
             hostfile = write_host_file(tst_host,
-                                       self.daos_test_shared_dir,
+                                       daos_test_shared_dir,
                                        tst_ppn)
 
         mca_flags = "--mca btl self,tcp "
@@ -344,23 +344,26 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
-    def log_check_valgrind_memcheck(self):
+    def log_check_valgrind_memcheck():
         """Check valgrind memcheck log files for errors."""
 
         memcheck_errors = 0
 
-        self.log.info("Parsing log path %s", self.daos_test_shared_dir)
-        if not os.path.exists(self.daos_test_shared_dir):
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
+
+        self.log.info("Parsing log path %s", daos_test_shared_dir)
+        if not os.path.exists(daos_test_shared_dir):
             self.log.info("Path does not exist")
-            return
+            return 1
 
         xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
         memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
-                                os.listdir(self.daos_test_shared_dir)))
+                                os.listdir(daos_test_shared_dir)))
 
         for filename in memcheck_files:
 
-            log_file = os.path.join(self.daos_test_shared_dir, filename)
+            log_file = os.path.join(daos_test_shared_dir, filename)
 
             file1 = open(log_file, 'r')
             lines = file1.readlines()
@@ -371,7 +374,7 @@ class CartTest(TestWithoutServers):
 
             try:
                 saved_cwd = os.getcwd()
-                os.chdir(self.daos_test_shared_dir)
+                os.chdir(daos_test_shared_dir)
                 os.rename(filename, filename + "-checked")
                 os.chdir(saved_cwd)
             except OSError as e:
@@ -383,6 +386,8 @@ class CartTest(TestWithoutServers):
                 " <error> element(s) in the " +
                 " memcheck XML log file(s): [" +
                 ", ".join(memcheck_files) + "]")
+
+        return 0
 
     def launch_srv_cli_test(self, srvcmd, clicmd):
         """Launch a sever in the background and client in the foreground."""
@@ -401,7 +406,7 @@ class CartTest(TestWithoutServers):
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
 
-        self.log_check_valgrind_memcheck(self)
+        self.log_check_valgrind_memcheck()
 
         return 0
 
