@@ -26,8 +26,6 @@ def remove_certain_gcc_flags(_str):
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
-
     tenv = env.Clone(LIBS=[])
     tenv.AppendUnique(CPPPATH=['#/src/utils/self_test/src'])
     tenv.AppendUnique(CPPPATH=['#/src/cart', '#/src/tests/ftest/cart'])

@@ -425,7 +425,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Thur Apr 22 2021 Steve Bollinger <stevenx.bollinger@intel.com> - 1.3.0-13
-- Add selftest configuration files 
+- Add selftest configuration files
 
 * Wed Apr 16 2021 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 1.3.0-12
 - remove dfuse_hl

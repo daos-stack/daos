@@ -1,6 +1,6 @@
 daos (1.3.0-10) unstable; urgency=medium
   [ Steven Bollinger ]
-  * Add selftest configuration file 
+  * Add selftest configuration file
 
  -- Steven Bollinger <stevenx.bollinger@intel.com>  Thur, 22 Apr 2021 12:00:00 -0400
 
