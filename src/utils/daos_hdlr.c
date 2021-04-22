@@ -2579,7 +2579,7 @@ out:
 	return rc;
 }
 
-static inline void
+inline void
 set_dm_args_default(struct dm_args *dm)
 {
 	dm->src = NULL;
@@ -2853,7 +2853,7 @@ out:
 	return rc;
 }
 
-static inline void
+inline void
 file_set_defaults_dfs(struct file_dfs *file_dfs)
 {
 	/* set defaults for file_dfs struct */
