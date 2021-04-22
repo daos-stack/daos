@@ -15,6 +15,11 @@ class ContainerAutotestTest(TestWithServers):
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize object."""
+        super().__init__(*args, **kwargs)
+        self.daos_cmd = None
+
     def test_container_autotest(self):
         """Test container autotest.
 
@@ -28,5 +33,6 @@ class ContainerAutotestTest(TestWithServers):
         try:
             self.daos_cmd.pool_autotest(pool=self.pool.uuid)
             self.log.info("daos pool autotest passed.")
-        except CommandFailure as e:
+        except CommandFailure as error:
+            self.log.error("Error: %s", error)
             self.fail("daos pool autotest failed!")
