@@ -423,7 +423,7 @@ test_drpc_verify_cluster_event(void **state)
 			    "exjobid", &pool, &cont, &objid, "exctlop",
 			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
 	verify_cluster_event((uint32_t)RAS_SYSTEM_STOP_FAILED, "ranks failed",
-			     (uint32_t)RAS_TYPE_INFO, (uint32_t)RAS_SEV_NOTICE,
+			     (uint32_t)RAS_TYPE_INFO, (uint32_t)RAS_SEV_ERROR,
 			     "exhwid", 1, "exjobid", pool_str, cont_str, "1.1",
 			     "exctlop",
 			     "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
@@ -437,10 +437,10 @@ test_drpc_verify_cluster_event_min_viable(void **state)
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);
 
-	ds_notify_ras_event(RAS_ENGINE_FAILED, "rank down",
+	ds_notify_ras_event(RAS_ENGINE_DIED, "rank down",
 			    RAS_TYPE_STATE_CHANGE, RAS_SEV_WARNING, NULL, NULL,
 			    NULL, NULL, NULL, NULL, NULL, NULL);
-	verify_cluster_event((uint32_t)RAS_ENGINE_FAILED, "rank down",
+	verify_cluster_event((uint32_t)RAS_ENGINE_DIED, "rank down",
 			     (uint32_t)RAS_TYPE_STATE_CHANGE,
 			     (uint32_t)RAS_SEV_WARNING, "", mock_self_rank, "",
 			     "", "", "", "", "");
@@ -454,7 +454,7 @@ test_drpc_verify_cluster_event_emptymsg(void **state)
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);
 
-	ds_notify_ras_event(RAS_ENGINE_FAILED, "", RAS_TYPE_STATE_CHANGE,
+	ds_notify_ras_event(RAS_ENGINE_DIED, "", RAS_TYPE_STATE_CHANGE,
 			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
 			    NULL, NULL);
 	assert_int_equal(sendmsg_call_count, 0);
@@ -468,7 +468,7 @@ test_drpc_verify_cluster_event_nomsg(void **state)
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);
 
-	ds_notify_ras_event(RAS_ENGINE_FAILED, NULL, RAS_TYPE_STATE_CHANGE,
+	ds_notify_ras_event(RAS_ENGINE_DIED, NULL, RAS_TYPE_STATE_CHANGE,
 			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
 			    NULL, NULL);
 	assert_int_equal(sendmsg_call_count, 0);

@@ -38,8 +38,8 @@
 #define RAS_EVENT_LIST							\
 	X(RAS_UNKNOWN_EVENT,		"unknown_ras_event")		\
 	X(RAS_ENGINE_FORMAT_REQUIRED,	"engine_format_required")	\
-	X(RAS_ENGINE_FAILED,		"engine_failed")		\
-	X(RAS_ENGINE_ASSERTION_FAILED,	"engine_assertion_failed")	\
+	X(RAS_ENGINE_DIED,		"engine_died")			\
+	X(RAS_ENGINE_ASSERTED,		"engine_asserted")		\
 	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")		\
 	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")	\
 	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")		\

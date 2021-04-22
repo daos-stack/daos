@@ -7,6 +7,8 @@
 package events
 
 import (
+	"fmt"
+
 	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 )
@@ -55,11 +57,11 @@ func EngineStateInfoToProto(rsi *EngineStateInfo) (*sharedpb.RASEvent_EngineStat
 	return pbInfo, nil
 }
 
-// NewEngineFailedEvent creates a specific EngineFailed event from given inputs.
-func NewEngineFailedEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) *RASEvent {
+// NewEngineDiedEvent creates a specific EngineDied event from given inputs.
+func NewEngineDiedEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) *RASEvent {
 	return New(&RASEvent{
 		Msg:      "DAOS engine exited unexpectedly",
-		ID:       RASEngineFailed,
+		ID:       RASEngineDied,
 		Hostname: hostname,
 		Rank:     rank,
 		Type:     RASTypeStateChange,
@@ -67,6 +69,20 @@ func NewEngineFailedEvent(hostname string, instanceIdx uint32, rank uint32, exit
 		ExtendedInfo: &EngineStateInfo{
 			InstanceIdx: instanceIdx,
 			ExitErr:     exitErr,
+		},
+	})
+}
+
+// NewEngineFormatRequiredEvent creates a EngineFormatRequired event from given inputs.
+func NewEngineFormatRequiredEvent(hostname string, instanceIdx uint32, formatType string) *RASEvent {
+	return New(&RASEvent{
+		Msg:      fmt.Sprintf("DAOS engine %d requires a %s format", instanceIdx, formatType),
+		ID:       RASEngineFormatRequired,
+		Hostname: hostname,
+		Type:     RASTypeInfoOnly,
+		Severity: RASSeverityNotice,
+		ExtendedInfo: &EngineStateInfo{
+			InstanceIdx: instanceIdx,
 		},
 	})
 }
