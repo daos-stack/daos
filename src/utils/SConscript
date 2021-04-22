@@ -39,6 +39,8 @@ def scons():
         env.Install('$PREFIX/lib64/', daos_hdlrs_lib)
     libs += ['daos_cmd_hdlrs']
 
+    Export('daos_hdlrs_lib')
+
     Import('cmd_parser', 'dc_credit')
     daos_obj = [cmd_parser, dc_credit]
     daos_src = ['daos.c', 'daos_obj_ctl.c', 'daos_autotest.c']
