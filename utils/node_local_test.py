@@ -513,7 +513,7 @@ class DaosServer():
             self._check_timing("start", start, max_start_time)
         print('Server started in {:.2f} seconds'.format(time.time() - start))
 
-    def stop(self, abort_on_warning=True):
+    def stop(self, wf, abort_on_warning=True):
         """Stop a previously started DAOS server"""
         if self._agent:
             self._agent.send_signal(signal.SIGINT)
@@ -2178,7 +2178,8 @@ def run_daos_test(server, conf):
 
     rc = subprocess.run([daos_test_bin, '--help'],
                         env=env,
-                        stdout=subprocess.PIPE)
+                        stdout=subprocess.PIPE,
+                        check=False)
     print(rc)
     assert rc.returncode == 0
     log_test(conf, log_file.name)
@@ -2208,7 +2209,7 @@ def run_daos_test(server, conf):
                                      env['PATH'])
 
         cmd = [daos_test_bin, mode]
-        rc = subprocess.run(cmd, env=env, stdout=subprocess.PIPE)
+        rc = subprocess.run(cmd, env=env, stdout=subprocess.PIPE, check=False)
         stdout = rc.stdout.decode('utf-8')
         print(rc)
         log_test(conf, log_file.name, abort_on_warning=False)
@@ -2643,7 +2644,7 @@ def main():
         print("Unknown mode")
         fatal_errors.add_result(True)
 
-    if server.stop(wf_server, abort_on_warning = server_log_strict) != 0:
+    if server.stop(wf_server, abort_on_warning=server_log_strict) != 0:
         fatal_errors.fail()
 
     # If running all tests then restart the server under valgrind.
