@@ -567,7 +567,7 @@ class DaosServer():
             self.conf.wf.issues.append(entry)
 
         rc = self.run_dmg(['system', 'stop'])
-        if (rc.returncode != 0):
+        if rc.returncode != 0:
             print(rc)
             entry = {}
             entry['fileName'] = os.path.basename(self._file)
@@ -575,7 +575,8 @@ class DaosServer():
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
-            entry['message'] = 'dmg system stop failed with {}'.format(rc.returncode)
+            msg = 'dmg system stop failed with {}'.format(rc.returncode)
+            entry['message'] = msg
             self.conf.wf.issues.append(entry)
         assert rc.returncode == 0
 
