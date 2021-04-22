@@ -18,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // scmConfig returns the scm configuration assigned to this instance.
@@ -104,7 +105,9 @@ func (ei *EngineInstance) NotifyStorageReady() {
 // storage format.
 func publishFormatRequiredFn(publishFn func(*events.RASEvent), hostname string, engineIdx uint32) onAwaitFormatFn {
 	return func(_ context.Context) error {
-		publishFn(events.NewEngineFormatRequiredEvent(hostname, engineIdx))
+		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx).
+			WithRank(uint32(system.NilRank))
+		publishFn(evt)
 
 		return nil
 	}

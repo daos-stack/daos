@@ -423,7 +423,7 @@ test_drpc_verify_cluster_event(void **state)
 			    "exjobid", &pool, &cont, &objid, "exctlop",
 			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
 	verify_cluster_event((uint32_t)RAS_SYSTEM_STOP_FAILED, "ranks failed",
-			     (uint32_t)RAS_TYPE_INFO, (uint32_t)RAS_SEV_NOTICE,
+			     (uint32_t)RAS_TYPE_INFO, (uint32_t)RAS_SEV_ERROR,
 			     "exhwid", 1, "exjobid", pool_str, cont_str, "1.1",
 			     "exctlop",
 			     "{\"people\":[\"bill\",\"steve\",\"bob\"]}");

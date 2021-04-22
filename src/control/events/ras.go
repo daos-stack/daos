@@ -145,7 +145,6 @@ func (evt *RASEvent) IsForwarded() bool {
 // WithForwarded sets the forwarded state of this event.
 func (evt *RASEvent) WithForwarded(forwarded bool) *RASEvent {
 	evt.forwarded.Store(forwarded)
-
 	return evt
 }
 
@@ -158,7 +157,12 @@ func (evt *RASEvent) ShouldForward() bool {
 // WithForwardable sets the forwardable state of this event.
 func (evt *RASEvent) WithForwardable(forwardable bool) *RASEvent {
 	evt.forwardable.Store(forwardable)
+	return evt
+}
 
+// WithRank sets the rank identifier on the event.
+func (evt *RASEvent) WithRank(rid uint32) *RASEvent {
+	evt.Rank = rid
 	return evt
 }
 
