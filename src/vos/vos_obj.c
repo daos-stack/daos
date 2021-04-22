@@ -1794,6 +1794,7 @@ exit:
 			 "Failed to delete iter entry: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
+
 static int
 obj_iter_corrupt(struct vos_obj_iter *oiter)
 {

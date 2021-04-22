@@ -758,7 +758,7 @@ to be corrupted. Because the checksum scrubber will be iterating the vos
 objects, the vos_iter API is used to mark objects as corrupt. The
 vos_iter_process() will take the iter handle that the corruptions was discovered
 on and will call into the btree/evtree to update the durable format structure
-that contains the bio_addr. 
+that contains the bio_addr.
 
 <a id="80"></a>
 
