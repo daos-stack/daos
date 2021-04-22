@@ -36,6 +36,7 @@ class OSAOfflineParallelTest(OSAUtils):
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",
                                              "/run/extra_servers/*")
+        self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.out_queue = queue.Queue()
         self.dmg_command.exit_status_exception = True
         self.server_boot = None
@@ -195,6 +196,7 @@ class OSAOfflineParallelTest(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
+    @skipForTicket("DAOS-7247")
     def test_osa_offline_parallel_test(self):
         """
         JIRA ID: DAOS-4752
@@ -209,6 +211,7 @@ class OSAOfflineParallelTest(OSAUtils):
         self.log.info("Offline Parallel Test: Basic Test")
         self.run_offline_parallel_test(1, data=True)
 
+    @skipForTicket("DAOS-7247")
     def test_osa_offline_parallel_test_without_csum(self):
         """
         JIRA ID: DAOS-7161
@@ -226,6 +229,7 @@ class OSAOfflineParallelTest(OSAUtils):
         self.log.info("Offline Parallel Test: Without Checksum")
         self.run_offline_parallel_test(1, data=True)
 
+    @skipForTicket("DAOS-7247")
     def test_osa_offline_parallel_test_rank_boot(self):
         """
         JIRA ID: DAOS-7161
@@ -245,7 +249,7 @@ class OSAOfflineParallelTest(OSAUtils):
         self.log.info("Offline Parallel Test: Restart a rank")
         self.run_offline_parallel_test(1, data=True)
 
-    @skipForTicket("DAOS-7195")
+    @skipForTicket("DAOS-7195,DAOS-7247")
     def test_osa_offline_parallel_test_with_aggregation(self):
         """
         JIRA ID: DAOS-7161
@@ -263,6 +267,7 @@ class OSAOfflineParallelTest(OSAUtils):
         self.log.info("Offline Parallel Test : Aggregation")
         self.run_offline_parallel_test(1, data=True)
 
+    @skipForTicket("DAOS-7247")
     def test_osa_offline_parallel_test_oclass(self):
         """
         JIRA ID: DAOS-7161
@@ -275,7 +280,6 @@ class OSAOfflineParallelTest(OSAUtils):
         :avocado: tags=osa
         :avocado: tags=offline_parallel,offline_parallel_oclass
         """
-        self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.log.info("Offline Parallel Test : OClass")
         # Presently, the script is limited and supports only one extra
         # object class testing. We are testing S1 apart from RP_2G1.
