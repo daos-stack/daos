@@ -426,7 +426,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Fri Apr 16 2021 Steven Bollinger <stevenx.bollinger@intel.com> 1.3.0-13
 - Add cart_utils library to release
 
-* Wed Apr 16 2021 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 1.3.0-12
+* Wed Apr 14 2021 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 1.3.0-12
 - remove dfuse_hl
 
 * Wed Apr 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.3.0-11
