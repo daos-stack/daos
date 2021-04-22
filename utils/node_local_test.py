@@ -145,7 +145,8 @@ class WarningsFactory():
 
         if junit:
             test_case = junit_xml.TestCase('Startup', classname='NLT.core')
-            self.ts = junit_xml.TestSuite('Node Local Testing', test_cases=[test_case])
+            self.ts = junit_xml.TestSuite('Node Local Testing',
+                                          test_cases=[test_case])
             self.tc = junit_xml.TestCase('Sanity', classname='NLT.core')
         else:
             self.ts = None
@@ -170,7 +171,7 @@ class WarningsFactory():
             self.tc.add_failure_info('NLT exited abnormally')
         self.close()
 
-    def add_test_case(self, name, failure=None, test_class=None):
+    def add_test_case(self, name, failure=None, test_class='core'):
         """Add a test case to the results
 
         class and other metadata will be set automatically,
@@ -180,15 +181,15 @@ class WarningsFactory():
         if not self.ts:
             return
 
-        if test_class:
-            classname = 'NLT.{}'.format(test_class)
-        else:
-            classname = 'NLT.core'
-
-        tc = junit_xml.TestCase(name, classname=classname)
+        tc = junit_xml.TestCase(name, classname='NLT.{}'.format(test_class))
         if failure:
             tc.add_failure_info(failure)
         self.ts.test_cases.append(tc)
+
+        self._write_test_file()
+
+    def _write_test_file(self):
+        """Write test results to file"""
 
         with open('nlt-junit.xml', 'w') as f:
             junit_xml.TestSuite.to_file(f, [self.ts], prettyprint=True)
@@ -300,8 +301,7 @@ class WarningsFactory():
                                                           len(self.issues)))
         if self.ts:
             self.ts.test_cases.append(self.tc)
-            with open('nlt-junit.xml', 'w') as f:
-                junit_xml.TestSuite.to_file(f, [self.ts], prettyprint=True)
+            self._write_test_file()
 
 def load_conf(args):
     """Load the build config file"""
@@ -2620,11 +2620,10 @@ def main():
         fatal_errors.add_result(run_posix_tests(server, conf))
         test_pydaos_kv(server, conf)
         fatal_errors.add_result(set_server_fi(server))
+    elif args.test == 'all':
+        fatal_errors.add_result(run_posix_tests(server, conf))
     elif args.test:
-        if args.test == 'all':
-            fatal_errors.add_result(run_posix_tests(server, conf))
-        else:
-            fatal_errors.add_result(run_posix_tests(server, conf, args.test))
+        fatal_errors.add_result(run_posix_tests(server, conf, args.test))
     else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
