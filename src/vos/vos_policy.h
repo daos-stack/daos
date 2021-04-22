@@ -23,7 +23,7 @@
 #define VOS_POLICY_SCM_SHIFT        (12)  /* 4k */
 #define VOS_POLICY_SCM_THRESHOLD    (1ULL << VOS_POLICY_SCM_SHIFT)
 
-daos_media_type_t
+enum daos_media_type_t
 vos_policy_media_select(struct vos_pool *pool, daos_iod_type_t type,
                         daos_size_t size);
 

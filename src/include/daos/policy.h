@@ -16,13 +16,13 @@
 /**
  * tier placement policy
  */
-typedef enum tier_policy {
-        TIER_POLICY_NOT_EXIST = -1,
-        TIER_POLICY_DEFAULT,
-        TIER_POLICY_IO_SIZE,
-        TIER_POLICY_WRITE_INTENSIVITY,
-        TIER_POLICY_MAX
-} tier_policy_t;
+enum tier_policy_t {
+        DAOS_MEDIA_POLICY_NOT_EXIST = -1,
+        DAOS_MEDIA_POLICY_DEFAULT,
+        DAOS_MEDIA_POLICY_IO_SIZE,
+        DAOS_MEDIA_POLICY_WRITE_INTENSIVITY,
+        DAOS_MEDIA_POLICY_MAX
+};
 
 int get_policy_index(const char *name);
 

@@ -1058,7 +1058,7 @@ enum vos_pool_opc {
 };
 
 typedef struct {
-	tier_policy_t policy_index;
+	enum tier_policy_t policy_index;
 	unsigned int  policy_io_size_low;
 	unsigned int  policy_io_size_high;
 } vos_ctl_set_policy_param;

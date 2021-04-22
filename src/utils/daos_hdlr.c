@@ -104,13 +104,13 @@ pool_decode_props(daos_prop_t *props)
 	} else {
 		D_PRINT("policy:\t\t\t");
 		switch(entry->dpe_val) {
-		case TIER_POLICY_DEFAULT:
+		case DAOS_MEDIA_POLICY_DEFAULT:
 			D_PRINT("default\n");
 			break;
-		case TIER_POLICY_IO_SIZE:
+		case DAOS_MEDIA_POLICY_IO_SIZE:
 			D_PRINT("IO size\n");
 			break;
-		case TIER_POLICY_WRITE_INTENSIVITY:
+		case DAOS_MEDIA_POLICY_WRITE_INTENSIVITY:
 			D_PRINT("write intesivity\n");
 			break;
 		}

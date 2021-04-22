@@ -271,7 +271,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_PO_POLICY:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val >= TIER_POLICY_MAX) {
+			if (val >= DAOS_MEDIA_POLICY_MAX) {
 				D_ERROR("invalid policy index "DF_U64"\n", val);
 				return false;
 			}

@@ -64,7 +64,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_val_ptr	= NULL,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_POLICY,
-		.dpe_val	= TIER_POLICY_DEFAULT,
+		.dpe_val	= DAOS_MEDIA_POLICY_DEFAULT,
 	}
 };
 

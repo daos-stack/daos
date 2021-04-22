@@ -51,9 +51,9 @@ const (
 
 const (
 	// PoolPolicyDefault sets the pool's policy to default
-	PoolPolicyDefault = C.TIER_POLICY_DEFAULT
+	PoolPolicyDefault = C.DAOS_MEDIA_POLICY_DEFAULT
 	// PoolPolicyDefault sets the pool's policy to io_size
-	PoolPolicyIoSize = C.TIER_POLICY_IO_SIZE
+	PoolPolicyIoSize = C.DAOS_MEDIA_POLICY_IO_SIZE
 	// PoolPolicyDefault sets the pool's policy to write_intensivity
-	PoolPolicyWriteIntensivity = C.TIER_POLICY_WRITE_INTENSIVITY
+	PoolPolicyWriteIntensivity = C.DAOS_MEDIA_POLICY_WRITE_INTENSIVITY
 )

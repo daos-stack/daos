@@ -67,7 +67,7 @@ enum daos_pool_props {
 	 */
 	DAOS_PROP_PO_SVC_LIST,
 	/**
-	 * Tier selection policy
+	 * Media selection policy
 	 */
 	DAOS_PROP_PO_POLICY,
 	DAOS_PROP_PO_MAX,
