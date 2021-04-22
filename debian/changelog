@@ -1,15 +1,16 @@
-daos (1.3.0-9) unstable; urgency=medium
+daos (1.3.0-10) unstable; urgency=medium
   [ Mohamad Chaarawi ]
   * Remove dfuse_hl
 
  -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>  Wed, 16 Apr 2021 17:57:00 -0400
 
-daos (1.3.0-8) unstable; urgency=medium
+daos (1.3.0-9) unstable; urgency=medium
   [ Steven Bollinger ]
   * Create cart_utils library
 
  -- Steven A. Bollinger<stevenx.bollinger@intel.com>  Thu, 15 Apr 2021 13:30:00 -0400
 
+daos (1.3.0-8) unstable; urgency=medium
   [ Jeff Olivier ]
   * Remove client dependencies on PMDK, SPDK, and argobots
 
