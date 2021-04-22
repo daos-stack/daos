@@ -61,8 +61,8 @@ type (
 
 	// DeviceFormatRequest designs the parameters for a device-specific format.
 	DeviceFormatRequest struct {
-		Device  string
-		Class   storage.BdevClass
+		Device string
+		Class  storage.BdevClass
 	}
 
 	// DeviceFormatResponse contains device-specific Format operation results.
