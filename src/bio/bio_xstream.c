@@ -350,7 +350,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	 */
 	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
 		D_ERROR("Per-xstream DMA buffer upperbound limit < 1GB!\n");
-		D_DEBUG(DB_MGMT, "mem_size:%d, DMA upper bound:%dMB\n",
+		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
 			mem_size, (mem_size / tgt_nr));
 		return -DER_INVAL;
 	}
