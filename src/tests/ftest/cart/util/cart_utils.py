@@ -21,6 +21,10 @@ from write_host_file import write_host_file
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
 
+    # Woraround for attribute-defined-outside-init pylint bug
+    #   See https://github.com/PyCQA/pylint/issues/2981
+    daos_test_shared_dir: TestWithoutServers
+
     def __init__(self, *args, **kwargs):
         """Initialize a CartTest object."""
         super().__init__(*args, **kwargs)
