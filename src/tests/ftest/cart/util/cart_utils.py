@@ -277,7 +277,7 @@ class CartTest(TestWithoutServers):
                                          os.getenv('HOME'))
 
         tst_vgd = " valgrind --xml=yes " + \
-                  "--xml-file={}/".format(self.daos_test_shared_dir) + \
+                  "--xml-file={}/".format(daos_test_shared_dir) + \
                   r"valgrind.%q\{PMIX_ID\}.memcheck " + \
                   "--fair-sched=try --partial-loads-ok=yes " + \
                   "--leak-check=yes --gen-suppressions=all " + \
