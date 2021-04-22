@@ -47,7 +47,8 @@ pipeline {
     triggers {
         cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
              env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
-             env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6' : '')
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '' +
+             env.BRANCH_NAME == 'weekly-testing-1.2' ? 'H 0 * * 6' : '')
     }
 
     environment {
@@ -166,7 +167,9 @@ pipeline {
                 stage('Python Bandit check') {
                     when {
                       beforeAgent true
-                      expression { ! skipStage() }
+                      expression { ! (skipStage(stage: 'python-bandit',
+		                                 def_val: 'false') ||
+		                        quickFunctional()) }
                     }
                     agent {
                         dockerfile {
@@ -931,7 +934,10 @@ pipeline {
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { ! (target_branch == 'weekly-testing' ||
+                                        skipStage(stage: 'scan-centos-rpms',
+                                                  def_val: 'false') ||
+                                        quickFunctional()) }
                     }
                     agent {
                         label 'ci_vm1'
@@ -964,7 +970,7 @@ pipeline {
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label 'stage_nvme3'
+                        label 'ci_nvme3'
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
