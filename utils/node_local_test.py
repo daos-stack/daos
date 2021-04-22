@@ -333,7 +333,7 @@ class DaosServer():
 
     def __del__(self):
         if self.running:
-            self.stop(abort_on_warning=False)
+            self.stop(None, abort_on_warning=False)
         os.rmdir(self.agent_dir)
 
     # pylint: disable=no-self-use
