@@ -766,6 +766,10 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 		return -DER_NOMEM;
 	bsgl->bs_iovs = buffer;
 
+	/* Initialize new segments */
+	memset(&bsgl->bs_iovs[bsgl->bs_nr], 0,
+		sizeof(bsgl->bs_iovs[0]) * added_segs);
+
 	for (i = 0; i < bsgl->bs_nr; i++) {
 		if (bsgl->bs_iovs[i].bi_prefix_len) {
 			/* Add the prefix. */
