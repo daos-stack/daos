@@ -2,12 +2,9 @@
 
 REPOS_DIR=/etc/dnf/repos.d
 DISTRO_NAME=leap15
-LSB_RELEASE=lsb-release
 EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
 
-
 bootstrap_dnf() {
-    time zypper --non-interactive install dnf
     rm -rf "$REPOS_DIR"
     ln -s ../zypp/repos.d "$REPOS_DIR"
 }
@@ -82,7 +79,6 @@ post_provision_config_nodes() {
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    time dnf -y install $LSB_RELEASE
 
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
