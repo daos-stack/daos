@@ -200,6 +200,11 @@ class SoakTestBase(TestWithServers):
             name = "SVR_STOP"
             params = (self, pool, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "server-start":
+            method = launch_server_stop_start
+            name = "SVR_START"
+            params = (self, pool, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "server-reintegrate":
             method = launch_server_stop_start
             name = "SVR_REINTEGRATE"
@@ -280,11 +285,11 @@ class SoakTestBase(TestWithServers):
                         commands = create_ior_cmdline(self, job, pool, ppn, npj)
                     elif "fio" in job:
                         commands = create_fio_cmdline(self, job, pool)
-                    elif "daos_racer" in job:
-                        commands = create_racer_cmdline(self, job, pool)
                     elif "mdtest" in job:
                         commands = create_mdtest_cmdline(
                             self, job, pool, ppn, npj)
+                    elif "daos_racer" in job:
+                        commands = create_racer_cmdline(self, job, pool)
                     else:
                         raise SoakTestError(
                             "<<FAILED: Job {} is not supported. ".format(

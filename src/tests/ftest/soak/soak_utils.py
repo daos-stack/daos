@@ -420,22 +420,37 @@ def launch_server_stop_start(self, pools, name, results, args):
                             pool.uuid), exc_info=error)
                     status = False
                 drain_status &= status
-            if drain_status:
-                for pool in pools:
+                if drain_status:
                     drain_status &= wait_for_pool_rebuild(self, pool, name)
-                status = drain_status
-            else:
-                status = False
+                    status = drain_status
+                else:
+                    status = False
 
         if status:
             # Shutdown the server
             try:
-                self.dmg_command.system_stop(ranks=rank)
+                self.dmg_command.system_stop(force=True, ranks=rank)
             except TestFail as error:
                 self.log.error(
                     "<<<FAILED:dmg system stop failed", exc_info=error)
                 status = False
-
+    elif name == "SVR_START":
+        if self.harasser_results["SVR_STOP"]:
+            rank = self.harasser_args["SVR_STOP"]["rank"]
+            self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
+                          self.loop, name, rank, time.ctime())
+            try:
+                self.dmg_command.system_start(ranks=rank)
+                status = True
+            except TestFail as error:
+                self.log.error(
+                    "<<<FAILED:dmg system start failed", exc_info=error)
+                status = False
+        else:
+            self.log.error(
+                "<<<PASS %s: %s failed due to SVR_STOP failure >>>",
+                self.loop, name)
+            status = False
     elif name == "SVR_REINTEGRATE":
         if self.harasser_results["SVR_STOP"]:
             rank = self.harasser_args["SVR_STOP"]["rank"]
@@ -448,25 +463,25 @@ def launch_server_stop_start(self, pools, name, results, args):
                 self.log.error(
                     "<<<FAILED:dmg system start failed", exc_info=error)
                 status = False
-            # reintegrate ranks
-            reintegrate_status = True
-            for pool in pools:
-                try:
-                    pool.reintegrate(rank)
-                    status = True
-                except TestFail as error:
-                    self.log.error(
-                        "<<<FAILED:dmg pool {} reintegrate failed".format(
-                            pool.uuid), exc_info=error)
-                    status = False
-                reintegrate_status &= status
-            if reintegrate_status:
+            if status:
+                # reintegrate ranks
+                reintegrate_status = True
                 for pool in pools:
-                    reintegrate_status &= wait_for_pool_rebuild(
-                        self, pool, name)
-                status = reintegrate_status
-            else:
-                status = False
+                    try:
+                        pool.reintegrate(rank)
+                        status = True
+                    except TestFail as error:
+                        self.log.error(
+                            "<<<FAILED:dmg pool {} reintegrate failed".format(
+                                pool.uuid), exc_info=error)
+                        status = False
+                    reintegrate_status &= status
+                    if reintegrate_status:
+                        reintegrate_status &= wait_for_pool_rebuild(
+                            self, pool, name)
+                        status = reintegrate_status
+                    else:
+                        status = False
         else:
             self.log.error("<<<PASS %s: %s failed due to SVR_STOP failure >>>",
                            self.loop, name)
