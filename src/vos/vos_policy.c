@@ -65,7 +65,7 @@ static enum daos_media_type_t (*vos_policies[DAOS_MEDIA_POLICY_MAX])(struct vos_
 
 enum daos_media_type_t
 vos_policy_media_select(struct vos_pool *pool, daos_iod_type_t type,
-                        daos_size_t size)
+                        daos_size_t size, enum vos_io_stream ios)
 {
         return vos_policies[pool->vp_policy](pool, type, size);
 }

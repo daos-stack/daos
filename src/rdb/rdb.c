@@ -375,7 +375,6 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 			path, DP_RC(rc));
 		goto err;
 	}
-
 	ABT_thread_yield();
 
 	rc = vos_cont_open(pool, (unsigned char *)uuid, &mc);

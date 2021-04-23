@@ -689,7 +689,8 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 	int		rc;
 
 	memset(addr, 0, sizeof(*addr));
-	media = vos_policy_media_select(vos_obj2pool(obj), DAOS_IOD_ARRAY, size);
+	media = vos_policy_media_select(vos_obj2pool(obj), DAOS_IOD_ARRAY, size,
+					VOS_IOS_AGGREGATION);
 
 	if (media == DAOS_MEDIA_SCM) {
 		off = vos_reserve_scm(obj->obj_cont, io->ic_rsrvd_scm, size);

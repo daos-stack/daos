@@ -1917,7 +1917,7 @@ akey_update_begin(struct vos_io_context *ioc)
 					 iod->iod_type, size); */
 
 		media = vos_policy_media_select(vos_cont2pool(ioc->ic_cont),
-					 iod->iod_type, size);
+					 iod->iod_type, size, VOS_IOS_GENERIC);
 
 		recx_csum = (iod_csums != NULL) ? &iod_csums[i] : NULL;
 
