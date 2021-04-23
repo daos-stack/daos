@@ -41,6 +41,27 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
       sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
           -i /etc/dnf/dnf.conf;                                 \
       dnf -y upgrade epel-release;                              \
+    else                                                        \
+      dnf -y install epel-release dnf-plugins-core &&           \
+      dnf config-manager --set-enabled powertools;              \
+    fi;                                                         \
+    dnf clean all
+
+# Currently the appstream REPO can not be part of a repo group
+ARG REPO_APSTREAM=""
+RUN if [ -n "$REPO_APPSTREAM" ]; then                           \
+      rpm --import /etc/pki/rpm-gpg/*;                          \
+      MY_REPO="${REPO_URL}${REPO_APPSTREAM}/";                  \
+      MY_NAME="${MY_REPO#*//}";                                 \
+      MY_NAME="${MY_NAME//\//_}";                               \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=1\n\
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
+      dnf config-manager --assumeyes --quiet --disable          \
+          appstream;                                            \
       dnf clean all;                                            \
     fi
 
@@ -62,8 +83,7 @@ gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
 
 # Install basic tools to build DAOS
 # *** Keep these in as much alphbetical order as possible ***
-RUN dnf -y install epel-release && \
-    dnf -y upgrade && \
+RUN dnf -y upgrade && \
     dnf -y install \
         boost-python3-devel \
         clang-analyzer \
