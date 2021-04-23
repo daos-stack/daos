@@ -742,7 +742,17 @@ pool_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	D_ASSERT(d_hash_rec_unlinked(&hdl->sph_entry));
 	D_ASSERTF(hdl->sph_ref == 0, "%d\n", hdl->sph_ref);
 	daos_iov_free(&hdl->sph_cred);
-	ds_pool_put(hdl->sph_pool);
+
+	/*
+	 * FIXME: We currently don't guarantee all caches are cleared before
+	 * TLS fini on server shutdown, so we have to avoid calling into
+	 * ds_pool_put() (where asserting on xtream ID) if it's from cache
+	 * destroy on pool module fini.
+	 */
+	if (dss_tls_get() == NULL)
+		daos_lru_ref_release(pool_cache, &hdl->sph_pool->sp_entry);
+	else
+		ds_pool_put(hdl->sph_pool);
 	D_FREE(hdl);
 }
 
