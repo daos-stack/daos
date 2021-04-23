@@ -7,9 +7,7 @@
 import os
 import daos_build
 
-TEST_SRC = ['test_gurt.c',
-            'test_gurt_telem_producer.c',
-            'test_gurt_telem_consumer.c']
+TEST_SRC = ['test_gurt.c']
 
 def scons():
     """Scons function"""

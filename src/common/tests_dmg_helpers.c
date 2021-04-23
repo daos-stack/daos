@@ -259,6 +259,10 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 	}
 
 	n_svcranks = json_object_array_length(tmp);
+	if (n_svcranks <= 0) {
+		D_ERROR("unexpected svc_reps length: %d\n", n_svcranks);
+		return -DER_INVAL;
+	}
 	if (pool_info->mgpi_svc == NULL) {
 		pool_info->mgpi_svc = d_rank_list_alloc(n_svcranks);
 		if (pool_info->mgpi_svc == NULL) {
@@ -579,17 +583,19 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 	struct json_object	*targets;
 	int			tgts_len;
 	int			i, j;
+	char		*tmp_var;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
 
-		if (strlen(host + 2) <= DSS_HOSTNAME_MAX_LEN)
-			strcpy(devices[*disks].host, strtok(host, ":") + 1);
-		else {
-			D_ERROR("Hostname is larger than %d\n",
-				DSS_HOSTNAME_MAX_LEN);
+		tmp_var =  strtok(host, ":");
+		if (tmp_var == NULL) {
+			D_ERROR("Hostname is empty\n");
 			return -DER_INVAL;
 		}
+
+		snprintf(devices[*disks].host, sizeof(devices[*disks].host),
+			 "%s", tmp_var + 1);
 
 		if (!json_object_object_get_ex(dev, "uuid", &tmp)) {
 			D_ERROR("unable to extract uuid from JSON\n");
@@ -615,7 +621,9 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 			D_ERROR("unable to extract state from JSON\n");
 			return -DER_INVAL;
 		}
-		strcpy(devices[*disks].state, json_object_to_json_string(tmp));
+
+		snprintf(devices[*disks].state, sizeof(devices[*disks].state),
+			 "%s", json_object_to_json_string(tmp));
 
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
 			D_ERROR("unable to extract rank from JSON\n");
@@ -656,9 +664,8 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
 				       &storage_map)) {
-		D_FREE(disk);
 		D_ERROR("unable to extract host_storage_map from JSON\n");
-		return -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	json_object_object_foreach(storage_map, key, val) {
@@ -666,9 +673,8 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 			json_object_to_json_string(val));
 
 		if (!json_object_object_get_ex(val, "hosts", &hosts)) {
-			D_FREE(disk);
 			D_ERROR("unable to extract hosts from JSON\n");
-			return -DER_INVAL;
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 
 		D_ALLOC(host, strlen(json_object_to_json_string(hosts)) + 1);
@@ -684,7 +690,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 					smd_info, "devices", &smd_dev)) {
 					D_ERROR("unable to extract devices\n");
 					D_FREE(host);
-					return -DER_INVAL;
+					D_GOTO(out, rc = -DER_INVAL);
 				}
 
 				if (smd_dev != NULL)
@@ -712,6 +718,7 @@ out_json:
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
 
+out:
 	D_FREE(disk);
 	return rc;
 }

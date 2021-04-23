@@ -1,3 +1,15 @@
+daos (1.1.4-6) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Remove daos_metrics from 1.2 release
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Wed, 21 Apr 2021 17:58:03 -0000
+
+daos (1.1.4-5) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Remove client dependencies on PMDK, SPDK, and argobots
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 14 Apr 2021 13:27:00 -0400
+
 daos (1.1.4-4) unstable; urgency=medium
   [ Maureen Jean ]
   * Change pydaos_shim_3 to pydaos_shim

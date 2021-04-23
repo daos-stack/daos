@@ -19,8 +19,23 @@
 
 struct dtx_batched_commit_args {
 	d_list_t		 dbca_link;
+	int			 dbca_refs;
 	struct ds_cont_child	*dbca_cont;
 };
+
+static inline void
+dtx_get_dbca(struct dtx_batched_commit_args *dbca)
+{
+	dbca->dbca_refs++;
+	D_ASSERT(dbca->dbca_refs >= 1);
+}
+
+static inline void
+dtx_put_dbca(struct dtx_batched_commit_args *dbca)
+{
+	D_ASSERT(dbca->dbca_refs >= 1);
+	dbca->dbca_refs--;
+}
 
 static void
 dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
@@ -34,7 +49,8 @@ dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
 void
 dtx_aggregate(void *arg)
 {
-	struct ds_cont_child	*cont = arg;
+	struct dtx_batched_commit_args	*dbca = arg;
+	struct ds_cont_child		*cont = dbca->dbca_cont;
 
 	while (!cont->sc_closing && !cont->sc_dtx_cos_shutdown) {
 		struct dtx_stat		stat = { 0 };
@@ -61,7 +77,7 @@ dtx_aggregate(void *arg)
 	}
 
 	cont->sc_dtx_aggregating = 0;
-	ds_cont_child_put(cont);
+	dtx_put_dbca(dbca);
 }
 
 static inline void
@@ -92,8 +108,15 @@ dtx_free_dbca(struct dtx_batched_commit_args *dbca)
 	D_ASSERT(d_list_empty(&cont->sc_dtx_cos_list));
 
 out:
-	ds_cont_child_put(cont);
+	D_ASSERT(d_list_empty(&dbca->dbca_link));
+
+	while (dbca->dbca_refs > 0) {
+		D_DEBUG(DB_TRACE, "Sleep 10 mseconds for batched commit ULT\n");
+		dss_sleep(10);
+	}
+
 	D_FREE_PTR(dbca);
+	ds_cont_child_put(cont);
 }
 
 static void
@@ -177,8 +200,8 @@ dtx_batched_commit(void *arg)
 
 		dbca = d_list_entry(dmi->dmi_dtx_batched_list.next,
 				    struct dtx_batched_commit_args, dbca_link);
+		dtx_get_dbca(dbca);
 		cont = dbca->dbca_cont;
-		ds_cont_child_get(cont);
 
 		d_list_move_tail(&dbca->dbca_link, &dmi->dmi_dtx_batched_list);
 		dtx_stat(cont, &stat);
@@ -213,17 +236,18 @@ dtx_batched_commit(void *arg)
 		      dtx_hlc_age2sec(stat.dtx_oldest_committed_time) >=
 				DTX_AGG_THRESHOLD_AGE_UPPER))) {
 			sleep_time = 0;
-			ds_cont_child_get(cont);
+			dtx_get_dbca(dbca);
 			cont->sc_dtx_aggregating = 1;
 			rc = dss_ult_create(dtx_aggregate, cont, DSS_XS_SELF,
 					    0, 0, NULL);
 			if (rc != 0) {
 				cont->sc_dtx_aggregating = 0;
-				ds_cont_child_put(cont);
+				dtx_put_dbca(dbca);
 			}
 		}
 
-		ds_cont_child_put(cont);
+		dtx_put_dbca(dbca);
+
 check:
 		if (dss_xstream_exiting(dmi->dmi_xstream))
 			break;
@@ -272,6 +296,7 @@ static void
 dtx_shares_init(struct dtx_handle *dth)
 {
 	D_INIT_LIST_HEAD(&dth->dth_share_cmt_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_abt_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count = 0;
@@ -287,6 +312,11 @@ dtx_shares_fini(struct dtx_handle *dth)
 		return;
 
 	while ((dsp = d_list_pop_entry(&dth->dth_share_cmt_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		D_FREE(dsp);
+
+	while ((dsp = d_list_pop_entry(&dth->dth_share_abt_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
 		D_FREE(dsp);
@@ -1029,6 +1059,7 @@ dtx_batched_commit_register(struct ds_cont_child *cont)
 add:
 	cont->sc_dtx_cos_shutdown = 0;
 	ds_cont_child_get(cont);
+	dbca->dbca_refs = 0;
 	dbca->dbca_cont = cont;
 	d_list_add_tail(&dbca->dbca_link, head);
 

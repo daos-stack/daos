@@ -51,7 +51,8 @@ pipeline {
     triggers {
         cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
              env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
-             env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6' : '')
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '' +
+             env.BRANCH_NAME == 'weekly-testing-1.2' ? 'H 0 * * 6' : '')
     }
 
     environment {
@@ -76,8 +77,8 @@ pipeline {
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: "daily_regression",
-               description: 'Test-tag to use for this run (i.e pr, daily_regression, full_regression, etc.')
+               defaultValue: "",
+               description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
     }
 
     stages {

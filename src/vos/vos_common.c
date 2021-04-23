@@ -336,7 +336,8 @@ vos_tls_fini(void *data)
 		d_uhash_destroy(tls->vtl_cont_hhash);
 
 	umem_fini_txd(&tls->vtl_txd);
-	vos_ts_table_free(&tls->vtl_ts_table);
+	if (tls->vtl_ts_table)
+		vos_ts_table_free(&tls->vtl_ts_table);
 	D_FREE(tls);
 }
 

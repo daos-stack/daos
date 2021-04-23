@@ -825,7 +825,6 @@ rebuild_scan_broadcast(struct ds_pool *pool,
 	crt_rpc_t		*rpc;
 	int			rc;
 
-retry:
 	/* Send rebuild RPC to all targets of the pool to initialize rebuild.
 	 * XXX this should be idempotent as well as query and fini.
 	 */
@@ -854,12 +853,6 @@ retry:
 	rso = crt_reply_get(rpc);
 	if (rc == 0)
 		rc = rso->rso_status;
-	if (rc == -DER_BUSY) {
-		crt_req_decref(rpc);
-		D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" scan retry\n",
-			DP_UUID(pool->sp_uuid));
-		goto retry;
-	}
 
 	rgt->rgt_init_scan = 1;
 	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
@@ -1295,7 +1288,8 @@ try_reschedule:
 		 * rebuild sequence, which has to be done by failure
 		 * sequence order.
 		 */
-		rgt->rgt_status.rs_done = 0;
+		if (rgt)
+			rgt->rgt_status.rs_done = 0;
 		ret = ds_rebuild_schedule(pool, task->dst_map_ver,
 					  &task->dst_tgts,
 					  task->dst_rebuild_op, 5);
