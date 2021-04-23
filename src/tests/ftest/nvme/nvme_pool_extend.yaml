@@ -2,9 +2,7 @@ hosts:
   test_servers:
     - server-A
     - server-B
-    - server-C
   test_clients:
-    - client-E
     - client-F
     - client-G
 # If we define the server under test_servers, launch.py will convert it to the
@@ -13,7 +11,9 @@ hosts:
 # other than hosts.
 extra_servers:
   test_servers:
+    - server-C
     - server-D
+    - server-E
 timeout: 1000
 server_config:
     engines_per_host: 2

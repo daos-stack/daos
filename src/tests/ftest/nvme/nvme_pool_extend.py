@@ -10,6 +10,8 @@ import threading
 from test_utils_pool import TestPool
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
+from dmg_utils import check_system_query_status
+from daos_utils import DaosCommand
 
 
 class NvmePoolExtend(OSAUtils):
@@ -29,6 +31,7 @@ class NvmePoolExtend(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
+        self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
         # Start an additional server.
@@ -38,6 +41,7 @@ class NvmePoolExtend(OSAUtils):
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
         self.pool = None
+        self.dmg_command.exit_status_exception = True
 
     def run_nvme_pool_extend(self, num_pool, oclass=None):
         """Run Pool Extend
@@ -59,56 +63,65 @@ class NvmePoolExtend(OSAUtils):
             pool[val].create()
             pool[val].set_property("reclaim", "disabled")
 
+        # On each pool (max 3), extend the ranks
+        # eg: ranks : 4,5 ; 6,7; 8,9.
         for val in range(0, num_pool):
-            threads = []
             self.pool = pool[val]
-            for test in self.ior_test_sequence:
-                threads.append(threading.Thread(target=self.run_ior_thread,
-                                                kwargs={"action": "Write",
-                                                        "oclass": oclass,
-                                                        "test": test}))
-                # Launch the IOR threads
-                for thrd in threads:
-                    self.log.info("Thread : %s", thrd)
-                    thrd.start()
-                    time.sleep(1)
+            test = self.ior_test_sequence[val]
+            threads = []
+            threads.append(threading.Thread(target=self.run_ior_thread,
+                                            kwargs={"action": "Write",
+                                                    "oclass": oclass,
+                                                    "test": test}))
+            # Launch the IOR threads
+            for thrd in threads:
+                self.log.info("Thread : %s", thrd)
+                thrd.start()
+                time.sleep(1)
 
-                scm_pool_size = self.pool.scm_size
-                nvme_pool_size = self.pool.nvme_size
-                self.pool.display_pool_daos_space("Pool space: Beginning")
-                pver_begin = self.get_pool_version()
+            scm_pool_size = self.pool.scm_size
+            nvme_pool_size = self.pool.nvme_size
+            self.pool.display_pool_daos_space("Pool space: Beginning")
+            pver_begin = self.get_pool_version()
 
-                # Start the additional servers and extend the pool
+            # Start the additional servers and extend the pool
+            if val == 0:
                 self.log.info("Extra Servers = %s", self.extra_servers)
                 self.start_additional_servers(self.extra_servers)
-                # Give some time for the additional server to come up.
-                # Extending two ranks (two servers per node)
-                time.sleep(25)
-                self.log.info("Pool Version at the beginning %s", pver_begin)
-                output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                      "6, 7", scm_pool_size,
-                                                      nvme_pool_size)
-                self.print_and_assert_on_rebuild_failure(output)
-                pver_extend = self.get_pool_version()
-                self.log.info("Pool Version after extend %s", pver_extend)
-                # Check pool version incremented after pool extend
-                self.assertTrue(pver_extend > pver_begin,
-                                "Pool Version Error:  After extend")
-                # Wait to finish the threads
-                for thrd in threads:
-                    thrd.join()
-                # Verify the data after pool extend
-                self.run_ior_thread("Read", oclass, test)
-                # Get the pool space at the end of the test
-                display_string = "Pool{} space at the End".format(val)
-                self.pool = pool[val]
-                self.pool.display_pool_daos_space(display_string)
-                pool[val].destroy()
-
-                # Stop the extra node servers (rank 6 and 7)
-                output = self.dmg_command.system_stop(self.pool.uuid,
-                                                      "6, 7")
-                self.log.info(output)
+                # Check the system map extra servers are in joined state.
+                for retry in range(0, 10):
+                    scan_info = self.get_dmg_command().system_query()
+                    if not check_system_query_status(scan_info):
+                        if retry == 9:
+                            self.fail("One or more servers not in expected status")
+                    else:
+                        break
+            self.log.info("Pool Version at the beginning %s", pver_begin)
+            # Extend ranks (4,5), (6,7), (8,9)
+            ranks_extended = "{},{}".format((val * 2) + 4, (val * 2) + 5)
+            output = self.dmg_command.pool_extend(self.pool.uuid,
+                                                  ranks_extended,
+                                                  scm_pool_size,
+                                                  nvme_pool_size)
+            self.print_and_assert_on_rebuild_failure(output)
+            pver_extend = self.get_pool_version()
+            self.log.info("Pool Version after extend %s", pver_extend)
+            # Check pool version incremented after pool extend
+            self.assertTrue(pver_extend > pver_begin,
+                            "Pool Version Error:  After extend")
+            # Wait to finish the threads
+            for thrd in threads:
+                thrd.join()
+            # Verify the data after pool extend
+            self.run_ior_thread("Read", oclass, test)
+            # Get the pool space at the end of the test
+            display_string = "Pool{} space at the End".format(val)
+            self.pool.display_pool_daos_space(display_string)
+            self.container = self.pool_cont_dict[self.pool][0]
+            kwargs = {"pool": self.pool.uuid,
+                      "cont": self.container.uuid}
+            output = self.daos_command.container_check(**kwargs)
+            self.log.info(output)
 
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086
@@ -119,4 +132,4 @@ class NvmePoolExtend(OSAUtils):
         :avocado: tags=nvme,checksum,nvme_osa
         :avocado: tags=nvme_pool_extend
         """
-        self.run_nvme_pool_extend(1)
+        self.run_nvme_pool_extend(3)

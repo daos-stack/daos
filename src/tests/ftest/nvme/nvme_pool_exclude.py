@@ -8,10 +8,10 @@ import time
 import random
 import threading
 
-from apricot import skipForTicket
 from test_utils_pool import TestPool
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
+from daos_utils import DaosCommand
 
 
 class NvmePoolExclude(OSAUtils):
@@ -26,12 +26,15 @@ class NvmePoolExclude(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
+        self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
         self.pool = None
+        self.cont_list = []
+        self.dmg_command.exit_status_exception = True
 
     def run_nvme_pool_exclude(self, num_pool, oclass=None):
         """This is the main method which performs the actual
@@ -70,12 +73,16 @@ class NvmePoolExclude(OSAUtils):
             pool[val].set_property("reclaim", "disabled")
 
         for val in range(0, num_pool):
-            threads = []
             self.pool = pool[val]
+            self.add_container(self.pool)
+            self.cont_list.append(self.container)
             for test in self.ior_test_sequence:
+                threads = []
                 threads.append(threading.Thread(target=self.run_ior_thread,
                                                 kwargs={"action": "Write",
                                                         "oclass": oclass,
+                                                        "single_cont_read":
+                                                        False,
                                                         "test": test}))
                 # Launch the IOR threads
                 for thrd in threads:
@@ -105,12 +112,12 @@ class NvmePoolExclude(OSAUtils):
                     thrd.join()
                 # Verify the data after pool exclude
                 self.run_ior_thread("Read", oclass, test)
-
-        for val in range(0, num_pool):
-            display_string = "Pool{} space at the End".format(val)
-            self.pool = pool[val]
-            self.pool.display_pool_daos_space(display_string)
-            pool[val].destroy()
+                display_string = "Pool{} space at the End".format(val)
+                self.pool.display_pool_daos_space(display_string)
+                kwargs = {"pool": self.pool.uuid,
+                          "cont": self.container.uuid}
+                output = self.daos_command.container_check(**kwargs)
+                self.log.info(output)
 
     def test_nvme_pool_excluded(self):
         """Test ID: DAOS-2086
@@ -123,5 +130,4 @@ class NvmePoolExclude(OSAUtils):
         :avocado: tags=nvme,checksum,nvme_osa
         :avocado: tags=nvme_pool_exclude
         """
-        for num_pool in range(1, 4):
-            self.run_nvme_pool_exclude(num_pool)
+        self.run_nvme_pool_exclude(2)
