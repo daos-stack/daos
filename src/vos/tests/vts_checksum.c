@@ -504,7 +504,7 @@ test_marking_corrupted_with_iod_type(void **state, daos_iod_type_t iod_type)
 	 */
 	for (i = 0; i < 100; i++) {
 		snprintf(akey, 32, "akey-%d", i);
-		rc = vos_obj_fetch(k.container_hdl, k.object_id, 2, 0,
+		rc = vos_obj_fetch(k.container_hdl, k.object_id, 1, 0,
 				   &k.dkey, 1, &iod, &sgl_fetch);
 		assert_rc_equal(-DER_CSUM, rc);
 	}

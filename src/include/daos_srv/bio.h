@@ -17,7 +17,7 @@
 #include <daos_srv/control.h>
 #include <abt.h>
 
-#define BIO_ADDR_IS_CORRUPTED(addr) ((addr)->ba_flags == BIO_FLAG_CORRUPTED)
+#define BIO_ADDR_IS_CORRUPTED(addr) ((addr)->ba_flags & BIO_FLAG_CORRUPTED)
 #define BIO_ADDR_SET_CORRUPTED(addr) ((addr)->ba_flags |= BIO_FLAG_CORRUPTED)
 
 enum BIO_FLAG {

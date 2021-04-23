@@ -756,7 +756,9 @@ svt_rec_corrupt(struct btr_instance *tins, struct btr_record *rec)
 
 	irec = vos_rec2irec(tins, rec);
 
-	rc = umem_tx_add(&tins->ti_umm, rec->rec_off, sizeof(*irec));
+	rc = umem_tx_add(&tins->ti_umm,
+			 rec->rec_off + offsetof(struct vos_irec_df, ir_ex_addr),
+			 sizeof(*irec) - offsetof(struct vos_irec_df, ir_ex_addr));
 	if (rc != 0)
 		return rc;
 
