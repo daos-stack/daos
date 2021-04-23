@@ -203,12 +203,7 @@ class TestPool(TestDaosApiBase):
             if self.pool.attached:
                 self.log.info("Destroying pool %s", self.uuid)
 
-                if self.control_method.value == self.USE_API:
-                    # Destroy the pool with the API method
-                    self._call_method(self.pool.destroy, {"force": force})
-                    status = True
-
-                elif self.control_method.value == self.USE_DMG and self.dmg:
+                if self.control_method.value == self.USE_DMG and self.dmg:
                     # Destroy the pool with the dmg command
                     self.dmg.pool_destroy(pool=self.uuid, force=force)
                     status = True
