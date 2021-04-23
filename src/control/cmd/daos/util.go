@@ -81,21 +81,16 @@ func copyUUID(dst *C.uuid_t, src uuid.UUID) error {
 	return nil
 }
 
-func deallocCmdArgs(ap *C.struct_cmd_args_s) {
-	if ap == nil {
-		return
+func uuidToC(in uuid.UUID) (out C.uuid_t) {
+	for i, v := range in {
+		out[i] = C.uchar(v)
 	}
 
-	if ap.sysname != nil {
-		C.free(unsafe.Pointer(ap.sysname))
-	}
+	return
+}
 
-	if ap.props != nil {
-		ap.props.dpp_nr = C.DAOS_PROP_ENTRIES_MAX_NR
-		C.daos_prop_free(ap.props)
-	}
-
-	C.free(unsafe.Pointer(ap))
+func uuidFromC(cUUID C.uuid_t) (uuid.UUID, error) {
+	return uuid.FromBytes(C.GoBytes(unsafe.Pointer(&cUUID[0]), C.int(len(cUUID))))
 }
 
 func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(), error) {
@@ -107,6 +102,8 @@ func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(
 		return nil, nil, err
 	}
 
+	write := C.CString("w")
+	defer C.free(unsafe.Pointer(write))
 	stream := C.fdopen(C.int(w.Fd()), C.CString("w"))
 	if stream == nil {
 		return nil, nil, errors.New("fdopen() failed")
@@ -137,6 +134,23 @@ func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(
 		C.fclose(stream)
 		C.sync()
 	}, nil
+}
+
+func deallocCmdArgs(ap *C.struct_cmd_args_s) {
+	if ap == nil {
+		return
+	}
+
+	if ap.sysname != nil {
+		C.free(unsafe.Pointer(ap.sysname))
+	}
+
+	if ap.props != nil {
+		ap.props.dpp_nr = C.DAOS_PROP_ENTRIES_MAX_NR
+		C.daos_prop_free(ap.props)
+	}
+
+	C.free(unsafe.Pointer(ap))
 }
 
 func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), err error) {

@@ -27,7 +27,7 @@ def scons():
     # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
-    daos_hdlrs_src = ['daos_hdlr.c']
+    daos_hdlrs_src = ['daos_hdlr.c', 'daos_autotest.c']
     daos_hdlrs_lib = daos_build.library(denv, 'daos_cmd_hdlrs',
                                         daos_hdlrs_src,
                                         SHLIBVERSION=API_VERSION,
@@ -43,7 +43,7 @@ def scons():
 
     Import('cmd_parser', 'dc_credit')
     daos_obj = [cmd_parser, dc_credit]
-    daos_src = ['daos.c', 'daos_obj_ctl.c', 'daos_autotest.c']
+    daos_src = ['daos.c', 'daos_obj_ctl.c']
 
     daos = daos_build.program(denv, 'daos', [daos_src, daos_obj], LIBS=libs)
     denv.Install('$PREFIX/bin/', daos)
