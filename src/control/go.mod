@@ -13,7 +13,7 @@ require (
 	github.com/hashicorp/raft v1.1.2
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/kr/pretty v0.1.0 // indirect
-	github.com/mitchellh/hashstructure v1.0.0
+	github.com/mitchellh/hashstructure/v2 v2.0.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v0.9.2
 	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4
