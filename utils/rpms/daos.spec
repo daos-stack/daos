@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       11%{?relval}%{?dist}
+Release:       13%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -128,7 +128,7 @@ Requires: spdk-tools
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
-Requires: ipmctl < 02.00.00.3809
+Requires: ipmctl >= 02.00.00.3733
 Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
 %else
 Requires: ipmctl > 02.00.00.3816
@@ -357,7 +357,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
-%{_bindir}/dfuse_hl
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
 %{_libdir}/libduns.so
@@ -423,6 +422,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Wed Apr 21 2021 Tom Nabarro <tom.nabarro@intel.com> - 1.3.0-13
+- Relax ipmctl version requirement on leap15 as we have runtime checks
+
+* Wed Apr 16 2021 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 1.3.0-12
+- remove dfuse_hl
+
 * Wed Apr 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.3.0-11
 - Remove storage_estimator and io_conf from client packages to remove
   any client side dependence on bio and vos (and and PMDK/SPDK)

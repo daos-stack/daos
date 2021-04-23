@@ -72,9 +72,9 @@ func (c *ControlService) doNvmePrepare(pbReq *ctlpb.PrepareNvmeReq) *ctlpb.Prepa
 	pnr := new(ctlpb.PrepareNvmeResp)
 
 	req := bdev.PrepareRequest{
-		HugePageCount: int(pbReq.GetNrhugepages()),
-		TargetUser:    pbReq.GetTargetuser(),
-		PCIAllowlist:  pbReq.GetPciwhitelist(),
+		HugePageCount: int(pbReq.GetNrHugePages()),
+		TargetUser:    pbReq.GetTargetUser(),
+		PCIAllowlist:  pbReq.GetPciAllowList(),
 		ResetOnly:     pbReq.GetReset_(),
 		// Default to minimum necessary for scan to work correctly.
 	}
@@ -234,8 +234,7 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 func stripNvmeDetails(pbc *ctlpb.NvmeController) {
 	pbc.Serial = ""
 	pbc.Model = ""
-	pbc.Fwrev = ""
-	pbc.Namespaces = nil
+	pbc.FwRev = ""
 }
 
 // newScanBdevResp populates protobuf NVMe scan response with controller info
@@ -257,10 +256,10 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 	// trim unwanted fields so responses can be coalesced from hash map
 	for _, pbc := range pbCtrlrs {
 		if !req.GetHealth() {
-			pbc.Healthstats = nil
+			pbc.HealthStats = nil
 		}
 		if !req.GetMeta() {
-			pbc.Smddevices = nil
+			pbc.SmdDevices = nil
 		}
 		if req.GetBasic() {
 			stripNvmeDetails(pbc)
