@@ -100,7 +100,7 @@ void test_close_handle(void)
 		 * test_close_handle() without sharing pointers.
 		 */
 		rc = d_tm_add_metric(&num_open_handles, D_TM_GAUGE, NULL, NULL,
-				"handle/open handles");
+				     "handle/open handles");
 		if (rc != 0) {
 			printf("d_tm_add_metric gauge failed: "DF_RC"\n",
 			       DP_RC(rc));
