@@ -468,7 +468,7 @@ err:
 	return rc;
 }
 
-#define ATTR_COUNT 4
+#define ATTR_COUNT 5
 /* Setup caching attributes for a container.
  *
  * These are read from pool attributes, or can be overwritten on the command
@@ -478,15 +478,18 @@ err:
 static int
 dfuse_cont_init(struct dfuse_cont *dfc)
 {
-	char const *const names[ATTR_COUNT] = {"dfuse-attr-timeout",
-					       "dfuse-dentry",
-					       "dfuse-ndentry",
+	char const *const names[ATTR_COUNT] = {"dfuse-attr-time",
+					       "dfuse-dentry-time",
+					       "dfuse-dentry-dir-time",
+					       "dfuse-ndentry-time",
 					       "dfuse-data-cache"};
 	size_t		size;
 	char		*buff;
 	int		rc;
 	int		i;
 	unsigned int	value;
+	bool have_dentry = false;
+	bool have_dentry_dir = false;
 
 	D_ALLOC(buff, 128);
 	if (buff == NULL)
@@ -506,8 +509,16 @@ dfuse_cont_init(struct dfuse_cont *dfc)
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
-		if (i == 3) {
-			dfc->dfs_data_caching = true;
+		if (i == 4) {
+			if (strncmp(buff, "on", size) == 0) {
+				dfc->dfs_data_caching = true;
+			} else if (strncmp(buff, "off", size) == 0) {
+				dfc->dfs_data_caching = false;
+			} else {
+				DFUSE_TRA_WARNING(dfc, "Failed to parse '%s' for '%s'",
+						buff, names[i]);
+				dfc->dfs_data_caching = false;
+			}
 			continue;
 		}
 
@@ -521,13 +532,20 @@ dfuse_cont_init(struct dfuse_cont *dfc)
 			continue;
 		}
 		DFUSE_TRA_INFO(dfc, "setting '%s' is %u", names[i], value);
-		if (i == 0)
+		if (i == 0) {
 			dfc->dfs_attr_timeout = value;
-		else if (i == 1)
+		} else if (i == 1) {
+			have_dentry = true;
 			dfc->dfs_dentry_timeout = value;
-		else if (i == 2)
+		} else if (i == 2) {
+			have_dentry_dir = true;
+			dfc->dfs_dentry_dir_timeout = value;
+		} else if (i == 3) {
 			dfc->dfs_ndentry_timeout = value;
+		}
 	}
+	if (have_dentry && !have_dentry_dir)
+		dfc->dfs_dentry_dir_timeout = dfc->dfs_dentry_timeout;
 	rc = 0;
 out:
 	D_FREE(buff);

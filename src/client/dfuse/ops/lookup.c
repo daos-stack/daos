@@ -25,8 +25,9 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
-	/* Do not cache directory attributes as this does not work with uns */
-	if (!S_ISDIR(ie->ie_stat.st_mode))
+	if (S_ISDIR(ie->ie_stat.st_mode))
+		entry.entry_timeout = ie->ie_dfs->dfs_dentry_dir_timeout;
+	else
 		entry.entry_timeout = ie->ie_dfs->dfs_dentry_timeout;
 
 	/* Set the attr caching attributes of this entry */

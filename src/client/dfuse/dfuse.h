@@ -208,6 +208,7 @@ struct dfuse_cont {
 	/** Caching data */
 	double			dfs_attr_timeout;
 	double			dfs_dentry_timeout;
+	double			dfs_dentry_dir_timeout;
 	double			dfs_ndentry_timeout;
 	bool			dfs_data_caching;
 	pthread_mutex_t		dfs_read_mutex;
