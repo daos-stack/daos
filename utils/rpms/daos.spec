@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       11%{?relval}%{?dist}
+Release:       12%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -300,7 +300,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
-%{_libdir}/*.so.*
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
@@ -357,6 +356,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
+%{_bindir}/daos_new
+%{_libdir}/libdaos_cmd_hdlrs.so*
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
 %{_libdir}/libduns.so
@@ -414,7 +415,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files devel
 %{_includedir}/*
-%{_libdir}/libdaos.so
+%{_libdir}/libdaos.so*
 %{_libdir}/*.a
 
 %files firmware
@@ -422,7 +423,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Wed Apr 16 2021 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 1.3.0-12
+* Wed Apr 14 2021 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 1.3.0-12
 - remove dfuse_hl
 
 * Wed Apr 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.3.0-11
