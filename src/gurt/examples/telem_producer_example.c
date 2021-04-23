@@ -209,7 +209,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 		return NULL;
 	}
 
-	rc = d_tm_add_node(counter1, &node_list);
+	rc = d_tm_list_add_node(counter1, &node_list);
 	if (rc != DER_SUCCESS) {
 		printf("d_tm_add_metric failed: " DF_RC "\n", DP_RC(rc));
 		return NULL;
@@ -225,7 +225,7 @@ struct d_tm_nodeList_t *add_metrics_manually(void)
 		return NULL;
 	}
 
-	rc = d_tm_add_node(counter2, &node_list);
+	rc = d_tm_list_add_node(counter2, &node_list);
 	if (rc != DER_SUCCESS) {
 		d_tm_list_free(node_list);
 		printf("d_tm_add_metric failed: " DF_RC "\n", DP_RC(rc));

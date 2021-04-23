@@ -150,6 +150,7 @@ func (srv *server) OnEnginesStarted(fns ...func(context.Context) error) {
 
 func (srv *server) shutdown() {
 	srv.pubSub.Close()
+	stopPrometheusExporter()
 }
 
 // initNetwork resolves local address and starts TCP listener then calls

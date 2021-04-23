@@ -19,6 +19,9 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+// cleanupTelem tracks the cleanup functions for the active engine sources
+var cleanupTelem = map[uint32]func(){}
+
 func regPromEngineSources(ctx context.Context, log logging.Logger, engines []*EngineInstance) error {
 	numEngines := len(engines)
 	if numEngines == 0 {
@@ -31,11 +34,12 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []*En
 		if err != nil {
 			return errors.Wrapf(err, "failed to get rank for idx %d", i)
 		}
-		es, err := promexp.NewEngineSource(ctx, uint32(i), er.Uint32())
+		es, cleanup, err := promexp.NewEngineSource(ctx, uint32(i), er.Uint32())
 		if err != nil {
 			return errors.Wrapf(err, "failed to create EngineSource for idx %d", i)
 		}
 		sources[i] = es
+		cleanupTelem[uint32(i)] = cleanup
 	}
 
 	opts := &promexp.CollectorOpts{
@@ -81,4 +85,11 @@ func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, 
 	}
 
 	return nil
+}
+
+func stopPrometheusExporter() {
+	for idx, cleanupSrc := range cleanupTelem {
+		cleanupSrc()
+		delete(cleanupTelem, idx)
+	}
 }
