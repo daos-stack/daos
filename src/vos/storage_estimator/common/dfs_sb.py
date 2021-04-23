@@ -246,7 +246,7 @@ class BASE_CLASS():
 
 class VOS_SIZE(BASE_CLASS):
     def __init__(self):
-        super().__init__('libvos_size.so')
+        super().__init__('daos_srv/libvos_size.so')
         self._data = STR_BUFFER()
 
     def __del__(self):
