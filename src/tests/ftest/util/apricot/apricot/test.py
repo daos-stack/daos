@@ -768,7 +768,11 @@ class TestWithServers(TestWithoutServers):
             server_groups = {
                 self.server_group: {
                     "hosts": self.hostlist_servers,
-                    "access_points": self.access_points
+                    "access_points": self.access_points,
+                    "svr_config_file": None,
+                    "dmg_config_file": None,
+                    "svr_config_temp": None,
+                    "dmg_config_temp": None
                 }
             }
 
@@ -776,7 +780,9 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(server_groups, dict):
             for group, info in list(server_groups.items()):
-                self.add_server_manager(group)
+                self.add_server_manager(
+                    group, info["svr_config_file"], info["dmg_config_file"],
+                    info["svr_config_temp"], info["dmg_config_temp"])
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
