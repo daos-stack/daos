@@ -44,7 +44,7 @@ ds_pool_metrics_fini(void)
 
 /**
  * Fetch the global pool metrics.
- * 
+ *
  * \return global pool metrics structure
  */
 struct pool_metrics *

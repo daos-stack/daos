@@ -2148,7 +2148,7 @@ int d_tm_get_metadata(char **desc, char **units, uint64_t *shmem_root,
 	if (units != NULL)
 		*units = NULL;
 
-	if (node == NULL) 
+	if (node == NULL)
 		return -DER_INVAL;
 
 	if (!d_tm_validate_shmem_ptr(shmem_root, (void *)node))

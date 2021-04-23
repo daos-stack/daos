@@ -55,7 +55,7 @@ test_increment_counter(void **state)
 		d_tm_increment_counter(loop, 1);
 	}
 
-	rc = d_tm_get_counter(&val, shmem_root, 
+	rc = d_tm_get_counter(&val, shmem_root,
 			      d_tm_conv_ptr(shmem_root, loop));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, count);
@@ -163,7 +163,7 @@ test_interval_timer(void **state)
 	d_tm_mark_duration_end(timer);
 
 	rc = d_tm_get_duration(&result, &stats, shmem_root,
-			    d_tm_conv_ptr(shmem_root, timer));
+			       d_tm_conv_ptr(shmem_root, timer));
 	assert_int_equal(rc, DER_SUCCESS);
 	/* very rough estimation, based on the sleep timing */
 	assert_true(result.tv_nsec > ts.tv_nsec || result.tv_sec > 0);
@@ -260,7 +260,7 @@ test_duration_stats(void **state)
 	 * Manually store timer values into the metric to avoid actually timing
 	 * something for this test.  This will produce a set of known values
 	 * each run.
-	 * 
+	 *
 	 * Simulate what happens when running the timer by calling the
 	 * d_tm_compute_stats() each time a new duration value is created.
 	 * This allows the statistics to be updated at each step, as they would
@@ -395,7 +395,7 @@ check_histogram_m1_data(char *path)
 {
 	struct d_tm_node_t	*gauge;
 	struct d_tm_histogram_t	histogram;
-	struct d_tm_bucket_t	bucket;	
+	struct d_tm_bucket_t	bucket;
 	int			rc;
 
 	gauge = d_tm_find_metric(shmem_root, path);
@@ -498,7 +498,7 @@ check_histogram_m2_data(char *path)
 {
 	struct d_tm_node_t	*gauge;
 	struct d_tm_histogram_t	histogram;
-	struct d_tm_bucket_t	bucket;	
+	struct d_tm_bucket_t	bucket;
 	int			rc;
 
 	gauge = d_tm_find_metric(shmem_root, path);
