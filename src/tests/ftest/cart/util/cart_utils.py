@@ -406,7 +406,7 @@ class CartTest(TestWithoutServers):
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
 
-        self.log_check_valgrind_memcheck(self)
+        self.log_check_valgrind_memcheck()
 
         return 0
 
