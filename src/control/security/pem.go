@@ -168,7 +168,7 @@ func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
 				keyPath)
 		}
 	}
-	return nil, fmt.Errorf("Invalid key data in PRIVATE KEY block")
+	return nil, errors.Wrapf(err, "Invalid key data in PRIVATE KEY block")
 }
 
 // ValidateCertDirectory ensures the certificate directory has safe permissions

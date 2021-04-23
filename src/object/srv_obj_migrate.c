@@ -599,7 +599,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	int			 i;
 	int			 rc = 0;
 	struct daos_oclass_attr	*oca;
-	struct daos_csummer	*csummer;
+	struct daos_csummer	*csummer = NULL;
 	d_iov_t			*csums_iov = NULL;
 	d_iov_t			 csum_iov_fetch = {0};
 	d_iov_t			 tmp_csum_iov;
@@ -965,6 +965,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	struct daos_oclass_attr	*oca;
 	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	d_iov_t			 iov[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
+	struct dcs_layout	 los[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
 	char			*data;
 	daos_size_t		 size;
 	int			 i;
@@ -1043,6 +1044,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		if (obj_ec_singv_one_tgt(iod->iod_size, &sgls[i], oca)) {
 			D_DEBUG(DB_REBUILD, DF_UOID" one tgt.\n",
 				DP_UOID(mrone->mo_oid));
+			los[i].cs_even_dist = 0;
 			continue;
 		}
 
@@ -1065,18 +1067,31 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 				       mrone->mo_epoch, ORF_EC,
 				       start_shard, 1,
 				       true, false, NULL);
+		los[i].cs_even_dist = 1;
+		los[i].cs_bytes = obj_ec_singv_cell_bytes(
+					mrone->mo_iods[i].iod_size, oca);
+		los[i].cs_nr = obj_ec_tgt_nr(oca);
 	}
 
 	rc = daos_csummer_csum_init_with_packed(&csummer, &csum_iov_fetch);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	tmp_csum_iov = csum_iov_fetch;
-	rc = daos_csummer_alloc_iods_csums_with_packed(
-		csummer,
-		&mrone->mo_iods[0],
-		mrone->mo_iod_num,
-		&tmp_csum_iov, &iod_csums);
+	if (DAOS_OC_IS_EC(oca)) {
+		/** Calc checksum for EC single value, since it may be striped,
+		 * and we need re-calculate the single stripe checksum.
+		 */
+		rc = daos_csummer_calc_iods(csummer, sgls, mrone->mo_iods, NULL,
+					    mrone->mo_iod_num, false, los,
+					    -1, &iod_csums);
+	} else {
+		tmp_csum_iov = csum_iov_fetch;
+		rc = daos_csummer_alloc_iods_csums_with_packed(csummer,
+							       mrone->mo_iods,
+							      mrone->mo_iod_num,
+							       &tmp_csum_iov,
+							       &iod_csums);
+	}
 	if (rc != 0) {
 		D_ERROR("unable to allocate iod csums: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1097,6 +1112,7 @@ out:
 			mrone->mo_iods[i].iod_recxs = NULL;
 	}
 
+	daos_csummer_free_ic(csummer, &iod_csums);
 	daos_iov_free(&csum_iov_fetch);
 	daos_csummer_destroy(&csummer);
 
@@ -1134,7 +1150,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		return rc;
 	}
 
-	rc = bio_iod_prep(vos_ioh2desc(ioh));
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_REBUILD);
 	if (rc) {
 		D_ERROR("Prepare EIOD for "DF_UOID" error: "DF_RC"\n",
 			DP_UOID(mrone->mo_oid), DP_RC(rc));
@@ -1166,9 +1182,11 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		D_GOTO(post, rc);
 
 	rc = mrone_obj_fetch(mrone, oh, sgls, &csum_iov_fetch);
-	if (rc)
+	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed: "DF_RC"\n",
 			DP_KEY(&mrone->mo_dkey), DP_RC(rc));
+		D_GOTO(post, rc);
+	}
 
 	rc = daos_csummer_csum_init_with_packed(&csummer, &csum_iov_fetch);
 	if (rc != 0)
@@ -1315,8 +1333,14 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, mrone->mo_cont_uuid,
 				       &cont);
-	if (rc)
+	if (rc) {
+		if (rc == -DER_SHUTDOWN) {
+			D_DEBUG(DB_REBUILD, DF_UUID "container is being"
+				" destroyed\n", DP_UUID(mrone->mo_cont_uuid));
+			rc = 0;
+		}
 		D_GOTO(out, rc);
+	}
 
 	rc = dsc_pool_open(tls->mpt_pool_uuid, tls->mpt_poh_uuid, 0,
 			   NULL, tls->mpt_pool->spc_pool->sp_map,
@@ -1432,7 +1456,7 @@ migrate_one_ult(void *arg)
 				      mrone->mo_pool_tls_version);
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
-			DP_UUID(mrone->mo_pool_uuid));
+		       DP_UUID(mrone->mo_pool_uuid));
 		goto out;
 	}
 
@@ -1785,7 +1809,11 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 		iod_eph_total);
 
 	tls = migrate_pool_tls_lookup(iter_arg->pool_uuid, iter_arg->version);
-	D_ASSERT(tls != NULL);
+	if (tls == NULL || tls->mpt_fini) {
+		D_WARN("some one abort the rebuild "DF_UUID"\n",
+		       DP_UUID(iter_arg->pool_uuid));
+		D_GOTO(put, rc = 0);
+	}
 	if (iod_eph_total == 0 || tls->mpt_version <= version ||
 	    tls->mpt_fini) {
 		D_DEBUG(DB_REBUILD, "No need eph_total %d version %u"
@@ -1885,7 +1913,8 @@ free:
 		migrate_one_destroy(mrone);
 	}
 put:
-	migrate_pool_tls_put(tls);
+	if (tls)
+		migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -1973,7 +2002,11 @@ migrate_obj_punch_one(void *data)
 	int			rc;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
-	D_ASSERT(tls != NULL);
+	if (tls == NULL || tls->mpt_fini) {
+		D_WARN("some one abort the rebuild "DF_UUID"\n",
+		       DP_UUID(arg->pool_uuid));
+		D_GOTO(put, rc = 0);
+	}
 	D_DEBUG(DB_REBUILD, "tls %p "DF_UUID" version %d punch "DF_UOID"\n",
 		tls, DP_UUID(tls->mpt_pool_uuid), arg->version,
 		DP_UOID(arg->oid));
@@ -1987,7 +2020,9 @@ migrate_obj_punch_one(void *data)
 	if (rc)
 		D_ERROR(DF_UOID" migrate punch failed: "DF_RC"\n",
 			DP_UOID(arg->oid), DP_RC(rc));
-	migrate_pool_tls_put(tls);
+put:
+	if (tls)
+		migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -2001,7 +2036,11 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 	int			rc = 0;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
-	D_ASSERT(tls != NULL);
+	if (tls == NULL || tls->mpt_fini) {
+		D_WARN("some one abort the rebuild "DF_UUID"\n",
+		       DP_UUID(arg->pool_uuid));
+		D_GOTO(put, rc = 0);
+	}
 	d_list_for_each_entry_safe(mrone, tmp, &unpack_arg->merge_list,
 				   mo_list) {
 		/* Recover the OID (with correct shard) after merging IOD
@@ -2023,7 +2062,9 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 		tls->mpt_generated_ult++;
 	}
 
-	migrate_pool_tls_put(tls);
+put:
+	if (tls)
+		migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -2166,9 +2207,12 @@ retry:
 			/* DER_DATA_LOSS means it can not find any replicas
 			 * to rebuild the data, see obj_list_common.
 			 */
-			if (rc == -DER_DATA_LOSS) {
+			/* If the container is being destroyed, it may return
+			 * -DER_NONEXIST, see obj_ioc_init().
+			 */
+			if (rc == -DER_DATA_LOSS || rc == -DER_NONEXIST) {
 				D_DEBUG(DB_REBUILD, "No replicas for "DF_UOID
-					"\n", DP_UOID(arg->oid));
+					" %d\n", DP_UOID(arg->oid), rc);
 				num = 0;
 				rc = 0;
 			}
@@ -2304,9 +2348,13 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 	int rc;
 
 	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont);
-	if (rc == DER_NONEXIST) {
-		return DER_SUCCESS;
-	} else if (rc != 0) {
+	if (rc == -DER_SHUTDOWN) {
+		D_DEBUG(DB_REBUILD, DF_UUID "container is being destroyed\n",
+			DP_UUID(cont_uuid));
+		return 0;
+	}
+
+	if (rc != 0) {
 		D_ERROR("Failed to open cont to clear obj before migrate; pool="
 			DF_UUID" cont="DF_UUID"\n",
 			DP_UUID(tls->mpt_pool_uuid), DP_UUID(cont_uuid));
@@ -2314,9 +2362,7 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 	}
 
 	rc = vos_obj_delete(cont->sc_hdl, *oid);
-	if (rc == DER_NONEXIST) {
-		return DER_SUCCESS;
-	} else if (rc != 0) {
+	if (rc != 0) {
 		D_ERROR("Migrate failed to destroy object prior to "
 			"reintegration: pool/object "DF_UUID"/"DF_UOID
 			" rc: "DF_RC"\n", DP_UUID(tls->mpt_pool_uuid),
@@ -2357,7 +2403,11 @@ migrate_obj_ult(void *data)
 	int			 rc;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
-	D_ASSERT(tls != NULL);
+	if (tls == NULL || tls->mpt_fini) {
+		D_WARN("some one abort the rebuild "DF_UUID"\n",
+		       DP_UUID(arg->pool_uuid));
+		D_GOTO(free, rc = 0);
+	}
 
 	if (tls->mpt_del_local_objs) {
 		/* Destroy this object ID locally prior to migration */
@@ -2400,6 +2450,27 @@ free:
 		tls->mpt_obj_count++;
 
 	tls->mpt_obj_executed_ult++;
+	if (rc == -DER_NONEXIST) {
+		struct ds_cont_child *cont_child = NULL;
+		int ret;
+
+		ret = ds_cont_child_lookup(tls->mpt_pool_uuid, arg->cont_uuid,
+					   &cont_child);
+		if (ret != 0 || cont_child->sc_stopping) {
+			/**
+			 * If the current container is being destroyed, let's
+			 * ignore the -DER_NONEXIST failure.
+			 */
+			D_DEBUG(DB_REBUILD, DF_UUID" status %d:%d\n",
+				DP_UUID(arg->cont_uuid), ret,
+				cont_child ? cont_child->sc_stopping : 0);
+			rc = 0;
+		}
+
+		if (cont_child)
+			ds_cont_child_put(cont_child);
+	}
+
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
 	D_DEBUG(DB_REBUILD, "stop migrate obj "DF_UOID" for shard %u: "
