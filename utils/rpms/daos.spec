@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.1.4
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -129,7 +129,7 @@ Requires: spdk-tools
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
-Requires: ipmctl < 02.00.00.3809
+Requires: ipmctl >= 02.00.00.3733
 Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
 %else
 Requires: ipmctl > 02.00.00.3816
@@ -407,6 +407,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Fri Apr 21 2021 Tom Nabarro <tom.nabarro@intel.com> - 1.1.4-7
+- Relax ipmctl version requirement on leap as runtime version checks
+  are in place
+
 * Wed Apr 21 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.4-6
 - Remove daos_metrics utility from 1.2 release
 
