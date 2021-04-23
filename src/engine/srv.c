@@ -903,6 +903,8 @@ dss_xstreams_init(void)
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));
 
+	d_getenv_int("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
+
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
 		"%d cores total detected starting %d main xstreams\n",

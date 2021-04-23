@@ -11,7 +11,7 @@ import (
 	"sort"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/mitchellh/hashstructure"
+	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -48,7 +48,7 @@ type HostFabric struct {
 // HashKey returns a uint64 value suitable for use as a key into
 // a map of HostFabric configurations.
 func (hf *HostFabric) HashKey() (uint64, error) {
-	return hashstructure.Hash(hf, nil)
+	return hashstructure.Hash(hf, hashstructure.FormatV2, nil)
 }
 
 // AddInterface is a helper function that populates a HostFabric.
@@ -242,7 +242,7 @@ func (gair *GetAttachInfoResp) String() string {
 func GetAttachInfo(ctx context.Context, rpcClient UnaryInvoker, req *GetAttachInfoReq) (*GetAttachInfoResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).GetAttachInfo(ctx, &mgmtpb.GetAttachInfoReq{
-			Sys:      req.getSystem(),
+			Sys:      req.getSystem(rpcClient),
 			AllRanks: req.AllRanks,
 		})
 	})

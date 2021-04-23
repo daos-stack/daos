@@ -32,6 +32,8 @@ struct bio_dma_chunk {
 	unsigned int	 bdc_pg_idx;
 	/* Being used by how many I/O descriptors */
 	unsigned int	 bdc_ref;
+	/* Chunk type */
+	unsigned int	 bdc_type;
 };
 
 /*
@@ -41,7 +43,8 @@ struct bio_dma_chunk {
 struct bio_dma_buffer {
 	d_list_t		 bdb_idle_list;
 	d_list_t		 bdb_used_list;
-	struct bio_dma_chunk	*bdb_cur_chk;
+	struct bio_dma_chunk	*bdb_cur_chk[BIO_CHK_TYPE_MAX];
+	unsigned int		 bdb_used_cnt[BIO_CHK_TYPE_MAX];
 	unsigned int		 bdb_tot_cnt;
 	unsigned int		 bdb_active_iods;
 	ABT_cond		 bdb_wait_iods;
@@ -196,6 +199,7 @@ struct bio_desc {
 	/* Inflight SPDK DMA transfers */
 	unsigned int		 bd_inflights;
 	int			 bd_result;
+	unsigned int		 bd_chk_type;
 	/* Flags */
 	unsigned int		 bd_buffer_prep:1,
 				 bd_update:1,

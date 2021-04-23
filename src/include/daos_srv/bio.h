@@ -560,6 +560,13 @@ struct bio_desc *bio_iod_alloc(struct bio_io_context *ctxt,
  */
 void bio_iod_free(struct bio_desc *biod);
 
+enum bio_chunk_type {
+	BIO_CHK_TYPE_IO	= 0,	/* For IO request */
+	BIO_CHK_TYPE_LOCAL,	/* For local DMA transfer */
+	BIO_CHK_TYPE_REBUILD,	/* For rebuild pull */
+	BIO_CHK_TYPE_MAX,
+};
+
 /**
  * Prepare all the SG lists of an io descriptor.
  *
@@ -569,10 +576,11 @@ void bio_iod_free(struct bio_desc *biod);
  * operation.
  *
  * \param biod       [IN]	io descriptor
+ * \param type       [IN]	chunk type used by this iod
  *
  * \return			Zero on success, negative value on error
  */
-int bio_iod_prep(struct bio_desc *biod);
+int bio_iod_prep(struct bio_desc *biod, unsigned int type);
 
 /*
  * Post operation after the RDMA transfer or local copy done for the io

@@ -9,7 +9,6 @@ from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
-from apricot import skipForTicket
 
 
 class OSAOfflineReintegration(OSAUtils):
@@ -168,20 +167,23 @@ class OSAOfflineReintegration(OSAUtils):
         Test Description: Validate Offline Reintegration
         with multiple pools
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_daily
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=offline_reintegration_daily
         :avocado: tags=offline_reintegration_multiple_pools
         """
         self.log.info("Offline Reintegration : Multiple Pools")
         self.run_offline_reintegration_test(5, data=True)
 
-    @skipForTicket("DAOS-6807")
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
 
         Test Description: Validate Offline Reintegration with server stop
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_daily
+        :avocado: tags=all,pr,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=offline_reintegration_full
         :avocado: tags=offline_reintegration_srv_stop
         """
         self.log.info("Offline Reintegration : System Start/Stop")
