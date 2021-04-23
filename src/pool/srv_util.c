@@ -261,8 +261,6 @@ ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 	 * in the pool map and not present in the list of replicas.
 	 **/
 	for (i = 0, nreplaced = 0; i < nnodes && nreplaced < nfailed; i++) {
-		if (nodes[i].do_comp.co_rank == 0 /* Skip rank 0 */)
-			continue;
 		if (!map_ranks_include(MAP_RANKS_UP,
 				       nodes[i].do_comp.co_status))
 			continue;
