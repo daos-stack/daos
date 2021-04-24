@@ -9,11 +9,12 @@ package server
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
-	"golang.org/x/sys/unix"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -45,7 +46,7 @@ func getFaultDomain(cfg *config.Server) (*system.FaultDomain, error) {
 	}
 
 	if cfg.FaultCb != "" {
-		return getFaultDomainFromCallback(cfg.FaultCb)
+		return getFaultDomainFromCallback(cfg.FaultCb, build.ConfigDir)
 	}
 
 	return getDefaultFaultDomain(os.Hostname)
@@ -63,18 +64,12 @@ func newFaultDomainFromConfig(domainStr string) (*system.FaultDomain, error) {
 	return fd, nil
 }
 
-func getFaultDomainFromCallback(callbackPath string) (*system.FaultDomain, error) {
-	if callbackPath == "" {
-		return nil, errors.New("no callback path supplied")
+func getFaultDomainFromCallback(path, requiredDir string) (*system.FaultDomain, error) {
+	if err := checkFaultDomainCallback(path, requiredDir); err != nil {
+		return nil, err
 	}
 
-	// Fault callback can't be an arbitrary command. Must point to a
-	// specific executable file.
-	if err := unix.Stat(callbackPath, nil); os.IsNotExist(err) {
-		return nil, config.FaultConfigFaultCallbackNotFound
-	}
-
-	output, err := exec.Command(callbackPath).Output()
+	output, err := exec.Command(path).Output()
 	if os.IsPermission(err) {
 		return nil, config.FaultConfigFaultCallbackBadPerms
 	} else if err != nil {
@@ -87,4 +82,47 @@ func getFaultDomainFromCallback(callbackPath string) (*system.FaultDomain, error
 	}
 
 	return newFaultDomainFromConfig(trimmedOutput)
+}
+
+func checkFaultDomainCallback(path, requiredDir string) error {
+	if path == "" {
+		return errors.New("no callback path supplied")
+	}
+
+	// Must be under the required directory
+	absDir, err := filepath.Abs(requiredDir)
+	if err != nil {
+		return err
+	}
+	absScriptPath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(absScriptPath, absDir) {
+		return config.FaultConfigFaultCallbackInsecure(absDir)
+	}
+
+	// Fault callback can't be an arbitrary command. Must point to a
+	// specific executable file.
+	fi, err := os.Lstat(path)
+	if err != nil {
+		if os.IsPermission(err) {
+			return config.FaultConfigFaultCallbackBadPerms
+		}
+		return config.FaultConfigFaultCallbackNotFound
+	}
+
+	// Symlinks and setuid scripts are potentially dangerous and shouldn't
+	// be automatically run.
+	mode := fi.Mode()
+	if mode&os.ModeSymlink != 0 || mode&os.ModeSetuid != 0 {
+		return config.FaultConfigFaultCallbackInsecure(absDir)
+	}
+
+	// Script shouldn't be writable by non-owners.
+	if mode.Perm()&0022 != 0 {
+		return config.FaultConfigFaultCallbackInsecure(absDir)
+	}
+
+	return nil
 }
