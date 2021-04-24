@@ -467,6 +467,11 @@ dmg_pool_create(const char *dmg_config_file,
 	if (svc == NULL)
 		goto out_svc;
 
+	if (pool_info.mgpi_svc->rl_nr == 0) {
+		D_ERROR("unexpected zero-length pool svc ranks list\n");
+		rc = -DER_INVAL;
+		goto out_svc;
+	}
 	rc = d_rank_list_copy(svc, pool_info.mgpi_svc);
 	if (rc != 0) {
 		D_ERROR("failed to dup svc rank list\n");
