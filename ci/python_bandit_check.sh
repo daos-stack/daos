@@ -8,4 +8,5 @@ if [ -e '.git' ]; then
 fi
 
 bandit --format xml -o bandit.xml -r "${gitfiles[@]}" \
+       --exclude utils/rpms/_topdir \
        -c src/tests/ftest/security/bandit.config || true
