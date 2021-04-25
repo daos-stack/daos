@@ -198,7 +198,7 @@ gc_wait_check(struct gc_test_args *args, bool cont_delete)
 	while (1) {
 		int	creds = 64;
 
-		rc = vos_gc_pool(args->gc_ctx.tsc_poh, &creds);
+		rc = vos_gc_pool_tight(args->gc_ctx.tsc_poh, &creds);
 		if (rc) {
 			print_error("gc pool failed: %s\n", d_errstr(rc));
 			return rc;
