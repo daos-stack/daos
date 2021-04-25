@@ -133,8 +133,11 @@ struct rank_status {
 	int num_dead;
 };
 
-/* Keep a table of whether each rank is alive (0) or dead (1) */
-static char swim_seq_by_rank[MAX_NUM_RANKS][MAX_SWIM_STATUSES] = {{0}};
+/**
+ * As we want to catch swim status flickering (sequenes of dead, alive, dead);
+ * track swim state sequences by rank, e.g., 0001 (0=alive, 1=dead) by rank.
+ */
+static char swim_seq_by_rank[MAX_NUM_RANKS][MAX_SWIM_STATUSES] = { { 0 } };
 
 static void
 test_swim_status_handler(crt_rpc_t *rpc_req)

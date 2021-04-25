@@ -47,7 +47,8 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	swim_state_str[0] = type + '0';
 	swim_state_str[1] = 0;
 
-	strcat(swim_seq_by_rank[rank], swim_state_str);
+	if (strlen(swim_seq_by_rank[rank]) < MAX_SWIM_STATUSES)
+		strcat(swim_seq_by_rank[rank], swim_state_str);
 
 	/* Remove rank from context, so we stop sending swim RPCs to it. */
 	if (src == CRT_EVS_SWIM && type == CRT_EVT_DEAD) {
