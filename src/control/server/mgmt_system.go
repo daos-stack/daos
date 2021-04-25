@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -586,18 +588,39 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 	return resp, nil
 }
 
-func populateStopResp(fanResp *fanoutResponse, pbResp *mgmtpb.SystemStopResp, action string) error {
-	pbResp.Absentranks = fanResp.AbsentRanks.String()
-	pbResp.Absenthosts = fanResp.AbsentHosts.String()
+func fanout2pbStopResp(act string, fr *fanoutResponse) (*mgmtpb.SystemStopResp, error) {
+	sr := &mgmtpb.SystemStopResp{}
+	sr.Absentranks = fr.AbsentRanks.String()
+	sr.Absenthosts = fr.AbsentHosts.String()
 
-	if err := convert.Types(fanResp.Results, &pbResp.Results); err != nil {
-		return err
+	if err := convert.Types(fr.Results, &sr.Results); err != nil {
+		return nil, err
 	}
-	for _, result := range pbResp.Results {
-		result.Action = action
+	for _, r := range sr.Results {
+		r.Action = act
 	}
 
-	return nil
+	return sr, nil
+}
+
+// raiseSystemStopFailed raises a system_stop_failed RAS event when system stop
+// fails and will indicate which ranks failed to stop.
+func raiseSystemStopFailed(act, errs string, publisher events.Publisher) {
+	publisher.Publish(events.New(&events.RASEvent{
+		ID:       events.RASSystemStopFailed,
+		Severity: events.RASSeverityError,
+		Type:     events.RASTypeInfoOnly,
+		Msg:      fmt.Sprintf("System shutdown failed during %q action, %s", act, errs),
+		Rank:     uint32(system.NilRank),
+	}))
+}
+
+func processStopResp(act string, fr *fanoutResponse, publisher events.Publisher) (*mgmtpb.SystemStopResp, error) {
+	if fr.Results.Errors() != nil {
+		raiseSystemStopFailed(act, fr.Results.Errors().Error(), publisher)
+	}
+
+	return fanout2pbStopResp(act, fr)
 }
 
 // SystemStop implements the method defined for the Management Service.
@@ -609,65 +632,47 @@ func populateStopResp(fanResp *fanoutResponse, pbResp *mgmtpb.SystemStopResp, ac
 //
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected ranks.
-func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq) (*mgmtpb.SystemStopResp, error) {
-	if err := svc.checkLeaderRequest(pbReq); err != nil {
+func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (resp *mgmtpb.SystemStopResp, err error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
-	if !pbReq.GetPrep() && !pbReq.GetKill() {
+	if !req.GetPrep() && !req.GetKill() {
 		return nil, errors.New("invalid request, no action specified")
 	}
 
-	// TODO DAOS-7264: system_stop_failed event should be raised in the case
-	//                 that operation failed and should indicate which ranks
-	//                 did not stop.
-	//
-	// Raise event on systemwide shutdown
-	// if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
-	// 	svc.events.Publish(events.New(&events.RASEvent{
-	// 		ID:   events.RASSystemStop,
-	// 		Type: events.RASTypeInfoOnly,
-	// 		Msg:  "System-wide shutdown requested",
-	// 		Rank: uint32(system.NilRank),
-	// 	}))
-	// }
+	defer func() {
+		if err == nil {
+			svc.log.Debugf("Responding to SystemStop RPC: %+v", resp)
+		}
+	}()
 
-	pbResp := new(mgmtpb.SystemStopResp)
-
-	fanReq := fanoutRequest{
-		Hosts: pbReq.GetHosts(),
-		Ranks: pbReq.GetRanks(),
-		Force: pbReq.GetForce(),
+	fReq := fanoutRequest{
+		Hosts: req.GetHosts(),
+		Ranks: req.GetRanks(),
+		Force: req.GetForce(),
 	}
 
-	if pbReq.GetPrep() {
-		fanReq.Method = control.PrepShutdownRanks
-		fanResp, _, err := svc.rpcFanout(ctx, fanReq, false)
+	if req.GetPrep() {
+		fReq.Method = control.PrepShutdownRanks
+		fResp, _, err := svc.rpcFanout(ctx, fReq, false)
 		if err != nil {
 			return nil, err
 		}
-		if err := populateStopResp(fanResp, pbResp, "prep shutdown"); err != nil {
-			return nil, err
-		}
-		if !fanReq.Force && fanResp.Results.Errors() != nil {
-			return pbResp, errors.New("PrepShutdown HasErrors")
-		}
-	}
-	if pbReq.GetKill() {
-		fanReq.Method = control.StopRanks
-		fanResp, _, err := svc.rpcFanout(ctx, fanReq, true)
-		if err != nil {
-			return nil, err
-		}
-		if err := populateStopResp(fanResp, pbResp, "stop"); err != nil {
-			return nil, err
+		if !req.GetKill() || (!fReq.Force && fResp.Results.Errors() != nil) {
+			// return early if prep shutdown fails
+			return processStopResp("prep shutdown", fResp, svc.events)
 		}
 	}
 
-	svc.log.Debugf("Responding to SystemStop RPC: %+v", pbResp)
+	fReq.Method = control.StopRanks
+	fResp, _, err := svc.rpcFanout(ctx, fReq, true)
+	if err != nil {
+		return nil, err
+	}
 
-	return pbResp, nil
+	return processStopResp("stop", fResp, svc.events)
 }
 
 // SystemStart implements the method defined for the Management Service.
