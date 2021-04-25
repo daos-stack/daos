@@ -87,8 +87,8 @@ gc_ult(void *arg)
 
 	D_ASSERT(child->spc_gc_req != NULL);
 	while (!dss_ult_exiting(child->spc_gc_req)) {
-		rc = vos_gc_pool_run(child->spc_hdl, -1, dss_ult_yield,
-				     (void *)child->spc_gc_req);
+		rc = vos_gc_pool(child->spc_hdl, -1, dss_ult_yield,
+				 (void *)child->spc_gc_req);
 		if (rc < 0)
 			D_ERROR(DF_UUID"[%d]: GC pool run failed. "DF_RC"\n",
 				DP_UUID(child->spc_uuid), dmi->dmi_tgt_id,
