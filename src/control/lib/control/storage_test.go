@@ -71,6 +71,17 @@ func TestControl_StorageMap(t *testing.T) {
 				{
 					NvmeDevices:   nil,
 					ScmNamespaces: &storage.ScmNamespaces{},
+		"mismatch reboot required": {
+			hss: []*HostStorage{
+				{
+					NvmeDevices:    &storage.NvmeControllers{},
+					ScmNamespaces:  &storage.ScmNamespaces{storage.MockScmNamespace(0)},
+					RebootRequired: false,
+				},
+				{
+					NvmeDevices:    &storage.NvmeControllers{},
+					ScmNamespaces:  &storage.ScmNamespaces{storage.MockScmNamespace(0)},
+					RebootRequired: true,
 				},
 			},
 			expHsmLen: 2,
@@ -369,6 +380,29 @@ func TestControl_StorageScan(t *testing.T) {
 						{
 							Addr:    "host2",
 							Message: noScm,
+						},
+					},
+				},
+			},
+			expResponse: &StorageScanResp{
+				HostErrorsResp: MockHostErrorsResp(t),
+				HostStorage: MockHostStorageMap(t,
+					&MockStorageScan{"host1", noNvme},
+					&MockStorageScan{"host2", noScm},
+				),
+			},
+		},
+		"two hosts different nvme capacity": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr:    "host1",
+							Message: nvmeBasicA,
+						},
+						{
+							Addr:    "host2",
+							Message: nvmeBasicB,
 						},
 					},
 				},
