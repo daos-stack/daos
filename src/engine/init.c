@@ -526,7 +526,7 @@ server_init(int argc, char *argv[])
 	rc = dss_engine_metrics_init();
 	if (rc != 0)
 		D_WARN("Unable to initialize engine metrics, " DF_RC "\n",
-			DP_RC(rc));
+		       DP_RC(rc));
 
 	metrics = &dss_engine_metrics;
 
