@@ -40,6 +40,7 @@ crtu_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	opts.num_attach_retries	= num_attach_retries;
 	opts.assert_on_error	= assert_on_error;
 	opts.shutdown		= 0;
+	opts.is_swim_enabled	= false;
 
 	/* Use 2 second delay as a default for all tests for now */
 	opts.delay_shutdown_sec	= 2;
@@ -103,14 +104,14 @@ crtu_progress_fn(void *data)
 	while (opts.shutdown == 0)
 		crt_progress(*p_ctx, 1000);
 
-	if (idx == 0)
+	if (opts.is_swim_enabled && idx == 0)
 		crt_swim_fini();
-
-	if (opts.delay_shutdown_sec > 0)
-		sleep(opts.delay_shutdown_sec);
 
 	rc = crtu_drain_queue(*p_ctx);
 	D_ASSERTF(rc == 0, "crtu_drain_queue() failed with rc=%d\n", rc);
+
+	if (opts.delay_shutdown_sec > 0)
+		sleep(opts.delay_shutdown_sec);
 
 	rc = crt_context_destroy(*p_ctx, 1);
 	D_ASSERTF(rc == 0, "Failed to destroy context rc=%d\n", rc);
@@ -441,8 +442,10 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	D_FREE(my_uri);
 
-	rc = crt_swim_init(0);
-	D_ASSERTF(rc == 0, "crt_swim_init() failed; rc=%d\n", rc);
+	if (opts.is_swim_enabled) {
+		rc = crt_swim_init(0);
+		D_ASSERTF(rc == 0, "crt_swim_init() failed; rc=%d\n", rc);
+	}
 
 	rc = crt_group_size(NULL, grp_size);
 	D_ASSERTF(rc == 0, "crt_group_size() failed; rc=%d\n", rc);

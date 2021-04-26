@@ -38,6 +38,7 @@ struct test_options {
 	bool		assert_on_error;
 	volatile int	shutdown;
 	int		delay_shutdown_sec;
+	bool		is_swim_enabled;
 };
 
 struct test_options *crtu_get_opts();
@@ -77,6 +78,15 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 		     uint32_t *grp_size, crt_init_options_t *init_opt);
 int
 crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg);
+
+static inline void
+crtu_test_swim_enable(bool is_swim_enabled)
+{
+	struct test_options	*opts;
+
+	opts = crtu_get_opts();
+	opts->is_swim_enabled = is_swim_enabled;
+}
 
 static inline int
 crtu_sem_timedwait(sem_t *sem, int sec, int line_number)
