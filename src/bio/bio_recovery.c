@@ -92,12 +92,6 @@ teardown_xstream(void *arg)
 		return;
 	}
 
-	/* Close open desc for io stats */
-	if (xs_ctxt->bxc_desc != NULL) {
-		spdk_bdev_close(xs_ctxt->bxc_desc);
-		xs_ctxt->bxc_desc = NULL;
-	}
-
 	/* Put the io channel */
 	if (xs_ctxt->bxc_io_channel != NULL) {
 		spdk_bs_free_io_channel(xs_ctxt->bxc_io_channel);
@@ -208,7 +202,7 @@ setup_xstream(void *arg)
 	struct bio_blobstore	*bbs;
 	struct bio_bdev		*d_bdev;
 	struct bio_io_context	*ioc;
-	int			 rc, closed_blobs = 0;
+	int			 closed_blobs = 0;
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (!is_server_started()) {
@@ -254,19 +248,6 @@ setup_xstream(void *arg)
 	d_bdev = bbs->bb_dev;
 	D_ASSERT(d_bdev != NULL);
 	D_ASSERT(d_bdev->bb_name != NULL);
-
-	/* Acquire open desc for io stats as the last step of xs setup */
-	if (xs_ctxt->bxc_desc == NULL) {
-		rc = spdk_bdev_open_ext(d_bdev->bb_name, false,
-					bio_bdev_event_cb, NULL,
-					&xs_ctxt->bxc_desc);
-		if (rc != 0) {
-			D_ERROR("Failed to open bdev %s, for %p, %d\n",
-				d_bdev->bb_name, bbs, rc);
-			return;
-		}
-		D_ASSERT(xs_ctxt->bxc_desc != NULL);
-	}
 }
 
 static void
@@ -360,10 +341,6 @@ bs_loaded:
 	D_ASSERT(is_server_started());
 	for (i = 0; i < bbs->bb_ref; i++) {
 		struct bio_xs_context	*xs_ctxt = bbs->bb_xs_ctxts[i];
-
-		/* Setup for the xsteam is done */
-		if (xs_ctxt->bxc_desc != NULL)
-			continue;
 
 		D_ASSERT(xs_ctxt->bxc_thread != NULL);
 		spdk_thread_send_msg(xs_ctxt->bxc_thread, setup_xstream,
@@ -543,31 +520,37 @@ void
 bio_media_error(void *msg_arg)
 {
 	struct media_error_msg		*mem = msg_arg;
+	struct bio_dev_health		*bdh;
 	struct nvme_stats		*dev_state;
 	int				 rc;
 
-	dev_state = &mem->mem_bs->bb_dev_health.bdh_health_state;
+	bdh = &mem->mem_bs->bb_dev_health;
+	dev_state = &bdh->bdh_health_state;
 
 	switch (mem->mem_err_type) {
 	case MET_UNMAP:
 		/* Update unmap error counter */
 		dev_state->bio_unmap_errs++;
+		d_tm_inc_counter(bdh->bdh_unmap_errs, 1);
 		D_ERROR("Unmap error logged from tgt_id:%d\n", mem->mem_tgt_id);
 		break;
 	case MET_WRITE:
 		/* Update write I/O error counter */
 		dev_state->bio_write_errs++;
-		D_ERROR("Write error logged from xs_id:%d\n", mem->mem_tgt_id);
+		d_tm_inc_counter(bdh->bdh_write_errs, 1);
+		D_ERROR("Write error logged from tgt_id:%d\n", mem->mem_tgt_id);
 		break;
 	case MET_READ:
 		/* Update read I/O error counter */
 		dev_state->bio_read_errs++;
-		D_ERROR("Read error logged from xs_id:%d\n", mem->mem_tgt_id);
+		d_tm_inc_counter(bdh->bdh_read_errs, 1);
+		D_ERROR("Read error logged from tgt_id:%d\n", mem->mem_tgt_id);
 		break;
 	case MET_CSUM:
 		/* Update CSUM error counter */
 		dev_state->checksum_errs++;
-		D_ERROR("CSUM error logged from xs_id:%d\n", mem->mem_tgt_id);
+		d_tm_inc_counter(bdh->bdh_checksum_errs, 1);
+		D_ERROR("CSUM error logged from tgt_id:%d\n", mem->mem_tgt_id);
 		break;
 	}
 

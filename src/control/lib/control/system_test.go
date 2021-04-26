@@ -1298,7 +1298,7 @@ func TestControl_SystemErase(t *testing.T) {
 }
 
 func TestControl_SystemNotify(t *testing.T) {
-	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
+	rasEventEngineDied := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
 		req     *SystemNotifyReq
@@ -1316,12 +1316,12 @@ func TestControl_SystemNotify(t *testing.T) {
 			expErr: errors.New("nil event in request"),
 		},
 		"zero sequence number": {
-			req:    &SystemNotifyReq{Event: rasEventRankDown},
+			req:    &SystemNotifyReq{Event: rasEventEngineDied},
 			expErr: errors.New("invalid sequence"),
 		},
 		"local failure": {
 			req: &SystemNotifyReq{
-				Event:    rasEventRankDown,
+				Event:    rasEventEngineDied,
 				Sequence: 1,
 			},
 			uErr:   errors.New("local failed"),
@@ -1329,7 +1329,7 @@ func TestControl_SystemNotify(t *testing.T) {
 		},
 		"remote failure": {
 			req: &SystemNotifyReq{
-				Event:    rasEventRankDown,
+				Event:    rasEventEngineDied,
 				Sequence: 1,
 			},
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -1337,7 +1337,7 @@ func TestControl_SystemNotify(t *testing.T) {
 		},
 		"empty response": {
 			req: &SystemNotifyReq{
-				Event:    rasEventRankDown,
+				Event:    rasEventEngineDied,
 				Sequence: 1,
 			},
 			uResp:   MockMSResponse("10.0.0.1:10001", nil, &sharedpb.ClusterEventResp{}),
@@ -1367,8 +1367,8 @@ func TestControl_SystemNotify(t *testing.T) {
 }
 
 func TestControl_EventForwarder_OnEvent(t *testing.T) {
-	rasEventRankDownFwdable := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
-	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
+	rasEventEngineDiedFwdable := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit)
+	rasEventEngineDied := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit).
 		WithForwardable(false)
 
 	for name, tc := range map[string]struct {
@@ -1381,15 +1381,15 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 			event: nil,
 		},
 		"missing access points": {
-			event: rasEventRankDownFwdable,
+			event: rasEventEngineDiedFwdable,
 		},
 		"successful forward": {
-			event:          rasEventRankDownFwdable,
+			event:          rasEventEngineDiedFwdable,
 			aps:            []string{"192.168.1.1"},
 			expInvokeCount: 2,
 		},
 		"skip non-forwardable event": {
-			event: rasEventRankDown,
+			event: rasEventEngineDied,
 			aps:   []string{"192.168.1.1"},
 		},
 	} {
@@ -1434,8 +1434,8 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 		return nil, errors.Errorf("failed to create new syslogger (prio %d)", prio)
 	}
 
-	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
-	rasEventRankDownFwded := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
+	rasEventEngineDied := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit)
+	rasEventEngineDiedFwded := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit).
 		WithForwarded(true)
 
 	for name, tc := range map[string]struct {
@@ -1448,22 +1448,22 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 			event: nil,
 		},
 		"forwarded event is not logged": {
-			event: rasEventRankDownFwded,
+			event: rasEventEngineDiedFwded,
 		},
 		"not forwarded error event gets logged": {
-			event:           rasEventRankDown,
+			event:           rasEventEngineDied,
 			expShouldLog:    true,
 			expShouldLogSys: true,
 		},
 		"not forwarded info event gets logged": {
 			event: events.NewGenericEvent(events.RASID(math.MaxInt32-1),
-				events.RASSeverityInfo, "DAOS generic test event",
+				events.RASSeverityNotice, "DAOS generic test event",
 				`{"people":["bill","steve","bob"]}`),
 			expShouldLog:    true,
 			expShouldLogSys: true,
 		},
 		"sysloggers not created": {
-			event:           rasEventRankDown,
+			event:           rasEventEngineDied,
 			newSyslogger:    mockNewSysloggerFail,
 			expShouldLog:    true,
 			expShouldLogSys: false,
