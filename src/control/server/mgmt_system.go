@@ -25,7 +25,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -613,15 +612,19 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 		return nil, errors.New("invalid request, no action specified")
 	}
 
+	// TODO DAOS-7264: system_stop_failed event should be raised in the case
+	//                 that operation failed and should indicate which ranks
+	//                 did not stop.
+	//
 	// Raise event on systemwide shutdown
-	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
-		svc.events.Publish(events.New(&events.RASEvent{
-			ID:   events.RASSystemStop,
-			Type: events.RASTypeInfoOnly,
-			Msg:  "System-wide shutdown requested",
-			Rank: uint32(system.NilRank),
-		}))
-	}
+	// if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
+	// 	svc.events.Publish(events.New(&events.RASEvent{
+	// 		ID:   events.RASSystemStop,
+	// 		Type: events.RASTypeInfoOnly,
+	// 		Msg:  "System-wide shutdown requested",
+	// 		Rank: uint32(system.NilRank),
+	// 	}))
+	// }
 
 	pbResp := new(mgmtpb.SystemStopResp)
 
@@ -674,15 +677,19 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 	}
 	svc.log.Debug("Received SystemStart RPC")
 
+	// TODO DAOS-7264: system_start_failed event should be raised in the
+	//                 case that operation failed and should indicate which
+	//                 ranks did not start.
+	//
 	// Raise event on systemwide start
-	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
-		svc.events.Publish(events.New(&events.RASEvent{
-			ID:   events.RASSystemStart,
-			Type: events.RASTypeInfoOnly,
-			Msg:  "System-wide start requested",
-			Rank: uint32(system.NilRank),
-		}))
-	}
+	// if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
+	// 	svc.events.Publish(events.New(&events.RASEvent{
+	// 		ID:   events.RASSystemStart,
+	// 		Type: events.RASTypeInfoOnly,
+	// 		Msg:  "System-wide start requested",
+	// 		Rank: uint32(system.NilRank),
+	// 	}))
+	// }
 
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.StartRanks,
