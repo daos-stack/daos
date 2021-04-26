@@ -56,9 +56,7 @@ public class DaosFileSystemIT {
   @Test
   public void testServiceLoader() throws Exception {
     Configuration cfg = new Configuration();
-    cfg.set(Constants.DAOS_POOL_UUID, DaosFSFactory.pooluuid);
-    cfg.set(Constants.DAOS_CONTAINER_UUID, DaosFSFactory.contuuid);
-    cfg.set(Constants.DAOS_POOL_SVC, DaosFSFactory.svc);
+    DaosFSFactory.config(cfg);
     FileSystem fileSystem = FileSystem.get(URI.create("daos://2345:567/"), cfg);
     Assert.assertTrue(fileSystem instanceof DaosFileSystem);
   }
