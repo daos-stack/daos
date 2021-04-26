@@ -2303,17 +2303,24 @@ vos_dtx_aggregate(daos_handle_t coh)
 	int				 rc;
 	int				 i;
 
+	D_INFO("DTX aggregation for container %"PRIx64"\n", coh.cookie);
+
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	umm = vos_cont2umm(cont);
 	cont_df = cont->vc_cont_df;
+	D_ASSERT(cont_df != NULL);
 
 	dbd_off = cont_df->cd_dtx_committed_head;
+
+	D_ASSERT(cont->vc_pool != NULL);
+	umm = vos_cont2umm(cont);
+
 	dbd = umem_off2ptr(umm, dbd_off);
 	if (dbd == NULL || dbd->dbd_count == 0)
 		return 0;
 
+	D_ASSERT(cont->vc_dtx_array != NULL);
 	/** Take the opportunity to free some memory if we can */
 	lrua_array_aggregate(cont->vc_dtx_array);
 
