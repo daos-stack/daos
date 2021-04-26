@@ -97,7 +97,7 @@ func setupTestMetrics(t *testing.T) (context.Context, testMetricsMap) {
 			if rc != 0 {
 				t.Fatalf("failed to add %s: %d", tm.name, rc)
 			}
-			C.d_tm_increment_counter(tm.node, 1)
+			C.d_tm_inc_counter(tm.node, 1)
 		default:
 			t.Fatalf("metric type %d not supported", mt)
 		}

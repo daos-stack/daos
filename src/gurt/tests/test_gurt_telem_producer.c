@@ -52,7 +52,7 @@ test_increment_counter(void **state)
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < count; i++) {
-		d_tm_increment_counter(loop, 1);
+		d_tm_inc_counter(loop, 1);
 	}
 
 	rc = d_tm_get_counter(&val, shmem_root,
@@ -73,8 +73,8 @@ test_add_to_counter(void **state)
 	rc = d_tm_add_metric(&loop, D_TM_COUNTER, NULL, NULL, path);
 	assert_rc_equal(rc, 0);
 
-	d_tm_increment_counter(loop, count);
-	d_tm_increment_counter(loop, 1);
+	d_tm_inc_counter(loop, count);
+	d_tm_inc_counter(loop, 1);
 
 	rc = d_tm_get_counter(&val, shmem_root,
 			      d_tm_conv_ptr(shmem_root, loop));

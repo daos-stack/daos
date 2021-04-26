@@ -473,7 +473,7 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	metrics = dss_get_engine_metrics();
 	D_ASSERT(metrics != NULL);
 
-	d_tm_increment_counter(metrics->dead_rank_events, 1);
+	d_tm_inc_counter(metrics->dead_rank_events, 1);
 	d_tm_record_timestamp(metrics->last_event_time);
 
 	rc = ds_notify_swim_rank_dead(rank);
@@ -679,7 +679,7 @@ server_init(int argc, char *argv[])
 	d_tm_record_timestamp(metrics->ready_time);
 
 	/** Report rank */
-	d_tm_increment_counter(metrics->rank_id, dss_self_rank());
+	d_tm_set_counter(metrics->rank_id, dss_self_rank());
 
 	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",

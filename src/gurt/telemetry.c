@@ -1054,7 +1054,7 @@ d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 	for (i = 0; i < dtm_histogram->dth_num_buckets; i++) {
 		if (value <= dtm_histogram->dth_buckets[i].dtb_max) {
 			bucket = dtm_histogram->dth_buckets[i].dtb_bucket;
-			d_tm_increment_counter(bucket, 1);
+			d_tm_inc_counter(bucket, 1);
 			break;
 		}
 	}
@@ -1090,13 +1090,9 @@ d_tm_set_counter(struct d_tm_node_t *metric, uint64_t value)
 		return;
 	}
 
-	if (unlikely(metric->dtn_protect))
-		D_MUTEX_LOCK(&metric->dtn_lock);
-
+	d_tm_node_lock(metric);
 	metric->dtn_metric->dtm_data.value = value;
-
-	if (unlikely(metric->dtn_protect))
-		D_MUTEX_UNLOCK(&metric->dtn_lock);
+	d_tm_node_unlock(metric);
 }
 
 /**
@@ -1115,34 +1111,6 @@ d_tm_inc_counter(struct d_tm_node_t *metric, uint64_t value)
 	if (unlikely(metric->dtn_type != D_TM_COUNTER)) {
 		D_ERROR("Failed to set counter [%s] on item not a "
 			"counter.\n", metric->dtn_name);
-		return;
-	}
-
-	if (unlikely(metric->dtn_protect))
-		D_MUTEX_LOCK(&metric->dtn_lock);
-
-	metric->dtn_metric->dtm_data.value += value;
-
-	if (unlikely(metric->dtn_protect))
-		D_MUTEX_UNLOCK(&metric->dtn_lock);
-}
-
-/**
- * Increment the given counter by the specified \a value
- *
- * \param[in]	node	Pointer to the metric
- * \param[in]	value	Increments the counter by this \a value
- */
-void
-d_tm_increment_counter(struct d_tm_node_t *metric, uint64_t value)
-{
-	if (d_tm_shmem_root == NULL || metric == NULL)
-		return;
-
-	if (metric->dtn_type != D_TM_COUNTER) {
-		D_ERROR("Failed to increment counter [%s] on item not a "
-			"counter.  Operation mismatch: " DF_RC "\n",
-			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
 		return;
 	}
 

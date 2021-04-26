@@ -28,7 +28,7 @@ void test_function1(int count)
 	}
 
 	for (i = 0; i < count - 1; i++) {
-		d_tm_increment_counter(loop, 1);
+		d_tm_inc_counter(loop, 1);
 	}
 }
 
@@ -249,7 +249,7 @@ void use_manually_added_metrics(struct d_tm_nodeList_t *node_list)
 		case D_TM_DIRECTORY:
 			break;
 		case D_TM_COUNTER:
-			d_tm_increment_counter(node_list->dtnl_node, 1);
+			d_tm_inc_counter(node_list->dtnl_node, 1);
 			break;
 		default:
 			printf("Item: %s has unknown type: 0x%x\n",
@@ -306,7 +306,7 @@ main(int argc, char **argv)
 		goto failure;
 	}
 
-	d_tm_increment_counter(entry, 1);
+	d_tm_inc_counter(entry, 1);
 
 	/**
 	 * Increment another counter in a loop.
@@ -317,7 +317,7 @@ main(int argc, char **argv)
 		goto failure;
 	}
 	for (i = 0; i < 1000; i++) {
-		d_tm_increment_counter(loop, 1);
+		d_tm_inc_counter(loop, 1);
 	}
 
 	/**
