@@ -141,7 +141,8 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	 * Need the pool for the IV namespace
 	 */
 	D_ASSERT(cont->sc_csummer == NULL);
-	rc = ds_get_cont_props(cont_props, cont->sc_pool_uuid, cont->sc_uuid);
+	rc = ds_get_cont_props(cont_props, cont->sc_pool->spc_uuid,
+			       cont->sc_uuid);
 	if (rc != 0)
 		goto done;
 
