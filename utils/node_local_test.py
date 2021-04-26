@@ -1090,15 +1090,27 @@ class posix_tests():
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
                       '--pool', self.pool, '--cont', container,
-                      '--attr', 'dfuse-attr-timeout', '--value', '2'],
+                      '--attr', 'dfuse-attr-time', '--value', '2'],
                      show_stdout=True)
 
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
                       '--pool', self.pool, '--cont', container,
-                      '--attr', 'dfuse-dentry', '--value', '100s'],
+                      '--attr', 'dfuse-dentry-time', '--value', '100s'],
                      show_stdout=True)
 
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      '--pool', self.pool, '--cont', container,
+                      '--attr', 'dfuse-dentry-time-dir', '--value', '100s'],
+                     show_stdout=True)
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      '--pool', self.pool, '--cont', container,
+                      '--attr', 'dfuse-ndentry-time', '--value', '100s'],
+                     show_stdout=True)
+        
         run_daos_cmd(self.conf,
                      ['container', 'list-attrs',
                       '--pool', self.pool, '--cont', container],

@@ -515,8 +515,9 @@ dfuse_cont_init(struct dfuse_cont *dfc)
 			} else if (strncmp(buff, "off", size) == 0) {
 				dfc->dfs_data_caching = false;
 			} else {
-				DFUSE_TRA_WARNING(dfc, "Failed to parse '%s' for '%s'",
-						buff, names[i]);
+				DFUSE_TRA_WARNING(dfc,
+						  "Failed to parse '%s' for '%s'",
+						  buff, names[i]);
 				dfc->dfs_data_caching = false;
 			}
 			continue;
