@@ -473,7 +473,7 @@ class CartIvOneNodeTest(CartTest):
         ]
 
         # wait for servers to come up.
-        time.sleep(10)
+        time.sleep(4)
 
         failed = False
 
@@ -519,7 +519,7 @@ class CartIvOneNodeTest(CartTest):
             self.print("Exception in launching client : {}".format(e))
 
         # wait for servers to finish shutting down
-        time.sleep(20)
+        time.sleep(2)
 
         # Stop the server if it is still running
         if self.check_process(srv_rtn):
