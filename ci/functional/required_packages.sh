@@ -16,7 +16,9 @@ pkgs="openmpi3 hwloc ndctl fio                \
       hdf5-vol-daos-openmpi3-tests            \
       MACSio-mpich                            \
       MACSio-openmpi3                         \
-      mpifileutils-mpich-daos-${client_ver}"
+      mpifileutils-mpich-daos-${client_ver}   \
+      protobuf-c                              \
+      protobuf-c-devel"
 
 if [[ $distro = el7* ]] || [[ $distro = centos7* ]]; then
     pkgs="--exclude openmpi $pkgs"

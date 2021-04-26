@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.3.0
-Release:       13%{?relval}%{?dist}
+Release:       14%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -64,6 +64,7 @@ BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
+BuildRequires: maven
 BuildRequires: valgrind-devel
 BuildRequires: systemd
 %if (0%{?rhel} >= 7)
@@ -205,6 +206,14 @@ Summary: The DAOS development libraries and headers
 %description devel
 This is the package needed to build software with the DAOS library.
 
+%package tests-java
+Summary: The DAOS Java test suite
+Requires: %{name}-devel = %{version}-%{release}
+Requires: maven
+
+%description tests-java
+This is the package needed to run the DAOS java test suite.
+
 %package firmware
 Summary: The DAOS firmware management helper
 Requires: %{name}-server%{?_isa} = %{version}-%{release}
@@ -266,6 +275,11 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{_sysconfdir}/daos/bash_completion.d %{buildroot}/%{_sysconfdir}
+mvn clean install -DskipITs -Ddaos.install.path=%{buildroot}/%{_prefix} --file src/client/java/daos-java/pom.xml  -Dgpg.skip -X
+cp -r src/client/java %{buildroot}/%{_prefix}/lib/daos/TESTING/
+BUILDROOT="%{buildroot}"
+sed -i -e "s/${BUILDROOT//\//\\/}//g" %{buildroot}/usr/lib/daos/TESTING/java/daos-java/target/{{antrun/build-main,surefire-reports/TEST-io.daos.{dfs.Daos{FilePath,Uns}Test,obj.{DaosObject{,Id},IO{Data,Key}Desc}Test,Daos{Utils,IOException}Test}}.xml,surefire/surefire_*tmp}
+chmod 755 %{buildroot}/%{_prefix}/lib/daos/TESTING/java/daos-java/target/antrun/build-compile-proto.xml
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -412,6 +426,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_prefix}/lib/daos/.build_vars.sh
 %{_libdir}/libdts.so
 
+%files tests-java
+%{_prefix}/lib/daos/TESTING/java
+
 %files devel
 %{_includedir}/*
 %{_libdir}/libdaos.so
@@ -422,6 +439,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Fri Apr 23 2021 Saurabh Tandan <saurabh.tandan@intel.com> 1.3.0-14
+- Add daos-tests-java package
+
 * Wed Apr 21 2021 Tom Nabarro <tom.nabarro@intel.com> - 1.3.0-13
 - Relax ipmctl version requirement on leap15 as we have runtime checks
 
@@ -453,7 +473,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Tue Mar 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.0-4
 - Update libfabric to v1.12.0
 - Disable grdcopy/gdrapi linkage in libfabric
-
 
 * Thu Mar 18 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-3
 - Update to python3
