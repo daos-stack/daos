@@ -199,7 +199,7 @@ out:
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
 			DP_RC(rc));
 
-	d_tm_increment_counter(tls->ot_op_total[opc], 1);
+	d_tm_inc_counter(tls->ot_op_total[opc], 1);
 
 	if (opc == DTX_REFRESH && rc1 > 0) {
 		struct dtx_entry	 dtes[DTX_REFRESH_MAX] = { 0 };

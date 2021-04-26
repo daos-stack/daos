@@ -48,7 +48,7 @@ func (tly *tally) getRx() []string {
 }
 
 func TestEvents_PubSub_Basic(t *testing.T) {
-	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
+	evt1 := NewEngineDiedEvent("foo", 1, 1, common.ExitStatus("test"))
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -79,7 +79,7 @@ func TestEvents_PubSub_Basic(t *testing.T) {
 }
 
 func TestEvents_PubSub_Reset(t *testing.T) {
-	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
+	evt1 := NewEngineDiedEvent("foo", 1, 1, common.ExitStatus("test"))
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -123,7 +123,7 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 }
 
 func TestEvents_PubSub_DisableEvent(t *testing.T) {
-	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
+	evt1 := NewEngineDiedEvent("foo", 1, 1, common.ExitStatus("test"))
 	evt2 := NewPoolSvcReplicasUpdateEvent("foo", 1, common.MockUUID(), []uint32{0, 1}, 1)
 
 	log, buf := logging.NewTestLogger(t.Name())
@@ -157,7 +157,7 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 }
 
 func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
-	evt1 := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
+	evt1 := NewEngineDiedEvent("foo", 1, 1, common.ExitStatus("test"))
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)

@@ -40,8 +40,16 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Scan",
+			"Scan summary",
 			"storage scan",
+			strings.Join([]string{
+				printRequest(t, &control.StorageScanReq{NvmeBasic: true}),
+			}, " "),
+			nil,
+		},
+		{
+			"Scan verbose",
+			"storage scan --verbose",
 			strings.Join([]string{
 				printRequest(t, &control.StorageScanReq{}),
 			}, " "),
@@ -60,6 +68,12 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Scan NVMe health with verbose",
+			"storage scan --nvme-health --verbose",
+			"",
+			errors.New("cannot use --verbose"),
+		},
+		{
 			"Scan NVMe meta data short",
 			"storage scan -m",
 			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
@@ -70,6 +84,18 @@ func TestStorageCommands(t *testing.T) {
 			"storage scan --nvme-meta",
 			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
 			nil,
+		},
+		{
+			"Scan NVMe meta with verbose",
+			"storage scan --nvme-meta --verbose",
+			"",
+			errors.New("cannot use --verbose"),
+		},
+		{
+			"Scan NVMe meta and health",
+			"storage scan --nvme-meta --nvme-health --verbose",
+			"",
+			errors.New("cannot use --nvme-health and --nvme-meta"),
 		},
 		{
 			"Prepare without force",
