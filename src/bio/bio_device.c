@@ -481,7 +481,7 @@ json_write_cb(void *cb_ctx, const void *data, size_t size)
 	return 0;
 }
 
-static int
+int
 fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 {
 	struct spdk_bdev		*bdev;
