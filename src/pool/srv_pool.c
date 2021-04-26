@@ -2012,8 +2012,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
 
-	metrics = ds_pool_get_metrics();
-	D_ASSERT(metrics != NULL);
+	metrics = &ds_pool_metrics;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -2271,8 +2270,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 
 	D_ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
 
-	metrics = ds_pool_get_metrics();
-	D_ASSERT(metrics != NULL);
+	metrics = &ds_pool_metrics;
 
 	D_DEBUG(DF_DSMS, DF_UUID": disconnecting %d hdls: hdl_uuids[0]="DF_UUID
 		"\n", DP_UUID(svc->ps_uuid), n_hdl_uuids,

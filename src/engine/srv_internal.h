@@ -84,6 +84,8 @@ struct engine_metrics {
 	struct d_tm_node_t	*last_event_time;
 };
 
+extern struct engine_metrics dss_engine_metrics;
+
 #define DSS_HOSTNAME_MAX_LEN	255
 
 /** Server node hostname */
@@ -138,7 +140,6 @@ int dss_xstream_cnt(void);
 /* srv_metrics.c */
 int dss_engine_metrics_init(void);
 int dss_engine_metrics_fini(void);
-struct engine_metrics *dss_get_engine_metrics(void);
 
 /* sched.c */
 #define SCHED_RELAX_INTVL_MAX		100 /* msec */

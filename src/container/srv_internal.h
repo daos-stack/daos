@@ -35,6 +35,8 @@ struct cont_metrics {
 	struct d_tm_node_t	*open_cont_gauge;
 };
 
+extern struct cont_metrics ds_cont_metrics;
+
 /* ds_cont thread local storage structure */
 struct dsm_tls {
 	struct daos_lru_cache  *dt_cont_cache;
@@ -286,6 +288,5 @@ int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 /* srv_metrics.c */
 int ds_cont_metrics_init(void);
 int ds_cont_metrics_fini(void);
-struct cont_metrics *ds_cont_get_metrics(void);
 
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

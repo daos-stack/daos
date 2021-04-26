@@ -42,14 +42,14 @@ init(void)
 
 	rc = ds_pool_metrics_init();
 	if (rc)
-		D_GOTO(err_prop, rc);
+		D_WARN("Unable to initialize pool metrics, " DF_RC "\n",
+		       DP_RC(rc));
 
 	ds_pool_rsvc_class_register();
 
 	bio_register_ract_ops(&nvme_reaction_ops);
 	return 0;
-err_prop:
-	ds_pool_prop_default_fini();
+
 err_pool_iv:
 	ds_pool_iv_fini();
 err_hdl_hash:

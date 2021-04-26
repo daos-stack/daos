@@ -12,7 +12,7 @@
 /**
  * Global pool metrics
  */
-static struct pool_metrics g_metrics;
+struct pool_metrics ds_pool_metrics;
 
 /**
  * Initializes the pool metrics
@@ -22,9 +22,9 @@ ds_pool_metrics_init(void)
 {
 	int rc;
 
-	memset(&g_metrics, 0, sizeof(g_metrics));
+	memset(&ds_pool_metrics, 0, sizeof(ds_pool_metrics));
 
-	rc = d_tm_add_metric(&g_metrics.open_hdl_gauge, D_TM_GAUGE,
+	rc = d_tm_add_metric(&ds_pool_metrics.open_hdl_gauge, D_TM_GAUGE,
 			     "Number of open pool handles", "",
 			     "pool/ops/open/active");
 	if (rc != 0)
@@ -40,15 +40,4 @@ int
 ds_pool_metrics_fini(void)
 {
 	return 0;
-}
-
-/**
- * Fetch the global pool metrics.
- *
- * \return global pool metrics structure
- */
-struct pool_metrics *
-ds_pool_get_metrics(void)
-{
-	return &g_metrics;
 }

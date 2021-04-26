@@ -3016,8 +3016,7 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct cont_metrics		*metrics;
 	int				 rc;
 
-	metrics = ds_cont_get_metrics();
-	D_ASSERT(metrics != NULL);
+	metrics = &ds_cont_metrics;
 
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_OPEN:

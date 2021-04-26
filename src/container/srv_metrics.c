@@ -14,7 +14,7 @@
 #include <gurt/telemetry_producer.h>
 
 /* Global container metrics */
-static struct cont_metrics metrics;
+struct cont_metrics ds_cont_metrics;
 
 /**
  * Initialize global metrics used in the server container module.
@@ -24,30 +24,30 @@ ds_cont_metrics_init(void)
 {
 	int rc;
 
-	memset(&metrics, 0, sizeof(metrics));
+	memset(&ds_cont_metrics, 0, sizeof(ds_cont_metrics));
 
-	rc = d_tm_add_metric(&metrics.op_open_ctr, D_TM_COUNTER,
+	rc = d_tm_add_metric(&ds_cont_metrics.op_open_ctr, D_TM_COUNTER,
 			     "Number of times cont_open has been called", "",
 			     "container/ops/open/total");
 	if (rc != 0)
 		D_ERROR("failed to add open counter: "
 			DF_RC "\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&metrics.open_cont_gauge, D_TM_GAUGE,
+	rc = d_tm_add_metric(&ds_cont_metrics.open_cont_gauge, D_TM_GAUGE,
 			     "Number of open container handles", "",
 			     "container/ops/open/active");
 	if (rc != 0)
 		D_ERROR("failed to add open cont gauge: "
 			DF_RC "\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&metrics.op_close_ctr, D_TM_COUNTER,
+	rc = d_tm_add_metric(&ds_cont_metrics.op_close_ctr, D_TM_COUNTER,
 			     "Number of times cont_close has been called", "",
 			     "container/ops/close/total");
 	if (rc != 0)
 		D_ERROR("failed to add close counter: "
 			DF_RC "\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&metrics.op_destroy_ctr, D_TM_COUNTER,
+	rc = d_tm_add_metric(&ds_cont_metrics.op_destroy_ctr, D_TM_COUNTER,
 			     "Number of times cont_destroy has been called", "",
 			     "container/ops/destroy/total");
 	if (rc != 0)
@@ -65,15 +65,4 @@ ds_cont_metrics_fini(void)
 {
 	/* nothing to do - shared memory will be cleaned up automatically */
 	return 0;
-}
-
-/**
- * Fetch the container module's global metrics.
- *
- * \return container metrics structure
- */
-struct cont_metrics *
-ds_cont_get_metrics(void)
-{
-	return &metrics;
 }

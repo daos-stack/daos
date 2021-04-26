@@ -35,11 +35,11 @@ init(void)
 
 	rc = ds_cont_metrics_init();
 	if (rc)
-		D_GOTO(err_prop, rc);
+		D_WARN("Unable to initialize container metrics, " DF_RC "\n",
+		       DP_RC(rc));
 
 	return 0;
-err_prop:
-	ds_cont_prop_default_fini();
+
 err_cont_iv:
 	ds_cont_iv_fini();
 err_oid_iv:
