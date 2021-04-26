@@ -75,7 +75,7 @@ agg_rate_ctl(void *arg)
 
 static inline int
 cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		   daos_epoch_t hae, bool is_current)
+		   daos_epoch_t hae, bool is_current, bool full_scan)
 {
 	int	rc;
 
@@ -103,7 +103,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	if (cont->sc_ec_agg_eph_boundry > hae && is_current) {
 		epr->epr_hi = cont->sc_ec_agg_eph_boundry;
 		rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc,
-				   agg_rate_ctl, cont);
+				   agg_rate_ctl, cont, full_scan);
 	} else
 		rc = 2;
 
@@ -117,13 +117,16 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 }
 
 int
-ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
+ds_get_cont_props(struct cont_props *cont_props, uuid_t pool_uuid,
 		  uuid_t cont_uuid)
 {
 	daos_prop_t	*props;
 	int		 rc;
 
-	props = daos_prop_alloc(7);
+	/* The provided prop entry types should cover the types used in
+	 * daos_props_2cont_props().
+	 */
+	props = daos_prop_alloc(9);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -134,8 +137,10 @@ ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
 	props->dpp_entries[4].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
 	props->dpp_entries[5].dpe_type = DAOS_PROP_CO_COMPRESS;
 	props->dpp_entries[6].dpe_type = DAOS_PROP_CO_ENCRYPT;
+	props->dpp_entries[7].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	props->dpp_entries[8].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
 
-	rc = cont_iv_prop_fetch(pool_ns, cont_uuid, props);
+	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 
 	if (rc == DER_SUCCESS)
 		daos_props_2cont_props(props, cont_props);
@@ -163,8 +168,7 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	 * Need the pool for the IV namespace
 	 */
 	D_ASSERT(cont->sc_csummer == NULL);
-	rc = ds_get_cont_props(cont_props, cont->sc_pool->spc_pool->sp_iv_ns,
-			       cont->sc_uuid);
+	rc = ds_get_cont_props(cont_props, cont->sc_pool_uuid, cont->sc_uuid);
 	if (rc != 0)
 		goto done;
 
@@ -260,6 +264,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 	uint64_t		*snapshots = NULL;
 	int			snapshots_nr;
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
+	bool			full_scan = false;
 	int			i, rc;
 
 	/* Check if it's ok to start aggregation in every 2 seconds */
@@ -282,6 +287,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		 * aggregation, let's restart from 0.
 		 */
 		epoch_min = 0;
+		full_scan = true;
 		D_DEBUG(DB_EPC, "change hlc "DF_U64" > full "DF_U64"\n",
 			change_hlc, cont->sc_aggregation_full_scan_hlc);
 	} else {
@@ -377,7 +383,8 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-		rc = cont_aggregate_epr(cont, &epoch_range, 0ULL, false);
+		rc = cont_aggregate_epr(cont, &epoch_range, 0ULL, false,
+					full_scan);
 		if (rc)
 			D_GOTO(free, rc);
 		epoch_range.epr_lo = epoch_range.epr_hi + 1;
@@ -392,7 +399,8 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-	rc = cont_aggregate_epr(cont, &epoch_range, cinfo.ci_hae, true);
+	rc = cont_aggregate_epr(cont, &epoch_range, cinfo.ci_hae, true,
+				full_scan);
 out:
 	if (rc == 0 && epoch_min == 0)
 		cont->sc_aggregation_full_scan_hlc = hlc;
@@ -1991,7 +1999,7 @@ ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 /* iterate all of objects or uncommitted DTXs of the container. */
 int
 ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
-	     void *arg, uint32_t type)
+	     void *arg, uint32_t type, uint32_t flags)
 {
 	vos_iter_param_t param;
 	daos_handle_t	 iter_h;
@@ -2009,7 +2017,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	param.ip_flags = VOS_IT_FOR_MIGRATION;
+	param.ip_flags = flags;
 
 	rc = vos_iter_prepare(type, &param, &iter_h, NULL);
 	if (rc != 0) {

@@ -109,4 +109,9 @@ public final class Constants {
   public static final int UNS_ATTR_NAME_MAX_LEN = 255;
   public static final int UNS_ATTR_VALUE_MAX_LEN = 64 * 1024;
   public static final int UNS_ATTR_VALUE_MAX_LEN_DEFAULT = 1024;
+
+  public static final int RET_CODE_SUCCEEDED = 0;
+
+  public static final int DEFAULT_NUMBER_OF_EVENTS_PER_EQ = 128;
+  public static final String CFG_NUMBER_OF_EVENTS_PER_EQ = "eq.events";
 }
