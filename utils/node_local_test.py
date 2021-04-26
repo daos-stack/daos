@@ -1171,6 +1171,44 @@ class posix_tests():
         ofd.close()
 
     @needs_dfuse
+    def test_symlink_broken(self):
+        """Check that broken symlinks work"""
+
+        src_link = os.path.join(self.dfuse.dir, 'source')
+
+        os.symlink('target', src_link)
+        entry = os.listdir(self.dfuse.dir)
+        print(entry)
+        assert len(entry) == 1
+        assert entry[0] == 'source'
+        os.lstat(src_link)
+
+        try:
+            os.stat(src_link)
+            assert False
+        except FileNotFoundError:
+            pass
+
+    @needs_dfuse
+    def test_symlink_rel(self):
+        """Check that relative symlinks work"""
+
+        src_link = os.path.join(self.dfuse.dir, 'source')
+
+        os.symlink('../target', src_link)
+        entry = os.listdir(self.dfuse.dir)
+        print(entry)
+        assert len(entry) == 1
+        assert entry[0] == 'source'
+        os.lstat(src_link)
+
+        try:
+            os.stat(src_link)
+            assert False
+        except FileNotFoundError:
+            pass
+
+    @needs_dfuse
     def test_xattr(self):
         """Perform basic tests with extended attributes"""
 
@@ -1362,7 +1400,11 @@ class posix_tests():
             self.fatal_errors = True
 
 def run_posix_tests(server, conf, test=None):
-    """Run one or all posix tests"""
+    """Run one or all posix tests
+
+    Create a new container per test, to ensure that every test is
+    isolated from others.
+    """
 
     def _run_test():
         start = time.time()
@@ -1376,13 +1418,15 @@ def run_posix_tests(server, conf, test=None):
     while len(pools) < 1:
         pools = make_pool(server)
     pool = pools[0]
-    container = create_cont(conf, pool, posix=True)
 
-    pt = posix_tests(server, conf, pool=pool, container=container)
+    pt = posix_tests(server, conf, pool=pool)
     if test:
         fn = 'test_{}'.format(test)
         obj = getattr(pt, fn)
+        container = create_cont(conf, pool, posix=True)
+        pt.container = container
         _run_test()
+        destroy_container(conf, pool, container)
     else:
 
         for fn in sorted(dir(pt)):
@@ -1391,9 +1435,11 @@ def run_posix_tests(server, conf, test=None):
             obj = getattr(pt, fn)
             if not callable(obj):
                 continue
+            container = create_cont(conf, pool, posix=True)
+            pt.container = container
             _run_test()
+            destroy_container(conf, pool, container)
 
-    destroy_container(conf, pool, container)
     return pt.fatal_errors
 
 def run_tests(dfuse):
