@@ -164,7 +164,7 @@ def configure_fuse(cenv):
 def scons():
     """Scons function"""
 
-    Import('env il_env prereqs')
+    Import('env', 'il_env', 'prereqs')
 
     # Set options which are used throughout the src.
     dfuse_env = env.Clone(LIBS=[])
