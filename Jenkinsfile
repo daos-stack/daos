@@ -888,9 +888,6 @@ pipeline {
                     agent {
                         label 'ci_vm9'
                     }
-                    environment {
-                        CART_TEST_MODE = 'memcheck'
-                    }
                     steps {
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
@@ -902,26 +899,6 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7 with Valgrind')
-                stage('Functional on CentOS 7 with Valgrind 2') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label 'ci_vm9'
-                    }
-                    environment {
-                        CART_TEST_MODE = 'memcheck'
-                    }
-                    steps {
-                        sh 'printenv'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional on CentOS 7 with Valgrind 2')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true

@@ -331,7 +331,7 @@ class CartTest(TestWithoutServers):
         if logparse:
             tst_cmd += " -x D_LOG_FILE_APPEND_PID=1"
 
-        tst_mod = os.getenv("CART_TEST_MODE", "native")
+        tst_mod = os.getenv("WITH_VALGRIND", "native")
 
         if tst_mod == "memcheck":
             tst_cmd += tst_vgd
