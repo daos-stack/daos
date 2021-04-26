@@ -1076,6 +1076,61 @@ d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value)
 }
 
 /**
+ * Set the given counter to the specified \a value
+ *
+ * \param[in]	metric	Pointer to the metric
+ * \param[in]	value	Sets the counter to this \a value
+ */
+void
+d_tm_set_counter(struct d_tm_node_t *metric, uint64_t value)
+{
+	if (unlikely(d_tm_shmem_root == NULL || metric == NULL))
+		return;
+
+	if (unlikely(metric->dtn_type != D_TM_COUNTER)) {
+		D_ERROR("Failed to set counter [%s] on item not a "
+			"counter.\n", metric->dtn_name);
+		return;
+	}
+
+	if (unlikely(metric->dtn_protect))
+		D_MUTEX_LOCK(&metric->dtn_lock);
+
+	metric->dtn_metric->dtm_data.value = value;
+
+	if (unlikely(metric->dtn_protect))
+		D_MUTEX_UNLOCK(&metric->dtn_lock);
+}
+
+/**
+ * Increment the given counter by the specified \a value
+ *
+ * \param[in]	metric	Pointer to the metric
+ * \param[in]	value	Increments the counter by this \a value
+ */
+void
+d_tm_inc_counter(struct d_tm_node_t *metric, uint64_t value)
+{
+
+	if (unlikely(d_tm_shmem_root == NULL || metric == NULL))
+		return;
+
+	if (unlikely(metric->dtn_type != D_TM_COUNTER)) {
+		D_ERROR("Failed to set counter [%s] on item not a "
+			"counter.\n", metric->dtn_name);
+		return;
+	}
+
+	if (unlikely(metric->dtn_protect))
+		D_MUTEX_LOCK(&metric->dtn_lock);
+
+	metric->dtn_metric->dtm_data.value += value;
+
+	if (unlikely(metric->dtn_protect))
+		D_MUTEX_UNLOCK(&metric->dtn_lock);
+}
+
+/**
  * Increment the given counter by the specified \a value
  *
  * The counter is specified either by an initialized pointer or by a fully
@@ -2174,6 +2229,7 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 
 failure:
 	D_MUTEX_UNLOCK(&d_tm_add_lock);
+	*node = NULL;
 	D_ERROR("Failed to add metric [%s]: " DF_RC "\n", path, DP_RC(rc));
 	return rc;
 }

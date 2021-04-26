@@ -1632,8 +1632,11 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 
 	/* load VOS container on demand for rebuild */
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
-	if (rc)
+	if (rc) {
+		D_ERROR("Can not find the container "DF_UUID"/"DF_UUID"\n",
+			DP_UUID(pool_uuid), DP_UUID(cont_uuid));
 		D_GOTO(failed, rc);
+	}
 
 	/* load csummer on demand for rebuild if not already loaded */
 	rc = ds_cont_csummer_init(coc);
@@ -1765,7 +1768,7 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	uint64_t		time;
 
 	(void)d_tm_decrement_gauge(&tls->ot_op_active[opc], 1, NULL);
-	(void)d_tm_increment_counter(&tls->ot_op_total[opc], 1, NULL);
+	d_tm_inc_counter(tls->ot_op_total[opc], 1);
 
 	if (unlikely(err != 0))
 		return;
@@ -1780,13 +1783,11 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_TGT_UPDATE:
-		(void)d_tm_increment_counter(&tls->ot_update_bytes,
-					     ioc->ioc_io_size, NULL);
+		d_tm_inc_counter(tls->ot_update_bytes, ioc->ioc_io_size);
 		lat = &tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	case DAOS_OBJ_RPC_FETCH:
-		(void)d_tm_increment_counter(&tls->ot_fetch_bytes,
-					     ioc->ioc_io_size, NULL);
+		d_tm_inc_counter(tls->ot_fetch_bytes, ioc->ioc_io_size);
 		lat = &tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	default:
@@ -2381,7 +2382,7 @@ again:
 		daos_epoch_t	e = 0;
 		struct obj_tls  *tls = obj_tls_get();
 
-		(void)d_tm_increment_counter(&tls->ot_update_resent, 1, NULL);
+		d_tm_inc_counter(tls->ot_update_resent, 1);
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2407,8 +2408,8 @@ again:
 	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
-					 orw->orw_tgt_max, NULL, 0,
-					 orw->orw_shard_tgts.ca_count,
+					 orw->orw_tgt_max, PO_COMP_ID_ALL,
+					 NULL, 0, orw->orw_shard_tgts.ca_count,
 					 orw->orw_shard_tgts.ca_arrays,
 					 &split_req);
 		if (rc != 0) {
@@ -2487,8 +2488,7 @@ again:
 			orw->orw_epoch = crt_hlc_get();
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
-			(void)d_tm_increment_counter(&tls->ot_update_restart, 1,
-						     NULL);
+			d_tm_inc_counter(tls->ot_update_restart, 1);
 			goto again;
 		}
 
@@ -4206,8 +4206,9 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 			      struct daos_shard_tgt *tgts,
 			      int tgt_cnt, int req_cnt, uint32_t *flags)
 {
-	int	rc = 0;
-	int	i;
+	struct dtx_daos_target	*ddt = &dcsh->dcsh_mbs->dm_tgts[0];
+	int			 rc = 0;
+	int			 i;
 
 	for (i = 0; i < req_cnt; i++) {
 		struct daos_cpd_sub_req		*dcsr;
@@ -4223,6 +4224,7 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 
 		rc = obj_ec_rw_req_split(dcsr->dcsr_oid, &dcu->dcu_iod_array,
 					 dcsr->dcsr_nr, dcu->dcu_start_shard, 0,
+					 ddt->ddt_id,
 					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
 					 tgt_cnt, tgts, &dcu->dcu_ec_split_req);
 		if (rc != 0) {
