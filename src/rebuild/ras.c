@@ -40,7 +40,7 @@ rebuild_notify_ras_start(uuid_t *pool, uint32_t map_ver, char *op_str)
 {
 	char *msg = "Pool rebuild started.";
 
-	return raise_ras(RAS_POOL_REBUILD_START, RAS_SEV_INFO,
+	return raise_ras(RAS_POOL_REBUILD_START, RAS_SEV_NOTICE,
 			 pool, map_ver, op_str, msg);
 }
 
@@ -50,12 +50,12 @@ rebuild_notify_ras_end(uuid_t *pool, uint32_t map_ver, char *op_str, int op_rc)
 	char		*msg	= NULL;
 	char		*status	= NULL;
 	ras_event_t	 ev_id	= RAS_POOL_REBUILD_END;
-	ras_sev_t	 ev_sev = RAS_SEV_INFO;
+	ras_sev_t	 ev_sev = RAS_SEV_NOTICE;
 	int		 rc	= 0;
 
 	if (op_rc != 0) {
 		ev_id = RAS_POOL_REBUILD_FAILED;
-		ev_sev = RAS_SEV_FATAL;
+		ev_sev = RAS_SEV_ERROR;
 		D_ASPRINTF(status, "failed: "DF_RC, DP_RC(op_rc));
 		if (status == NULL)
 			return -DER_NOMEM;
