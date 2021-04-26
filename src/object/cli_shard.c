@@ -277,11 +277,14 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		daos_iod_t		 shard_iod = *iod;
 		d_sg_list_t		 shard_sgl = sgls[i];
 		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
+		uint64_t		*sizes;
 		daos_iom_t		*map = &maps[i];
 
 		if (!csum_iod_is_supported(iod))
 			continue;
 
+		sizes = orwo->orw_iod_sizes.ca_arrays;
+		shard_iod.iod_size = sizes[i];
 		if (iod->iod_type == DAOS_IOD_ARRAY && oiods != NULL) {
 			rc = dc_rw_cb_iod_sgl_copy(iod, &sgls[i], &shard_iod,
 					&shard_sgl, &oiods->oiod_siods[i],
