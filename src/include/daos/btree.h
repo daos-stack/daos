@@ -346,15 +346,6 @@ typedef struct {
 
 	/**
 	 * Optional:
-	 * Mark the record as corrupted.
-	 * \param tins	[IN]	Tree instance which contains the root umem
-	 *			offset and memory class etc.
-	 * \param rec	[IN]	Record to mark corrupt.
-	 */
-	int		(*to_rec_corrupt)(struct btr_instance *tins,
-					  struct btr_record *rec);
-	/**
-	 * Optional:
 	 * Return key and value size of the record.
 	 * \param tins	[IN]	Tree instance which contains the root umem
 	 *			offset and memory class etc.
@@ -570,7 +561,6 @@ int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
 int dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 		      d_iov_t *val, daos_anchor_t *anchor);
-int dbtree_iter_corrupt(daos_handle_t ih);
 int dbtree_iter_delete(daos_handle_t ih, void *args);
 int dbtree_iter_empty(daos_handle_t ih);
 

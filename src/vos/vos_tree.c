@@ -516,6 +516,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
 	rbund->rb_dtx_state = vos_dtx_ent_state(irec->ir_dtx);
+	rbund->rb_off = rec->rec_off;
 	return 0;
 }
 
@@ -749,26 +750,6 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static int
-svt_rec_corrupt(struct btr_instance *tins, struct btr_record *rec)
-{
-	struct vos_irec_df	*irec;
-	int			 rc;
-
-	irec = vos_rec2irec(tins, rec);
-
-	rc = umem_tx_add(&tins->ti_umm,
-			 rec->rec_off + offsetof(struct vos_irec_df, ir_ex_addr),
-			 sizeof(*irec) - offsetof(struct vos_irec_df, ir_ex_addr));
-	if (rc != 0)
-		return rc;
-
-	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted\n");
-	BIO_ADDR_SET_CORRUPTED(&irec->ir_ex_addr);
-
-	return 0;
-}
-
-static int
 svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 		       uint32_t intent)
 {
@@ -798,7 +779,6 @@ static btr_ops_t singv_btr_ops = {
 	.to_rec_free		= svt_rec_free,
 	.to_rec_fetch		= svt_rec_fetch,
 	.to_rec_update		= svt_rec_update,
-	.to_rec_corrupt		= svt_rec_corrupt,
 	.to_check_availability	= svt_check_availability,
 	.to_node_alloc		= svt_node_alloc,
 };
