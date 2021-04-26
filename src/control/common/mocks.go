@@ -58,8 +58,8 @@ func MockPCIAddr(varIdx ...int32) string {
 	return fmt.Sprintf("0000:%02d:00.0", idx)
 }
 
-func MockPCIAddrs(num int) (addrs []string) {
-	for i := 1; i < num+1; i++ {
+func MockPCIAddrs(idxs ...int) (addrs []string) {
+	for _, i := range idxs {
 		addrs = append(addrs, MockPCIAddr(int32(i)))
 	}
 

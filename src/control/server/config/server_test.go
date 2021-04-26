@@ -391,6 +391,18 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigBadControlPort,
 		},
+		"single access point including negative port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:-10002")
+			},
+			expErr: FaultConfigBadControlPort,
+		},
+		"single access point hostname including negative port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("hostX:-10002")
+			},
+			expErr: errors.New("invalid hostname"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

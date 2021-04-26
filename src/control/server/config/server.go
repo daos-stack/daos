@@ -455,21 +455,32 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	case len(cfg.AccessPoints) > 1:
 		// temporary notification while the feature is still being polished.
 		log.Info("\n*******\nNOTICE: Support for multiple access points is an alpha feature and is not well-tested!\n*******\n\n")
+	case cfg.ControlPort <= 0:
+		return FaultConfigBadControlPort
+	case cfg.TelemetryPort < 0:
+		return FaultConfigBadTelemetryPort
 	}
 
 	for _, ap := range cfg.AccessPoints {
 		host, port, err := net.SplitHostPort(ap)
 		if err != nil {
-			return errors.Wrap(FaultConfigBadAccessPoints, err.Error())
-		}
-
-		// warn if access point port differs from config control port
-		if strconv.Itoa(cfg.ControlPort) != port {
-			log.Debugf("access point (%s) port (%s) differs from control port (%d)", host, port, cfg.ControlPort)
-		}
-
-		if port == "0" {
+			log.Errorf("invalid access point %q: %s", ap, err)
 			return FaultConfigBadControlPort
+		}
+
+		portNum, err := strconv.Atoi(port)
+		if err != nil {
+			log.Errorf("invalid access point port: %s", err)
+			return FaultConfigBadControlPort
+		}
+		if portNum <= 0 {
+			log.Errorf("non-zero or negative access point port %d", portNum)
+			return FaultConfigBadControlPort
+		}
+		// warn if access point port differs from config control port
+		if cfg.ControlPort != portNum {
+			log.Debugf("access point (%s) port (%s) differs from control port (%d)",
+				host, port, cfg.ControlPort)
 		}
 	}
 
