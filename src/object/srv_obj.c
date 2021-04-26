@@ -446,15 +446,9 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	ABT_eventual_free(&p_arg->eventual);
 	/* After RDMA is done, corrupt the server data */
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
-		struct obj_rw_in	*orw = crt_req_get(rpc);
-		struct ds_pool		*pool;
 		struct bio_sglist	*fbsgl;
 		d_sg_list_t		 fsgl;
 		int			*fbuffer;
-
-		pool = ds_pool_lookup(orw->orw_pool_uuid);
-		if (pool == NULL)
-			return -DER_NONEXIST;
 
 		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
 		fbsgl = vos_iod_sgl_at(ioh, 0);
@@ -462,7 +456,6 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
 		*fbuffer += 0x2;
 		d_sgl_fini(&fsgl, false);
-		ds_pool_put(pool);
 	}
 	return rc;
 }
@@ -1427,7 +1420,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		goto out;
 
 	biod = vos_ioh2desc(ioh);
-	rc = bio_iod_prep(biod);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO);
 	if (rc) {
 		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1632,8 +1625,11 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 
 	/* load VOS container on demand for rebuild */
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
-	if (rc)
+	if (rc) {
+		D_ERROR("Can not find the container "DF_UUID"/"DF_UUID"\n",
+			DP_UUID(pool_uuid), DP_UUID(cont_uuid));
 		D_GOTO(failed, rc);
+	}
 
 	/* load csummer on demand for rebuild if not already loaded */
 	rc = ds_cont_csummer_init(coc);
@@ -1765,7 +1761,7 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	uint64_t		time;
 
 	(void)d_tm_decrement_gauge(&tls->ot_op_active[opc], 1, NULL);
-	(void)d_tm_increment_counter(&tls->ot_op_total[opc], 1, NULL);
+	d_tm_inc_counter(tls->ot_op_total[opc], 1);
 
 	if (unlikely(err != 0))
 		return;
@@ -1780,13 +1776,11 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_TGT_UPDATE:
-		(void)d_tm_increment_counter(&tls->ot_update_bytes,
-					     ioc->ioc_io_size, NULL);
+		d_tm_inc_counter(tls->ot_update_bytes, ioc->ioc_io_size);
 		lat = &tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	case DAOS_OBJ_RPC_FETCH:
-		(void)d_tm_increment_counter(&tls->ot_fetch_bytes,
-					     ioc->ioc_io_size, NULL);
+		d_tm_inc_counter(tls->ot_fetch_bytes, ioc->ioc_io_size);
 		lat = &tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	default:
@@ -1877,7 +1871,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 		goto out;
 	}
 	biod = vos_ioh2desc(ioh);
-	rc = bio_iod_prep(biod);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO);
 	if (rc) {
 		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
@@ -1960,7 +1954,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			goto out;
 		}
 		biod = vos_ioh2desc(ioh);
-		rc = bio_iod_prep(biod);
+		rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO);
 		if (rc) {
 			D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
@@ -2381,7 +2375,7 @@ again:
 		daos_epoch_t	e = 0;
 		struct obj_tls  *tls = obj_tls_get();
 
-		(void)d_tm_increment_counter(&tls->ot_update_resent, 1, NULL);
+		d_tm_inc_counter(tls->ot_update_resent, 1);
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2407,8 +2401,8 @@ again:
 	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
-					 orw->orw_tgt_max, NULL, 0,
-					 orw->orw_shard_tgts.ca_count,
+					 orw->orw_tgt_max, PO_COMP_ID_ALL,
+					 NULL, 0, orw->orw_shard_tgts.ca_count,
 					 orw->orw_shard_tgts.ca_arrays,
 					 &split_req);
 		if (rc != 0) {
@@ -2487,8 +2481,7 @@ again:
 			orw->orw_epoch = crt_hlc_get();
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
-			(void)d_tm_increment_counter(&tls->ot_update_restart, 1,
-						     NULL);
+			d_tm_inc_counter(tls->ot_update_restart, 1);
 			goto again;
 		}
 
@@ -3779,7 +3772,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			goto out;
 
 		biods[i] = vos_ioh2desc(iohs[i]);
-		rc = bio_iod_prep(biods[i]);
+		rc = bio_iod_prep(biods[i], BIO_CHK_TYPE_IO);
 		if (rc != 0) {
 			D_ERROR("bio_iod_prep failed for obj "DF_UOID
 				", DTX "DF_DTI": "DF_RC"\n",
@@ -4206,8 +4199,9 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 			      struct daos_shard_tgt *tgts,
 			      int tgt_cnt, int req_cnt, uint32_t *flags)
 {
-	int	rc = 0;
-	int	i;
+	struct dtx_daos_target	*ddt = &dcsh->dcsh_mbs->dm_tgts[0];
+	int			 rc = 0;
+	int			 i;
 
 	for (i = 0; i < req_cnt; i++) {
 		struct daos_cpd_sub_req		*dcsr;
@@ -4223,6 +4217,7 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 
 		rc = obj_ec_rw_req_split(dcsr->dcsr_oid, &dcu->dcu_iod_array,
 					 dcsr->dcsr_nr, dcu->dcu_start_shard, 0,
+					 ddt->ddt_id,
 					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
 					 tgt_cnt, tgts, &dcu->dcu_ec_split_req);
 		if (rc != 0) {

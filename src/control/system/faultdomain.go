@@ -44,7 +44,23 @@ func (f *FaultDomain) String() string {
 
 // Equals checks if the fault domains are equal.
 func (f *FaultDomain) Equals(other *FaultDomain) bool {
-	return f.String() == other.String()
+	if f.NumLevels() != other.NumLevels() {
+		return false
+	}
+
+	if f == nil || other == nil {
+		if f == nil && other == nil {
+			return true
+		}
+		return false
+	}
+
+	for i, dom := range f.Domains {
+		if other.Domains[i] != dom {
+			return false
+		}
+	}
+	return true
 }
 
 // NumLevels gets the number of levels in the domain.
