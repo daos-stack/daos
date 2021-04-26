@@ -1030,9 +1030,8 @@ gc_wait(void)
 #endif
 }
 
-/** public API to reclaim space for a opened pool */
 int
-vos_gc_pool(daos_handle_t poh, int *credits)
+vos_gc_pool_tight(daos_handle_t poh, int *credits)
 {
 	struct vos_pool *pool = vos_hdl2pool(poh);
 	bool		 empty;
@@ -1080,17 +1079,20 @@ vos_gc_yield(bool (*yield_func)(void *arg), void *yield_arg)
 	return false;
 }
 
+/** public API to reclaim space for a opened pool */
 int
-vos_gc_pool_run(daos_handle_t poh, int credits,
-		bool (*yield_func)(void *arg), void *yield_arg)
+vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
+	    void *yield_arg)
 {
 	struct vos_pool	*pool = vos_hdl2pool(poh);
+	struct vos_tls	*tls  = vos_tls_get();
 	int		 rc, total = 0;
 
 	D_ASSERT(daos_handle_is_valid(poh));
 	if (!gc_have_pool(pool))
 		return 0; /* nothing to reclaim for this pool */
 
+	tls->vtl_gc_running++;
 	/*
 	 * Pause flushing free extents in VEA aging buffer, otherwise,
 	 * there'll be way more fragments to be processed.
@@ -1104,7 +1106,7 @@ vos_gc_pool_run(daos_handle_t poh, int credits,
 			creds = credits - total;
 
 		total += creds;
-		rc = vos_gc_pool(poh, &creds);
+		rc = vos_gc_pool_tight(poh, &creds);
 		if (rc) {
 			D_ERROR("GC pool failed: %s\n", d_errstr(rc));
 			break;
@@ -1128,6 +1130,9 @@ vos_gc_pool_run(daos_handle_t poh, int credits,
 
 	if (total != 0) /* did something */
 		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
+
+	D_ASSERT(tls->vtl_gc_running > 0);
+	tls->vtl_gc_running--;
 	return rc;
 }
 
