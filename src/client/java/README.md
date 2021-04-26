@@ -5,8 +5,15 @@ daos-java and hadoop-daos.
 
 ### daos-java
 
-It wraps most of common APIs from daos_fs.h and daos_uns.h, as well as some pool and container connection related APIs
-from daos_pool.h and daos_cont.h. There are three main classes, DaosFsClient, DaosFile and DaosUns.
+It wraps most of common APIs from daos_fs.h, daos_uns.h and daos_obj.h, as well as some pool and container connection
+related APIs from daos_pool.h and daos_cont.h. There are three parts, DAOS File (dfs), DAOS Object (obj) and DAOS Event
+.
+
+#### DAOS File (dfs)
+
+You'll typically interact with three classes, DaosFsClient, DaosFile and DaosUns. You get DaosFsClient instance via
+DaosFsClientBuilder. Then you get DaosFile instance of given POSIX path from the DaosFsClient. With DaosFile
+instance, you can do some file read/write operations. For DAOS Unified Namespace, you can use DaosUns class.
 
 * DaosFsClient
 
@@ -34,8 +41,49 @@ attribute. Besides, this class can be run from command line in which you can cal
 parameters. Use below command to show its usage in details.
 
 ```bash
-$ java -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns --help
+$ java -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns --help
 ```
+
+#### DAOS Object (obj)
+
+Similar to dfs, you need to get instance of DaosObjClient via DaosObjClientBuilder and DaosObject from DaosObjClient.
+Different than dfs, you need to use concrete classes of IODataDesc to read/write data to DAOS Object. IODataDesc
+classes model after DAOS Object structures, like Dkey, Akey, single value and array value.
+
+* IODataDesc
+
+Top interface of all IO Description classes as well as Akey Entry classes.
+
+* IODataDescBase
+
+Abstract IO Description class implements common methods from IODataDesc. All concrete IO Description classes extend
+this class.
+
+* IODataDescSync
+
+IO Description class for synchronous DAOS Object read/write. This class provides all DAOS Object value options, like
+value type, element size.
+
+* IOSimpleDataDesc
+
+Similar to IODataDescSync, you can use this class to describe which dkey/akey and what position you want to read/write.
+For simplicity, this class defaults value type to be array with element size of 1. It supports both synchronous and
+asynchronous read/write. And this class can be reused for repeatible read/write.
+
+* IOSimpleDDAsync
+
+Similar to IOSimpleDataDesc, except it's non-reusable and soly for asynchronous read/write.
+
+#### Daos Event
+
+To support asynchronous read/write in dfs and obj, we need Java correspondings of DAOS Event Queue and DAOS Event.
+We put Daos Event related classes in DaosEventQueue. To use Daos Event, there are typical scenario.
+- Get per-thread DaosEventQueue instance.
+- Acquire event from the DaosEventQueue instance.
+- Bind event to IO Description class, like IODfsDesc or IODataDesc.
+- Read/write with given IO Description.
+- Try to poll completed event with given DaosEventQueue instance until you got something or timedout.
+- Get the IO Description in form of attachment from the completed event.
 
 ### hadoop-daos
 
@@ -46,6 +94,9 @@ DaosInputStream and DaosOutputStream.
     status, create directory and so on. It also does file system initialization and finalization.
 * DaosInputStream, for reading file, preload is also possible in this class.
 * DaosOutputStream, for writing file.
+
+It supports both synchronous and asynchronous. The default is asynchronous. You can change it by setting
+"fs.daos.io.async" to false.
 
 #### Hadoop DAOS FileSystem Configuration
 
