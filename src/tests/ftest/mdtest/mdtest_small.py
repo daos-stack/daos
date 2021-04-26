@@ -58,3 +58,17 @@ class MdtestSmall(MdtestBase):
             self.execute_mdtest()
             # re-set mdtest params before next iteration
             self.mdtest_cmd.get_params(self)
+
+    def tearDown(self):
+        """ To avoid the issue from DAOS-7304, timeout when destroying a pool,
+        the plan is to delete each container within pool, this should simplify
+        the pool delete process.
+        """
+        daos_cmd = self.get_daos_command()
+        pool_uuid = self.pool.uuid
+        containers = daos_cmd.pool_list_cont(pool_uuid)
+
+        for cont in containers["uuids"]:
+            daos_cmd.container_destroy(pool_uuid, cont, force=True)
+
+        super().tearDown()
