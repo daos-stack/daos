@@ -44,8 +44,6 @@ engines:
   # - CRT_CREDIT_EP_CTX=0
   # - CRT_CTX_SHARE_ADDR=1
   # - CRT_CTX_NUM=8
-  # nvme options
-  # - IO_STAT_PERIOD=10
 
   # Storage definitions
 
