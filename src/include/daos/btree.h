@@ -211,7 +211,7 @@ typedef struct {
 	 *
 	 * \param alloc_overhead[IN]	Expected per-allocation overhead
 	 */
-	int		(*to_rec_msize)(int alloc_ovheread);
+	int		(*to_rec_msize)(int alloc_overhead);
 	/**
 	 * Optional:
 	 * Comparison of hashed key.

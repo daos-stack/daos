@@ -731,7 +731,7 @@ Java_io_daos_dfs_DaosFsClient_dfsGetSize(JNIEnv *env, jobject client,
 }
 
 /**
- * JNI method to duplicae a file denoted by \a objId.
+ * JNI method to duplicate a file denoted by \a objId.
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object

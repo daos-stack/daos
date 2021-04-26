@@ -579,7 +579,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 			iv.riv_sync = 1;
 
 			/* Notify others the global scan is done, then
-			 * each target can reliablly report its pull status
+			 * each target can reliably report its pull status
 			 */
 			rc = rebuild_iv_update(pool->sp_iv_ns,
 					       &iv, CRT_IV_SHORTCUT_NONE,

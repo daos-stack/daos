@@ -1403,7 +1403,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	 * is enough to guarantee related data records' visibility. That also
 	 * simplify the DTX logic.
 	 *
-	 * XXX: The logic is related with DAOS server re-intergration, but we
+	 * XXX: The logic is related with DAOS server re-integration, but we
 	 *	do not support that currently. Then resync DTX when container
 	 *	open will be used as temporary solution for DTX related logic.
 	 *

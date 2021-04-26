@@ -78,7 +78,7 @@ void test_open_handle(void)
 	/**
 	 * Create / use a gauge at a known location so that it can be used by
 	 * test_close_handle() without sharing pointers.  The gauge can be
-	 * incremented by an arbitrary value.  We will incrememt by one for this
+	 * incremented by an arbitrary value.  We will increment by one for this
 	 * example.
 	 */
 	rc = d_tm_increment_gauge(&num_open_handles, 1, "handles/open handles");
@@ -112,7 +112,7 @@ void test_close_handle(void)
  * high resolution timer snapshots at various places within their code, which
  * can then be interpreted depending on the need.  A duration type metric
  * is a simplified version of this metric that does the interval calculation.
- * When the timer shapshot is created, specify the clock type from:
+ * When the timer snapshot is created, specify the clock type from:
  * D_TM_CLOCK_REALTIME which is CLOCK_REALTIME
  * D_TM_CLOCK_PROCESS_CPUTIME which is CLOCK_PROCESS_CPUTIME_ID
  * D_TM_CLOCK_THREAD_CPUTIME which is CLOCK_THREAD_CPUTIME_ID

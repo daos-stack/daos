@@ -6,7 +6,7 @@
 
 /*
  * The purpose of this program is to provide a DAOS client which can be
- * triggered to terminate either correctly or illgally and after a given number
+ * triggered to terminate either correctly or illegally and after a given number
  * of seconds. This will be used in functional testing to be able to trigger
  * log messages for comparison.
  */

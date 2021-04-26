@@ -136,6 +136,7 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 	}
 
 	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
+
 	token = strtok_r(arg_str, ",", &saveptr);
 	while (token != NULL) {
 		ptr = strchr(token, '-');
@@ -247,7 +248,7 @@ print_usage_msg(const char *msg)
 	printf("\tReturn pids of the specified ranks\n");
 	printf("\nset_fi_attr\n");
 	printf("\tset fault injection attributes for a fault ID. This command\n"
-	       "\tmust be acompanied by the option\n"
+	       "\tmust be accompanied by the option\n"
 	       "\t--attr fault_id,max_faults,probability,err_code"
 	       "[,argument]\n");
 	printf("\noptions:\n");

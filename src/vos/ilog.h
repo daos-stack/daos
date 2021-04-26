@@ -119,7 +119,7 @@ int
 ilog_destroy(struct umem_instance *umm, struct ilog_desc_cbs *cbs,
 	     struct ilog_df *root);
 
-/** Logs or updates an entry in the incaration log identified by the epoch
+/** Logs or updates an entry in the incarnation log identified by the epoch
  *  and the currently executing transaction.  If a visible creation entry
  *  exists, nothing will be logged and the function will succeed.
  *

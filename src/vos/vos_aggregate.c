@@ -489,7 +489,7 @@ csum_prepare_ent(struct evt_entry_in *ent_in, unsigned int cs_type,
  * the verification checksum for the component (input) segments.
  * The full buffer is extended to hold checksums for entire merge window.
  * Currently, allocations for prior windows are retained until aggregation
- * for an evtree is complete (in vos_agg_akey, and at end of agggregation).
+ * for an evtree is complete (in vos_agg_akey, and at end of aggregation).
  */
 static int
 csum_prepare_buf(struct agg_lgc_seg *segs, unsigned int seg_cnt,
@@ -750,7 +750,7 @@ csum_widen_biov(struct bio_iov *biov, struct agg_phy_ent *phy_ent,
 }
 
 
-/* Extends bio_sglist to include extension to csum boumdaries (added to the end
+/* Extends bio_sglist to include extension to csum boundaries (added to the end
  * of the list) with added_segs additional entries. These entries will hold the
  * extended prefix and suffix data ranges needed to widen the aggregatable range
  * to prior checksum boundaries.
@@ -1007,7 +1007,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	if (added_csum_segs) {
-		/* Additional data requird to verify checksums is read
+		/* Additional data required to verify checksums is read
 		 * into end of read buffer. This allows the write data
 		 * to be placed as a single contiguous range at beginning
 		 * of the buffer.
@@ -1351,7 +1351,7 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	 * If no new updates in an already aggregated window, window flush will
 	 * be skipped, otherwise, all the data within the window will be
 	 * migrated to a new location, such batch data migration is good for
-	 * anti-fragmentaion.
+	 * anti-fragmentation.
 	 */
 	if (!need_flush(mw))
 		return 0;
@@ -1431,7 +1431,7 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
 
-	/* Physical entry with valid csum type triggers checksum recalcuation.
+	/* Physical entry with valid csum type triggers checksum recalculation.
 	 */
 	if (phy_ent->pe_csum_info.cs_type && mw->mw_csum_support == false)
 		mw->mw_csum_support = true;

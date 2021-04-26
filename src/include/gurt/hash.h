@@ -67,7 +67,7 @@ typedef struct {
 				 void *arg);
 	/**
 	 * Optional, hash \p key to a 32-bit value.
-	 * DJB2 hash is used when this function is abscent.
+	 * DJB2 hash is used when this function is absent.
 	 *
 	 * \param[in]	htable	hash table
 	 * \param[in]	key	Key to hash

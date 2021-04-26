@@ -31,7 +31,7 @@ typedef struct crt_init_options {
 	 * Global RPC timeout.
 	 *
 	 * This field is similar in behavior to setting of CRT_TIMEOUT
-	 * evnironment variable.
+	 * environment variable.
 	 */
 	int		cio_crt_timeout;
 	/**

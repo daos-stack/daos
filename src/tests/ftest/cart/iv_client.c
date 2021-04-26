@@ -388,9 +388,9 @@ exit_code:
  * of the call.
  * However, if this is not zero, then it allows for the change
  * in version number to occur at some other time, implementer
- * discression.  Its intention is to allow the change in version
+ * discretion.  Its intention is to allow the change in version
  * number within a call back function; thus simulating an
- * asynchronis event requesting a version change while the
+ * asynchronous event requesting a version change while the
  * system is handling another iv request.
  * Currently, there are 2 time out values implemented:
  *    Value    CallBack          Test

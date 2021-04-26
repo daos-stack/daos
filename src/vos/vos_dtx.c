@@ -299,7 +299,7 @@ dtx_act_ent_free(struct btr_instance *tins, struct btr_record *rec,
 	d_list_del_init(&dae->dae_link);
 
 	if (args != NULL) {
-		/* Return the record addreass (offset in DRAM).
+		/* Return the record address (offset in DRAM).
 		* The caller will release it after using.
 		*/
 		D_ASSERT(dae != NULL);

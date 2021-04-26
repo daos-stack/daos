@@ -1306,7 +1306,7 @@ ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool, uuid_t *srv_cont_hdl,
 	int			rc;
 
 	/* Fetch the capability from the leader. To avoid extra locks,
-	 * all metadatas are maintained by xstream 0, so let's create
+	 * all metadata are maintained by xstream 0, so let's create
 	 * an ULT on xstream 0 to let xstream 0 to handle capa fetch
 	 * and update.
 	 */

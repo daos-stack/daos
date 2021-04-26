@@ -2013,7 +2013,7 @@ dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 
 /**
  * Delete the leaf record pointed by @cur_tr from the current node, then fill
- * the deletion gap by shifting remainded records on the specified direction.
+ * the deletion gap by shifting remained records on the specified direction.
  *
  * NB: this function can delete the last record in the node, it means that
  * caller should be responsible for deleting this node.
@@ -2106,7 +2106,7 @@ btr_node_del_leaf_rebal(struct btr_context *tcx,
 		dst_rec = btr_node_rec_at(tcx, cur_tr->tr_node,
 					  cur_nd->tn_keyn);
 		btr_rec_copy(tcx, dst_rec, src_rec, 1);
-		/* shift left remainded record on the sibling */
+		/* shift left remained record on the sibling */
 		btr_rec_move(tcx, src_rec, btr_rec_at(tcx, src_rec, 1),
 			     sib_nd->tn_keyn - 1);
 
@@ -2268,7 +2268,7 @@ btr_node_del_leaf(struct btr_context *tcx,
 
 /**
  * Delete the child record (non-leaf) pointed by @cur_tr from the current node,
- * then fill the deletion gap by shifting remainded records on the specified
+ * then fill the deletion gap by shifting remained records on the specified
  * direction. In addition, caller should guarantee the child being deleted
  * is already empty.
  *

@@ -41,7 +41,7 @@ enum dc_tx_status {
 
 /*
  * XXX: In the CPD RPC on-wire data, the read sub requests and write ones are
- *	classified and stored separatedly (but adjacent each other). The Read
+ *	classified and stored separately (but adjacent each other). The Read
  *	ones are in front of the write ones. Such layout will simplify server
  *	side CPD RPC processing.
  *
@@ -51,7 +51,7 @@ enum dc_tx_status {
  *	related sub-requests for both read and write consecutively.
  *
  *	LOW								 HIGH
- *	|      <-- read reqs direction -- | -- write reqs directoion -->    |
+ *	|      <-- read reqs direction -- | -- write reqs ddirection-->    |
  *	|---------------------------------|---------------------------------|
  *
  *	The order for read sub requests is not important, but write ones must
@@ -2796,7 +2796,7 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 		break;
 	}
 	default:
-		D_ERROR("Unsupportted TX attach opc %d\n", opc);
+		D_ERROR("Unsupported TX attach opc %d\n", opc);
 		rc = -DER_INVAL;
 		break;
 	}
@@ -2923,7 +2923,7 @@ dc_tx_convert(enum obj_rpc_opc opc, tse_task_t *task)
 		coh = dc_obj_hdl2cont_hdl(pu->oh);
 		break;
 	default:
-		D_ERROR("Unsupportted TX convert opc %d\n", opc);
+		D_ERROR("Unsupported TX convert opc %d\n", opc);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
