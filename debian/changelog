@@ -4,7 +4,7 @@ daos (1.3.0-10) unstable; urgency=medium
 
  -- Steven A. Bollinger<stevenx.bollinger@intel.com>  Thu, 15 Apr 2021 13:30:00 -0400
 
-daos (1.3.0-s90) unstable; urgency=medium
+daos (1.3.0-9) unstable; urgency=medium
   [ Mohamad Chaarawi ]
   * Remove dfuse_hl
 
