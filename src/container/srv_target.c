@@ -117,7 +117,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 }
 
 int
-ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
+ds_get_cont_props(struct cont_props *cont_props, uuid_t pool_uuid,
 		  uuid_t cont_uuid)
 {
 	daos_prop_t	*props;
@@ -140,7 +140,7 @@ ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
 	props->dpp_entries[7].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	props->dpp_entries[8].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
 
-	rc = cont_iv_prop_fetch(pool_ns, cont_uuid, props);
+	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 
 	if (rc == DER_SUCCESS)
 		daos_props_2cont_props(props, cont_props);
@@ -168,8 +168,7 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	 * Need the pool for the IV namespace
 	 */
 	D_ASSERT(cont->sc_csummer == NULL);
-	rc = ds_get_cont_props(cont_props, cont->sc_pool->spc_pool->sp_iv_ns,
-			       cont->sc_uuid);
+	rc = ds_get_cont_props(cont_props, cont->sc_pool_uuid, cont->sc_uuid);
 	if (rc != 0)
 		goto done;
 
@@ -2000,7 +1999,7 @@ ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 /* iterate all of objects or uncommitted DTXs of the container. */
 int
 ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
-	     void *arg, uint32_t type)
+	     void *arg, uint32_t type, uint32_t flags)
 {
 	vos_iter_param_t param;
 	daos_handle_t	 iter_h;
@@ -2018,7 +2017,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	param.ip_flags = VOS_IT_FOR_MIGRATION;
+	param.ip_flags = flags;
 
 	rc = vos_iter_prepare(type, &param, &iter_h, NULL);
 	if (rc != 0) {

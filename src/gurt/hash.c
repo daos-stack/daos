@@ -475,8 +475,10 @@ d_hash_rec_insert(struct d_hash_table *htable, const void *key,
 
 	if (exclusive) {
 		tmp = ch_rec_find(htable, bucket, key, ksize, D_HASH_LRU_NONE);
-		if (tmp)
+		if (tmp) {
+			D_DEBUG(DB_TRACE, "Dup key detected\n");
 			D_GOTO(out_unlock, rc = -DER_EXIST);
+		}
 	}
 	ch_rec_insert_addref(htable, bucket, link);
 
