@@ -10,8 +10,8 @@
 
 #define D_TM_VERSION			1
 #define D_TM_MAX_NAME_LEN		256
-#define D_TM_MAX_DESC_LEN		64
-#define D_TM_MAX_UNIT_LEN		16
+#define D_TM_MAX_DESC_LEN		128
+#define D_TM_MAX_UNIT_LEN		32
 #define D_TM_TIME_BUFF_LEN		26
 
 #define D_TM_SHARED_MEMORY_KEY		0x10242048

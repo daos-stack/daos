@@ -19,22 +19,43 @@
 
 struct dtx_batched_commit_args {
 	d_list_t		 dbca_link;
+	int			 dbca_refs;
 	struct ds_cont_child	*dbca_cont;
 };
+
+struct dtx_cleanup_stale_cb_args {
+	d_list_t		dcsca_list;
+	int			dcsca_count;
+};
+
+static inline void
+dtx_get_dbca(struct dtx_batched_commit_args *dbca)
+{
+	dbca->dbca_refs++;
+	D_ASSERT(dbca->dbca_refs >= 1);
+}
+
+static inline void
+dtx_put_dbca(struct dtx_batched_commit_args *dbca)
+{
+	D_ASSERT(dbca->dbca_refs >= 1);
+	dbca->dbca_refs--;
+}
 
 static void
 dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
 {
-	vos_dtx_stat(cont->sc_hdl, stat);
+	vos_dtx_stat(cont->sc_hdl, stat, DSF_SKIP_BAD);
 
 	stat->dtx_committable_count = cont->sc_dtx_committable_count;
 	stat->dtx_oldest_committable_time = dtx_cos_oldest(cont);
 }
 
-void
+static void
 dtx_aggregate(void *arg)
 {
-	struct ds_cont_child	*cont = arg;
+	struct dtx_batched_commit_args	*dbca = arg;
+	struct ds_cont_child		*cont = dbca->dbca_cont;
 
 	while (!cont->sc_closing && !cont->sc_dtx_cos_shutdown) {
 		struct dtx_stat		stat = { 0 };
@@ -61,7 +82,104 @@ dtx_aggregate(void *arg)
 	}
 
 	cont->sc_dtx_aggregating = 0;
-	ds_cont_child_put(cont);
+	dtx_put_dbca(dbca);
+}
+
+static int
+dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
+{
+	struct dtx_cleanup_stale_cb_args	*dcsca = args;
+	struct dtx_memberships			*mbs;
+	struct dtx_share_peer			*dsp;
+
+	/* We commit the DTXs periodically, there will be very limited DTXs
+	 * to be checked when cleanup. So we can load all those uncommitted
+	 * DTXs in RAM firstly, then check the state one by one. That avoid
+	 * the race trouble between iteration of active-DTX tree and commit
+	 * (or abort) the DTXs (that will change the active-DTX tree).
+	 */
+
+	D_ASSERT(!(ent->ie_dtx_flags & DTE_INVALID));
+
+	/* Skip corrupted entry that will be handled via other special tool. */
+	if (ent->ie_dtx_flags & DTE_CORRUPTED)
+		return 0;
+
+	/* Stop cleanup iteration if current DTX is not too old. */
+	if (dtx_hlc_age2sec(ent->ie_dtx_start_time) <=
+	    DTX_CLEANUP_THRESHOLD_AGE_LOWER)
+		return 1;
+
+	D_ALLOC(dsp, sizeof(*dsp) + ent->ie_dtx_mbs_dsize);
+	if (dsp == NULL)
+		return -DER_NOMEM;
+
+	dsp->dsp_xid = ent->ie_dtx_xid;
+	dsp->dsp_oid = ent->ie_dtx_oid;
+	dsp->dsp_epoch = ent->ie_epoch;
+
+	mbs = &dsp->dsp_mbs;
+	mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
+	mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
+	mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
+	mbs->dm_flags = ent->ie_dtx_mbs_flags;
+	mbs->dm_dte_flags = ent->ie_dtx_flags;
+	memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+
+	d_list_add_tail(&dsp->dsp_link, &dcsca->dcsca_list);
+	dcsca->dcsca_count++;
+
+	return 0;
+}
+
+static void
+dtx_cleanup_stale(void *arg)
+{
+	struct dtx_batched_commit_args		*dbca = arg;
+	struct ds_cont_child			*cont = dbca->dbca_cont;
+	struct dtx_share_peer			*dsp;
+	struct dtx_cleanup_stale_cb_args	 dcsca;
+	int					 count;
+	int					 rc;
+
+	D_INIT_LIST_HEAD(&dcsca.dcsca_list);
+	dcsca.dcsca_count = 0;
+	rc = ds_cont_iter(cont->sc_pool->spc_hdl, cont->sc_uuid,
+			  dtx_cleanup_stale_iter_cb, &dcsca, VOS_ITER_DTX,
+			  VOS_IT_CLEANUP_DTX);
+	if (rc < 0)
+		D_WARN("Failed to scan stale DTX entry for "
+		       DF_UUID": "DF_RC"\n", DP_UUID(cont->sc_uuid), DP_RC(rc));
+
+	while (!cont->sc_closing && !cont->sc_dtx_cos_shutdown &&
+	       !d_list_empty(&dcsca.dcsca_list)) {
+		if (dcsca.dcsca_count > DTX_REFRESH_MAX) {
+			count = DTX_REFRESH_MAX;
+			dcsca.dcsca_count -= DTX_REFRESH_MAX;
+		} else {
+			D_ASSERT(dcsca.dcsca_count > 0);
+
+			count = dcsca.dcsca_count;
+			dcsca.dcsca_count = 0;
+		}
+
+		/* Use false as the "failout" parameter that should guarantee
+		 * that all the DTX entries in the check list will be handled
+		 * even if some former ones hit failure.
+		 */
+		rc = dtx_refresh_internal(cont, &count, &dcsca.dcsca_list,
+					  NULL, NULL, NULL, false);
+		D_ASSERTF(count == 0, "%d entries are not handled: "DF_RC"\n",
+			  count, DP_RC(rc));
+	}
+
+	while ((dsp = d_list_pop_entry(&dcsca.dcsca_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		D_FREE(dsp);
+
+	cont->sc_dtx_cleanup_stale = 0;
+	dtx_put_dbca(dbca);
 }
 
 static inline void
@@ -92,8 +210,15 @@ dtx_free_dbca(struct dtx_batched_commit_args *dbca)
 	D_ASSERT(d_list_empty(&cont->sc_dtx_cos_list));
 
 out:
-	ds_cont_child_put(cont);
+	D_ASSERT(d_list_empty(&dbca->dbca_link));
+
+	while (dbca->dbca_refs > 0) {
+		D_DEBUG(DB_TRACE, "Sleep 10 mseconds for batched commit ULT\n");
+		dss_sleep(10);
+	}
+
 	D_FREE_PTR(dbca);
+	ds_cont_child_put(cont);
 }
 
 static void
@@ -177,8 +302,8 @@ dtx_batched_commit(void *arg)
 
 		dbca = d_list_entry(dmi->dmi_dtx_batched_list.next,
 				    struct dtx_batched_commit_args, dbca_link);
+		dtx_get_dbca(dbca);
 		cont = dbca->dbca_cont;
-		ds_cont_child_get(cont);
 
 		d_list_move_tail(&dbca->dbca_link, &dmi->dmi_dtx_batched_list);
 		dtx_stat(cont, &stat);
@@ -201,7 +326,8 @@ dtx_batched_commit(void *arg)
 					D_WARN("Fail to batched commit dtx: "
 					       DF_RC"\n", DP_RC(rc));
 
-				if (!cont->sc_dtx_aggregating)
+				if (!cont->sc_dtx_aggregating ||
+				    !cont->sc_dtx_cleanup_stale)
 					dtx_stat(cont, &stat);
 			}
 		}
@@ -213,17 +339,33 @@ dtx_batched_commit(void *arg)
 		      dtx_hlc_age2sec(stat.dtx_oldest_committed_time) >=
 				DTX_AGG_THRESHOLD_AGE_UPPER))) {
 			sleep_time = 0;
-			ds_cont_child_get(cont);
+			dtx_get_dbca(dbca);
 			cont->sc_dtx_aggregating = 1;
 			rc = dss_ult_create(dtx_aggregate, cont, DSS_XS_SELF,
 					    0, 0, NULL);
 			if (rc != 0) {
 				cont->sc_dtx_aggregating = 0;
-				ds_cont_child_put(cont);
+				dtx_put_dbca(dbca);
 			}
 		}
 
-		ds_cont_child_put(cont);
+		if (!cont->sc_closing && !cont->sc_dtx_cleanup_stale &&
+		    stat.dtx_oldest_active_time != 0 &&
+		    dtx_hlc_age2sec(stat.dtx_oldest_active_time) >=
+		    DTX_CLEANUP_THRESHOLD_AGE_UPPER) {
+			sleep_time = 0;
+			dtx_get_dbca(dbca);
+			cont->sc_dtx_cleanup_stale = 1;
+			rc = dss_ult_create(dtx_cleanup_stale, cont,
+					    DSS_XS_SELF, 0, 0, NULL);
+			if (rc != 0) {
+				cont->sc_dtx_cleanup_stale = 0;
+				dtx_put_dbca(dbca);
+			}
+		}
+
+		dtx_put_dbca(dbca);
+
 check:
 		if (dss_xstream_exiting(dmi->dmi_xstream))
 			break;
@@ -272,6 +414,7 @@ static void
 dtx_shares_init(struct dtx_handle *dth)
 {
 	D_INIT_LIST_HEAD(&dth->dth_share_cmt_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_abt_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count = 0;
@@ -287,6 +430,11 @@ dtx_shares_fini(struct dtx_handle *dth)
 		return;
 
 	while ((dsp = d_list_pop_entry(&dth->dth_share_cmt_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		D_FREE(dsp);
+
+	while ((dsp = d_list_pop_entry(&dth->dth_share_abt_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
 		D_FREE(dsp);
@@ -1029,6 +1177,7 @@ dtx_batched_commit_register(struct ds_cont_child *cont)
 add:
 	cont->sc_dtx_cos_shutdown = 0;
 	ds_cont_child_get(cont);
+	dbca->dbca_refs = 0;
 	dbca->dbca_cont = cont;
 	d_list_add_tail(&dbca->dbca_link, head);
 
