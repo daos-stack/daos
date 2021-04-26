@@ -5,6 +5,9 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
+    if not prereqs.server_requested():
+        return
+
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 

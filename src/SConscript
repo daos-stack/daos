@@ -29,7 +29,7 @@ def generate_daos_version_header(env):
 def scons():
     """Execute build"""
 
-    Import('env', 'il_env')
+    Import('env', 'il_env', 'prereqs')
 
     # For Common library (tse.h)
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
@@ -52,9 +52,10 @@ def scons():
     generate_daos_version_header(env)
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include'), 'include/%s' % header)
-    for header in HEADERS_SRV:
-        env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'),
-                    'include/daos_srv/%s' % header)
+    if prereqs.server_requested():
+        for header in HEADERS_SRV:
+            env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'),
+                        'include/daos_srv/%s' % header)
     for header in HEADERS_GURT:
         env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
                     'include/gurt/%s' % header)
