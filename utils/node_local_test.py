@@ -351,11 +351,8 @@ class DaosServer():
             desired_states = [desired_states]
 
         rc = self.run_dmg(['system', 'query', '--json'])
-#        print(rc)
-#        print(rc.stdout)
         if rc.returncode == 0:
             data = json.loads(rc.stdout.decode('utf-8'))
-            print(data)
             members = data['response']['members']
             if members is not None:
                 for desired_state in desired_states:
@@ -368,7 +365,7 @@ class DaosServer():
 
         server_env = get_base_env(clean=True)
 
-        plane_env = os.environ.copy()
+        plain_env = os.environ.copy()
 
         if self.valgrind:
             valgrind_args = ['--fair-sched=yes',
@@ -403,8 +400,8 @@ class DaosServer():
             os.chmod(os.path.join(self._io_server_dir.name, 'daos_engine'),
                      stat.S_IXUSR | stat.S_IRUSR)
 
-            plane_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
-                                               plane_env['PATH'])
+            plain_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
+                                               plain_env['PATH'])
             self.max_start_time = 300
             self.max_stop_time = 300
             self.stop_sleep_time = 10
@@ -439,7 +436,7 @@ class DaosServer():
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
                'start', '-t', '4', '--insecure', '-d', self.agent_dir]
 
-        self._sp = subprocess.Popen(cmd, env=plane_env)
+        self._sp = subprocess.Popen(cmd, env=plain_env)
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
