@@ -2472,6 +2472,8 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
 
 	rc = vos_update_end(ioh, 0 /* don't care */, (daos_key_t *)dkey, rc,
 			    NULL, NULL);
+	D_DEBUG(DB_IO, DF_UOID" remove "DF_RECX" "DF_RC"\n",
+		DP_UOID(oid), DP_RECX(*recx), DP_RC(rc));
 	return rc;
 }
 

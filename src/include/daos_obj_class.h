@@ -201,6 +201,7 @@ enum {
 	OC_RP_2G6K,
 	OC_RP_2G8K,
 	OC_RP_2GX,
+	OC_RP_2G3,
 
 	/** 3-way replicated object classes */
 	OC_RP_3G1	= 280,

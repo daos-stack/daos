@@ -454,7 +454,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		rc = 0;
 		goto out_mutex;
 	} else if (rc != 0) {
-		D_ERROR("%s: failed to step up as leader "DF_U64": "DF_RC"\n",
+		D_DEBUG(DB_MD, "%s: failed to step up to "DF_U64": "DF_RC"\n",
 			svc->s_name, term, DP_RC(rc));
 		if (map_distd_initialized)
 			drain_map_distd(svc);
