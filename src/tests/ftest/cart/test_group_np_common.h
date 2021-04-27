@@ -167,6 +167,9 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 			       swim_seq_by_rank[rank],
 			       0, NULL, 0);
 
+	regfree(&regex_alive);
+	regfree(&regex_dead);
+
 	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
 		  rpc_req->cr_opc);
 	DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
