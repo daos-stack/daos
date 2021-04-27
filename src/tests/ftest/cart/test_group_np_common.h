@@ -135,7 +135,7 @@ struct rank_status {
 
 /**
  * As we want to catch swim status flickering (sequenes of dead, alive, dead);
- * track swim state sequences by rank, e.g., 0001 (0=alive, 1=dead) by rank.
+ * track swim state sequences by rank, e.g., 0001 (0=alive, 1=dead) by rank .
  */
 static char swim_seq_by_rank[MAX_NUM_RANKS][MAX_SWIM_STATUSES] = { { 0 } };
 
@@ -153,6 +153,8 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
+	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
+
 	rank = e_req->rank;
 
 	/* compile and run regex's */
@@ -164,8 +166,6 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	int rc_alive = regexec(&regex_alive,
 			       swim_seq_by_rank[rank],
 			       0, NULL, 0);
-
-	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
 	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
 		  rpc_req->cr_opc);
