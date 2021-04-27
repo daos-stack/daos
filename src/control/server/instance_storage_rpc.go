@@ -45,7 +45,7 @@ func (ei *EngineInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeContro
 		info = fault.ShowResolutionFor(inErr)
 	}
 	return &ctlpb.NvmeControllerResult{
-		Pciaddr: pciAddr,
+		PciAddr: pciAddr,
 		State:   newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_NVME, info),
 	}
 }

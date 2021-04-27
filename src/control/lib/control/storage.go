@@ -12,7 +12,7 @@ import (
 	"sort"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/mitchellh/hashstructure"
+	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
@@ -25,24 +25,28 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+var storageHashOpts = hashstructure.HashOptions{
+	SlicesAsSets: true,
+}
+
 // HostStorage describes a host storage configuration which
 // may apply to one or more hosts.
 type HostStorage struct {
 	// NvmeDevices contains the set of NVMe controllers (SSDs)
 	// in this configuration.
-	NvmeDevices storage.NvmeControllers `hash:"set" json:"nvme_devices"`
+	NvmeDevices storage.NvmeControllers `json:"nvme_devices"`
 
 	// ScmModules contains the set of SCM modules (persistent
 	// memory DIMMs) in this configuration.
-	ScmModules storage.ScmModules `hash:"set" json:"scm_modules"`
+	ScmModules storage.ScmModules `json:"scm_modules"`
 
 	// ScmNamespaces contains the set of prepared SCM namespaces
 	// (block devices) in this configuration.
-	ScmNamespaces storage.ScmNamespaces `hash:"set" json:"scm_namespaces"`
+	ScmNamespaces storage.ScmNamespaces `json:"scm_namespaces"`
 
 	// ScmMountPoints contains the set of SCM mountpoints in
 	// this configuration.
-	ScmMountPoints storage.ScmMountPoints `hash:"set" json:"scm_mount_points"`
+	ScmMountPoints storage.ScmMountPoints `json:"scm_mount_points"`
 
 	// SmdInfo contains information obtained by querying the
 	// host's metadata table, if available.
@@ -56,7 +60,7 @@ type HostStorage struct {
 // HashKey returns a uint64 value suitable for use as a key into
 // a map of HostStorage configurations.
 func (hs *HostStorage) HashKey() (uint64, error) {
-	return hashstructure.Hash(hs, nil)
+	return hashstructure.Hash(hs, hashstructure.FormatV2, &storageHashOpts)
 }
 
 // HostStorageSet contains a HostStorage configuration and the
@@ -364,25 +368,25 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 	}
 
 	hs := new(HostStorage)
-	for _, nvmeFmtResult := range pbResp.GetCrets() {
-		switch nvmeFmtResult.GetState().GetStatus() {
+	for _, nr := range pbResp.GetCrets() {
+		switch nr.GetState().GetStatus() {
 		case ctlpb.ResponseStatus_CTL_SUCCESS:
 			// If we didn't receive a PCI Address in the response,
 			// then the device wasn't formatted.
-			if nvmeFmtResult.GetPciaddr() == "" {
+			if nr.GetPciAddr() == "" {
 				continue
 			}
 
-			info := nvmeFmtResult.GetState().GetInfo()
+			info := nr.GetState().GetInfo()
 			if info == "" {
 				info = ctlpb.ResponseStatus_CTL_SUCCESS.String()
 			}
 			hs.NvmeDevices = append(hs.NvmeDevices, &storage.NvmeController{
 				Info:    info,
-				PciAddr: nvmeFmtResult.GetPciaddr(),
+				PciAddr: nr.GetPciAddr(),
 			})
 		default:
-			if err := ctlStateToErr(nvmeFmtResult.GetState()); err != nil {
+			if err := ctlStateToErr(nr.GetState()); err != nil {
 				if err := sfr.addHostError(hr.Addr, err); err != nil {
 					return err
 				}
@@ -390,19 +394,19 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 		}
 	}
 
-	for _, scmFmtResult := range pbResp.GetMrets() {
-		switch scmFmtResult.GetState().GetStatus() {
+	for _, sr := range pbResp.GetMrets() {
+		switch sr.GetState().GetStatus() {
 		case ctlpb.ResponseStatus_CTL_SUCCESS:
-			info := scmFmtResult.GetState().GetInfo()
+			info := sr.GetState().GetInfo()
 			if info == "" {
 				info = ctlpb.ResponseStatus_CTL_SUCCESS.String()
 			}
 			hs.ScmMountPoints = append(hs.ScmMountPoints, &storage.ScmMountPoint{
 				Info: info,
-				Path: scmFmtResult.GetMntpoint(),
+				Path: sr.GetMntpoint(),
 			})
 		default:
-			if err := ctlStateToErr(scmFmtResult.GetState()); err != nil {
+			if err := ctlStateToErr(sr.GetState()); err != nil {
 				if err := sfr.addHostError(hr.Addr, err); err != nil {
 					return err
 				}

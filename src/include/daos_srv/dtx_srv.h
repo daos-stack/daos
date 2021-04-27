@@ -162,6 +162,7 @@ struct dtx_stat {
 	uint64_t	dtx_oldest_committable_time;
 	uint64_t	dtx_committed_count;
 	uint64_t	dtx_oldest_committed_time;
+	uint64_t	dtx_oldest_active_time;
 };
 
 enum dtx_flags {

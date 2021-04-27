@@ -63,17 +63,22 @@ reintegrate_inflight_io(void *data)
 }
 
 static void
-reintegrate_with_inflight_io(test_arg_t *arg, d_rank_t rank, int tgt)
+reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
+			     d_rank_t rank, int tgt)
 {
-	daos_obj_id_t oid;
-	int rc;
+	daos_obj_id_t inflight_oid;
 
-	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
-				0, arg->myrank);
+	if (oid != NULL) {
+		inflight_oid = *oid;
+	} else {
+		inflight_oid = daos_test_oid_gen(arg->coh,
+						 DAOS_OC_R3S_SPEC_RANK, 0,
+						 0, arg->myrank);
+		inflight_oid = dts_oid_set_rank(inflight_oid, rank);
+	}
 
-	oid = dts_oid_set_rank(oid, rank);
 	arg->rebuild_cb = reintegrate_inflight_io;
-	arg->rebuild_cb_arg = &oid;
+	arg->rebuild_cb_arg = &inflight_oid;
 
 	/* To make sure the IO will be done before reintegration is done */
 	if (arg->myrank == 0)
@@ -83,9 +88,13 @@ reintegrate_with_inflight_io(test_arg_t *arg, d_rank_t rank, int tgt)
 	arg->rebuild_cb = NULL;
 	arg->rebuild_cb_arg = NULL;
 
-	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	if (rc != 0)
-		assert_rc_equal(rc, -DER_NOSYS);
+	if (oid == NULL) {
+		int rc;
+
+		rc = daos_obj_verify(arg->coh, inflight_oid, DAOS_EPOCH_MAX);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
+	}
 }
 
 static void
@@ -134,7 +143,7 @@ rebuild_dkeys(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_with_inflight_io(arg, kill_rank, -1);
+	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
 
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
@@ -189,7 +198,7 @@ rebuild_akeys(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_with_inflight_io(arg, kill_rank, tgt);
+	reintegrate_with_inflight_io(arg, &oid, kill_rank, tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -233,7 +242,7 @@ rebuild_indexes(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -292,7 +301,7 @@ rebuild_snap_update_recs(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
 		if (rc != 0)
@@ -351,7 +360,7 @@ rebuild_snap_punch_recs(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
 		if (rc != 0)
@@ -438,7 +447,7 @@ rebuild_snap_update_keys(void **state)
 		assert_int_equal(number, SNAP_CNT);
 	}
 
-	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -540,7 +549,7 @@ rebuild_snap_punch_keys(void **state)
 		assert_int_equal(number, SNAP_CNT);
 	}
 
-	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -714,7 +723,7 @@ rebuild_large_rec(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -749,7 +758,7 @@ rebuild_objects(void **state)
 			assert_rc_equal(rc, -DER_NOSYS);
 	}
 
-	reintegrate_with_inflight_io(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, NULL, ranks_to_kill[0], tgt);
 	for (i = 0; i < OBJ_NR; i++) {
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
 		if (rc != 0)
@@ -1003,6 +1012,61 @@ rebuild_punch_recs(void **state)
 		assert_rc_equal(rc, -DER_NOSYS);
 }
 
+static void
+rebuild_multiple_group(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		oid;
+	struct ioreq		req;
+	d_rank_t		kill_rank = 0;
+	int			kill_rank_nr;
+	int			i;
+	int			rc;
+
+	if (!test_runable(arg, 7))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_RP_2G3, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	print_message("Insert %d kv record in object "DF_OID"\n",
+		      KEY_NR, DP_OID(oid));
+	for (i = 0; i < 50; i++) {
+		char	key[16];
+		daos_recx_t recx;
+		char	data[10];
+		char	akey[16];
+		int	j;
+
+		sprintf(key, "dkey_0_%d", i);
+		recx.rx_idx = 0;
+		recx.rx_nr = 10;
+		memset(data, 'a', 10);
+		for (j = 0; j < 10; j++) {
+			sprintf(akey, "a_key_s_%d", j);
+			insert_single(key, akey, 0, "data", strlen("data") + 1,
+				      DAOS_TX_NONE, &req);
+			sprintf(akey, "a_key_a_%d", j);
+			insert_recxs(key, akey, 1, DAOS_TX_NONE, &recx, 1,
+				     data, 10, &req);
+		}
+	}
+
+	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
+	ioreq_fini(&req);
+
+	rebuild_single_pool_target(arg, kill_rank, -1, false);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+
+	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -1039,6 +1103,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_full_shards, rebuild_small_pool_n4_setup, test_teardown},
 	{"REBUILD17: rebuild with punch recxs",
 	 rebuild_punch_recs, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD18: rebuild with multiple group",
+	 rebuild_multiple_group, rebuild_small_sub_setup, test_teardown},
 };
 
 int
