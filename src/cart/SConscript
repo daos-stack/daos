@@ -30,11 +30,7 @@ LIB_SRC = ['crt_utils.c']
 def build_utility_library():
     """Build cart utility library"""
 
-    Import('env', 'prereqs')
     denv = env.Clone()
-    denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
-    denv.AppendUnique(CPPPATH=[Dir('include').srcnode()])
-
     prereqs.require(denv, 'mercury', headers_only=True)
     cart_utils_lib  = daos_build.library(denv, 'cart_utils', LIB_SRC)
     denv.Install('$PREFIX/lib64/', cart_utils_lib)
@@ -79,9 +75,6 @@ def scons():
     SConscript('swim/SConscript')
     Default('swim')
 
-    # Generate cart utility library
-    build_utility_library()
-
     Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
     Import('conf_dir')
 
@@ -93,9 +86,14 @@ def scons():
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('../gurt').srcnode()])
+    env.AppendUnique(CPPPATH=['#/src/include/cart'])
+
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
                     os.path.join('../include', 'cart', header))
+
+    # Generate cart utility library
+    build_utility_library()
 
     denv = env.Clone(LIBS=[])
 
