@@ -88,6 +88,8 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
 
+	goto vos_aggregation;
+
 	rc = ds_obj_ec_aggregate(cont, epr, agg_rate_ctl, cont, is_current);
 	if (rc) {
 		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN,
@@ -102,6 +104,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	if (cont->sc_ec_agg_eph_boundry > hae && is_current) {
 		epr->epr_hi = cont->sc_ec_agg_eph_boundry;
+vos_aggregation:
 		rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc,
 				   agg_rate_ctl, cont, full_scan);
 	} else
@@ -2333,6 +2336,8 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 	while (!dss_ult_exiting(pool->sp_ec_ephs_req)) {
 		struct dss_coll_ops	coll_ops = { 0 };
 		struct dss_coll_args	coll_args = { 0 };
+
+		goto yield;
 
 		if (pool->sp_map == NULL)
 			goto yield;
