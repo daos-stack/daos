@@ -30,7 +30,7 @@
 /* DMA buffer parameters */
 #define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	32	/* Per-xstream init chunks */
-#define DAOS_DMA_MIN_UB_BUF_MB	1024	/* 1GB min upperbound DMA buffer */
+#define DAOS_DMA_MIN_UB_BUF_MB	1024	/* 1GB min upper bound DMA buffer */
 #define DAOS_NVME_MAX_CTRLRS	1024	/* Max read from nvme_conf */
 
 /* Max inflight blob IOs per io channel */
@@ -349,7 +349,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	 * (~1GB per xstream).
 	 */
 	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
-		D_ERROR("Per-xstream DMA buffer upperbound limit < 1GB!\n");
+		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
 		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
 			mem_size, (mem_size / tgt_nr));
 		return -DER_INVAL;
