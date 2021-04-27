@@ -443,13 +443,28 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"bad control port": {
+		"good control port": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithControlPort(-123)
+				return c.WithControlPort(1234)
+			},
+		},
+		"bad control port (zero)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlPort(0)
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"bad telemetry port": {
+		"good telemetry port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithTelemetryPort(1234)
+			},
+		},
+		"good telemetry port (zero)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithTelemetryPort(0)
+			},
+		},
+		"bad telemetry port (negative)": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithTelemetryPort(-123)
 			},
