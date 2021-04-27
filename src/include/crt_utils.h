@@ -10,7 +10,6 @@
 #define __CART_UTILS_H__
 #include <semaphore.h>
 #include <cart/api.h>
-
 #include "crt_internal.h"
 
 #define DBG_PRINT(x...)							\
@@ -79,43 +78,10 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 int
 crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg);
 
-static inline void
-crtu_test_swim_enable(bool is_swim_enabled)
-{
-	struct test_options	*opts;
+void
+crtu_test_swim_enable(bool is_swim_enabled);
 
-	opts = crtu_get_opts();
-	opts->is_swim_enabled = is_swim_enabled;
-}
-
-static inline int
-crtu_sem_timedwait(sem_t *sem, int sec, int line_number)
-{
-	struct timespec		deadline;
-	int			rc;
-	struct test_options	*opts;
-
-	opts = crtu_get_opts();
-	rc = clock_gettime(CLOCK_REALTIME, &deadline);
-	if (rc != 0) {
-		if (opts->assert_on_error)
-			D_ASSERTF(rc == 0, "clock_gettime() failed at "
-				  "line %d rc: %d\n", line_number, rc);
-		D_ERROR("clock_gettime() failed, rc = %d\n", rc);
-		D_GOTO(out, rc);
-	}
-
-	deadline.tv_sec += sec;
-	rc = sem_timedwait(sem, &deadline);
-	if (rc != 0) {
-		if (opts->assert_on_error)
-			D_ASSERTF(rc == 0, "sem_timedwait() failed at "
-				  "line %d rc: %d\n", line_number, rc);
-		D_ERROR("sem_timedwait() failed, rc = %d\n", rc);
-		D_GOTO(out, rc);
-	}
-out:
-	return rc;
-}
+int
+crtu_sem_timedwait(sem_t *sem, int sec, int line_number);
 
 #endif /* __CART_UTILS_H__ */
