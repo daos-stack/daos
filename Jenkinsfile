@@ -453,6 +453,7 @@ pipeline {
                                          aggregatingResults: true,
                                          tool: gcc4(pattern: 'centos7-gcc-release-build.log',
                                                     id: "analysis-gcc-centos7-release")
+                            junit testResults: 'nlt-junit.xml'
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -493,6 +494,7 @@ pipeline {
                                          aggregatingResults: true,
                                          tool: clang(pattern: 'centos7-clang-build.log',
                                                      id: "analysis-centos7-clang")
+                            junit testResults: 'nlt-junit.xml'
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
