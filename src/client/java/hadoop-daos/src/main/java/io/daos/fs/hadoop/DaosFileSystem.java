@@ -152,6 +152,8 @@ public class DaosFileSystem extends FileSystem {
   private String qualifiedUnsWorkPath;
   private String workPath;
 
+  private boolean async = Constants.DEFAULT_DAOS_IO_ASYNC;
+
   static {
     if (ShutdownHookManager.removeHook(DaosClient.FINALIZER)) {
       org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosClient.FINALIZER, 0);
@@ -172,17 +174,19 @@ public class DaosFileSystem extends FileSystem {
     if (!getScheme().equals(name.getScheme())) {
       throw new IllegalArgumentException("schema should be " + getScheme());
     }
-    DunsInfo info = searchUnsPath(name.getPath());
+    DunsInfo info = searchUnsPath(name.getPath(),
+        conf.getBoolean(Constants.UNS_PATH_SEARCH_RECURSIVE, Constants.DEFAULT_UNS_PATH_SEARCH_RECURSIVE));
     if (info != null) {
       LOG.info("initializing from uns path, " + name);
       uns = true;
       unsPrefix = info.getPrefix();
       initializeFromUns(name, conf, info);
     } else {
-      LOG.info("initializing from config file, " + name);
+      LOG.info("initializing from config file");
       uns = false;
       initializeFromConfigFile(name, conf);
     }
+    async = conf.getBoolean(Constants.DAOS_IO_ASYNC, Constants.DEFAULT_DAOS_IO_ASYNC);
   }
 
   /**
@@ -218,11 +222,13 @@ public class DaosFileSystem extends FileSystem {
    *
    * @param path
    * path of URI
+   * @param recursive
+   * search UNS path recursively?
    * @return DunsInfo
    * @throws IOException
    * {@link DaosIOException}
    */
-  private DunsInfo searchUnsPath(String path) throws IOException {
+  private DunsInfo searchUnsPath(String path, boolean recursive) throws IOException {
     if ("/".equals(path) || !path.startsWith("/")) {
       return null;
     }
@@ -232,7 +238,7 @@ public class DaosFileSystem extends FileSystem {
       try {
         info = DaosUns.getAccessInfo(file.getAbsolutePath(), Constants.UNS_ATTR_NAME_HADOOP,
           io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
-        if (info != null) {
+        if (info != null || !recursive) {
           break;
         }
       } catch (DaosIOException e) {
@@ -243,7 +249,7 @@ public class DaosFileSystem extends FileSystem {
     return info;
   }
 
-  private void parseUnsConfig(Configuration conf, DunsInfo info) throws IOException {
+  private void parseUnsConfig(Configuration conf, DunsInfo info) {
     if (!"POSIX".equalsIgnoreCase(info.getLayout())) {
       throw new IllegalArgumentException("expect POSIX file system, but " + info.getLayout());
     }
@@ -296,6 +302,13 @@ public class DaosFileSystem extends FileSystem {
               if (StringUtils.isBlank(conf.get(kv[0]))) {
                 conf.setInt(kv[0], Integer.valueOf(kv[1]));
               }
+              break;
+            case Constants.DAOS_IO_ASYNC:
+              if (!("true".equalsIgnoreCase(kv[1]) || "false".equalsIgnoreCase(kv[1]))) {
+                throw new IllegalArgumentException("value need to be true or false for " +
+                        Constants.DAOS_IO_ASYNC);
+              }
+              conf.set(Constants.DAOS_IO_ASYNC, kv[1]);
               break;
             default:
               throw new IllegalArgumentException("unknown daos config, " + kv[0]);
@@ -530,7 +543,8 @@ public class DaosFileSystem extends FileSystem {
     }
 
     return new FSDataInputStream(new DaosInputStream(
-            file, statistics, readBufferSize, bufferSize < minReadSize ? minReadSize : bufferSize));
+            file, statistics, readBufferSize,
+            bufferSize < minReadSize ? minReadSize : bufferSize, async));
   }
 
   @Override
@@ -572,7 +586,8 @@ public class DaosFileSystem extends FileSystem {
             this.chunkSize,
             true);
 
-    return new FSDataOutputStream(new DaosOutputStream(daosFile, key, writeBufferSize, statistics), statistics);
+    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, async),
+        statistics);
   }
 
   @Override
