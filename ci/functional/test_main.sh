@@ -43,5 +43,6 @@ if $TEST_RPMS; then
        FTEST_ARG=\"$FTEST_ARG\"                      \
        $(cat ci/functional/test_main_node.sh)"
 else
+    env
     ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
 fi
