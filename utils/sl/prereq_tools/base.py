@@ -368,10 +368,16 @@ build with random upstream changes.
             raise DownloadFailure(self.url, subdir)
 
         if (passed_commit_sha and not branch):
-            commands = ['git clone %s --branch %s --single-branch %s' % (self.url,
-                                                                         passed_commit_sha,
-                                                                         subdir)]
-            if not RUNNER.run_commands(commands):
+            commands = ['git',
+                        'clone',
+                        self.url,
+                        '--branch',
+                        passed_commit_sha,
+                        '--single-branch',
+                        '--depth',
+                        '1',
+                        subdir]
+            if not RUNNER.run_commands([' '.join(commands)]):
                 raise DownloadFailure(self.url, subdir)
         else:
             raise DownloadFailure(self.url, subdir)
