@@ -8,7 +8,7 @@ package main
 
 import (
 	"fmt"
-	"io"
+	"os"
 	"strings"
 	"unsafe"
 
@@ -20,7 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 /*
@@ -92,6 +91,10 @@ func (cmd *poolBaseCmd) disconnectPool() {
 	}
 }
 
+func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
+	return getDaosAttribute(cmd.cPoolHandle, poolAttr, name)
+}
+
 type poolCmd struct {
 	ListContainers poolContainersListCmd `command:"list-containers" alias:"list-cont" alias:"ls" description:"container operations for the specified pool"`
 	Query          poolQueryCmd          `command:"query" description:"query pool info"`
@@ -142,6 +145,8 @@ func (cmd *poolContainersListCmd) Execute(_ []string) error {
 		return err
 	}
 
+	// Create a Go slice backed by the C array in order to easily
+	// iterate over it.
 	conts := (*[1 << 30]C.struct_daos_pool_cont_info)(unsafe.Pointer(cConts))[:ncont:ncont]
 	contUUIDs := make([]uuid.UUID, ncont)
 	for i, cont := range conts {
@@ -248,7 +253,8 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	}
 	rc := C.daos_pool_query(cmd.cPoolHandle, nil, &pinfo, nil, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Wrap(err, "pool query failed")
+		return errors.Wrapf(err,
+			"failed to query pool %s", cmd.poolUUID)
 	}
 
 	pqr, err := convertPoolInfo(&pinfo)
@@ -270,44 +276,10 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-type attribute struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
-func printAttributes(out io.Writer, header string, attrs ...*attribute) error {
-	fmt.Fprintf(out, "%s\n", header)
-
-	if len(attrs) == 0 {
-		fmt.Fprintln(out, "  No attributes found.")
-		return nil
-	}
-
-	nameTitle := "Name"
-	valueTitle := "Value"
-	titles := []string{nameTitle}
-
-	table := []txtfmt.TableRow{}
-	for _, attr := range attrs {
-		row := txtfmt.TableRow{}
-		row[nameTitle] = attr.Name
-		if attr.Value != "" {
-			row[valueTitle] = attr.Value
-			if len(titles) == 1 {
-				titles = append(titles, valueTitle)
-			}
-		}
-		table = append(table, row)
-	}
-
-	tf := txtfmt.NewTableFormatter(titles...)
-	tf.InitWriter(out)
-	tf.Format(table)
-	return nil
-}
-
 type poolListAttrsCmd struct {
 	poolBaseCmd
+
+	Verbose bool `long:"verbose" short:"v" description:"Include values"`
 }
 
 func (cmd *poolListAttrsCmd) Execute(_ []string) error {
@@ -317,44 +289,10 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	expectedSize, totalSize := C.size_t(0), C.size_t(0)
-	rc := C.daos_pool_list_attr(cmd.cPoolHandle, nil, &totalSize, nil)
-	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err, "failed to list attributes for pool %s", cmd.poolUUID)
-	}
-
-	attrs := []*attribute{}
-
-	if totalSize > 0 {
-		expectedSize = totalSize
-		buf := C.malloc(totalSize)
-		if buf == nil {
-			return errors.New("failed to malloc buf")
-		}
-		defer C.free(buf)
-
-		rc = C.daos_pool_list_attr(cmd.cPoolHandle, (*C.char)(buf), &totalSize, nil)
-		if err := daosError(rc); err != nil {
-			return errors.Wrapf(err, "failed to list attributes for pool %s", cmd.poolUUID)
-		}
-
-		if expectedSize < totalSize {
-			cmd.log.Errorf("attribute size changed; value truncated (%d < %d)", expectedSize, totalSize)
-		}
-
-		bufSlice := (*[1 << 30]C.char)(unsafe.Pointer(buf))[:expectedSize:expectedSize]
-		len := C.size_t(0)
-		for cur := C.size_t(0); cur < expectedSize; cur += len + 1 {
-			chunk := bufSlice[cur:]
-			len = C.strnlen((*C.char)(&chunk[0]), totalSize-cur)
-			if len == totalSize-cur {
-				return errors.New("corrupt buffer")
-			}
-			chunk = bufSlice[cur:len]
-			attrs = append(attrs, &attribute{
-				Name: C.GoString((*C.char)(&chunk[0])),
-			})
-		}
+	attrs, err := listDaosAttributes(cmd.cPoolHandle, poolAttr, cmd.Verbose)
+	if err != nil {
+		return errors.Wrapf(err,
+			"failed to list attributes for pool %s", cmd.poolUUID)
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -363,9 +301,7 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 
 	var bld strings.Builder
 	title := fmt.Sprintf("Attributes for pool %s:", cmd.poolUUID)
-	if err := printAttributes(&bld, title, attrs...); err != nil {
-		return err
-	}
+	printAttributes(&bld, title, attrs...)
 
 	cmd.log.Info(bld.String())
 
@@ -387,36 +323,11 @@ func (cmd *poolGetAttrCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	attrName := C.CString(cmd.Args.Name)
-	defer C.free(unsafe.Pointer(attrName))
-	expectedSize, attrSize := C.size_t(0), C.size_t(0)
-	rc := C.daos_pool_get_attr(cmd.cPoolHandle, 1, &attrName, nil, &attrSize, nil)
-	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err, "failed to get attribute %q for pool %s", cmd.Args.Name, cmd.poolUUID)
-	}
-
-	attr := &attribute{
-		Name: cmd.Args.Name,
-	}
-
-	if attrSize > 0 {
-		expectedSize = attrSize
-		buf := C.malloc(attrSize)
-		if buf == nil {
-			return errors.New("failed to malloc buf")
-		}
-		defer C.free(buf)
-
-		rc = C.daos_pool_get_attr(cmd.cPoolHandle, 1, &attrName, &buf, &attrSize, nil)
-		if err := daosError(rc); err != nil {
-			return errors.Wrapf(err, "failed to get attribute %q for pool %s", cmd.Args.Name, cmd.poolUUID)
-		}
-
-		if expectedSize < attrSize {
-			cmd.log.Errorf("attribute size changed; value truncated (%d < %d)", expectedSize, attrSize)
-		}
-
-		attr.Value = C.GoString((*C.char)(buf))
+	attr, err := cmd.getAttr(cmd.Args.Name)
+	if err != nil {
+		return errors.Wrapf(err,
+			"failed to get attribute %q from pool %s",
+			cmd.Args.Name, cmd.poolUUID)
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -425,9 +336,7 @@ func (cmd *poolGetAttrCmd) Execute(_ []string) error {
 
 	var bld strings.Builder
 	title := fmt.Sprintf("Attributes for pool %s:", cmd.poolUUID)
-	if err := printAttributes(&bld, title, attr); err != nil {
-		return err
-	}
+	printAttributes(&bld, title, attr)
 
 	cmd.log.Info(bld.String())
 
@@ -450,18 +359,13 @@ func (cmd *poolSetAttrCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	attrName := C.CString(cmd.Args.Name)
-	defer C.free(unsafe.Pointer(attrName))
-	attrValue := C.CString(cmd.Args.Value)
-	defer C.free(unsafe.Pointer(attrValue))
-	valueLen := C.uint64_t(len(cmd.Args.Value) + 1)
-	rc := C.daos_pool_set_attr(cmd.cPoolHandle, 1, &attrName, (*unsafe.Pointer)(unsafe.Pointer(&attrValue)), &valueLen, nil)
-	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err, "failed to set attribute %q for pool %s", cmd.Args.Name, cmd.poolUUID)
-	}
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, nil)
+	if err := setDaosAttribute(cmd.cPoolHandle, poolAttr, &attribute{
+		Name:  cmd.Args.Name,
+		Value: cmd.Args.Value,
+	}); err != nil {
+		return errors.Wrapf(err,
+			"failed to set attribute %q on pool %s",
+			cmd.Args.Name, cmd.poolUUID)
 	}
 
 	return nil
@@ -482,15 +386,10 @@ func (cmd *poolDelAttrCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	attrName := C.CString(cmd.Args.Name)
-	defer C.free(unsafe.Pointer(attrName))
-	rc := C.daos_pool_del_attr(cmd.cPoolHandle, 1, &attrName, nil)
-	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err, "failed to delete attribute %q for pool %s", cmd.Args.Name, cmd.poolUUID)
-	}
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, nil)
+	if err := delDaosAttribute(cmd.cPoolHandle, poolAttr, cmd.Args.Name); err != nil {
+		return errors.Wrapf(err,
+			"failed to delete attribute %q on pool %s",
+			cmd.Args.Name, cmd.poolUUID)
 	}
 
 	return nil
@@ -519,9 +418,16 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 	}
 	ap.p_op = C.POOL_AUTOTEST
 
+	// Set outstream to stdout; don't try to redirect it.
+	ap.outstream, err = fd2FILE(os.Stdout.Fd(), "w")
+	if err != nil {
+		return err
+	}
+
 	rc := C.pool_autotest_hdlr(ap)
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err, "failed to run autotest for pool %s", cmd.poolUUID)
+		return errors.Wrapf(err, "failed to run autotest for pool %s",
+			cmd.poolUUID)
 	}
 
 	return nil
