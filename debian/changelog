@@ -1,3 +1,9 @@
+daos (1.2-1) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Version bump up to 1.2-rc1
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 26 Apr 2021 15:03:35 -0400
+
 daos (1.1.4-7) unstable; urgency=medium
   [ Michael MacDonald ]
   * Remove daos_metrics from 1.2 release

@@ -7,8 +7,8 @@
 %global __python %{__python3}
 
 Name:          daos
-Version:       1.1.4
-Release:       8%{?relval}%{?dist}
+Version:       1.2
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -406,6 +406,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Mon Apr 26 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.2-1
+- Version bump up to 1.2-rc1
+
 * Fri Apr 23 2021 Tom Nabarro <tom.nabarro@intel.com> - 1.1.4-8
 - Relax ipmctl version requirement on leap as runtime version checks
   are in place
