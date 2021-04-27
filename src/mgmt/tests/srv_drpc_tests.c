@@ -709,6 +709,7 @@ expect_drpc_list_cont_resp_with_containers(Drpc__Response *resp,
 		uuid_unparse(exp_cont[i].pci_uuid, exp_uuid);
 		assert_string_equal(cont_resp->containers[i]->uuid, exp_uuid);
 	}
+	mgmt__list_cont_resp__free_unpacked(cont_resp, NULL);
 }
 
 static void
