@@ -85,7 +85,7 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 }
 
 // supply mock external interface, populates config from given file path
-func mockConfigFromFile(t *testing.T, path string) *Server {
+func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
 	t.Helper()
 	c := DefaultServer().
 		WithProviderValidator(netdetect.ValidateProviderStub).
@@ -93,11 +93,7 @@ func mockConfigFromFile(t *testing.T, path string) *Server {
 		WithGetNetworkDeviceClass(getDeviceClassStub)
 	c.Path = path
 
-	if err := c.Load(); err != nil {
-		t.Fatalf("failed to load %s: %s", path, err)
-	}
-
-	return c
+	return c, c.Load()
 }
 
 func getDeviceClassStub(netdev string) (uint32, error) {
@@ -199,7 +195,10 @@ func TestServerConfig_Constructed(t *testing.T) {
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
 	uncommentServerConfig(t, testFile)
-	defaultCfg := mockConfigFromFile(t, testFile)
+	defaultCfg, err := mockConfigFromFile(t, testFile)
+	if err != nil {
+		t.Fatalf("failed to load %s: %s", testFile, err)
+	}
 
 	var numaNode0 uint = 0
 	var numaNode1 uint = 1
@@ -336,7 +335,6 @@ func TestServerConfig_Validation(t *testing.T) {
 
 	for name, tt := range map[string]struct {
 		extraConfig func(c *Server) *Server
-		setServers  bool // replace engines section with legacy servers in conf
 		expErr      error
 	}{
 		"example config": {},
@@ -393,16 +391,74 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigBadControlPort,
 		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			if tt.extraConfig == nil {
+				tt.extraConfig = noopExtra
+			}
+
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
+
+			// First, load a config based on the server config with all options uncommented.
+			testFile := filepath.Join(testDir, sConfigUncomment)
+			uncommentServerConfig(t, testFile)
+			config, err := mockConfigFromFile(t, testFile)
+			if err != nil {
+				t.Fatalf("failed to load %s: %s", testFile, err)
+			}
+
+			// Apply extra config test case
+			config = tt.extraConfig(config)
+
+			CmpErr(t, tt.expErr, config.Validate(log))
+		})
+	}
+}
+
+func TestServerConfig_Parsing(t *testing.T) {
+	noopExtra := func(c *Server) *Server { return c }
+
+	for name, tt := range map[string]struct {
+		inTxt          string
+		outTxt         string
+		extraConfig    func(c *Server) *Server
+		expParseErr    error
+		expValidateErr error
+	}{
+		"bad engine section": {
+			inTxt:       "engines:",
+			outTxt:      "engine:",
+			expParseErr: errors.New("field engine not found"),
+		},
 		"use legacy servers conf directive rather than engines": {
-			setServers: true,
+			inTxt:  "engines:",
+			outTxt: "servers:",
 		},
 		"specify legacy servers conf directive in addition to engines": {
+			inTxt:  "engines:",
+			outTxt: "servers:",
 			extraConfig: func(c *Server) *Server {
 				var nilEngineConfig *engine.Config
 				return c.WithEngines(nilEngineConfig)
 			},
-			setServers: true,
-			expErr:     errors.New("cannot specify both"),
+			expValidateErr: errors.New("cannot specify both"),
+		},
+		"duplicates in bdev_list from config": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(
+					engine.NewConfig().
+						WithFabricInterface("qib0").
+						WithFabricInterfacePort(20000).
+						WithScmClass("ram").
+						WithScmRamdiskSize(1).
+						WithScmMountPoint("/mnt/daos/2").
+						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)))
+			},
+			expValidateErr: errors.New("bdev_list contains duplicate pci"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -419,15 +475,17 @@ func TestServerConfig_Validation(t *testing.T) {
 			// First, load a config based on the server config with all options uncommented.
 			testFile := filepath.Join(testDir, sConfigUncomment)
 			uncommentServerConfig(t, testFile)
-			if tt.setServers {
-				replaceFile(t, testFile, "engines:", "servers:")
-			}
-			config := mockConfigFromFile(t, testFile)
 
-			// Apply extra config test case
+			replaceFile(t, testFile, tt.inTxt, tt.outTxt)
+
+			config, errParse := mockConfigFromFile(t, testFile)
+			CmpErr(t, tt.expParseErr, errParse)
+			if tt.expParseErr != nil {
+				return
+			}
 			config = tt.extraConfig(config)
 
-			CmpErr(t, tt.expErr, config.Validate(log))
+			CmpErr(t, tt.expValidateErr, config.Validate(log))
 		})
 	}
 }
@@ -573,6 +631,13 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			configB: configB().
 				WithBdevDeviceList("b", "a"),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
+		},
+		"duplicates in bdev_list": {
+			configA: configA().
+				WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+			configB: configB().
+				WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
+			expErr: errors.New("bdev_list contains duplicate pci addresses"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

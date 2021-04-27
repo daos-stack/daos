@@ -36,13 +36,18 @@ const (
 	MemberStateStopping MemberState = 0x0010
 	// MemberStateStopped indicates process has been stopped.
 	MemberStateStopped MemberState = 0x0020
-	// MemberStateEvicted indicates rank has been evicted from DAOS system.
+	// MemberStateEvicted indicates rank has been automatically evicted from DAOS system.
 	MemberStateEvicted MemberState = 0x0040
 	// MemberStateErrored indicates the process stopped with errors.
 	MemberStateErrored MemberState = 0x0080
 	// MemberStateUnresponsive indicates the process is not responding.
 	MemberStateUnresponsive MemberState = 0x0100
+	// MemberStateExcluded indicates that the rank has been administratively excluded.
+	MemberStateExcluded MemberState = 0x0200
 
+	// ExcludedMemberFilter defines the state(s) to be used when determining
+	// whether or not a member should be excluded from CaRT group map updates.
+	ExcludedMemberFilter = MemberStateAwaitFormat | MemberStateEvicted | MemberStateExcluded
 	// AvailableMemberFilter defines the state(s) to be used when determining
 	// whether or not a member is available for the purposes of pool creation, etc.
 	AvailableMemberFilter = MemberStateReady | MemberStateJoined
@@ -66,6 +71,8 @@ func (ms MemberState) String() string {
 		return "Stopped"
 	case MemberStateEvicted:
 		return "Evicted"
+	case MemberStateExcluded:
+		return "Excluded"
 	case MemberStateErrored:
 		return "Errored"
 	case MemberStateUnresponsive:
@@ -91,6 +98,8 @@ func memberStateFromString(in string) MemberState {
 		return MemberStateStopped
 	case "evicted":
 		return MemberStateEvicted
+	case "excluded":
+		return MemberStateExcluded
 	case "errored":
 		return MemberStateErrored
 	case "unresponsive":

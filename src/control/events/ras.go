@@ -45,15 +45,14 @@ type RASID uint32
 // RASID constant definitions matching those used when creating events either in
 // the control or data (engine) planes.
 const (
-	RASUnknownEvent   RASID = C.RAS_UNKNOWN_EVENT
-	RASRankUp         RASID = C.RAS_RANK_UP
-	RASRankDown       RASID = C.RAS_RANK_DOWN
-	RASRankNoResponse RASID = C.RAS_RANK_NO_RESPONSE
-	RASPoolRepsUpdate RASID = C.RAS_POOL_REPS_UPDATE
-	RASSwimRankAlive  RASID = C.RAS_SWIM_RANK_ALIVE
-	RASSwimRankDead   RASID = C.RAS_SWIM_RANK_DEAD
-	RASSystemStop     RASID = C.RAS_SYSTEM_STOP
-	RASSystemStart    RASID = C.RAS_SYSTEM_START
+	RASUnknownEvent         RASID = C.RAS_UNKNOWN_EVENT
+	RASEngineFormatRequired RASID = C.RAS_ENGINE_FORMAT_REQUIRED // notice
+	RASEngineDied           RASID = C.RAS_ENGINE_DIED            // error
+	RASPoolRepsUpdate       RASID = C.RAS_POOL_REPS_UPDATE       // info
+	RASSwimRankAlive        RASID = C.RAS_SWIM_RANK_ALIVE        // info
+	RASSwimRankDead         RASID = C.RAS_SWIM_RANK_DEAD         // info
+	RASSystemStartFailed    RASID = C.RAS_SYSTEM_START_FAILED    // error
+	RASSystemStopFailed     RASID = C.RAS_SYSTEM_STOP_FAILED     // error
 )
 
 func (id RASID) String() string {
@@ -90,10 +89,9 @@ type RASSeverityID uint32
 // RASSeverityID constant definitions.
 const (
 	RASSeverityUnknown RASSeverityID = C.RAS_SEV_UNKNOWN
-	RASSeverityFatal   RASSeverityID = C.RAS_SEV_FATAL
-	RASSeverityWarn    RASSeverityID = C.RAS_SEV_WARN
 	RASSeverityError   RASSeverityID = C.RAS_SEV_ERROR
-	RASSeverityInfo    RASSeverityID = C.RAS_SEV_INFO
+	RASSeverityWarning RASSeverityID = C.RAS_SEV_WARNING
+	RASSeverityNotice  RASSeverityID = C.RAS_SEV_NOTICE
 )
 
 func (sev RASSeverityID) String() string {
@@ -108,10 +106,9 @@ func (sev RASSeverityID) Uint32() uint32 {
 // SyslogPriority maps RAS severity to syslog package priority.
 func (sev RASSeverityID) SyslogPriority() syslog.Priority {
 	slSev := map[RASSeverityID]syslog.Priority{
-		RASSeverityFatal: syslog.LOG_CRIT,
-		RASSeverityError: syslog.LOG_ERR,
-		RASSeverityWarn:  syslog.LOG_WARNING,
-		RASSeverityInfo:  syslog.LOG_INFO,
+		RASSeverityError:   syslog.LOG_ERR,
+		RASSeverityWarning: syslog.LOG_WARNING,
+		RASSeverityNotice:  syslog.LOG_NOTICE,
 	}[sev]
 
 	return slSev | syslog.LOG_DAEMON
@@ -148,7 +145,6 @@ func (evt *RASEvent) IsForwarded() bool {
 // WithForwarded sets the forwarded state of this event.
 func (evt *RASEvent) WithForwarded(forwarded bool) *RASEvent {
 	evt.forwarded.Store(forwarded)
-
 	return evt
 }
 
@@ -161,7 +157,12 @@ func (evt *RASEvent) ShouldForward() bool {
 // WithForwardable sets the forwardable state of this event.
 func (evt *RASEvent) WithForwardable(forwardable bool) *RASEvent {
 	evt.forwardable.Store(forwardable)
+	return evt
+}
 
+// WithRank sets the rank identifier on the event.
+func (evt *RASEvent) WithRank(rid uint32) *RASEvent {
+	evt.Rank = rid
 	return evt
 }
 
@@ -172,7 +173,8 @@ func New(evt *RASEvent) *RASEvent {
 		evt = &RASEvent{}
 	}
 
-	// Set defaults as necessary.
+	// set defaults
+
 	if evt.Timestamp == "" {
 		evt.Timestamp = common.FormatTime(time.Now())
 	}
@@ -190,7 +192,7 @@ func New(evt *RASEvent) *RASEvent {
 		evt.ProcID = uint64(os.Getpid())
 	}
 	if evt.Severity == RASSeverityUnknown {
-		evt.Severity = RASSeverityInfo
+		evt.Severity = RASSeverityNotice
 	}
 	evt.forwarded.SetFalse()
 	evt.forwardable.SetTrue()
@@ -246,8 +248,8 @@ func (evt *RASEvent) ToProto() (*sharedpb.RASEvent, error) {
 
 	var err error
 	switch ei := evt.ExtendedInfo.(type) {
-	case *RankStateInfo:
-		pbEvt.ExtendedInfo, err = RankStateInfoToProto(ei)
+	case *EngineStateInfo:
+		pbEvt.ExtendedInfo, err = EngineStateInfoToProto(ei)
 	case *PoolSvcInfo:
 		pbEvt.ExtendedInfo, err = PoolSvcInfoToProto(ei)
 	case *StrInfo:
@@ -281,8 +283,8 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 	evt.forwardable.SetTrue()
 
 	switch ei := pbEvt.GetExtendedInfo().(type) {
-	case *sharedpb.RASEvent_RankStateInfo:
-		evt.ExtendedInfo, err = RankStateInfoFromProto(ei)
+	case *sharedpb.RASEvent_EngineStateInfo:
+		evt.ExtendedInfo, err = EngineStateInfoFromProto(ei)
 	case *sharedpb.RASEvent_PoolSvcInfo:
 		evt.ExtendedInfo, err = PoolSvcInfoFromProto(ei)
 	case *sharedpb.RASEvent_StrInfo:
