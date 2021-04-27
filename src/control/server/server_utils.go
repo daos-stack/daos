@@ -223,7 +223,7 @@ func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter g
 		// Warn if hugepages are not enough to sustain average
 		// I/O workload (~1GB)
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
-			srv.log.Infof("Not enough hugepages are allocated!")
+			srv.log.Errorf("Not enough hugepages are allocated!")
 		}
 	}
 
