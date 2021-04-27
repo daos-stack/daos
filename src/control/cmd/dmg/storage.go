@@ -111,10 +111,18 @@ type storageScanCmd struct {
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(_ []string) error {
 	if cmd.NvmeHealth && cmd.NvmeMeta {
-		return errors.New("Cannot use --nvme-health and --nvme-meta together")
+		return errors.New("cannot use --nvme-health and --nvme-meta together")
+	}
+	if cmd.Verbose && (cmd.NvmeHealth || cmd.NvmeMeta) {
+		return errors.New("cannot use --verbose with --nvme-health or --nvme-meta")
 	}
 
-	req := &control.StorageScanReq{NvmeHealth: cmd.NvmeHealth, NvmeMeta: cmd.NvmeMeta}
+	req := &control.StorageScanReq{
+		NvmeHealth: cmd.NvmeHealth,
+		NvmeMeta:   cmd.NvmeMeta,
+		// don't strip nvme details if verbose or health or meta set
+		NvmeBasic: !(cmd.Verbose || cmd.NvmeHealth || cmd.NvmeMeta),
+	}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StorageScan(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {

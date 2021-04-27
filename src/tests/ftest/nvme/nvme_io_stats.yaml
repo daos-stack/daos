@@ -11,8 +11,6 @@ server_config:
         bdev_list: ["0000:81:00.0"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
-        env_vars:
-        - IO_STAT_PERIOD=5
 pool:
     mode: 146
     name: daos_server
