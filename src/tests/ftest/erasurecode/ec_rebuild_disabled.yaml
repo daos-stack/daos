@@ -76,9 +76,6 @@ ior:
    dfs_oclass:
     #- [EC_Object_Class, Minimum number of servers]
     - ["EC_2P1G1", 4]
-    - ["EC_2P2G1", 4]
-    - ["DAOS_OC_EC_K2P2_L32K", 4]
     - ["EC_4P1G1", 6]
     - ["EC_4P2G1", 6]
-    - ["DAOS_OC_EC_K4P2_L32K", 6]
     - ["EC_8P2G1", 10]
