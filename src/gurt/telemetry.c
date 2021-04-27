@@ -1261,7 +1261,7 @@ d_tm_set_gauge(struct d_tm_node_t *metric, uint64_t value)
  * \param[in]		value	Increment the gauge by this value
  */
 void
-d_tm_increment_gauge(struct d_tm_node_t *metric, uint64_t value)
+d_tm_inc_gauge(struct d_tm_node_t *metric, uint64_t value)
 {
 	if (d_tm_shmem_root == NULL || metric == NULL)
 		return;
@@ -1287,7 +1287,7 @@ d_tm_increment_gauge(struct d_tm_node_t *metric, uint64_t value)
  * \param[in]		value	Decrement the gauge by this value
  */
 void
-d_tm_decrement_gauge(struct d_tm_node_t *metric, uint64_t value)
+d_tm_dec_gauge(struct d_tm_node_t *metric, uint64_t value)
 {
 	if (d_tm_shmem_root == NULL || metric == NULL)
 		return;

@@ -100,7 +100,7 @@ test_gauge(void **state)
 	d_tm_set_gauge(gauge, init_val);
 
 	for (i = 0; i < inc_count; i++) {
-		d_tm_increment_gauge(gauge, 1);
+		d_tm_inc_gauge(gauge, 1);
 	}
 
 	rc = d_tm_get_gauge(&val, NULL, shmem_root,
@@ -109,7 +109,7 @@ test_gauge(void **state)
 	assert_int_equal(val, init_val + inc_count);
 
 	for (i = 0; i < dec_count; i++) {
-		d_tm_decrement_gauge(gauge, 1);
+		d_tm_dec_gauge(gauge, 1);
 	}
 
 	rc = d_tm_get_gauge(&val, NULL, shmem_root,

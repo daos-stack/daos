@@ -1728,7 +1728,7 @@ out:
 	dss_rpc_cntr_enter(DSS_RC_OBJ);
 	/** increment active request counter and start the chrono */
 	tls = obj_tls_get();
-	d_tm_increment_gauge(tls->ot_op_active[opc], 1);
+	d_tm_inc_gauge(tls->ot_op_active[opc], 1);
 	ioc->ioc_start_time = daos_get_ntime();
 	ioc->ioc_began = 1;
 	return rc;
@@ -1760,7 +1760,7 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	uint32_t		opc = ioc->ioc_opc;
 	uint64_t		time;
 
-	d_tm_decrement_gauge(tls->ot_op_active[opc], 1);
+	d_tm_dec_gauge(tls->ot_op_active[opc], 1);
 	d_tm_inc_counter(tls->ot_op_total[opc], 1);
 
 	if (unlikely(err != 0))

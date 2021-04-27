@@ -80,7 +80,7 @@ void test_open_handle(void)
 	/**
 	 * The gauge can be incremented by an arbitrary value.
 	 */
-	d_tm_increment_gauge(num_open_handles, 1);
+	d_tm_inc_gauge(num_open_handles, 1);
 }
 
 /**
@@ -113,7 +113,7 @@ void test_close_handle(void)
 	 * that increments in test_open_handle() are changing the same metric
 	 * as the one used here.
 	 */
-	d_tm_decrement_gauge(num_open_handles, 1);
+	d_tm_dec_gauge(num_open_handles, 1);
 }
 
 /**
