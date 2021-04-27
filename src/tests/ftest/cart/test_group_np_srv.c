@@ -23,6 +23,7 @@ static void
 swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		  enum crt_event_type type, void *arg)
 {
+	int maxlen;
 	char swim_state_str[2];
 
 	/* Example output for SWIM CRT_EVT_DEAD on rank #2:
@@ -47,7 +48,8 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	swim_state_str[0] = type + '0';
 	swim_state_str[1] = 0;
 
-	if (strlen(swim_seq_by_rank[rank]) < MAX_SWIM_STATUSES)
+	maxlen = MAX_SWIM_STATUSES - strlen(swim_state_str);
+	if (strlen(swim_seq_by_rank[rank]) < maxlen)
 		strcat(swim_seq_by_rank[rank], swim_state_str);
 
 	/* Remove rank from context, so we stop sending swim RPCs to it. */
