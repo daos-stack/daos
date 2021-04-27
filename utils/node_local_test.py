@@ -634,12 +634,8 @@ class DaosServer():
             time.sleep(0.5)
             if self._check_system_state('stopped'):
                 break
-            try:
-                self._check_timing("stop", start, max_stop_time)
-            except NLTestTimeout as e:
-                print('Failed to stop: {}'.format(e))
-                if time.time() - start > 30:
-                    raise
+            self._check_timing("stop", start, max_stop_time)
+
         self._add_test_case('stop')
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
