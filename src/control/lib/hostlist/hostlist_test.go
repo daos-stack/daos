@@ -160,7 +160,8 @@ func TestHostList_Create(t *testing.T) {
 			expUniqOut:   "d-server-[0001-0002]ab",
 			expUniqCount: 2,
 		},
-		// TODO: fix irregularity
+		// TODO DAOS-7332: fix irregularity where hostlist recognizes
+		//                 negative port as bad hostname
 		"negative port": {
 			startList: "node4:10001,node5:-10001",
 			expErr:    errors.New("invalid hostname"),

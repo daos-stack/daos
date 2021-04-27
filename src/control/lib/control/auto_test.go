@@ -678,7 +678,33 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaIfaces:     numaNetIfaceMap{0: ib0},
 			numaSSDs:       numaSSDsMap{0: []string{}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
-			expErr:         errors.New("invalid hostname"),
+			expErr:         config.FaultConfigBadControlPort,
+		},
+		"access point ip with valid port": {
+			engineCount:    1,
+			accessPoints:   []string{"192.168.1.1:10002"},
+			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
+			numaIfaces:     numaNetIfaceMap{0: ib0},
+			numaSSDs:       numaSSDsMap{0: []string{}},
+			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("192.168.1.1:10002").WithEngines(
+				defaultEngineCfg(0).
+					WithFabricInterface("ib0").
+					WithFabricInterfacePort(defaultFiPort).
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa0).
+					WithScmDeviceList("/dev/pmem0").
+					WithScmMountPoint("/mnt/daos0").
+					WithHelperStreamCount(7)),
+		},
+		"access point ip with invalid port": {
+			engineCount:    1,
+			accessPoints:   []string{"192.168.1.1:-10001"},
+			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
+			numaIfaces:     numaNetIfaceMap{0: ib0},
+			numaSSDs:       numaSSDsMap{0: []string{}},
+			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
+			expErr:         config.FaultConfigBadControlPort,
 		},
 		"single pmem single ssd": {
 			engineCount:    1,
