@@ -2291,7 +2291,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		if (iv_prop == NULL)
 			return -DER_NOMEM;
 
-		rc = cont_iv_prop_fetch(pool_hdl->sph_pool->sp_iv_ns,
+		rc = cont_iv_prop_fetch(pool_hdl->sph_pool->sp_uuid,
 					in->cqi_op.ci_uuid, iv_prop);
 		if (rc) {
 			D_ERROR("cont_iv_prop_fetch failed "DF_RC"\n",

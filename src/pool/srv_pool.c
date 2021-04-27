@@ -5634,39 +5634,6 @@ out_svc:
 }
 
 bool
-is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid)
-{
-	struct ds_pool	*pool;
-	uuid_t		hdl_uuid;
-	int		rc;
-	bool		result = false;
-
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL) {
-		D_ERROR(DF_UUID": failed to get ds_pool\n",
-			DP_UUID(pool_uuid));
-		return false;
-	}
-
-	if (uuid_compare(coh_uuid, pool->sp_srv_cont_hdl) == 0) {
-		/* Compare if the handle uuid is from another server */
-		result = true;
-		D_GOTO(output, result);
-	}
-
-	rc = ds_pool_iv_srv_hdl_fetch_non_sys(pool, &hdl_uuid, NULL);
-	if (rc) {
-		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
-		D_GOTO(output, result);
-	}
-
-	result = !uuid_compare(coh_uuid, hdl_uuid);
-output:
-	ds_pool_put(pool);
-	return result;
-}
-
-bool
 is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 {
 	struct ds_pool	*pool;
