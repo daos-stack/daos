@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import uuid
 import threading
 
@@ -149,16 +148,12 @@ class NvmePoolExtend(TestWithServers):
         # Create a pool
         pool = TestPool(self.context, dmg_command=self.dmg_command)
         pool.get_params(self)
-        # Split total SCM and NVME size for creating multiple pools.
-        pool.scm_size.value = int(pool.scm_size.value)
-        pool.nvme_size.value = int(pool.nvme_size.value)
         pool.create()
         return pool
 
     def run_nvme_pool_extend(self):
         """Run Pool Extend
         """
-        pool = {}
         total_servers = len(self.hostlist_servers) * 2
         self.log.info("Total Daos Servers (Initial): %d", total_servers)
 
@@ -190,14 +185,8 @@ class NvmePoolExtend(TestWithServers):
             self.log.info(output)
             # Wait for rebuild to complete
             self.pool.wait_for_rebuild(to_start=False)
+            pver_extend = self.get_pool_version()
 
-            fail_count = 0
-            while fail_count <= 20:
-                pver_extend = self.get_pool_version()
-                time.sleep(5)
-                fail_count += 1
-                if pver_extend > pver_begin:
-                    break
             self.log.info("Pool Version after extend %s", pver_extend)
             # Check pool version incremented after pool extend
             self.assertTrue(pver_extend > pver_begin,
@@ -211,7 +200,7 @@ class NvmePoolExtend(TestWithServers):
 
             # Cleanup
             self.pool.destroy()
-            time.sleep(10)
+
 
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086
