@@ -539,7 +539,7 @@ transaction performs all operations using its epoch.
 
 The MVCC rules ensure that transactions execute as if they are serialized in
 their epoch order while ensuring that every transaction observes all
-conflicting transactions commit before it openes, as long as the
+conflicting transactions commit before it opens, as long as the
 system clock offsets are always within the expected maximum system clock offset
 (epsilon). For convenience, the rules classify the I/O operations into reads
 and writes:
