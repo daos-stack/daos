@@ -20,7 +20,8 @@ struct dtx_share_peer {
 	d_list_t		dsp_link;
 	struct dtx_id		dsp_xid;
 	daos_unit_oid_t		dsp_oid;
-	uint32_t		dsp_leader;
+	daos_epoch_t		dsp_epoch;
+	struct dtx_memberships	dsp_mbs;
 };
 
 /**
@@ -115,8 +116,13 @@ struct dtx_handle {
 	void				**dth_deferred;
 	/* NVME extents to release */
 	d_list_t			 dth_deferred_nvme;
+	/* Committed or comittable DTX list */
 	d_list_t			 dth_share_cmt_list;
+	/* Aborted DTX list */
+	d_list_t			 dth_share_abt_list;
+	/* Active DTX list */
 	d_list_t			 dth_share_act_list;
+	/* DTX list to be checked */
 	d_list_t			 dth_share_tbd_list;
 	int				 dth_share_tbd_count;
 };
@@ -156,6 +162,7 @@ struct dtx_stat {
 	uint64_t	dtx_oldest_committable_time;
 	uint64_t	dtx_committed_count;
 	uint64_t	dtx_oldest_committed_time;
+	uint64_t	dtx_oldest_active_time;
 };
 
 enum dtx_flags {

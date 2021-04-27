@@ -259,6 +259,10 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 	}
 
 	n_svcranks = json_object_array_length(tmp);
+	if (n_svcranks <= 0) {
+		D_ERROR("unexpected svc_reps length: %d\n", n_svcranks);
+		return -DER_INVAL;
+	}
 	if (pool_info->mgpi_svc == NULL) {
 		pool_info->mgpi_svc = d_rank_list_alloc(n_svcranks);
 		if (pool_info->mgpi_svc == NULL) {
@@ -465,6 +469,11 @@ dmg_pool_create(const char *dmg_config_file,
 	if (svc == NULL)
 		goto out_svc;
 
+	if (pool_info.mgpi_svc->rl_nr == 0) {
+		D_ERROR("unexpected zero-length pool svc ranks list\n");
+		rc = -DER_INVAL;
+		goto out_svc;
+	}
 	rc = d_rank_list_copy(svc, pool_info.mgpi_svc);
 	if (rc != 0) {
 		D_ERROR("failed to dup svc rank list\n");

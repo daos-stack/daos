@@ -1321,7 +1321,7 @@ enumerate_akey(daos_handle_t th, char *dkey, uint32_t *number,
 	return rc;
 }
 
-static void
+void
 enumerate_rec(daos_handle_t th, char *dkey, char *akey,
 	      daos_size_t *size, uint32_t *number, daos_recx_t *recxs,
 	      daos_epoch_range_t *eprs, daos_anchor_t *anchor, bool incr,
