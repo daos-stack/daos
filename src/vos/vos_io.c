@@ -1415,6 +1415,7 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	struct dcs_csum_info	 csum;
 	d_iov_t			 kiov, riov;
 	struct bio_iov		*biov;
+	struct dcs_csum_info	*value_csum;
 	umem_off_t		 umoff;
 	daos_epoch_t		 epoch = ioc->ic_epr.epr_hi;
 	int			 rc;
@@ -1432,7 +1433,7 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 
 	tree_rec_bundle2iov(&rbund, &riov);
 
-	struct dcs_csum_info *value_csum = vos_ioc2csum(ioc);
+	value_csum = vos_ioc2csum(ioc);
 
 	if (value_csum != NULL)
 		rbund.rb_csum	= value_csum;

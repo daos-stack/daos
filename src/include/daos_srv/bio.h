@@ -17,10 +17,10 @@
 #include <daos_srv/control.h>
 #include <abt.h>
 
-#define BIO_ADDR_IS_HOLE(addr) ((addr)->ba_flags == BIO_FLAG_HOLE)
+#define BIO_ADDR_IS_HOLE(addr) ((addr)->ba_flags & BIO_FLAG_HOLE)
 #define BIO_ADDR_SET_HOLE(addr) ((addr)->ba_flags |= BIO_FLAG_HOLE)
 #define BIO_ADDR_SET_NOT_HOLE(addr) ((addr)->ba_flags &= ~(BIO_FLAG_HOLE))
-#define BIO_ADDR_IS_DEDUP(addr) ((addr)->ba_flags == BIO_FLAG_DEDUP)
+#define BIO_ADDR_IS_DEDUP(addr) ((addr)->ba_flags & BIO_FLAG_DEDUP)
 #define BIO_ADDR_SET_DEDUP(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP)
 #define BIO_ADDR_SET_NOT_DEDUP(addr) ((addr)->ba_flags &= ~(BIO_FLAG_DEDUP))
 #define BIO_ADDR_IS_CORRUPTED(addr) ((addr)->ba_flags & BIO_FLAG_CORRUPTED)

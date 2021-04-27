@@ -461,14 +461,13 @@ test_marking_corrupted_with_iod_type(void **state, daos_iod_type_t iod_type)
 	vos_iter_param_t	param = {0};
 	struct vos_iter_anchors	anchor = {0};
 
-
 	/** setup */
+	memset(akey, 0, akey_len);
 	extent_key_from_test_args(&k, *state);
 	dts_sgl_init_with_strings(&sgl, 1, "Going to be corrupted!!");
 	dts_sgl_alloc_single_iov(&sgl_fetch, daos_sgl_buf_size(&sgl));
 
-	d_iov_set(&iod.iod_name, akey, 32);
-
+	d_iov_set(&iod.iod_name, akey, akey_len);
 	setup_iod_data(&iod, &sgl, iod_type);
 
 	for (i = 0; i < 100; i++) {
