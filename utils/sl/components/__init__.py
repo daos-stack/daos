@@ -282,8 +282,7 @@ def define_components(reqs):
                                  True)
     reqs.define('argobots',
                 retriever=retriever,
-                commands=['git clean -dxf',
-                          './autogen.sh',
+                commands=['./autogen.sh',
                           './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
                           ' --enable-valgrind'
                           ' --enable-stack-unwind',
@@ -299,9 +298,9 @@ def define_components(reqs):
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['cd dpdk; '                            \
-                          'git fetch; '                          \
-                          'git checkout origin/spdk-19.11.6',    \
+                # git -C would be a better option here, however does not play
+                # with older versions of git.
+                commands=['git --git-dir dpdk/.git --work-tree dpdk checkout origin/spdk-19.11.6', \
                           './configure --prefix="$SPDK_PREFIX"'                \
                           ' --disable-tests --without-vhost --without-crypto'  \
                           ' --without-pmdk --without-vpp --without-rbd'        \
