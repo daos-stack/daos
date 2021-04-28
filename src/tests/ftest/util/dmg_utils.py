@@ -895,12 +895,11 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "evict"), pool=pool)
 
-    def config_generate(self, access_points=None, num_engines=None,
-                        min_ssds=None, net_class=None):
+    def config_generate(self, access_points, num_engines=None, min_ssds=None,
+                        net_class=None):
         """Produce a server configuration.
         Args:
             access_points (str): Comma separated list of access point addresses.
-                Defaults to None.
             num_pmem (int): Number of SCM (pmem) devices required per
                 storage host in DAOS system. Defaults to None.
             num_nvme (int): Minimum number of NVMe devices required per storage
@@ -921,7 +920,8 @@ class DmgCommand(DmgCommandBase):
             yaml_data = yaml.safe_load(result.stdout)
         except yaml.YAMLError as error:
             raise CommandFailure(
-                "Error loading dmg generated config: {}".format(error))
+                "Error loading dmg generated config: {}".format(
+                    error)) from error
 
         return yaml_data
 
