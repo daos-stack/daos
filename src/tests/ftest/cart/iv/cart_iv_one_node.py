@@ -498,7 +498,7 @@ class CartIvOneNodeTest(CartTest):
         # Request each server shut down gracefully
         for rank in reversed(list(range(1, int(srv_ppn) * num_servers))):
             clicmdt = clicmd + " -o shutdown -r " + str(rank)
-            self.print("\nClient cmd : {}\n".format(clicmd))
+            self.print("\nClient cmd : {}\n".format(clicmdt))
             try:
                 subprocess.call(shlex.split(clicmdt))
             # pylint: disable=broad-except
