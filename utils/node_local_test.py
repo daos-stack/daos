@@ -403,18 +403,32 @@ class DaosServer():
             raise NLTestTimeout(res)
 
     def _check_system_state(self, desired_states):
+        """Check the system state for against list
+
+        Return true if all members are in a state specified by the
+        desired_states.
+        """
         if not isinstance(desired_states, list):
             desired_states = [desired_states]
 
         rc = self.run_dmg(['system', 'query', '--json'])
-        if rc.returncode == 0:
-            data = json.loads(rc.stdout.decode('utf-8'))
-            members = data['response']['members']
-            if members is not None:
-                for desired_state in desired_states:
-                    if members[0]['state'] == desired_state:
-                        return True
-        return False
+        if rc.returncode != 0:
+            return False
+        data = json.loads(rc.stdout.decode('utf-8'))
+        print(data)
+        if data['error'] or data['status'] != 0:
+            return False
+        members = data['response']['members']
+        if members is None:
+            return False
+        if len(members) != self.engines:
+            print('Not enough members')
+            return False
+
+        for member in members:
+            if member['state'] not in desired_states:
+                return False
+        return True
 
     def start(self, clean=True):
         """Start a DAOS server"""
