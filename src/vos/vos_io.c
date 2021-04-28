@@ -601,7 +601,7 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	if (iov_at == iov_nr - 1) {
 		struct bio_iov *biovs;
 
-		D_REALLOC_ARRAY(biovs, bsgl->bs_iovs, (iov_nr * 2));
+		D_REALLOC_ARRAY(biovs, bsgl->bs_iovs, iov_nr, (iov_nr * 2));
 		if (biovs == NULL)
 			return -DER_NOMEM;
 
@@ -625,7 +625,7 @@ bsgl_csums_resize(struct vos_io_context *ioc)
 		struct dcs_csum_info *new_infos;
 		uint32_t	 new_nr = dcb_nr * 2;
 
-		D_REALLOC_ARRAY(new_infos, csums, new_nr);
+		D_REALLOC_ARRAY(new_infos, csums, dcb_nr, new_nr);
 		if (new_infos == NULL)
 			return -DER_NOMEM;
 
@@ -694,17 +694,17 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		D_GOTO(out, rc = (rc == 0 ? -DER_INPROGRESS : rc));
 
 	if (rc == -DER_NONEXIST) {
-		rbund.rb_rsize = 0;
+		rbund.rb_gsize = 0;
 		bio_addr_set_hole(&biov.bi_addr, 1);
 		rc = 0;
 	} else if (rc != 0) {
 		goto out;
 	} else if (key.sk_epoch < epr->epr_lo) {
 		/* The single value is before the valid epoch range (after a
-		 * punch when incarnation log is available
+		 * punch when incarnation log is available)
 		 */
 		rc = 0;
-		rbund.rb_rsize = 0;
+		rbund.rb_gsize = 0;
 		bio_addr_set_hole(&biov.bi_addr, 1);
 	} else if (key.sk_epoch > epr->epr_hi) {
 		/* Uncertainty violation */

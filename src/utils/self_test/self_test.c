@@ -895,8 +895,8 @@ static int run_self_test(struct st_size_params all_params[],
 		if (num_ms_endpts != num_ms_endpts_in) {
 			struct st_master_endpt *realloc_ptr;
 
-			D_REALLOC(realloc_ptr, ms_endpts,
-				  num_ms_endpts * sizeof(*ms_endpts));
+			D_REALLOC_ARRAY(realloc_ptr, ms_endpts,
+					num_ms_endpts_in, num_ms_endpts);
 			if (realloc_ptr == NULL)
 				D_GOTO(cleanup, ret = -DER_NOMEM);
 			ms_endpts = realloc_ptr;
@@ -1317,7 +1317,7 @@ int parse_endpoint_string(char *const opt_arg,
 	uint32_t		 num_ranks = 0;
 	char			*tag_valid_str = NULL;
 	uint32_t		 num_tags = 0;
-	void			*realloced_mem;
+	struct st_endpoint	*realloced_mem;
 	struct st_endpoint	*next_endpoint;
 
 	/*
@@ -1398,11 +1398,11 @@ int parse_endpoint_string(char *const opt_arg,
 	printf("  tags: %s (# tags = %u)\n", tag_valid_str, num_tags);
 
 	/* Reallocate/expand the endpoints array */
-	*num_endpts += num_ranks * num_tags;
-	D_REALLOC(realloced_mem, *endpts,
-		  sizeof(struct st_endpoint) * (*num_endpts));
+	D_REALLOC_ARRAY(realloced_mem, *endpts, *num_endpts,
+			*num_endpts + num_ranks * num_tags);
 	if (realloced_mem == NULL)
 		D_GOTO(cleanup, ret = -DER_NOMEM);
+	*num_endpts += num_ranks * num_tags;
 	*endpts = (struct st_endpoint *)realloced_mem;
 
 	/* Populate the newly expanded values in the endpoints array */
@@ -1822,11 +1822,11 @@ int main(int argc, char *argv[])
 
 	/* Shrink the buffer if some of the user's tokens weren't kept */
 	if (num_msg_sizes < num_tokens + 1) {
-		void *realloced_mem;
+		struct st_size_params *realloced_mem;
 
 		/* This should always succeed since the buffer is shrinking.. */
-		D_REALLOC(realloced_mem, all_params,
-			  num_msg_sizes * sizeof(all_params[0]));
+		D_REALLOC_ARRAY(realloced_mem, all_params, num_tokens + 1,
+				num_msg_sizes);
 		if (realloced_mem == NULL)
 			D_GOTO(cleanup, ret = -DER_NOMEM);
 		all_params = (struct st_size_params *)realloced_mem;

@@ -171,7 +171,7 @@ pool_target_addr_list_append(struct pool_target_addr_list *addr_list,
 		return 0;
 
 	D_REALLOC_ARRAY(new_addrs, addr_list->pta_addrs,
-			addr_list->pta_number + 1);
+			addr_list->pta_number, addr_list->pta_number + 1);
 	if (new_addrs == NULL)
 		return -DER_NOMEM;
 

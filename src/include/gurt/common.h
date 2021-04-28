@@ -130,10 +130,11 @@ void *d_realloc(void *, size_t);
  * there is no way to tell the difference between successful and
  * failed realloc.
  */
-#define D_REALLOC_COMMON(newptr, oldptr, size, cnt)			\
+#define D_REALLOC_COMMON(newptr, oldptr, oldsize, size, cnt)		\
 	do {								\
 		size_t _esz = (size_t)(size);				\
 		size_t _sz = (size_t)(size) * (cnt);			\
+		size_t _oldsz = (size_t)(oldsize);			\
 		size_t _cnt = (size_t)(cnt);				\
 		/* Compiler check to ensure type match */		\
 		__typeof__(newptr) optr = oldptr;			\
@@ -167,6 +168,9 @@ void *d_realloc(void *, size_t);
 					"':%p).\n",			\
 					_esz, _cnt, (newptr), (oldptr));\
 			(oldptr) = NULL;				\
+			if (_oldsz < _sz)				\
+				memset((char *)(newptr) + _oldsz, 0,	\
+				       _sz - _oldsz);			\
 			break;						\
 		}							\
 		if (_cnt <= 1)						\
@@ -179,11 +183,13 @@ void *d_realloc(void *, size_t);
 				_esz, _cnt);				\
 	} while (0)
 
-#define D_REALLOC(newptr, oldptr, size)					\
-	D_REALLOC_COMMON(newptr, oldptr, size, 1)
+#define D_REALLOC(newptr, oldptr, oldsize, size)			\
+	D_REALLOC_COMMON(newptr, oldptr, oldsize, size, 1)
 
-#define D_REALLOC_ARRAY(newptr, oldptr, count)				\
-	D_REALLOC_COMMON(newptr, oldptr, sizeof(*(oldptr)), count)
+#define D_REALLOC_ARRAY(newptr, oldptr, oldcount, count)		\
+	D_REALLOC_COMMON(newptr, oldptr,				\
+			 (oldcount) * sizeof(*(oldptr)),		\
+					     sizeof(*(oldptr)), count)
 
 #define D_FREE(ptr)							\
 	do {								\

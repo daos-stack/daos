@@ -560,7 +560,11 @@ rewait:
 			} else if (evp->ev_error == -DER_REC2BIG) {
 				char *new_buff;
 
-				D_REALLOC(new_buff, op->buf, op->size);
+				/** No need to clear the buffer so size doesn't
+				 * matter.
+				 */
+				D_REALLOC(new_buff, op->buf, op->size,
+					  op->size);
 				if (new_buff == NULL) {
 					rc = -DER_NOMEM;
 					break;
@@ -623,7 +627,11 @@ rewait:
 				daos_event_fini(evp);
 				rc2 = daos_event_init(evp, eq, NULL);
 
-				D_REALLOC(new_buff, op->buf, op->size);
+				/** No need to clear the buffer so size doesn't
+				 * matter.
+				 */
+				D_REALLOC(new_buff, op->buf, op->size,
+					  op->size);
 				if (new_buff == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 
@@ -802,6 +810,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	PyObject	*anchor_cap;
 	char		*enum_buf = NULL;
 	daos_size_t	 size;
+	daos_size_t	 oldsize;
 	char		*ptr;
 	uint32_t	 i;
 	int		 rc = 0;
@@ -813,6 +822,8 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 		rc = -DER_INVAL;
 		goto out;
 	}
+
+	oldsize = size;
 
 	/** Allocate an anchor for the first iteration */
 	if (anchor_cap == Py_None) {
@@ -875,11 +886,12 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 			size = kds[0].kd_key_len;
 
 			/** realloc buffer twice as big */
-			D_REALLOC(new_buf, enum_buf, size);
+			D_REALLOC(new_buf, enum_buf, oldsize, size);
 			if (new_buf == NULL) {
 				rc = -DER_NOMEM;
 				goto out;
 			}
+			oldsize = size;
 
 			/** refresh daos structures to point at new buffer */
 			d_iov_set(&iov, (void *)new_buf, size);

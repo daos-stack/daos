@@ -1197,10 +1197,10 @@ test_gurt_alloc(void **state)
 	assert_string_equal(testptr, str2);
 	D_FREE(testptr);
 	assert_null(testptr);
-	D_REALLOC(newptr, testptr, 10);
+	D_REALLOC(newptr, testptr, 0, 10);
 	assert_non_null(newptr);
 	assert_null(testptr);
-	D_REALLOC(testptr, newptr, 20);
+	D_REALLOC(testptr, newptr, 10, 20);
 	assert_non_null(testptr);
 	assert_null(newptr);
 	D_FREE(testptr);
@@ -1222,12 +1222,10 @@ test_gurt_alloc(void **state)
 	D_ALLOC_ARRAY(ptr1, nr);
 	assert_non_null(ptr1);
 
-	D_REALLOC_ARRAY(ptr2, ptr1, nr + 10);
+	D_REALLOC_ARRAY(ptr2, ptr1, nr, nr + 10);
 
 	assert_non_null(ptr2);
 	assert_null(ptr1);
-	/* Fill memory to catch wrong allocation via valgrind */
-	memset(ptr2, 0x0, (nr + 10) * sizeof(*ptr2));
 
 	D_FREE(ptr2);
 	assert_null(ptr2);

@@ -418,7 +418,8 @@ obj_auxi_add_failed_tgt(struct obj_auxi_args *obj_auxi, uint32_t tgt)
 		}
 	}
 
-	D_REALLOC_ARRAY(tgts, tgt_list->tl_tgts, tgt_list->tl_nr + 1);
+	D_REALLOC_ARRAY(tgts, tgt_list->tl_tgts, tgt_list->tl_nr,
+			tgt_list->tl_nr + 1);
 	if (tgts == NULL) {
 		if (allocated)
 			D_FREE(tgt_list);

@@ -96,7 +96,6 @@ static int
 expand_vector(struct vector *vector, unsigned int new_index)
 {
 	unsigned int num_entries = get_new_size(new_index);
-	unsigned int new_entries;
 	void *data;
 
 	if (num_entries < MIN_SIZE)
@@ -105,15 +104,12 @@ expand_vector(struct vector *vector, unsigned int new_index)
 	if (num_entries > vector->max_entries)
 		num_entries = vector->max_entries;
 
-	D_REALLOC_ARRAY(data, vector->data, num_entries);
+	D_REALLOC_ARRAY(data, vector->data, vector->num_entries,
+			num_entries);
 	if (!data)
 		return -DER_NOMEM;
 	vector->data = data;
 
-	/* Now fill in the data from the old size onward */
-	data = &vector->data[vector->num_entries];
-	new_entries = num_entries - vector->num_entries;
-	memset(data, 0, new_entries * sizeof(union ptr_lock));
 	vector->num_entries = num_entries;
 
 	return -DER_SUCCESS;

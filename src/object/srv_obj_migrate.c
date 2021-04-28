@@ -558,7 +558,8 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		 */
 		void *p;
 
-		D_REALLOC(p, csum_iov_fetch->iov_buf, csum_iov_fetch->iov_len);
+		D_REALLOC(p, csum_iov_fetch->iov_buf,
+			  csum_iov_fetch->iov_buf_len, csum_iov_fetch->iov_len);
 		if (p == NULL)
 			return -DER_NOMEM;
 		csum_iov_fetch->iov_buf_len = csum_iov_fetch->iov_len;

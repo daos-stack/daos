@@ -1053,7 +1053,8 @@ create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 		D_ASSERT(user_sgl->sg_nr > cur_i);
 
 		sgl->sg_nr++;
-		D_REALLOC_ARRAY(new_sg_iovs, sgl->sg_iovs, sgl->sg_nr);
+		D_REALLOC_ARRAY(new_sg_iovs, sgl->sg_iovs, sgl->sg_nr - 1,
+				sgl->sg_nr);
 		if (new_sg_iovs == NULL)
 			return -DER_NOMEM;
 		sgl->sg_iovs = new_sg_iovs;
@@ -1592,7 +1593,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			iod->iod_nr++;
 
 			/** add another element to recxs */
-			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs, iod->iod_nr);
+			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs,
+					iod->iod_nr - 1, iod->iod_nr);
 			if (new_recxs == NULL) {
 				D_GOTO(err_stask, rc = -DER_NOMEM);
 			}
