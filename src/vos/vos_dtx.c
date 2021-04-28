@@ -2735,22 +2735,27 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 int
 vos_dtx_pin(struct dtx_handle *dth, bool persistent)
 {
+	struct vos_container	*cont;
 	struct umem_instance	*umm = NULL;
 	struct vos_dtx_blob_df	*dbd = NULL;
 	bool			 began = false;
-	int			 rc;
+	int			 rc = 0;
 
-	if (!dtx_is_valid_handle(dth) || dth->dth_ent != NULL)
+	if (!dtx_is_valid_handle(dth))
 		return 0;
 
-	D_ASSERT(dth->dth_pinned == 0);
+	if (dth->dth_ent != NULL) {
+		if (!persistent || dth->dth_active)
+			return 0;
+	} else {
+		D_ASSERT(dth->dth_pinned == 0);
+	}
+
+	cont = vos_hdl2cont(dth->dth_coh);
+	D_ASSERT(cont != NULL);
 
 	if (persistent) {
-		struct vos_container	*cont;
 		struct vos_cont_df	*cont_df;
-
-		cont = vos_hdl2cont(dth->dth_coh);
-		D_ASSERT(cont != NULL);
 
 		umm = vos_cont2umm(cont);
 		cont_df = cont->vc_cont_df;
@@ -2770,7 +2775,20 @@ vos_dtx_pin(struct dtx_handle *dth, bool persistent)
 		}
 	}
 
-	rc = vos_dtx_alloc(dbd, dth);
+	if (dth->dth_ent == NULL) {
+		rc = vos_dtx_alloc(dbd, dth);
+	} else {
+		struct vos_dtx_act_ent	*dae = dth->dth_ent;
+
+		D_ASSERT(dbd != NULL);
+		D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
+
+		dae->dae_df_off = cont->vc_cont_df->cd_dtx_active_tail +
+			offsetof(struct vos_dtx_blob_df, dbd_active_data) +
+			sizeof(struct vos_dtx_act_ent_df) * dbd->dbd_index;
+		dae->dae_dbd = dbd;
+	}
+
 	if (rc == 0) {
 		if (persistent) {
 			dth->dth_active = 1;
@@ -2782,8 +2800,10 @@ vos_dtx_pin(struct dtx_handle *dth, bool persistent)
 
 out:
 	if (rc != 0) {
-		if (dth->dth_ent != NULL)
+		if (dth->dth_ent != NULL) {
+			dth->dth_pinned = 0;
 			vos_dtx_cleanup_internal(dth);
+		}
 
 		D_ERROR("Failed to pin DTX entry for "DF_DTI": "DF_RC"\n",
 			DP_DTI(&dth->dth_xid), DP_RC(rc));

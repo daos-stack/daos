@@ -4122,10 +4122,10 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 				    dth.dth_modification_cnt > 0 ?
 				    true : false);
 
-	/* For the case of only containing read sub operations,
-	 *  we will generate DTX entry for DTX recovery.
+	/* For the case of only containing read sub operations, we will
+	 * generate DTX entry for DTX recovery. Similarly for noop case.
 	 */
-	if (rc == 0 && dth.dth_modification_cnt == 0)
+	if (rc == 0 && (dth.dth_modification_cnt == 0 || !dth.dth_active))
 		rc = vos_dtx_pin(&dth, true);
 
 	rc = dtx_end(&dth, ioc->ioc_coc, rc);
