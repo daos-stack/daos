@@ -170,6 +170,8 @@ struct crt_context {
 	uint32_t		 cc_timeout_sec;
 	/** provider on which context is allocated */
 	int			 cc_provider;
+	/** HLC time of last received RPC */
+	uint64_t		 cc_last_unpack_hlc;
 
 	/** Per-context statistics (server-side only) */
 	/** Total number of timed out requests, of type counter */
