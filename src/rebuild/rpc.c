@@ -15,9 +15,10 @@
 #include "rpc.h"
 
 static int
-crt_proc_daos_unit_oid_t(crt_proc_t proc, daos_unit_oid_t *p)
+crt_proc_daos_unit_oid_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			 daos_unit_oid_t *p)
 {
-	return crt_proc_memcpy(proc, p, sizeof(*p));
+	return crt_proc_memcpy(proc, proc_op, p, sizeof(*p));
 }
 
 CRT_RPC_DEFINE(rebuild_scan, DAOS_ISEQ_REBUILD_SCAN, DAOS_OSEQ_REBUILD_SCAN)

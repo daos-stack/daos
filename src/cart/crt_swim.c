@@ -36,10 +36,10 @@
 	((int32_t)		     (rc)		CRT_VAR)
 
 static inline int
-crt_proc_struct_swim_member_update(crt_proc_t proc,
+crt_proc_struct_swim_member_update(crt_proc_t proc, crt_proc_op_t proc_op,
 				   struct swim_member_update *data)
 {
-	return crt_proc_memcpy(proc, data, sizeof(*data));
+	return crt_proc_memcpy(proc, proc_op, data, sizeof(*data));
 }
 
 /* One way RPC */
