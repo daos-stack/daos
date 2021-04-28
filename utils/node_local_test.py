@@ -511,7 +511,6 @@ class DaosServer():
 
         self._agent = subprocess.Popen(agent_cmd)
         self.conf.agent_dir = self.agent_dir
-        self.running = True
 
         # Configure the storage.  DAOS wants to mount /mnt/daos itself if not
         # already mounted, so let it do that.

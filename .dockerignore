@@ -28,6 +28,7 @@ config.log
 .daos_server.active.yml
 autodocs
 utils/rpms/_topdir
+utils/docker
 
 # Doc isn't required for building.
 doc

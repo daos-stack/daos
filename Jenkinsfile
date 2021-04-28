@@ -445,7 +445,7 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh (script:"""sudo ./utils/docker/docker_nlt.sh --class-name centos7.release kv""",
+                        sh (script:"""sudo ./utils/docker_nlt.sh --class-name centos7.release kv""",
                             label: 'Run NLT smoke test')
                     }
                     post {
@@ -523,7 +523,7 @@ pipeline {
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no",
                                    scons_exe: 'scons-3'
-                        sh (script: """sudo ./utils/docker/docker_nlt.sh --class-name centos8 kv""",
+                        sh (script: """sudo ./utils/docker_nlt.sh --class-name centos8 kv""",
                             label: 'Run NLT smoke test')
                     }
                     post {
@@ -595,7 +595,7 @@ pipeline {
                         sconsBuild parallel_build: parallelBuild(),
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh (script: """sudo ./utils/docker/docker_nlt.sh --class-name ubuntu-clang kv""",
+                        sh (script: """sudo ./utils/docker_nlt.sh --class-name ubuntu-clang kv""",
                             label: 'Run NLT smoke test')
                     }
                     post {
@@ -636,7 +636,7 @@ pipeline {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
                                    scons_args: sconsFaultsArgs()
-                        sh (script: """sudo ./utils/docker/docker_nlt.sh --class-name leap kv""",
+                        sh (script: """sudo ./utils/docker_nlt.sh --class-name leap kv""",
                             label: 'Run NLT smoke test')
                     }
                     post {
