@@ -3009,34 +3009,28 @@ static int
 cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		  struct cont *cont, crt_rpc_t *rpc)
 {
-	struct d_tm_node_t	*op_open_ctr = NULL;
-	struct d_tm_node_t	*op_close_ctr = NULL;
-	struct d_tm_node_t	*op_destroy_ctr = NULL;
-	struct d_tm_node_t	*open_cont_gauge = NULL;
-	struct cont_op_in	*in = crt_req_get(rpc);
-	d_iov_t			 key;
-	d_iov_t			 value;
-	struct container_hdl	 hdl;
-	int			 rc;
+	struct cont_op_in		*in = crt_req_get(rpc);
+	d_iov_t				 key;
+	d_iov_t				 value;
+	struct container_hdl		 hdl;
+	struct cont_metrics		*metrics;
+	int				 rc;
+
+	metrics = &ds_cont_metrics;
 
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_OPEN:
-		d_tm_increment_counter(&op_open_ctr, 1,
-				       "container/ops/open/total");
-		d_tm_increment_gauge(&open_cont_gauge, 1,
-				     "container/ops/open/active");
+		d_tm_inc_counter(metrics->op_open_ctr, 1);
+		d_tm_inc_gauge(metrics->open_cont_gauge, 1);
 		rc = cont_open(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_CLOSE:
-		d_tm_increment_counter(&op_close_ctr, 1,
-				       "container/ops/close/total");
-		d_tm_decrement_gauge(&open_cont_gauge, 1,
-				     "container/ops/open/active");
+		d_tm_inc_counter(metrics->op_close_ctr, 1);
+		d_tm_dec_gauge(metrics->open_cont_gauge, 1);
 		rc = cont_close(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_DESTROY:
-		d_tm_increment_counter(&op_destroy_ctr, 1,
-				       "container/ops/destroy/total");
+		d_tm_inc_counter(metrics->op_destroy_ctr, 1);
 		rc = cont_destroy(tx, pool_hdl, cont, rpc);
 		break;
 	default:

@@ -7,6 +7,7 @@
 #define __DAOS_SRV_INTERNAL__
 
 #include <daos_srv/daos_engine.h>
+#include <gurt/telemetry_common.h>
 
 /**
  * Argobots ULT pools for different tasks, NET_POLL & NVME_POLL
@@ -74,6 +75,17 @@ struct dss_xstream {
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 };
 
+/** Engine module's metrics */
+struct engine_metrics {
+	struct d_tm_node_t	*started_time;
+	struct d_tm_node_t	*ready_time;
+	struct d_tm_node_t	*rank_id;
+	struct d_tm_node_t	*dead_rank_events;
+	struct d_tm_node_t	*last_event_time;
+};
+
+extern struct engine_metrics dss_engine_metrics;
+
 #define DSS_HOSTNAME_MAX_LEN	255
 
 /** Server node hostname */
@@ -124,6 +136,10 @@ void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
+
+/* srv_metrics.c */
+int dss_engine_metrics_init(void);
+int dss_engine_metrics_fini(void);
 
 /* sched.c */
 #define SCHED_RELAX_INTVL_MAX		100 /* msec */
