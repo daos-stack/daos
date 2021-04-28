@@ -153,6 +153,7 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 // to a given priority, here we just check the correct prefix (maps to severity)
 // is printed which verifies the event was written to the correct logger.
 func TestControl_EventLogger_OnEvent(t *testing.T) {
+	var evtIDMarker = " id: "
 	var mockSyslogBuf *strings.Builder
 	mockNewSyslogger := func(prio syslog.Priority, _ int) (*log.Logger, error) {
 		return log.New(mockSyslogBuf, fmt.Sprintf("prio%d ", prio), log.LstdFlags), nil
@@ -211,7 +212,7 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 
 			// check event logged to control plane
 			common.AssertEqual(t, tc.expShouldLog,
-				strings.Contains(bufBasic.String(), "RAS "),
+				strings.Contains(bufBasic.String(), evtIDMarker),
 				"unexpected log output")
 
 			slStr := mockSyslogBuf.String()
@@ -225,7 +226,7 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 			sevOut := "sev: [" + tc.event.Severity.String() + "]"
 
 			// check event logged to correct mock syslogger
-			common.AssertEqual(t, 1, strings.Count(slStr, "RAS EVENT"),
+			common.AssertEqual(t, 1, strings.Count(slStr, evtIDMarker),
 				"unexpected number of events in syslog")
 			common.AssertTrue(t, strings.Contains(slStr, sevOut),
 				"syslog output missing severity")

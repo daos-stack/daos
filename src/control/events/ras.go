@@ -174,7 +174,6 @@ func New(evt *RASEvent) *RASEvent {
 	}
 
 	// set defaults
-
 	if evt.Timestamp == "" {
 		evt.Timestamp = common.FormatTime(time.Now())
 	}
@@ -303,8 +302,8 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 func (evt *RASEvent) PrintRAS() string {
 	var b strings.Builder
 
-	/* Log mandatory RAS fields. */
-	fmt.Fprintf(&b, "&&& RAS EVENT id: [%s]", evt.ID)
+	// log mandatory ras fields
+	fmt.Fprintf(&b, "id: [%s]", evt.ID)
 	if evt.Timestamp != "" {
 		fmt.Fprintf(&b, " ts: [%s]", evt.Timestamp)
 	}
@@ -322,7 +321,7 @@ func (evt *RASEvent) PrintRAS() string {
 		fmt.Fprintf(&b, " tid: [%d]", evt.ThreadID)
 	}
 
-	/* Log optional RAS fields. */
+	// log optional ras fields
 	if evt.HWID != "" {
 		fmt.Fprintf(&b, " hwid: [%s]", evt.HWID)
 	}
@@ -345,7 +344,7 @@ func (evt *RASEvent) PrintRAS() string {
 		fmt.Fprintf(&b, " ctlop: [%s]", evt.CtlOp)
 	}
 
-	/* Log data blob if event info is non-specific */
+	// log data blob if event info is non-specific
 	if ei := evt.GetStrInfo(); ei != nil && *ei != "" {
 		fmt.Fprintf(&b, " data: [%s]", *ei)
 	}
