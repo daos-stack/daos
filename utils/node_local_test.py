@@ -151,6 +151,7 @@ class WarningsFactory():
                                           test_cases=[test_case])
             self.tc = junit_xml.TestCase('Sanity',
                                          classname=self._class_name('core'))
+            self._write_test_file()
         else:
             self.ts = None
             self.tc = None
@@ -391,6 +392,8 @@ class DaosServer():
         if os.path.exists(server_file):
             os.unlink(server_file)
         os.rmdir(self.agent_dir)
+        if os.path.exists(self.server_log.name):
+            log_test(self.conf, self.server_log.name)
 
     def _add_test_case(self, op, failure=None):
         """Add a test case to the server instance
@@ -536,7 +539,9 @@ class DaosServer():
         while True:
             try:
                 self._sp.wait(timeout=0.5)
-                raise Exception('daos server died waiting for start')
+                res = 'daos server died waiting for start'
+                self._add_test_case('format', failure=res)
+                raise Exception(res)
             except subprocess.TimeoutExpired:
                 pass
             rc = self.run_dmg(cmd)
@@ -579,9 +584,10 @@ class DaosServer():
                 elif cmd == error_resolutions['storage_force_format'][1]:
                     break
 
-            self._check_timing("format", start, max_start_time)
+            self._check_timing('format', start, max_start_time)
         self._add_test_case('format')
         print('Format completion in {:.2f} seconds'.format(time.time() - start))
+        self.running = True
 
         # Now wait until the system is up, basically the format to happen.
         while True:
