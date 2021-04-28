@@ -179,7 +179,6 @@ class CartTest(TestWithoutServers):
         ofi_interface = None
         ofi_domain = None
         ofi_share_addr = None
-        server_continuous = None
 
         if "D_LOG_MASK" in os.environ:
             log_mask = os.environ.get("D_LOG_MASK")
@@ -195,9 +194,6 @@ class CartTest(TestWithoutServers):
 
         if "CRT_CTX_SHARE_ADDR" in os.environ:
             ofi_share_addr = os.environ.get("CRT_CTX_SHARE_ADDR")
-
-        if "CRT_TEST_CONT" in os.environ:
-            server_continuous = os.environ.get("CRT_TEST_CONT")
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
@@ -224,9 +220,6 @@ class CartTest(TestWithoutServers):
 
         if ofi_share_addr is not None:
             env += " -x CRT_CTX_SHARE_ADDR={!s}".format(ofi_share_addr)
-
-        if server_continuous is not None:
-            env += " -x CRT_TEST_CONT={!s}".format(server_continuous)
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
         env += " -x COVFILE=/tmp/test.cov"
