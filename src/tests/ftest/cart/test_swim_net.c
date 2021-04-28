@@ -29,12 +29,12 @@
 #define CRT_OSEQ_RPC_SWIM	/* output fields */
 
 static int
-crt_proc_struct_swim_member_update(crt_proc_t proc,
+crt_proc_struct_swim_member_update(crt_proc_t proc, crt_proc_op_t proc_op,
 				   struct swim_member_update *data)
 {
 	int rc;
 
-	rc = crt_proc_memcpy(proc, data, sizeof(*data));
+	rc = crt_proc_memcpy(proc, proc_op, data, sizeof(*data));
 	if (rc != 0)
 		return -DER_HG;
 
