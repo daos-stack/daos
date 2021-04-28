@@ -387,7 +387,7 @@ class DaosServer():
     def __del__(self):
         if self.running:
             self.stop(None)
-        server_file = os.path.join(self.agent_dir, 'daos_server.active.yml')
+        server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
         if os.path.exists(server_file):
             os.unlink(server_file)
         os.rmdir(self.agent_dir)

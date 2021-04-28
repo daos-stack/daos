@@ -72,6 +72,7 @@ RUN zypper --non-interactive update && \
     pandoc \
     patch \
     patchelf \
+    pciutils \
     python3-devel \
     python3-distro \
     python3-junit-xml \
