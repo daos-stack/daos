@@ -152,6 +152,5 @@ class PoolSvc(TestWithServers):
                 self.pool.wait_for_rebuild(to_start=False, interval=1)
                 # Verify the pool leader has not changed
                 self.check_leader(pool_leader, False)
-                self.destroy_pools(self.pool)
 
         self.log.info("Test passed!")
