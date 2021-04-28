@@ -1,6 +1,6 @@
 // Copyright 2017, The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE.md file.
+// license that can be found in the LICENSE file.
 
 package cmpopts
 
@@ -42,7 +42,7 @@ func newStructFilter(typ interface{}, names ...string) structFilter {
 
 	t := reflect.TypeOf(typ)
 	if t == nil || t.Kind() != reflect.Struct {
-		panic(fmt.Sprintf("%T must be a struct", typ))
+		panic(fmt.Sprintf("%T must be a non-pointer struct", typ))
 	}
 	var ft fieldTree
 	for _, name := range names {
