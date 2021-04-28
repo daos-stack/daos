@@ -20,7 +20,11 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Java wrapper of underlying native DAOS event queue which has multiple reusable events. It manages event
  * acquiring and releasing, as well as polls completed events.
- * {@link IOSimpleDataDesc} is associated with each event so that it can be reused along with event.
+ *
+ * The default number of events per EQ can be configured via {@linkplain Constants#CFG_NUMBER_OF_EVENTS_PER_EQ}
+ * in system property or system environment. Or hard-coded value {@linkplain Constants#DEFAULT_NUMBER_OF_EVENTS_PER_EQ}
+ * is used.
+ *
  * One instance per thread.
  */
 @NotThreadSafe
@@ -54,9 +58,27 @@ public class DaosEventQueue {
 
   private static final int DEFAULT_NBR_OF_TIMEDOUT_ERROR = 2 * DEFAULT_NBR_OF_TIMEDOUT_WARN;
 
+  private static int DEFAULT_NBR_OF_EVENTS;
+
   private static final Map<Long, DaosEventQueue> EQ_MAP = new ConcurrentHashMap<>();
 
   private static final Logger log = LoggerFactory.getLogger(DaosEventQueue.class);
+
+  static {
+    String v = System.getProperty(Constants.CFG_NUMBER_OF_EVENTS_PER_EQ);
+    if (v != null) {
+      DEFAULT_NBR_OF_EVENTS = Integer.valueOf(v);
+    } else {
+      v = System.getenv(Constants.CFG_NUMBER_OF_EVENTS_PER_EQ);
+      DEFAULT_NBR_OF_EVENTS = v == null ? Constants.DEFAULT_NUMBER_OF_EVENTS_PER_EQ : Integer.valueOf(v);
+    }
+    if (DEFAULT_NBR_OF_EVENTS <= 0) {
+      log.error("got non-positive number of events per EQ, " + DEFAULT_NBR_OF_EVENTS +
+          ", check your property or env config, " + Constants.CFG_NUMBER_OF_EVENTS_PER_EQ +
+          ". set to default value, " + Constants.DEFAULT_NUMBER_OF_EVENTS_PER_EQ);
+      DEFAULT_NBR_OF_EVENTS = Constants.DEFAULT_NUMBER_OF_EVENTS_PER_EQ;
+    }
+  }
 
   /**
    * constructor without {@link IOSimpleDataDesc} being bound.
@@ -86,10 +108,13 @@ public class DaosEventQueue {
   }
 
   /**
-   * Get EQ without any {@link IOSimpleDataDesc} being bound.
+   * Get EQ without any {@link Attachment} being bound. User should associate it to event by himself.
+   * @see {@link IOSimpleDataDesc} {@link io.daos.dfs.IODfsDesc}
+   *
+   * If <code>nbrOfEvents</code> is <= 0, default value is used.
    *
    * @param nbrOfEvents
-   * how many events created in EQ
+   * how many events created in EQ.
    * @return single {@link DaosEventQueue} instance per thread
    * @throws IOException
    */
@@ -97,6 +122,9 @@ public class DaosEventQueue {
     long tid = Thread.currentThread().getId();
     DaosEventQueue queue = EQ_MAP.get(tid);
     if (queue == null) {
+      if (nbrOfEvents <= 0) {
+        nbrOfEvents = DEFAULT_NBR_OF_EVENTS;
+      }
       queue = new DaosEventQueue(Thread.currentThread().getName(), nbrOfEvents);
       EQ_MAP.put(tid, queue);
     }
@@ -110,16 +138,14 @@ public class DaosEventQueue {
   /**
    * no synchronization due to single thread access.
    *
-   * @param updateOrFetch
-   * event for update or fetch? true for update, false for fetch.
    * @return event
    */
-  public Event acquireEvent(boolean updateOrFetch) {
+  public Event acquireEvent() {
     int idx = nextEventIdx;
     if (nbrOfAcquired == nbrOfEvents) {
       return null;
     }
-    while (!events[idx].available) {
+    while (events[idx].status != EventStatus.FREE) {
       idx++;
       if (idx == nbrOfEvents) {
         idx = 0;
@@ -133,7 +159,7 @@ public class DaosEventQueue {
       nextEventIdx = 0;
     }
     Event ret = events[idx];
-    ret.available = false;
+    ret.status = EventStatus.USING;
     nbrOfAcquired++;
     return ret;
   }
@@ -143,8 +169,6 @@ public class DaosEventQueue {
    * events. If there is no completed event for more than <code>maxWaitMs</code>, a timeout exception
    * will be thrown.
    *
-   * @param updateOrFetch
-   * true for update, false for fetch.
    * @param maxWaitMs
    * max wait time in millisecond
    * @param completedList
@@ -153,9 +177,9 @@ public class DaosEventQueue {
    * @return event
    * @throws IOException
    */
-  public Event acquireEventBlocking(boolean updateOrFetch, int maxWaitMs, List<Attachment> completedList)
+  public Event acquireEventBlocking(long maxWaitMs, List<Attachment> completedList)
       throws IOException {
-    Event e = acquireEvent(updateOrFetch);
+    Event e = acquireEvent();
     if (e != null) { // for most of cases
       return e;
     }
@@ -175,7 +199,7 @@ public class DaosEventQueue {
         totalWait += wait;
       }
       pollCompleted(completedList, wait);
-      e = acquireEvent(updateOrFetch);
+      e = acquireEvent();
       cnt++;
     }
     return e;
@@ -208,7 +232,7 @@ public class DaosEventQueue {
    * null means you want to ignore them.
    * @throws IOException
    */
-  public void waitForCompletion(int maxWaitMs, List<Attachment> completedList)
+  public void waitForCompletion(long maxWaitMs, List<Attachment> completedList)
       throws IOException {
     long start = System.currentTimeMillis();
     int timeout = 0;
@@ -228,17 +252,9 @@ public class DaosEventQueue {
     }
   }
 
-//  public void releaseEvent(int idx) {
-//    if (idx >= nbrOfEvents) {
-//      throw new IllegalArgumentException("event index " + idx + " should not exceed number of total events, " +
-//          nbrOfEvents);
-//    }
-//    events[idx].putBack();
-//  }
-
   /**
    * It's just for accessing event without acquiring it for DAOS API calls.
-   * Use {@link #acquireEvent(boolean)} or {@link #acquireEventBlocking(boolean, int, List)} instead for DAOS API calls.
+   * Use {@link #acquireEvent()} or {@link #acquireEventBlocking(long, List)} instead for DAOS API calls.
    *
    * @param idx
    * @return
@@ -252,33 +268,74 @@ public class DaosEventQueue {
   }
 
   /**
-   * poll completed event. The completed events are put back immediately.
+   * abort event.
+   *
+   * @param event
+   * @return true if event being aborted. false if event is not in use.
+   */
+  public boolean abortEvent(Event event) {
+    return DaosClient.abortEvent(eqWrapperHdl, event.getId());
+  }
+
+  /**
+   * poll completed events. The completed events are put back immediately.
    *
    * @param completedList
    * if it's not null, attachments of completed events are added to this list.
    * @param timeOutMs
+   * timeout in millisecond
    * @return number of events completed
    * @throws IOException
    */
-  public int pollCompleted(List<Attachment> completedList, int timeOutMs) throws IOException {
-    DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(),
-      nbrOfEvents, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
-    completed.readerIndex(0);
-    int nbr = completed.readShort();
-    Event event;
-    for (int i = 0; i < nbr; i++) {
-      event = events[completed.readShort()];
-      Attachment attachment = event.complete();
-      if (completedList != null) {
-        completedList.add(attachment);
+  public int pollCompleted(List<Attachment> completedList, long timeOutMs) throws IOException {
+    return pollCompleted(completedList, nbrOfEvents, timeOutMs);
+  }
+
+  /**
+   * poll expected number of completed events. The completed events are put back immediately.
+   *
+   * @param completedList
+   * if it's not null, attachments of completed events are added to this list.
+   * @param expNbrOfRet
+   * expected number of completed event
+   * @param timeOutMs
+   * timeout in millisecond
+   * @return number of events completed
+   * @throws IOException
+   */
+  public int pollCompleted(List<Attachment> completedList, int expNbrOfRet, long timeOutMs) throws IOException {
+    int aborted;
+    int nbr;
+    while (true) {
+      aborted = 0;
+      DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(),
+          expNbrOfRet, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
+      completed.readerIndex(0);
+      nbr = completed.readShort();
+      Event event;
+      for (int i = 0; i < nbr; i++) {
+        event = events[completed.readShort()];
+        if (event.status == EventStatus.ABORTED) {
+          aborted++;
+          event.putBack();
+          continue;
+        }
+        Attachment attachment = event.complete();
+        if (completedList != null) {
+          completedList.add(attachment);
+        }
+      }
+      nbrOfAcquired -= nbr;
+      nbr -= aborted;
+      if (nbr > 0) {
+        lastProgressed = System.currentTimeMillis();
+        nbrOfTimedOut = 0;
+        return nbr;
+      }
+      if (aborted == 0) {
+        return nbr;
       }
     }
-    nbrOfAcquired -= nbr;
-    if (nbr > 0) {
-      lastProgressed = System.currentTimeMillis();
-      nbrOfTimedOut = 0;
-    }
-    return nbr;
   }
 
   public int getNbrOfAcquired() {
@@ -307,6 +364,19 @@ public class DaosEventQueue {
     }
   }
 
+  public static void destroy(long id, DaosEventQueue eq) throws IOException {
+    long tid = Thread.currentThread().getId();
+    if (id != tid) {
+      throw new UnsupportedOperationException("Cannot destroy EQ belongs to other thread, id: " + id);
+    }
+    DaosEventQueue teq = EQ_MAP.get(id);
+    if (teq != eq) {
+      throw new IllegalArgumentException("given EQ is not same as EQ of current thread");
+    }
+    eq.release();
+    EQ_MAP.remove(id);
+  }
+
   /**
    * destroy all event queues. It's should be called when JVM is shutting down.
    */
@@ -321,8 +391,10 @@ public class DaosEventQueue {
     EQ_MAP.clear();
   }
 
+
+
   /**
-   * Java representer of DAOS event associated to a event queue identified by
+   * Java represent of DAOS event associated to a event queue identified by
    * <code>eqHandle</code>.
    * A {@link Attachment} can be associate to event as a outcome of asynchronous call.
    */
@@ -330,16 +402,16 @@ public class DaosEventQueue {
     private final short id;
     private final long eqHandle;
 
-    protected boolean available;
     protected Attachment attachment;
+    protected EventStatus status;
 
     protected Event(short id) {
       this.eqHandle = eqWrapperHdl;
       this.id = id;
-      this.available = true;
+      this.status = EventStatus.FREE;
     }
 
-    public int getId() {
+    public short getId() {
       return id;
     }
 
@@ -357,8 +429,8 @@ public class DaosEventQueue {
       return pa;
     }
 
-    protected void putBack() {
-      available = true;
+    public void putBack() {
+      status = EventStatus.FREE;
       if (attachment != null && !attachment.alwaysBoundToEvt()) {
         attachment = null;
       }
@@ -372,9 +444,30 @@ public class DaosEventQueue {
       putBack();
       return ret;
     }
+
+    public void abort() throws DaosIOException {
+      if (status != EventStatus.USING) {
+        return;
+      }
+      status = EventStatus.ABORTED;
+      if (!abortEvent(this)) { // event is not actually using
+        status = EventStatus.FREE;
+      }
+    }
+  }
+
+  public enum EventStatus {
+    FREE, USING, ABORTED
   }
 
   public interface Attachment {
+    /**
+     * associate this attachment to event.
+     *
+     * @param e
+     */
+    void setEvent(Event e);
+
     /**
      * reuse attachment.
      */
@@ -398,5 +491,4 @@ public class DaosEventQueue {
      */
     void release();
   }
-
 }

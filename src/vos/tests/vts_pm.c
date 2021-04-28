@@ -2302,7 +2302,7 @@ start_over:
 		if ((epoch - 200) < epr.epr_lo)
 			continue;
 		epr.epr_hi = epoch - 200;
-		rc = vos_aggregate(coh, &epr, NULL, NULL, NULL);
+		rc = vos_aggregate(coh, &epr, NULL, NULL, NULL, false);
 		assert_rc_equal(rc, 0);
 	}
 	for (i = 0; i < NR_TX - 1; i++) {

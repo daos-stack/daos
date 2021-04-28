@@ -1298,10 +1298,11 @@ class DaosContainer():
         if self.cont_input_values.type.decode("UTF-8") != "Unknown":
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
-            if self.cont_input_values.type in ("posix", "POSIX"):
+            if self.cont_input_values.type.decode(
+                    "UTF-8") in ("posix", "POSIX"):
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value)
-            elif self.cont_input_values.type == "hdf5":
+            elif self.cont_input_values.type.decode("UTF-8") == "hdf5":
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value)
             else:

@@ -13,8 +13,8 @@ import (
 	"time"
 
 	transport "github.com/Jille/raft-grpc-transport"
-	boltdb "github.com/daos-stack/raft-boltdb"
 	"github.com/hashicorp/raft"
+	boltdb "github.com/hashicorp/raft-boltdb/v2"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
@@ -424,10 +424,12 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 			db.data.SchemaVersion, CurrentSchemaVersion)
 	}
 
+	f.data.Lock()
 	f.data.Members = db.data.Members
 	f.data.Pools = db.data.Pools
 	f.data.NextRank = db.data.NextRank
 	f.data.MapVersion = db.data.MapVersion
+	f.data.Unlock()
 	f.log.Debugf("db snapshot loaded (map version %d)", db.data.MapVersion)
 	return nil
 }

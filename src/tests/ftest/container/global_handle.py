@@ -41,7 +41,6 @@ class GlobalHandle(TestWithServers):
         pool = DaosPool(self.context)
         pool.uuid = uuidstr
         pool.set_svc(rank)
-        pool.group = "daos_server"
         buf = ctypes.cast(
             pool_glob_handle.iov_buf,
             ctypes.POINTER(ctypes.c_byte * pool_glob_handle.iov_buf_len))
