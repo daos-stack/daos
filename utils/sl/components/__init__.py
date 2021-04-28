@@ -176,14 +176,11 @@ def define_mercury(reqs):
                           '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX '
                           '-DBUILD_EXAMPLES=OFF '
                           '-DMERCURY_USE_BOOST_PP=ON '
-                          '-DMERCURY_USE_SELF_FORWARD=ON '
-                          '-DMERCURY_ENABLE_VERBOSE_ERROR=ON '
                           + MERCURY_DEBUG +
                           '-DBUILD_TESTING=OFF '
                           '-DNA_USE_OFI=ON '
                           '-DBUILD_DOCUMENTATION=OFF '
-                          '-DBUILD_SHARED_LIBS=ON ../mercury '
-                          '-DMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ' +
+                          '-DBUILD_SHARED_LIBS=ON ../mercury ' +
                           check(reqs, 'ofi',
                                 '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
                                 '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
@@ -313,12 +310,11 @@ def define_components(reqs):
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
                 libs=['rte_bus_pci'], patch_rpath=['lib'])
 
-    url = 'https://github.com/protobuf-c/protobuf-c/releases/download/' \
-        'v1.3.3/protobuf-c-1.3.3.tar.gz'
-    web_retriever = WebRetriever(url, "dabc05a5f11c21b96d8d6db4153f5343")
+    retriever = GitRepoRetriever("https://github.com/protobuf-c/protobuf-c.git")
     reqs.define('protobufc',
-                retriever=web_retriever,
-                commands=['./configure --prefix=$PROTOBUFC_PREFIX '
+                retriever=retriever,
+                commands=['./autogen.sh',
+                          './configure --prefix=$PROTOBUFC_PREFIX '
                           '--disable-protoc', 'make $JOBS_OPT',
                           'make install'],
                 libs=['protobuf-c'],

@@ -10,6 +10,9 @@
 
 #include "daos_iotest.h"
 
+int dts_ec_obj_class;
+int dts_ec_grp_size;
+
 /* the temporary IO dir */
 char *test_io_dir;
 /* the temporary IO working dir, will be cleanup for every running */
