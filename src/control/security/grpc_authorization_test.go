@@ -142,6 +142,9 @@ func TestSecurity_AllRpcsAreAuthorized(t *testing.T) {
 
 			var rpcNames []string
 			for i := 0; i < svcType.NumMethod(); i++ {
+				if strings.HasPrefix(svcType.Method(i).Name, "mustEmbedUnimplemented") {
+					continue
+				}
 				fullName := tc.prefix + svcType.Method(i).Name
 				rpcNames = append(rpcNames, fullName)
 			}
