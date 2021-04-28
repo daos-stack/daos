@@ -6,7 +6,7 @@
 """
 import os
 
-from general_utils import pcmd
+from general_utils import pcmd, run_pcmd
 from apricot import TestWithServers
 
 
@@ -30,25 +30,41 @@ class DmgStorageScanSCMTest(TestWithServers):
         """
         JIRA ID: DAOS-1507
 
-        Test Description: Test dmg storage scan with and without --verbose.
+        Test Description: Test dmg storage scan --verbose
+
+        1. Verify the device name such as pmem0 exists in /dev
+        2. Verify the Socket ID matches with the one in
+        /sys/class/block/<dev_name>/device/numa_node
 
         :avocado: tags=all,small,full_regression,hw,control,dmg_storage_scan_scm
         """
         # Use --verbose and obtain the SCM Namespace values such as pmem0,
         # pmem1.
         data = self.get_dmg_command().storage_scan(verbose=True)
-        host = self.hostlist_servers[0]
-        pmem_names = list(data[host]["scm"].keys())
-        # Verifies that all namespaces exist under /dev.
+
+        temp_dict = data["response"]["HostStorage"]
+        struct_hash = list(temp_dict.keys())[0]
+        scm_namespaces = temp_dict[struct_hash]["storage"]["scm_namespaces"]
+
         RC_SUCCESS = 0
-        for pmem_name in pmem_names:
+        for scm_namespace in scm_namespaces:
+            # Verify that all namespaces exist under /dev.
+            pmem_name = scm_namespace["blockdev"]
             lscmd = "{} {}".format("ls", os.path.join("/dev", pmem_name))
             # rc is a dictionary where return code is the key.
             rc = pcmd(hosts=self.hostlist_servers, command=lscmd)
             self.assertTrue(RC_SUCCESS in rc)
 
-        # Call without verbose and verify the namespace value.
-        data = self.get_dmg_command().storage_scan()
-        self.assertEqual(
-            data[host]["scm"]["details"],
-            "{} namespaces".format(len(pmem_names)))
+            # Verify the Socket ID.
+            numa_node_path = "/sys/class/block/{}/device/numa_node".format(
+                pmem_name)
+            command = "cat {}".format(numa_node_path)
+            out_list = run_pcmd(hosts=self.hostlist_servers, command=command)
+
+            # This one is in str.
+            expected_numa_node = out_list[0]["stdout"][0]
+            actual_numa_node = str(scm_namespace["numa_node"])
+
+            msg = "Unexpected Socket ID! Expected: {}, Actual: {}".format(
+                expected_numa_node, actual_numa_node)
+            self.assertEqual(expected_numa_node, actual_numa_node, msg)

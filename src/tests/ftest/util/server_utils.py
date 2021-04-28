@@ -839,26 +839,51 @@ class DaosServerManager(SubprocessManager):
             list: a list of the maximum available SCM and NVMe sizes in bytes
 
         """
-        def get_host_capacity(key, device_names):
+        def get_host_capacity(capacity_type):
             """Get the total storage capacity per host rank.
 
             Args:
-                key (str): the capacity type, e.g. "scm" or "nvme"
-                device_names (list): the device names of this capacity type
+                capacity_type (str): the capacity type, e.g. "scm" or "nvme"
 
             Returns:
                 dict: a dictionary of total storage capacity per host rank
 
             """
             host_capacity = {}
-            for host in data:
-                device_sizes = []
-                for device in data[host][key]:
-                    if device in device_names:
-                        device_sizes.append(
-                            human_to_bytes(
-                                data[host][key][device]["capacity"]))
-                host_capacity[host] = sum(device_sizes)
+
+            # Get nvme_devices and scm_namespaces list that are buried. There's
+            # a uint64 hash of the strcut under HostStorage.
+            storage_dict = data["response"]["HostStorage"]
+            struct_hashes = list(storage_dict.keys())
+
+            # Iterate the struct hashes, which corresponds to a host.
+            for host_hash in struct_hashes:
+                # Get the hostname.
+                hostname = storage_dict[host_hash]["hosts"].split(":")[0]
+
+                if capacity_type == "nvme":
+                    # Get nvme_devices list, iterate it, and sum the sizes.
+                    nvme_devices = storage_dict[host_hash]["storage"][
+                        "nvme_devices"]
+                    for nvme_device in nvme_devices:
+                        for namespace in nvme_device["namespaces"]:
+                            size = namespace["size"]
+                            if hostname in host_capacity:
+                                host_capacity[hostname] += size
+                            else:
+                                host_capacity[hostname] = size
+
+                elif capacity_type == "scm":
+                    # Get scm_namespaces list, iterate it, and sum the sizes.
+                    scm_namespaces = storage_dict[host_hash]["storage"][
+                        "scm_namespaces"]
+                    for scm_namespace in scm_namespaces:
+                        size = scm_namespace["size"]
+                        if hostname in host_capacity:
+                            host_capacity[hostname] += size
+                        else:
+                            host_capacity[hostname] = size
+
             return host_capacity
 
         # Default maximum bytes for SCM and NVMe
@@ -884,10 +909,7 @@ class DaosServerManager(SubprocessManager):
 
         if using_dcpm:
             # Find the sizes of the configured SCM storage
-            scm_devices = [
-                os.path.basename(path)
-                for path in self.get_config_value("scm_list") if path]
-            capacity = get_host_capacity("scm", scm_devices)
+            capacity = get_host_capacity("scm")
             for host in sorted(capacity):
                 self.log.info("SCM capacity for %s: %s", host, capacity[host])
             # Use the minimum SCM storage across all servers
@@ -899,8 +921,7 @@ class DaosServerManager(SubprocessManager):
 
         if using_nvme:
             # Find the sizes of the configured NVMe storage
-            capacity = get_host_capacity(
-                "nvme", self.get_config_value("bdev_list"))
+            capacity = get_host_capacity("nvme")
             for host in sorted(capacity):
                 self.log.info("NVMe capacity for %s: %s", host, capacity[host])
             # Use the minimum SCM storage across all servers
