@@ -722,7 +722,8 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	case DTX_ST_PREPARED:
 		break;
 	case DTX_ST_INITED:
-		if (dth->dth_modification_cnt == 0)
+		if (dth->dth_modification_cnt == 0 ||
+		    !dth->dth_active)
 			break;
 		/* full through */
 	case DTX_ST_ABORTED:
