@@ -391,9 +391,9 @@ class DaosServer():
         server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
         if os.path.exists(server_file):
             os.unlink(server_file)
-        os.rmdir(self.agent_dir)
         if os.path.exists(self.server_log.name):
             log_test(self.conf, self.server_log.name)
+        os.rmdir(self.agent_dir)
 
     def _add_test_case(self, op, failure=None):
         """Add a test case to the server instance
