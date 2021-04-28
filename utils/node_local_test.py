@@ -804,11 +804,9 @@ class DFuse():
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
 
-    def start(self, v_hint=None):
+    def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
-
-        single_threaded = False
 
         pre_inode = os.stat(self.dir).st_ino
 
@@ -1102,6 +1100,22 @@ def needs_dfuse(method):
         return rc
     return _helper
 
+def needs_dfuse_single(method):
+    """Decorator function for starting dfuse single threaded
+    under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           pool=self.pool,
+                           container=self.container)
+        self.dfuse.start(v_hint=method.__name__, single_threaded=True)
+        rc = method(self)
+        if self.dfuse.stop():
+            self.fatal_errors = True
+        return rc
+    return _helper
+
 def needs_dfuse_with_cache(method):
     """Decorator function for starting dfuse under posix_tests class"""
     @functools.wraps(method)
@@ -1175,6 +1189,11 @@ class posix_tests():
         print(files)
         print(len(files))
         assert len(files) == count
+
+    @needs_dfuse_single
+    def test_single_threaded(self):
+        """Test single-threaded mode"""
+        self.readdir_test(10)
 
     @needs_dfuse
     def test_open_replaced(self):
