@@ -150,7 +150,7 @@ func (mb *metricBase) fillMetadata() {
 
 	var desc *C.char
 	var units *C.char
-	res := C.d_tm_get_metadata(&desc, &units, mb.handle.shmem, mb.node, C.CString(mb.Name()))
+	res := C.d_tm_get_metadata(&desc, &units, mb.handle.shmem, mb.node)
 	if res == C.DER_SUCCESS {
 		descStr := C.GoString(desc)
 		mb.desc = &descStr

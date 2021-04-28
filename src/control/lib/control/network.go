@@ -10,11 +10,11 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/mitchellh/hashstructure"
+	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
@@ -48,7 +48,7 @@ type HostFabric struct {
 // HashKey returns a uint64 value suitable for use as a key into
 // a map of HostFabric configurations.
 func (hf *HostFabric) HashKey() (uint64, error) {
-	return hashstructure.Hash(hf, nil)
+	return hashstructure.Hash(hf, hashstructure.FormatV2, nil)
 }
 
 // AddInterface is a helper function that populates a HostFabric.

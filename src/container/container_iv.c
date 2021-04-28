@@ -1142,8 +1142,8 @@ cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop)
 }
 
 struct iv_prop_ult_arg {
-	struct ds_iv_ns		*iv_ns;
 	daos_prop_t		*prop;
+	uuid_t			 pool_uuid;
 	uuid_t			 cont_uuid;
 	ABT_eventual		 eventual;
 };
@@ -1152,7 +1152,8 @@ static void
 cont_iv_prop_fetch_ult(void *data)
 {
 	struct iv_prop_ult_arg	*arg = data;
-	struct cont_iv_entry	*iv_entry;
+	struct ds_pool		*pool;
+	struct cont_iv_entry	*iv_entry = NULL;
 	int			iv_entry_size;
 	daos_prop_t		*prop = arg->prop;
 	daos_prop_t		*prop_fetch = NULL;
@@ -1160,12 +1161,16 @@ cont_iv_prop_fetch_ult(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
+	pool = ds_pool_lookup(arg->pool_uuid);
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
 	iv_entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
 	D_ALLOC(iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = cont_iv_fetch(arg->iv_ns, IV_CONT_PROP, arg->cont_uuid,
+	rc = cont_iv_fetch(pool->sp_iv_ns, IV_CONT_PROP, arg->cont_uuid,
 			   iv_entry, iv_entry_size, iv_entry_size,
 			   false /* retry */);
 	if (rc) {
@@ -1192,28 +1197,32 @@ cont_iv_prop_fetch_ult(void *data)
 	}
 
 out:
-	D_FREE(iv_entry);
-	daos_prop_free(prop_fetch);
+	if (pool != NULL)
+		ds_pool_put(pool);
+	if (iv_entry != NULL)
+		D_FREE(iv_entry);
+	if (prop_fetch != NULL)
+		daos_prop_free(prop_fetch);
 	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 int
-cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_uuid,
-		   daos_prop_t *cont_prop)
+cont_iv_prop_fetch(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *cont_prop)
 {
 	struct iv_prop_ult_arg	arg;
 	ABT_eventual		eventual;
 	int			*status;
 	int			rc;
 
-	if (ns == NULL || cont_prop == NULL || uuid_is_null(cont_uuid))
+	if (uuid_is_null(pool_uuid) || cont_prop == NULL ||
+	    uuid_is_null(cont_uuid))
 		return -DER_INVAL;
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
-	arg.iv_ns = ns;
+	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.prop = cont_prop;
 	arg.eventual = eventual;
@@ -1254,11 +1263,10 @@ ds_cont_revoke_snaps(struct ds_iv_ns *ns, uuid_t cont_uuid,
 }
 
 int
-ds_cont_fetch_prop(struct ds_iv_ns *ns, uuid_t co_uuid,
-		   daos_prop_t *cont_prop)
+ds_cont_fetch_prop(uuid_t po_uuid, uuid_t co_uuid, daos_prop_t *cont_prop)
 {
 	/* NB: it can be called from any xstream */
-	return cont_iv_prop_fetch(ns, co_uuid, cont_prop);
+	return cont_iv_prop_fetch(po_uuid, co_uuid, cont_prop);
 }
 
 int
