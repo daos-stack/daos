@@ -15,68 +15,52 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// SystemNotifyReq contains the inputs for the system notify request.
-type SystemNotifyReq struct {
+// EventNotifyReq contains the inputs for an event notify request.
+type EventNotifyReq struct {
 	unaryRequest
 	msRequest
-	Event    *events.RASEvent
-	Sequence uint64
 }
 
-// toClusterEventReq converts the system notify request to a cluster event
-// request. Resolve control address to a hostname if possible.
-func (req *SystemNotifyReq) toClusterEventReq() (*sharedpb.ClusterEventReq, error) {
-	if req.Event == nil {
-		return nil, errors.New("nil event in request")
-	}
+// EventNotifyResp contains the inputs for an event notify response.
+type EventNotifyResp struct{}
 
-	pbRASEvent, err := req.Event.ToProto()
-	if err != nil {
-		return nil, errors.Wrap(err, "convert event to proto")
-	}
-
-	return &sharedpb.ClusterEventReq{Sequence: req.Sequence, Event: pbRASEvent}, nil
-}
-
-// SystemNotifyResp contains the request response.
-type SystemNotifyResp struct{}
-
-// SystemNotify will attempt to notify the DAOS system of a cluster event.
-func SystemNotify(ctx context.Context, rpcClient UnaryInvoker, req *SystemNotifyReq) (*SystemNotifyResp, error) {
+// eventNotify will attempt to notify the DAOS system of a cluster event.
+func eventNotify(ctx context.Context, rpcClient UnaryInvoker, seq uint64, evt *events.RASEvent, aps []string) error {
 	switch {
-	case req == nil:
-		return nil, errors.New("nil request")
-	case common.InterfaceIsNil(req.Event):
-		return nil, errors.New("nil event in request")
-	case req.Sequence == 0:
-		return nil, errors.New("invalid sequence number in request")
+	case evt == nil:
+		return errors.New("nil event")
+	case seq == 0:
+		return errors.New("invalid sequence number in request")
 	case rpcClient == nil:
-		return nil, errors.New("nil rpc client")
+		return errors.New("nil rpc client")
 	}
 
-	pbReq, err := req.toClusterEventReq()
+	pbRASEvent, err := evt.ToProto()
 	if err != nil {
-		return nil, errors.Wrap(err, "decoding system notify request")
+		return errors.Wrap(err, "convert event to proto")
 	}
+
+	req := &EventNotifyReq{}
+	req.SetHostList(aps)
+	rpcClient.Debugf("forwarding %s event to MS access points %v (seq: %d)", evt.ID, aps, seq)
+
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx, pbReq)
+		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx,
+			&sharedpb.ClusterEventReq{Sequence: seq, Event: pbRASEvent})
 	})
-	rpcClient.Debugf("DAOS cluster event request: %+v", pbReq)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	resp := new(SystemNotifyResp)
-	return resp, convertMSResponse(ur, resp)
+	return convertMSResponse(ur, new(EventNotifyResp))
 }
 
 // EventForwarder implements the events.Handler interface, increments sequence
@@ -101,15 +85,7 @@ func (ef *EventForwarder) OnEvent(ctx context.Context, evt *events.RASEvent) {
 		return
 	}
 
-	req := &SystemNotifyReq{
-		Sequence: <-ef.seq,
-		Event:    evt,
-	}
-	req.SetHostList(ef.accessPts)
-	ef.client.Debugf("forwarding %s event to MS access points %v (seq: %d)",
-		evt.ID, ef.accessPts, req.Sequence)
-
-	if _, err := SystemNotify(ctx, ef.client, req); err != nil {
+	if err := eventNotify(ctx, ef.client, <-ef.seq, evt, ef.accessPts); err != nil {
 		ef.client.Debugf("failed to forward event to MS: %s", err)
 	}
 }

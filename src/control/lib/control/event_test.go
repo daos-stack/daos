@@ -15,7 +15,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -24,51 +23,41 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestControl_SystemNotify(t *testing.T) {
+func TestControl_eventNotify(t *testing.T) {
 	rasEventEngineDied := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
-		req     *SystemNotifyReq
-		uErr    error
-		uResp   *UnaryResponse
-		expResp *SystemNotifyResp
-		expErr  error
+		seq    uint64
+		evt    *events.RASEvent
+		aps    []string
+		uErr   error
+		uResp  *UnaryResponse
+		expErr error
 	}{
-		"nil req": {
-			req:    nil,
-			expErr: errors.New("nil request"),
-		},
 		"nil event": {
-			req:    &SystemNotifyReq{},
-			expErr: errors.New("nil event in request"),
+			seq:    1,
+			expErr: errors.New("nil event"),
 		},
 		"zero sequence number": {
-			req:    &SystemNotifyReq{Event: rasEventEngineDied},
+			evt:    rasEventEngineDied,
 			expErr: errors.New("invalid sequence"),
 		},
 		"local failure": {
-			req: &SystemNotifyReq{
-				Event:    rasEventEngineDied,
-				Sequence: 1,
-			},
+			evt:    rasEventEngineDied,
+			seq:    1,
 			uErr:   errors.New("local failed"),
 			expErr: errors.New("local failed"),
 		},
 		"remote failure": {
-			req: &SystemNotifyReq{
-				Event:    rasEventEngineDied,
-				Sequence: 1,
-			},
+			evt:    rasEventEngineDied,
+			seq:    1,
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
 			expErr: errors.New("remote failed"),
 		},
 		"empty response": {
-			req: &SystemNotifyReq{
-				Event:    rasEventEngineDied,
-				Sequence: 1,
-			},
-			uResp:   MockMSResponse("10.0.0.1:10001", nil, &sharedpb.ClusterEventResp{}),
-			expResp: &SystemNotifyResp{},
+			evt:   rasEventEngineDied,
+			seq:   1,
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &sharedpb.ClusterEventResp{}),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -80,14 +69,10 @@ func TestControl_SystemNotify(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemNotify(context.TODO(), rpcClient, tc.req)
+			gotErr := eventNotify(context.TODO(), rpcClient, tc.seq, tc.evt, tc.aps)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
