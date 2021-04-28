@@ -103,8 +103,8 @@ func (ei *EngineInstance) NotifyStorageReady() {
 // publishFormatRequiredFn returns onAwaitFormatFn which will publish an
 // event using the provided publish function to indicate that host is awaiting
 // storage format.
-func publishFormatRequiredFn(publishFn func(*events.RASEvent), hostname string, engineIdx uint32) onAwaitFormatFn {
-	return func(_ context.Context, formatType string) error {
+func publishFormatRequiredFn(publishFn func(*events.RASEvent), hostname string) onAwaitFormatFn {
+	return func(_ context.Context, engineIdx uint32, formatType string) error {
 		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx, formatType).
 			WithRank(uint32(system.NilRank))
 		publishFn(evt)
@@ -153,22 +153,22 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 	if !needsScmFormat {
 		formatType = "Metadata"
 	}
-	ei.log.Infof("%s format required on instance %d", formatType, ei.Index())
+	ei.log.Infof("%s format required on instance %d", formatType, idx)
 
 	ei.waitFormat.SetTrue()
 	// After we know that the instance is awaiting format, fire off
 	// any callbacks that are waiting for this state.
 	for _, fn := range ei.onAwaitFormat {
-		if err := fn(ctx, formatType); err != nil {
+		if err := fn(ctx, idx, formatType); err != nil {
 			return err
 		}
 	}
 
 	select {
 	case <-ctx.Done():
-		ei.log.Infof("%s instance %d storage not ready: %s", build.DataPlaneName, ei.Index(), ctx.Err())
+		ei.log.Infof("%s instance %d storage not ready: %s", build.DataPlaneName, idx, ctx.Err())
 	case <-ei.storageReady:
-		ei.log.Infof("%s instance %d storage ready", build.DataPlaneName, ei.Index())
+		ei.log.Infof("%s instance %d storage ready", build.DataPlaneName, idx)
 	}
 
 	ei.waitFormat.SetFalse()

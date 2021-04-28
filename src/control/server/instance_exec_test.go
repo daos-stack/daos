@@ -10,6 +10,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -31,13 +32,22 @@ func TestIOEngineInstance_exit(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		rankInSuperblock bool
+		instanceIdx      uint32
 		exitErr          error
 		expShouldForward bool
+		expEvtMsg        string
 	}{
-		"without rank": {},
+		"without rank": {
+			expEvtMsg: "DAOS engine 0 exited unexpectedly",
+		},
 		"with rank": {
 			rankInSuperblock: true,
 			expShouldForward: true,
+			expEvtMsg:        "DAOS engine 0 exited unexpectedly",
+		},
+		"instance 1": {
+			instanceIdx: 1,
+			expEvtMsg:   "DAOS engine 1 exited unexpectedly",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -47,6 +57,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 			rxEvts = []*events.RASEvent{}
 			runner := engine.NewRunner(log, &engine.Config{})
 			engine := NewEngineInstance(log, nil, nil, nil, runner)
+			engine.setIndex(tc.instanceIdx)
 
 			if tc.rankInSuperblock {
 				engine.setSuperblock(&Superblock{
@@ -55,7 +66,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 			}
 
 			engine.OnInstanceExit(publishInstanceExitFn(fakePublish,
-				hostname(), engine.Index()))
+				hostname()))
 
 			engine.exit(context.Background(), exitErr)
 
@@ -63,6 +74,10 @@ func TestIOEngineInstance_exit(t *testing.T) {
 				"unexpected number of events published")
 			common.AssertEqual(t, rxEvts[0].ShouldForward(),
 				tc.expShouldForward, "unexpected forwarding state")
+			if diff := cmp.Diff(tc.expEvtMsg, rxEvts[0].Msg); diff != "" {
+				t.Fatalf("unexpected event message (-want, +got):\n%s\n", diff)
+			}
+
 		})
 	}
 }

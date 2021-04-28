@@ -114,8 +114,8 @@ func (ei *EngineInstance) finishStartup(ctx context.Context, ready *srvpb.Notify
 
 // publishInstanceExitFn returns onInstanceExitFn which will publish an exit
 // event using the provided publish function.
-func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string, engineIdx uint32) onInstanceExitFn {
-	return func(_ context.Context, rank system.Rank, exitErr error) error {
+func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string) onInstanceExitFn {
+	return func(_ context.Context, engineIdx uint32, rank system.Rank, exitErr error) error {
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")
 		}
@@ -137,7 +137,7 @@ func (ei *EngineInstance) exit(ctx context.Context, exitErr error) {
 
 	rank, err := ei.GetRank()
 	if err != nil {
-		ei.log.Debugf("instance %d: no rank (%s)", ei.Index(), err)
+		ei.log.Debugf("instance %d: no rank (%s)", engineIdx, err)
 	}
 
 	ei._lastErr = exitErr
@@ -148,7 +148,7 @@ func (ei *EngineInstance) exit(ctx context.Context, exitErr error) {
 	// After we know that the instance has exited, fire off
 	// any callbacks that were waiting for this state.
 	for _, exitFn := range ei.onInstanceExit {
-		if err := exitFn(ctx, rank, exitErr); err != nil {
+		if err := exitFn(ctx, engineIdx, rank, exitErr); err != nil {
 			ei.log.Errorf("onExit: %s", err)
 		}
 	}

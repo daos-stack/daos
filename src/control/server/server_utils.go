@@ -237,10 +237,10 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 
 func registerEngineCallbacks(engine *EngineInstance, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
-	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname(), engine.Index()))
+	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname()))
 
 	// Register callback to publish engine format requested events.
-	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, hostname(), engine.Index()))
+	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, hostname()))
 
 	var onceReady sync.Once
 	engine.OnReady(func(_ context.Context) error {

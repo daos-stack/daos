@@ -385,7 +385,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				*srv._superblock.Rank = system.Rank(i + 1)
 
 				srv.OnInstanceExit(
-					func(_ context.Context, _ system.Rank, _ error) error {
+					func(_ context.Context, _ uint32, _ system.Rank, _ error) error {
 						svc.events.Publish(events.NewEngineDiedEvent("foo",
 							0, 0, common.NormalExit))
 						return nil

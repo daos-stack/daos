@@ -867,7 +867,8 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 			expMembers: Members{
 				MockMember(t, 0, MemberStateJoined),
 				MockMember(t, 1, MemberStateErrored).WithInfo(
-					errors.Wrap(common.NormalExit, "DAOS engine exited unexpectedly").Error()),
+					errors.Wrap(common.NormalExit,
+						"DAOS engine 0 exited unexpectedly").Error()),
 				MockMember(t, 2, MemberStateStopped),
 				MockMember(t, 3, MemberStateEvicted),
 			},
