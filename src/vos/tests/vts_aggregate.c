@@ -414,10 +414,16 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
-				   ds_csum_agg_recalc, NULL, NULL);
+				   ds_csum_agg_recalc, NULL, NULL, false);
 	if (rc != -DER_CSUM) {
 		assert_rc_equal(rc, 0);
 		verify_view(arg, oid, dkey, akey, ds);
+	} else {
+		/*
+		 * not calling verify_view so must free ds->td_expected_view
+		 * here
+		 */
+		D_FREE(ds->td_expected_view);
 	}
 }
 
@@ -585,7 +591,8 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	if (ds_sample->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL,
+				   false);
 	assert_rc_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
@@ -1137,7 +1144,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 			rc = vos_discard(arg->ctx.tc_co_hdl, &epr, NULL, NULL);
 		else
 			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
-					   NULL, NULL);
+					   NULL, NULL, false);
 
 		assert_rc_equal(rc, 0);
 
@@ -1844,7 +1851,8 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL,
+				   false);
 		if (rc) {
 			print_error("aggregate %d failed:%d\n", i, rc);
 			break;
@@ -2034,7 +2042,7 @@ aggregate_22(void **state)
 
 	epr.epr_hi = epoch++;
 
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL, false);
 	assert_rc_equal(rc, 0);
 
 	fetch_value(arg, oid, epoch++,

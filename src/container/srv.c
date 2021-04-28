@@ -27,15 +27,24 @@ init(void)
 
 	rc = ds_cont_iv_init();
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(err_oid_iv, rc);
 
 	rc = ds_cont_prop_default_init();
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(err_cont_iv, rc);
+
+	rc = ds_cont_metrics_init();
+	if (rc)
+		D_WARN("Unable to initialize container metrics, " DF_RC "\n",
+		       DP_RC(rc));
 
 	return 0;
-err:
+
+err_cont_iv:
+	ds_cont_iv_fini();
+err_oid_iv:
 	ds_oid_iv_fini();
+err:
 	return rc;
 }
 
@@ -45,6 +54,7 @@ fini(void)
 	ds_cont_iv_fini();
 	ds_oid_iv_fini();
 	ds_cont_prop_default_fini();
+	ds_cont_metrics_fini();
 
 	return 0;
 }

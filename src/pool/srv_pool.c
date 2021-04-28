@@ -934,8 +934,8 @@ ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	int			rc = 0;
 
 	/* Only used for evict the rank for the moment */
-	if ((src != CRT_EVS_SWIM && src != CRT_EVS_GRPMOD) ||
-	    type != CRT_EVT_DEAD || pool_disable_evict) {
+	if (src != CRT_EVS_GRPMOD || type != CRT_EVT_DEAD ||
+	    pool_disable_evict) {
 		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u/%d\n",
 			src, type, pool_disable_evict);
 		return;
@@ -1010,6 +1010,18 @@ fini_svc_pool(struct pool_svc *svc)
 	ds_pool_iv_ns_update(svc->ps_pool, -1 /* master_rank */);
 	ds_pool_put(svc->ps_pool);
 	svc->ps_pool = NULL;
+}
+
+/* Is the primary group initialized (i.e., version > 0)? */
+static bool
+primary_group_initialized(void)
+{
+	uint32_t	version;
+	int		rc;
+
+	rc = crt_group_version(NULL /* grp */, &version);
+	D_ASSERTF(rc == 0, "crt_group_version: "DF_RC"\n", DP_RC(rc));
+	return (version > 0);
 }
 
 /*
@@ -1108,13 +1120,13 @@ out:
 }
 
 /*
- * There might be some swim status inconsistency, let's check and
+ * There might be some rank status inconsistency, let's check and
  * fix it.
  */
 static int
 pool_svc_check_node_status(struct pool_svc *svc)
 {
-	struct pool_domain	*doms;
+	struct pool_domain     *doms;
 	int			doms_cnt;
 	int			i;
 	int			rc = 0;
@@ -1125,33 +1137,29 @@ pool_svc_check_node_status(struct pool_svc *svc)
 		return 0;
 	}
 
+	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
 	doms_cnt = pool_map_find_nodes(svc->ps_pool->sp_map, PO_COMP_ID_ALL,
 				       &doms);
 	D_ASSERT(doms_cnt >= 0);
 	for (i = 0; i < doms_cnt; i++) {
 		struct swim_member_state state;
 
-		/* Only check if UPIN server becomes DEAD for now */
+		/* Only check if UPIN server is excluded for now */
 		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
 			continue;
 
 		rc = crt_rank_state_get(crt_group_lookup(NULL),
-				   doms[i].do_comp.co_rank, &state);
+					doms[i].do_comp.co_rank, &state);
 		if (rc != 0 && rc != -DER_NONEXIST) {
-			D_ERROR("failed to get swim for rank %u: %d\n",
+			D_ERROR("failed to get status of rank %u: %d\n",
 				doms[i].do_comp.co_rank, rc);
 			break;
 		}
 
-		/* Since there is a big chance the INACTIVE node will become
-		 * ACTIVE soon, let's only evict the DEAD node rank for the
-		 * moment.
-		 */
 		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
 			doms[i].do_comp.co_rank,
 			rc == -DER_NONEXIST ? -1 : state.sms_status);
-		if (rc == -DER_NONEXIST ||
-		    state.sms_status == SWIM_MEMBER_DEAD) {
+		if (rc == -DER_NONEXIST) {
 			rc = pool_evict_rank(svc, doms[i].do_comp.co_rank);
 			if (rc) {
 				D_ERROR("failed to evict rank %u: %d\n",
@@ -1160,6 +1168,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 			}
 		}
 	}
+	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 	return rc;
 }
 
@@ -1176,6 +1185,22 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	bool			event_cb_registered = false;
 	d_rank_t		rank;
 	int			rc;
+
+	/*
+	 * If this is the only voting replica, it may have become the leader
+	 * without doing any RPC. The primary group may have yet to be
+	 * initialized by the MS. Proceeding with such a primary group may
+	 * result in unnecessary rank exclusions (see the
+	 * pool_svc_check_node_status call below). Wait for the primary group
+	 * initialization by retrying the leader election (rate-limited by
+	 * rdb_timerd). (If there's at least one other voting replica, at least
+	 * one RPC must have been done, so the primary group must have been
+	 * initialized at this point.)
+	 */
+	if (!primary_group_initialized()) {
+		rc = -DER_GRPVER;
+		goto out;
+	}
 
 	rc = read_db_for_stepping_up(svc, &map_buf, &map_version, &prop);
 	if (rc != 0)
@@ -1814,7 +1839,7 @@ out_tx:
 		rc = pool_svc_step_up_cb(&svc->ps_rsvc);
 		if (rc != 0) {
 			D_ASSERT(rc != DER_UNINIT);
-			/* TODO: Ask rdb to step down. */
+			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
 			D_GOTO(out_svc, rc);
 		}
 		svc->ps_rsvc.s_state = DS_RSVC_UP;
@@ -1965,7 +1990,6 @@ out:
 void
 ds_pool_connect_handler(crt_rpc_t *rpc)
 {
-	struct d_tm_node_t	       *open_hdl_gauge = NULL;
 	struct pool_connect_in	       *in = crt_req_get(rpc);
 	struct pool_connect_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
@@ -1986,6 +2010,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct daos_prop_entry	       *owner_entry;
 	struct daos_prop_entry	       *owner_grp_entry;
 	uint64_t			sec_capas = 0;
+	struct pool_metrics	       *metrics;
+
+	metrics = &ds_pool_metrics;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -2090,8 +2117,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
-	d_tm_increment_gauge(&open_hdl_gauge, 1,
-			     "pool/ops/open/active");
+	d_tm_inc_gauge(metrics->open_hdl_gauge, 1);
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
@@ -2236,13 +2262,15 @@ static int
 pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 		     int n_hdl_uuids, crt_context_t ctx)
 {
-	struct d_tm_node_t	*open_hdl_gauge = NULL;
 	d_iov_t			 value;
 	uint32_t		 nhandles;
+	struct pool_metrics	*metrics;
 	int			 i;
 	int			 rc;
 
 	D_ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
+
+	metrics = &ds_pool_metrics;
 
 	D_DEBUG(DF_DSMS, DF_UUID": disconnecting %d hdls: hdl_uuids[0]="DF_UUID
 		"\n", DP_UUID(svc->ps_uuid), n_hdl_uuids,
@@ -2261,8 +2289,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	d_tm_decrement_gauge(&open_hdl_gauge, n_hdl_uuids,
-			     "pool/ops/open/active");
+	d_tm_dec_gauge(metrics->open_hdl_gauge, n_hdl_uuids);
 
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
@@ -5645,39 +5672,6 @@ out_tx:
 out_svc:
 	pool_svc_put_leader(svc);
 	return rc;
-}
-
-bool
-is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid)
-{
-	struct ds_pool	*pool;
-	uuid_t		hdl_uuid;
-	int		rc;
-	bool		result = false;
-
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL) {
-		D_ERROR(DF_UUID": failed to get ds_pool\n",
-			DP_UUID(pool_uuid));
-		return false;
-	}
-
-	if (uuid_compare(coh_uuid, pool->sp_srv_cont_hdl) == 0) {
-		/* Compare if the handle uuid is from another server */
-		result = true;
-		D_GOTO(output, result);
-	}
-
-	rc = ds_pool_iv_srv_hdl_fetch_non_sys(pool, &hdl_uuid, NULL);
-	if (rc) {
-		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
-		D_GOTO(output, result);
-	}
-
-	result = !uuid_compare(coh_uuid, hdl_uuid);
-output:
-	ds_pool_put(pool);
-	return result;
 }
 
 bool

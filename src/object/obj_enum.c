@@ -502,11 +502,11 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct dss_enum_arg *arg,
 		}
 
 		rc = fill_data_csum(new_csum_info, &arg->csum_iov);
+		daos_csummer_free_ci(csummer, &new_csum_info);
 		if (rc != 0) {
 			D_ERROR("Issue filling csum data");
 			return rc;
 		}
-		daos_csummer_free_ci(csummer, &new_csum_info);
 	} else {
 		rc = fill_data_csum(&ent->ie_csum, &arg->csum_iov);
 		if (rc != 0) {
@@ -644,7 +644,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		" rsize "DF_U64" ver %u kd_len "DF_U64" type %d sgl_idx %d/%zd"
 		"kds_len %d inline "DF_U64" epr "DF_U64"/"DF_U64"\n",
 		key_ent->ie_recx.rx_idx, key_ent->ie_recx.rx_nr,
-		key_ent->ie_rsize, rec->rec_version,
+		rec->rec_size, rec->rec_version,
 		arg->kds[arg->kds_len].kd_key_len, type, arg->sgl_idx,
 		iovs[arg->sgl_idx].iov_len, arg->kds_len,
 		rec->rec_flags & RECX_INLINE ? data_size : 0,
@@ -1351,22 +1351,25 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		 unsigned int type, obj_enum_process_cb_t cb,
 		 void *cb_arg)
 {
+	struct daos_sgl_idx sgl_idx = {0};
 	char		*ptr;
 	unsigned int	i;
 	int		rc = 0;
 
 	D_ASSERTF(sgl->sg_nr > 0, "%u\n", sgl->sg_nr);
 	D_ASSERT(sgl->sg_iovs != NULL);
-	ptr = sgl->sg_iovs[0].iov_buf;
 	for (i = 0; i < nr; i++) {
 		daos_key_desc_t *kds = &kdss[i];
 
-		D_DEBUG(DB_REBUILD, "process %d type %d ptr %p len "DF_U64
-			" total %zd\n", i, kds->kd_val_type, ptr,
+		ptr = sgl_indexed_byte(sgl, &sgl_idx);
+		D_ASSERTF(ptr != NULL, "kds and sgl don't line up");
+
+		D_DEBUG(DB_REBUILD, "process %d, type %d, ptr %p, len "DF_U64
+			", total %zd\n", i, kds->kd_val_type, ptr,
 			kds->kd_key_len, sgl->sg_iovs[0].iov_len);
 		if (kds->kd_val_type == 0 ||
 		    (kds->kd_val_type != type && type != -1)) {
-			ptr += kds->kd_key_len;
+			sgl_move_forward(sgl, &sgl_idx, kds->kd_key_len);
 			D_DEBUG(DB_REBUILD, "skip type/size %d/%zd\n",
 				kds->kd_val_type, kds->kd_key_len);
 			continue;
@@ -1374,6 +1377,10 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 
 		if (kds->kd_val_type == OBJ_ITER_RECX ||
 		    kds->kd_val_type == OBJ_ITER_SINGLE) {
+			/*
+			 * XXX: Assuming that data for a single kds is entirely
+			 * contained in a single iov
+			 */
 			char *end = ptr + kds->kd_key_len;
 			char *data = ptr;
 
@@ -1395,7 +1402,7 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		} else {
 			rc = cb(kds, ptr, kds->kd_key_len, cb_arg);
 		}
-		ptr += kds->kd_key_len;
+		sgl_move_forward(sgl, &sgl_idx, kds->kd_key_len);
 		if (rc) {
 			D_ERROR("iterate %dth failed: rc"DF_RC"\n", i,
 				DP_RC(rc));

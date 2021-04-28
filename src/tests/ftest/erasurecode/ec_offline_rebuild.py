@@ -16,7 +16,7 @@ class EcOfflineRebuild(ErasureCodeIor):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-6450")
+    @skipForTicket("DAOS-7212")
     def test_ec_offline_rebuild(self):
         """Jira ID: DAOS-5894.
 

@@ -6,7 +6,11 @@
 
 package storage
 
-import "github.com/pkg/errors"
+import (
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+)
 
 const (
 	// MinNVMeStorage defines the minimum per-target allocation
@@ -17,7 +21,7 @@ const (
 	// MinScmToNVMeRatio defines the minimum-allowable ratio
 	// of SCM to NVMe.
 	MinScmToNVMeRatio = 0.01 // 1%
-	// DefaultScmToNVMeRation defines the default ratio of
+	// DefaultScmToNVMeRatio defines the default ratio of
 	// SCM to NVMe.
 	DefaultScmToNVMeRatio = 0.06
 )
@@ -26,6 +30,7 @@ const (
 	maxScmDeviceLen = 1
 )
 
+// ScmClass definitions.
 const (
 	ScmClassNone ScmClass = ""
 	ScmClassDCPM ScmClass = "dcpm"
@@ -64,6 +69,7 @@ type ScmConfig struct {
 	DeviceList  []string `yaml:"scm_list,omitempty"`
 }
 
+// Validate sanity checks engine scm config parameters.
 func (sc *ScmConfig) Validate() error {
 	if sc.MountPoint == "" {
 		return errors.New("no scm_mount set")
@@ -94,6 +100,7 @@ func (sc *ScmConfig) Validate() error {
 	return nil
 }
 
+// BdevClass definitions.
 const (
 	BdevClassNone   BdevClass = ""
 	BdevClassNvme   BdevClass = "nvme"
@@ -142,10 +149,52 @@ type BdevConfig struct {
 	Hostname    string    `yaml:"-"` // used when generating templates
 }
 
-func (bc *BdevConfig) Validate() error {
+func (bc *BdevConfig) checkNonZeroFileSize() error {
+	if bc.FileSize == 0 {
+		return errors.Errorf("bdev_class %s requires non-zero bdev_size",
+			bc.Class)
+	}
+
 	return nil
 }
 
+// Validate sanity checks engine bdev config parameters.
+func (bc *BdevConfig) Validate() error {
+	if common.StringSliceHasDuplicates(bc.DeviceList) {
+		return errors.New("bdev_list contains duplicate pci addresses")
+	}
+
+	switch bc.Class {
+	case BdevClassFile:
+		if err := bc.checkNonZeroFileSize(); err != nil {
+			return err
+		}
+	case BdevClassMalloc:
+		if err := bc.checkNonZeroFileSize(); err != nil {
+			return err
+		}
+		if bc.DeviceCount == 0 {
+			return errors.Errorf("bdev_class %s requires non-zero bdev_number",
+				bc.Class)
+		}
+	case BdevClassKdev:
+		if len(bc.DeviceList) == 0 {
+			return errors.Errorf("bdev_class %s requires non-empty bdev_list",
+				bc.Class)
+		}
+	case BdevClassNvme:
+		for _, pci := range bc.DeviceList {
+			_, _, _, _, err := common.ParsePCIAddress(pci)
+			if err != nil {
+				return errors.Wrapf(err, "parse pci address %s", pci)
+			}
+		}
+	}
+
+	return nil
+}
+
+// GetNvmeDevs retrieves device list only if class is nvme.
 func (bc *BdevConfig) GetNvmeDevs() []string {
 	if bc.Class == BdevClassNvme {
 		return bc.DeviceList

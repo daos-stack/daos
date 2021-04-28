@@ -10,8 +10,8 @@
 
 #define D_TM_VERSION			1
 #define D_TM_MAX_NAME_LEN		256
-#define D_TM_MAX_DESC_LEN		64
-#define D_TM_MAX_UNIT_LEN		16
+#define D_TM_MAX_DESC_LEN		128
+#define D_TM_MAX_UNIT_LEN		32
 #define D_TM_TIME_BUFF_LEN		26
 
 #define D_TM_SHARED_MEMORY_KEY		0x10242048
@@ -236,6 +236,6 @@ int d_tm_get_version(void);
 void d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value);
 double d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
 				 double mean);
-int d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value);
+void d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value);
 void d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format);
 #endif /* __TELEMETRY_COMMON_H__ */
