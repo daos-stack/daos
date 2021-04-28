@@ -8,7 +8,6 @@ import time
 import random
 import threading
 
-from itertools import product
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from osa_utils import OSAUtils
@@ -108,6 +107,8 @@ class OSAOnlineDrain(OSAUtils):
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()
+                if not self.out_queue.empty():
+                    self.assert_on_exception(self.out_queue)
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
