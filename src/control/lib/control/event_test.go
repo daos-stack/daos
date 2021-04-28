@@ -152,10 +152,10 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 		WithForwarded(true)
 
 	for name, tc := range map[string]struct {
-		event           *events.RASEvent
-		newSyslogger    newSysloggerFn
-		expShouldLog    bool
-		expShouldLogSys bool
+		event              *events.RASEvent
+		newSyslogger       newSysloggerFn
+		expShouldLog       bool
+		expShouldLogSyslog bool
 	}{
 		"nil event": {
 			event: nil,
@@ -164,22 +164,22 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 			event: rasEventEngineDiedFwded,
 		},
 		"not forwarded error event gets logged": {
-			event:           rasEventEngineDied,
-			expShouldLog:    true,
-			expShouldLogSys: true,
+			event:              rasEventEngineDied,
+			expShouldLog:       false,
+			expShouldLogSyslog: true,
 		},
 		"not forwarded info event gets logged": {
 			event: events.NewGenericEvent(events.RASID(math.MaxInt32-1),
 				events.RASSeverityNotice, "DAOS generic test event",
 				`{"people":["bill","steve","bob"]}`),
-			expShouldLog:    true,
-			expShouldLogSys: true,
+			expShouldLog:       false,
+			expShouldLogSyslog: true,
 		},
 		"sysloggers not created": {
-			event:           rasEventEngineDied,
-			newSyslogger:    mockNewSysloggerFail,
-			expShouldLog:    true,
-			expShouldLogSys: false,
+			event:              rasEventEngineDied,
+			newSyslogger:       mockNewSysloggerFail,
+			expShouldLog:       true,
+			expShouldLogSyslog: false,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -202,7 +202,7 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 
 			slStr := mockSyslogBuf.String()
 			t.Logf("syslog out: %s", slStr)
-			if !tc.expShouldLogSys {
+			if !tc.expShouldLogSyslog {
 				common.AssertTrue(t, slStr == "",
 					"expected syslog to be empty")
 				return

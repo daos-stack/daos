@@ -125,10 +125,12 @@ func (el *EventLogger) OnEvent(_ context.Context, evt *events.RASEvent) {
 	}
 
 	out := evt.PrintRAS()
-	el.log.Info(out)
 	if sl := el.sysloggers[evt.Severity]; sl != nil {
 		sl.Print(out)
+		return
 	}
+	// no syslogger, write to default logger instead
+	el.log.Info("&&& RAS " + out)
 }
 
 type newSysloggerFn func(syslog.Priority, int) (*log.Logger, error)
