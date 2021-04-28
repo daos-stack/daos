@@ -33,7 +33,7 @@ class DaosPerf(DaosPerfBase):
             class. Run this config with multiple server/client configuration.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,large
         :avocado: tags=daosperf,daosperfsmall
         """
         self.run_daos_perf()

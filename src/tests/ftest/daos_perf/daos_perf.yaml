@@ -12,6 +12,12 @@ hosts:
 timeout: 600
 server_config:
     name: daos_server
+    servers:
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+      scm_class: dcpm
+      scm_list: [ "/dev/pmem0" ]
+      scm_mount: /mnt/daos0
 daos_perf:
   pool_scm_size: 20G
   processes_mux: !mux
