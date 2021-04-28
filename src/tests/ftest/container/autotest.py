@@ -15,23 +15,19 @@ class ContainerAutotestTest(TestWithServers):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize object."""
-        super().__init__(*args, **kwargs)
-        self.daos_cmd = None
-
     def test_container_autotest(self):
         """Test container autotest.
 
-        :avocado: tags=all,full_regression,daily,hw,small,quick,autotest
+        :avocado: tags=all,full_regression,daily_regression
+        :avocado: tags=hw,small
+        :avocado: tags=container,autotest,containerautotest,quick
         """
-        # Create a pool
         self.log.info("Create a pool")
         self.add_pool()
-        self.daos_cmd = self.get_daos_command()
+        daos_cmd = self.get_daos_command()
         self.log.info("Autotest start")
         try:
-            self.daos_cmd.pool_autotest(pool=self.pool.uuid)
+            daos_cmd.pool_autotest(pool=self.pool.uuid)
             self.log.info("daos pool autotest passed.")
         except CommandFailure as error:
             self.log.error("Error: %s", error)
