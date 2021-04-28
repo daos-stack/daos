@@ -415,14 +415,12 @@ class DaosServer():
         if rc.returncode != 0:
             return False
         data = json.loads(rc.stdout.decode('utf-8'))
-        print(data)
         if data['error'] or data['status'] != 0:
             return False
         members = data['response']['members']
         if members is None:
             return False
         if len(members) != self.engines:
-            print('Not enough members')
             return False
 
         for member in members:
@@ -646,8 +644,10 @@ class DaosServer():
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
             entry['message'] = 'daos_engine died during testing'
+            self._add_test_case('engine_count', failure=entry['message'])
             self.conf.wf.issues.append(entry)
-
+        else:
+            self._add_test_case('engine_count')
         rc = self.run_dmg(['system', 'stop'])
         assert rc.returncode == 0
 
