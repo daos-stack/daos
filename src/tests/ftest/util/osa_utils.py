@@ -320,8 +320,8 @@ class OSAUtils(MdtestBase, IorTestBase):
         if self.out_queue.empty():
             pass
         else:
-            exc = self.out_queue.get(block=False)
-            self.out_queue.put(exc)
+            exc = out_queue.get(block=False)
+            out_queue.put(exc)
             raise exc
 
     def cleanup_queue(self, out_queue):
@@ -372,7 +372,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         # Wait for the thread to finish
         try:
             process.join()
-        except Exception as err_msg:
+        except CommandFailure as err_msg:
             self.out_queue.put(err_msg)
             self.assert_on_exception(self.out_queue)
 
@@ -410,7 +410,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.fail("Not supported option on ior_thread")
         try:
             job_manager = self.get_ior_job_manager_command()
-        except Exception as err_msg:
+        except CommandFailure as err_msg:
             self.out_queue.put(err_msg)
             self.assert_on_exception(self.out_queue)
         job_manager.job.dfs_cont.update(self.container.uuid)
@@ -420,7 +420,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         try:
             self.run_ior_with_pool(create_pool=False, create_cont=False,
                                    fail_on_warning=fail_on_warning)
-        except Exception as err_msg:
+        except CommandFailure as err_msg:
             self.out_queue.put(err_msg)
             self.assert_on_exception(self.out_queue)
 
@@ -446,7 +446,6 @@ class OSAUtils(MdtestBase, IorTestBase):
         # Wait for the thread to finish
         try:
             process.join()
-        except Exception as err_msg:
+        except CommandFailure as err_msg:
             self.out_queue.put(err_msg)
             self.assert_on_exception(self.out_queue)
-
