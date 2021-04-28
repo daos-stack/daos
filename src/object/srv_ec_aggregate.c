@@ -2005,7 +2005,7 @@ agg_data_extent(struct dtx_handle *dth, vos_iter_entry_t *entry,
 			rounddown(extent->ae_recx.rx_idx, ec_age2ss(agg_entry));
 
 	agg_entry->ae_cur_stripe.as_extent_cnt++;
-	if (entry->ie_biov.bi_addr.ba_hole) {
+	if (BIO_ADDR_IS_HOLE(&entry->ie_biov.bi_addr)) {
 		extent->ae_hole = true;
 		agg_entry->ae_cur_stripe.as_has_holes = true;
 	} else {

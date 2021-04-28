@@ -27,6 +27,7 @@ import argparse
 import tabulate
 import functools
 import subprocess
+import junit_xml
 import tempfile
 import pickle
 import xattr
@@ -132,7 +133,7 @@ class WarningsFactory():
 
     # Error levels supported by the reporting are LOW, NORMAL, HIGH, ERROR.
 
-    def __init__(self, filename):
+    def __init__(self, filename, junit=False):
         self._fd = open(filename, 'w')
         self.filename = filename
         self.issues = []
@@ -142,6 +143,15 @@ class WarningsFactory():
         # work in __del__
         self._file = __file__.lstrip('./')
         self._flush()
+
+        if junit:
+            test_case = junit_xml.TestCase('Startup', classname='NLT.core')
+            self.ts = junit_xml.TestSuite('Node Local Testing',
+                                          test_cases=[test_case])
+            self.tc = junit_xml.TestCase('Sanity', classname='NLT.core')
+        else:
+            self.ts = None
+            self.tc = None
 
     def __del__(self):
         """Ensure the file is flushed on exit, but if it hasn't already
@@ -157,7 +167,33 @@ class WarningsFactory():
         entry['message'] = 'Tests exited without shutting down properly'
         entry['severity'] = 'ERROR'
         self.issues.append(entry)
+
+        if self.ts:
+            self.tc.add_failure_info('NLT exited abnormally')
         self.close()
+
+    def add_test_case(self, name, failure=None, test_class='core'):
+        """Add a test case to the results
+
+        class and other metadata will be set automatically,
+        if failure is set the test will fail with the message
+        provided.  Saves the state to file after each update.
+        """
+        if not self.ts:
+            return
+
+        tc = junit_xml.TestCase(name, classname='NLT.{}'.format(test_class))
+        if failure:
+            tc.add_failure_info(failure)
+        self.ts.test_cases.append(tc)
+
+        self._write_test_file()
+
+    def _write_test_file(self):
+        """Write test results to file"""
+
+        with open('nlt-junit.xml', 'w') as f:
+            junit_xml.TestSuite.to_file(f, [self.ts], prettyprint=True)
 
     def explain(self, line, log_file, esignal):
         """Log an error, along with the other errors it caused
@@ -264,6 +300,9 @@ class WarningsFactory():
         self._fd = None
         print('Closed JSON file {} with {} errors'.format(self.filename,
                                                           len(self.issues)))
+        if self.ts:
+            self.ts.test_cases.append(self.tc)
+            self._write_test_file()
 
 def load_conf(args):
     """Load the build config file"""
@@ -299,11 +338,15 @@ def get_base_env(clean=False):
 class DaosServer():
     """Manage a DAOS server instance"""
 
-    def __init__(self, conf, valgrind=False):
+    def __init__(self, conf, test_class=None, valgrind=False):
         self.running = False
         self._file = __file__.lstrip('./')
         self._sp = None
         self.conf = conf
+        if test_class:
+            self._test_class = 'Server.{}'.format(test_class)
+        else:
+            self._test_class = None
         self.valgrind = valgrind
         self._agent = None
         self.engines = conf.args.engine_count
@@ -338,12 +381,26 @@ class DaosServer():
             self.stop(None)
         os.rmdir(self.agent_dir)
 
+    def _add_test_case(self, op, failure=None):
+        """Add a test case to the server instance
+
+        Simply wrapper to automatically add the class
+        """
+        if not self._test_class:
+            return
+
+        self.conf.wf.add_test_case(op,
+                                   failure=failure,
+                                   test_class=self._test_class)
+
     # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
         elapsed = time.time() - start
         if elapsed > max_time:
-            raise NLTestTimeout("{} failed after {:.2f}s (max {:.2f}s)".format(
-                op, elapsed, max_time))
+            res = '{} failed after {:.2f}s (max {:.2f}s)'.format(op, elapsed,
+                                                                 max_time)
+            self._add_test_case(op, failure=res)
+            raise NLTestTimeout(res)
 
     def _check_system_state(self, desired_states):
         if not isinstance(desired_states, list):
@@ -519,6 +576,7 @@ class DaosServer():
                     break
 
             self._check_timing("format", start, max_start_time)
+        self._add_test_case('format')
         print('Format completion in {:.2f} seconds'.format(time.time() - start))
 
         # Now wait until the system is up, basically the format to happen.
@@ -527,6 +585,7 @@ class DaosServer():
             if self._check_system_state(['ready', 'joined']):
                 break
             self._check_timing("start", start, max_start_time)
+        self._add_test_case('start')
         print('Server started in {:.2f} seconds'.format(time.time() - start))
 
     def stop(self, wf):
@@ -590,6 +649,7 @@ class DaosServer():
                 print('Failed to stop: {}'.format(e))
                 if time.time() - start > 30:
                     raise
+        self._add_test_case('stop')
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
         self._sp.send_signal(signal.SIGTERM)
@@ -761,11 +821,9 @@ class DFuse():
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
 
-    def start(self, v_hint=None):
+    def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
-
-        single_threaded = False
 
         pre_inode = os.stat(self.dir).st_ino
 
@@ -1062,6 +1120,22 @@ def needs_dfuse(method):
         return rc
     return _helper
 
+def needs_dfuse_single(method):
+    """Decorator function for starting dfuse single threaded
+    under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           pool=self.pool,
+                           container=self.container)
+        self.dfuse.start(v_hint=method.__name__, single_threaded=True)
+        rc = method(self)
+        if self.dfuse.stop():
+            self.fatal_errors = True
+        return rc
+    return _helper
+
 def needs_dfuse_with_cache(method):
     """Decorator function for starting dfuse under posix_tests class"""
     @functools.wraps(method)
@@ -1135,6 +1209,11 @@ class posix_tests():
         print(files)
         print(len(files))
         assert len(files) == count
+
+    @needs_dfuse_single
+    def test_single_threaded(self):
+        """Test single-threaded mode"""
+        self.readdir_test(10)
 
     @needs_dfuse
     def test_open_replaced(self):
@@ -2593,7 +2672,7 @@ def main():
 
     conf = load_conf(args)
 
-    wf = WarningsFactory('nlt-errors.json')
+    wf = WarningsFactory('nlt-errors.json', junit=True)
 
     wf_server = WarningsFactory('nlt-server-leaks.json')
     wf_client = WarningsFactory('nlt-client-leaks.json')
@@ -2602,7 +2681,7 @@ def main():
     conf.set_args(args)
     setup_log_test(conf)
 
-    server = DaosServer(conf)
+    server = DaosServer(conf, test_class='first')
     server.start()
 
     fatal_errors = BoolRatchet()
@@ -2628,11 +2707,10 @@ def main():
         fatal_errors.add_result(run_posix_tests(server, conf))
         test_pydaos_kv(server, conf)
         fatal_errors.add_result(set_server_fi(server))
+    elif args.test == 'all':
+        fatal_errors.add_result(run_posix_tests(server, conf))
     elif args.test:
-        if args.test == 'all':
-            fatal_errors.add_result(run_posix_tests(server, conf))
-        else:
-            fatal_errors.add_result(run_posix_tests(server, conf, args.test))
+        fatal_errors.add_result(run_posix_tests(server, conf, args.test))
     else:
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
@@ -2646,7 +2724,7 @@ def main():
     # This is really, really slow so just do list-containers, then
     # exit again.
     if args.mode == 'server-valgrind':
-        server = DaosServer(conf, valgrind=True)
+        server = DaosServer(conf, valgrind=True, test_class='valgrind')
         server.start(clean=False)
         pools = get_pool_list(server)
         for pool in pools:
@@ -2662,7 +2740,7 @@ def main():
         args.server_debug = 'INFO'
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
-        server = DaosServer(conf)
+        server = DaosServer(conf, test_class='no-debug')
         server.start(clean=False)
         if fi_test:
             fatal_errors.add_result(test_alloc_fail_cat(server,
@@ -2672,6 +2750,11 @@ def main():
             check_readdir_perf(server, conf)
         if server.stop(wf_server) != 0:
             fatal_errors.fail()
+
+    if fatal_errors.errors:
+        wf.add_test_case('Errors', 'Significant errors encountered')
+    else:
+        wf.add_test_case('Errors')
 
     wf.close()
     wf_server.close()

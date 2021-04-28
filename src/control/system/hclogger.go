@@ -36,7 +36,7 @@ func newHcLogger(l logging.Logger) *hcLogger {
 	return &hcLogger{log: l}
 }
 
-func (hlc *hcLogger) argString(args ...interface{}) string {
+func (hcl *hcLogger) argString(args ...interface{}) string {
 	var argPairs []string
 	for i := 0; i < len(args); i += 2 {
 		keyStr, ok := args[i].(string)
@@ -48,51 +48,70 @@ func (hlc *hcLogger) argString(args ...interface{}) string {
 	return strings.Join(argPairs, " ")
 }
 
-func (hlc *hcLogger) Trace(msg string, args ...interface{}) {}
+func (hcl *hcLogger) Log(level hclog.Level, msg string, args ...interface{}) {
+	switch level {
+	case hclog.Trace:
+		hcl.Trace(msg, args...)
+	case hclog.Debug:
+		hcl.Debug(msg, args...)
+	case hclog.Info:
+		hcl.Info(msg, args...)
+	case hclog.Warn:
+		hcl.Warn(msg, args...)
+	case hclog.Error:
+		hcl.Error(msg, args...)
+	}
+}
 
-func (hlc *hcLogger) Debug(msg string, args ...interface{}) {
+func (hcl *hcLogger) Trace(msg string, args ...interface{}) {}
+
+func (hcl *hcLogger) Debug(msg string, args ...interface{}) {
 	if _, found := suppressedMessages[msg]; found {
 		return
 	}
-	hlc.log.Debugf(msg+": %s", hlc.argString(args...))
+	hcl.log.Debugf(msg+": %s", hcl.argString(args...))
 }
 
-func (hlc *hcLogger) Info(msg string, args ...interface{}) {
+func (hcl *hcLogger) Info(msg string, args ...interface{}) {
 	// We don't want raft stuff to be shown at INFO level.
-	hlc.log.Debugf(msg+": %s", hlc.argString(args...))
+	hcl.log.Debugf(msg+": %s", hcl.argString(args...))
 }
 
-func (hlc *hcLogger) Warn(msg string, args ...interface{}) {
+func (hcl *hcLogger) Warn(msg string, args ...interface{}) {
 	// Only errors should be printed at ERROR.
-	hlc.log.Debugf(msg+": %s", hlc.argString(args...))
+	hcl.log.Debugf(msg+": %s", hcl.argString(args...))
 }
 
-func (hlc *hcLogger) Error(msg string, args ...interface{}) {
-	hlc.log.Errorf(msg+": %s", hlc.argString(args...))
+func (hcl *hcLogger) Error(msg string, args ...interface{}) {
+	hcl.log.Errorf(msg+": %s", hcl.argString(args...))
 }
 
-func (hlc *hcLogger) IsTrace() bool { return false }
+func (hcl *hcLogger) IsTrace() bool { return false }
 
-func (hlc *hcLogger) IsDebug() bool { return true }
+func (hcl *hcLogger) IsDebug() bool { return true }
 
-func (hlc *hcLogger) IsInfo() bool { return true }
+func (hcl *hcLogger) IsInfo() bool { return true }
 
-func (hlc *hcLogger) IsWarn() bool { return true }
+func (hcl *hcLogger) IsWarn() bool { return true }
 
-func (hlc *hcLogger) IsError() bool { return true }
+func (hcl *hcLogger) IsError() bool { return true }
 
-func (hlc *hcLogger) With(args ...interface{}) hclog.Logger { panic("not supported") }
+func (hcl *hcLogger) Name() string { return "DAOS hcLogger interface" }
 
-func (hlc *hcLogger) Named(name string) hclog.Logger { panic("not supported") }
+func (hcl *hcLogger) ImpliedArgs() []interface{} { panic("not supported") }
 
-func (hlc *hcLogger) ResetNamed(name string) hclog.Logger { panic("not supported") }
+func (hcl *hcLogger) With(args ...interface{}) hclog.Logger { panic("not supported") }
 
-func (hlc *hcLogger) SetLevel(level hclog.Level) { panic("not supported") }
+func (hcl *hcLogger) Named(name string) hclog.Logger { panic("not supported") }
 
-func (hlc *hcLogger) StandardLogger(opts *hclog.StandardLoggerOptions) *log.Logger {
+func (hcl *hcLogger) ResetNamed(name string) hclog.Logger { panic("not supported") }
+
+func (hcl *hcLogger) SetLevel(level hclog.Level) { panic("not supported") }
+
+func (hcl *hcLogger) StandardLogger(opts *hclog.StandardLoggerOptions) *log.Logger {
 	panic("not supported")
 }
 
-func (hlc *hcLogger) StandardWriter(opts *hclog.StandardLoggerOptions) io.Writer {
+func (hcl *hcLogger) StandardWriter(opts *hclog.StandardLoggerOptions) io.Writer {
 	panic("not supported")
 }
