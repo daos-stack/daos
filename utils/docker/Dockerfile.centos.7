@@ -250,7 +250,5 @@ RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
-ARG DAOS_KEEP_SRC=no
-
 # Remove local copy
-RUN [ "$DAOS_KEEP_SRC" == "yes" ] || rm -rf /home/daos/*
+RUN rm -rf /home/daos/*

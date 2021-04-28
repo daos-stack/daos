@@ -647,7 +647,7 @@ class DaosServer():
         assert rc.returncode == 0
 
         start = time.time()
-        max_stop_time = 5
+        max_stop_time = 30
         while True:
             time.sleep(0.5)
             if self._check_system_state('stopped'):
