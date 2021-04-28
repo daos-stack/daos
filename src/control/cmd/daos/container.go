@@ -109,7 +109,9 @@ func (cmd *containerCreateCmd) Execute(args []string) (err error) {
 		}
 
 		if cmd.ObjectClass != "" {
-			ap.oclass = (C.ushort)(C.daos_oclass_name2id(C.CString(cmd.ObjectClass)))
+			cObjClass := C.CString(cmd.ObjectClass)
+			defer C.free(unsafe.Pointer(cObjClass))
+			ap.oclass = (C.ushort)(C.daos_oclass_name2id(cObjClass))
 			if ap.oclass == C.OC_UNKNOWN {
 				return errors.Errorf("unknown object class %q", cmd.ObjectClass)
 			}
