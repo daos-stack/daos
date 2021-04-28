@@ -168,8 +168,8 @@ pipeline {
                     when {
                       beforeAgent true
                       expression { ! (skipStage(stage: 'python-bandit',
-		                                 def_val: 'false') ||
-		                        quickFunctional()) }
+                                                def_val: 'false') ||
+                                      quickFunctional()) }
                     }
                     agent {
                         dockerfile {
@@ -445,8 +445,8 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh """sudo ./utils/docker/docker_nlt.sh kv"""
-			    label 'Run NLT smoke test'
+                        sh (script:"""sudo ./utils/docker/docker_nlt.sh --class-name centos7.release kv""",
+                            label: 'Run NLT smoke test')
                     }
                     post {
                         always {
@@ -487,8 +487,8 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh """sudo ./utils/docker/docker_nlt.sh --class-name centos7.clang kv"""
-			    label 'Run NLT smoke test'
+                        sh (script: """sudo ./utils/docker/docker_nlt.sh --class-name centos7.clang kv""",
+                            label: 'Run NLT smoke test')
                     }
                     post {
                         always {
@@ -527,8 +527,8 @@ pipeline {
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no",
                                    scons_exe: 'scons-3'
-                        sh """sudo ./utils/docker/docker_nlt.sh --class-name centos8 kv"""
-			    label 'Run NLT smoke test'
+                        sh (script: """sudo ./utils/docker/docker_nlt.sh --class-name centos8 kv"""
+                            label: 'Run NLT smoke test')
                     }
                     post {
                         always {
@@ -536,6 +536,7 @@ pipeline {
                                          aggregatingResults: true,
                                          tool: gcc4(pattern: 'centos8-gcc-build.log',
                                                     id: "analysis-centos8-gcc")
+                            junit testResults: 'nlt-junit.xml'
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -635,8 +636,8 @@ pipeline {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
                                    scons_args: sconsFaultsArgs()
-                        sh """sudo ./utils/docker/docker_nlt.sh kv""",
-			    label 'Run NLT smoke test'
+                        sh (script: """sudo ./utils/docker/docker_nlt.sh --class-name leap kv""",
+                            label: 'Run NLT smoke test')
                     }
                     post {
                         always {
@@ -644,6 +645,7 @@ pipeline {
                                          aggregatingResults: true,
                                          tool: gcc4(pattern: 'leap15-gcc-build.log',
                                                     id: "analysis-gcc-leap15")
+                            junit testResults: 'nlt-junit.xml'
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
