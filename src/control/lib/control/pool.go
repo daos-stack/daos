@@ -112,7 +112,10 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 
 	out.Uuid = uuid.New().String()
 
-	out.Policy = in.Policy
+	out.Policy, err = ParsePolicy(in.Policy)
+	if err != nil {
+		return nil, err
+	}
 
 	return
 }
@@ -136,7 +139,7 @@ type (
 		Ranks     []system.Rank
 		ScmBytes  uint64
 		NvmeBytes uint64
-		Policy    uint32
+		Policy    string
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -707,4 +710,24 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 	rpcClient.Debugf("Reintegrate DAOS pool target response: %s\n", msResp)
 
 	return nil
+}
+
+// ParsePolicy will parse the incoming policy name string and return
+// a policy index used in the DAOS engine.
+// Returns an error if string cannot be found in the map
+func ParsePolicy(stringPolicy string) (policy uint32, err error) {
+
+	var policyMap = map[string]drpc.PoolPolicy{
+		"default":           drpc.PoolPolicyDefault,
+		"io_size":           drpc.PoolPolicyIoSize,
+		"write_intensivity": drpc.PoolPolicyWriteIntensivity,
+	}
+
+	var p, found = policyMap[stringPolicy]
+
+	if !found {
+		return 0, errors.New("Policy " + stringPolicy + " does not exist")
+	}
+
+	return uint32(p), nil
 }

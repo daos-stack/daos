@@ -716,7 +716,6 @@ out:
 
 		if (entries_alloc)
 			D_FREE(prop_req->dpp_entries);
-
 	}
 	return rc;
 }

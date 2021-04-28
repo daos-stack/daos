@@ -2846,8 +2846,6 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 							    iv_entry) != 0)
 					rc = -DER_IO;
 				break;
-
-				break;
 			case DAOS_PROP_PO_SVC_LIST:
 				break;
 			default:

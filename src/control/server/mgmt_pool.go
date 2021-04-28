@@ -625,11 +625,11 @@ func resolvePoolPropVal(req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropReq, err
 		recType := strings.TrimSpace(req.GetStrval())
 		switch strings.ToLower(recType) {
 		case "default":
-			newReq.SetValueNumber(drpc.PoolPolicyDefault)
+			newReq.SetValueNumber(uint64(drpc.PoolPolicyDefault))
 		case "io_size":
-			newReq.SetValueNumber(drpc.PoolPolicyIoSize)
+			newReq.SetValueNumber(uint64(drpc.PoolPolicyIoSize))
 		case "write_intensivity":
-			newReq.SetValueNumber(drpc.PoolPolicyWriteIntensivity)
+			newReq.SetValueNumber(uint64(drpc.PoolPolicyWriteIntensivity))
 		default:
 			return nil, errors.Errorf("unhandled policy type %q", recType)
 		}

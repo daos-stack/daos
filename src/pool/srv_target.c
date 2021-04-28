@@ -1292,6 +1292,7 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	aggregate_pool_space(&out_result->tqo_space, &out_source->tqo_space);
 	return 0;
 }
+
 static int
 update_vos_prop_on_targets(void *in)
 {

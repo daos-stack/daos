@@ -49,11 +49,13 @@ const (
 	PoolSelfHealingAutoRebuild = C.DAOS_SELF_HEAL_AUTO_REBUILD
 )
 
+type PoolPolicy uint32
+
 const (
 	// PoolPolicyDefault sets the pool's policy to default
-	PoolPolicyDefault = C.DAOS_MEDIA_POLICY_DEFAULT
+	PoolPolicyDefault PoolPolicy = C.DAOS_MEDIA_POLICY_DEFAULT
 	// PoolPolicyDefault sets the pool's policy to io_size
-	PoolPolicyIoSize = C.DAOS_MEDIA_POLICY_IO_SIZE
+	PoolPolicyIoSize PoolPolicy = C.DAOS_MEDIA_POLICY_IO_SIZE
 	// PoolPolicyDefault sets the pool's policy to write_intensivity
-	PoolPolicyWriteIntensivity = C.DAOS_MEDIA_POLICY_WRITE_INTENSIVITY
+	PoolPolicyWriteIntensivity PoolPolicy = C.DAOS_MEDIA_POLICY_WRITE_INTENSIVITY
 )

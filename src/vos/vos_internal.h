@@ -128,7 +128,6 @@ agg_reserve_space(daos_size_t *rsrvd)
 	rsrvd[DAOS_MEDIA_NVME]	+= size;
 }
 
-
 /**
  * VOS pool (DRAM)
  */

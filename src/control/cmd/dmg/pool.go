@@ -93,7 +93,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		UserGroup:  cmd.GroupName,
 		Name:       cmd.PoolName,
 		NumSvcReps: cmd.NumSvcReps,
-		//Policy:     cmd.Policy,
+		Policy:     cmd.Policy,
 	}
 
 	if cmd.ACLFile != "" {
@@ -106,11 +106,6 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	req.Ranks, err = system.ParseRanks(cmd.RankList)
 	if err != nil {
 		return errors.Wrap(err, "parsing rank list")
-	}
-
-	req.Policy, err = ParsePolicy(cmd.Policy)
-	if err != nil {
-		return errors.Wrap(err, "parsing policy")
 	}
 
 	if cmd.Size != "" {
