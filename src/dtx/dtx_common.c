@@ -693,6 +693,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	int				 status = -1;
 	int				 rc = 0;
 	bool				 aborted = false;
+	bool				 unpin = false;
 
 	D_ASSERT(cont != NULL);
 
@@ -722,7 +723,8 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	case DTX_ST_PREPARED:
 		break;
 	case DTX_ST_INITED:
-		if (dth->dth_modification_cnt == 0)
+		if (dth->dth_modification_cnt == 0 ||
+		    !dth->dth_active)
 			break;
 		/* full through */
 	case DTX_ST_ABORTED:
@@ -739,6 +741,14 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 		 */
 		dth->dth_sync = 1;
 		goto sync;
+	}
+
+	/* For standalone modification, if leader modified nothing, then
+	 * non-leader(s) must be the same, unpin the DTX via dtx_abort().
+	 */
+	if (!dth->dth_active) {
+		unpin = true;
+		D_GOTO(abort, result = 0);
 	}
 
 	/* If the DTX is started befoe DTX resync (for rebuild), then it is
@@ -860,7 +870,7 @@ abort:
 	 * to locally retry for avoiding RPC timeout. The leader replica
 	 * will trigger retry globally without aborting 'prepared' ones.
 	 */
-	if (result < 0 && result != -DER_AGAIN && !dth->dth_solo) {
+	if (unpin || (result < 0 && result != -DER_AGAIN && !dth->dth_solo)) {
 		/* Drop partial modification for distributed transaction. */
 		vos_dtx_cleanup(dth);
 		dte = &dth->dth_dte;
