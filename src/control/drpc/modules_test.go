@@ -9,21 +9,11 @@ package drpc
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 )
-
-func TestMarshal_Failed(t *testing.T) {
-	result, err := Marshal(nil)
-
-	common.CmpErr(t, MarshalingFailure(), err)
-
-	if result != nil {
-		t.Errorf("Expected no marshaled result, got: %+v", result)
-	}
-}
 
 func TestMarshal_Success(t *testing.T) {
 	message := &Call{Module: 1, Method: 2, Sequence: 3}

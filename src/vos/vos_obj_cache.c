@@ -224,7 +224,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	visible_only = flags & VOS_OBJ_VISIBLE;
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
-		" create=%s epr="DF_U64"-"DF_U64"\n",
+		" create=%s epr="DF_X64"-"DF_X64"\n",
 		DP_UUID(cont->vc_id), DP_UOID(oid),
 		create ? "true" : "false", epr->epr_lo, epr->epr_hi);
 
@@ -264,7 +264,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 	 /* newly cached object */
-	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_U64"-"DF_U64"\n",
+	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_X64"-"DF_X64"\n",
 		create ? "find/create" : "find", DP_UOID(oid), epr->epr_lo,
 		epr->epr_hi);
 
