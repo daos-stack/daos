@@ -74,6 +74,7 @@ RUN zypper --non-interactive update && \
     patchelf \
     python3-devel \
     python3-distro \
+    python3-junit_xml \
     python3-pip \
     python3-pyxattr  \
     python3-PyYAML \

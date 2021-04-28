@@ -479,7 +479,6 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7') + '"'
-                            args '--tmpfs /mnt/daos --device /dev/fuse --cap-add SYS_ADMIN'
                         }
                     }
                     steps {
@@ -487,8 +486,6 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh (script: """sudo ./utils/docker/docker_nlt.sh --class-name centos7.clang kv""",
-                            label: 'Run NLT smoke test')
                     }
                     post {
                         always {
@@ -496,7 +493,6 @@ pipeline {
                                          aggregatingResults: true,
                                          tool: clang(pattern: 'centos7-clang-build.log',
                                                      id: "analysis-centos7-clang")
-                            junit testResults: 'nlt-junit.xml'
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -592,12 +588,15 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"
+                            args '--tmpfs /mnt/daos'
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
+                        sh (script: """sudo ./utils/docker/docker_nlt.sh --class-name ubuntu-clang kv""",
+                            label: 'Run NLT smoke test')
                     }
                     post {
                         always {
@@ -605,6 +604,7 @@ pipeline {
                                          aggregatingResults: true,
                                          tool: clang(pattern: 'ubuntu20.04-clang-build.log',
                                                      id: "analysis-ubuntu20-clang")
+                            junit testResults: 'nlt-junit.xml'
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
