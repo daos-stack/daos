@@ -342,19 +342,6 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	int		rc, fd;
 	uint64_t	size_mb = DAOS_DMA_CHUNK_MB;
 
-	D_ASSERT(tgt_nr > 0);
-	D_ASSERT(mem_size > 0);
-	/*
-	 * Hugepages are not enough to sustain average I/O workload
-	 * (~1GB per xstream).
-	 */
-	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
-		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
-		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
-			mem_size, (mem_size / tgt_nr));
-		return -DER_INVAL;
-	}
-
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
 	D_INIT_LIST_HEAD(&nvme_glb.bd_bdevs);
@@ -375,6 +362,19 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
 		nvme_glb.bd_nvme_conf = NULL;
 		return 0;
+	}
+
+	D_ASSERT(tgt_nr > 0);
+	D_ASSERT(mem_size > 0);
+	/*
+	 * Hugepages are not enough to sustain average I/O workload
+	 * (~1GB per xstream).
+	 */
+	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
+		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
+		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
+			mem_size, (mem_size / tgt_nr));
+		return -DER_INVAL;
 	}
 
 	fd = open(nvme_conf, O_RDONLY, 0600);
