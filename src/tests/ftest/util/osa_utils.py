@@ -324,12 +324,14 @@ class OSAUtils(MdtestBase, IorTestBase):
             out_queue.put(exc)
             raise exc
 
-    def cleanup_queue(self, out_queue):
+    def cleanup_queue(self, out_queue=None):
         """Cleanup the existing thread queue.
 
         Args:
             out_queue (queue): Queue to cleanup.
         """
+        if out_queue is None:
+            out_queue = self.out_queue
         while not out_queue.empty():
             out_queue.get(block=True)
 
@@ -351,7 +353,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                                       for IOR warnings.
                                       Defaults to True.
         """
-        self.cleanup_queue(self.out_queue)
+        self.cleanup_queue()
         if action == "Write":
             flags = self.ior_w_flags
         else:
@@ -393,7 +395,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                                       for IOR warnings.
                                       Defaults to True.
         """
-        self.cleanup_queue(self.out_queue)
+        self.cleanup_queue()
         self.pool = pool
         self.ior_cmd.get_params(self)
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
