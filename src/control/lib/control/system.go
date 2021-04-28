@@ -946,3 +946,65 @@ func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ran
 
 	return invokeRPCFanout(ctx, rpcClient, req)
 }
+
+// SystemCleanupReq contains the inputs for the system cleanup request.
+type SystemCleanupReq struct {
+	unaryRequest
+	msRequest
+	sysRequest
+	Machine string `json:"machine"`
+}
+
+type CleanupCount struct {
+	UUID  string `json:"uuid"`  // Unique identifier
+	Count uint32 `json:"count"` // Ranks of pool service replicas
+}
+
+// SystemCleanupResp contains the request response.
+type SystemCleanupResp struct {
+	Status int32
+	Pools  []*CleanupCount `json:"pools"`
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system cleanup response.
+func (resp *SystemCleanupResp) Errors() error {
+	return nil
+}
+
+// SystemCleaNUP requests resources associated with a machine name be cleanedup.
+//
+// Handles MS requests sent from management client app e.g. 'dmg' and calls into
+// mgmt_system.go method of the same name. The triggered method uses the control
+// API to fanout to (selection or all) gRPC servers listening as part of the
+// DAOS system and retrieve results from the selected ranks hosted there.
+func SystemCleanup(ctx context.Context, rpcClient UnaryInvoker, req *SystemCleanupReq) (*SystemCleanupResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	if req.Machine == "" {
+		return nil, errors.New("SystemCleanup requires a machine name.")
+	}
+
+	if len(req.Machine) > 64 {
+		return nil, errors.New("Machine Name must be 64 characters or less.")
+	}
+
+	pbReq := new(mgmtpb.SystemCleanupReq)
+	pbReq.Machine = req.Machine
+	pbReq.Sys = req.getSystem(rpcClient)
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCleanup(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS system cleanup request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemCleanupResp)
+	return resp, convertMSResponse(ur, resp)
+}

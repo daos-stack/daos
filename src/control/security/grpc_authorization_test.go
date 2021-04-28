@@ -87,6 +87,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/ListPools":        {ComponentAdmin},
 		"/mgmt.MgmtSvc/ListContainers":   {ComponentAdmin},
 		"/mgmt.MgmtSvc/ContSetOwner":     {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCleanup":    {ComponentAdmin},
 	}
 
 	var missing []string

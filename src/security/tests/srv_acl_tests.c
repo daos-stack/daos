@@ -31,13 +31,15 @@ char *ds_sec_server_socket_path = "/fake/socket/path";
  */
 #define TEST_USER	"myuser@"
 #define TEST_GROUP	"mygroup@"
+#define TEST_HOST	"testhost"
 
 /*
  * Test helper functions
  */
 static Auth__Token *
 create_valid_auth_token(const char *user, const char *grp,
-			const char *grp_list[], size_t num_grps)
+			const char *grp_list[], size_t num_grps,
+			const char *machine)
 {
 	Auth__Token	*token;
 	Auth__Sys	*authsys;
@@ -50,6 +52,7 @@ create_valid_auth_token(const char *user, const char *grp,
 	auth__sys__init(authsys);
 	D_STRNDUP(authsys->user, user, DAOS_ACL_MAX_PRINCIPAL_LEN);
 	D_STRNDUP(authsys->group, grp, DAOS_ACL_MAX_PRINCIPAL_LEN);
+	D_STRNDUP(authsys->machinename, machine, MAXHOSTNAMELEN);
 
 	if (num_grps > 0) {
 		size_t i;
@@ -75,12 +78,14 @@ create_valid_auth_token(const char *user, const char *grp,
 static Auth__Token *
 create_default_auth_token(void)
 {
-	return create_valid_auth_token(TEST_USER, TEST_GROUP, NULL, 0);
+	return create_valid_auth_token(TEST_USER, TEST_GROUP, NULL, 0,
+					TEST_HOST);
 }
 
 static void
 init_valid_cred(d_iov_t *cred, const char *user, const char *grp,
-		const char *grp_list[], size_t num_grps)
+		const char *grp_list[], size_t num_grps,
+		const char *machine)
 {
 	Auth__Credential	new_cred = AUTH__CREDENTIAL__INIT;
 	Auth__Token		*token;
@@ -88,7 +93,8 @@ init_valid_cred(d_iov_t *cred, const char *user, const char *grp,
 	size_t			buf_len;
 	Auth__ValidateCredResp	resp = AUTH__VALIDATE_CRED_RESP__INIT;
 
-	token = create_valid_auth_token(user, grp, grp_list, num_grps);
+	token = create_valid_auth_token(user, grp, grp_list, num_grps,
+					machine);
 
 	/* Initialize the cred with token */
 	new_cred.token = token;
@@ -108,7 +114,8 @@ init_valid_cred(d_iov_t *cred, const char *user, const char *grp,
 static void
 init_default_cred(d_iov_t *cred)
 {
-	init_valid_cred(cred, TEST_USER, TEST_GROUP, NULL, 0);
+	init_valid_cred(cred, TEST_USER, TEST_GROUP, NULL, 0,
+			TEST_HOST);
 }
 
 static void
@@ -555,6 +562,7 @@ expect_pool_get_capas_flags_invalid(uint64_t invalid_flags)
 	d_iov_t			valid_cred;
 	struct ownership	valid_owner;
 	uint64_t		result = 0;
+	char 			*machine;
 
 	valid_owner.user = "root@";
 	valid_owner.group = "admins@";
@@ -567,7 +575,7 @@ expect_pool_get_capas_flags_invalid(uint64_t invalid_flags)
 	assert_rc_equal(ds_sec_pool_get_capabilities(invalid_flags,
 						     &valid_cred,
 						     &valid_owner, valid_acl,
-						     &result),
+						     &result, &machine),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -592,6 +600,7 @@ test_pool_get_capas_null_input(void **state)
 	struct ownership	valid_owner;
 	uint64_t		valid_flags = DAOS_PC_RO;
 	uint64_t		result = 0;
+	char 			*machine;
 
 	init_default_ownership(&valid_owner);
 	init_default_cred(&valid_cred);
@@ -602,25 +611,25 @@ test_pool_get_capas_null_input(void **state)
 	assert_rc_equal(ds_sec_pool_get_capabilities(valid_flags,
 						     NULL,
 						     &valid_owner, valid_acl,
-						     &result),
+						     &result, &machine),
 			-DER_INVAL);
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(valid_flags,
 						     &valid_cred,
 						     NULL, valid_acl,
-						     &result),
+						     &result, &machine),
 			-DER_INVAL);
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(valid_flags,
 						     &valid_cred,
 						     &valid_owner, NULL,
-						     &result),
+						     &result, &machine),
 			-DER_INVAL);
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(valid_flags,
 						     &valid_cred,
 						     &valid_owner, valid_acl,
-						     NULL),
+						     NULL, &machine),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -635,6 +644,7 @@ expect_pool_get_capas_owner_invalid(char *user, char *group)
 	struct ownership	invalid_owner;
 	uint64_t		valid_flags = DAOS_PC_RO;
 	uint64_t		result = 0;
+	char 			*machine;
 
 	init_default_cred(&valid_cred);
 
@@ -646,7 +656,7 @@ expect_pool_get_capas_owner_invalid(char *user, char *group)
 	assert_rc_equal(ds_sec_pool_get_capabilities(valid_flags,
 						     &valid_cred,
 						     &invalid_owner, valid_acl,
-						     &result),
+						     &result, &machine),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -670,6 +680,7 @@ test_pool_get_capas_bad_acl(void **state)
 	d_iov_t			cred;
 	struct ownership	ownership;
 	uint64_t		result;
+	char 			*machine;
 
 	init_default_cred(&cred);
 	init_default_ownership(&ownership);
@@ -680,7 +691,7 @@ test_pool_get_capas_bad_acl(void **state)
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(DAOS_PC_RO, &cred,
 						     &ownership, bad_acl,
-						     &result),
+						     &result, &machine),
 			-DER_INVAL);
 
 	D_FREE(bad_acl);
@@ -694,6 +705,7 @@ test_pool_get_capas_validate_cred_failed(void **state)
 	d_iov_t			cred;
 	struct ownership	ownership;
 	uint64_t		result;
+	char 			*machine;
 
 	init_default_cred(&cred);
 	init_default_ownership(&ownership);
@@ -705,7 +717,7 @@ test_pool_get_capas_validate_cred_failed(void **state)
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(DAOS_PC_RO, &cred,
 						     &ownership, acl,
-						     &result),
+						     &result, &machine),
 			drpc_call_return);
 
 	daos_acl_free(acl);
@@ -722,6 +734,7 @@ expect_pool_get_capas_bad_authsys_payload(int auth_flavor)
 	Auth__ValidateCredResp	resp = AUTH__VALIDATE_CRED_RESP__INIT;
 	struct ownership	ownership;
 	uint64_t		result;
+	char 			*machine;
 
 	init_default_cred(&cred);
 	init_default_ownership(&ownership);
@@ -740,7 +753,7 @@ expect_pool_get_capas_bad_authsys_payload(int auth_flavor)
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(DAOS_PC_RO, &cred,
 						     &ownership, acl,
-						     &result),
+						     &result, &machine),
 			-DER_PROTO);
 
 	daos_acl_free(acl);
@@ -766,14 +779,16 @@ expect_pool_capas_with_acl(struct daos_acl *acl, d_iov_t *cred,
 {
 	struct ownership	ownership;
 	uint64_t		result = -1;
+	char			*machine;
 
 	init_default_ownership(&ownership);
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(flags, cred, &ownership,
-						     acl, &result),
+						     acl, &result, &machine),
 			0);
 
 	assert_int_equal(result, exp_capas);
+	D_FREE(machine);
 }
 
 static void
@@ -800,7 +815,8 @@ expect_owner_capas_with_perms(uint64_t acl_perms, uint64_t flags,
 	d_iov_t		cred;
 
 	/* Only matches owner */
-	init_valid_cred(&cred, TEST_USER, "somerandomgroup@", NULL, 0);
+	init_valid_cred(&cred, TEST_USER, "somerandomgroup@", NULL, 0,
+			TEST_HOST);
 	acl = get_acl_with_perms(acl_perms, 0);
 
 	expect_pool_capas_with_acl(acl, &cred, flags, exp_capas);
@@ -854,7 +870,8 @@ expect_group_capas_with_perms(uint64_t acl_perms, uint64_t flags,
 	d_iov_t		cred;
 
 	/* Only matches group */
-	init_valid_cred(&cred, "randomuser@", TEST_GROUP, NULL, 0);
+	init_valid_cred(&cred, "randomuser@", TEST_GROUP, NULL, 0,
+			TEST_HOST);
 	acl = get_acl_with_perms(0, acl_perms);
 
 	expect_pool_capas_with_acl(acl, &cred, flags, exp_capas);
@@ -912,7 +929,8 @@ expect_list_capas_with_perms(uint64_t acl_perms,
 
 	/* Only matches group */
 	init_valid_cred(&cred, "fakeuser@", "fakegroup@", grps,
-			sizeof(grps) / sizeof(char *));
+			sizeof(grps) / sizeof(char *),
+			TEST_HOST);
 	acl = get_acl_with_perms(0, acl_perms);
 
 	expect_pool_capas_with_acl(acl, &cred, flags, exp_capas);
@@ -975,7 +993,8 @@ test_pool_get_capas_no_match(void **state)
 	d_iov_t			cred;
 
 	/* Cred is neither owner user nor owner group */
-	init_valid_cred(&cred, "fakeuser@", "fakegroup@", NULL, 0);
+	init_valid_cred(&cred, "fakeuser@", "fakegroup@", NULL, 0,
+			TEST_HOST);
 	acl = get_acl_with_perms(DAOS_ACL_PERM_READ, DAOS_ACL_PERM_READ);
 
 	expect_pool_capas_with_acl(acl, &cred, DAOS_PC_RO, 0);
@@ -1082,7 +1101,8 @@ test_pool_get_capas_no_owner_group_entry(void **state)
 	struct daos_acl		*acl;
 	d_iov_t			cred;
 
-	init_valid_cred(&cred, "fakeuser@", TEST_GROUP, NULL, 0);
+	init_valid_cred(&cred, "fakeuser@", TEST_GROUP, NULL, 0,
+			TEST_HOST);
 	acl = get_acl_with_perms(DAOS_ACL_PERM_READ, DAOS_ACL_PERM_READ);
 	assert_rc_equal(daos_acl_remove_ace(&acl, DAOS_ACL_OWNER_GROUP, NULL),
 			0);
@@ -1104,7 +1124,8 @@ test_pool_get_capas_no_owner_group_entry_list(void **state)
 	d_iov_t			cred;
 	static const char	*grps[] = { TEST_GROUP };
 
-	init_valid_cred(&cred, "fakeuser@", "fakegroup@", grps, 1);
+	init_valid_cred(&cred, "fakeuser@", "fakegroup@", grps, 1,
+			TEST_HOST);
 	acl = get_acl_with_perms(DAOS_ACL_PERM_READ, DAOS_ACL_PERM_READ);
 	assert_rc_equal(daos_acl_remove_ace(&acl, DAOS_ACL_OWNER_GROUP, NULL),
 			0);
@@ -1128,7 +1149,8 @@ expect_everyone_capas_with_perms(uint64_t acl_perms,
 	struct daos_ace		*ace;
 	d_iov_t			cred;
 
-	init_valid_cred(&cred, TEST_USER, TEST_GROUP, NULL, 0);
+	init_valid_cred(&cred, TEST_USER, TEST_GROUP, NULL, 0,
+			TEST_HOST);
 	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 	ace->dae_allow_perms = acl_perms;
@@ -1218,7 +1240,8 @@ test_pool_get_capas_fall_thru_everyone(void **state)
 	static const char	*grps[] = { "anotherbadgrp@" };
 
 	/* Cred doesn't match owner or group */
-	init_valid_cred(&cred, "baduser@", "badgrp@", grps, 1);
+	init_valid_cred(&cred, "baduser@", "badgrp@", grps, 1,
+			TEST_HOST);
 	/* Owner/group entries exist with no perms */
 	acl = get_acl_with_perms(0, 0);
 
@@ -1248,7 +1271,8 @@ test_pool_get_capas_user_matches(void **state)
 	const char	*username = "pooluser@";
 
 	/* Ownership won't match the cred */
-	init_valid_cred(&cred, username, "somegroup@", NULL, 0);
+	init_valid_cred(&cred, username, "somegroup@", NULL, 0,
+			TEST_HOST);
 
 	/* User entry matches our cred */
 	ace = daos_ace_create(DAOS_ACL_USER, username);
@@ -1274,7 +1298,8 @@ test_pool_get_capas_user_matches_second(void **state)
 	d_iov_t		cred;
 	const char	*username = "pooluser@";
 
-	init_valid_cred(&cred, username, "somegroup@", NULL, 0);
+	init_valid_cred(&cred, username, "somegroup@", NULL, 0,
+			TEST_HOST);
 
 	/* Match is not the first in the list */
 	ace[0] = daos_ace_create(DAOS_ACL_USER, "fakeuser@");
@@ -1302,7 +1327,8 @@ test_pool_get_capas_owner_beats_user(void **state)
 	d_iov_t			cred;
 
 	/* Cred user is the owner */
-	init_valid_cred(&cred, TEST_USER, "somegroup@", NULL, 0);
+	init_valid_cred(&cred, TEST_USER, "somegroup@", NULL, 0,
+			TEST_HOST);
 
 	acl = get_acl_with_perms(DAOS_ACL_PERM_READ, DAOS_ACL_PERM_READ);
 
@@ -1332,7 +1358,8 @@ test_pool_get_capas_user_beats_owner_grp(void **state)
 	const char		*username = "someuser@";
 
 	/* Cred group is the owner group */
-	init_valid_cred(&cred, username, TEST_GROUP, NULL, 0);
+	init_valid_cred(&cred, username, TEST_GROUP, NULL, 0,
+			TEST_HOST);
 
 	acl = get_acl_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
@@ -1364,7 +1391,8 @@ test_pool_get_capas_grp_matches(void **state)
 	const char		*grpname = "wonderfulgroup@";
 
 	/* Ownership won't match our creds */
-	init_valid_cred(&cred, "someuser@", grpname, NULL, 0);
+	init_valid_cred(&cred, "someuser@", grpname, NULL, 0,
+			TEST_HOST);
 
 	/* Group entry matches our cred */
 	ace = daos_ace_create(DAOS_ACL_GROUP, grpname);
@@ -1390,7 +1418,8 @@ test_pool_get_capas_grp_matches_second(void **state)
 	const char		*grpname = "wonderfulgroup@";
 
 	/* Ownership won't match our creds */
-	init_valid_cred(&cred, "someuser@", grpname, NULL, 0);
+	init_valid_cred(&cred, "someuser@", grpname, NULL, 0,
+			TEST_HOST);
 
 	/* Match is not the first in the list */
 	ace[0] = daos_ace_create(DAOS_ACL_GROUP, "fakegrp@");
@@ -1419,7 +1448,8 @@ test_pool_get_capas_grp_matches_multiple(void **state)
 	static const char	*groups[] = { "group1@", "group2@" };
 
 	/* Ownership won't match our creds */
-	init_valid_cred(&cred, "someuser@", "somegroup@", groups, 2);
+	init_valid_cred(&cred, "someuser@", "somegroup@", groups, 2,
+			TEST_HOST);
 
 	/* Both groups in the ACL with different perms - should be unioned */
 	ace[0] = daos_ace_create(DAOS_ACL_GROUP, groups[0]);
@@ -1448,7 +1478,8 @@ test_pool_get_capas_grp_no_match(void **state)
 	static const char	*groups[] = { "group1@", "group2@" };
 
 	/* Not the owner */
-	init_valid_cred(&cred, "someuser@", "somegroup@", groups, 2);
+	init_valid_cred(&cred, "someuser@", "somegroup@", groups, 2,
+			TEST_HOST);
 
 	/* Shouldn't match any of them */
 	ace[0] = daos_ace_create(DAOS_ACL_GROUP, "fakegrp@");
@@ -1479,7 +1510,8 @@ test_pool_get_capas_grp_check_includes_owner(void **state)
 	static const char	*groups[] = { "group1@", "group2@" };
 
 	/* Ownership matches group */
-	init_valid_cred(&cred, "someuser@", TEST_GROUP, groups, 2);
+	init_valid_cred(&cred, "someuser@", TEST_GROUP, groups, 2,
+			TEST_HOST);
 
 	/* Should get union of owner group and named groups */
 	ace[0] = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL);
@@ -1508,7 +1540,8 @@ test_pool_get_capas_grps_beat_everyone(void **state)
 	static const char	*groups[] = { "group1@", "group2@" };
 
 	/* Ownership doesn't match */
-	init_valid_cred(&cred, "someuser@", "somegroup@", groups, 2);
+	init_valid_cred(&cred, "someuser@", "somegroup@", groups, 2,
+			TEST_HOST);
 
 	/*
 	 * "Everyone" has more privs than the group, but the matching group
@@ -1720,7 +1753,8 @@ expect_cont_capas_with_perms(uint64_t acl_perms, uint64_t flags,
 	/*
 	 * Just a user specific permission, not the owner
 	 */
-	init_valid_cred(&cred, "specificuser@", TEST_GROUP, NULL, 0);
+	init_valid_cred(&cred, "specificuser@", TEST_GROUP, NULL, 0,
+			TEST_HOST);
 	acl = get_user_acl_with_perms("specificuser@", acl_perms);
 	init_default_ownership(&ownership);
 
@@ -1801,7 +1835,8 @@ expect_cont_capas_with_owner_perms(uint64_t acl_perms, uint64_t flags,
 	/*
 	 * Owner entry matched by cred
 	 */
-	init_valid_cred(&cred, TEST_USER, TEST_GROUP, NULL, 0);
+	init_valid_cred(&cred, TEST_USER, TEST_GROUP, NULL, 0,
+			TEST_HOST);
 	acl = get_acl_with_perms(acl_perms, 0);
 	init_default_ownership(&ownership);
 

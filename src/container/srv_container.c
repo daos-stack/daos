@@ -2761,8 +2761,10 @@ shall_close(const uuid_t pool_hdl, uuid_t *pool_hdls, int n_pool_hdls)
 	int i;
 
 	for (i = 0; i < n_pool_hdls; i++) {
-		if (uuid_compare(pool_hdls[i], pool_hdl) == 0)
+		if (uuid_compare(pool_hdls[i], pool_hdl) == 0) {
+			D_DEBUG(DF_DSMS, "Found container for: pool_hdls" DF_UUID"\n",  DP_UUID(pool_hdls[0]));
 			return 1;
+		}
 	}
 	return 0;
 }
@@ -2787,6 +2789,8 @@ close_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (!shall_close(hdl->ch_pool_hdl, arg->cia_pool_hdls,
 			 arg->cia_n_pool_hdls))
 		return 0;
+
+	D_DEBUG(DF_DSMS, " closing container: "DF_UUID"\n", DP_UUID(hdl->ch_cont));
 
 	rc = recs_buf_grow(buf);
 	if (rc != 0)

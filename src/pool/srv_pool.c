@@ -1999,7 +1999,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct rdb_tx			tx;
 	d_iov_t				key;
 	d_iov_t				value;
-	struct pool_hdl			hdl;
+	struct pool_hdl			hdl = {0};
 	uint32_t			nhandles;
 	int				skip_update = 0;
 	int				rc;
@@ -2011,6 +2011,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct daos_prop_entry	       *owner_grp_entry;
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
+	char			       *machine = NULL;
 
 	metrics = &ds_pool_metrics;
 
@@ -2102,7 +2103,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 */
 	rc = ds_sec_pool_get_capabilities(in->pci_flags, &in->pci_cred, &owner,
 					  acl_entry->dpe_val_ptr,
-					  &sec_capas);
+					  &sec_capas, &machine);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": refusing connect attempt for "
 			DF_X64" error: "DF_RC"\n", DP_UUID(in->pci_op.pi_uuid),
@@ -2179,6 +2180,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	hdl.ph_flags = in->pci_flags;
 	hdl.ph_sec_capas = sec_capas;
+	strcpy(hdl.ph_machine, machine);
+
 	nhandles++;
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
 	d_iov_set(&value, &hdl, sizeof(hdl));
@@ -2202,6 +2205,8 @@ out_map_version:
 	out->pco_op.po_map_version = ds_pool_get_version(svc->ps_pool);
 	if (map_buf)
 		D_FREE(map_buf);
+	if (machine)
+		D_FREE(machine);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -2327,7 +2332,7 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	struct rdb_tx			tx;
 	d_iov_t			key;
 	d_iov_t			value;
-	struct pool_hdl			hdl;
+	struct pool_hdl			hdl = {0};
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
@@ -2616,7 +2621,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 	struct rdb_tx			 tx;
 	d_iov_t				 key;
 	d_iov_t				 value;
-	struct pool_hdl			 hdl;
+	struct pool_hdl			 hdl = {0};
 	int				 rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
@@ -2710,7 +2715,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	struct rdb_tx		tx;
 	d_iov_t			key;
 	d_iov_t			value;
-	struct pool_hdl		hdl;
+	struct pool_hdl		hdl = {0};
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
@@ -4669,6 +4674,7 @@ struct evict_iter_arg {
 	uuid_t *eia_hdl_uuids;
 	size_t	eia_hdl_uuids_size;
 	int	eia_n_hdl_uuids;
+	char 	*eia_machine;
 };
 
 static int
@@ -4684,6 +4690,15 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
 			key->iov_len, val->iov_len);
 		return -DER_IO;
+	}
+
+	/* If we specified a machine name as a filter check before we do the realloc */
+	if (arg->eia_machine) {
+		struct pool_hdl	*hdl = (struct pool_hdl *)val->iov_buf;
+
+		if(strncmp(arg->eia_machine, hdl->ph_machine, MAXHOSTNAMELEN ) != 0) {
+			return 0;
+		}
 	}
 
 	/*
@@ -4716,7 +4731,7 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
  */
 static int
 find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
-		   size_t *hdl_uuids_size, int *n_hdl_uuids)
+		   size_t *hdl_uuids_size, int *n_hdl_uuids, char *machine)
 {
 	struct evict_iter_arg	arg;
 	int			rc;
@@ -4753,7 +4768,7 @@ validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,
 	int		rc = 0;
 	d_iov_t		key;
 	d_iov_t		value;
-	struct pool_hdl	hdl;
+	struct pool_hdl	hdl = {0};
 
 	if (hdl_list == NULL || n_hdl_list == 0) {
 		return -DER_INVAL;
@@ -4827,7 +4842,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 					    in->pvi_hdls.ca_count);
 	} else {
 		rc = find_hdls_to_evict(&tx, svc, &hdl_uuids, &hdl_uuids_size,
-					&n_hdl_uuids);
+					&n_hdl_uuids, in->pvi_machine);
 	}
 
 	if (rc != 0)
@@ -4878,6 +4893,7 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pvo_op.po_rc = rc;
+	out->pvo_count = n_hdl_uuids;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pvi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
@@ -4895,6 +4911,7 @@ out:
  * \param[in]	destroy		If true the evict request is a destroy request
  * \param[in]	force		If true and destroy is true request all handles
  *				be forcibly evicted
+ * \param[out]	count		Number of handles evicted
  *
  * \return	0		Success
  *		-DER_BUSY	Open pool handles exist and no force requested
@@ -4903,7 +4920,8 @@ out:
 int
 ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 			uuid_t *handles, size_t n_handles,
-			uint32_t destroy, uint32_t force)
+			char *machine, uint32_t destroy,
+			uint32_t force, uint32_t *count)
 {
 	int			 rc;
 	struct rsvc_client	 client;
@@ -4942,6 +4960,7 @@ rechoose:
 	uuid_clear(in->pvi_op.pi_hdl);
 	in->pvi_hdls.ca_arrays = handles;
 	in->pvi_hdls.ca_count = n_handles;
+	in->pvi_machine = machine;
 
 	/* Pool destroy (force=false): assert no open handles / do not evict.
 	 * Pool destroy (force=true): evict any/all open handles on the pool.
@@ -4966,6 +4985,8 @@ rechoose:
 	if (rc != 0)
 		D_ERROR(DF_UUID": pool destroy failed to evict handles, "
 			"rc: %d\n", DP_UUID(pool_uuid), rc);
+	if (count)
+		*count = out->pvo_count;
 
 	crt_req_decref(rpc);
 out_client:

@@ -74,4 +74,6 @@ service MgmtSvc {
 	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {}
 	// Erase DAOS system database prior to reformat
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
+	// Clean up leaked resources for a given node
+	rpc SystemCleanup(SystemCleanupReq) returns(SystemCleanupResp){}
 }

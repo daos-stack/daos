@@ -506,16 +506,65 @@ get_sec_capas_for_token(Auth__Token *token, struct ownership *ownership,
 	return rc;
 }
 
+static int
+get_sec_origin_for_token(Auth__Token *token, char **machine)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	int 			machine_size = 0;
+	int 			rc = 0;
+	char 			*mtmp;
+	Auth__Sys		*authsys;
+
+
+	if (token == NULL || machine == NULL) {
+		D_ERROR("NULL input\n");
+		return -DER_INVAL;
+	}
+
+	rc = get_auth_sys_payload(token, &authsys);
+	if (rc != 0)
+		return rc;
+
+	if(authsys->machinename) {
+		 machine_size = strnlen(authsys->machinename, MAXHOSTNAMELEN);
+	} else {
+		D_ERROR("Malformed AuthSys token missing machinename");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	if (machine_size > 64) {
+		D_ERROR("hostname provided by the agent is too large");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	D_STRNDUP(mtmp, authsys->machinename, machine_size);
+
+	if (mtmp) {
+		*machine = mtmp;
+		rc = 0;
+	} else {
+		rc = -DER_NOMEM;
+	}
+
+out:
+	auth__sys__free_unpacked(authsys, &alloc.alloc);
+	return rc;
+}
+
 int
 ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 			     struct ownership *ownership,
-			     struct daos_acl *acl, uint64_t *capas)
+			     struct daos_acl *acl, uint64_t *capas,
+			     char **machine)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int		rc;
 	Auth__Token	*token;
 
-	if (cred == NULL || ownership == NULL || acl == NULL || capas == NULL) {
+	if (cred == NULL || ownership == NULL || acl == NULL ||
+	    capas == NULL || machine == NULL) {
 		D_ERROR("NULL input\n");
 		return -DER_INVAL;
 	}
@@ -549,6 +598,8 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 				     pool_capas_from_perms, capas);
 	if (rc == 0)
 		filter_pool_capas_based_on_flags(flags, capas);
+
+	rc = get_sec_origin_for_token(token, machine);
 
 	auth__token__free_unpacked(token, &alloc.alloc);
 	return rc;

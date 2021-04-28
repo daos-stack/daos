@@ -59,6 +59,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/ListPools":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/ListContainers":   {ComponentAdmin},
 	"/mgmt.MgmtSvc/ContSetOwner":     {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCleanup":    {ComponentAdmin},
 }
 
 // HasAccess check if the given component has access to method given in FullMethod

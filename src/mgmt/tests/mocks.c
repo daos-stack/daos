@@ -353,9 +353,11 @@ mock_ds_mgmt_pool_extend_setup(void)
 
 int     ds_mgmt_pool_evict_return;
 uuid_t  ds_mgmt_pool_evict_uuid;
+
 int
 ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		   uuid_t *handles, size_t n_handles, const char *group)
+		   uuid_t *handles, size_t n_handles, char *machine,
+		   const char *group, uint32_t *count)
 {
 	uuid_copy(ds_mgmt_pool_evict_uuid, pool_uuid);
 	return ds_mgmt_pool_evict_return;

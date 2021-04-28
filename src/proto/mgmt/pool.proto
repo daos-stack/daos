@@ -62,12 +62,14 @@ message PoolEvictReq {
 	string sys = 1; // DAOS system identifier
 	string uuid = 2; // uuid of pool to evict
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
-	repeated string handles = 4; // Optional list of handles to evict
+	repeated string handles = 4; // Optional list of handles to evict (Mutually exclusive with machine name)
+	string machine = 5; // Optional machine name to evict handles for (Mutually exclusive with handles)
 }
 
 // PoolEvictResp returns resultant state of evict operation.
 message PoolEvictResp {
 	int32 status = 1; // DAOS error code
+	int32 count = 2; // Optional count of handles evicted when machine name was passed
 }
 
 // PoolExcludeReq supplies pool identifier, rank, and target_idxs.

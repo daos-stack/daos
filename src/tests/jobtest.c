@@ -28,7 +28,8 @@ void print_usage(void)
 }
 
 void cleanup_handles(uuid_t *pool_uuids, int num_pools,
-		     daos_handle_t **pool_handles, int handles_per_pool)
+		     daos_handle_t **pool_handles, int handles_per_pool,
+		     daos_handle_t **cont_handles)
 {
 	int i, rc;
 
@@ -42,6 +43,7 @@ void cleanup_handles(uuid_t *pool_uuids, int num_pools,
 			if (daos_handle_is_inval(pool_handles[i][j])) {
 				continue;
 			}
+
 			rc = daos_pool_disconnect(pool_handles[i][j], NULL);
 			if (rc) {
 				struct dc_pool	*pool;
@@ -52,12 +54,14 @@ void cleanup_handles(uuid_t *pool_uuids, int num_pools,
 				uuid_unparse_lower(pool->dp_pool, pool_str);
 				uuid_unparse_lower(pool->dp_pool, hdl_str);
 				printf("disconnect handle %s from pool %s "
-					"failed\n", hdl_str, pool_str);
+					"failed: %d\n", hdl_str, pool_str, rc);
 				dc_pool_put(pool);
 			}
 		}
 		free(pool_handles[i]);
+		free(cont_handles[i]);
 		pool_handles[i] = NULL;
+		cont_handles[i] = NULL;
 	}
 }
 
@@ -120,6 +124,7 @@ main(int argc, char **argv)
 	char		*pool_str = NULL;
 	uuid_t		*pool_uuids = NULL;
 	daos_handle_t	**pool_handles = NULL;
+	daos_handle_t	**cont_handles = NULL;
 
 	progname = argv[0];
 	while ((opt = getopt(argc, argv, "xs:h:wp:")) != -1) {
@@ -170,11 +175,23 @@ main(int argc, char **argv)
 		exit(-1);
 	}
 
+	cont_handles = calloc(num_pools, sizeof(daos_handle_t *));
+	if (cont_handles == NULL) {
+		perror("Unable to allocate space for container handles");
+		exit(-1);
+	}
+
 	for (i = 0; i < num_pools; i++) {
 		pool_handles[i] = calloc(handles_per_pool,
 					sizeof(daos_handle_t));
 		if (pool_handles[i] == NULL) {
 			perror("Unable to allocate space for pool handles");
+			exit(-1);
+		}
+		cont_handles[i] = calloc(handles_per_pool,
+					sizeof(daos_handle_t));
+		if (cont_handles[i] == NULL) {
+			perror("Unable to allocate container handles");
 			exit(-1);
 		}
 	}
@@ -204,12 +221,13 @@ main(int argc, char **argv)
 	/** Give a sleep grace period then exit based on -x switch */
 	sleep(sleep_seconds);
 
-	/* User our handles */
+	/* User our handles by creating pools and connecting to them */
 	for (i = 0; i < num_pools; i++) {
 		int j;
 
 		for (j = 0; j < handles_per_pool; j++) {
 			uuid_t c_uuid;
+			char cstr[64];
 
 			uuid_generate(c_uuid);
 			printf("Creating container using handle %" PRIu64 "\n",
@@ -221,6 +239,18 @@ main(int argc, char **argv)
 				       " %" PRIu64 " rc: %d\n",
 				       pool_handles[i][j].cookie, rc);
 			}
+
+			uuid_unparse(c_uuid, cstr);
+			printf("Opening container %s\n",cstr);
+			rc = daos_cont_open(pool_handles[i][j], c_uuid, DAOS_COO_RW,
+						&cont_handles[i][j], NULL, NULL);
+			if (rc != 0) {
+				char		uuid_str[64];
+
+				uuid_unparse(pool_uuids[i], uuid_str);
+				printf("Unable to open container %s rc: %d",
+				       uuid_str, rc);
+			}
 		}
 	}
 
@@ -230,7 +260,8 @@ main(int argc, char **argv)
 cleanup:
 	if (well_behaved) {
 		cleanup_handles(pool_uuids, num_pools,
-				pool_handles, handles_per_pool);
+				pool_handles, handles_per_pool,
+				cont_handles);
 	}
 
 	/** shutdown the local DAOS stack */

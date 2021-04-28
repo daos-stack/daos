@@ -49,6 +49,7 @@ ds_sec_alloc_default_daos_cont_acl(void);
  * \param[in]	ownership	Pool ownership information
  * \param[in]	acl		Pool ACL
  * \param[out]	capas		Capability bits for this user
+ * \param[out]  machine		Hostname of the machine that generated the credential.
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
@@ -62,7 +63,8 @@ ds_sec_alloc_default_daos_cont_acl(void);
 int
 ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 			     struct ownership *ownership,
-			     struct daos_acl *acl, uint64_t *capas);
+			     struct daos_acl *acl, uint64_t *capas,
+			     char **machine);
 
 /**
  * Derive the container security capabilities for the given user credential,
