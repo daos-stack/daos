@@ -437,7 +437,7 @@ pipeline {
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
-                            args '--tmpfs /mnt/daos --device /dev/fuse --cap-add SYS_ADMIN'
+                            args '--tmpfs /mnt/daos'
                         }
                     }
                     steps {
@@ -445,7 +445,8 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh """sudo ./utils/docker/docker_nlt.sh --test xattr"""
+                        sh """sudo ./utils/docker/docker_nlt.sh kv"""
+			    label 'Run NLT smoke test'
                     }
                     post {
                         always {
@@ -486,7 +487,8 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh """sudo ./utils/docker/docker_nlt.sh kv"""
+                        sh """sudo ./utils/docker/docker_nlt.sh --class-name centos7.clang kv"""
+			    label 'Run NLT smoke test'
                     }
                     post {
                         always {
@@ -517,6 +519,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: quickBuild(),
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos8 "
+                            args '--tmpfs /mnt/daos'
                         }
                     }
                     steps {
@@ -524,6 +527,8 @@ pipeline {
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no",
                                    scons_exe: 'scons-3'
+                        sh """sudo ./utils/docker/docker_nlt.sh --class-name centos8 kv"""
+			    label 'Run NLT smoke test'
                     }
                     post {
                         always {
@@ -623,12 +628,15 @@ pipeline {
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('leap15') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
+                            args '--tmpfs /mnt/daos'
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
                                    scons_args: sconsFaultsArgs()
+                        sh """sudo ./utils/docker/docker_nlt.sh kv""",
+			    label 'Run NLT smoke test'
                     }
                     post {
                         always {

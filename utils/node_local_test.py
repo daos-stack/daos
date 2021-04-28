@@ -132,10 +132,11 @@ class WarningsFactory():
 
     # Error levels supported by the reporting are LOW, NORMAL, HIGH, ERROR.
 
-    def __init__(self, filename, junit=False):
+    def __init__(self, filename, junit=False, class_id=None):
         self._fd = open(filename, 'w')
         self.filename = filename
         self.issues = []
+        self._class_id = class_id
         self.pending = []
         self._running = True
         # Save the filename of the object, as __file__ does not
@@ -144,13 +145,22 @@ class WarningsFactory():
         self._flush()
 
         if junit:
-            test_case = junit_xml.TestCase('Startup', classname='NLT.core')
+            test_case = junit_xml.TestCase('Startup',
+                                           classname=self._class_name(core))
             self.ts = junit_xml.TestSuite('Node Local Testing',
                                           test_cases=[test_case])
-            self.tc = junit_xml.TestCase('Sanity', classname='NLT.core')
+            self.tc = junit_xml.TestCase('Sanity',
+                                         classname=self._class_name(core))
         else:
             self.ts = None
             self.tc = None
+
+    def _class_name(self, class_name):
+        """Return a formatted ID string for class"""
+
+        if self._class_id:
+            return 'NLT.{}.{}'.format(self._class_id, class_name)
+        return 'NLT.{}'.format(class_name)
 
     def __del__(self):
         """Ensure the file is flushed on exit, but if it hasn't already
@@ -181,7 +191,7 @@ class WarningsFactory():
         if not self.ts:
             return
 
-        tc = junit_xml.TestCase(name, classname='NLT.{}'.format(test_class))
+        tc = junit_xml.TestCase(name, classname=self._class_name(test_class))
         if failure:
             tc.add_failure_info(failure)
         self.ts.test_cases.append(tc)
@@ -2609,6 +2619,8 @@ def main():
         description='Run DAOS client on local node')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--dfuse-debug', default=None)
+    parser.add_argument('--class-name', default=None,
+                        help='class name to use for junit')
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--no-root', action='store_true')
@@ -2635,7 +2647,9 @@ def main():
 
     conf = load_conf(args)
 
-    wf = WarningsFactory('nlt-errors.json', junit=True)
+    wf = WarningsFactory('nlt-errors.json',
+                         junit=True,
+                         class_id=args.class_name)
 
     wf_server = WarningsFactory('nlt-server-leaks.json')
     wf_client = WarningsFactory('nlt-client-leaks.json')
