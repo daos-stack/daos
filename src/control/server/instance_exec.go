@@ -78,8 +78,7 @@ func (ei *EngineInstance) waitReady(ctx context.Context, errChan chan error) err
 	case <-ctx.Done(): // propagated harness exit
 		return ctx.Err()
 	case err := <-errChan:
-		// TODO: Restart failed instances on unexpected exit.
-		return errors.Wrapf(err, "instance %d exited prematurely", ei.Index())
+		return errors.Wrapf(err, "instance %d exited during start-up", ei.Index())
 	case ready := <-ei.awaitDrpcReady():
 		if err := ei.finishStartup(ctx, ready); err != nil {
 			return err
@@ -130,7 +129,7 @@ func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string) on
 	}
 }
 
-func (ei *EngineInstance) exit(ctx context.Context, exitErr error) {
+func (ei *EngineInstance) exit(ctx context.Context, exitErr error, exPid int) {
 	engineIdx := ei.Index()
 
 	ei.log.Infof("instance %d exited: %s", engineIdx, common.GetExitStatus(exitErr))
@@ -148,7 +147,8 @@ func (ei *EngineInstance) exit(ctx context.Context, exitErr error) {
 	// After we know that the instance has exited, fire off
 	// any callbacks that were waiting for this state.
 	for _, exitFn := range ei.onInstanceExit {
-		if err := exitFn(ctx, engineIdx, rank, exitErr); err != nil {
+		err := exitFn(ctx, engineIdx, rank, exitErr, exPid)
+		if err != nil {
 			ei.log.Errorf("onExit: %s", err)
 		}
 	}
@@ -214,7 +214,10 @@ func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
 					return
 				}
 
-				ei.exit(ctx, ei.run(ctx, recreateSBs))
+				err := ei.run(ctx, recreateSBs)
+				// engine should have exited, retrieve pid
+				7ei.
+				ei.exit(ctx, 
 			}
 		}
 	}()

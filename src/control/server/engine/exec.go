@@ -118,6 +118,8 @@ func (r *Runner) Signal(signal os.Signal) error {
 	return r.cmd.Process.Signal(signal)
 }
 
+// GetPid retrieves the Runner process PID
+
 // GetConfig returns the runner's configuration
 func (r *Runner) GetConfig() *Config {
 	return r.Config
