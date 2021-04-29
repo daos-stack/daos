@@ -163,8 +163,7 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = ds_mgmt_group_update_handler(&in);
 out:
-	if (in.gui_servers != NULL)
-		D_FREE(in.gui_servers);
+	D_FREE(in.gui_servers);
 
 	resp.status = rc;
 	len = mgmt__group_update_resp__get_packed_size(&resp);
@@ -189,7 +188,7 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 	char		*out_owner_grp = NULL;
 	char		*out_label = NULL;
 	struct daos_acl	*out_acl = NULL;
-	daos_prop_t	*new_prop = NULL;
+	daos_prop_t	*new_prop;
 	uint32_t	entries = 0;
 	uint32_t	idx = 0;
 	int		rc = 0;
@@ -264,7 +263,6 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 	return rc;
 
 err_out:
-	daos_prop_free(new_prop);
 	daos_acl_free(out_acl);
 	D_FREE(out_label);
 	D_FREE(out_owner_grp);
@@ -434,7 +432,6 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	size_t			 len;
 	int			 rc;
 	int			 i;
-
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_evict_req__unpack(&alloc.alloc,
@@ -645,6 +642,7 @@ out:
 
 	mgmt__pool_drain_req__free_unpacked(req, &alloc.alloc);
 }
+
 void
 ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -1301,8 +1299,7 @@ out:
 	if (resp.containers) {
 		for (i = 0; i < resp.n_containers; i++) {
 			if (resp.containers[i]) {
-				if (resp.containers[i]->uuid)
-					D_FREE(resp.containers[i]->uuid);
+				D_FREE(resp.containers[i]->uuid);
 				D_FREE(resp.containers[i]);
 			}
 		}
@@ -1676,8 +1673,7 @@ out:
 	ctl__bio_health_req__free_unpacked(req, &alloc.alloc);
 	D_FREE(resp);
 
-	if (bio_health != NULL)
-		D_FREE(bio_health);
+	D_FREE(bio_health);
 }
 
 void
@@ -1743,10 +1739,8 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_state_req__free_unpacked(req, &alloc.alloc);
 
 	if (rc == 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
-		if (resp->dev_uuid != NULL)
-			D_FREE(resp->dev_uuid);
+		D_FREE(resp->dev_state);
+		D_FREE(resp->dev_uuid);
 	}
 
 	D_FREE(resp);
@@ -1815,10 +1809,8 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_state_req__free_unpacked(req, &alloc.alloc);
 
 	if (rc == 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
-		if (resp->dev_uuid != NULL)
-			D_FREE(resp->dev_uuid);
+		D_FREE(resp->dev_state);
+		D_FREE(resp->dev_uuid);
 	}
 
 	D_FREE(resp);
@@ -1907,10 +1899,8 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
 
 	if (rc == 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
-		if (resp->new_dev_uuid != NULL)
-			D_FREE(resp->new_dev_uuid);
+		D_FREE(resp->dev_state);
+		D_FREE(resp->new_dev_uuid);
 	}
 
 	D_FREE(resp);
@@ -1987,15 +1977,12 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_identify_req__free_unpacked(req, &alloc.alloc);
 
 	if (rc == 0) {
-		if (resp->led_state != NULL)
-			D_FREE(resp->led_state);
-		if (resp->dev_uuid != NULL)
-			D_FREE(resp->dev_uuid);
+		D_FREE(resp->led_state);
+		D_FREE(resp->dev_uuid);
 	}
 
 	D_FREE(resp);
 }
-
 
 
 void

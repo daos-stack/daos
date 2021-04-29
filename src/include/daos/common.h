@@ -838,8 +838,6 @@ int crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
-void daos_prop_fini(daos_prop_t *prop)
-	__attribute__((nonnull));
 
 struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_entry_copy(struct daos_prop_entry *entry,
