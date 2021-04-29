@@ -70,10 +70,10 @@ type (
 type (
 	handle struct {
 		sync.RWMutex
-		idx    uint32
-		rank   *uint32
-		apiCtx *C.struct_d_tm_context
-		root   *C.struct_d_tm_node_t
+		idx  uint32
+		rank *uint32
+		ctx  *C.struct_d_tm_context
+		root *C.struct_d_tm_node_t
 	}
 
 	metricBase struct {
@@ -111,7 +111,7 @@ func findNode(hdl *handle, name string) (*C.struct_d_tm_node_t, error) {
 		return nil, errors.New("nil handle")
 	}
 
-	node := C.d_tm_find_metric(hdl.apiCtx, C.CString(name))
+	node := C.d_tm_find_metric(hdl.ctx, C.CString(name))
 	if node == nil {
 		return nil, errors.Errorf("unable to find metric named %q", name)
 	}
@@ -136,7 +136,7 @@ func (mb *metricBase) Name() string {
 	}
 
 	if mb.name == nil {
-		name := C.GoString((*C.char)(C.d_tm_conv_ptr(mb.handle.apiCtx, unsafe.Pointer(mb.node.dtn_name))))
+		name := C.GoString((*C.char)(C.d_tm_conv_ptr(mb.handle.ctx, unsafe.Pointer(mb.node.dtn_name))))
 		mb.name = &name
 	}
 
@@ -150,7 +150,7 @@ func (mb *metricBase) fillMetadata() {
 
 	var desc *C.char
 	var units *C.char
-	res := C.d_tm_get_metadata(mb.handle.apiCtx, &desc, &units, mb.node)
+	res := C.d_tm_get_metadata(mb.handle.ctx, &desc, &units, mb.node)
 	if res == C.DER_SUCCESS {
 		descStr := C.GoString(desc)
 		mb.desc = &descStr
@@ -196,7 +196,7 @@ func (mb *metricBase) String() string {
 	}
 
 	go func() {
-		C.d_tm_print_node(mb.handle.apiCtx, mb.node, C.int(0), C.CString(""), C.D_TM_STANDARD, C.int(0), f)
+		C.d_tm_print_node(mb.handle.ctx, mb.node, C.int(0), C.CString(""), C.D_TM_STANDARD, C.int(0), f)
 		C.fclose(f)
 	}()
 
@@ -247,9 +247,9 @@ func Init(parent context.Context, idx uint32) (context.Context, error) {
 	}
 
 	handle := &handle{
-		idx:    idx,
-		apiCtx: tmCtx,
-		root:   root,
+		idx:  idx,
+		ctx:  tmCtx,
+		root: root,
 	}
 
 	return context.WithValue(parent, handleKey, handle), nil
@@ -258,7 +258,7 @@ func Init(parent context.Context, idx uint32) (context.Context, error) {
 // Detach detaches from the telemetry handle
 func Detach(ctx context.Context) {
 	if hdl, err := getHandle(ctx); err != nil {
-		C.d_tm_close(&hdl.apiCtx)
+		C.d_tm_close(&hdl.ctx)
 	}
 }
 
@@ -269,11 +269,11 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 		return
 	}
 	path := strings.Join(pathComps, "/")
-	name := C.GoString((*C.char)(C.d_tm_conv_ptr(hdl.apiCtx, unsafe.Pointer(node.dtn_name))))
+	name := C.GoString((*C.char)(C.d_tm_conv_ptr(hdl.ctx, unsafe.Pointer(node.dtn_name))))
 
 	switch node.dtn_type {
 	case C.D_TM_DIRECTORY:
-		next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.apiCtx, unsafe.Pointer(node.dtn_child)))
+		next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.ctx, unsafe.Pointer(node.dtn_child)))
 		if next != nil {
 			visit(hdl, next, append(pathComps, name), out)
 		}
@@ -284,7 +284,7 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 	default:
 	}
 
-	next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.apiCtx, unsafe.Pointer(node.dtn_sibling)))
+	next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.ctx, unsafe.Pointer(node.dtn_sibling)))
 	if next != nil && next != node {
 		visit(hdl, next, pathComps, out)
 	}
@@ -312,7 +312,7 @@ func CollectMetrics(ctx context.Context, dirname string, out chan<- Metric) erro
 	var nl *C.struct_d_tm_nodeList_t
 
 	filter := C.D_TM_ALL_NODES
-	rc := C.d_tm_list(hdl.apiCtx, &nl, node, C.int(filter))
+	rc := C.d_tm_list(hdl.ctx, &nl, node, C.int(filter))
 
 	if rc != C.DER_SUCCESS {
 		return errors.Errorf("unable to find entry for %s.  rc = %d\n", dirname, rc)

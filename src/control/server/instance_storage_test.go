@@ -278,7 +278,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 	dcpmCfg := &engine.Config{
 		Storage: engine.StorageConfig{
 			SCM: storage.ScmConfig{
-				MountPoint: "/mnt/daos",
+				MountPoint: "/mnt/test",
 				Class:      storage.ScmClassDCPM,
 				DeviceList: []string{"/dev/foo"},
 			},
@@ -300,7 +300,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 		"needs format but skip missing superblock": {
 			needsScmFormat: true,
 			skipMissingSB:  true,
-			expErr:         FaultScmUnmanaged("/mnt/daos"),
+			expErr:         FaultScmUnmanaged("/mnt/test"),
 		},
 		"no need to format and skip missing superblock": {
 			skipMissingSB: true,
