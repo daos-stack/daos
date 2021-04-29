@@ -78,16 +78,18 @@ func (fc *FabricConfig) GetNumaNode() (uint, error) {
 
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
-	if fc.Provider == "" {
+	switch {
+	case fc.Provider == "":
 		return errors.New("provider not set")
-	}
-	if fc.Interface == "" {
+	case fc.Interface == "":
 		return errors.New("fabric_iface not set")
-	}
-	if fc.InterfacePort == 0 {
+	case fc.InterfacePort == 0:
 		return errors.New("fabric_iface_port not set")
+	case fc.InterfacePort < 0:
+		return errors.New("fabric_iface_port cannot be negative")
+	default:
+		return nil
 	}
-	return nil
 }
 
 // cleanEnvVars scrubs the supplied slice of environment
