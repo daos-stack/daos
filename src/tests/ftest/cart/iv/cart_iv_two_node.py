@@ -191,7 +191,7 @@ class CartIvTwoNodeTest(CartTest):
         """
         Test CaRT IV
 
-        :avocado: tags=all,cart,pr,daily_regression,iv,two_node
+        :avocado: tags=all,cart,pr,daily_regression,iv,two_node,memcheck
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 

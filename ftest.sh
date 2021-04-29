@@ -155,7 +155,6 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      TEST_NODES=\"$TEST_NODES\"
      NVME_ARG=\"$NVME_ARG\"
      LOGS_THRESHOLD=\"$LOGS_THRESHOLD\"
-     WITH_VALGRIND=\"$WITH_VALGRIND\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}
     if ${SETUP_ONLY:-false}; then

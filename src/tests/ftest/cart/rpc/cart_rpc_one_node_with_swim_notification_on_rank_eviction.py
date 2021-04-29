@@ -17,7 +17,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
     def test_cart_rpc(self):
         """Test CaRT RPC.
 
-        :avocado: tags=all,cart,pr,rpc,one_node,swim_rank_eviction
+        :avocado: tags=all,cart,pr,rpc,one_node,swim_rank_eviction,memcheck
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 

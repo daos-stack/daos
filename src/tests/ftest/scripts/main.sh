@@ -59,7 +59,6 @@ else
 fi
 
 export CRT_PHY_ADDR_STR=ofi+sockets
-export WITH_VALGRIND=$WITH_VALGRIND
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE
@@ -223,6 +222,9 @@ if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
     fi
 fi
 
+if [[ "${TEST_TAG_ARG}" =~ memcheck ]]; then
+  export WITH_VALGRIND="memcheck"
+fi
 
 launch_args="-jcrisa"
 # can only process cores on EL7 currently
