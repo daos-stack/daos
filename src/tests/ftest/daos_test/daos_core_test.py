@@ -149,6 +149,21 @@ class DaosCoreTest(DaosCoreBase):
         """
         self.run_subtest()
 
+    def test_daos_ec_io(self):
+        """Jira ID: DAOS-1568
+
+        Test Description:
+            Run daos_test -i -l"EC_4P2G1"
+
+        Use cases:
+            Core tests for daos_test
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,ib2,medium
+        :avocado: tags=daos_test,daos_core_test,test_daos_io
+        """
+        self.run_subtest()
+
     def test_daos_object_array(self):
         """Jira ID: DAOS-1568
 
@@ -344,18 +359,18 @@ class DaosCoreTest(DaosCoreBase):
         """
         self.run_subtest()
 
-    def test_daos_degraded_ec_8to22(self):
+    def test_daos_degraded_ec_8to23(self):
         """Jira ID: DAOS-1568
 
         Test Description:
-            Run daos_test -X -u subtests="8-22"
+            Run daos_test -X -u subtests="8-23"
 
         Use cases:
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_degraded_ec_8to22
+        :avocado: tags=daos_test,daos_core_test,test_daos_degraded_ec_8to23
         """
         self.run_subtest()
 

@@ -38,6 +38,7 @@ enum {
 	do {								\
 		D_DEBUG(DB_TRACE, "Evicting lid "DF_DTI": lid=%d\n",	\
 			DP_DTI(&DAE_XID(dae)), DAE_LID(dae));		\
+		d_list_del_init(&dae->dae_link);			\
 		lrua_evictx(cont->vc_dtx_array,				\
 			    DAE_LID(dae) - DTX_LID_RESERVED,		\
 			    DAE_EPOCH(dae));				\
@@ -115,6 +116,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	       bool hit_again, int pos)
 {
 	struct dtx_share_peer	*dsp;
+	struct dtx_memberships	*mbs;
 	bool			 s_try = false;
 
 	if (dth == NULL)
@@ -167,7 +169,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	if (dth->dth_share_tbd_count >= DTX_REFRESH_MAX)
 		goto out;
 
-	D_ALLOC_PTR(dsp);
+	D_ALLOC(dsp, sizeof(*dsp) + DAE_MBS_DSIZE(dae));
 	if (dsp == NULL) {
 		D_ERROR("Hit uncommitted DTX "DF_DTI" at %d: lid=%d, "
 			"but fail to alloc DRAM.\n",
@@ -177,19 +179,22 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 
 	dsp->dsp_xid = DAE_XID(dae);
 	dsp->dsp_oid = DAE_OID(dae);
-	if (DAE_MBS_FLAGS(dae) & DMF_CONTAIN_LEADER) {
-		struct umem_instance	*umm;
-		struct dtx_daos_target	*ddt;
+	dsp->dsp_epoch = DAE_EPOCH(dae);
 
-		if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae))) {
-			ddt = DAE_MBS_INLINE(dae);
-		} else {
-			umm = vos_cont2umm(vos_hdl2cont(dth->dth_coh));
-			ddt = umem_off2ptr(umm, DAE_MBS_OFF(dae));
-		}
-		dsp->dsp_leader = ddt->ddt_id;
+	mbs = &dsp->dsp_mbs;
+	mbs->dm_tgt_cnt = DAE_TGT_CNT(dae);
+	mbs->dm_grp_cnt = DAE_GRP_CNT(dae);
+	mbs->dm_data_size = DAE_MBS_DSIZE(dae);
+	mbs->dm_flags = DAE_MBS_FLAGS(dae);
+	mbs->dm_dte_flags = DAE_FLAGS(dae);
+	if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae))) {
+		memcpy(mbs->dm_data, DAE_MBS_INLINE(dae), DAE_MBS_DSIZE(dae));
 	} else {
-		dsp->dsp_leader = PO_COMP_ID_ALL;
+		struct umem_instance	*umm;
+
+		umm = vos_cont2umm(vos_hdl2cont(dth->dth_coh));
+		memcpy(mbs->dm_data, umem_off2ptr(umm, DAE_MBS_OFF(dae)),
+		       DAE_MBS_DSIZE(dae));
 	}
 
 	d_list_add_tail(&dsp->dsp_link, &dth->dth_share_tbd_list);
@@ -197,10 +202,12 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 
 out:
 	D_DEBUG(DB_IO,
-		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p, lid=%d, %x, "
-		"may need %s retry.\n", hit_again ? "Repeat" : "First",
-		DP_DTI(&DAE_XID(dae)), pos, dth, DAE_LID(dae), DAE_FLAGS(dae),
-		s_try ? "server" :
+		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (force %s, "
+		"dist %s), lid=%d, flags %x/%x, may need %s retry.\n",
+		hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
+		dth, dth != NULL && dth->dth_force_refresh ? "yes" : "no",
+		dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
+		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" :
 		(dth != NULL && dth->dth_local_retry) ? "local" : "client");
 
 	return -DER_INPROGRESS;
@@ -289,6 +296,7 @@ dtx_act_ent_free(struct btr_instance *tins, struct btr_record *rec,
 
 	dae = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	rec->rec_off = UMOFF_NULL;
+	d_list_del_init(&dae->dae_link);
 
 	if (args != NULL) {
 		/* Return the record addreass (offset in DRAM).
@@ -816,8 +824,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		if (rc != 0)
 			goto out;
 
-		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-
+		dae = riov.iov_buf;
 		if (dae->dae_aborted) {
 			D_ERROR("NOT allow to commit an aborted DTX "DF_DTI"\n",
 				DP_DTI(dti));
@@ -849,6 +856,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	if (dae != NULL) {
 		memcpy(&dce->dce_base.dce_common, &dae->dae_base.dae_common,
 		       sizeof(dce->dce_base.dce_common));
+		DCE_EPOCH(dce) = dae->dae_start_time;
 		dce->dce_oid_cnt = dae->dae_oid_cnt;
 		if (dce->dce_oid_cnt > 1) {
 			/* Take over OIDs buffer. */
@@ -869,7 +877,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		D_ASSERT(dtx_is_valid_handle(dth));
 
 		DCE_XID(dce) = *dti;
-		DCE_EPOCH(dce) = epoch;
+		DCE_EPOCH(dce) = crt_hlc_get();
 		DCE_OID(dce) = dth->dth_leader_oid;
 		DCE_DKEY_HASH(dce) = dth->dth_dkey_hash;
 
@@ -960,8 +968,7 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 	if (rc != 0)
 		goto out;
 
-	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-
+	dae = riov.iov_buf;
 	if (dae->dae_committable || dae->dae_committed) {
 		D_ERROR("NOT allow to abort a committed DTX "DF_DTI"\n",
 			DP_DTI(dti));
@@ -1108,6 +1115,7 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 		return rc;
 	}
 
+	D_INIT_LIST_HEAD(&dae->dae_link);
 	DAE_LID(dae) = idx + DTX_LID_RESERVED;
 	DAE_XID(dae) = dth->dth_xid;
 	DAE_OID(dae) = dth->dth_leader_oid;
@@ -1146,10 +1154,13 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	d_iov_set(&riov, dae, sizeof(*dae));
 	rc = dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
-	if (rc == 0)
+	if (rc == 0) {
+		dae->dae_start_time = crt_hlc_get();
+		d_list_add_tail(&dae->dae_link, &cont->vc_dtx_act_list);
 		dth->dth_ent = dae;
-	else
+	} else {
 		dtx_evict_lid(cont, dae);
+	}
 
 	return rc;
 }
@@ -1299,14 +1310,21 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	    DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 		return ALB_UNAVAILABLE;
 
-	if (!(DAE_FLAGS(dae) & DTE_LEADER) &&
-	    !(DAE_MBS_FLAGS(dae) & DMF_SRDG_REP) && dth != NULL) {
+	if (dth != NULL && !(DAE_FLAGS(dae) & DTE_LEADER) &&
+	    (!(DAE_MBS_FLAGS(dae) & DMF_SRDG_REP) ||
+	     dth->dth_force_refresh)) {
 		struct dtx_share_peer	*dsp;
 
 		d_list_for_each_entry(dsp, &dth->dth_share_cmt_list, dsp_link) {
 			if (memcmp(&dsp->dsp_xid, &DAE_XID(dae),
 				   sizeof(struct dtx_id)) == 0)
 				return ALB_AVAILABLE_CLEAN;
+		}
+
+		d_list_for_each_entry(dsp, &dth->dth_share_abt_list, dsp_link) {
+			if (memcmp(&dsp->dsp_xid, &DAE_XID(dae),
+				   sizeof(struct dtx_id)) == 0)
+				return ALB_UNAVAILABLE;
 		}
 
 		d_list_for_each_entry(dsp, &dth->dth_share_act_list, dsp_link) {
@@ -1459,7 +1477,7 @@ vos_dtx_validation(struct dtx_handle *dth)
 			return DTX_ST_ABORTED;
 		}
 
-		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+		dae = riov.iov_buf;
 	}
 
 	if (dae->dae_committed) {
@@ -1856,7 +1874,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 	d_iov_set(&riov, NULL, 0);
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 	if (rc == 0) {
-		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+		dae = riov.iov_buf;
 
 		if (DAE_FLAGS(dae) & DTE_CORRUPTED)
 			return DTX_ST_CORRUPTED;
@@ -2357,7 +2375,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 }
 
 void
-vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat)
+vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags)
 {
 	struct vos_container	*cont;
 
@@ -2365,6 +2383,32 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat)
 	D_ASSERT(cont != NULL);
 
 	stat->dtx_committed_count = cont->vc_dtx_committed_count;
+
+	if (d_list_empty(&cont->vc_dtx_act_list)) {
+		stat->dtx_oldest_active_time = 0;
+	} else {
+		struct vos_dtx_act_ent	*dae;
+
+		dae = d_list_entry(cont->vc_dtx_act_list.next,
+				   struct vos_dtx_act_ent, dae_link);
+		if (flags & DSF_SKIP_BAD) {
+			while (DAE_FLAGS(dae) & DTE_CORRUPTED) {
+				if (dae->dae_link.next ==
+				    &cont->vc_dtx_act_list) {
+					stat->dtx_oldest_active_time = 0;
+					goto cmt;
+				}
+
+				dae = d_list_entry(dae->dae_link.next,
+						   struct vos_dtx_act_ent,
+						   dae_link);
+			}
+		}
+
+		stat->dtx_oldest_active_time = dae->dae_start_time;
+	}
+
+cmt:
 	if (d_list_empty(&cont->vc_dtx_committed_list)) {
 		stat->dtx_oldest_committed_time = 0;
 	} else {
@@ -2485,6 +2529,7 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			memcpy(&dae->dae_base, dae_df, sizeof(dae->dae_base));
 			dae->dae_df_off = umem_ptr2off(umm, dae_df);
 			dae->dae_dbd = dbd;
+			D_INIT_LIST_HEAD(&dae->dae_link);
 
 			if (DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT) {
 				size_t	size;
@@ -2515,6 +2560,9 @@ vos_dtx_act_reindex(struct vos_container *cont)
 				dtx_evict_lid(cont, dae);
 				goto out;
 			}
+
+			dae->dae_start_time = crt_hlc_get();
+			d_list_add_tail(&dae->dae_link, &cont->vc_dtx_act_list);
 		}
 
 		dbd_off = dbd->dbd_next;

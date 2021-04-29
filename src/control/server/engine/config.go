@@ -15,9 +15,11 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const (
-	maxHelperStreamCount = 2
-)
+const maxHelperStreamCount = 2
+
+// ErrNoPinnedNumaNode error indicates no NUMA node has been pinned in this
+// engine's configuration.
+var ErrNoPinnedNumaNode = errors.New("pinned NUMA node was not configured")
 
 // StorageConfig encapsulates an I/O Engine's storage configuration.
 type StorageConfig struct {
@@ -71,21 +73,23 @@ func (fc *FabricConfig) GetNumaNode() (uint, error) {
 	if fc.PinnedNumaNode != nil {
 		return *fc.PinnedNumaNode, nil
 	}
-	return 0, errors.New("pinned NUMA node was not configured")
+	return 0, ErrNoPinnedNumaNode
 }
 
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
-	if fc.Provider == "" {
+	switch {
+	case fc.Provider == "":
 		return errors.New("provider not set")
-	}
-	if fc.Interface == "" {
+	case fc.Interface == "":
 		return errors.New("fabric_iface not set")
-	}
-	if fc.InterfacePort == 0 {
+	case fc.InterfacePort == 0:
 		return errors.New("fabric_iface_port not set")
+	case fc.InterfacePort < 0:
+		return errors.New("fabric_iface_port cannot be negative")
+	default:
+		return nil
 	}
-	return nil
 }
 
 // cleanEnvVars scrubs the supplied slice of environment
@@ -264,7 +268,7 @@ func (c *Config) WithScmClass(scmClass string) *Config {
 	return c
 }
 
-// WithScmMountPath sets the path to the device used for SCM storage.
+// WithScmMountPoint sets the path to the device used for SCM storage.
 func (c *Config) WithScmMountPoint(scmPath string) *Config {
 	c.Storage.SCM.MountPoint = scmPath
 	return c

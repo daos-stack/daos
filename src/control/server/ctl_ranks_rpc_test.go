@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -386,7 +386,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 
 				srv.OnInstanceExit(
 					func(_ context.Context, _ system.Rank, _ error) error {
-						svc.events.Publish(events.NewRankDownEvent("foo",
+						svc.events.Publish(events.NewEngineDiedEvent("foo",
 							0, 0, common.NormalExit))
 						return nil
 					})

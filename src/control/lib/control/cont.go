@@ -9,9 +9,9 @@ package control
 import (
 	"context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
@@ -46,7 +46,7 @@ func ContSetOwner(ctx context.Context, rpcClient UnaryInvoker, req *ContSetOwner
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ContSetOwner(ctx, &mgmtpb.ContSetOwnerReq{
-			Sys:        req.getSystem(),
+			Sys:        req.getSystem(rpcClient),
 			ContUUID:   req.ContUUID,
 			PoolUUID:   req.PoolUUID,
 			Owneruser:  req.User,

@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize/english"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -132,6 +132,7 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, err
 	}
+	pbReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, pbReq)
 	})
@@ -306,10 +307,9 @@ func newEventLogger(logBasic logging.Logger, newSyslogger newSysloggerFn) *Event
 
 	for _, sev := range []events.RASSeverityID{
 		events.RASSeverityUnknown,
-		events.RASSeverityFatal,
 		events.RASSeverityError,
-		events.RASSeverityWarn,
-		events.RASSeverityInfo,
+		events.RASSeverityWarning,
+		events.RASSeverityNotice,
 	} {
 		sl, err := newSyslogger(sev.SyslogPriority(), log.LstdFlags)
 		if err != nil {
@@ -384,7 +384,7 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	pbReq := new(mgmtpb.SystemQueryReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
-	pbReq.Sys = req.getSystem()
+	pbReq.Sys = req.getSystem(rpcClient)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemQuery(ctx, pbReq)
@@ -484,7 +484,7 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 	pbReq := new(mgmtpb.SystemStartReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
-	pbReq.Sys = req.getSystem()
+	pbReq.Sys = req.getSystem(rpcClient)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, pbReq)
@@ -560,7 +560,7 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	pbReq.Prep = req.Prep
 	pbReq.Kill = req.Kill
 	pbReq.Force = req.Force
-	pbReq.Sys = req.getSystem()
+	pbReq.Sys = req.getSystem(rpcClient)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStop(ctx, pbReq)
@@ -668,7 +668,7 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 	}
 
 	pbReq := new(mgmtpb.SystemEraseReq)
-	pbReq.Sys = req.getSystem()
+	pbReq.Sys = req.getSystem(rpcClient)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemErase(ctx, pbReq)
@@ -736,7 +736,7 @@ type LeaderQueryResp struct {
 func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryReq) (*LeaderQueryResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).LeaderQuery(ctx, &mgmtpb.LeaderQueryReq{
-			Sys: req.getSystem(),
+			Sys: req.getSystem(rpcClient),
 		})
 	})
 	rpcClient.Debugf("DAOS system leader-query request: %s", req)
@@ -768,7 +768,7 @@ type ListPoolsResp struct {
 func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (*ListPoolsResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ListPools(ctx, &mgmtpb.ListPoolsReq{
-			Sys: req.getSystem(),
+			Sys: req.getSystem(rpcClient),
 		})
 	})
 	rpcClient.Debugf("DAOS system list-pools request: %s", req)
