@@ -37,3 +37,17 @@ func TestDrpc_Status(t *testing.T) {
 		})
 	}
 }
+
+func TestDrpc_Error(t *testing.T) {
+	// Light test to make sure the error stringer works as expected.
+	for ds, expStr := range map[drpc.DaosStatus]string{
+		drpc.DaosSuccess:        "DER_SUCCESS(0): Success",
+		drpc.DaosProtocolError:  "DER_PROTO(-1014): Incompatible protocol",
+		drpc.DaosNotReplica:     "DER_NOTREPLICA(-2020): Not a service replica",
+		drpc.DaosStatus(424242): "DER_UNKNOWN(424242): Unknown error code 424242",
+	} {
+		t.Run(expStr, func(t *testing.T) {
+			common.AssertEqual(t, expStr, ds.Error(), "not equal")
+		})
+	}
+}
