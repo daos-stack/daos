@@ -50,14 +50,12 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	case DAOS_PROP_CO_OWNER:
 	case DAOS_PROP_PO_OWNER_GROUP:
 	case DAOS_PROP_CO_OWNER_GROUP:
-		if (entry->dpe_str)
-			D_FREE(entry->dpe_str);
+		D_FREE(entry->dpe_str);
 		break;
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
 	case DAOS_PROP_CO_ROOTS:
-		if (entry->dpe_val_ptr)
-			D_FREE(entry->dpe_val_ptr);
+		D_FREE(entry->dpe_val_ptr);
 		break;
 	case DAOS_PROP_PO_SVC_LIST:
 		if (entry->dpe_val_ptr)
@@ -85,7 +83,6 @@ daos_prop_fini(daos_prop_t *prop)
 	}
 
 	D_FREE(prop->dpp_entries);
-	prop->dpp_entries = NULL;
 out:
 	prop->dpp_nr = 0;
 }
@@ -93,9 +90,6 @@ out:
 void
 daos_prop_free(daos_prop_t *prop)
 {
-	if (prop == NULL)
-		return;
-
 	daos_prop_fini(prop);
 	D_FREE(prop);
 }

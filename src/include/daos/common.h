@@ -179,7 +179,6 @@ daos_u32_hash(uint64_t key, unsigned int bits)
 	return (DGOLDEN_RATIO_PRIME_32 * key) >> (32 - bits);
 }
 
-
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
 static inline uint8_t
@@ -437,11 +436,11 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 /* given a pointer @ptr to the field @member embedded into type (usually
  *  * struct) @type, return pointer to the embedding instance of @type. */
 # define container_of(ptr, type, member)		\
-	        ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+	        ((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 #endif
 
 #ifndef offsetof
-# define offsetof(typ,memb)	((long)((char *)&(((typ *)0)->memb)))
+# define offsetof(typ, memb)	((long)((char *)&(((typ *)0)->memb)))
 #endif
 
 #ifndef ARRAY_SIZE
@@ -449,27 +448,27 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 #endif
 
 #ifndef MIN
-# define MIN(a,b) (((a)<(b)) ? (a): (b))
+# define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 #ifndef MAX
-# define MAX(a,b) (((a)>(b)) ? (a): (b))
+# define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
 #ifndef min
-#define min(x,y) ((x)<(y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
 #endif
 
 #ifndef max
-#define max(x,y) ((x)>(y) ? (x) : (y))
+#define max(x, y) ((x) > (y) ? (x) : (y))
 #endif
 
 #ifndef min_t
-#define min_t(type,x,y) \
-	        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
+#define min_t(type, x, y) \
+	        ({ type __x = (x); type __y = (y); __x < __y ? __x : __y; })
 #endif
 #ifndef max_t
-#define max_t(type,x,y) \
-	        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
+#define max_t(type, x, y) \
+	        ({ type __x = (x); type __y = (y); __x > __y ? __x : __y; })
 #endif
 
 #define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
@@ -839,7 +838,8 @@ int crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
-void daos_prop_fini(daos_prop_t *prop);
+void daos_prop_fini(daos_prop_t *prop)
+	__attribute__((nonnull));
 
 struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_entry_copy(struct daos_prop_entry *entry,
