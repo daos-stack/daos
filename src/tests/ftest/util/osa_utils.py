@@ -317,7 +317,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             out_queue (queue): Check whether the queue is
             empty. If empty, app (ior, mdtest) didn't encounter error.
         """
-        if self.out_queue.empty():
+        if out_queue.empty():
             pass
         else:
             exc = out_queue.get(block=False)
