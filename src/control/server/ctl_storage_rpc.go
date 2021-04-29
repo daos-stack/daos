@@ -44,7 +44,7 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 // doNvmePrepare issues prepare request and returns response.
 func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) *ctlpb.PrepareNvmeResp {
 	if req.GetTargetuser() == "" {
-		if runningUser, err := user.Current(); err != nil {
+		if runningUser, err := user.Current(); err == nil {
 			req.Targetuser = runningUser.Username
 		}
 	}
