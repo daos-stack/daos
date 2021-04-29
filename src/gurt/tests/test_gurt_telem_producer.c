@@ -158,7 +158,8 @@ test_interval_timer(void **state)
 
 	d_tm_mark_duration_end(timer);
 
-	rc = d_tm_get_duration(cli_ctx, &result, &stats, d_tm_conv_ptr(cli_ctx, timer));
+	rc = d_tm_get_duration(cli_ctx, &result, &stats,
+			       d_tm_conv_ptr(cli_ctx, timer));
 	assert_int_equal(rc, DER_SUCCESS);
 	/* very rough estimation, based on the sleep timing */
 	assert_true(result.tv_nsec > ts.tv_nsec || result.tv_sec > 0);
@@ -190,10 +191,12 @@ test_timer_snapshot(void **state)
 	d_tm_take_timer_snapshot(snapshot2, D_TM_CLOCK_REALTIME);
 
 	/* check values */
-	rc = d_tm_get_timer_snapshot(cli_ctx, &tms1, d_tm_conv_ptr(cli_ctx, snapshot1));
+	rc = d_tm_get_timer_snapshot(cli_ctx, &tms1,
+				     d_tm_conv_ptr(cli_ctx, snapshot1));
 	assert_rc_equal(rc, 0);
 
-	rc = d_tm_get_timer_snapshot(cli_ctx, &tms2, d_tm_conv_ptr(cli_ctx, snapshot2));
+	rc = d_tm_get_timer_snapshot(cli_ctx, &tms2,
+				     d_tm_conv_ptr(cli_ctx, snapshot2));
 	assert_rc_equal(rc, 0);
 
 	tms3 = d_timediff(tms1, tms2);
@@ -228,7 +231,8 @@ test_gauge_stats(void **state)
 		d_tm_set_gauge(gauge, test_values[i]);
 	}
 
-	rc = d_tm_get_gauge(cli_ctx, &val, &stats, d_tm_conv_ptr(cli_ctx, gauge));
+	rc = d_tm_get_gauge(cli_ctx, &val, &stats,
+			    d_tm_conv_ptr(cli_ctx, gauge));
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(val, 20);
@@ -294,7 +298,8 @@ test_duration_stats(void **state)
 	d_tm_compute_stats(timer, microseconds);
 
 	/* Verify the results - figured out empirically */
-	rc = d_tm_get_duration(cli_ctx, &tms, &stats, d_tm_conv_ptr(cli_ctx, timer));
+	rc = d_tm_get_duration(cli_ctx, &tms, &stats,
+			       d_tm_conv_ptr(cli_ctx, timer));
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(stats.dtm_min, 1125000);
@@ -600,7 +605,8 @@ test_units(void **state)
 			     "gurt/tests/telem/kibibyte-counter");
 	assert_rc_equal(rc, DER_SUCCESS);
 
-	rc = d_tm_get_metadata(cli_ctx, NULL, &units, d_tm_conv_ptr(cli_ctx, counter));
+	rc = d_tm_get_metadata(cli_ctx, NULL, &units,
+			       d_tm_conv_ptr(cli_ctx, counter));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(units, D_TM_KIBIBYTE);
 	free(units);
@@ -608,7 +614,8 @@ test_units(void **state)
 	rc = d_tm_add_metric(&gauge, D_TM_GAUGE, NULL, D_TM_GIGIBYTE_PER_SECOND,
 			     "gurt/tests/telem/gigibyte-per-second-gauge");
 	assert_rc_equal(rc, DER_SUCCESS);
-	rc = d_tm_get_metadata(cli_ctx, NULL, &units, d_tm_conv_ptr(cli_ctx, gauge));
+	rc = d_tm_get_metadata(cli_ctx, NULL, &units,
+			       d_tm_conv_ptr(cli_ctx, gauge));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(units, D_TM_GIGIBYTE_PER_SECOND);
 	free(units);
