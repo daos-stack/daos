@@ -854,7 +854,8 @@ cont_create_snap_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	D_PRINT("snapshot/epoch "DF_U64" has been created\n", ap->epc);
+	fprintf(ap->outstream,
+		"snapshot/epoch "DF_U64" has been created\n", ap->epc);
 out:
 	return rc;
 }

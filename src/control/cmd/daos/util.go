@@ -93,6 +93,36 @@ func uuidFromC(cUUID C.uuid_t) (uuid.UUID, error) {
 	return uuid.FromBytes(C.GoBytes(unsafe.Pointer(&cUUID[0]), C.int(len(cUUID))))
 }
 
+func iterStringsBuf(cBuf unsafe.Pointer, expected C.size_t, cb func(string)) error {
+	var curLen C.size_t
+
+	// Create a Go slice for easy iteration (no pointer arithmetic in Go).
+	bufSlice := (*[1 << 30]C.char)(cBuf)[:expected:expected]
+	for total := C.size_t(0); total < expected; total += curLen + 1 {
+		chunk := bufSlice[total:]
+		curLen = C.strnlen(&chunk[0], expected-total)
+
+		if curLen >= expected-total {
+			return errors.New("corrupt buffer")
+		}
+
+		chunk = bufSlice[total : total+curLen]
+		cb(C.GoString(&chunk[0]))
+	}
+
+	return nil
+}
+
+func fd2FILE(fd uintptr, modeStr string) (out *C.FILE, err error) {
+	cModeStr := C.CString(modeStr)
+	defer C.free(unsafe.Pointer(cModeStr))
+	out = C.fdopen(C.int(fd), cModeStr)
+	if out == nil {
+		return nil, errors.New("fdopen() failed")
+	}
+	return
+}
+
 func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(), error) {
 	// Create a FILE object for the handler to use for
 	// printing output or errors, and call the callback
@@ -102,11 +132,9 @@ func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(
 		return nil, nil, err
 	}
 
-	write := C.CString("w")
-	defer C.free(unsafe.Pointer(write))
-	stream := C.fdopen(C.int(w.Fd()), C.CString("w"))
-	if stream == nil {
-		return nil, nil, errors.New("fdopen() failed")
+	stream, err := fd2FILE(w.Fd(), "w")
+	if err != nil {
+		return nil, nil, err
 	}
 
 	go func(prefix string) {
