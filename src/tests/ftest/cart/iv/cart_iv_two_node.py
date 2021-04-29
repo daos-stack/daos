@@ -209,7 +209,7 @@ class CartIvTwoNodeTest(CartTest):
 
         actions = [
             # Fetch, expect fail, no variable yet
-            {"operation": "fetch", "rank": 0, "key": (0, 42), "return_code": -1,
+            {"operation": "fetch", "rank": 1, "key": (0, 42), "return_code": -1,
              "expected_value": ""},
             # Add variable 0:42
             {"operation": "update", "rank": 0, "key": (0, 42),
@@ -224,14 +224,17 @@ class CartIvTwoNodeTest(CartTest):
              "expected_value": ""},
         ]
 
-        time.sleep(2)
+        ###### Wait for servers to come up ######
+        # Only 32 retries allowed. May exceed this limit
+        # Not required but results in cleaner log files.
+        # Don't see the client retries
+        time.sleep(4)
 
         failed = False
 
         clicmd = self.build_cmd(self.env, "test_clients")
 
         ########## Launch Client Actions ##########
-
         try:
             self._iv_test_actions(clicmd, actions)
         except ValueError as exception:
@@ -239,7 +242,6 @@ class CartIvTwoNodeTest(CartTest):
             self.print("TEST FAILED: {}".format(exception))
 
         ########## Shutdown Servers ##########
-
         num_servers = self.get_srv_cnt("test_servers")
 
         srv_ppn = self.params.get("test_servers_ppn", '/run/tests/*/')
@@ -247,10 +249,10 @@ class CartIvTwoNodeTest(CartTest):
         # Note: due to CART-408 issue, rank 0 needs to shutdown last
         # Request each server shut down gracefully
         for rank in reversed(list(range(1, int(srv_ppn) * num_servers))):
-            clicmd += " -o shutdown -r " + str(rank)
-            self.print("\nClient cmd : {}\n".format(clicmd))
+            clicmdt = clicmd + " -o shutdown -r " + str(rank)
+            self.print("\nClient cmd : {}\n".format(clicmdt))
             try:
-                subprocess.call(shlex.split(clicmd))
+                subprocess.call(shlex.split(clicmdt))
             # pylint: disable=broad-except
             except Exception as e:
                 failed = True
@@ -268,6 +270,7 @@ class CartIvTwoNodeTest(CartTest):
             failed = True
             self.print("Exception in launching client : {}".format(e))
 
+        # Give some time for completion before forcing servers shut down
         time.sleep(2)
 
         # Stop the server if it is still running
