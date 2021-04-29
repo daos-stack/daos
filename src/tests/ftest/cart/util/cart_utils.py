@@ -175,6 +175,7 @@ class CartTest(TestWithoutServers):
 
         # Default env vars for orterun to None
         log_mask = None
+        log_size = None
         self.provider = None
         ofi_interface = None
         ofi_domain = None
@@ -182,6 +183,9 @@ class CartTest(TestWithoutServers):
 
         if "D_LOG_MASK" in os.environ:
             log_mask = os.environ.get("D_LOG_MASK")
+
+        if "D_LOG_SIZE" in os.environ:
+            log_size = os.environ.get("D_LOG_SIZE")
 
         if "CRT_PHY_ADDR_STR" in os.environ:
             self.provider = os.environ.get("CRT_PHY_ADDR_STR")
@@ -208,6 +212,9 @@ class CartTest(TestWithoutServers):
 
         if log_mask is not None:
             env += " -x D_LOG_MASK={!s}".format(log_mask)
+
+        if log_size is not None:
+            env += " -x D_LOG_SIZE={!s}".format(log_size)
 
         if self.provider is not None:
             env += " -x CRT_PHY_ADDR_STR={!s}".format(self.provider)
