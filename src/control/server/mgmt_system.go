@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -25,7 +25,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -200,19 +199,26 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 				joinResps[i] = svc.join(parent, req)
 			}
 
-			for {
-				err := svc.doGroupUpdate(parent)
-				if err == nil || errors.Cause(err) == errInstanceNotReady {
-					break
-				}
-
-				err = errors.Wrap(err, "failed to perform CaRT group update")
-				for i, jr := range joinResps {
-					if jr.joinErr == nil {
-						joinResps[i] = &batchJoinResponse{joinErr: err}
+			// Reset groupUpdateNeeded here to avoid triggering it
+			// again by timer. Any requests that were made between
+			// the last timer and these join requests will be handled
+			// here.
+			groupUpdateNeeded = false
+			if err := svc.doGroupUpdate(parent); err != nil {
+				// If the call failed, however, make sure that
+				// it gets called again by the timer. We have to
+				// deal with the situation where a local MS service
+				// rank is joining but isn't ready to handle dRPC
+				// requests yet.
+				groupUpdateNeeded = true
+				if errors.Cause(err) != errInstanceNotReady {
+					err = errors.Wrap(err, "failed to perform CaRT group update")
+					for i, jr := range joinResps {
+						if jr.joinErr == nil {
+							joinResps[i] = &batchJoinResponse{joinErr: err}
+						}
 					}
 				}
-				break
 			}
 
 			svc.log.Debugf("sending %d join responses", len(joinReqs))
@@ -613,15 +619,19 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 		return nil, errors.New("invalid request, no action specified")
 	}
 
+	// TODO DAOS-7264: system_stop_failed event should be raised in the case
+	//                 that operation failed and should indicate which ranks
+	//                 did not stop.
+	//
 	// Raise event on systemwide shutdown
-	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
-		svc.events.Publish(events.New(&events.RASEvent{
-			ID:   events.RASSystemStop,
-			Type: events.RASTypeInfoOnly,
-			Msg:  "System-wide shutdown requested",
-			Rank: uint32(system.NilRank),
-		}))
-	}
+	// if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
+	// 	svc.events.Publish(events.New(&events.RASEvent{
+	// 		ID:   events.RASSystemStop,
+	// 		Type: events.RASTypeInfoOnly,
+	// 		Msg:  "System-wide shutdown requested",
+	// 		Rank: uint32(system.NilRank),
+	// 	}))
+	// }
 
 	pbResp := new(mgmtpb.SystemStopResp)
 
@@ -674,15 +684,19 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 	}
 	svc.log.Debug("Received SystemStart RPC")
 
+	// TODO DAOS-7264: system_start_failed event should be raised in the
+	//                 case that operation failed and should indicate which
+	//                 ranks did not start.
+	//
 	// Raise event on systemwide start
-	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
-		svc.events.Publish(events.New(&events.RASEvent{
-			ID:   events.RASSystemStart,
-			Type: events.RASTypeInfoOnly,
-			Msg:  "System-wide start requested",
-			Rank: uint32(system.NilRank),
-		}))
-	}
+	// if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
+	// 	svc.events.Publish(events.New(&events.RASEvent{
+	// 		ID:   events.RASSystemStart,
+	// 		Type: events.RASTypeInfoOnly,
+	// 		Msg:  "System-wide start requested",
+	// 		Rank: uint32(system.NilRank),
+	// 	}))
+	// }
 
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.StartRanks,

@@ -231,7 +231,7 @@ vos_dedup_lookup(struct vos_pool *pool, struct dcs_csum_info *csum,
 	entry = dedup_rlink2entry(rlink);
 	if (biov) {
 		biov->bi_addr = entry->de_addr;
-		biov->bi_addr.ba_dedup = true;
+		BIO_ADDR_SET_DEDUP(&biov->bi_addr);
 		biov->bi_data_len = entry->de_data_len;
 		D_DEBUG(DB_IO, "Found dedup entry\n");
 	}
@@ -249,7 +249,9 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 {
 	struct dedup_entry	*entry;
 
-	if (!ci_is_valid(csum) || csum_len == 0 || biov->bi_addr.ba_dedup)
+
+	if (!ci_is_valid(csum) || csum_len == 0 ||
+	    BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 		return;
 
 	if (bio_addr_is_hole(&biov->bi_addr))
@@ -1466,7 +1468,8 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	ioc->ic_io_size += recx->rx_nr * rsize;
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
-	ent.ei_addr.ba_dedup = false;	/* Don't make this flag persistent */
+	/* Don't make this flag persistent */
+	BIO_ADDR_SET_NOT_DEDUP(&ent.ei_addr);
 
 	if (ioc->ic_remove)
 		return evt_remove_all(toh, &ent.ei_rect.rc_ex, &ioc->ic_epr);
@@ -1767,7 +1770,7 @@ iod_reserve(struct vos_io_context *ioc, struct bio_iov *biov)
 	ioc->ic_iov_at++;
 	bsgl->bs_nr_out++;
 
-	D_DEBUG(DB_TRACE, "media %hu offset "DF_U64" size %zd\n",
+	D_DEBUG(DB_TRACE, "media %d offset "DF_U64" size %zd\n",
 		biov->bi_addr.ba_type, biov->bi_addr.ba_off,
 		bio_iov2len(biov));
 	return 0;
@@ -2329,7 +2332,7 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 
 		*biov_dup = *biov;
 		/* Original biov isn't deduped, don't duplicate buffer */
-		if (!biov->bi_addr.ba_dedup)
+		if (!BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 			continue;
 
 		D_ASSERT(bio_iov2len(biov) != 0);
@@ -2365,7 +2368,7 @@ vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl)
 		if (UMOFF_IS_NULL(bio_iov2off(biov)))
 			continue;
 		/* Not duplicated buffer, don't free it */
-		if (!biov->bi_addr.ba_dedup)
+		if (!BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 			continue;
 
 		oid = umem_off2id(vos_ioc2umm(ioc), bio_iov2off(biov));
@@ -2472,6 +2475,8 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
 
 	rc = vos_update_end(ioh, 0 /* don't care */, (daos_key_t *)dkey, rc,
 			    NULL, NULL);
+	D_DEBUG(DB_IO, DF_UOID" remove "DF_RECX" "DF_RC"\n",
+		DP_UOID(oid), DP_RECX(*recx), DP_RC(rc));
 	return rc;
 }
 

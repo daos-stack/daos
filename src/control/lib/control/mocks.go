@@ -12,8 +12,10 @@ import (
 	"testing"
 
 	"github.com/dustin/go-humanize"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/runtime/protoimpl"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -28,6 +30,9 @@ type MockMessage struct{}
 func (mm *MockMessage) Reset()         {}
 func (mm *MockMessage) String() string { return "mock" }
 func (mm *MockMessage) ProtoMessage()  {}
+func (mm *MockMessage) ProtoReflect() protoreflect.Message {
+	return (&protoimpl.MessageInfo{}).MessageOf(mm)
+}
 
 type (
 	// MockInvokerConfig defines the configured responses
@@ -261,6 +266,23 @@ func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 // defined by the variant input string parameter.
 func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 	ssr := standardServerScanResponse(t)
+	nss := func(idxs ...int) storage.ScmNamespaces {
+		nss := make(storage.ScmNamespaces, 0, len(idxs))
+		for _, i := range idxs {
+			ns := storage.MockScmNamespace(int32(i))
+			nss = append(nss, ns)
+		}
+		return nss
+	}
+	ctrlrs := func(idxs ...int) storage.NvmeControllers {
+		ncs := make(storage.NvmeControllers, 0, len(idxs))
+		for _, i := range idxs {
+			nc := storage.MockNvmeController(int32(i))
+			ncs = append(ncs, nc)
+		}
+		return ncs
+	}
+
 	switch variant {
 	case "withSpaceUsage":
 		snss := make(storage.ScmNamespaces, 0)
@@ -286,22 +308,11 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
 			t.Fatal(err)
 		}
-	case "withNamespace":
-		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(0),
-		}
-		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+	case "pmemSingle":
+		if err := convert.Types(nss(0), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-	case "withNamespaces":
-		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(1), // verify out of order works
-			storage.MockScmNamespace(0),
-		}
-		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
-			t.Fatal(err)
-		}
-	case "withNamespacesNumaZero":
+	case "pmemDupNuma":
 		ns1 := storage.MockScmNamespace(1)
 		ns1.NumaNode = 0
 		scmNamespaces := storage.ScmNamespaces{
@@ -311,18 +322,68 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-	case "withSingleSSD":
-		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(0),
-			storage.MockScmNamespace(1),
-		}
-		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+	case "pmemA":
+		// verify out of order namespace ids
+		if err := convert.Types(nss(1, 0), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-		ssr.Nvme.Ctrlrs[0].Socketid = 0
-	case "noNVME":
+	case "pmemB":
+		ns := nss(0, 1)
+		for _, n := range ns {
+			n.Size += uint64(humanize.GByte * 100)
+		}
+		if err := convert.Types(ns, &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeSingle":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ssr.Nvme.Ctrlrs[0].SocketId = 0
+	case "nvmeA":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		if err := convert.Types(ctrlrs(1, 2, 3, 4), &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeB":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		if err := convert.Types(ctrlrs(1, 2, 5, 4), &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeBasicA":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ncs := ctrlrs(1, 4)
+		for _, c := range ncs {
+			c.Model = ""
+			c.FwRev = ""
+			c.Serial = ""
+		}
+		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeBasicB":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ncs := ctrlrs(1, 4)
+		for _, c := range ncs {
+			c.Model = ""
+			c.FwRev = ""
+			c.Serial = ""
+			c.Namespaces[0].Size += uint64(humanize.GByte * 100)
+		}
+		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "noNvme":
 		ssr.Nvme.Ctrlrs = nil
-	case "noSCM":
+	case "noScm":
 		ssr.Scm.Modules = nil
 	case "noStorage":
 		ssr.Nvme.Ctrlrs = nil

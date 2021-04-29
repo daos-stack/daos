@@ -12,11 +12,11 @@
 #include "obj_rpc.h"
 #include "rpc_csum.h"
 
-#define PROC(type, value)					\
-		do {						\
-			rc = crt_proc_##type(proc, value);	\
-			if (unlikely(rc))			\
-				return rc;			\
+#define PROC(type, value)						\
+		do {							\
+			rc = crt_proc_##type(proc, proc_op, value);	\
+			if (unlikely(rc))				\
+				return rc;				\
 		} while (0)
 
 /**
@@ -62,7 +62,8 @@ proc_struct_dcs_csum_info_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 		return 0;
 
 	if (ENCODING(proc_op)) {
-		rc = crt_proc_memcpy(proc, csum->cs_csum + idx * csum->cs_len,
+		rc = crt_proc_memcpy(proc, proc_op,
+				     csum->cs_csum + idx * csum->cs_len,
 				     buf_len);
 		if (unlikely(rc))
 			return rc;
@@ -73,7 +74,8 @@ proc_struct_dcs_csum_info_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 		if (csum->cs_csum == NULL)
 			return -DER_NOMEM;
 
-		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_buf_len);
+		rc = crt_proc_memcpy(proc, proc_op,
+				     csum->cs_csum, csum->cs_buf_len);
 		if (unlikely(rc)) {
 			D_FREE(csum->cs_csum);
 			return rc;
@@ -84,38 +86,28 @@ proc_struct_dcs_csum_info_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 static int
-proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info *csum)
+proc_struct_dcs_csum_info(crt_proc_t proc, crt_proc_op_t proc_op,
+			  struct dcs_csum_info *csum)
 {
-	crt_proc_op_t		proc_op;
-	int			rc;
-
 	if (csum == NULL)
 		return 0;
-
-	rc = crt_proc_get_op(proc, &proc_op);
-	if (unlikely(rc))
-		return rc;
 
 	return proc_struct_dcs_csum_info_adv(proc, proc_op, csum, 0,
 					     csum->cs_nr);
 }
 
 int
-crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info **p_csum)
+crt_proc_struct_dcs_csum_info(crt_proc_t proc, crt_proc_op_t proc_op,
+			      struct dcs_csum_info **p_csum)
 {
-	crt_proc_op_t		proc_op;
 	bool			csum_enabled = 0;
-	int			rc;
-
-	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0 || p_csum == NULL)
-		return -DER_HG;
+	int			rc = 0;
 
 	if (ENCODING(proc_op)) {
 		csum_enabled = *p_csum != NULL;
 		PROC(bool, &csum_enabled);
 		if (csum_enabled) {
-			rc = proc_struct_dcs_csum_info(proc, *p_csum);
+			rc = proc_struct_dcs_csum_info(proc, proc_op, *p_csum);
 			if (unlikely(rc))
 				return rc;
 		}
@@ -132,7 +124,7 @@ crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info **p_csum)
 		D_ALLOC_PTR(*p_csum);
 		if (*p_csum == NULL)
 			return -DER_NOMEM;
-		rc = proc_struct_dcs_csum_info(proc, *p_csum);
+		rc = proc_struct_dcs_csum_info(proc, proc_op, *p_csum);
 		if (unlikely(rc)) {
 			D_FREE(*p_csum);
 			return rc;
@@ -140,7 +132,7 @@ crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info **p_csum)
 	}
 
 	if (FREEING(proc_op)) {
-		rc = proc_struct_dcs_csum_info(proc, *p_csum);
+		rc = proc_struct_dcs_csum_info(proc, proc_op, *p_csum);
 		D_FREE(*p_csum);
 	}
 
@@ -176,13 +168,13 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 			singv_ci = &iod_csum->ic_data[0];
 			D_ASSERT(idx < singv_ci->cs_nr);
 			rc = proc_struct_dcs_csum_info_adv(proc, proc_op,
-				singv_ci, idx, 1);
+							   singv_ci, idx, 1);
 			if (unlikely(rc))
 				return rc;
 		} else {
 			for (i = idx; i < idx + nr; i++) {
-				rc = proc_struct_dcs_csum_info(proc,
-					&iod_csum->ic_data[i]);
+				rc = proc_struct_dcs_csum_info(proc, proc_op,
+							&iod_csum->ic_data[i]);
 				if (unlikely(rc))
 					return rc;
 			}
@@ -195,8 +187,8 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 		if (iod_csum->ic_data == NULL)
 			return -DER_NOMEM;
 		for (i = 0; i < iod_csum->ic_nr; i++) {
-			rc = proc_struct_dcs_csum_info(proc,
-				&iod_csum->ic_data[i]);
+			rc = proc_struct_dcs_csum_info(proc, proc_op,
+						       &iod_csum->ic_data[i]);
 			if (unlikely(rc)) {
 				D_FREE(iod_csum->ic_data);
 				return rc;
@@ -206,8 +198,8 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	if (FREEING(proc_op)) {
 		for (i = 0; i < iod_csum->ic_nr; i++) {
-			rc = proc_struct_dcs_csum_info(proc,
-				&iod_csum->ic_data[i]);
+			rc = proc_struct_dcs_csum_info(proc, proc_op,
+						       &iod_csum->ic_data[i]);
 			if (unlikely(rc))
 				break;
 		}
@@ -216,7 +208,7 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 		D_FREE(iod_csum->ic_data);
 	}
 
-	rc = proc_struct_dcs_csum_info(proc, &iod_csum->ic_akey);
+	rc = proc_struct_dcs_csum_info(proc, proc_op, &iod_csum->ic_akey);
 	if (unlikely(rc)) {
 		D_FREE(iod_csum->ic_data);
 		return rc;
@@ -226,15 +218,9 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 int
-crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum)
+crt_proc_struct_dcs_iod_csums(crt_proc_t proc, crt_proc_op_t proc_op,
+			      struct dcs_iod_csums *iod_csum)
 {
-	crt_proc_op_t		 proc_op;
-	int			 rc;
-
-	rc = crt_proc_get_op(proc, &proc_op);
-	if (unlikely(rc))
-		return rc;
-
 	return crt_proc_struct_dcs_iod_csums_adv(proc, proc_op, iod_csum, false,
 						 0, iod_csum->ic_nr);
 }

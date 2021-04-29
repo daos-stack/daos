@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from avocado.core.exceptions import TestFail
 from test_utils_pool import TestPool
@@ -81,7 +81,6 @@ class Permission(TestWithServers):
                     "Test was expected to pass but it failed at " +
                     "pool.connect.\n")
 
-    @skipForTicket("DAOS-7221")
     def test_filemodification(self):
         """Test ID: DAOS-???.
 
@@ -109,6 +108,7 @@ class Permission(TestWithServers):
         self.test_log.debug("Pool initialization successful")
         self.pool.get_params(self)
         self.pool.mode.value = createmode
+        self.pool.create()
         self.test_log.debug("Pool Creation successful")
 
         try:

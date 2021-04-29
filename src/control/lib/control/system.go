@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize/english"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -307,10 +307,9 @@ func newEventLogger(logBasic logging.Logger, newSyslogger newSysloggerFn) *Event
 
 	for _, sev := range []events.RASSeverityID{
 		events.RASSeverityUnknown,
-		events.RASSeverityFatal,
 		events.RASSeverityError,
-		events.RASSeverityWarn,
-		events.RASSeverityInfo,
+		events.RASSeverityWarning,
+		events.RASSeverityNotice,
 	} {
 		sl, err := newSyslogger(sev.SyslogPriority(), log.LstdFlags)
 		if err != nil {

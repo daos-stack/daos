@@ -63,7 +63,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			return;
 
 		d_tm_get_metadata(&desc, &units, shmem_root,
-				  nodelist->dtnl_node, NULL);
+				  nodelist->dtnl_node);
 
 		switch (nodelist->dtnl_node->dtn_type) {
 		case D_TM_DIRECTORY:
@@ -71,7 +71,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			break;
 		case D_TM_COUNTER:
 			rc = d_tm_get_counter(&val, shmem_root,
-					      nodelist->dtnl_node, NULL);
+					      nodelist->dtnl_node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on counter read: " DF_RC "\n",
 				       DP_RC(rc));
@@ -82,7 +82,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			break;
 		case D_TM_TIMESTAMP:
 			rc = d_tm_get_timestamp(&clk, shmem_root,
-						nodelist->dtnl_node, NULL);
+						nodelist->dtnl_node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on timestamp read: " DF_RC "\n",
 				       DP_RC(rc));
@@ -95,7 +95,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME):
 			rc = d_tm_get_timer_snapshot(&tms, shmem_root,
-						     nodelist->dtnl_node, NULL);
+						     nodelist->dtnl_node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on highres timer read: " DF_RC
 				       "\n", DP_RC(rc));
@@ -110,7 +110,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 		case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
 		case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
 			rc = d_tm_get_duration(&tms, &stats, shmem_root,
-					       nodelist->dtnl_node, NULL);
+					       nodelist->dtnl_node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on duration read: " DF_RC "\n",
 				       DP_RC(rc));
@@ -122,7 +122,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 			break;
 		case D_TM_GAUGE:
 			rc = d_tm_get_gauge(&val, &stats, shmem_root,
-					    nodelist->dtnl_node, NULL);
+					    nodelist->dtnl_node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on gauge read: " DF_RC "\n",
 				       DP_RC(rc));
