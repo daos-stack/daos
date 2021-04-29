@@ -18,8 +18,16 @@ import (
 func TestDmg_ConfigCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"Generate with defaults",
+			"Generate with no access point",
 			"config generate",
+			strings.Join([]string{
+				printRequest(t, &control.NetworkScanReq{}),
+			}, " "),
+			errors.New("no access points"),
+		},
+		{
+			"Generate with defaults",
+			"config generate -a foo",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -27,7 +35,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with no nvme",
-			"config generate --min-ssds 0",
+			"config generate -a foo --min-ssds 0",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -35,7 +43,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with storage parameters",
-			"config generate --num-engines 2 --min-ssds 4",
+			"config generate -a foo --num-engines 2 --min-ssds 4",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -43,7 +51,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with short option storage parameters",
-			"config generate -e 2 -s 4",
+			"config generate -a foo -e 2 -s 4",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -51,7 +59,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with ethernet network device class",
-			"config generate --net-class ethernet",
+			"config generate -a foo --net-class ethernet",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -59,7 +67,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with infiniband network device class",
-			"config generate --net-class infiniband",
+			"config generate -a foo --net-class infiniband",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -67,7 +75,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with best-available network device class",
-			"config generate --net-class best-available",
+			"config generate -a foo --net-class best-available",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -75,7 +83,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with unsupported network device class",
-			"config generate --net-class loopback",
+			"config generate -a foo --net-class loopback",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),

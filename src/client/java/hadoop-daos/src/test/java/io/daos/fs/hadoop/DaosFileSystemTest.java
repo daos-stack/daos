@@ -289,4 +289,12 @@ public class DaosFileSystemTest {
     Path p6 = new Path(s + path2.toString());
     System.out.println(p6);
   }
+
+  @Test
+  public void testURIValid() throws Exception {
+    String path = "daos://abc$xyz/";
+    Path p = new Path(path);
+    URI uri = p.toUri();
+    System.out.println(uri.getAuthority());
+  }
 }
