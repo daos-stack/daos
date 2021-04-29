@@ -918,7 +918,7 @@ class PreReqComponent():
         SetOption("implicit_cache", True)
 
         self.add_opts(EnumVariable('WARNING_LEVEL', "Set default warning level",
-                                   'error', ['warning', 'warn', 'error'],
+                                   'warn', ['warning', 'warn', 'error'],
                                    ignorecase=1))
 
     def __parse_build_deps(self):

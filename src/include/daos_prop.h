@@ -361,14 +361,14 @@ daos_prop_alloc(uint32_t entries_nr);
 void
 daos_prop_fini(daos_prop_t *prop);
 
-
 /**
  * Free the DAOS properties and the \a prop.
  *
  * \param[in]	prop	properties to be freed.
  */
 void
-daos_prop_free(daos_prop_t *prop);
+daos_prop_free(daos_prop_t *prop)
+	__attribute__((nonnull));
 
 /**
  * Merge a set of new DAOS properties into a set of existing DAOS properties.
