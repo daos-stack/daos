@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.2
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -406,6 +406,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Thu Apr 29 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.2-2
+- Version bump up to 1.2-rc2
+
 * Mon Apr 26 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.2-1
 - Version bump up to 1.2-rc1
 
