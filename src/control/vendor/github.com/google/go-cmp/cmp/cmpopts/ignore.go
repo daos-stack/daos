@@ -1,6 +1,6 @@
 // Copyright 2017, The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE.md file.
+// license that can be found in the LICENSE file.
 
 package cmpopts
 
@@ -128,7 +128,7 @@ func newUnexportedFilter(typs ...interface{}) unexportedFilter {
 	for _, typ := range typs {
 		t := reflect.TypeOf(typ)
 		if t == nil || t.Kind() != reflect.Struct {
-			panic(fmt.Sprintf("invalid struct type: %T", typ))
+			panic(fmt.Sprintf("%T must be a non-pointer struct", typ))
 		}
 		ux.m[t] = true
 	}

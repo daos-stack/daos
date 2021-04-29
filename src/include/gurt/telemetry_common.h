@@ -236,6 +236,6 @@ int d_tm_get_version(void);
 void d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value);
 double d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
 				 double mean);
-int d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value);
+void d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value);
 void d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format);
 #endif /* __TELEMETRY_COMMON_H__ */

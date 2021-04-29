@@ -11,8 +11,8 @@ package drpc
 import (
 	fmt "fmt"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 // #cgo CFLAGS: -I${SRCDIR}/../../include
