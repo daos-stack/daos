@@ -8,6 +8,7 @@ package server
 
 import (
 	"fmt"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -42,6 +43,12 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 
 // doNvmePrepare issues prepare request and returns response.
 func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) *ctlpb.PrepareNvmeResp {
+	if req.GetTargetuser() == "" {
+		if runningUser, err := user.Current(); err != nil {
+			req.Targetuser = runningUser.Username
+		}
+	}
+
 	_, err := c.NvmePrepare(bdev.PrepareRequest{
 		HugePageCount: int(req.GetNrhugepages()),
 		TargetUser:    req.GetTargetuser(),
