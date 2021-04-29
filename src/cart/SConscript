@@ -24,18 +24,16 @@ SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
 
 LIB_SRC = ['crt_utils.c']
 
-##############################
-# Create cart utility library
-##############################
-def build_utility_library():
+####################################
+# Create cart utility share objects
+####################################
+def build_utility_shared_obj():
     """Build cart utility library"""
 
     denv = env.Clone()
     prereqs.require(denv, 'mercury', headers_only=True)
-    cart_utils_lib  = daos_build.library(denv, 'cart_utils', LIB_SRC)
-    denv.Install('$PREFIX/lib64/', cart_utils_lib)
-    Default(cart_utils_lib)
-    Export('cart_utils_lib')
+    cart_utils_objs  = denv.SharedObject(LIB_SRC)
+    Export('cart_utils_objs')
 
 # pylint: disable=unused-argument
 def macro_expand(target, source, env):
@@ -92,8 +90,8 @@ def scons():
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
                     os.path.join('../include', 'cart', header))
 
-    # Generate cart utility library
-    build_utility_library()
+    # Generate cart utility shared objects
+    build_utility_shared_obj()
 
     denv = env.Clone(LIBS=[])
 

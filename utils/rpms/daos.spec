@@ -363,7 +363,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
-%{_libdir}/libcart_utils.so
 %dir %{_libdir}/python3/site-packages/pydaos
 %{_libdir}/python3/site-packages/pydaos/*.py
 %dir %{_libdir}/python3/site-packages/pydaos/raw
@@ -423,9 +422,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Fri Apr 23 2021 Steven Bollinger <stevenx.bollinger@intel.com> 1.3.0-14
-- Add cart_utils library to release
-
 * Wed Apr 21 2021 Tom Nabarro <tom.nabarro@intel.com> - 1.3.0-13
 - Relax ipmctl version requirement on leap15 as we have runtime checks
 
