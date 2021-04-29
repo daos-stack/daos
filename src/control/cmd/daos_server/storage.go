@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"os/user"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -56,6 +57,14 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	if prepNvme {
 		cmd.log.Info(op + " locally-attached NVMe storage...")
+
+		if cmd.TargetUser == "" {
+			runningUser, err := user.Current()
+			if err != nil {
+				return errors.Wrap(err, "couldn't lookup running user")
+			}
+			cmd.TargetUser = runningUser.Username
+		}
 
 		// Prepare NVMe access through SPDK
 		if _, err := cmd.scs.NvmePrepare(bdev.PrepareRequest{
