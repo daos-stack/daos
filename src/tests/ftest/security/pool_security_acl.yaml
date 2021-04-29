@@ -25,27 +25,27 @@ pool_acl:
   num_user: 1
   num_group: 1
   test_users: !mux
-    user_type1:
-      user:
-         - owner
-    user_type2:
-      user:
-         - user
+#    user_type1:
+#      user:
+#         - owner
+#    user_type2:
+#      user:
+#         - user
     user_type3:
       user:
          - ownergroup
-    user_type4:
-      user:
-         - group
+#    user_type4:
+#      user:
+#         - group
     user_type5:
       user:
          - everyone
   permissions: !mux
-    permission_none:
-      name:
-         - none
-         - deny   #read
-         - deny   #write
+#    permission_none:
+#      name:
+#         - none
+#         - deny   #read
+#         - deny   #write
     permission_r:
       name:
          - r
