@@ -239,8 +239,7 @@ crt_ui_destroy(struct crt_uri_item *ui)
 	D_ASSERT(ui->ui_initialized == 1);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		if (ui->ui_uri[i])
-			D_FREE(ui->ui_uri[i]);
+		D_FREE(ui->ui_uri[i]);
 
 	D_FREE(ui);
 }
@@ -1033,7 +1032,6 @@ out:
 	return rc;
 }
 
-
 void
 crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 {
@@ -1182,21 +1180,13 @@ out:
 int
 crt_group_rank(crt_group_t *grp, d_rank_t *rank)
 {
-	struct crt_grp_gdata	*grp_gdata;
 	struct crt_grp_priv	*grp_priv;
 	int			 rc = 0;
-
-	if (rank == NULL) {
-		D_ERROR("invalid parameter of NULL rank pointer.\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
-	grp_gdata = crt_gdata.cg_grp;
-	D_ASSERT(grp_gdata != NULL);
 
 	grp_priv = crt_grp_pub2priv(grp);
 	*rank = grp_priv->gp_self;

@@ -21,6 +21,7 @@ from prereq_tools import PreReqComponent
 
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
+                 '-Wnonnull',
                  '-Wno-missing-braces',
                  '-Wno-ignored-attributes',
                  '-Wno-gnu-zero-variadic-macro-arguments',
