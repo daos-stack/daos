@@ -38,6 +38,8 @@
 
 set -eux
 
+env
+
 # shellcheck disable=SC2153
 mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
 
@@ -57,6 +59,7 @@ else
 fi
 
 export CRT_PHY_ADDR_STR=ofi+sockets
+export WITH_VALGRIND=$WITH_VALGRIND
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE

@@ -38,11 +38,15 @@
 
 set -ex -o pipefail
 
+env
+
 # shellcheck disable=SC1091
 if [ -f .localenv ]; then
     # read (i.e. environment, etc.) overrides
     . .localenv
 fi
+
+env
 
 TEST_TAG_ARG="${1:-quick}"
 

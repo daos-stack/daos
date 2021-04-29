@@ -33,6 +33,7 @@ mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
+export WITH_VALGRIND=$WITH_VALGRIND
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 env
@@ -42,7 +43,6 @@ if $TEST_RPMS; then
       "TEST_TAG=\"$test_tag\"                        \
        TNODES=\"$tnodes\"                            \
        FTEST_ARG=\"$FTEST_ARG\"                      \
-       WITH_VALGRIND=\"$WITH_VALGRIND\"              \
        $(cat ci/functional/test_main_node.sh)"
 else
     ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
