@@ -12,6 +12,7 @@ from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from test_utils_pool import TestPool
 
+#Add a line to enable and trigger bandit runs
 
 class PoolSecurityTest(TestWithServers):
     """
