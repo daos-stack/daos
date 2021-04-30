@@ -822,7 +822,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 	if (li->li_tag_addr[tag] == NULL) {
 		li->li_tag_addr[tag] = *hg_addr;
 	} else {
-		D_WARN("NA address already exits. "
+		D_INFO("NA address already exits. "
 		       " grp_priv %p ctx_idx %d, rank: %d, tag %d, rlink %p\n",
 		       grp_priv, ctx_idx, rank, tag, &li->li_link);
 		rc = crt_hg_addr_free(&crt_ctx->cc_hg_ctx, *hg_addr);
