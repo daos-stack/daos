@@ -102,7 +102,7 @@ enum {
 #define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
 /* Force aggregation/discard ULT yield on certain amount of tight loops */
-#define VOS_AGG_CREDITS_MAX	256
+#define VOS_AGG_CREDITS_MAX	32
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {

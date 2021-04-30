@@ -84,11 +84,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # List of daos test paths to keep track of
         self.daos_test_paths = []
 
-        # Keep track of dcp compatibility options
-        # Defaulting to the newer options
-        self.dcp_has_src_pool = False
-        self.dcp_has_bufsize = True
-
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
@@ -118,13 +113,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         tool = self.params.get("tool", "/run/datamover/*")
         if tool:
             self.set_tool(tool)
-
-        # Get and save dcp compatibility options
-        self.dcp_cmd = Dcp(self.hostlist_clients, self.tmp)
-        self.dcp_cmd.get_params(self)
-        self.dcp_cmd.query_compatibility()
-        self.dcp_has_src_pool = self.dcp_cmd.has_src_pool
-        self.dcp_has_bufsize = self.dcp_cmd.has_bufsize
 
     def pre_tear_down(self):
         """Tear down steps to run before tearDown().
@@ -680,50 +668,44 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.fail("dst params require dst_type")
 
         # First, initialize a new dcp command
-        self.dcp_cmd = Dcp(self.hostlist_clients, self.tmp)
+        self.dcp_cmd = Dcp(self.hostlist_clients)
         self.dcp_cmd.get_params(self)
-
-        # Set the compatibility options
-        self.dcp_cmd.set_compatibility(self.dcp_has_src_pool,
-                                       self.dcp_has_bufsize)
 
         # Set the source params
         if src_type == "POSIX":
             self.dcp_cmd.set_dcp_params(
-                src_path=src_path)
+                src=str(src_path))
         elif src_type == "DAOS_UUID":
+            param = self._format_daos_path(src_pool, src_cont, src_path)
             self.dcp_cmd.set_dcp_params(
-                src_path=src_path,
-                src_pool=self._uuid_from_obj(src_pool),
-                src_cont=self._uuid_from_obj(src_cont))
+                src=param)
         elif src_type == "DAOS_UNS":
             if src_cont:
                 if src_path == "/":
                     self.dcp_cmd.set_dcp_params(
-                        src_path=src_cont.path.value)
+                        src=src_cont.path.value)
                 else:
                     self.dcp_cmd.set_dcp_params(
                         prefix=src_cont.path.value,
-                        src_path=src_cont.path.value + src_path)
+                        src=src_cont.path.value + src_path)
 
         # Set the destination params
         if dst_type == "POSIX":
             self.dcp_cmd.set_dcp_params(
-                dst_path=dst_path)
+                dst=dst_path)
         elif dst_type == "DAOS_UUID":
+            param = self._format_daos_path(dst_pool, dst_cont, dst_path)
             self.dcp_cmd.set_dcp_params(
-                dst_path=dst_path,
-                dst_pool=self._uuid_from_obj(dst_pool),
-                dst_cont=self._uuid_from_obj(dst_cont))
+                dst=param)
         elif dst_type == "DAOS_UNS":
             if dst_cont:
                 if dst_path == "/":
                     self.dcp_cmd.set_dcp_params(
-                        dst_path=dst_cont.path.value)
+                        dst=dst_cont.path.value)
                 else:
                     self.dcp_cmd.set_dcp_params(
                         prefix=dst_cont.path.value,
-                        dst_path=dst_cont.path.value + dst_path)
+                        dst=dst_cont.path.value + dst_path)
 
     def _set_dsync_params(self,
                           src_type=None, src_path=None,
@@ -1165,7 +1147,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 if not processes:
                     processes = self.dsync_processes
                 # If we expect an rc other than 0, don't fail
-                self.dcp_cmd.exit_status_exception = (expected_rc == 0)
+                self.dsync_cmd.exit_status_exception = (expected_rc == 0)
                 result = self.dsync_cmd.run(self.workdir, processes)
             elif self.tool== "DSERIAL":
                 if not processes:
@@ -1196,6 +1178,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 self.fail("stdout expected {}: {}".format(s, test_desc))
         for s in expected_err:
             if s not in result.stderr_text:
-                self.fail("stderr xpected {}: {}".format(s, test_desc))
+                self.fail("stderr expected {}: {}".format(s, test_desc))
 
         return result
