@@ -47,28 +47,16 @@ func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
 	return (*C.uchar)(unsafe.Pointer(&cmd.poolUUID[0]))
 }
 
-func (cmd *poolBaseCmd) resolvePool() (err error) {
-	// TODO: Resolve name
-	cmd.poolUUID, err = uuid.Parse(cmd.Args.Pool)
+func (cmd *poolBaseCmd) resolvePool(id string) (err error) {
+	// TODO: Resolve label.
+
+	cmd.poolUUID, err = uuid.Parse(id)
 	if err != nil {
-		return
+		return errors.Wrapf(err,
+			"unable to resolve pool id %q as UUID", id)
 	}
 
 	return
-}
-
-func (cmd *poolBaseCmd) resolveAndConnect() (func(), error) {
-	if err := cmd.resolvePool(); err != nil {
-		return nil, err
-	}
-
-	if err := cmd.connectPool(); err != nil {
-		return nil, err
-	}
-
-	return func() {
-		cmd.disconnectPool()
-	}, nil
 }
 
 func (cmd *poolBaseCmd) connectPool() error {
@@ -85,10 +73,32 @@ func (cmd *poolBaseCmd) connectPool() error {
 }
 
 func (cmd *poolBaseCmd) disconnectPool() {
+	cmd.log.Debugf("disconnecting pool %s", cmd.poolUUID)
 	rc := C.daos_pool_disconnect(cmd.cPoolHandle, nil)
 	if err := daosError(rc); err != nil {
 		cmd.log.Errorf("pool disconnect failed: %s", err)
 	}
+}
+
+func (cmd *poolBaseCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (func(), error) {
+	if err := cmd.resolvePool(cmd.Args.Pool); err != nil {
+		return nil, err
+	}
+
+	if err := cmd.connectPool(); err != nil {
+		return nil, err
+	}
+
+	if ap != nil {
+		if err := copyUUID(&ap.p_uuid, cmd.poolUUID); err != nil {
+			return nil, err
+		}
+		ap.pool = cmd.cPoolHandle
+	}
+
+	return func() {
+		cmd.disconnectPool()
+	}, nil
 }
 
 func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
@@ -112,7 +122,7 @@ type poolContainersListCmd struct {
 func (cmd *poolContainersListCmd) Execute(_ []string) error {
 	extra_cont_margin := C.size_t(16)
 
-	cleanup, err := cmd.resolveAndConnect()
+	cleanup, err := cmd.resolveAndConnect(nil)
 	if err != nil {
 		return err
 	}
@@ -242,7 +252,7 @@ const (
 )
 
 func (cmd *poolQueryCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
+	cleanup, err := cmd.resolveAndConnect(nil)
 	if err != nil {
 		return err
 	}
@@ -283,7 +293,7 @@ type poolListAttrsCmd struct {
 }
 
 func (cmd *poolListAttrsCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
+	cleanup, err := cmd.resolveAndConnect(nil)
 	if err != nil {
 		return err
 	}
@@ -317,7 +327,7 @@ type poolGetAttrCmd struct {
 }
 
 func (cmd *poolGetAttrCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
+	cleanup, err := cmd.resolveAndConnect(nil)
 	if err != nil {
 		return err
 	}
@@ -353,7 +363,7 @@ type poolSetAttrCmd struct {
 }
 
 func (cmd *poolSetAttrCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
+	cleanup, err := cmd.resolveAndConnect(nil)
 	if err != nil {
 		return err
 	}
@@ -380,7 +390,7 @@ type poolDelAttrCmd struct {
 }
 
 func (cmd *poolDelAttrCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
+	cleanup, err := cmd.resolveAndConnect(nil)
 	if err != nil {
 		return err
 	}
@@ -400,17 +410,17 @@ type poolAutoTestCmd struct {
 }
 
 func (cmd *poolAutoTestCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(nil)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 
 	ap.pool = cmd.cPoolHandle
 	if err := copyUUID(&ap.p_uuid, cmd.poolUUID); err != nil {

@@ -26,27 +26,22 @@ import "C"
 type containerSnapshotCreateCmd struct {
 	existingContainerCmd
 
-	Epoch uint64 `long:"epoch" short:"e" description:"epoch to use for snapshot"`
-	Name  string `long:"name" short:"s" description:"snapshot name"`
+	Epoch uint64 `long:"epc" short:"e" description:"epoch to use for snapshot"`
+	Name  string `long:"snap" short:"s" description:"snapshot name"`
 }
 
 func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
-	cleanup, err := cmd.resolveAndConnect()
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
 
-	ap.cont = cmd.cContHandle
-	if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
+	cleanup, err := cmd.resolveAndConnect(ap)
+	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	if cmd.Epoch > 0 {
 		ap.epc = C.uint64_t(cmd.Epoch)
@@ -62,35 +57,28 @@ func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
 			cmd.contUUID)
 	}
 
-	cmd.log.Infof("snapshot/epoch %d has been created", ap.epc)
-
 	return nil
 }
 
 type containerSnapshotDestroyCmd struct {
 	existingContainerCmd
 
-	Epoch uint64 `long:"epoch" short:"e" description:"snapshot epoch to delete"`
+	Epoch uint64 `long:"epc" short:"e" description:"snapshot epoch to delete"`
 	Range string `long:"range" short:"r" description:"range of snapshot epochs to delete"`
 }
 
 func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
-	cleanup, err := cmd.resolveAndConnect()
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
 
-	ap.cont = cmd.cContHandle
-	if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
+	cleanup, err := cmd.resolveAndConnect(nil)
+	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	if cmd.Epoch > 0 {
 		ap.epc = C.uint64_t(cmd.Epoch)
@@ -120,13 +108,61 @@ type containerSnapshotListCmd struct {
 }
 
 func (cmd *containerSnapshotListCmd) Execute(args []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	rc := C.cont_list_snaps_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to list snapshots for container %s",
+			cmd.contUUID)
+	}
+
 	return nil
 }
 
 type containerSnapshotRollbackCmd struct {
 	existingContainerCmd
+
+	Epoch uint64 `long:"epc" short:"e" description:"epoch to use for snapshot"`
+	Name  string `long:"snap" short:"s" description:"snapshot name"`
 }
 
 func (cmd *containerSnapshotRollbackCmd) Execute(args []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	if cmd.Epoch > 0 {
+		ap.epc = C.uint64_t(cmd.Epoch)
+	}
+	if cmd.Name != "" {
+		ap.snapname_str = C.CString(cmd.Name)
+		defer C.free(unsafe.Pointer(ap.snapname_str))
+	}
+
+	rc := C.cont_rollback_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err, "failed to roll back container %s",
+			cmd.contUUID)
+	}
+
 	return nil
 }
