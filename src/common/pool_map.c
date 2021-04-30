@@ -1475,7 +1475,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		D_GOTO(out_map_buf, rc = -DER_NOMEM);
 
 	/* Make a sorted target UUID array to determine target IDs. */
-	D_ALLOC_ARRAY(uuids, nnodes);
+	D_ALLOC_ARRAY_NZ(uuids, nnodes);
 	if (uuids == NULL)
 		D_GOTO(out_map_buf, rc = -DER_NOMEM);
 	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);

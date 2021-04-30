@@ -583,9 +583,7 @@ pool_iv_map_ent_update(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 		uint32_t new_size;
 
 		new_size = pool_iv_map_ent_size(pb_nr);
-		/* Old size doesn't matter, buffer is immediately overwritten */
-		D_REALLOC(new_buf, dst_sgl->sg_iovs[0].iov_buf, new_size,
-			  new_size);
+		D_REALLOC_NZ(new_buf, dst_sgl->sg_iovs[0].iov_buf, new_size);
 		if (new_buf == NULL)
 			return -DER_NOMEM;
 

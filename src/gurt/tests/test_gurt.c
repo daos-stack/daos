@@ -15,12 +15,12 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include "wrap_cmocka.h"
-#include "gurt/common.h"
-#include "gurt/list.h"
-#include "gurt/heap.h"
-#include "gurt/dlog.h"
-#include "gurt/hash.h"
-#include "gurt/atomic.h"
+#include <gurt/common.h>
+#include <gurt/list.h>
+#include <gurt/heap.h>
+#include <gurt/dlog.h>
+#include <gurt/hash.h>
+#include <gurt/atomic.h>
 
 /* machine epsilon */
 #define EPSILON (1.0E-16)
@@ -1166,11 +1166,14 @@ test_gurt_hash_decref(void **state)
 	assert_int_equal(rc, 0);
 }
 
+#define GA_BUF_SIZE 32
 static void
 test_gurt_alloc(void **state)
 {
 	const char *str1 = "Hello World1";
 	const char str2[] = "Hello World2";
+	char zero_buf[GA_BUF_SIZE] = {0};
+	char fill_buf[GA_BUF_SIZE] = {0};
 	char *testptr;
 	char *newptr;
 	int *testint;
@@ -1179,6 +1182,8 @@ test_gurt_alloc(void **state)
 	int *ptr1, *ptr2;
 	int nr = 10;
 	int rc;
+
+	memset(fill_buf, 'f', sizeof(fill_buf));
 
 	rc = d_log_init();
 	assert_int_equal(rc, 0);
@@ -1218,17 +1223,43 @@ test_gurt_alloc(void **state)
 	assert_non_null(testint);
 	D_FREE(testint);
 	assert_null(testint);
+	D_ALLOC_PTR_NZ(testint);
+	assert_non_null(testint);
+	D_FREE(testint);
+	assert_null(testint);
 
 	D_ALLOC_ARRAY(ptr1, nr);
 	assert_non_null(ptr1);
-
 	D_REALLOC_ARRAY(ptr2, ptr1, nr, nr + 10);
-
 	assert_non_null(ptr2);
 	assert_null(ptr1);
-
 	D_FREE(ptr2);
 	assert_null(ptr2);
+
+	D_ALLOC_ARRAY_NZ(ptr1, nr);
+	assert_non_null(ptr1);
+	D_REALLOC_ARRAY_NZ(ptr2, ptr1, nr + 10);
+	assert_non_null(ptr2);
+	assert_null(ptr1);
+	D_FREE(ptr2);
+	assert_null(ptr2);
+
+	D_ALLOC(newptr, GA_BUF_SIZE);
+	assert_non_null(newptr);
+	assert_memory_equal(newptr, zero_buf, sizeof(zero_buf));
+	D_FREE(newptr);
+	assert_null(newptr);
+	D_REALLOC(newptr, testptr, 0, GA_BUF_SIZE);
+	assert_non_null(newptr);
+	assert_memory_equal(newptr, zero_buf, sizeof(zero_buf));
+	memset(newptr, 'f', sizeof(fill_buf));
+	D_REALLOC(testptr, newptr, GA_BUF_SIZE, GA_BUF_SIZE * 2);
+	assert_non_null(testptr);
+	newptr = testptr;
+	assert_memory_equal(newptr, fill_buf, sizeof(fill_buf));
+	assert_memory_equal(newptr + GA_BUF_SIZE, zero_buf, sizeof(zero_buf));
+	D_FREE(newptr);
+	assert_null(newptr);
 
 	d_log_fini();
 }

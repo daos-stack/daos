@@ -313,14 +313,14 @@ ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 {
 	struct evt_list_entry	*ents;
 
-	D_ALLOC_ARRAY(ents, new_size);
+	if (ent_array->ea_ents != ent_array->ea_embedded_ents)
+		D_REALLOC_ARRAY(ents, ent_array->ea_ents, ent_array->ea_ent_nr,
+				new_size);
+	else
+		D_ALLOC_ARRAY(ents, new_size);
 	if (ents == NULL)
 		return -DER_NOMEM;
 
-	memcpy(ents, ent_array->ea_ents,
-	       sizeof(ents[0]) * ent_array->ea_ent_nr);
-	if (ent_array->ea_ents != ent_array->ea_embedded_ents)
-		D_FREE(ent_array->ea_ents);
 	ent_array->ea_ents = ents;
 	ent_array->ea_size = new_size;
 

@@ -560,11 +560,7 @@ rewait:
 			} else if (evp->ev_error == -DER_REC2BIG) {
 				char *new_buff;
 
-				/** No need to clear the buffer so size doesn't
-				 * matter.
-				 */
-				D_REALLOC(new_buff, op->buf, op->size,
-					  op->size);
+				D_REALLOC_NZ(new_buff, op->buf, op->size);
 				if (new_buff == NULL) {
 					rc = -DER_NOMEM;
 					break;
@@ -627,11 +623,7 @@ rewait:
 				daos_event_fini(evp);
 				rc2 = daos_event_init(evp, eq, NULL);
 
-				/** No need to clear the buffer so size doesn't
-				 * matter.
-				 */
-				D_REALLOC(new_buff, op->buf, op->size,
-					  op->size);
+				D_REALLOC_NZ(new_buff, op->buf, op->size);
 				if (new_buff == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 

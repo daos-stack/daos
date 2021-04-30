@@ -500,11 +500,7 @@ csum_prepare_buf(struct agg_lgc_seg *segs, unsigned int seg_cnt,
 	int		 i;
 
 	if (new_len > cur_len) {
-		/* We should probably use D_FREE/D_ALLOC here but since we
-		 * reset the whole array, just avoid any memset by setting
-		 * old size to new size
-		 */
-		D_REALLOC(buffer, *csum_bufp, new_len, new_len);
+		D_REALLOC_NZ(buffer, *csum_bufp, new_len);
 		if (buffer == NULL)
 			return -DER_NOMEM;
 	} else
@@ -549,8 +545,7 @@ prepare_segments(struct agg_merge_window *mw)
 	D_ASSERT(mw->mw_phy_cnt > 0);
 	seg_max = MAX((mw->mw_lgc_cnt + mw->mw_phy_cnt), 200);
 	if (io->ic_seg_max < seg_max) {
-		/* Avoid double memset by using seg_max as old size */
-		D_REALLOC_ARRAY(lgc_seg, io->ic_segs, seg_max, seg_max);
+		D_REALLOC_ARRAY_NZ(lgc_seg, io->ic_segs, seg_max);
 		if (lgc_seg == NULL)
 			return -DER_NOMEM;
 
@@ -1099,20 +1094,13 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		size = sizeof(*io->ic_rsrvd_scm) *
 			sizeof(*scm_exts) * scm_max;
 
-		if (io->ic_rsrvd_scm == NULL)
-			D_ALLOC(rsrvd_scm, size);
-		else
-			D_REALLOC(rsrvd_scm, io->ic_rsrvd_scm,
-				  sizeof(*io->ic_rsrvd_scm) * sizeof(*scm_exts)
-				  * io->ic_rsrvd_scm->rs_actv_cnt, size);
+		D_REALLOC_Z(rsrvd_scm, io->ic_rsrvd_scm, size);
 		if (rsrvd_scm == NULL)
 			return -DER_NOMEM;
 
 		io->ic_rsrvd_scm = rsrvd_scm;
 		io->ic_rsrvd_scm->rs_actv_cnt = scm_max;
 	}
-	memset(io->ic_rsrvd_scm->rs_actv, 0,
-	       io->ic_rsrvd_scm->rs_actv_cnt * sizeof(*scm_exts));
 	D_ASSERT(io->ic_rsrvd_scm->rs_actv_at == 0);
 
 	for (i = 0; i < io->ic_seg_cnt; i++) {
