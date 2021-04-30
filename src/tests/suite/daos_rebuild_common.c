@@ -570,11 +570,12 @@ rebuild_io_verify(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 	}
 }
 
-#define DATA_SIZE		(1048576 * 4 + 512)
-#define PARTIAL_DATA_SIZE	1024
-#define IOD3_DATA_SIZE		300
-#define LARGE_SINGLE_VALUE_SIZE	8500
-#define SMALL_SINGLE_VALUE_SIZE	32
+/* using some un-aligned size */
+#define DATA_SIZE			(1048576 * 4 + 347)
+#define PARTIAL_DATA_SIZE		(933)
+#define IOD3_DATA_SIZE			(311)
+#define LARGE_SINGLE_VALUE_SIZE		(8569)
+#define SMALL_SINGLE_VALUE_SIZE		(37)
 
 #define KEY_NR 5
 void make_buffer(char *buffer, char start, int total)
@@ -607,7 +608,6 @@ write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 		recx.rx_idx = off + i * 10485760;
 		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, size, req);
-
 		recx.rx_nr = IOD3_DATA_SIZE;
 		insert_recxs(key, "a_key_iod3", 3, DAOS_TX_NONE, &recx, 1,
 			     data, IOD3_DATA_SIZE * 3, req);
@@ -615,7 +615,8 @@ write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 		req->iod_type = DAOS_IOD_SINGLE;
 		memset(single_data, 'a' + i, LARGE_SINGLE_VALUE_SIZE);
 		sprintf(key, "dkey_single_small_%d_%d", index, i);
-		insert_single(key, "a_key", 0, single_data, 32, DAOS_TX_NONE,
+		insert_single(key, "a_key", 0, single_data,
+			      SMALL_SINGLE_VALUE_SIZE, DAOS_TX_NONE,
 			      req);
 
 		sprintf(key, "dkey_single_large_%d_%d", index, i);
