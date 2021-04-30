@@ -133,9 +133,10 @@ vos_dtx_aggregate(daos_handle_t coh);
  *
  * \param coh	[IN]	Container open handle.
  * \param stat	[OUT]	The structure to hold the DTXs information.
+ * \param flags	[IN]	The flags for stat operation.
  */
 void
-vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
+vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags);
 
 /**
  * Set the DTX committable as committable.

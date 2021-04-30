@@ -25,10 +25,6 @@
 
 #include "obj_ec.h"
 
-#define ENCODING(proc_op) (proc_op == CRT_PROC_ENCODE)
-#define DECODING(proc_op) (proc_op == CRT_PROC_DECODE)
-#define FREEING(proc_op)  (proc_op == CRT_PROC_FREE)
-
 /* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
  * for other RPC fields and cart/HG headers.
  */

@@ -559,7 +559,7 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	ctx->sc_target = SWIM_ID_INVALID;
 
 	/* delay the first ping until all things will be initialized */
-	ctx->sc_next_tick_time = swim_now_ms() + 10 * SWIM_PROTOCOL_PERIOD_LEN;
+	ctx->sc_next_tick_time = swim_now_ms() + 3 * SWIM_PROTOCOL_PERIOD_LEN;
 
 	/* set global tunable defaults */
 	swim_prot_period_len = swim_prot_period_len_default();

@@ -82,7 +82,16 @@ enum {
 
 static int	sched_policy;
 
-#define SCHED_DELAY_THRESH	20000	/* msecs */
+/*
+ * Time threshold for giving IO up throttling. If space pressure stays in the
+ * highest level for enough long time, we assume that no more space can be
+ * reclaimed and choose to give up IO throttling, so that ENOSPACE error could
+ * be returned to client earlier.
+ *
+ * To make time for aggregation reclaiming overwriteen space, this threshold
+ * should be longer than the DAOS_AGG_THRESHOLD.
+ */
+#define SCHED_DELAY_THRESH	40000	/* msecs */
 
 static unsigned int max_delay_msecs[SCHED_REQ_MAX] = {
 	20000,	/* SCHED_REQ_UPDATE */

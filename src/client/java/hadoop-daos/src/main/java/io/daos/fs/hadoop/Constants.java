@@ -33,6 +33,9 @@ public final class Constants {
   // daos container
   public static final String DAOS_CONTAINER_UUID = "fs.daos.container.uuid";
 
+  public static final String DAOS_IO_ASYNC = "fs.daos.io.async";
+  public static final boolean DEFAULT_DAOS_IO_ASYNC = true;
+
   // the minimum and default daos chunk size, maximum size
   public static final String DAOS_CHUNK_SIZE = "fs.daos.chunk.size";
   public static final int DEFAULT_DAOS_CHUNK_SIZE = 1024 * 1024;
@@ -62,5 +65,8 @@ public final class Constants {
   // minimum and maximum file block size
   public static final int MINIMUM_DAOS_BLOCK_SIZE = 16 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_BLOCK_SIZE = Integer.MAX_VALUE;
+
+  public static final String UNS_PATH_SEARCH_RECURSIVE = "fs.daos.uns.search.recursive";
+  public static final boolean DEFAULT_UNS_PATH_SEARCH_RECURSIVE = false;
 
 }
