@@ -781,7 +781,7 @@ dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list,
 	struct sys_path	sys_path;
 	dfs_obj_t	*obj;
 	daos_size_t	got_size = *size;
-	int		lookup_flags = O_RDWR;
+	int		lookup_flags = O_RDONLY;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -837,7 +837,7 @@ dfs_sys_getxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
 	struct sys_path	sys_path;
 	dfs_obj_t	*obj;
 	daos_size_t	got_size = *size;
-	int		lookup_flags = O_RDWR;
+	int		lookup_flags = O_RDONLY;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -988,7 +988,7 @@ dfs_sys_readlink(dfs_sys_t *dfs_sys, const char *path, char *buf,
 	int		rc;
 	struct sys_path	sys_path;
 	dfs_obj_t	*obj;
-	int		lookup_flags = O_RDWR | O_NOFOLLOW;
+	int		lookup_flags = O_RDONLY | O_NOFOLLOW;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
