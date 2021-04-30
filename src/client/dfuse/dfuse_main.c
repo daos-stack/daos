@@ -256,7 +256,6 @@ main(int argc, char **argv)
 		{"thread-count",	required_argument, 0, 't'},
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"enable-caching",	no_argument,	   0, 'A'},
-		{"disable-direct-io",	no_argument,	   0, 'D'},
 		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
 		{0, 0, 0, 0}
@@ -271,7 +270,6 @@ main(int argc, char **argv)
 		D_GOTO(out_debug, ret = -DER_NOMEM);
 
 	dfuse_info->di_threaded = true;
-	dfuse_info->di_direct_io = true;
 
 	while (1) {
 		c = getopt_long(argc, argv, "m:Sfh",
@@ -310,9 +308,6 @@ main(int argc, char **argv)
 		case 'f':
 			dfuse_info->di_foreground = true;
 			break;
-		case 'D':
-			dfuse_info->di_direct_io = false;
-			break;
 		case 'h':
 			show_help(argv[0]);
 			exit(0);
@@ -322,11 +317,6 @@ main(int argc, char **argv)
 			exit(1);
 			break;
 		}
-	}
-
-	if (dfuse_info->di_caching && !dfuse_info->di_threaded) {
-		printf("Caching not compatible with single-threaded mode\n");
-		exit(1);
 	}
 
 	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {

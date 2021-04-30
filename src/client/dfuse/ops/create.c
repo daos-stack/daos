@@ -73,13 +73,13 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	oh->doh_dfs = parent->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
 
-	if (fs_handle->dpi_info->di_direct_io) {
-		if (parent->ie_dfs->dfs_data_caching) {
+	if (parent->ie_dfs->dfs_data_caching) {
+		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
-		} else {
-			if (fi->flags & O_DIRECT)
-				fi_out.direct_io = 1;
-		}
+		else
+			oh->doh_caching = true;
+	} else {
+		fi_out.direct_io = 1;
 	}
 
 	fi_out.fh = (uint64_t)oh;

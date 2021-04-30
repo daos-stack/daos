@@ -87,6 +87,9 @@ struct dfuse_obj_hdl {
 	/** the inode entry for the file */
 	struct dfuse_inode_entry	*doh_ie;
 
+	/** True is caching is enabled for this file. */
+	bool				doh_caching;
+
 	/* Below here is only used for directories */
 	/** an anchor to track listing in readdir */
 	daos_anchor_t			doh_anchor;

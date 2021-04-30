@@ -73,7 +73,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 					pos_ra <= oh->doh_ie->ie_start_off))) {
 			readahead = true;
 		}
-	} else if (oh->doh_ie->ie_dfs->dfs_data_caching &&
+	} else if (oh->doh_caching &&
 		len < (1024 * 1024) &&
 		oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
 		/* Only do readahead if the requested size is less than 1Mb and
