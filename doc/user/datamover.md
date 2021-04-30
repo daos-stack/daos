@@ -45,6 +45,10 @@ There are two mandatory command-line options; these are:
 | --src=daos://<pool/cont\> \| <path\>  | the source path      |
 | --dst=daos://<pool/cont\> \| <path\>  | the destination path |
 
+!!! note
+    In DAOS 1.2, only directories are supported as the source or destination.
+    Files, directories, and symbolic links are copied from the source directory.
+
 #### Examples
 
 Copy a POSIX container to a POSIX filesystem:
