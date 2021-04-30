@@ -343,7 +343,7 @@ d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank)
 	d_rank_list_t		*new_rank_list;
 	int			 rc = 0;
 
-	new_rank_list = d_rank_list_realloc(rank_list, rank_list->rl_nr + 1);
+	new_rank_list = d_rank_list_realloc(rank_list, old_num + 1);
 	if (new_rank_list == NULL) {
 		D_ERROR("d_rank_list_realloc() failed.\n");
 		D_GOTO(out, rc = -DER_NOMEM);

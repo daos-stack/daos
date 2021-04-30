@@ -164,7 +164,7 @@ daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src)
 	for (i = dst->sg_nr; i < total; i++) {
 		int idx = i - dst->sg_nr;
 
-		D_ALLOC(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
+		D_ALLOC_NZ(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
 		if (new_iovs[i].iov_buf == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
 
