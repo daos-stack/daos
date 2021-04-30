@@ -1185,8 +1185,12 @@ def archive_valgrind_logs(avocado_logs_dir, test_files, args):
 
     # Copy any log files written to the DAOS_TEST_SHARED_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR", os.environ['HOME'])
-    task = archive_files(
-        destination, hosts, "{}/valgrind*".format(logs_dir), True, args)
+
+    # Valgrind logs are in a shared directory, so only copy from one host
+    run_cart_logest=False
+    task = archive_files(destination, [hosts[0]],
+                         "{}/valgrind*".format(logs_dir),
+                         run_cart_logest, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
