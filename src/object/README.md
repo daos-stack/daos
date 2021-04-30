@@ -17,20 +17,19 @@ Enumeration of the akeys of a dkey is provided.
 The value can be either atomic <b>single value</b> (i.e. value replaced on
 update) or a <b>byte array</b> (i.e. arbitrary extent fetch/update).
 
-## Object Schema and Object Class
+## Object Class
 
 To avoid scaling problems and overhead common to traditional storage stack,
 DAOS objects are intentionally very simple. No default object metadata beyond
-the type and schema (object class ownership) are provided. This means that the
-system does not maintain time, size, owner, permissions and opener tracking
-attributes.
+the object class is provided. This means that the system does not maintain
+time, size, owner, permissions and opener tracking attributes.
 
-The DAOS <b>object schema</b> describes the definitions for object types, data
+The DAOS <b>object class</b> describes the definitions for object types, data
 protection methods, and data distribution strategies. An <b>object class</b> has
 a unique class ID, which is a 16-bit value, and can represent a category of
-objects that use the same schema and schema attributes. DAOS provides some
-pre-defined object class for the most common use (see `daos_obj_classes`). In
-addition user can register customized object class by
+objects that use the same schema(data protection, distribution). DAOS provides
+some pre-defined object class for the most common use (see `daos_obj_classes`).
+In addition user can register customized object class by
 `daos_obj_register_class()` (not implemented yet). A successfully registered
 object class is stored as container metadata; it is valid in the lifetime of the
 container.
@@ -55,54 +54,9 @@ Replication ensures high availability of object data because objects are
 accessible while any replica exists. Replication can also increase read
 bandwidth by allowing concurrent reads from different replicas.
 
-#### Client-side Replication
-
-Client replication is the mode that it is synchronous and fully in the client
-stack, to provide high concurrency and low latency I/O for the upper layer. This
-mode is not default and is only provided for testing purposes.
--   I/O requests against replicas are directly issued via DAOS client; there is
-    no sequential guarantee on writes in the same epoch, and concurrent writes
-    for a same object can arrive at different replicas in an arbitrary order.
-
--   Because there is no communication between servers in this way, there is no
-    consistent guarantee if there are overlapped writes or KV updates in the
-    same epoch. The DAOS server should detect overlapped updates in the same
-    epoch, and return errors or warnings for the updates to the client. The only
-    exception is multiple updates to the same extent or KV having the exactly
-    same data. In this case, it is allowed because these updates could
-    potentially be the resending requests.
-
-Furthermore, when failure occurs, the client replication protocol still needs
-some extra mechanism to enforce consistency between replicas:
--   If the DAOS client can capture the failure, e.g. a target failed during I/O,
-    because the DAOS client can complete this I/O by switching to another target
-    and resubmitting request. At the meanwhile, the DAOS servers can rebuild the
-    missing replica in the background. Therefore, DAOS can still guarantee data
-    consistency between replicas. This process is transparent to DAOS user.
-    In the implementation, the IO completion callback (`obj_comp_cb`) will
-    check the IO's completion status and will retry the IO when needed:
-    -   If any shard's IO completed with retryable error (stale pool map,
-        timedout, or other CaRT/HG level network error) then will refresh the
-        pool map and retry the IO.
-    -   If all shards' IO succeed but partial shards' replied pool map version
-        is newer than others and the target location changed for any shard
-        between old and new pool map version, then will refresh client-side pool
-        map and retry those shards' IO with old pool map version.
-    -   For read-only operation (fetch or enumerate) if the IO succeed but
-        replied pool map version is newer then just needs to refresh the client
-        cached pool map and needs not to retry the IO.
-
--   If DAOS cannot capture the failure, for example, the DAOS client itself
-    crashed before successfully updating all replicas so some replicas may lag
-    behind. Based on the current replication protocol, the DAOS servers cannot
-    detect the missing I/O requests, so DAOS cannot guarantee data consistency
-    between replicas. The upper layer stack has to either re-submit the
-    interrupted I/O requests to enforce data consistency between replicas, or
-    abort the epoch and rollback to the consistent status of the container.
-
 #### Server-side Replication
 
-DAOS also supports server replication, which has stronger consistency of
+DAOS supports server replication, which has stronger consistency of
 replicas with a trade-off in performance and latency. In server replication mode
 DAOS client selects a leader shard to send the IO request with the need-to-
 forward shards embedded in the RPC request, when the leader shard gets that IO
@@ -124,6 +78,25 @@ shard server. Now both modes are supported by DAOS, it can be dynamically
 configured by environment variable `DAOS_IO_SRV_DISPATCH` before loading DAOS
 server. By default DAOS works in server replication mode, and if the ENV set as
 zero then will work in client replication mode.
+
+#### Client-side Replication
+
+Client replication is the mode that it is synchronous and fully in the client
+stack, to provide high concurrency and low latency I/O for the upper layer.
+<b>This mode is not default and is only provided for testing purposes,
+consistency between replicas of this mode is not guaranteed when failure
+occurs</b>.
+-   I/O requests against replicas are directly issued via DAOS client; there is
+    no sequential guarantee on writes in the same epoch, and concurrent writes
+    for a same object can arrive at different replicas in an arbitrary order.
+
+-   Because there is no communication between servers in this way, there is no
+    consistent guarantee if there are overlapped writes or KV updates in the
+    same epoch. The DAOS server should detect overlapped updates in the same
+    epoch, and return errors or warnings for the updates to the client. The only
+    exception is multiple updates to the same extent or KV having the exactly
+    same data. In this case, it is allowed because these updates could
+    potentially be the resending requests.
 
 ### Erasure Code
 
@@ -157,8 +130,8 @@ On an object update (`dc_obj_update`) the client will calculate checksums
 using the data in the sgl as described by an iod (`daos_csummer_calc_iod`).
 Memory will be allocated for the checksums and the iod checksum
 structures that represent the checksums (`dcs_iod_csums`). The checksums will
- be sent to the server as part of the IOD and the server will store in [VOS]
- (src/vos/README.md).
+be sent to the server as part of the IOD and the server will store in [VOS]
+(src/vos/README.md).
 
 #### Object Fetch - Server
 On handling an object fetch (`ds_obj_rw_handler`), the server will allocate
@@ -224,25 +197,25 @@ In the client RPC callback, the client will calculate checksums for the
 
 DAOS supports different data distribution strategies.
 
-### Single (unstriped) Object (`DAOS_OS_SINGLE`)
+### Single (unstriped) Object
 
-Single (unstriped) objects always has one stripe and each shard of it is a full
-replica, they can generate the localities of replicas by the placement
-algorithm. A single (unstriped) object can be either a byte-array or a KV.
+For replication, single (unstriped) object always has one stripe and each
+shard of it is a full replica, for Erasure code, single object only has one
+parity group and a shard of it can either be a data chunk or parity chunk
+of the parity group.
+A single (unstriped) object can be either a byte-array or a KV.
 
-### Fixed Stripe Object (`DAOS_OS_STRIPED`)
+### Fixed Stripe Object
 
 A fixed stripe object has a constant number of stripes and each stripe has a
-fixed stripe size. Upper levels provide values for these attributes when
-initializing the stripe schema, and then DAOS uses these attributes to compute
-object layout.
+fixed stripe size. These stripe attributes are predefined by object class, DAOS
+uses these attributes to compute object layout.
 
-### Dynamically Striped Object
+### Dynamically Striped Object (Not implemented)
 
 A fixed stripe object always has the same number of stripes since it was
 created. In contrast, a dynamically stripped object could be created with a
 single stripe. It will increase its stripe count as its size grows to some
 boundary, to achieve more storage space and better concurrent I/O performance.
 
-Now the dynamically Striped Object schema defined in DAOS (`DAOS_OS_DYN_STRIPED`
-/`DAOS_OS_DYN_CHUNKED`) but not implemented yet.
+Now the dynamically Striped Object is not implemented yet.

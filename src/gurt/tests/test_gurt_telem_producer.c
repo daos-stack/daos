@@ -20,7 +20,8 @@
 #define STATS_EPSILON	(0.00001)
 #define TEST_IDX	(99)
 
-static uint64_t	*shmem_root;
+/* Context for checking results as a client */
+static struct d_tm_context	*cli_ctx;
 
 static int
 init_tests(void **state)
@@ -32,8 +33,8 @@ init_tests(void **state)
 		       D_TM_RETAIN_SHMEM);
 	assert_rc_equal(rc, DER_SUCCESS);
 
-	shmem_root = d_tm_get_shared_memory(simulated_srv_idx);
-	assert_non_null(shmem_root);
+	cli_ctx = d_tm_open(simulated_srv_idx);
+	assert_non_null(cli_ctx);
 
 	return d_log_init();
 }
@@ -55,8 +56,7 @@ test_increment_counter(void **state)
 		d_tm_inc_counter(loop, 1);
 	}
 
-	rc = d_tm_get_counter(&val, shmem_root,
-			      d_tm_conv_ptr(shmem_root, loop));
+	rc = d_tm_get_counter(cli_ctx, &val, d_tm_conv_ptr(cli_ctx, loop));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, count);
 }
@@ -76,8 +76,7 @@ test_add_to_counter(void **state)
 	d_tm_inc_counter(loop, count);
 	d_tm_inc_counter(loop, 1);
 
-	rc = d_tm_get_counter(&val, shmem_root,
-			      d_tm_conv_ptr(shmem_root, loop));
+	rc = d_tm_get_counter(cli_ctx, &val, d_tm_conv_ptr(cli_ctx, loop));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, count + 1);
 }
@@ -103,8 +102,7 @@ test_gauge(void **state)
 		d_tm_inc_gauge(gauge, 1);
 	}
 
-	rc = d_tm_get_gauge(&val, NULL, shmem_root,
-			    d_tm_conv_ptr(shmem_root, gauge));
+	rc = d_tm_get_gauge(cli_ctx, &val, NULL, d_tm_conv_ptr(cli_ctx, gauge));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, init_val + inc_count);
 
@@ -112,8 +110,7 @@ test_gauge(void **state)
 		d_tm_dec_gauge(gauge, 1);
 	}
 
-	rc = d_tm_get_gauge(&val, NULL, shmem_root,
-			    d_tm_conv_ptr(shmem_root, gauge));
+	rc = d_tm_get_gauge(cli_ctx, &val, NULL, d_tm_conv_ptr(cli_ctx, gauge));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, init_val + inc_count - dec_count);
 }
@@ -131,8 +128,7 @@ test_record_timestamp(void **state)
 
 	d_tm_record_timestamp(ts);
 
-	rc = d_tm_get_timestamp(&val, shmem_root,
-				d_tm_conv_ptr(shmem_root, ts));
+	rc = d_tm_get_timestamp(cli_ctx, &val, d_tm_conv_ptr(cli_ctx, ts));
 	assert_rc_equal(rc, DER_SUCCESS);
 	/*
 	 * Hard to determine exact timestamp at this point, so just verify
@@ -162,8 +158,8 @@ test_interval_timer(void **state)
 
 	d_tm_mark_duration_end(timer);
 
-	rc = d_tm_get_duration(&result, &stats, shmem_root,
-			       d_tm_conv_ptr(shmem_root, timer));
+	rc = d_tm_get_duration(cli_ctx, &result, &stats,
+			       d_tm_conv_ptr(cli_ctx, timer));
 	assert_int_equal(rc, DER_SUCCESS);
 	/* very rough estimation, based on the sleep timing */
 	assert_true(result.tv_nsec > ts.tv_nsec || result.tv_sec > 0);
@@ -195,12 +191,12 @@ test_timer_snapshot(void **state)
 	d_tm_take_timer_snapshot(snapshot2, D_TM_CLOCK_REALTIME);
 
 	/* check values */
-	rc = d_tm_get_timer_snapshot(&tms1, shmem_root,
-				     d_tm_conv_ptr(shmem_root, snapshot1));
+	rc = d_tm_get_timer_snapshot(cli_ctx, &tms1,
+				     d_tm_conv_ptr(cli_ctx, snapshot1));
 	assert_rc_equal(rc, 0);
 
-	rc = d_tm_get_timer_snapshot(&tms2, shmem_root,
-				     d_tm_conv_ptr(shmem_root, snapshot2));
+	rc = d_tm_get_timer_snapshot(cli_ctx, &tms2,
+				     d_tm_conv_ptr(cli_ctx, snapshot2));
 	assert_rc_equal(rc, 0);
 
 	tms3 = d_timediff(tms1, tms2);
@@ -235,8 +231,8 @@ test_gauge_stats(void **state)
 		d_tm_set_gauge(gauge, test_values[i]);
 	}
 
-	rc = d_tm_get_gauge(&val, &stats, shmem_root,
-			    d_tm_conv_ptr(shmem_root, gauge));
+	rc = d_tm_get_gauge(cli_ctx, &val, &stats,
+			    d_tm_conv_ptr(cli_ctx, gauge));
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(val, 20);
@@ -302,8 +298,8 @@ test_duration_stats(void **state)
 	d_tm_compute_stats(timer, microseconds);
 
 	/* Verify the results - figured out empirically */
-	rc = d_tm_get_duration(&tms, &stats, shmem_root,
-			       d_tm_conv_ptr(shmem_root, timer));
+	rc = d_tm_get_duration(cli_ctx, &tms, &stats,
+			       d_tm_conv_ptr(cli_ctx, timer));
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(stats.dtm_min, 1125000);
@@ -323,9 +319,9 @@ check_bucket_counter(char *path, int bucket_id, uint64_t exp_val)
 	snprintf(bucket_path, sizeof(bucket_path), "%s/bucket %d",
 		 path, bucket_id);
 
-	node = d_tm_find_metric(shmem_root, bucket_path);
+	node = d_tm_find_metric(cli_ctx, bucket_path);
 	assert_non_null(node);
-	rc = d_tm_get_counter(&val, shmem_root, node);
+	rc = d_tm_get_counter(cli_ctx, &val, node);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, exp_val);
 }
@@ -356,7 +352,7 @@ check_bucket_metadata(struct d_tm_node_t *node, int bucket_id)
 
 	printf("Checking bucket %d\n", bucket_id);
 
-	rc = d_tm_get_bucket_range(&bucket, bucket_id, shmem_root, node);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, bucket_id, node);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_non_null(bucket.dtb_bucket);
 
@@ -364,7 +360,7 @@ check_bucket_metadata(struct d_tm_node_t *node, int bucket_id)
 		 "histogram bucket %d [%lu .. %lu]",
 		 bucket_id, bucket.dtb_min, bucket.dtb_max);
 
-	rc = d_tm_get_metadata(&desc, &units, shmem_root, bucket.dtb_bucket);
+	rc = d_tm_get_metadata(cli_ctx, &desc, &units, bucket.dtb_bucket);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(desc, exp_desc);
 	free(desc);
@@ -380,10 +376,10 @@ check_histogram_metadata(char *path)
 	int			rc;
 	int			i;
 
-	node = d_tm_find_metric(shmem_root, path);
+	node = d_tm_find_metric(cli_ctx, path);
 	assert_non_null(node);
 
-	rc = d_tm_get_num_buckets(&histogram, shmem_root, node);
+	rc = d_tm_get_num_buckets(cli_ctx, &histogram, node);
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < histogram.dth_num_buckets; i++)
@@ -398,32 +394,32 @@ check_histogram_m1_data(char *path)
 	struct d_tm_bucket_t	bucket;
 	int			rc;
 
-	gauge = d_tm_find_metric(shmem_root, path);
+	gauge = d_tm_find_metric(cli_ctx, path);
 	assert_non_null(gauge);
 
-	rc = d_tm_get_num_buckets(&histogram, shmem_root, gauge);
+	rc = d_tm_get_num_buckets(cli_ctx, &histogram, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(histogram.dth_num_buckets, 10);
 	assert_int_equal(histogram.dth_initial_width, 5);
 	assert_int_equal(histogram.dth_value_multiplier, 1);
 
-	rc = d_tm_get_bucket_range(&bucket, 0, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 0, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 0);
 	assert_int_equal(bucket.dtb_max, 4);
 
-	rc = d_tm_get_bucket_range(&bucket, 1, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 1, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 5);
 	assert_int_equal(bucket.dtb_max, 9);
 
-	rc = d_tm_get_bucket_range(&bucket, 2, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 2, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 10);
 	assert_int_equal(bucket.dtb_max, 14);
 
-	rc = d_tm_get_bucket_range(&bucket, 10, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 10, gauge);
 	assert_rc_equal(rc, -DER_INVAL);
 }
 
@@ -501,42 +497,42 @@ check_histogram_m2_data(char *path)
 	struct d_tm_bucket_t	bucket;
 	int			rc;
 
-	gauge = d_tm_find_metric(shmem_root, path);
+	gauge = d_tm_find_metric(cli_ctx, path);
 	assert_non_null(gauge);
 
-	rc = d_tm_get_num_buckets(&histogram, shmem_root, gauge);
+	rc = d_tm_get_num_buckets(cli_ctx, &histogram, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(histogram.dth_num_buckets, 5);
 	assert_int_equal(histogram.dth_initial_width, 2048);
 	assert_int_equal(histogram.dth_value_multiplier, 2);
 
-	rc = d_tm_get_bucket_range(&bucket, 0, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 0, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 0);
 	assert_int_equal(bucket.dtb_max, 2047);
 
-	rc = d_tm_get_bucket_range(&bucket, 1, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 1, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 2048);
 	assert_int_equal(bucket.dtb_max, 6143);
 
-	rc = d_tm_get_bucket_range(&bucket, 2, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 2, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 6144);
 	assert_int_equal(bucket.dtb_max, 14335);
 
-	rc = d_tm_get_bucket_range(&bucket, 3, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 3, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 14336);
 	assert_int_equal(bucket.dtb_max, 30719);
 
-	rc = d_tm_get_bucket_range(&bucket, 4, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 4, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 30720);
 	assert_true(bucket.dtb_max == UINT64_MAX);
 
-	rc = d_tm_get_bucket_range(&bucket, 5, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 5, gauge);
 	assert_rc_equal(rc, -DER_INVAL);
 }
 
@@ -609,8 +605,8 @@ test_units(void **state)
 			     "gurt/tests/telem/kibibyte-counter");
 	assert_rc_equal(rc, DER_SUCCESS);
 
-	rc = d_tm_get_metadata(NULL, &units, shmem_root,
-			       d_tm_conv_ptr(shmem_root, counter));
+	rc = d_tm_get_metadata(cli_ctx, NULL, &units,
+			       d_tm_conv_ptr(cli_ctx, counter));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(units, D_TM_KIBIBYTE);
 	free(units);
@@ -618,8 +614,8 @@ test_units(void **state)
 	rc = d_tm_add_metric(&gauge, D_TM_GAUGE, NULL, D_TM_GIGIBYTE_PER_SECOND,
 			     "gurt/tests/telem/gigibyte-per-second-gauge");
 	assert_rc_equal(rc, DER_SUCCESS);
-	rc = d_tm_get_metadata(NULL, &units, shmem_root,
-			       d_tm_conv_ptr(shmem_root, gauge));
+	rc = d_tm_get_metadata(cli_ctx, NULL, &units,
+			       d_tm_conv_ptr(cli_ctx, gauge));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(units, D_TM_GIGIBYTE_PER_SECOND);
 	free(units);
@@ -631,26 +627,22 @@ test_find_metric(void **state)
 	struct d_tm_node_t	*node;
 
 	/** should find this one */
-	node = d_tm_find_metric(shmem_root, "gurt");
+	node = d_tm_find_metric(cli_ctx, "gurt");
 	assert_non_null(node);
 
 	/** should find this one */
-	node = d_tm_find_metric(shmem_root, "gurt/tests/telem/gauge");
+	node = d_tm_find_metric(cli_ctx, "gurt/tests/telem/gauge");
 	assert_non_null(node);
 
 	/** should not find this one */
-	node = d_tm_find_metric(shmem_root, "gurts");
+	node = d_tm_find_metric(cli_ctx, "gurts");
 	assert_null(node);
 
-	/** should not find this one */
+	/** no context */
 	node = d_tm_find_metric(NULL, "gurts");
 	assert_null(node);
 
-	/** should not find this one */
-	node = d_tm_find_metric(NULL, "gurt");
-	assert_null(node);
-
-	/** should not find this one */
+	/** all null inputs */
 	node = d_tm_find_metric(NULL, NULL);
 	assert_null(node);
 }
@@ -670,25 +662,25 @@ test_verify_object_count(void **state)
 	exp_total = exp_num_ctr + exp_num_gauge + exp_num_dur +
 		    exp_num_timestamp + exp_num_snap;
 
-	node = d_tm_find_metric(shmem_root, "gurt/tests/telem");
+	node = d_tm_find_metric(cli_ctx, "gurt/tests/telem");
 	assert_non_null(node);
 
-	num = d_tm_count_metrics(shmem_root, node, D_TM_COUNTER);
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_COUNTER);
 	assert_int_equal(num, exp_num_ctr);
 
-	num = d_tm_count_metrics(shmem_root, node, D_TM_GAUGE);
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_GAUGE);
 	assert_int_equal(num, exp_num_gauge);
 
-	num = d_tm_count_metrics(shmem_root, node, D_TM_DURATION);
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_DURATION);
 	assert_int_equal(num, exp_num_dur);
 
-	num = d_tm_count_metrics(shmem_root, node, D_TM_TIMESTAMP);
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_TIMESTAMP);
 	assert_int_equal(num, exp_num_timestamp);
 
-	num = d_tm_count_metrics(shmem_root, node, D_TM_TIMER_SNAPSHOT);
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_TIMER_SNAPSHOT);
 	assert_int_equal(num, exp_num_snap);
 
-	num = d_tm_count_metrics(shmem_root, node,
+	num = d_tm_count_metrics(cli_ctx, node,
 				 D_TM_COUNTER | D_TM_GAUGE | D_TM_DURATION |
 				 D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT);
 	assert_int_equal(num, exp_total);
@@ -700,29 +692,29 @@ test_print_metrics(void **state)
 	struct d_tm_node_t	*node;
 	int			filter;
 
-	node = d_tm_find_metric(shmem_root, "gurt");
+	node = d_tm_find_metric(cli_ctx, "gurt");
 	assert_non_null(node);
 
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 
-	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_STANDARD,
+	d_tm_print_my_children(cli_ctx, node, 0, filter, NULL, D_TM_STANDARD,
 			       D_TM_INCLUDE_METADATA, stdout);
 
 	d_tm_print_field_descriptors(D_TM_INCLUDE_TIMESTAMP |
 				     D_TM_INCLUDE_METADATA, stdout);
 
 	filter &= ~D_TM_DIRECTORY;
-	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_CSV,
+	d_tm_print_my_children(cli_ctx, node, 0, filter, NULL, D_TM_CSV,
 			       D_TM_INCLUDE_METADATA, stdout);
 }
 
 static void
 test_shared_memory_cleanup(void **state)
 {
-	int		simulated_srv_idx = TEST_IDX + 1;
-	int		rc;
-	uint64_t	*shmem;
+	int			simulated_srv_idx = TEST_IDX + 1;
+	int			rc;
+	struct d_tm_context	*ctx2;
 
 	/**
 	 * Cleanup from all other tests
@@ -743,17 +735,19 @@ test_shared_memory_cleanup(void **state)
 
 	/* Should be gone */
 	printf("This operation is expected to generate an error:\n");
-	shmem = d_tm_get_shared_memory(simulated_srv_idx);
-	assert_null(shmem);
+	ctx2 = d_tm_open(simulated_srv_idx);
+	assert_null(ctx2);
 
 	/* can still get original region */
-	shmem = d_tm_get_shared_memory(TEST_IDX);
-	assert_non_null(shmem);
+	ctx2 = d_tm_open(TEST_IDX);
+	assert_non_null(ctx2);
+	d_tm_close(&ctx2);
 }
 
 static int
 fini_tests(void **state)
 {
+	d_tm_close(&cli_ctx);
 	d_tm_fini();
 	d_log_fini();
 
