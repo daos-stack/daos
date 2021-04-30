@@ -15,10 +15,17 @@
  * with dfs_sys2base().
  */
 
+#ifndef __DAOS_FS_SYS_H__
+#define __DAOS_FS_SYS_H__
+
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 #include <dirent.h>
 
-#include "daos.h"
-#include "daos_fs.h"
+#include <daos.h>
+#include <daos_fs.h>
 
 #define DFS_SYS_NO_CACHE 1
 #define DFS_SYS_NO_LOCK 2
@@ -490,3 +497,8 @@ dfs_sys_closedir(DIR *dirp);
  */
 int
 dfs_sys_readdir(dfs_sys_t *dfs_sys, DIR *dirp, struct dirent **dirent);
+
+#if defined(__cplusplus)
+}
+#endif
+#endif /* __DAOS_FS_SYS_H__ */
