@@ -108,7 +108,7 @@ class OSAOnlineDrain(OSAUtils):
             for thrd in threads:
                 thrd.join()
                 if not self.out_queue.empty():
-                    self.assert_on_exception(self.out_queue)
+                    self.assert_on_exception()
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
