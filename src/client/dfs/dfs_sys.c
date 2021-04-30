@@ -23,7 +23,7 @@
 #define DFS_SYS_NUM_DIRENTS 24
 
 /** Size of the hash table */
-#define DFS_SYS_HASH_SIZE 16
+#define DFS_SYS_HASH_SIZE 12
 
 struct dfs_sys {
 	dfs_t			*dfs;	/* mounted filesystem */
