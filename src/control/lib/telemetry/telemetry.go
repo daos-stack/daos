@@ -136,7 +136,8 @@ func (mb *metricBase) Name() string {
 	}
 
 	if mb.name == nil {
-		name := C.GoString((*C.char)(C.d_tm_conv_ptr(mb.handle.ctx, unsafe.Pointer(mb.node.dtn_name))))
+		name := C.GoString((*C.char)(C.d_tm_conv_ptr(mb.handle.ctx, mb.node,
+			unsafe.Pointer(mb.node.dtn_name))))
 		mb.name = &name
 	}
 
@@ -269,11 +270,13 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 		return
 	}
 	path := strings.Join(pathComps, "/")
-	name := C.GoString((*C.char)(C.d_tm_conv_ptr(hdl.ctx, unsafe.Pointer(node.dtn_name))))
+	name := C.GoString((*C.char)(C.d_tm_conv_ptr(hdl.ctx, node,
+		unsafe.Pointer(node.dtn_name))))
 
 	switch node.dtn_type {
 	case C.D_TM_DIRECTORY:
-		next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.ctx, unsafe.Pointer(node.dtn_child)))
+		next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.ctx, node,
+			unsafe.Pointer(node.dtn_child)))
 		if next != nil {
 			visit(hdl, next, append(pathComps, name), out)
 		}
@@ -284,7 +287,8 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 	default:
 	}
 
-	next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.ctx, unsafe.Pointer(node.dtn_sibling)))
+	next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.ctx, node,
+		unsafe.Pointer(node.dtn_sibling)))
 	if next != nil && next != node {
 		visit(hdl, next, pathComps, out)
 	}
