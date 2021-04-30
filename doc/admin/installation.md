@@ -5,7 +5,7 @@ to select the appropriate software combination.
 
 ## Distribution Packages
 
-DAOS packages are available for CentOS7, openSUSE Leap 15 and Ubuntu 20.04.
+DAOS packages are available for CentOS7 and openSUSE Leap 15.
 For other distribution, manual building is required (see next section).
 
 ### CentOS 7.9
