@@ -19,23 +19,32 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func regPromEngineSources(ctx context.Context, log logging.Logger, engines []*EngineInstance) error {
+func regPromEngineSources(ctx context.Context, log logging.Logger, engines []*EngineInstance) ([]func(), error) {
 	numEngines := len(engines)
 	if numEngines == 0 {
-		return nil
+		return []func(){}, nil
 	}
+
+	var err error
+	cleanupFns := make([]func(), 0, numEngines)
+	defer func() {
+		if err != nil {
+			cleanupAll(cleanupFns)
+		}
+	}()
 
 	sources := make([]*promexp.EngineSource, numEngines)
 	for i := 0; i < numEngines; i++ {
 		er, err := engines[i].GetRank()
 		if err != nil {
-			return errors.Wrapf(err, "failed to get rank for idx %d", i)
+			return nil, errors.Wrapf(err, "failed to get rank for idx %d", i)
 		}
-		es, err := promexp.NewEngineSource(ctx, uint32(i), er.Uint32())
+		es, cleanup, err := promexp.NewEngineSource(ctx, uint32(i), er.Uint32())
 		if err != nil {
-			return errors.Wrapf(err, "failed to create EngineSource for idx %d", i)
+			return nil, errors.Wrapf(err, "failed to create EngineSource for idx %d", i)
 		}
 		sources[i] = es
+		cleanupFns = append(cleanupFns, cleanup)
 	}
 
 	opts := &promexp.CollectorOpts{
@@ -45,16 +54,23 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []*En
 	}
 	c, err := promexp.NewCollector(log, opts, sources...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	prometheus.MustRegister(c)
 
-	return nil
+	return cleanupFns, nil
 }
 
-func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, engines []*EngineInstance) error {
-	if err := regPromEngineSources(ctx, log, engines); err != nil {
-		return err
+func cleanupAll(cleanupFns []func()) {
+	for _, cleanup := range cleanupFns {
+		cleanup()
+	}
+}
+
+func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, engines []*EngineInstance) (func(), error) {
+	cleanupFns, err := regPromEngineSources(ctx, log, engines)
+	if err != nil {
+		return nil, err
 	}
 
 	http.Handle("/metrics", promhttp.HandlerFor(
@@ -76,9 +92,14 @@ func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, 
 	listenAddress := fmt.Sprintf("0.0.0.0:%d", port)
 	log.Infof("Listening on %s", listenAddress)
 
-	if err := http.ListenAndServe(listenAddress, nil); err != nil {
-		return err
-	}
+	// http listener is a blocking call
+	go func() {
+		err := http.ListenAndServe(listenAddress, nil)
+		log.Infof("Prometheus web exporter stopped: %s", err.Error())
+	}()
 
-	return nil
+	return func() {
+		log.Debug("cleaning up telemetry bindings")
+		cleanupAll(cleanupFns)
+	}, nil
 }
