@@ -97,7 +97,7 @@ hash_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 
 	hdl = hash_hdl_obj(rlink);
 	oldref = atomic_fetch_add_relaxed(&hdl->ref, 1);
-	D_DEBUG(DB_TRACE, "hash_rec_addref() %s, oldref = %u\n",
+	D_DEBUG(DB_TRACE, "%s, oldref = %u\n",
 		hdl->name, oldref);
 }
 
@@ -112,7 +112,7 @@ hash_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 
 	hdl = hash_hdl_obj(rlink);
 	oldref = atomic_fetch_sub_relaxed(&hdl->ref, 1);
-	D_DEBUG(DB_TRACE, "hash_rec_decref() %s, oldref = %u\n",
+	D_DEBUG(DB_TRACE, "%s, oldref = %u\n",
 		hdl->name, oldref);
 	D_ASSERT(oldref > 0);
 
@@ -127,7 +127,7 @@ hash_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct hash_hdl *hdl = hash_hdl_obj(rlink);
 
-	D_DEBUG(DB_TRACE, "hash_rec_free() %s\n", hdl->name);
+	D_DEBUG(DB_TRACE, "name=%s\n", hdl->name);
 
 	dfs_release(hdl->obj);
 	D_FREE(hdl->name);
@@ -184,8 +184,8 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 		rc = dfs_lookup(dfs_sys->dfs, sys_path->dir_name, O_RDWR,
 				&sys_path->parent, &mode, NULL);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "dfs_lookup() %s failed "DF_RC"\n",
-				sys_path->dir_name, DP_RC(rc));
+			D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
+				sys_path->dir_name, rc);
 			return rc;
 		}
 
@@ -374,18 +374,18 @@ dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags,
 		return EINVAL;
 
 	if (sflags & DFS_SYS_NO_CACHE) {
-		D_DEBUG(DB_TRACE, "dfs_sys_mount(): DFS_SYS_NO_CACHE.\n");
+		D_DEBUG(DB_TRACE, "mount: DFS_SYS_NO_CACHE.\n");
 		no_cache = true;
 		sflags &= ~DFS_SYS_NO_CACHE;
 	}
 	if (sflags & DFS_SYS_NO_LOCK) {
-		D_DEBUG(DB_TRACE, "dfs_sys_mount(): DFS_SYS_NO_LOCK.\n");
+		D_DEBUG(DB_TRACE, "mount: DFS_SYS_NO_LOCK.\n");
 		no_lock = true;
 		sflags &= ~DFS_SYS_NO_LOCK;
 	}
 
 	if (sflags != 0) {
-		D_DEBUG(DB_TRACE, "DFS_SYS mount invalid sflags.\n");
+		D_DEBUG(DB_TRACE, "mount: invalid sflags.\n");
 		return EINVAL;
 	}
 
@@ -411,7 +411,7 @@ dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags,
 					 NULL, &hash_hdl_ops,
 					 &dfs_sys->hash);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "d_hash_table_create() failed: "
+			D_DEBUG(DB_TRACE, "failed to create hash table "
 				DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_hash, rc = daos_der2errno(rc));
 		}
@@ -495,20 +495,18 @@ dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags,
 		return EINVAL;
 
 	if (sflags & DFS_SYS_NO_CACHE) {
-		D_DEBUG(DB_TRACE, "dfs_sys_global2local(): "
-			"DFS_SYS_NO_CACHE.\n");
+		D_DEBUG(DB_TRACE, "mount: DFS_SYS_NO_CACHE.\n");
 		no_cache = true;
 		sflags &= ~DFS_SYS_NO_CACHE;
 	}
 	if (sflags & DFS_SYS_NO_LOCK) {
-		D_DEBUG(DB_TRACE, "dfs_sys_global2local(): "
-			"DFS_SYS_NO_LOCK.\n");
+		D_DEBUG(DB_TRACE, "mount: DFS_SYS_NO_LOCK.\n");
 		no_lock = true;
 		sflags &= ~DFS_SYS_NO_LOCK;
 	}
 
 	if (sflags != 0) {
-		D_DEBUG(DB_TRACE, "dfs_sys_global2local invalid sflags.\n");
+		D_DEBUG(DB_TRACE, "mount: invalid sflags.\n");
 		return EINVAL;
 	}
 
@@ -534,7 +532,7 @@ dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags,
 					 NULL, &hash_hdl_ops,
 					 &dfs_sys->hash);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "d_hash_table_create() failed: "
+			D_DEBUG(DB_TRACE, "failed to create hash table: "
 				DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_hash, rc = daos_der2errno(rc));
 		}
@@ -591,7 +589,7 @@ dfs_sys_access(dfs_sys_t *dfs_sys, const char *path, int mask, int flags)
 				    sys_path.name, lookup_flags, &obj,
 				    &mode, NULL);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "dfs_lookup_rel() %s failed: (%d)\n",
+			D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
 				sys_path.name, rc);
 			D_GOTO(out_free_path, rc);
 		}
@@ -665,7 +663,7 @@ dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf,
 	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent,
 			    sys_path.name, lookup_flags, &obj, NULL, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_lookup_rel() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -673,7 +671,7 @@ dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf,
 setattr:
 	rc = dfs_osetattr(dfs_sys->dfs, obj, stbuf, flags);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_osetattr() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to setattr %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_close_obj, rc);
 	}
@@ -732,7 +730,7 @@ dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
 	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent,
 			    sys_path.name, lookup_flags, &obj, NULL, buf);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_lookup_rel() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -763,7 +761,7 @@ dfs_sys_mknod(dfs_sys_t *dfs_sys, const char *path, mode_t mode,
 	rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name, mode,
 		      O_CREAT | O_EXCL, cid, chunk_size, NULL, &obj);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_open() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -806,7 +804,7 @@ dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list,
 	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
 			    lookup_flags, &obj, NULL, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_lookup_rel() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -862,7 +860,7 @@ dfs_sys_getxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
 	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
 			    lookup_flags, &obj, NULL, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_lookup_rel() %s failed (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to lookup %s (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -917,7 +915,7 @@ dfs_sys_setxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
 	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
 			    lookup_flags, &obj, NULL, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_lookup_rel() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -965,7 +963,7 @@ dfs_sys_removexattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
 	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
 			    lookup_flags, &obj, NULL, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_lookup_rel() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -1004,7 +1002,7 @@ dfs_sys_readlink(dfs_sys_t *dfs_sys, const char *path, char *buf,
 	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
 			    lookup_flags, &obj, NULL, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_lookup_rel() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -1040,7 +1038,7 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path)
 		      S_IFLNK, O_CREAT | O_EXCL,
 		      0, 0, target, &obj);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_open() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -1084,7 +1082,7 @@ dfs_sys_open(dfs_sys_t *dfs_sys, const char *path, mode_t mode, int flags,
 		rc = dfs_dup(dfs_sys->dfs, sys_path.parent, mode,
 			     _obj);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "dfs_dup() %s failed: (%d)\n",
+			D_DEBUG(DB_TRACE, "failed to dup %s: (%d)\n",
 				sys_path.name, rc);
 		}
 		D_GOTO(out_free_path, rc);
@@ -1098,7 +1096,7 @@ dfs_sys_open(dfs_sys_t *dfs_sys, const char *path, mode_t mode, int flags,
 		rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name,
 			      mode, flags, cid, chunk_size, value, _obj);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "dfs_dup() %s failed: (%d)\n",
+			D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n",
 				sys_path.name, rc);
 		}
 		D_GOTO(out_free_path, rc);
@@ -1108,7 +1106,7 @@ dfs_sys_open(dfs_sys_t *dfs_sys, const char *path, mode_t mode, int flags,
 	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
 			    flags, &obj, &actual_mode, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_lookup_rel() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -1206,7 +1204,7 @@ dfs_sys_punch(dfs_sys_t *dfs_sys, const char *path,
 	rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name,
 		      S_IFREG, O_RDWR, 0, 0, NULL, &obj);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_open() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out, rc);
 	}
@@ -1255,7 +1253,7 @@ dfs_sys_remove_type(dfs_sys_t *dfs_sys, const char *path, bool force,
 	/* Stat the object and make sure it is the correct type */
 	rc = dfs_stat(dfs_sys->dfs, sys_path.parent, sys_path.name, &stbuf);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_stat() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to stat %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -1267,7 +1265,7 @@ remove:
 	rc = dfs_remove(dfs_sys->dfs, sys_path.parent, sys_path.name,
 			force, oid);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_remove() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to remove %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
@@ -1347,7 +1345,7 @@ dfs_sys_opendir(dfs_sys_t *dfs_sys, const char *dir, int flags, DIR **_dirp)
 		rc = dfs_dup(dfs_sys->dfs, sys_path.parent, O_RDWR,
 			     &sys_dir->obj);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "dfs_dup() %s failed: (%d)\n",
+			D_DEBUG(DB_TRACE, "failed to dup %s: (%d)\n",
 				sys_path.name, rc);
 			D_GOTO(out_free_dir, rc);
 		}
@@ -1360,7 +1358,7 @@ dfs_sys_opendir(dfs_sys_t *dfs_sys, const char *dir, int flags, DIR **_dirp)
 	rc = dfs_lookup_rel(dfs_sys->dfs, sys_path.parent, sys_path.name,
 			    lookup_flags, &sys_dir->obj, &mode, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_lookup_rel() %s failed: (%d)\n",
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
 			sys_path.name, rc);
 		D_GOTO(out_free_dir, rc);
 	}
