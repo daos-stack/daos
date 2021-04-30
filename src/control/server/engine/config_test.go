@@ -127,7 +127,7 @@ func TestConstructedConfig(t *testing.T) {
 	constructed := NewConfig().
 		WithRank(37).
 		WithSystemName("foo").
-		WithSocketDir("/foo/bar").
+		WithRuntimeDir("/foo/bar").
 		WithFabricProvider("foo+bar").
 		WithFabricInterface("qib42").
 		WithFabricInterfacePort(100).
@@ -413,7 +413,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithFabricInterfacePort(interfacePort).
 		WithPinnedNumaNode(&pinnedNumaNode).
 		WithModules(modules).
-		WithSocketDir(socketDir).
+		WithRuntimeDir(socketDir).
 		WithLogFile(logFile).
 		WithLogMask(logMask).
 		WithBdevConfigPath(cfgPath).

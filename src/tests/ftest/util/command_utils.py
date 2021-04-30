@@ -856,7 +856,7 @@ class YamlCommand(SubProcessCommand):
                         "ERROR: Copying yaml configuration file to {}: "
                         "{}".format(hosts, error)) from error
 
-    def verify_socket_directory(self, user, hosts):
+    def verify_runtime_directory(self, user, hosts):
         """Verify the domain socket directory is present and owned by this user.
 
         Args:
@@ -894,7 +894,7 @@ class YamlCommand(SubProcessCommand):
             str: file defined in the yaml file that must be owned by the user
 
         """
-        return self.get_config_value("socket_dir")
+        return self.get_config_value("runtime_dir")
 
 
 class SubprocessManager():
@@ -919,7 +919,7 @@ class SubprocessManager():
         self._hosts = []
 
         # The socket directory verification is not required with systemctl
-        self._verify_socket_dir = manager != "Systemctl"
+        self._verify_runtime_dir = manager != "Systemctl"
 
         # An internal dictionary used to define the expected states of each
         # job process. It will be populated when any of the following methods
@@ -1023,7 +1023,7 @@ class SubprocessManager():
         """Stop the daos command."""
         self.manager.stop()
 
-    def verify_socket_directory(self, user):
+    def verify_runtime_directory(self, user):
         """Verify the domain socket directory is present and owned by this user.
 
         Args:
@@ -1034,8 +1034,8 @@ class SubprocessManager():
                 owned by the user
 
         """
-        if self._hosts and self._verify_socket_dir:
-            self.manager.job.verify_socket_directory(user, self._hosts)
+        if self._hosts and self._verify_runtime_dir:
+            self.manager.job.verify_runtime_directory(user, self._hosts)
 
     def set_config_value(self, name, value):
         """Set the yaml configuration parameter value.
@@ -1082,7 +1082,7 @@ class SubprocessManager():
         """
         data = {}
         ranks = {host: rank for rank, host in enumerate(self._hosts)}
-        if not self._verify_socket_dir:
+        if not self._verify_runtime_dir:
             command = "systemctl is-active {}".format(
                 self.manager.job.service_name)
         else:

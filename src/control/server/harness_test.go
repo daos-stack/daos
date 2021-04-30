@@ -195,7 +195,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			}
 			config := config.DefaultServer().
 				WithEngines(engineCfgs...).
-				WithSocketDir(testDir).
+				WithRuntimeDir(testDir).
 				WithTransportConfig(&security.TransportConfig{AllowInsecure: true})
 
 			joinMu := sync.Mutex{}

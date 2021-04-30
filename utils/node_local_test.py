@@ -361,9 +361,9 @@ class DaosServer():
         if self.valgrind:
             self.__process_name = 'valgrind'
 
-        socket_dir = '/tmp/dnt_sockets'
-        if not os.path.exists(socket_dir):
-            os.mkdir(socket_dir)
+        runtime_dir = '/tmp/dnt_sockets'
+        if not os.path.exists(runtime_dir):
+            os.mkdir(runtime_dir)
 
         self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
 

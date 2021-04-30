@@ -1,7 +1,7 @@
 name: daos_server
 port: 10001
 provider: ofi+sockets
-socket_dir: /tmp/dnt_sockets
+runtime_dir: /tmp/dnt_sockets
 nr_hugepages: 4096
 control_log_mask: DEBUG
 access_points: ['localhost:10001']

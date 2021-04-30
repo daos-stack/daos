@@ -4,7 +4,7 @@ name: daos_server           # sys group daos_server
 access_points: ['example']  # management service leader (bootstrap)
 # port: 10001               # control listen port, default 10001
 provider: ofi+psm2          # map to CRT_PHY_ADDR_STR=ofi+psm2
-socket_dir: /tmp/daos_psm2
+runtime_dir: /tmp/daos_psm2
 nr_hugepages: 4096
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_server.log

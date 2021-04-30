@@ -53,8 +53,8 @@ func isRetryable(msg proto.Message) (*retryableDrpcReq, bool) {
 	return nil, false
 }
 
-func getDrpcServerSocketPath(sockDir string) string {
-	return filepath.Join(sockDir, "daos_server.sock")
+func getDrpcServerSocketPath(runDir string) string {
+	return filepath.Join(runDir, "daos_server.sock")
 }
 
 func checkDrpcClientSocketPath(socketPath string) error {
@@ -76,11 +76,11 @@ func checkDrpcClientSocketPath(socketPath string) error {
 	return nil
 }
 
-// checkSocketDir verifies socket directory exists, has appropriate permissions
-// and is a directory. SocketDir should be created during configuration management
+// checkRuntimeDir verifies runtime directory exists, has appropriate permissions
+// and is a directory. RuntimeDir should be created during configuration management
 // as locations may not be user creatable.
-func checkSocketDir(sockDir string) error {
-	f, err := os.Stat(sockDir)
+func checkRuntimeDir(runDir string) error {
+	f, err := os.Stat(runDir)
 	if err != nil {
 		msg := "unexpected error locating"
 		if os.IsPermission(err) {
@@ -89,10 +89,10 @@ func checkSocketDir(sockDir string) error {
 			msg = "missing"
 		}
 
-		return errors.WithMessagef(err, "%s socket directory %s", msg, sockDir)
+		return errors.WithMessagef(err, "%s runtime directory %s", msg, runDir)
 	}
 	if !f.IsDir() {
-		return errors.Errorf("path %s not a directory", sockDir)
+		return errors.Errorf("path %s not a directory", runDir)
 	}
 
 	return nil
@@ -100,7 +100,7 @@ func checkSocketDir(sockDir string) error {
 
 type drpcServerSetupReq struct {
 	log     logging.Logger
-	sockDir string
+	runDir  string
 	engines []*EngineInstance
 	tc      *security.TransportConfig
 	sysdb   *system.Database
@@ -110,11 +110,11 @@ type drpcServerSetupReq struct {
 // drpcServerSetup specifies socket path and starts drpc server.
 func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	// Clean up any previous execution's sockets before we create any new sockets
-	if err := drpcCleanup(req.sockDir); err != nil {
+	if err := drpcCleanup(req.runDir); err != nil {
 		return err
 	}
 
-	sockPath := getDrpcServerSocketPath(req.sockDir)
+	sockPath := getDrpcServerSocketPath(req.runDir)
 	drpcServer, err := drpc.NewDomainSocketServer(ctx, req.log, sockPath)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")
@@ -132,16 +132,16 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	return nil
 }
 
-// drpcCleanup deletes any DAOS sockets in the socket directory
-func drpcCleanup(sockDir string) error {
-	if err := checkSocketDir(sockDir); err != nil {
+// drpcCleanup deletes any DAOS sockets in the runtime directory
+func drpcCleanup(runDir string) error {
+	if err := checkRuntimeDir(runDir); err != nil {
 		return err
 	}
 
-	srvSock := getDrpcServerSocketPath(sockDir)
+	srvSock := getDrpcServerSocketPath(runDir)
 	os.Remove(srvSock)
 
-	pattern := filepath.Join(sockDir, "daos_engine*.sock")
+	pattern := filepath.Join(runDir, "daos_engine*.sock")
 	engineSocks, err := filepath.Glob(pattern)
 	if err != nil {
 		return errors.WithMessage(err, "couldn't get list of engine sockets")

@@ -163,7 +163,7 @@ type Config struct {
 	HelperStreamCount int           `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
 	ServiceThreadCore int           `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
 	SystemName        string        `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
-	SocketDir         string        `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
+	RuntimeDir        string        `yaml:"runtime_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
 	LogMask           string        `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
 	LogFile           string        `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
 	Storage           StorageConfig `yaml:",inline"`
@@ -256,9 +256,9 @@ func (c *Config) WithHostname(name string) *Config {
 	return c
 }
 
-// WithSocketDir sets the path to the instance's dRPC socket directory.
-func (c *Config) WithSocketDir(dir string) *Config {
-	c.SocketDir = dir
+// WithRuntimeDir sets the path to the instance's dRPC runtime directory.
+func (c *Config) WithRuntimeDir(dir string) *Config {
+	c.RuntimeDir = dir
 	return c
 }
 

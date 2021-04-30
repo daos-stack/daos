@@ -213,16 +213,16 @@ func TestStartOptions(t *testing.T) {
 				return cfg.WithSystemName("foo")
 			},
 		},
-		"SocketDir (short)": {
+		"RuntimeDir (short)": {
 			argList: []string{"-d", "/foo/bar"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				return cfg.WithSocketDir("/foo/bar")
+				return cfg.WithRuntimeDir("/foo/bar")
 			},
 		},
-		"SocketDir (long)": {
-			argList: []string{"--socket_dir=/foo/bar"},
+		"RuntimeDir (long)": {
+			argList: []string{"--runtime_dir=/foo/bar"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				return cfg.WithSocketDir("/foo/bar")
+				return cfg.WithRuntimeDir("/foo/bar")
 			},
 		},
 		"Insecure (short)": {
