@@ -163,8 +163,7 @@ scp_files() {
                 fi
             fi
         else
-            echo "  Failed to archive ${file} to ${2}"
-            echo "  Error code: $?"
+            echo "  Failed to archive ${file} to ${2} (error code: $?"
             rc=1
         fi
     done
