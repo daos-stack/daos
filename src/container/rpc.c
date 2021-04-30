@@ -12,19 +12,20 @@
 #include "rpc.h"
 
 static int
-crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
+crt_proc_struct_rsvc_hint(crt_proc_t proc, crt_proc_op_t proc_op,
+			  struct rsvc_hint *hint)
 {
 	int rc;
 
-	rc = crt_proc_uint32_t(proc, &hint->sh_flags);
+	rc = crt_proc_uint32_t(proc, proc_op, &hint->sh_flags);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &hint->sh_rank);
+	rc = crt_proc_uint32_t(proc, proc_op, &hint->sh_rank);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint64_t(proc, &hint->sh_term);
+	rc = crt_proc_uint64_t(proc, proc_op, &hint->sh_term);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -32,15 +33,16 @@ crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
 }
 
 static int
-crt_proc_daos_epoch_range_t(crt_proc_t proc, daos_epoch_range_t *erange)
+crt_proc_daos_epoch_range_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			    daos_epoch_range_t *erange)
 {
 	int rc;
 
-	rc = crt_proc_uint64_t(proc, &erange->epr_lo);
+	rc = crt_proc_uint64_t(proc, proc_op, &erange->epr_lo);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint64_t(proc, &erange->epr_hi);
+	rc = crt_proc_uint64_t(proc, proc_op, &erange->epr_hi);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -48,6 +50,21 @@ crt_proc_daos_epoch_range_t(crt_proc_t proc, daos_epoch_range_t *erange)
 }
 
 CRT_RPC_DEFINE(cont_op, DAOS_ISEQ_CONT_OP, DAOS_OSEQ_CONT_OP)
+
+static int
+crt_proc_struct_cont_op_in(crt_proc_t proc, crt_proc_op_t proc_op,
+			   struct cont_op_in *data)
+{
+	return crt_proc_cont_op_in(proc, data);
+}
+
+static int
+crt_proc_struct_cont_op_out(crt_proc_t proc, crt_proc_op_t proc_op,
+			    struct cont_op_out *data)
+{
+	return crt_proc_cont_op_out(proc, data);
+}
+
 CRT_RPC_DEFINE(cont_create, DAOS_ISEQ_CONT_CREATE, DAOS_OSEQ_CONT_CREATE)
 CRT_RPC_DEFINE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
 CRT_RPC_DEFINE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)

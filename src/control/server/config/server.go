@@ -402,6 +402,40 @@ func (cfg *Server) SaveActiveConfig(log logging.Logger) {
 	log.Debugf("active config saved to %s (read-only)", activeConfig)
 }
 
+func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int) (string, error) {
+	if !common.HasPort(addr) {
+		return fmt.Sprintf("%s:%d", addr, portDefault), nil
+	}
+
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		log.Errorf("invalid access point %q: %s", addr, err)
+		return "", FaultConfigBadAccessPoints
+	}
+
+	portNum, err := strconv.Atoi(port)
+	if err != nil {
+		log.Errorf("invalid access point port: %s", err)
+		return "", FaultConfigBadControlPort
+	}
+	if portNum <= 0 {
+		m := "zero"
+		if portNum < 0 {
+			m = "negative"
+		}
+		log.Errorf("access point port cannot be %s", m)
+		return "", FaultConfigBadControlPort
+	}
+
+	// warn if access point port differs from config control port
+	if portDefault != portNum {
+		log.Debugf("access point (%s) port (%s) differs from default port (%d)",
+			host, port, portDefault)
+	}
+
+	return addr, nil
+}
+
 // Validate asserts that config meets minimum requirements.
 func (cfg *Server) Validate(log logging.Logger) (err error) {
 	msg := "validating config file"
@@ -410,7 +444,7 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	}
 	log.Debug(msg)
 
-	// append the user-friendly message to any error
+	// Append the user-friendly message to any error.
 	defer func() {
 		if err != nil && !fault.HasResolution(err) {
 			examplesPath, _ := common.GetAdjacentPath(relConfExamplesPath)
@@ -430,8 +464,8 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	}
 	cfg.Servers = nil
 
-	// config without engines is valid when initially discovering hardware
-	// prior to adding per-engine sections with device allocations
+	// A config without engines is valid when initially discovering hardware
+	// prior to adding per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {
 		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName,
 			build.ControlPlaneName)
@@ -439,14 +473,31 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return nil
 	}
 
-	if cfg.Fabric.Provider == "" {
+	switch {
+	case cfg.Fabric.Provider == "":
 		return FaultConfigNoProvider
+	case cfg.ControlPort <= 0:
+		return FaultConfigBadControlPort
+	case cfg.TelemetryPort < 0:
+		return FaultConfigBadTelemetryPort
 	}
 
-	cfg.AccessPoints, err = common.ParseHostList(cfg.AccessPoints, cfg.ControlPort)
-	if err != nil {
-		return errors.Wrap(err, "unable to parse access_points")
+	// Update access point addresses with control port if port is not
+	// supplied.
+	newAPs := make([]string, 0, len(cfg.AccessPoints))
+	for _, ap := range cfg.AccessPoints {
+		newAP, err := getAccessPointAddrWithPort(log, ap, cfg.ControlPort)
+		if err != nil {
+			return err
+		}
+		newAPs = append(newAPs, newAP)
 	}
+	if common.StringSliceHasDuplicates(newAPs) {
+		log.Error("duplicate access points addresses")
+		return FaultConfigBadAccessPoints
+	}
+	cfg.AccessPoints = newAPs
+
 	switch {
 	case len(cfg.AccessPoints) < 1:
 		return FaultConfigBadAccessPoints
@@ -455,22 +506,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	case len(cfg.AccessPoints) > 1:
 		// temporary notification while the feature is still being polished.
 		log.Info("\n*******\nNOTICE: Support for multiple access points is an alpha feature and is not well-tested!\n*******\n\n")
-	}
-
-	for _, ap := range cfg.AccessPoints {
-		host, port, err := net.SplitHostPort(ap)
-		if err != nil {
-			return errors.Wrap(FaultConfigBadAccessPoints, err.Error())
-		}
-
-		// warn if access point port differs from config control port
-		if strconv.Itoa(cfg.ControlPort) != port {
-			log.Debugf("access point (%s) port (%s) differs from control port (%d)", host, port, cfg.ControlPort)
-		}
-
-		if port == "0" {
-			return FaultConfigBadControlPort
-		}
 	}
 
 	for i, engine := range cfg.Engines {

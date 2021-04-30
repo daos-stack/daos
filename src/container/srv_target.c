@@ -1848,7 +1848,7 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	args.snapshots = snapshots;
 	D_DEBUG(DB_EPC, DF_UUID": refreshing snapshots %d\n",
 		DP_UUID(cont_uuid), snap_count);
-	return dss_thread_collective(cont_snap_update_one, &args, 0);
+	return dss_task_collective(cont_snap_update_one, &args, 0);
 }
 
 void
@@ -1976,7 +1976,7 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_thread_collective(cont_epoch_aggregate_one, NULL, 0);
+	rc = dss_task_collective(cont_epoch_aggregate_one, NULL, 0);
 	if (rc != 0)
 		D_ERROR(DF_CONT": Aggregation failed: "DF_RC"\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
@@ -2345,8 +2345,8 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 		coll_args.ca_aggregator = pool;
 		coll_args.ca_func_args	= &coll_args.ca_stream_args;
 
-		rc = dss_thread_collective_reduce(&coll_ops, &coll_args,
-						  DSS_ULT_FL_PERIODIC);
+		rc = dss_task_collective_reduce(&coll_ops, &coll_args,
+						DSS_ULT_FL_PERIODIC);
 		if (rc) {
 			D_ERROR(DF_UUID": Can not collect min epoch: %d\n",
 				DP_UUID(pool->sp_uuid), rc);
