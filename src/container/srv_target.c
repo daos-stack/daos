@@ -117,7 +117,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 }
 
 int
-ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
+ds_get_cont_props(struct cont_props *cont_props, uuid_t pool_uuid,
 		  uuid_t cont_uuid)
 {
 	daos_prop_t	*props;
@@ -140,7 +140,7 @@ ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
 	props->dpp_entries[7].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	props->dpp_entries[8].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
 
-	rc = cont_iv_prop_fetch(pool_ns, cont_uuid, props);
+	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 
 	if (rc == DER_SUCCESS)
 		daos_props_2cont_props(props, cont_props);
@@ -168,8 +168,7 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	 * Need the pool for the IV namespace
 	 */
 	D_ASSERT(cont->sc_csummer == NULL);
-	rc = ds_get_cont_props(cont_props, cont->sc_pool->spc_pool->sp_iv_ns,
-			       cont->sc_uuid);
+	rc = ds_get_cont_props(cont_props, cont->sc_pool_uuid, cont->sc_uuid);
 	if (rc != 0)
 		goto done;
 
@@ -289,7 +288,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		 */
 		epoch_min = 0;
 		full_scan = true;
-		D_DEBUG(DB_EPC, "change hlc "DF_U64" > full "DF_U64"\n",
+		D_DEBUG(DB_EPC, "change hlc "DF_X64" > full "DF_X64"\n",
 			change_hlc, cont->sc_aggregation_full_scan_hlc);
 	} else {
 		epoch_min = cinfo.ci_hae;
@@ -321,7 +320,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 	if (epoch_max >= cont->sc_aggregation_max)
 		epoch_max = cont->sc_aggregation_max - 1;
 
-	D_ASSERTF(epoch_min <= epoch_max, "Min "DF_U64", Max "DF_U64"\n",
+	D_ASSERTF(epoch_min <= epoch_max, "Min "DF_X64", Max "DF_X64"\n",
 		  epoch_min, epoch_max);
 
 	if (cont->sc_pool->spc_rebuild_fence != 0) {
@@ -329,7 +328,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		int	j;
 		int	insert_idx;
 
-		D_DEBUG(DB_EPC, "rebuild fence "DF_U64"\n", rebuild_fence);
+		D_DEBUG(DB_EPC, "rebuild fence "DF_X64"\n", rebuild_fence);
 		/* Insert the rebuild_epoch into snapshots */
 		D_ALLOC(snapshots, (cont->sc_snapshots_nr + 1) *
 			sizeof(daos_epoch_t));
@@ -1849,7 +1848,7 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	args.snapshots = snapshots;
 	D_DEBUG(DB_EPC, DF_UUID": refreshing snapshots %d\n",
 		DP_UUID(cont_uuid), snap_count);
-	return dss_thread_collective(cont_snap_update_one, &args, 0);
+	return dss_task_collective(cont_snap_update_one, &args, 0);
 }
 
 void
@@ -1977,7 +1976,7 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_thread_collective(cont_epoch_aggregate_one, NULL, 0);
+	rc = dss_task_collective(cont_epoch_aggregate_one, NULL, 0);
 	if (rc != 0)
 		D_ERROR(DF_CONT": Aggregation failed: "DF_RC"\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
@@ -2000,7 +1999,7 @@ ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 /* iterate all of objects or uncommitted DTXs of the container. */
 int
 ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
-	     void *arg, uint32_t type)
+	     void *arg, uint32_t type, uint32_t flags)
 {
 	vos_iter_param_t param;
 	daos_handle_t	 iter_h;
@@ -2018,7 +2017,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	param.ip_flags = VOS_IT_FOR_MIGRATION;
+	param.ip_flags = flags;
 
 	rc = vos_iter_prepare(type, &param, &iter_h, NULL);
 	if (rc != 0) {
@@ -2346,8 +2345,8 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 		coll_args.ca_aggregator = pool;
 		coll_args.ca_func_args	= &coll_args.ca_stream_args;
 
-		rc = dss_thread_collective_reduce(&coll_ops, &coll_args,
-						  DSS_ULT_FL_PERIODIC);
+		rc = dss_task_collective_reduce(&coll_ops, &coll_args,
+						DSS_ULT_FL_PERIODIC);
 		if (rc) {
 			D_ERROR(DF_UUID": Can not collect min epoch: %d\n",
 				DP_UUID(pool->sp_uuid), rc);
@@ -2365,7 +2364,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 			    ec_eph->ce_eph < ec_eph->ce_last_eph)
 				ec_eph->ce_eph = 0;
 
-			D_DEBUG(DB_MD, "eph "DF_U64" "DF_UUID"\n",
+			D_DEBUG(DB_MD, "eph "DF_X64" "DF_UUID"\n",
 				ec_eph->ce_eph, DP_UUID(ec_eph->ce_cont_uuid));
 			rc = cont_iv_ec_agg_eph_update(pool->sp_iv_ns,
 						       ec_eph->ce_cont_uuid,

@@ -253,6 +253,7 @@ struct daos_obj_class daos_obj_classes[] = {
 	/* 2-replica classes */
 	OC_RP_DEF(2, 1),
 	OC_RP_DEF(2, 2),
+	OC_RP_DEF(2, 3),
 	OC_RP_DEF(2, 4),
 	OC_RP_DEF(2, 6),
 	OC_RP_DEF(2, 8),

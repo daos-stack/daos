@@ -42,8 +42,8 @@ func (c *Code) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
+// general fault codes
 const (
-	// general fault codes
 	Unknown Code = iota
 	MissingSoftwareDependency
 	BadVersionSoftwareDependency
@@ -52,8 +52,8 @@ const (
 	PrivilegedHelperRequestFailed
 )
 
+// generic storage fault codes
 const (
-	// generic storage fault codes
 	StorageUnknown Code = iota + 100
 	StorageAlreadyFormatted
 	StorageFilesystemAlreadyMounted
@@ -61,8 +61,8 @@ const (
 	StorageTargetAlreadyMounted
 )
 
+// SCM fault codes
 const (
-	// SCM fault codes
 	ScmUnknown Code = iota + 200
 	ScmFormatInvalidSize
 	ScmFormatInvalidDeviceCount
@@ -75,8 +75,8 @@ const (
 	ScmNoDevicesMatchFilter
 )
 
+// Bdev fault codes
 const (
-	// Bdev fault codes
 	BdevUnknown Code = iota + 300
 	BdevFormatUnknownClass
 	BdevFormatFailure
@@ -86,14 +86,14 @@ const (
 	BdevNoDevicesMatchFilter
 )
 
+// DAOS system fault codes
 const (
-	// DAOS system fault codes
 	SystemUnknown Code = iota + 400
 	SystemBadFaultDomainDepth
 )
 
+// client fault codes
 const (
-	// client fault codes
 	ClientUnknown Code = iota + 500
 	ClientConfigBadControlPort
 	ClientConfigBadAccessPoints
@@ -105,8 +105,8 @@ const (
 	ClientFormatRunningSystem
 )
 
+// server fault codes
 const (
-	// server fault codes
 	ServerUnknown Code = iota + 600
 	ServerScmUnmanaged
 	ServerBdevNotFound
@@ -125,12 +125,13 @@ const (
 	ServerVfioDisabled
 )
 
+// server config fault codes
 const (
-	// server config fault codes
 	ServerConfigUnknown Code = iota + 700
 	ServerBadConfig
 	ServerNoConfigPath
 	ServerConfigBadControlPort
+	ServerConfigBadTelemetryPort
 	ServerConfigBadAccessPoints
 	ServerConfigEvenAccessPoints
 	ServerConfigBadProvider
@@ -150,15 +151,15 @@ const (
 	ServerConfigFaultDomainTooManyLayers
 )
 
+// SPDK library bindings codes
 const (
-	// SPDK library bindings codes
 	SpdkUnknown Code = iota + 800
 	SpdkCtrlrNoHealth
 	SpdkBindingRetNull
 	SpdkBindingFailed
 )
 
+// security fault codes
 const (
-	// security fault codes
 	SecurityUnknown Code = iota + 900
 )
