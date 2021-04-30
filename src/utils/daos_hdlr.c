@@ -1800,7 +1800,7 @@ out:
 }
 
 static ssize_t
-write_dfs(struct file_dfs *file_dfs, char *file, void *buf, ssize_t size)
+write_dfs(struct file_dfs *file_dfs, const char *file, void *buf, ssize_t size)
 {
 	int		rc;
 	d_iov_t		iov;
@@ -1825,7 +1825,7 @@ out:
 }
 
 static ssize_t
-file_write(struct file_dfs *file_dfs, char *file,
+file_write(struct file_dfs *file_dfs, const char *file,
 	   void *buf, size_t size)
 {
 	ssize_t num_bytes_written = 0;
@@ -1846,7 +1846,7 @@ file_write(struct file_dfs *file_dfs, char *file,
 }
 
 static int
-open_dfs(struct file_dfs *file_dfs, char *file, int flags, mode_t mode)
+open_dfs(struct file_dfs *file_dfs, const char *file, int flags, mode_t mode)
 {
 	int		rc = 0;
 	int		tmp_rc = 0;
@@ -1883,7 +1883,7 @@ out:
 }
 
 int
-file_open(struct file_dfs *file_dfs, char *file, int flags, ...)
+file_open(struct file_dfs *file_dfs, const char *file, int flags, ...)
 {
 	/* extract the mode */
 	int	rc = 0;
@@ -1934,29 +1934,32 @@ mkdir_dfs(struct file_dfs *file_dfs, const char *path, mode_t *mode)
 	char		*dname = NULL;
 
 	parse_filename_dfs(path, &name, &dname);
-	if (dname == NULL || name == NULL) {
-		fprintf(stderr, "parsing filename failed, %s\n", dname);
-		D_GOTO(out, rc = EINVAL);
-	}
+
 	/* if the "/" path is given to DAOS the dfs_mkdir fails with
 	 * INVALID argument, so skip creation of that in DAOS since
 	 * it always already exists. This happens when copying from
 	 * DAOS -> DAOS from the root, because the first source
 	 * directory is always "/"
 	 */
-	if (name && strcmp(name, "/") != 0) {
-		rc = dfs_lookup(file_dfs->dfs, dname,
-				O_RDWR, &parent, NULL, NULL);
-		if (parent == NULL) {
-			fprintf(stderr, "dfs_lookup %s failed\n", dname);
-			D_GOTO(out, rc = EINVAL);
-		}
-		rc = dfs_mkdir(file_dfs->dfs, parent, name, *mode, 0);
-		if (rc != 0) {
-			/* continue if directory exists, fail otherwise */
-			fprintf(stderr, "dfs_mkdir %s failed, %s\n",
-				name, strerror(rc));
-		}
+	if (name == NULL || strcmp(name, "/") == 0)
+		D_GOTO(out, rc = 0);
+
+	if (dname == NULL) {
+		fprintf(stderr, "parsing filename failed, %s\n", path);
+		D_GOTO(out, rc = EINVAL);
+	}
+
+	rc = dfs_lookup(file_dfs->dfs, dname,
+			O_RDWR, &parent, NULL, NULL);
+	if (parent == NULL) {
+		fprintf(stderr, "dfs_lookup %s failed\n", dname);
+		D_GOTO(out, rc = EINVAL);
+	}
+	rc = dfs_mkdir(file_dfs->dfs, parent, name, *mode, 0);
+	if (rc != 0) {
+		/* continue if directory exists, fail otherwise */
+		fprintf(stderr, "dfs_mkdir %s failed, %s\n",
+			name, strerror(rc));
 	}
 out:
 	if (parent != NULL) {
@@ -1966,10 +1969,8 @@ out:
 				dname, rc);
 		}
 	}
-	if (name != NULL)
-		D_FREE(name);
-	if (dname != NULL)
-		D_FREE(dname);
+	D_FREE(name);
+	D_FREE(dname);
 	return rc;
 }
 
@@ -1984,8 +1985,6 @@ file_mkdir(struct file_dfs *file_dfs, const char *dir, mode_t *mode)
 		if (rc != 0) {
 			/* return error code for POSIX mkdir */
 			rc = errno;
-			fprintf(stderr, "mkdir %s failed, %s\n",
-				dir, strerror(errno));
 		}
 	} else if (file_dfs->type == DAOS) {
 		rc = mkdir_dfs(file_dfs, dir, mode);
@@ -2184,7 +2183,7 @@ out:
 }
 
 static ssize_t
-file_read(struct file_dfs *file_dfs, char *file,
+file_read(struct file_dfs *file_dfs, const char *file,
 	  void *buf, size_t size)
 {
 	ssize_t got_size = 0;
@@ -2343,239 +2342,289 @@ file_chmod(struct file_dfs *file_dfs, const char *path, mode_t mode)
 }
 
 static int
-fs_copy(struct file_dfs *src_file_dfs,
-	struct file_dfs *dst_file_dfs,
-	const char *dir_name,
-	int dfs_prefix_len,
-	const char *fs_dst_prefix)
+fs_copy_file(struct file_dfs *src_file_dfs,
+	     struct file_dfs *dst_file_dfs,
+	     struct stat *src_stat,
+	     const char *src_path,
+	     const char *dst_path)
 {
-	int	rc = 0;
-	DIR	*src_dir = NULL;
-	struct	stat st_dir_name;
-	char	*filename = NULL;
-	char	*dst_filename = NULL;
-	char	*next_path = NULL;
-	char	*next_dpath = NULL;
+	int src_flags		= O_RDONLY;
+	int dst_flags		= O_CREAT | O_WRONLY;
+	mode_t tmp_mode_file	= S_IRUSR | S_IWUSR;
+	int rc;
+	uint64_t file_length	= src_stat->st_size;
+	uint64_t total_bytes	= 0;
+	uint64_t buf_size	= 64 * 1024 * 1024;
+	void *buf		= NULL;
 
-
-	/* stat the source, and make sure it is a directory  */
-	rc = file_lstat(src_file_dfs, dir_name, &st_dir_name);
-	if (!S_ISDIR(st_dir_name.st_mode)) {
-		fprintf(stderr, "Source is not a directory: %s\n", dir_name);
+	/* Open source file */
+	rc = file_open(src_file_dfs, src_path, src_flags);
+	if (rc != 0)
 		D_GOTO(out, rc);
+
+	/* Open destination file */
+	rc = file_open(dst_file_dfs, dst_path, dst_flags, tmp_mode_file);
+	if (rc != 0)
+		D_GOTO(out_src_file, rc);
+
+	/* Allocate read/write buffer */
+	D_ALLOC(buf, buf_size);
+	if (buf == NULL)
+		D_GOTO(out_dst_file, rc = ENOMEM);
+
+	/* read from source file, then write to dest file */
+	while (total_bytes < file_length) {
+		size_t left_to_read = buf_size;
+		uint64_t bytes_left = file_length - total_bytes;
+
+		if (bytes_left < buf_size)
+			left_to_read = (size_t)bytes_left;
+		ssize_t bytes_read = file_read(src_file_dfs, src_path,
+					       buf, left_to_read);
+		if (bytes_read < 0) {
+			fprintf(stderr, "read failed on %s\n", src_path);
+			D_GOTO(out_buf, rc = EIO);
+		}
+		size_t bytes_to_write = (size_t)bytes_read;
+		ssize_t bytes_written;
+
+		bytes_written = file_write(dst_file_dfs, dst_path,
+					   buf, bytes_to_write);
+		if (bytes_written < 0) {
+			fprintf(stderr, "write failed on %s\n", dst_path);
+			D_GOTO(out_buf, rc = EIO);
+		}
+
+		total_bytes += bytes_read;
 	}
+
+	/* set perms on destination to original source perms */
+	rc = file_chmod(dst_file_dfs, dst_path, src_stat->st_mode);
+	if (rc != 0) {
+		fprintf(stderr, "updating dst file "
+			"permissions failed (%d)\n", rc);
+		D_GOTO(out_buf, rc);
+	}
+
+out_buf:
+	D_FREE(buf);
+out_dst_file:
+	file_close(dst_file_dfs, dst_path);
+out_src_file:
+	file_close(src_file_dfs, src_path);
+out:
+	/* reset offsets if there is another file to copy */
+	src_file_dfs->offset = 0;
+	dst_file_dfs->offset = 0;
+	return rc;
+}
+
+static int
+fs_copy_dir(struct file_dfs *src_file_dfs,
+	    struct file_dfs *dst_file_dfs,
+	    struct stat *src_stat,
+	    const char *src_path,
+	    const char *dst_path,
+	    uint64_t *num_dirs,
+	    uint64_t *num_files)
+{
+	DIR			*src_dir = NULL;
+	struct fs_copy_dirent	*dirp = NULL;
+	struct dirent		*entry = NULL;
+	char			*next_src_path = NULL;
+	char			*next_dst_path = NULL;
+	struct stat		next_src_stat;
+	mode_t			tmp_mode_dir = S_IRWXU;
+	int			rc;
 
 	/* begin by opening source directory */
-	src_dir = file_opendir(src_file_dfs, dir_name);
-
-	/* check it was opened. */
+	src_dir = file_opendir(src_file_dfs, src_path);
 	if (!src_dir) {
 		fprintf(stderr, "Cannot open directory '%s': %s\n",
-			dir_name, strerror(errno));
-		D_GOTO(out, rc);
+			src_path, strerror(errno));
+		D_GOTO(out, rc = errno);
 	}
 
-	/* initialize DAOS anchor */
-	struct fs_copy_dirent *dirp = (struct fs_copy_dirent *)src_dir;
+	/* create the destination directory if it does not exist */
+	rc = file_mkdir(dst_file_dfs, dst_path, &tmp_mode_dir);
+	if (rc != EEXIST && rc != 0)
+		D_GOTO(out, rc);
 
+	/* initialize DAOS anchor */
+	dirp = (struct fs_copy_dirent *)src_dir;
 	memset(&dirp->anchor, 0, sizeof(dirp->anchor));
+
+	/* copy all directory entries */
 	while (1) {
-		struct dirent *entry;
 		const char *d_name;
 
 		/* walk source directory */
 		entry = file_readdir(src_file_dfs, src_dir);
 		if (!entry) {
-			/* There are no more entries in this directory, so break
-			 * out of the while loop.
+			/* There are no more entries in this directory,
+			 * so break out of the while loop.
 			 */
 			break;
 		}
 
+		/* Check that the entry is not "src_path"
+		 * or src_path's parent.
+		 */
 		d_name = entry->d_name;
-		D_ASPRINTF(filename, "%s/%s", dir_name, d_name);
-		if (filename == NULL) {
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
+		if ((strcmp(d_name, "..") == 0) ||
+		    (strcmp(d_name, ".")) == 0)
+			continue;
 
-		/* stat the source file */
-		struct stat st;
+		/* build the next source path */
+		D_ASPRINTF(next_src_path, "%s/%s", src_path, d_name);
+		if (next_src_path == NULL)
+			D_GOTO(out, rc = ENOMEM);
 
-		rc = file_lstat(src_file_dfs, filename, &st);
-		if (rc) {
+		/* stat the next source path */
+		rc = file_lstat(src_file_dfs, next_src_path, &next_src_stat);
+		if (rc != 0) {
 			fprintf(stderr, "Cannot stat path %s, %s\n",
-				d_name, strerror(errno));
+				next_src_path, strerror(errno));
 			D_GOTO(out, rc);
 		}
 
-		D_ASPRINTF(dst_filename, "%s/%s", fs_dst_prefix,
-			   filename + dfs_prefix_len);
-		if (dst_filename == NULL) {
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
+		/* build the next destination path */
+		D_ASPRINTF(next_dst_path, "%s/%s", dst_path, d_name);
+		if (next_dst_path == NULL)
+			D_GOTO(out, rc = ENOMEM);
 
-		if (S_ISREG(st.st_mode)) {
-			int src_flags        = O_RDONLY;
-			int dst_flags        = O_CREAT | O_WRONLY;
-			mode_t tmp_mode_file = S_IRUSR | S_IWUSR;
-
-			rc = file_open(src_file_dfs, filename, src_flags,
-				       tmp_mode_file);
-			if (rc != 0) {
+		switch (next_src_stat.st_mode & S_IFMT) {
+		case S_IFREG:
+			rc = fs_copy_file(src_file_dfs, dst_file_dfs,
+					  &next_src_stat, next_src_path,
+					  next_dst_path);
+			if (rc != 0)
 				D_GOTO(out, rc);
-			}
-			rc = file_open(dst_file_dfs, dst_filename, dst_flags,
-				       tmp_mode_file);
-			if (rc != 0) {
-				D_GOTO(err_file, rc);
-			}
-
-			/* read from source file, then write to dest file */
-			uint64_t file_length = st.st_size;
-			uint64_t total_bytes = 0;
-			uint64_t buf_size = 64 * 1024 * 1024;
-			void *buf;
-
-			D_ALLOC(buf, buf_size);
-			if (buf == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			while (total_bytes < file_length) {
-				size_t left_to_read = buf_size;
-				uint64_t bytes_left = file_length - total_bytes;
-
-				if (bytes_left < buf_size) {
-					left_to_read = (size_t)bytes_left;
-				}
-				ssize_t bytes_read = file_read(src_file_dfs,
-								filename, buf,
-								left_to_read);
-				if (bytes_read < 0) {
-					fprintf(stderr, "read failed on %s\n",
-						filename);
-					D_GOTO(err_file, rc = EIO);
-				}
-				size_t bytes_to_write = (size_t)bytes_read;
-				ssize_t bytes_written;
-
-				bytes_written = file_write(dst_file_dfs,
-							   dst_filename,
-							buf, bytes_to_write);
-				if (bytes_written < 0) {
-					fprintf(stderr,
-						"error writing bytes\n");
-					D_GOTO(err_file, rc = EIO);
-				}
-
-				total_bytes += bytes_read;
-			}
-			D_FREE(buf);
-
-			/* reset offsets if there is another file to copy */
-			src_file_dfs->offset = 0;
-			dst_file_dfs->offset = 0;
-
-			/* set perms on files to original source perms */
-			rc = file_chmod(dst_file_dfs, dst_filename, st.st_mode);
-			if (rc != 0) {
-				fprintf(stderr, "updating dst file "
-					"permissions failed (%d)\n", rc);
-				D_GOTO(err_file, rc);
-			}
-
-			/* close src and dst */
-			file_close(src_file_dfs, filename);
-			file_close(dst_file_dfs, filename);
-		} else if (S_ISDIR(st.st_mode)) {
-			/* Check that the directory is not "src_dir"
-			 * or src_dirs's parent.
-			 */
-			if ((strcmp(d_name, "..") != 0) &&
-			    (strcmp(d_name, ".") != 0)) {
-				next_path = strdup(filename);
-				if (next_path == NULL) {
-					D_GOTO(out, rc = -DER_NOMEM);
-				}
-				next_dpath = strdup(dst_filename);
-				if (next_dpath == NULL) {
-					D_GOTO(out, rc = -DER_NOMEM);
-				}
-
-				mode_t tmp_mode_dir = S_IRWXU;
-
-				rc = file_mkdir(dst_file_dfs, next_dpath,
-						&tmp_mode_dir);
-				/* continue if directory already exists,
-				 * fail otherwise
-				 */
-				if (rc != EEXIST && rc != 0) {
-					D_GOTO(out, rc);
-				}
-				/* Recursively call "fs_copy"
-				 * with the new path.
-				 */
-				rc = fs_copy(src_file_dfs, dst_file_dfs,
-					     next_path, dfs_prefix_len,
-					     fs_dst_prefix);
-				if (rc != 0) {
-					fprintf(stderr, "filesystem copy "
-						"failed, %d.\n", rc);
-					D_GOTO(out, rc);
-				}
-
-				/* set original source perms on directories
-				 * after copying
-				 */
-				rc = file_chmod(dst_file_dfs, next_dpath,
-						st.st_mode);
-				if (rc != 0) {
-					fprintf(stderr, "updating destination "
-						"permissions failed on %s "
-						"(%d)\n", next_dpath, rc);
-					D_GOTO(out, rc);
-				}
-				D_FREE(next_path);
-				D_FREE(next_dpath);
-			} else {
-				/* if this is src_dir or src_dir's parent
-				 * continue to next entry if there is one
-				 */
-				continue;
-			}
-		} else {
-			rc = ENOTSUP;
-			fprintf(stderr, "file type is not supported (%d)\n",
-				rc);
-			D_GOTO(out, rc);
+			(*num_files)++;
+			break;
+		case S_IFDIR:
+			rc = fs_copy_dir(src_file_dfs, dst_file_dfs,
+					 &next_src_stat, next_src_path,
+					 next_dst_path, num_dirs, num_files);
+			if (rc != 0)
+				D_GOTO(out, rc);
+			(*num_dirs)++;
+			break;
+		default:
+			fprintf(stderr,
+				"Only files and directories are supported\n");
+			D_GOTO(out, rc = ENOTSUP);
 		}
+		D_FREE(next_src_path);
+		D_FREE(next_dst_path);
 	}
-err_file:
-	if (src_file_dfs->obj != NULL || src_file_dfs->fd != -1)
-		file_close(src_file_dfs, filename);
-	if (dst_file_dfs->obj != NULL || dst_file_dfs->fd != -1)
-		file_close(dst_file_dfs, filename);
+
+	/* set original source perms on directories after copying */
+	rc = file_chmod(dst_file_dfs, dst_path, src_stat->st_mode);
+	if (rc != 0) {
+		fprintf(stderr, "updating destination permissions failed on "
+			"%s (%d)\n", dst_path, rc);
+		D_GOTO(out, rc);
+	}
+
 out:
 	if (rc != 0) {
-		D_FREE(next_path);
-		D_FREE(next_dpath);
+		D_FREE(next_src_path);
+		D_FREE(next_dst_path);
 	}
 
-	/* don't try to closedir on something that is not a directory,
-	 * otherwise always close it before returning
-	 */
-	if (S_ISDIR(st_dir_name.st_mode) && (src_dir != NULL)) {
+	if (src_dir != NULL) {
 		int close_rc;
 
 		close_rc = file_closedir(src_file_dfs, src_dir);
 		if (close_rc != 0) {
 			fprintf(stderr, "Could not close '%s': %d\n",
-				dir_name, close_rc);
+				src_path, close_rc);
 			if (rc == 0)
 				rc = close_rc;
 		}
 	}
+	return rc;
+}
 
-	D_FREE(filename);
-	D_FREE(dst_filename);
+static int
+fs_copy(struct file_dfs *src_file_dfs,
+	struct file_dfs *dst_file_dfs,
+	const char *src_path,
+	const char *dst_path,
+	uint64_t *num_dirs,
+	uint64_t *num_files)
+{
+	int		rc = 0;
+	struct stat	src_stat;
+	struct stat	dst_stat;
+	bool		copy_into_dst = false;
+	char		*tmp_path = NULL;
+	char		*tmp_dir = NULL;
+	char		*tmp_name = NULL;
+
+	/* Make sure the source exists. */
+	rc = file_lstat(src_file_dfs, src_path, &src_stat);
+	if (rc != 0) {
+		fprintf(stderr, "Failed to stat %s: %s\n",
+			src_path, strerror(rc));
+		D_GOTO(out, rc);
+	}
+
+	/* If the destination exists and is a directory,
+	 * copy INTO the directory instead of TO it.
+	 */
+	rc = file_lstat(dst_file_dfs, dst_path, &dst_stat);
+	if (rc == 0) {
+		if (S_ISDIR(dst_stat.st_mode)) {
+			copy_into_dst = true;
+		} else if S_ISDIR(src_stat.st_mode) {
+			fprintf(stderr, "Destination is not a directory.\n");
+			D_GOTO(out, rc = EINVAL);
+		}
+	}
+
+	if (copy_into_dst) {
+		/* Get the dirname and basename */
+		parse_filename_dfs(src_path, &tmp_name, &tmp_dir);
+		if (tmp_dir == NULL) {
+			printf("Failed to parse path %s\n", src_path);
+			D_GOTO(out, rc = EINVAL);
+		}
+
+		/* Build the destination path */
+		if (tmp_name != NULL) {
+			D_ASPRINTF(tmp_path, "%s/%s", dst_path, tmp_name);
+			if (tmp_path == NULL)
+				D_GOTO(out, rc = ENOMEM);
+			dst_path = tmp_path;
+		}
+	}
+
+	switch (src_stat.st_mode & S_IFMT) {
+	case S_IFREG:
+		rc = fs_copy_file(src_file_dfs, dst_file_dfs, &src_stat,
+				  src_path, dst_path);
+		if (rc == 0)
+			(*num_files)++;
+		break;
+	case S_IFDIR:
+		rc = fs_copy_dir(src_file_dfs, dst_file_dfs, &src_stat,
+				 src_path, dst_path, num_dirs, num_files);
+		if (rc == 0)
+			(*num_dirs)++;
+		break;
+	default:
+		fprintf(stderr, "Only files and directories are supported\n");
+		D_GOTO(out, rc = ENOTSUP);
+	}
+
+out:
+	if (copy_into_dst) {
+		D_FREE(tmp_path);
+		D_FREE(tmp_dir);
+		D_FREE(tmp_name);
+	}
 	return rc;
 }
 
@@ -2945,9 +2994,6 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		} else {
 			strncpy(path, dattr.da_rel_path, path_len);
 		}
-	/* no prefix option is only for DAOS->DAOS (cont clone),
-	 * so this is an error
-	 */
 	} else if (strncmp(path, "daos://", 7) == 0) {
 		/* Error, since we expect a DAOS path */
 		D_GOTO(out, rc = 1);
@@ -2967,9 +3013,6 @@ out:
 int
 fs_copy_hdlr(struct cmd_args_s *ap)
 {
-	/* TODO: add check to make sure all required arguments are
-	 * provided
-	 */
 	int			rc = 0;
 	char			*src_str = NULL;
 	char			*dst_str = NULL;
@@ -2980,17 +3023,19 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	struct file_dfs		src_file_dfs = {0};
 	struct file_dfs		dst_file_dfs = {0};
 	struct dm_args		ca = {0};
-	char			*name = NULL;
-	char			*dname = NULL;
-	char			*dst_dir = NULL;
-	mode_t			tmp_mode_dir = S_IRWXU;
 	bool			is_posix_copy = true;
+	uint64_t		num_dirs = 0;
+	uint64_t		num_files = 0;
 
 	set_dm_args_default(&ca);
 	file_set_defaults_dfs(&src_file_dfs);
 	file_set_defaults_dfs(&dst_file_dfs);
 
 	src_str_len = strlen(ap->src);
+	if (src_str_len == 0) {
+		fprintf(stderr, "Source path required.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 	D_STRNDUP(src_str, ap->src, src_str_len);
 	if (src_str == NULL) {
 		fprintf(stderr, "Unable to allocate memory for source path.");
@@ -3004,6 +3049,10 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	}
 
 	dst_str_len = strlen(ap->dst);
+	if (dst_str_len == 0) {
+		fprintf(stderr, "Destinaton path required.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 	D_STRNDUP(dst_str, ap->dst, dst_str_len);
 	if (dst_str == NULL) {
 		fprintf(stderr,
@@ -3024,50 +3073,10 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
-	parse_filename_dfs(src_str, &name, &dname);
-
-	/* construct destination directory in DAOS, this needs
-	 * to strip the dirname and only use the basename that is
-	 * specified in the dst argument
-	 */
-	src_str_len = strlen(dname);
-	D_ASPRINTF(dst_dir, "%s/%s", dst_str, src_str + src_str_len);
-	if (dst_dir == NULL) {
-		fprintf(stderr,
-			"Unable to allocate memory for destination path.\n");
-		D_GOTO(out_disconnect, rc = -DER_NOMEM);
-	}
-	/* set paths based on file type for source and destination */
-	if (src_file_dfs.type == POSIX && dst_file_dfs.type == DAOS) {
-		rc = file_mkdir(&dst_file_dfs, dst_dir, &tmp_mode_dir);
-		if (rc != EEXIST && rc != 0)
-			D_GOTO(out_disconnect, rc);
-		rc = fs_copy(&src_file_dfs, &dst_file_dfs,
-			     src_str, src_str_len, dst_str);
-		if (rc != 0)
-			D_GOTO(out_disconnect, rc);
-	} else if (src_file_dfs.type == DAOS && dst_file_dfs.type == POSIX) {
-		rc = file_mkdir(&dst_file_dfs, dst_dir, &tmp_mode_dir);
-		if (rc != EEXIST && rc != 0)
-			D_GOTO(out_disconnect, rc);
-		rc = fs_copy(&src_file_dfs, &dst_file_dfs,
-			     src_str, src_str_len, dst_str);
-		if (rc != 0)
-			D_GOTO(out_disconnect, rc);
-	} else if (src_file_dfs.type == DAOS && dst_file_dfs.type == DAOS) {
-		rc = file_mkdir(&dst_file_dfs, dst_dir, &tmp_mode_dir);
-		if (rc != EEXIST && rc != 0)
-			D_GOTO(out_disconnect, rc);
-		rc = fs_copy(&src_file_dfs, &dst_file_dfs,
-			     src_str, src_str_len, dst_str);
-		if (rc != 0)
-			D_GOTO(out_disconnect, rc);
-	/* TODO: handle POSIX->POSIX case here */
-	} else {
-		fprintf(stderr, "Regular POSIX to POSIX copies are not "
-			"supported\n");
-		D_GOTO(out_disconnect, rc = EINVAL);
-	}
+	rc = fs_copy(&src_file_dfs, &dst_file_dfs,
+		     src_str, dst_str, &num_dirs, &num_files);
+	if (rc != 0)
+		D_GOTO(out_disconnect, rc = daos_errno2der(rc));
 
 	if (dst_file_dfs.type == DAOS) {
 		fprintf(stdout, "Successfully copied to DAOS: %s\n",
@@ -3076,17 +3085,17 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		fprintf(stdout, "Successfully copied to POSIX: %s\n",
 			dst_str);
 	}
+	fprintf(stdout, "    Directories: %lu\n", num_dirs);
+	fprintf(stdout, "    Files:       %lu\n", num_files);
+
 out_disconnect:
 	/* umount dfs, close conts, and disconnect pools */
 	rc = dm_disconnect(is_posix_copy, &ca, &src_file_dfs, &dst_file_dfs);
 	if (rc != 0)
 		fprintf(stderr, "failed to disconnect (%d)\n", rc);
 out:
-	D_FREE(name);
-	D_FREE(dname);
 	D_FREE(src_str);
 	D_FREE(dst_str);
-	D_FREE(dst_dir);
 	return rc;
 }
 

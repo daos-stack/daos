@@ -310,14 +310,16 @@ class OSAUtils(MdtestBase, IorTestBase):
             prop = prop.replace("rf:1", rf_value)
         self.container.properties.value = prop
 
-    def assert_on_exception(self, out_queue):
+    def assert_on_exception(self, out_queue=None):
         """Assert on exception while executing an application.
 
         Args:
             out_queue (queue): Check whether the queue is
             empty. If empty, app (ior, mdtest) didn't encounter error.
         """
-        if self.out_queue.empty():
+        if out_queue is None:
+            out_queue = self.out_queue
+        if out_queue.empty():
             pass
         else:
             exc = out_queue.get(block=False)
@@ -376,7 +378,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             process.join()
         except CommandFailure as err_msg:
             self.out_queue.put(err_msg)
-            self.assert_on_exception(self.out_queue)
+            self.assert_on_exception()
 
     def ior_thread(self, pool, oclass, test, flags,
                    single_cont_read=True,
@@ -414,7 +416,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             job_manager = self.get_ior_job_manager_command()
         except CommandFailure as err_msg:
             self.out_queue.put(err_msg)
-            self.assert_on_exception(self.out_queue)
+            self.assert_on_exception()
         job_manager.job.dfs_cont.update(self.container.uuid)
         self.ior_cmd.transfer_size.update(test[2])
         self.ior_cmd.block_size.update(test[3])
@@ -424,7 +426,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                                    fail_on_warning=fail_on_warning)
         except CommandFailure as err_msg:
             self.out_queue.put(err_msg)
-            self.assert_on_exception(self.out_queue)
+            self.assert_on_exception()
 
     def run_mdtest_thread(self):
         """Start mdtest thread and wait until thread completes.
@@ -450,4 +452,4 @@ class OSAUtils(MdtestBase, IorTestBase):
             process.join()
         except CommandFailure as err_msg:
             self.out_queue.put(err_msg)
-            self.assert_on_exception(self.out_queue)
+            self.assert_on_exception()
