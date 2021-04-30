@@ -171,7 +171,6 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 	for name, tc := range map[string]struct {
 		engineCount     int
 		netDevClass     uint32
-		accessPoints    []string
 		uErr            error
 		hostResponses   []*HostResponse
 		expHostErrs     []*MockHostError
@@ -282,8 +281,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			expIfs:          []*HostFabricInterface{ib0r, ib1r},
 			expCoresPerNuma: 24,
 		},
-		"engine count unset and dual numa with typical fabric scan output and access points": {
-			accessPoints:    []string{"hostX"},
+		"engine count unset and dual numa with typical fabric scan output": {
 			hostResponses:   dualHostRespSame(typicalFabIfs),
 			expIfs:          []*HostFabricInterface{ib0r, ib1r},
 			expCoresPerNuma: 24,
@@ -309,11 +307,10 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 				tc.netDevClass = NetDevAny
 			}
 			req := ConfigGenerateReq{
-				NrEngines:    tc.engineCount,
-				NetClass:     tc.netDevClass,
-				AccessPoints: tc.accessPoints,
-				Client:       mi,
-				Log:          log,
+				NrEngines: tc.engineCount,
+				NetClass:  tc.netDevClass,
+				Client:    mi,
+				Log:       log,
 			}
 
 			netDetails, gotHostErrs, gotErr := getNetworkDetails(context.TODO(), req)
@@ -593,7 +590,9 @@ func TestControl_AutoConfig_getCPUDetails(t *testing.T) {
 
 			numaSSDs := make(numaSSDsMap)
 			for nn, count := range tc.ssdListSizes {
-				numaSSDs[nn] = common.MockPCIAddrs(count)
+				for i := 0; i < count; i++ {
+					numaSSDs[nn] = append(numaSSDs[nn], common.MockPCIAddr(int32(i)))
+				}
 			}
 
 			nccs, gotErr := getCPUDetails(log, numaSSDs, tc.numaCoreCount)
@@ -634,8 +633,9 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 		expErr         error
 	}{
 		"no engines": {
-			numaPMems: numaPMemsMap{0: []string{"/dev/pmem0"}},
-			expErr:    errors.Errorf(errInvalNrEngines, 1, 0),
+			numaPMems:    numaPMemsMap{0: []string{"/dev/pmem0"}},
+			accessPoints: []string{"hostX:10002"},
+			expErr:       errors.Errorf(errInvalNrEngines, 1, 0),
 		},
 		"single pmem zero ssd with access point": {
 			engineCount:    1,
@@ -644,7 +644,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaIfaces:     numaNetIfaceMap{0: ib0},
 			numaSSDs:       numaSSDsMap{0: []string{}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX").WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10001").WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -654,13 +654,66 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithScmMountPoint("/mnt/daos0").
 					WithHelperStreamCount(7)),
 		},
+		"access point with valid port": {
+			engineCount:    1,
+			accessPoints:   []string{"hostX:10002"},
+			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
+			numaIfaces:     numaNetIfaceMap{0: ib0},
+			numaSSDs:       numaSSDsMap{0: []string{}},
+			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithEngines(
+				defaultEngineCfg(0).
+					WithFabricInterface("ib0").
+					WithFabricInterfacePort(defaultFiPort).
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa0).
+					WithScmDeviceList("/dev/pmem0").
+					WithScmMountPoint("/mnt/daos0").
+					WithHelperStreamCount(7)),
+		},
+		"access point with invalid port": {
+			engineCount:    1,
+			accessPoints:   []string{"hostX:-10001"},
+			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
+			numaIfaces:     numaNetIfaceMap{0: ib0},
+			numaSSDs:       numaSSDsMap{0: []string{}},
+			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
+			expErr:         config.FaultConfigBadControlPort,
+		},
+		"access point ip with valid port": {
+			engineCount:    1,
+			accessPoints:   []string{"192.168.1.1:10002"},
+			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
+			numaIfaces:     numaNetIfaceMap{0: ib0},
+			numaSSDs:       numaSSDsMap{0: []string{}},
+			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("192.168.1.1:10002").WithEngines(
+				defaultEngineCfg(0).
+					WithFabricInterface("ib0").
+					WithFabricInterfacePort(defaultFiPort).
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa0).
+					WithScmDeviceList("/dev/pmem0").
+					WithScmMountPoint("/mnt/daos0").
+					WithHelperStreamCount(7)),
+		},
+		"access point ip with invalid port": {
+			engineCount:    1,
+			accessPoints:   []string{"192.168.1.1:-10001"},
+			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
+			numaIfaces:     numaNetIfaceMap{0: ib0},
+			numaSSDs:       numaSSDsMap{0: []string{}},
+			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
+			expErr:         config.FaultConfigBadControlPort,
+		},
 		"single pmem single ssd": {
 			engineCount:    1,
+			accessPoints:   []string{"hostX:10002"},
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
 			numaSSDs:       numaSSDsMap{0: []string{common.MockPCIAddr(1)}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
-			expCfg: baseConfig("ofi+psm2").WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -672,16 +725,17 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithHelperStreamCount(7)),
 		},
 		"dual pmem dual ssd": {
-			engineCount: 2,
-			numaPMems:   numaPMemsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
-			numaIfaces:  numaNetIfaceMap{0: ib0, 1: ib1},
+			engineCount:  2,
+			accessPoints: []string{"hostX:10002"},
+			numaPMems:    numaPMemsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
+			numaIfaces:   numaNetIfaceMap{0: ib0, 1: ib1},
 			numaSSDs: numaSSDsMap{
-				0: common.MockPCIAddrs(4), 1: common.MockPCIAddrs(3),
+				0: common.MockPCIAddrs(0, 1, 2, 3), 1: common.MockPCIAddrs(4, 5, 6),
 			},
 			numaCoreCounts: numaCoreCountsMap{
 				0: &coreCounts{16, 7}, 1: &coreCounts{15, 6},
 			},
-			expCfg: baseConfig("ofi+psm2").WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -689,7 +743,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithPinnedNumaNode(&numa0).
 					WithScmDeviceList("/dev/pmem0").
 					WithScmMountPoint("/mnt/daos0").
-					WithBdevDeviceList(common.MockPCIAddrs(4)...).
+					WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...).
 					WithHelperStreamCount(7),
 				defaultEngineCfg(1).
 					WithFabricInterface("ib1").
@@ -699,13 +753,13 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithPinnedNumaNode(&numa1).
 					WithScmDeviceList("/dev/pmem1").
 					WithScmMountPoint("/mnt/daos1").
-					WithBdevDeviceList(common.MockPCIAddrs(3)...).
+					WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...).
 					WithTargetCount(15).
 					WithHelperStreamCount(6)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, buf := logging.NewTestLogger(t.Name())
+			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
 			nd := &networkDetails{
@@ -717,7 +771,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				numaSSDs:  tc.numaSSDs,
 			}
 
-			gotCfg, gotErr := genConfig(tc.accessPoints, nd, sd, tc.numaCoreCounts)
+			gotCfg, gotErr := genConfig(log, tc.accessPoints, nd, sd, tc.numaCoreCounts)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
