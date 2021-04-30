@@ -8,22 +8,25 @@ to select the appropriate software combination.
 DAOS packages are available for CentOS7, openSUSE Leap 15 and Ubuntu 20.04.
 For other distribution, manual building is required (see next section).
 
-### CentOS7
+### CentOS 7.9
 
 Configure the DAOS package repository as follows:
 ``` bash
 $ sudo wget -O /etc/yum.repos.d/daos-packages.repo http://packages.daos.io/v1.2/CentOS7/packages/x86_64/daos_packages.repo
 ```
 
-To install the DAOS client packages:
+epel-release is required for both client and server:
 ``` bash
 $ sudo yum install -y epel-release
+```
+
+To install the DAOS client packages:
+``` bash
 $ sudo yum install -y daos-client
 ```
 
 To install the DAOS server packages:
 ``` bash
-$ sudo yum install -y epel-release
 $ sudo yum install -y daos-server
 ```
 
@@ -33,11 +36,25 @@ repositories.
 
 ### openSUSE Leap 15
 
-TBD
+Add the DAOS package repository via zypper:
+``` bash
+$ sudo zypper ar http://packages.daos.io/v1.2/Leap15.2/packages x86_64/daos_packages
+$ sudo rpm --import http://packages.daos.io/RPM-GPG-KEY
+$ sudo zypper --non-interactive ref
+```
+To install the DAOS client packages:
+``` bash
+$ sudo zypper install -y daos-client
+```
 
-### Ubuntu 20.04
+To install the DAOS server packages:
+``` bash
+$ sudo zypper install -y daos-server
+```
 
-TBD
+Debug and source RPMs available in the respective [debug](http://packages.daos.io/v1.2/Leap15.2/debug/x86_64/daos_debug.repo)
+and [source](http://packages.daos.io/v1.2/Leaps15.2/source/daos_source.repo)
+repositories.
 
 ## DAOS from Scratch
 
