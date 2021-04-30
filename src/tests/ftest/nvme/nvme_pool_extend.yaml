@@ -44,8 +44,8 @@ server_config:
 pool:
   mode: 146
   name: daos_server
-  scm_size: 100000000000
-  nvme_size: 700000000000
+  scm_size: 50000000000
+  nvme_size: 300000000000
   svcn: 4
   control_method: dmg
   rebuild_timeout: 120
@@ -71,9 +71,9 @@ ior:
     #   - [scm_size, nvme_size, transfersize, blocksize]
     #    The values are set to be in the multiples of 10.
     #    Values are appx GB.
-        - [100000000000, 700000000000, 4000, 50000000]          #[4K, 51M]
-        - [100000000000, 700000000000, 1000000, 500000000]      #[1M, 512M]
-        - [100000000000, 700000000000, 1000000000, 8000000000]  #[1G, 8G]
+        - [50000000000, 300000000000, 4000, 50000000]          #[4K, 51M]
+        - [50000000000, 300000000000, 1000000, 500000000]      #[1M, 512M]
+        - [50000000000, 300000000000, 1000000000, 8000000000]  #[1G, 8G]
 test_obj_class:
   oclass:
     - RP_3G6
