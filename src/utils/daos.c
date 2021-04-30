@@ -553,6 +553,8 @@ args_free(struct cmd_args_s *ap)
 	D_FREE(ap->aclfile);
 	D_FREE(ap->entry);
 	D_FREE(ap->principal);
+	D_FREE(ap->user);
+	D_FREE(ap->group);
 }
 
 /* resource and command arguments (ie "container create" for example) can be
