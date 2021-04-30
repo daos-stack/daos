@@ -205,6 +205,7 @@ dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
  *			Valid on file create only; ignored otherwise.
  *
  * \return		0 on success, errno code on failure.
+ *			EEXIST	If path already exists.
  */
 int
 dfs_sys_mknod(dfs_sys_t *dfs_sys, const char *path, mode_t mode,
