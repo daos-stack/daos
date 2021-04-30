@@ -5544,7 +5544,7 @@ out:
 
 int
 ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version)
+			 uint32_t version, int *tgt_id)
 {
 	struct pl_map		*map;
 	struct pl_obj_layout	*layout;
@@ -5565,7 +5565,7 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 		goto out;
 
 	rc = pl_select_leader(oid->id_pub, oid->id_shard / layout->ol_grp_size,
-			      layout->ol_grp_size, true,
+			      layout->ol_grp_size, tgt_id,
 			      pl_obj_get_shard, layout);
 	pl_obj_layout_free(layout);
 	if (rc < 0)
@@ -5587,7 +5587,8 @@ out:
  * \param [IN]	version		The pool map version
  *
  * \return			+1 if leader is on current server.
- * \return			Zero if the leader resides on another server.
+ * \return			Zero if the leader resides on another server,
+ *				or the oid->id_shard is not the leader shard.
  * \return			Negative value if error.
  */
 int
@@ -5596,15 +5597,17 @@ ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 {
 	struct pool_target	*target;
 	d_rank_t		 myrank;
-	int			 leader;
+	int			 leader_tgt;
+	int			 leader_shard;
 	int			 rc;
 
-	leader = ds_pool_elect_dtx_leader(pool, oid, version);
-	if (leader < 0)
-		return leader;
+	rc = ds_pool_elect_dtx_leader(pool, oid, version, &leader_tgt);
+	if (rc < 0)
+		return rc;
+	leader_shard = rc;
 
-	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader);
-	rc = pool_map_find_target(pool->sp_map, leader, &target);
+	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader_tgt);
+	rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
 	if (rc < 0)
 		return rc;
 
@@ -5615,7 +5618,8 @@ ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc < 0)
 		return rc;
 
-	if (myrank != target->ta_comp.co_rank)
+	if (myrank != target->ta_comp.co_rank ||
+	    oid->id_shard != leader_shard)
 		rc = 0;
 	else
 		rc = 1;
