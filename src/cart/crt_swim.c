@@ -36,10 +36,10 @@
 	((int32_t)		     (rc)		CRT_VAR)
 
 static inline int
-crt_proc_struct_swim_member_update(crt_proc_t proc,
+crt_proc_struct_swim_member_update(crt_proc_t proc, crt_proc_op_t proc_op,
 				   struct swim_member_update *data)
 {
-	return crt_proc_memcpy(proc, data, sizeof(*data));
+	return crt_proc_memcpy(proc, proc_op, data, sizeof(*data));
 }
 
 /* One way RPC */
@@ -240,14 +240,11 @@ static int crt_swim_set_member_state(struct swim_context *ctx, swim_id_t id,
 
 static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 {
-	struct crt_rpc_priv	*rpc_priv = NULL;
 	struct swim_context	*ctx = cb_info->cci_arg;
 	crt_rpc_t		*rpc_req = cb_info->cci_rpc;
 	struct crt_rpc_swim_in	*rpc_swim_input = crt_req_get(rpc_req);
-	struct swim_member_state id_state;
 	swim_id_t		 self_id = swim_self_get(ctx);
 	swim_id_t		 id = rpc_req->cr_ep.ep_rank;
-	int			 rc = 0;
 
 	D_TRACE_DEBUG(DB_TRACE, rpc_req,
 		      "complete opc %#x with %zu updates %lu => %lu "
@@ -255,31 +252,6 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 		      rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
 		      rpc_swim_input->src, id, DP_RC(cb_info->cci_rc));
 
-	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
-
-	if (rpc_priv->crp_opc_info->coi_no_reply)
-		D_GOTO(out, rc);
-
-	if (cb_info->cci_rc == -DER_UNREG) /* protocol not registered */
-		D_GOTO(out, rc);
-
-	/* check for RPC with acknowledge a return code of request */
-	if (cb_info->cci_rc) {
-		rc = crt_swim_get_member_state(ctx, id, &id_state);
-		if (!rc) {
-			D_TRACE_ERROR(rpc_req,
-				      "member {%lu %c %lu} => {%lu D %lu}", id,
-				      SWIM_STATUS_CHARS[id_state.sms_status],
-				      id_state.sms_incarnation, id,
-				      (id_state.sms_incarnation + 1));
-			id_state.sms_incarnation++;
-			id_state.sms_status = SWIM_MEMBER_DEAD;
-			crt_swim_set_member_state(ctx, id, &id_state);
-		}
-		D_GOTO(out, rc);
-	}
-
-out:
 	if (crt_swim_fail_delay && crt_swim_fail_id == self_id) {
 		crt_swim_fail_hlc = crt_hlc_get() +
 				    crt_sec2hlc(crt_swim_fail_delay);
@@ -335,14 +307,11 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 		D_GOTO(out, rc);
 	}
 
-	if (opc_idx == 0) { /* set timeout for one way RPC only */
-		rc = crt_req_set_timeout(rpc_req, crt_swim_rpc_timeout);
-		if (rc) {
-			D_TRACE_ERROR(rpc_req,
-				      "crt_req_set_timeout(): "DF_RC"\n",
-				      DP_RC(rc));
-			D_GOTO(out, rc);
-		}
+	rc = crt_req_set_timeout(rpc_req, crt_swim_rpc_timeout);
+	if (rc) {
+		D_TRACE_ERROR(rpc_req, "crt_req_set_timeout(): "DF_RC"\n",
+			      DP_RC(rc));
+		D_GOTO(out, rc);
 	}
 
 	rpc_swim_input = crt_req_get(rpc_req);

@@ -19,8 +19,8 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// TestIOEngineInstance_RankDown establishes that event is published on exit.
-func TestIOEngineInstance_RankDown(t *testing.T) {
+// TestIOEngineInstance_exit establishes that event is published on exit.
+func TestIOEngineInstance_exit(t *testing.T) {
 	var (
 		rxEvts      []*events.RASEvent
 		fakePublish = func(evt *events.RASEvent) {

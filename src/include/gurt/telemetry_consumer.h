@@ -8,19 +8,17 @@
 
 /* Developer facing client API to read data */
 int d_tm_get_counter(uint64_t *val, uint64_t *shmem_root,
-		     struct d_tm_node_t *node, char *metric);
+		     struct d_tm_node_t *node);
 int d_tm_get_timestamp(time_t *val, uint64_t *shmem_root,
-		       struct d_tm_node_t *node, char *metric);
+		       struct d_tm_node_t *node);
 int d_tm_get_timer_snapshot(struct timespec *tms, uint64_t *shmem_root,
-			    struct d_tm_node_t *node, char *metric);
+			    struct d_tm_node_t *node);
 int d_tm_get_gauge(uint64_t *val, struct d_tm_stats_t *stats,
-		   uint64_t *shmem_root, struct d_tm_node_t *node,
-		   char *metric);
+		   uint64_t *shmem_root, struct d_tm_node_t *node);
 int d_tm_get_duration(struct timespec *tms, struct d_tm_stats_t *stats,
-		      uint64_t *shmem_root, struct d_tm_node_t *node,
-		      char *metric);
+		      uint64_t *shmem_root, struct d_tm_node_t *node);
 int d_tm_get_metadata(char **desc, char **units, uint64_t *shmem_root,
-		      struct d_tm_node_t *node, char *metric);
+		      struct d_tm_node_t *node);
 int d_tm_get_num_buckets(struct d_tm_histogram_t *histogram,
 			 uint64_t *shmem_root, struct d_tm_node_t *node);
 int d_tm_get_bucket_range(struct d_tm_bucket_t *bucket, int bucket_id,
