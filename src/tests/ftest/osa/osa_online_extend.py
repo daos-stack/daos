@@ -136,6 +136,8 @@ class OSAOnlineExtend(OSAUtils):
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()
+                if not self.out_queue.empty():
+                    self.assert_on_exception()
 
         # Check data consistency for IOR in future
         # Presently, we are running daos_racer in parallel
