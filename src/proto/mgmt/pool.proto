@@ -34,6 +34,7 @@ message PoolCreateReq {
 	uint64 scmbytes = 13; // SCM size in bytes (manual config)
 	uint64 nvmebytes = 14; // NVMe size in bytes (manual config)
 	uint32 policy = 15; // tier placement policy (manual config)
+	repeated uint32 policyParams = 16; // policy parameters (optional)
 }
 
 // PoolCreateResp returns created pool uuid and ranks.

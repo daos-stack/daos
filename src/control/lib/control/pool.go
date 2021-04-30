@@ -714,6 +714,7 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 
 // ParsePolicy will parse the incoming policy name string and return
 // a policy index used in the DAOS engine.
+// It will also parse all provided parameters and pass them to the engine
 // Returns an error if string cannot be found in the map
 func ParsePolicy(stringPolicy string) (policy uint32, err error) {
 
@@ -723,10 +724,12 @@ func ParsePolicy(stringPolicy string) (policy uint32, err error) {
 		"write_intensivity": drpc.PoolPolicyWriteIntensivity,
 	}
 
-	var p, found = policyMap[stringPolicy]
+	var splits = strings.Split(stringPolicy, " ")
+
+	var p, found = policyMap[splits[0]]
 
 	if !found {
-		return 0, errors.New("Policy " + stringPolicy + " does not exist")
+		return 0, errors.New("Policy " + splits[0] + " does not exist.")
 	}
 
 	return uint32(p), nil
