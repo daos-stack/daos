@@ -67,7 +67,6 @@ struct bio_nvme_data {
 };
 
 static struct bio_nvme_data nvme_glb;
-uint64_t io_stat_period;
 
 static int
 is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
@@ -417,10 +416,6 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 
 	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
-	env = getenv("IO_STAT_PERIOD");
-	io_stat_period = env ? atoi(env) : 0;
-	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
-
 	nvme_glb.bd_shm_id = shm_id;
 	nvme_glb.bd_mem_size = mem_size;
 
@@ -573,10 +568,6 @@ xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 	/* Wait for the completion callback done or timeout */
 	while (*inflights != 0) {
 		spdk_thread_poll(ctxt->bxc_thread, 0, 0);
-
-		/* Called by standalone VOS */
-		if (ctxt->bxc_tgt_id == -1)
-			bio_xs_io_stat(ctxt, d_timeus_secdiff(0));
 
 		/* Completion is executed */
 		if (*inflights == 0)
@@ -1230,7 +1221,6 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	bool			 assigned = false;
 	int			 rc;
 
-	D_ASSERT(ctxt->bxc_desc == NULL);
 	D_ASSERT(ctxt->bxc_blobstore == NULL);
 	D_ASSERT(ctxt->bxc_io_channel == NULL);
 
@@ -1355,15 +1345,6 @@ retry:
 		goto out;
 	}
 
-	/* generic read only descriptor (currently used for IO stats) */
-	rc = spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb,
-				NULL, &ctxt->bxc_desc);
-	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, %d\n", d_bdev->bb_name, rc);
-		rc = daos_errno2der(-rc);
-		goto out;
-	}
-
 out:
 	D_ASSERT(dev_info != NULL);
 	smd_dev_free_info(dev_info);
@@ -1398,11 +1379,6 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			bio_fini_health_monitoring(ctxt->bxc_blobstore);
 
 		ctxt->bxc_blobstore = NULL;
-	}
-
-	if (ctxt->bxc_desc != NULL) {
-		spdk_bdev_close(ctxt->bxc_desc);
-		ctxt->bxc_desc = NULL;
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
@@ -1763,9 +1739,6 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 		return 0;
 
 	rc = spdk_thread_poll(ctxt->bxc_thread, 0, 0);
-
-	/* Print SPDK I/O stats for each xstream */
-	bio_xs_io_stat(ctxt, now);
 
 	/* To avoid complicated race handling (init xstream and starting
 	 * VOS xstream concurrently access global device list & xstream

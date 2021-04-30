@@ -73,6 +73,10 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, errors.New("no hosts specified")
 	}
 
+	if len(req.AccessPoints) == 0 {
+		return nil, errors.New("no access points specified")
+	}
+
 	nd, hostErrs, err := getNetworkDetails(ctx, req)
 	if err != nil {
 		return checkHostErrors(hostErrs), err
@@ -88,13 +92,9 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, err
 	}
 
-	cfg, err := genConfig(req.AccessPoints, nd, sd, ccs)
+	cfg, err := genConfig(req.Log, req.AccessPoints, nd, sd, ccs)
 	if err != nil {
 		return nil, err
-	}
-
-	if err := cfg.Validate(req.Log); err != nil {
-		return nil, errors.Wrap(err, "validation failed on auto generated config")
 	}
 
 	return &ConfigGenerateResp{ConfigOut: cfg}, nil
@@ -543,7 +543,7 @@ func defaultEngineCfg(idx int) *engine.Config {
 
 // genConfig generates server config file from details of available network,
 // storage and CPU hardware.
-func genConfig(accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
+func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
 	// basic sanity checks
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
@@ -563,7 +563,7 @@ func genConfig(accessPoints []string, nd *networkDetails, sd *storageDetails, cc
 		return nil, errors.New("invalid number of core count groups") // shouldn't happen
 	}
 
-	cfg := config.DefaultServer()
+	engines := make([]*engine.Config, 0, nd.engineCount)
 	for nn := 0; nn < nd.engineCount; nn++ {
 		engineCfg := defaultEngineCfg(nn).
 			WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
@@ -580,18 +580,14 @@ func genConfig(accessPoints []string, nd *networkDetails, sd *storageDetails, cc
 			PinnedNumaNode: &pnn,
 		}
 
-		cfg.Engines = append(cfg.Engines, engineCfg)
+		engines = append(engines, engineCfg)
 	}
 
-	if len(accessPoints) != 0 {
-		cfg = cfg.WithAccessPoints(accessPoints...)
-	}
+	cfg := config.DefaultServer().
+		WithAccessPoints(accessPoints...).
+		WithFabricProvider(engines[0].Fabric.Provider).
+		WithEngines(engines...).
+		WithControlLogFile(defaultControlLogFile)
 
-	// apply global config parameters across engines
-	return cfg.WithSystemName(cfg.SystemName).
-		WithSocketDir(cfg.SocketDir).
-		WithFabricProvider(cfg.Engines[0].Fabric.Provider).
-		WithSystemName(cfg.SystemName).
-		WithSocketDir(cfg.SocketDir).
-		WithControlLogFile(defaultControlLogFile), nil
+	return cfg, cfg.Validate(log)
 }

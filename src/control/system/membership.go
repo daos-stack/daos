@@ -121,9 +121,11 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 			}
 		}
 
+		if curMember.state == MemberStateExcluded {
+			return nil, errAdminExcluded(curMember.UUID, curMember.Rank)
+		}
 		if !curMember.Rank.Equals(req.Rank) {
 			return nil, errRankChanged(req.Rank, curMember.Rank, curMember.UUID)
-
 		}
 		if curMember.UUID != req.UUID {
 			return nil, errUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
@@ -488,22 +490,25 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 	return m.db.UpdateMember(member)
 }
 
-func (m *Membership) handleRankDown(evt *events.RASEvent) {
-	ei := evt.GetRankStateInfo()
+func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
+	ei := evt.GetEngineStateInfo()
 	if ei == nil {
-		m.log.Error("no extended info in RankDown event received")
+		m.log.Error("no extended info in EngineDied event received")
 		return
 	}
-
-	// TODO: sanity check that the correct member is being updated by
-	// performing lookup on provided hostname and matching returned
-	// addresses with the member address with matching rank.
 
 	member, err := m.db.FindMemberByRank(Rank(evt.Rank))
 	if err != nil {
 		m.log.Errorf("member with rank %d not found", evt.Rank)
 		return
 	}
+
+	// TODO DAOS-7261: sanity check that the correct member is being
+	//                 updated by performing lookup on provided hostname
+	//                 and matching returned addresses with the address
+	//                 of the member with the matching rank.
+	//
+	// e.g. if member.Addr.IP.Equal(net.ResolveIPAddr(evt.Hostname))
 
 	ts := MemberStateErrored
 	if member.State().isTransitionIllegal(ts) {
@@ -522,8 +527,8 @@ func (m *Membership) handleRankDown(evt *events.RASEvent) {
 // OnEvent handles events on channel and updates member states accordingly.
 func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {
-	case events.RASRankDown:
-		m.handleRankDown(evt)
+	case events.RASEngineDied:
+		m.handleEngineFailure(evt)
 	}
 }
 

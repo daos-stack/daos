@@ -10,8 +10,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"

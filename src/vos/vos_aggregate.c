@@ -766,6 +766,10 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 		return -DER_NOMEM;
 	bsgl->bs_iovs = buffer;
 
+	/* Initialize new segments */
+	memset(&bsgl->bs_iovs[bsgl->bs_nr], 0,
+		sizeof(bsgl->bs_iovs[0]) * added_segs);
+
 	for (i = 0; i < bsgl->bs_nr; i++) {
 		if (bsgl->bs_iovs[i].bi_prefix_len) {
 			/* Add the prefix. */
@@ -781,7 +785,8 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_buf = NULL;
-			bsgl->bs_iovs[add_idx++].bi_addr.ba_hole = 0;
+			BIO_ADDR_SET_NOT_HOLE(
+				&bsgl->bs_iovs[add_idx++].bi_addr);
 		}
 		if (bsgl->bs_iovs[i].bi_suffix_len) {
 			/* Add the suffix. */
@@ -797,7 +802,8 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_buf = NULL;
-			bsgl->bs_iovs[add_idx++].bi_addr.ba_hole = 0;
+			BIO_ADDR_SET_NOT_HOLE(
+				&bsgl->bs_iovs[add_idx++].bi_addr);
 		}
 
 		/* Reset the parameters for the write (non-extended) data. */
@@ -1810,7 +1816,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	/* Aggregation */
 	D_DEBUG(DB_EPC, "oid:"DF_UOID", lgc_ext:"DF_EXT", "
-		"phy_ext:"DF_EXT", epoch:"DF_U64".%d, flags: %x\n",
+		"phy_ext:"DF_EXT", epoch:"DF_X64".%d, flags: %x\n",
 		DP_UOID(agg_param->ap_oid), DP_EXT(&lgc_ext),
 		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_minor_epc,
 		entry->ie_vis_flags);

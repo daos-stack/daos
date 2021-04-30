@@ -325,6 +325,7 @@ nvme_test_verify_device_stats(void **state)
 
 	if (ndisks <= 1) {
 		print_message("Need Minimum 2 disks for test\n");
+		D_FREE(devices);
 		skip();
 	}
 
@@ -356,6 +357,9 @@ nvme_test_verify_device_stats(void **state)
 	if (rc) {
 		print_message("Log Mask != DEBUG in %s.\n",
 			      server_config_file);
+		D_FREE(server_config_file);
+		D_FREE(devices);
+		D_FREE(log_file);
 		skip();
 	}
 
