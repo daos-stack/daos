@@ -8,7 +8,6 @@ import time
 import random
 import threading
 
-from itertools import product
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
@@ -141,7 +140,9 @@ class OSAOnlineReintegration(OSAUtils):
                             "Pool Version Error:  After reintegrate")
             # Wait to finish the threads
             for thrd in threads:
-                thrd.join(timeout=20)
+                thrd.join()
+                if not self.out_queue.empty():
+                    self.assert_on_exception()
 
         # Check data consistency for IOR in future
         # Presently, we are running daos_racer in parallel

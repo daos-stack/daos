@@ -9,8 +9,6 @@ timeout: 1110
 job_manager_timeout: 300
 setup:
   start_servers_once: False
-  server_manager_class: "Orterun"
-  agent_manager_class:  "Orterun"
 server_config:
   name: daos_server
   engines_per_host: 2
