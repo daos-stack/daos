@@ -356,6 +356,7 @@ class GitRepoRetriever():
 
         # Now checkout the commit_sha if specified
         passed_commit_sha = kw.get("commit_sha", None)
+        branch = kw.get("branch", None)
         if passed_commit_sha is None:
             comp = os.path.basename(subdir)
             print("""
@@ -366,28 +367,20 @@ build with random upstream changes.
 *********************** ERROR ************************\n""" % comp)
             raise DownloadFailure(self.url, subdir)
 
-        commands = ['git clone %s %s' % (self.url, subdir)]
-        if not RUNNER.run_commands(commands):
+        if (passed_commit_sha and not branch):
+            commands = ['git',
+                        'clone',
+                        self.url,
+                        '--branch',
+                        passed_commit_sha,
+                        '--single-branch',
+                        '--depth',
+                        '1',
+                        subdir]
+            if not RUNNER.run_commands([' '.join(commands)]):
+                raise DownloadFailure(self.url, subdir)
+        else:
             raise DownloadFailure(self.url, subdir)
-        self.get_specific(subdir, **kw)
-
-    def get_specific(self, subdir, **kw):
-        """Checkout the configured commit"""
-        # If the config overrides the branch, use it.  If a branch is
-        # specified, check it out first.
-        branch = kw.get("branch", None)
-        if branch is None:
-            branch = self.branch
-        self.branch = branch
-        if self.branch:
-            self.commit_sha = self.branch
-            self.checkout_commit(subdir)
-
-        # Now checkout the commit_sha if specified
-        passed_commit_sha = kw.get("commit_sha", None)
-        if passed_commit_sha is not None:
-            self.commit_sha = passed_commit_sha
-            self.checkout_commit(subdir)
 
         # Now apply any patches specified
         self.apply_patches(subdir, kw.get("patches", None))

@@ -125,7 +125,6 @@ if [ -d "/mnt/daos" ]; then
     COMP="UTEST_gurt"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
-    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
 
     COMP="UTEST_vos"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500

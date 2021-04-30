@@ -1990,7 +1990,6 @@ out:
 void
 ds_pool_connect_handler(crt_rpc_t *rpc)
 {
-	struct d_tm_node_t	       *open_hdl_gauge = NULL;
 	struct pool_connect_in	       *in = crt_req_get(rpc);
 	struct pool_connect_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
@@ -2011,6 +2010,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct daos_prop_entry	       *owner_entry;
 	struct daos_prop_entry	       *owner_grp_entry;
 	uint64_t			sec_capas = 0;
+	struct pool_metrics	       *metrics;
+
+	metrics = &ds_pool_metrics;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -2115,8 +2117,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
-	d_tm_increment_gauge(&open_hdl_gauge, 1,
-			     "pool/ops/open/active");
+	d_tm_inc_gauge(metrics->open_hdl_gauge, 1);
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
@@ -2261,13 +2262,15 @@ static int
 pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 		     int n_hdl_uuids, crt_context_t ctx)
 {
-	struct d_tm_node_t	*open_hdl_gauge = NULL;
 	d_iov_t			 value;
 	uint32_t		 nhandles;
+	struct pool_metrics	*metrics;
 	int			 i;
 	int			 rc;
 
 	D_ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
+
+	metrics = &ds_pool_metrics;
 
 	D_DEBUG(DF_DSMS, DF_UUID": disconnecting %d hdls: hdl_uuids[0]="DF_UUID
 		"\n", DP_UUID(svc->ps_uuid), n_hdl_uuids,
@@ -2286,8 +2289,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	d_tm_decrement_gauge(&open_hdl_gauge, n_hdl_uuids,
-			     "pool/ops/open/active");
+	d_tm_dec_gauge(metrics->open_hdl_gauge, n_hdl_uuids);
 
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
