@@ -208,7 +208,7 @@ A single (unstriped) object can be either a byte-array or a KV.
 ### Fixed Stripe Object
 
 A fixed stripe object has a constant number of stripes and each stripe has a
-fixed stripe size. These stripe attribures are predefined by object class, DAOS
+fixed stripe size. These stripe attributes are predefined by object class, DAOS
 uses these attributes to compute object layout.
 
 ### Dynamically Striped Object (Not implemented)
