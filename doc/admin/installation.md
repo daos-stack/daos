@@ -3,66 +3,58 @@
 Please check the [support matrix](https://daos-stack.github.io/release/support_matrix)
 to select the appropriate software combination.
 
-## Software Dependencies
-
-DAOS requires a C99-capable compiler, a Go compiler, and the scons build tool.
-Moreover, the DAOS stack leverages the following open source projects:
-
--   [*gRPC*](https://grpc.io/) provides a secured out-of-band channel for
-    DAOS administration.
-
--   [*PMDK*](https://github.com/pmem/pmdk.git) for persistent memory
-    programming.
-
--   [*SPDK*](http://spdk.io/) for userspace NVMe device access and management.
-
--   [*ISA-L*](https://github.com/01org/isa-l) and
-    [*ISA-L_Crypto*](https://github.com/01org/isa-l_crypto) for checksum and
-    erasure code
-
--   [*Argobots*](https://github.com/pmodels/argobots) for thread management.
-
--   [*hwloc*](https://github.com/open-mpi/hwloc) for discovering system devices,
-    detecting their NUMA node affinity and for CPU binding
-
--   [*libfabric*](https://github.com/ofiwg/libfabric) for detecting fabric
-    interfaces, providers, and connection management.
-
-The DAOS build system can be configured to download and build any missing
-dependencies automatically.
-
 ## Distribution Packages
 
-DAOS RPM packaging is currently available, and DEB packaging is under
-development and will be available in a future DAOS release.
-Integration with the [Spack](https://spack.io/) package manager is also
-under consideration.
+DAOS packages are available for CentOS7 and openSUSE Leap 15.
+For other distribution, manual building is required (see next section).
 
-### Installing DAOS from RPMs
+### CentOS 7.9
 
-DAOS RPMs are available from the Intel&copy; Registration Center.
-Clicking the [Intel&copy; Registration Center](https://registrationcenter.intel.com/forms/?productid=3412)
-link will take you to the registration center, where you will create an account.
-After creating an account, the following files can be downloaded:
-
-- daos_debug.tar - _debuginfo_ packages
-- daos_packages.tar - client and server main packages
-- daos_source.tar - source RPMs
-
-Recommended steps after download:
-
-```bash
-$ sudo tar -C / -xf daos_packages.tar
-$ sudo cp /opt/intel/daos_rpms/packages/daos_packages.repo /etc/yum.repos.d
-$ rm /opt/intel/daos_rpms/packages/libabt*
-  (cd /opt/intel/daos_rpms/packages/ && createrepo .)
-$ sudo yum install epel-release
-$ sudo yum install daos-server
-$ sudo yum install daos-client
+Configure the DAOS package repository as follows:
+``` bash
+$ sudo wget -O /etc/yum.repos.d/daos-packages.repo http://packages.daos.io/v1.2/CentOS7/packages/x86_64/daos_packages.repo
 ```
 
-!!! note
-    Only daos-client OR daos-server needs to be specified on the yum command line.
+epel-release is required for both client and server:
+``` bash
+$ sudo yum install -y epel-release
+```
+
+To install the DAOS client packages:
+``` bash
+$ sudo yum install -y daos-client
+```
+
+To install the DAOS server packages:
+``` bash
+$ sudo yum install -y daos-server
+```
+
+Debug and source RPMs available in the respective [debug](http://packages.daos.io/v1.2/CentOS7/debug/x86_64/daos_debug.repo)
+and [source](http://packages.daos.io/v1.2/CentOS7/source/daos_source.repo)
+repositories.
+
+### openSUSE Leap 15
+
+Add the DAOS package repository via zypper:
+``` bash
+$ sudo zypper ar http://packages.daos.io/v1.2/Leap15.2/packages x86_64/daos_packages
+$ sudo rpm --import http://packages.daos.io/RPM-GPG-KEY
+$ sudo zypper --non-interactive ref
+```
+To install the DAOS client packages:
+``` bash
+$ sudo zypper install -y daos-client
+```
+
+To install the DAOS server packages:
+``` bash
+$ sudo zypper install -y daos-server
+```
+
+Debug and source RPMs available in the respective [debug](http://packages.daos.io/v1.2/Leap15.2/debug/x86_64/daos_debug.repo)
+and [source](http://packages.daos.io/v1.2/Leaps15.2/source/daos_source.repo)
+repositories.
 
 ## DAOS from Scratch
 
@@ -82,13 +74,13 @@ version of at least 1.10 is required.
 An exhaustive list of packages for each supported Linux distribution is
 maintained in the Docker files (please click on the link):
 
--    [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L79)
--    [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L71-L100)
--    [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.20.04#L21-L39)
+-    [CentOS 7](https://github.com/daos-stack/daos/tree/release/1.2/utils/docker/Dockerfile.centos.7#L19-L79)
+-    [openSUSE Leap 15](https://github.com/daos-stack/daos/tree/release/1.2/utils/docker/Dockerfile.leap.15#L36-L85)
+-    [Ubuntu 20.04](https://github.com/daos-stack/daos/tree/release/1.2/utils/docker/Dockerfile.ubuntu.20.04#L14-L22)
 
 The command lines to install the required packages can be extracted from
 the Docker files by removing the "RUN" command, which is specific to Docker.
-Check the [utils/docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
+Check the [utils/docker](https://github.com/daos-stack/daos/tree/release/1.2/utils/docker)
 directory for different Linux distribution versions.
 
 Some DAOS tests use MPI. The DAOS build process uses the environment modules
@@ -99,16 +91,10 @@ building those tests.
 
 The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
 
-To checkout the latest stable version, simply run:
+To checkout the latest 1.2 version, simply run:
 
 ```bash
-$ git clone --recurse-submodules -b v1.0.1 https://github.com/daos-stack/daos.git
-```
-
-For the current development version, then run:
-
-```bash
-$ git clone --recurse-submodules https://github.com/daos-stack/daos.git
+$ git clone --recurse-submodules -b release/1.2 https://github.com/daos-stack/daos.git
 ```
 
 This command clones the DAOS git repository (path referred as ${daospath}
@@ -174,7 +160,7 @@ On Mac, please make sure that the Docker settings under
 To build the Docker image directly from GitHub, run the following command:
 
 ```bash
-$ docker build https://github.com/daos-stack/daos.git#master \
+$ docker build https://github.com/daos-stack/daos.git#release/1.2 \
         -f utils/docker/Dockerfile.centos.7 -t daos
 ```
 
@@ -188,8 +174,6 @@ This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
 builds it, and installs it in the image.
 For Ubuntu and other Linux distributions, replace Dockerfile.centos.7 with
 Dockerfile.ubuntu.20.04 and the appropriate version of interest.
-`master` should be replaced by the relevant release tag (e.g. v1.0.1) to
-build a stable version.
 
 ### Simple Docker Setup
 
