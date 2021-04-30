@@ -918,7 +918,8 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 	int			 rc;
 	bool			 match;
 
-	if (!daos_csummer_initialized(obj) || obj->dcs_skip_data_verify)
+	if (!daos_csummer_initialized(obj) || obj->dcs_skip_data_verify ||
+	    iod->iod_size == 0)
 		return 0;
 
 	if (iod == NULL || sgl == NULL || iod_csum == NULL) {

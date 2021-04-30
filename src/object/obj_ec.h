@@ -219,6 +219,10 @@ struct obj_ec_recov_codec {
 /* EC recovery task */
 struct obj_ec_recov_task {
 	daos_iod_t		ert_iod;
+	/* the original user iod pointer, used for the case that in singv
+	 * degraded fetch, set the iod_size.
+	 */
+	daos_iod_t		*ert_oiod;
 	d_sg_list_t		ert_sgl;
 	daos_epoch_t		ert_epoch;
 	daos_handle_t		ert_th; /* read-only tx handle */
@@ -226,10 +230,6 @@ struct obj_ec_recov_task {
 
 /** EC obj IO failure information */
 struct obj_ec_fail_info {
-	/* the original user iods pointer, used for the case that in singv
-	 * degraded fetch, set the iod_size.
-	 */
-	daos_iod_t			*efi_uiods;
 	/* missed (to be recovered) recx list */
 	struct daos_recx_ep_list	*efi_recx_lists;
 	/* list of error targets */

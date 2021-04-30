@@ -310,6 +310,33 @@ class OSAUtils(MdtestBase, IorTestBase):
             prop = prop.replace("rf:1", rf_value)
         self.container.properties.value = prop
 
+    def assert_on_exception(self, out_queue=None):
+        """Assert on exception while executing an application.
+
+        Args:
+            out_queue (queue): Check whether the queue is
+            empty. If empty, app (ior, mdtest) didn't encounter error.
+        """
+        if out_queue is None:
+            out_queue = self.out_queue
+        if out_queue.empty():
+            pass
+        else:
+            exc = out_queue.get(block=False)
+            out_queue.put(exc)
+            raise exc
+
+    def cleanup_queue(self, out_queue=None):
+        """Cleanup the existing thread queue.
+
+        Args:
+            out_queue (queue): Queue to cleanup.
+        """
+        if out_queue is None:
+            out_queue = self.out_queue
+        while not out_queue.empty():
+            out_queue.get(block=True)
+
     def run_ior_thread(self, action, oclass, test,
                        single_cont_read=True,
                        fail_on_warning=True):
@@ -328,6 +355,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                                       for IOR warnings.
                                       Defaults to True.
         """
+        self.cleanup_queue()
         if action == "Write":
             flags = self.ior_w_flags
         else:
@@ -346,7 +374,11 @@ class OSAUtils(MdtestBase, IorTestBase):
         # Launch the IOR thread
         process.start()
         # Wait for the thread to finish
-        process.join()
+        try:
+            process.join()
+        except CommandFailure as err_msg:
+            self.out_queue.put(err_msg)
+            self.assert_on_exception()
 
     def ior_thread(self, pool, oclass, test, flags,
                    single_cont_read=True,
@@ -365,6 +397,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                                       for IOR warnings.
                                       Defaults to True.
         """
+        self.cleanup_queue()
         self.pool = pool
         self.ior_cmd.get_params(self)
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
@@ -379,13 +412,21 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.log.info(self.container)
         else:
             self.fail("Not supported option on ior_thread")
-        job_manager = self.get_ior_job_manager_command()
+        try:
+            job_manager = self.get_ior_job_manager_command()
+        except CommandFailure as err_msg:
+            self.out_queue.put(err_msg)
+            self.assert_on_exception()
         job_manager.job.dfs_cont.update(self.container.uuid)
         self.ior_cmd.transfer_size.update(test[2])
         self.ior_cmd.block_size.update(test[3])
         self.ior_cmd.flags.update(flags)
-        self.run_ior_with_pool(create_pool=False, create_cont=False,
-                               fail_on_warning=fail_on_warning)
+        try:
+            self.run_ior_with_pool(create_pool=False, create_cont=False,
+                                   fail_on_warning=fail_on_warning)
+        except CommandFailure as err_msg:
+            self.out_queue.put(err_msg)
+            self.assert_on_exception()
 
     def run_mdtest_thread(self):
         """Start mdtest thread and wait until thread completes.
@@ -407,4 +448,8 @@ class OSAUtils(MdtestBase, IorTestBase):
         # Launch the MDtest thread
         process.start()
         # Wait for the thread to finish
-        process.join()
+        try:
+            process.join()
+        except CommandFailure as err_msg:
+            self.out_queue.put(err_msg)
+            self.assert_on_exception()
