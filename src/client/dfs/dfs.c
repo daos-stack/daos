@@ -1220,7 +1220,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[0],
 					 0, dattr.da_oclass_id, 0, 0);
 	if (rc) {
-		D_ERROR("Failed to generate DB OID "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -1230,7 +1230,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[1],
 					 0, dattr.da_oclass_id, 0, 0);
 	if (rc) {
-		D_ERROR("Failed to generate DB OID "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to generate ROOT OID "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
