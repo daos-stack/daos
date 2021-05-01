@@ -809,9 +809,9 @@ test_log(void **state)
 	d_log_fini();
 }
 
-#define TEST_GURT_HASH_NUM_BITS (12)
+#define TEST_GURT_HASH_NUM_BITS (D_ON_VALGRIND ? 4 : 12)
 #define TEST_GURT_HASH_NUM_ENTRIES (1 << TEST_GURT_HASH_NUM_BITS)
-#define TEST_GURT_HASH_NUM_THREADS (16)
+#define TEST_GURT_HASH_NUM_THREADS (D_ON_VALGRIND ? 4 : 16)
 #define TEST_GURT_HASH_ENTRIES_PER_THREAD \
 	(TEST_GURT_HASH_NUM_ENTRIES / TEST_GURT_HASH_NUM_THREADS)
 #define TEST_GURT_HASH_KEY_LEN (65L)
@@ -2104,7 +2104,8 @@ hash_perf(int hash_type, unsigned int buckets, unsigned int loop)
 static void
 test_hash_perf(void **state)
 {
-	unsigned el = (16 << 10); /* elements per buckert */
+	unsigned shift = D_ON_VALGRIND ? 3 : 10;
+	unsigned el = (16 << shift); /* elements per buckert */
 	unsigned i;
 
 	/* hash buckets: 2, 4, 8... 8192 */
