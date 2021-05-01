@@ -1,0 +1,74 @@
+# Project Information
+site_name: DAOS v.1.2
+site_description: Distributed Asynchronous Object Storage
+site_author: DAOS Project
+site_url: http://daos.io
+site_dir: ../1.2_site
+
+# Repository
+repo_name: daos-stack/daos
+repo_url: https://github.com/daos-stack/daos
+edit_url: ""
+
+# Theme
+theme:
+    name: 'material'
+    font:
+        text: 'Ubuntu'
+        code: 'Ubuntu Mono'
+    language: en
+    palette:
+        primary: 'blue grey'
+        accent: 'blue'
+    feature:
+        tabs: true
+
+docs_dir: doc
+
+markdown_extensions:
+    - admonition
+    - footnotes
+    - toc:
+        permalink: true
+
+# Page tree
+nav:
+    - Home: 'index.md'
+    - Architecture Overview:
+        - 'Terminology': 'overview/terminology.md'
+        - 'Architecture': 'overview/architecture.md'
+        - 'Storage Model': 'overview/storage.md'
+        - 'Transaction Model': 'overview/transaction.md'
+        - 'Fault Model': 'overview/fault.md'
+        - 'Security Model': 'overview/security.md'
+    - Administration Guide:
+        - 'Hardware Requirements': 'admin/hardware.md'
+        - 'Software Installation': 'admin/installation.md'
+        - 'Pre-deployment Checklist': 'admin/predeployment_check.md'
+        - 'System Deployment': 'admin/deployment.md'
+        - 'System Administration': 'admin/administration.md'
+        - 'Pool Operations': 'admin/pool_operations.md'
+        - 'Tiering and Unified Namespace': 'admin/tiering_uns.md'
+        - 'Performance Tuning': 'admin/performance_tuning.md'
+        - 'Troubleshooting': 'admin/troubleshooting.md'
+        - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
+        - 'Environment Variables': 'admin/env_variables.md'
+    - User Guide:
+        - 'Container Management': 'user/container.md'
+        - 'Native Programming Interface': 'user/interface.md'
+        - 'POSIX Namespace': 'user/posix.md'
+        - 'MPI-IO Support': 'user/mpi-io.md'
+        - 'HDF5 Support': 'user/hdf5.md'
+        - 'Spark and Hadoop': 'user/spark.md'
+    - Releases:
+        - 'Release Notes v1.0': 'release/release_notes_v1_0.md'
+        - 'Support Matrix': 'release/support_matrix.md'
+    - Developer Zone:
+        - 'Dev Environment': 'dev/development.md'
+        - 'Contributing': 'dev/contributing.md'
+        - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
+        - 'DAOS API Documentation': 'html/index.html'
+    - Community Wiki: 'https://wiki.hpdd.intel.com'
+    - Roadmap: 'https://wiki.hpdd.intel.com/display/DC/Roadmap/'
+    - Mailing list: 'https://daos.groups.io/g/daos'
+    - Issue tracker: 'https://jira.hpdd.intel.com/projects/DAOS'
