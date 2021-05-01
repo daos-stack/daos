@@ -1263,6 +1263,8 @@ alloc_entry(struct ilog_entries *entries)
 	struct ilog_entry	*new_data;
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
 	struct ilog_entry	*item;
+	bool			 dealloc;
+	size_t			 old_count;
 	size_t			 new_count;
 
 	if (entries->ie_num_entries < NUM_EMBEDDED)
@@ -1272,18 +1274,24 @@ alloc_entry(struct ilog_entries *entries)
 		goto out;
 
 	if (priv->ip_alloc_size) {
-		new_count = priv->ip_alloc_size * 2;
-		D_REALLOC_ARRAY(new_data, entries->ie_entries,
-				priv->ip_alloc_size, new_count);
+		old_count = priv->ip_alloc_size;
+		dealloc = true;
 	} else {
-		new_count = NUM_EMBEDDED * 2;
-		D_ALLOC_ARRAY(new_data, new_count);
+		old_count = NUM_EMBEDDED;
+		dealloc = false;
 	}
+	new_count = old_count * 2;
 
+	D_ALLOC_ARRAY(new_data, new_count);
 	if (new_data == NULL) {
 		D_ERROR("No memory available for iterating ilog\n");
 		return NULL;
 	}
+
+	memcpy(new_data, entries->ie_entries,
+	       sizeof(*new_data) * old_count);
+	if (dealloc)
+		D_FREE(entries->ie_entries);
 
 	entries->ie_entries = new_data;
 	priv->ip_alloc_size = new_count;
