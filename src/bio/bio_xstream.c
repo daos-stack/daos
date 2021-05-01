@@ -1723,13 +1723,14 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
  * Execute the messages on msg ring, call all registered pollers.
  *
  * \param[IN] ctxt	Per-xstream NVMe context
+ * \param[IN] bypass	Set to bypass the health check
  *
  * \returns		0: If mo work was done
  *			1: If work was done
  *			-1: If thread has exited
  */
 int
-bio_nvme_poll(struct bio_xs_context *ctxt)
+bio_nvme_poll(struct bio_xs_context *ctxt, bool bypass)
 {
 	uint64_t now = d_timeus_secdiff(0);
 	int rc;
@@ -1754,7 +1755,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	 */
 	if (ctxt->bxc_blobstore != NULL &&
 	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
-		bio_bs_monitor(ctxt, now);
+		bio_bs_monitor(ctxt, now, bypass);
 
 	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);
