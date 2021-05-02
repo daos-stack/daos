@@ -152,7 +152,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			args[i]->rebuild_cb(args[i]);
 
 	sleep(10); /* make sure the rebuild happens after exclude/add/kill */
-	if (args[0]->myrank == 0)
+	if (args[0]->myrank == 0 && !args[0]->no_rebuild)
 		test_rebuild_wait(args, args_cnt);
 
 	MPI_Barrier(MPI_COMM_WORLD);
