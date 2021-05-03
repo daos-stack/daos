@@ -1604,8 +1604,8 @@ def install_debuginfos():
         elif "centos" in distro_info.name.lower():
             dnf_args.extend(["libpmemobj", "python36"])
             cmds.append(
-                ["sudo", "debuginfo-install", "--enablerepo=*-debuginfo", "-y"] +
-                dnf_args + ["daos-server", "gcc"])
+                ["sudo", "debuginfo-install", "--enablerepo=*-debuginfo",
+                 "-y"] + dnf_args + ["daos-server", "gcc"])
         else:
             raise RuntimeError(
                 "install_debuginfos(): Unsupported distro: {}".format(
