@@ -248,7 +248,8 @@ Server nodes require:
 
 After the certificates have been securely distributed, the DAOS configuration files must be
 updated in order to enable authentication and secure communications. These examples assume
-that the configuration and certificate files have been installed under `/etc/daos`:
+that the configuration files have been installed under `/etc/daos` and certificate files under
+`/etc/daos/certs` with root ownership and `755` permission for certs dir:
 
 ```yaml
 # /etc/daos/daos_server.yml (servers)
