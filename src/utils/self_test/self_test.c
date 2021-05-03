@@ -56,7 +56,7 @@ static const char * const crt_st_msg_type_str[] = { "EMPTY",
 /* Global shutdown flag, used to terminate the progress thread */
 static int g_shutdown_flag;
 static bool g_randomize_endpoints;
-static bool g_group_inited = false;
+static bool g_group_inited;
 
 static void *progress_fn(void *arg)
 {
