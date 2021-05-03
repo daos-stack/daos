@@ -644,7 +644,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		" rsize "DF_U64" ver %u kd_len "DF_U64" type %d sgl_idx %d/%zd"
 		"kds_len %d inline "DF_U64" epr "DF_U64"/"DF_U64"\n",
 		key_ent->ie_recx.rx_idx, key_ent->ie_recx.rx_nr,
-		key_ent->ie_rsize, rec->rec_version,
+		rec->rec_size, rec->rec_version,
 		arg->kds[arg->kds_len].kd_key_len, type, arg->sgl_idx,
 		iovs[arg->sgl_idx].iov_len, arg->kds_len,
 		rec->rec_flags & RECX_INLINE ? data_size : 0,

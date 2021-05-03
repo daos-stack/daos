@@ -316,9 +316,9 @@ populate_health_stats(struct bio_dev_health *bdh)
 	dev_state->crit_temp_time	= page->critical_temp_time;
 	d_tm_set_counter(bdh->bdh_temp_crit_time, page->critical_temp_time);
 	dev_state->temperature		= page->temperature;
-	(void)d_tm_set_gauge(&bdh->bdh_temp, page->temperature, NULL);
+	d_tm_set_gauge(bdh->bdh_temp, page->temperature);
 	dev_state->temp_warn		= cw.bits.temperature ? true : false;
-	(void)d_tm_set_gauge(&bdh->bdh_temp_warn, dev_state->temp_warn, NULL);
+	d_tm_set_gauge(bdh->bdh_temp_warn, dev_state->temp_warn);
 
 	/** reliability */
 	d_tm_set_counter(bdh->bdh_avail_spare, page->available_spare);
@@ -326,21 +326,19 @@ populate_health_stats(struct bio_dev_health *bdh)
 			 page->available_spare_threshold);
 	dev_state->avail_spare_warn	= cw.bits.available_spare ? true
 								  : false;
-	(void)d_tm_set_gauge(&bdh->bdh_avail_spare_warn,
-			     dev_state->avail_spare_warn, NULL);
+	d_tm_set_gauge(bdh->bdh_avail_spare_warn, dev_state->avail_spare_warn);
 	dev_state->dev_reliability_warn	= cw.bits.device_reliability ? true
 								     : false;
-	(void)d_tm_set_gauge(&bdh->bdh_reliability_warn,
-			     dev_state->dev_reliability_warn, NULL);
+	d_tm_set_gauge(bdh->bdh_reliability_warn,
+		       dev_state->dev_reliability_warn);
 
 	/** various critical warnings */
 	dev_state->read_only_warn	= cw.bits.read_only ? true : false;
-	(void)d_tm_set_gauge(&bdh->bdh_read_only_warn,
-			     dev_state->read_only_warn, NULL);
+	d_tm_set_gauge(bdh->bdh_read_only_warn, dev_state->read_only_warn);
 	dev_state->volatile_mem_warn	= cw.bits.volatile_memory_backup ? true
 									: false;
-	(void)d_tm_set_gauge(&bdh->bdh_volatile_mem_warn,
-			     dev_state->volatile_mem_warn, NULL);
+	d_tm_set_gauge(bdh->bdh_volatile_mem_warn,
+		       dev_state->volatile_mem_warn);
 
 	/** number of error log entries, internal use */
 	dev_state->err_log_entries = page->num_error_info_log_entries[0];
@@ -501,7 +499,7 @@ collect_raw_health_data(struct bio_xs_context *ctxt)
 }
 
 void
-bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
+bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now, bool bypass)
 {
 	struct bio_dev_health	*dev_health;
 	struct bio_blobstore	*bbs;
@@ -534,7 +532,8 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 		D_ERROR("State transition on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
 
-	collect_raw_health_data(ctxt);
+	if (!bypass)
+		collect_raw_health_data(ctxt);
 }
 
 /* Free all device health monitoring info */

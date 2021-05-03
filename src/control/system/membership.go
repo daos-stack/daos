@@ -121,9 +121,11 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 			}
 		}
 
+		if curMember.state == MemberStateExcluded {
+			return nil, errAdminExcluded(curMember.UUID, curMember.Rank)
+		}
 		if !curMember.Rank.Equals(req.Rank) {
 			return nil, errRankChanged(req.Rank, curMember.Rank, curMember.UUID)
-
 		}
 		if curMember.UUID != req.UUID {
 			return nil, errUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
