@@ -144,7 +144,6 @@ compress_files() {
 #   1: Failure detected with at least one command
 #######################################
 scp_files() {
-    set -x
     local rc=0
     copied=()
     # shellcheck disable=SC2045,SC2086
@@ -172,7 +171,6 @@ scp_files() {
     do
         echo "    ${file}"
     done
-    set +x
     return ${rc}
 }
 

@@ -137,7 +137,6 @@ args+=" $*"
 
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
-
 if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
     "FIRST_NODE=\"${nodes[0]}\"
      TEST_RPMS=\"$TEST_RPMS\"
