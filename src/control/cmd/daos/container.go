@@ -167,8 +167,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	if cmd.Properties.props != nil {
 		ap.props = cmd.Properties.props
-
-		cmd.log.Debugf("# props: %d", ap.props.dpp_nr)
 	}
 
 	switch cmd.Type {
@@ -578,8 +576,30 @@ func (cmd *containerGetPropertyCmd) Execute(args []string) error {
 
 type containerSetPropertyCmd struct {
 	existingContainerCmd
+
+	Properties SetPropertiesFlag `long:"properties" required:"1" description:"container properties"`
 }
 
 func (cmd *containerSetPropertyCmd) Execute(args []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	ap.props = cmd.Properties.props
+
+	rc := C.cont_set_prop_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Errorf("failed to set properties on container %s",
+			cmd.contUUID)
+	}
+
 	return nil
 }
