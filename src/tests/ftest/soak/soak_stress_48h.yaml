@@ -113,10 +113,11 @@ ior_stress:
     test_file: daos:testFile
     flags: -v -w -W -r -R -F -k
     block_size:
-        - '1G'
+        - '64M'
     repetitions: 5
     transfer_size:
         - '1m'
+        - '4k'
     dfs_oclass:
         - 'SX'
     dfs_dir_oclass:
@@ -148,14 +149,14 @@ fio_stress:
     oclass:
         - 'SX'
 daos_racer:
-    runtime: 7200
+    runtime: 120
     container:
         type: POSIX
         oclass: SX
         control_method: daos
 mdtest_stress:
     # maximum timeout for a single job in test in minutes
-    job_timeout: 20
+    job_timeout: 40
     nodesperjob:
         - 1
         - 4
@@ -167,7 +168,7 @@ mdtest_stress:
         - 'DFS'
         - 'POSIX'
     iteration: 1
-    num_of_files_dirs: 200000
+    num_of_files_dirs: 3000
     branching_factor: 1
     flags: '-L -F -N 1 -P -v'
     write_bytes:
@@ -175,10 +176,10 @@ mdtest_stress:
     read_bytes:
         - 3901
     depth: 
-        - 20
+        - 10
         - 0
     dfs_oclass:
-        - 'SX'
+        - 'S1'
     dfs_dir_oclass:
         - 'SX'
     dfs_destroy: False
