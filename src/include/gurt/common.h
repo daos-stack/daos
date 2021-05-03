@@ -172,15 +172,17 @@ void *d_realloc(void *, size_t);
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
 					"': %zu at %p (old '" #oldptr	\
-					"':%p).\n",			\
-					_esz, (newptr), (oldptr));	\
+					"': %zu at %p).\n",		\
+					_esz, (newptr), _oldsz,		\
+					(oldptr));			\
 			else						\
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
 					"': %zu * '" #cnt		\
 					"':%zu at %p (old '" #oldptr	\
-					"':%p).\n",			\
-					_esz, _cnt, (newptr), (oldptr));\
+					"': %zu at %p).\n",		\
+					_esz, _cnt, (newptr), _oldsz,	\
+					(oldptr));			\
 			(oldptr) = NULL;				\
 			if (_oldsz < _sz)				\
 				memset((char *)(newptr) + _oldsz, 0,	\
