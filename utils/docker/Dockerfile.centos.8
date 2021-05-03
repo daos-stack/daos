@@ -43,7 +43,7 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
       dnf -y upgrade epel-release;                              \
     else                                                        \
       dnf -y install epel-release dnf-plugins-core &&           \
-      dnf config-manager --assumeyes--set-enabled powertools;   \
+      dnf config-manager --assumeyes --set-enabled powertools;  \
     fi;                                                         \
     dnf clean all
 
