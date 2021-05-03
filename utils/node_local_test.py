@@ -377,6 +377,9 @@ class DaosServer():
     def __del__(self):
         if self.running:
             self.stop(None)
+        server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
+        if os.path.exists(server_file):
+            os.unlink(server_file)
         os.rmdir(self.agent_dir)
 
     def _add_test_case(self, op, failure=None):
@@ -1477,6 +1480,27 @@ class posix_tests():
         assert uns_stat.st_ino == direct_stat.st_ino
         if dfuse.stop():
             self.fatal_errors = True
+
+    def test_cont_copy(self):
+        """Verify that copying into a container works"""
+
+        # Create a temporary directory, with one file into it and copy it into
+        # the container.  Check the returncode only, do not verify the data.
+        # tempfile() will remove the directory on completion.
+        src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
+        ofd = open(os.path.join(src_dir.name, 'file'), 'w')
+        ofd.write('hello')
+        ofd.close()
+
+        cmd = ['filesystem',
+               'copy',
+               '--src',
+               src_dir.name,
+               '--dst',
+               'daos://{}/{}'.format(self.pool, self.container)]
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests

@@ -385,7 +385,7 @@ void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 /* bio_monitor.c */
 int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
-void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now);
+void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now, bool bypass);
 void bio_media_error(void *msg_arg);
 
 /* bio_context.c */
