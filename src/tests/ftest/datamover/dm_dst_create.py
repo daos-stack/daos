@@ -173,10 +173,6 @@ class DmDstCreate(DataMoverTestBase):
                 Required when check_attr_prop is True.
 
         """
-        # Disable attribute and property checking until the relevant
-        # mpifileutils commit is in CI
-        check_attr_prop = False
-
         # It's important to check the properties first, since when ior
         # mounts DFS the alloc'ed OID might be incremented.
         if check_attr_prop:
