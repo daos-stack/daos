@@ -150,6 +150,13 @@ static struct crt_corpc_ops crt_iv_sync_co_ops = {
 
 CRT_GEN_PROC_FUNC(crt_grp_cache, CRT_SEQ_GRP_CACHE);
 
+static int
+crt_proc_struct_crt_grp_cache(crt_proc_t proc, crt_proc_op_t proc_op,
+			      struct crt_grp_cache *data)
+{
+	return crt_proc_crt_grp_cache(proc, data);
+}
+
 /* !! All of the following 4 RPC definition should have the same input fields !!
  * All of them are verified in one function:
  * int verify_ctl_in_args(struct crt_ctl_ep_ls_in *in_args)

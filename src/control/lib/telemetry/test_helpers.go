@@ -24,18 +24,6 @@ import (
 // variadic functions.
 
 static int
-set_gauge(struct d_tm_node_t **metric, uint64_t value, char *item)
-{
-	return d_tm_set_gauge(metric, value, item);
-}
-
-static int
-incr_counter(struct d_tm_node_t **metric, char *item)
-{
-	return d_tm_increment_counter(metric, 1, item);
-}
-
-static int
 add_metric(struct d_tm_node_t **node, int metric_type, char *sh_desc,
            char *lng_desc, const char *str)
 {
@@ -102,20 +90,14 @@ func setupTestMetrics(t *testing.T) (context.Context, testMetricsMap) {
 				t.Fatalf("failed to add %s: %d", tm.name, rc)
 			}
 			for _, val := range []float64{tm.min, tm.max, tm.cur} {
-				rc = C.set_gauge(&tm.node, C.uint64_t(val), nil)
-				if rc != 0 {
-					t.Fatalf("failed to set %s: %d", tm.name, rc)
-				}
+				C.d_tm_set_gauge(tm.node, C.uint64_t(val))
 			}
 		case MetricTypeCounter:
 			rc = C.add_metric(&tm.node, C.D_TM_COUNTER, C.CString(tm.desc), C.CString(tm.units), C.CString(tm.name))
 			if rc != 0 {
 				t.Fatalf("failed to add %s: %d", tm.name, rc)
 			}
-			rc = C.incr_counter(&tm.node, nil)
-			if rc != 0 {
-				t.Fatalf("failed to set %s: %d", tm.name, rc)
-			}
+			C.d_tm_inc_counter(tm.node, 1)
 		default:
 			t.Fatalf("metric type %d not supported", mt)
 		}
@@ -124,6 +106,7 @@ func setupTestMetrics(t *testing.T) (context.Context, testMetricsMap) {
 	return ctx, testMetrics
 }
 
-func cleanupTestMetrics(t *testing.T) {
+func cleanupTestMetrics(ctx context.Context, t *testing.T) {
+	Detach(ctx)
 	C.d_tm_fini()
 }

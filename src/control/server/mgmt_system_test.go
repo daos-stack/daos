@@ -241,7 +241,7 @@ func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
 }
 
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
-	eventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
+	eventEngineDied := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit)
 
 	for name, tc := range map[string]struct {
 		nilReq        bool
@@ -256,12 +256,12 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expErr: errors.New("nil request"),
 		},
 		"successful notification": {
-			event: eventRankDown,
+			event: eventEngineDied,
 			expResp: &sharedpb.ClusterEventResp{
 				Sequence: 1,
 			},
 			expDispatched: []*events.RASEvent{
-				eventRankDown.WithForwarded(true),
+				eventEngineDied.WithForwarded(true),
 			},
 		},
 	} {
