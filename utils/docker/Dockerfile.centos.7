@@ -17,9 +17,9 @@ ARG CB0
 # The Docker image starts out with the DISTRO provided GPG keys
 # on the disk, but not installed.  These must be isntalled before
 # adding any repo that needs GPG keys but does not provide meta
-# data for installing those keys.  Then the epel-release
-# package must be installed and the GPG key it provides must be
-# installed.
+# data for installing those keys.  Then the epel-release package
+# version from the extras repository must be installed and the
+# GPG key it provides must be installed.
 ARG REPO_URL=""
 ARG REPO_DISTRO=""
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
@@ -34,7 +34,7 @@ enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
       yum -y install --disablerepo=extras                       \
-             dnf dnf-plugins-core epel-release-7-11;             \
+             dnf dnf-plugins-core epel-release-7-11;            \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7;         \
       yum clean all;                                            \
       dnf clean all;                                            \
@@ -42,6 +42,9 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
                          --disable base extras epel updates;    \
       sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
           -i /etc/yum.conf;                                     \
+    else                                                        \
+      yum -y install dnf dnf-plugins-core epel-release-7-11;    \
+      yum clean all;                                            \
     fi
 
 # If a local DAOS repository is supplied, then we should use it
@@ -67,9 +70,7 @@ gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
-RUN yum -y install dnf epel-release && \
-    yum clean all && \
-    dnf -y upgrade && \
+RUN dnf -y upgrade && \
     dnf -y install \
         boost-python36-devel \
         clang-analyzer \
