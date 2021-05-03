@@ -431,6 +431,8 @@ class CartTest(TestWithoutServers):
                 self.stop_process(srv2)
             self.fail("Failed, return codes {}".format(rtn))
 
+        self.log_check_valgrind_memcheck()
+
         return rtn
 
     def launch_cmd_bg(self, cmd):
@@ -443,6 +445,8 @@ class CartTest(TestWithoutServers):
         if rtn is None:
             self.fail("Failed to start command\n")
             return -1
+
+        self.log_check_valgrind_memcheck()
 
         return rtn
 
