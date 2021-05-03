@@ -47,6 +47,9 @@ extern int		 dss_nvme_mem_size;
 /** I/O Engine instance index */
 extern unsigned int	 dss_instance_idx;
 
+/** Bypass for the nvme health check */
+extern bool		 dss_nvme_bypass_health_check;
+
 /**
  * Stackable Module API
  * Provides a modular interface to load and register server-side code on
