@@ -55,8 +55,8 @@ static const char * const crt_st_msg_type_str[] = { "EMPTY",
 
 /* Global shutdown flag, used to terminate the progress thread */
 static int g_shutdown_flag;
-
 static bool g_randomize_endpoints;
+static bool g_group_inited = false;
 
 static void *progress_fn(void *arg)
 {
@@ -124,6 +124,9 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		D_ERROR("crt_group_attach failed; ret = %d\n", ret);
 		return ret;
 	}
+
+	g_group_inited = true;
+
 	D_ASSERTF(*srv_grp != NULL,
 		  "crt_group_attach succeeded but returned group is NULL\n");
 
@@ -1005,7 +1008,7 @@ cleanup_nothread:
 		D_FREE(latencies);
 	}
 
-	if (srv_grp != NULL) {
+	if (srv_grp != NULL && g_group_inited) {
 		cleanup_ret = crt_group_detach(srv_grp);
 		if (cleanup_ret != 0)
 			D_ERROR("crt_group_detach failed; ret = %d\n",
