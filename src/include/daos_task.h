@@ -173,12 +173,14 @@ typedef struct {
 
 /** pool connect args */
 typedef struct {
-	/** UUID of the pool. */
-	uuid_t			uuid;
+	/** Label of the pool. May be NULL if connecting by UUID */
+	const char		*label;
+	/** UUID of the pool. May be the NULL UUID if connecting  by label */
+	uuid_t			 uuid;
 	/** Process set name of the DAOS servers managing the pool. */
 	const char		*grp;
 	/** Connect mode represented by the DAOS_PC_ bits. */
-	unsigned int		flags;
+	unsigned int		 flags;
 	/** Returned open handle. */
 	daos_handle_t		*poh;
 	/** Optional, returned pool information. */

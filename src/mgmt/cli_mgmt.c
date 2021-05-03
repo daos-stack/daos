@@ -828,6 +828,96 @@ decref:
 	return rc;
 }
 
+/* For a given pool label, contact mgmt. service to find the pool's UUID
+ * and pool service replica ranks. Note: synchronous RPC with caller already
+ * in a task execution context. On successful return, caller is responsible
+ * for freeing the d_rank_list_t allocated here. Must not be called by server.
+ */
+int
+dc_mgmt_pool_find_bylabel(struct dc_mgmt_sys *sys, const char *label,
+			  uuid_t puuid, d_rank_list_t **svcranksp)
+{
+	d_rank_list_t			       *ms_ranks;
+	crt_endpoint_t				srv_ep;
+	crt_rpc_t			       *rpc = NULL;
+	struct mgmt_pool_find_bylabel_in       *rpc_in;
+	struct mgmt_pool_find_bylabel_out      *rpc_out;
+	crt_opcode_t				opc;
+	int					i;
+	int					idx;
+	crt_context_t				ctx;
+	bool					success = false;
+	int					rc = 0;
+
+	D_ASSERT(sys->sy_server == 0);
+
+	/* NB: ms_ranks may have multiple entries even for single MS replica. */
+	ms_ranks = sys->sy_info.ms_ranks;
+	D_ASSERT(ms_ranks->rl_nr > 0);
+	idx = rand() % ms_ranks->rl_nr;
+	ctx = daos_get_crt_ctx();
+	opc = DAOS_RPC_OPCODE(MGMT_POOL_FIND_BYLABEL, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+	srv_ep.ep_grp = sys->sy_group;
+	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	for (i = 0 ; i < ms_ranks->rl_nr; i++) {
+		srv_ep.ep_rank = ms_ranks->rl_ranks[idx];
+		rpc = NULL;
+		rc = crt_req_create(ctx, &srv_ep, opc, &rpc);
+		if (rc != 0) {
+			D_ERROR("%s: crt_req_create() failed, "DF_RC"\n",
+				label, DP_RC(rc));
+			idx = (idx + 1) % ms_ranks->rl_nr;
+			continue;
+		}
+
+		rpc_in = NULL;
+		rpc_in = crt_req_get(rpc);
+		D_ASSERT(rpc_in != NULL);
+		rpc_in->fbli_label = label;
+
+		D_DEBUG(DB_MGMT, "%s: ask rank %u for pool UUID and replicas\n",
+			label, srv_ep.ep_rank);
+		crt_req_addref(rpc);
+		rc = daos_rpc_send_wait(rpc);
+		if (rc != 0) {
+			D_DEBUG(DB_MGMT, "%s: daos_rpc_send_wait() failed, "
+				DF_RC "\n", label, DP_RC(rc));
+			crt_req_decref(rpc);
+			idx = (idx + 1) % ms_ranks->rl_nr;
+			continue;
+		}
+		success = true;
+		break;
+	}
+
+	if (!success) {
+		D_ERROR("%s: failed to get PS replicas list from %d servers, "
+			DF_RC "\n", label, ms_ranks->rl_nr, DP_RC(rc));
+		return rc;
+	}
+
+	rpc_out = crt_reply_get(rpc);
+	D_ASSERT(rpc_out != NULL);
+	rc = rpc_out->fblo_rc;
+	if (rc != 0) {
+		D_ERROR("%s: MGMT_POOL_FIND_BYLABEL rpc failed to all %d "
+			"ranks, "DF_RC"\n", label, ms_ranks->rl_nr, DP_RC(rc));
+		goto decref;
+	}
+
+	D_DEBUG(DB_MGMT, "%s: rank %u returned pool "DF_UUID"\n", label,
+		srv_ep.ep_rank, DP_UUID(rpc_out->fblo_puuid));
+	uuid_copy(puuid, rpc_out->fblo_puuid);
+	rc = d_rank_list_dup(svcranksp, rpc_out->fblo_ranks);
+	if (rc != 0)
+		D_ERROR("%s: d_rank_list_dup() failed, " DF_RC "\n", label,
+			DP_RC(rc));
+
+decref:
+	crt_req_decref(rpc);
+	return rc;
+}
 /**
  * Initialize management interface
  */

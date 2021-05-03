@@ -167,7 +167,7 @@ failed:
 	return NULL;
 }
 
-/* Choose a pool service replica rank. If the rsvc module indicates
+/* Choose a pool service replica rank by UUID. If the rsvc module indicates
  * DER_NOTREPLICA, (clients only) try to refresh the list by querying the MS.
  */
 int
@@ -206,6 +206,57 @@ choose:
 		if (rc == 0) {
 			for (i = 0; i < cli->sc_ranks->rl_nr; i++) {
 				D_DEBUG(DF_DSMC, DF_UUID ": sc_ranks[%d]=%u\n",
+					DP_UUID(puuid), i,
+					cli->sc_ranks->rl_ranks[i]);
+			}
+			goto choose;
+		}
+	}
+	if (cli_lock)
+		D_MUTEX_UNLOCK(cli_lock);
+	return rc;
+}
+
+/* Choose a pool service replica rank by label. If the rsvc module indicates
+ * DER_NOTREPLICA, (clients only) try to refresh the list by querying the MS.
+ */
+int
+dc_pool_choose_svc_rank_bylabel(const char *label, uuid_t puuid,
+				struct rsvc_client *cli,
+				pthread_mutex_t *cli_lock,
+				struct dc_mgmt_sys *sys, crt_endpoint_t *ep)
+{
+	int			rc;
+	int			i;
+
+	if (cli_lock)
+		D_MUTEX_LOCK(cli_lock);
+choose:
+	rc = rsvc_client_choose(cli, ep);
+	if ((rc == -DER_NOTREPLICA) && !sys->sy_server) {
+		d_rank_list_t	*ranklist = NULL;
+
+		/* Query MS for replica ranks. Not under client lock. */
+		if (cli_lock)
+			D_MUTEX_UNLOCK(cli_lock);
+		rc = dc_mgmt_pool_find_bylabel(sys, label, puuid, &ranklist);
+		if (rc) {
+			D_ERROR("%s: dc_mgmt_pool_find_bylabel() failed, "
+				DF_RC"\n", label, DP_RC(rc));
+			return rc;
+		}
+		if (cli_lock)
+			D_MUTEX_LOCK(cli_lock);
+
+		/* Reinitialize rsvc client with new rank list, rechoose. */
+		rsvc_client_fini(cli);
+		rc = rsvc_client_init(cli, ranklist);
+		d_rank_list_free(ranklist);
+		ranklist = NULL;
+		if (rc == 0) {
+			for (i = 0; i < cli->sc_ranks->rl_nr; i++) {
+				D_DEBUG(DF_DSMC, "%s: "DF_UUID": "
+					"sc_ranks[%d]=%u\n", label,
 					DP_UUID(puuid), i,
 					cli->sc_ranks->rl_ranks[i]);
 			}
@@ -469,15 +520,17 @@ dc_pool_connect(tse_task_t *task)
 	pool = dc_task_get_priv(task);
 
 	if (pool == NULL) {
-		if (!daos_uuid_valid(args->uuid) ||
-		    !flags_are_valid(args->flags) || args->poh == NULL)
+		if (!args->label && !daos_uuid_valid(args->uuid))
+			D_GOTO(out_task, rc = -DER_INVAL);
+		if (!flags_are_valid(args->flags) || args->poh == NULL)
 			D_GOTO(out_task, rc = -DER_INVAL);
 
 		/** allocate and fill in pool connection */
 		pool = dc_pool_alloc(DC_POOL_DEFAULT_COMPONENTS_NR);
 		if (pool == NULL)
 			D_GOTO(out_task, rc = -DER_NOMEM);
-		uuid_copy(pool->dp_pool, args->uuid);
+		if (args->label == NULL)
+			uuid_copy(pool->dp_pool, args->uuid);
 		uuid_generate(pool->dp_pool_hdl);
 		pool->dp_capas = args->flags;
 
@@ -505,10 +558,20 @@ dc_pool_connect(tse_task_t *task)
 
 	/** Choose an endpoint and create an RPC. */
 	ep.ep_grp = pool->dp_sys->sy_group;
-	rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
-				     &pool->dp_client_lock, pool->dp_sys, &ep);
+	if (args->label) {
+		rc = dc_pool_choose_svc_rank_bylabel(args->label,
+						     pool->dp_pool,
+						     &pool->dp_client,
+						     &pool->dp_client_lock,
+						     pool->dp_sys, &ep);
+	} else {
+		rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+					     &pool->dp_client_lock,
+					     pool->dp_sys, &ep);
+	}
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+		D_ERROR("%s: "DF_UUID": cannot find pool service: "DF_RC"\n",
+			args->label ? args->label : "",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
 		goto out_pool;
 	}
@@ -531,7 +594,7 @@ dc_pool_connect(tse_task_t *task)
 		D_GOTO(out_req, rc);
 	}
 
-	uuid_copy(pci->pci_op.pi_uuid, args->uuid);
+	uuid_copy(pci->pci_op.pi_uuid, pool->dp_pool);
 	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
 	pci->pci_flags = args->flags;
 	pci->pci_query_bits = pool_query_bits(args->info, NULL);

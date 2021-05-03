@@ -74,6 +74,7 @@ struct cmd_args_s {
 	daos_handle_t		pool;
 	uuid_t			c_uuid;		/* --cont */
 	daos_handle_t		cont;
+	char			*label;
 	int			force;		/* --force */
 	char			*attrname_str;	/* --attr attribute name */
 	char			*value_str;	/* --value attribute value */
@@ -105,12 +106,17 @@ struct cmd_args_s {
 	char			*principal;	/* --principal for ACL */
 };
 
-#define ARGS_VERIFY_PUUID(ap, label, rcexpr)			\
+/* Pool identified by either UUID or label */
+#define ARGS_VERIFY_POOL(ap, gotolabel, rcexpr)			\
 	do {							\
-		if (uuid_is_null((ap)->p_uuid)) {		\
-			fprintf(stderr, "pool UUID required\n");\
-			D_GOTO(label, (rcexpr));		\
-		}						\
+		if ((uuid_is_null((ap)->p_uuid)) && (((ap)->label) == NULL)) { \
+			fprintf(stderr, "pool UUID or label required\n");      \
+			D_GOTO(gotolabel, (rcexpr));			       \
+		}							       \
+		if ((!uuid_is_null((ap)->p_uuid)) && ((ap)->label)) {	       \
+			fprintf(stderr, "specify one: pool UUID or label\n");  \
+			D_GOTO(gotolabel, (rcexpr));			       \
+		}							       \
 	} while (0)
 
 #define ARGS_VERIFY_CUUID(ap, label, rcexpr)				\
