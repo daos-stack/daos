@@ -311,8 +311,6 @@ class DaosServerYamlParameters(YamlParameters):
             #       Add to enable scalable endpoint:
             #           - CRT_CTX_SHARE_ADDR=1
             #           - CRT_CTX_NUM=8
-            #       nvme options:
-            #           - IO_STAT_PERIOD=10
             self.targets = BasicParameter(None, 8)
             self.first_core = BasicParameter(None, 0)
             self.nr_xs_helpers = BasicParameter(None, 16)

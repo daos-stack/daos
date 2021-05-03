@@ -41,8 +41,6 @@ engines:
   - PSM2_MULTI_EP=1
   - CRT_CTX_SHARE_ADDR=1
   - FI_PSM2_DISCONNECT=1
-  # nvme options
-  # - IO_STAT_PERIOD=10
 
   # Storage definitions
   scm_mount: /mnt/daos0
@@ -99,8 +97,6 @@ engines:
   - PSM2_MULTI_EP=1
   - CRT_CTX_SHARE_ADDR=1
   - FI_PSM2_DISCONNECT=1
-  # nvme options
-  # - IO_STAT_PERIOD=10
 
   scm_mount: /mnt/daos1
   scm_class: dcpm

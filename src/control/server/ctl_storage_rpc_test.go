@@ -44,10 +44,15 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 	ctrlr := storage.MockNvmeController()
 	ctrlr.SmdDevices = nil
 	ctrlrPB := proto.MockNvmeController()
-	ctrlrPB.Healthstats = nil
-	ctrlrPB.Smddevices = nil
+	ctrlrPB.HealthStats = nil
+	ctrlrPB.SmdDevices = nil
 	ctrlrPBwHealth := proto.MockNvmeController()
-	ctrlrPBwHealth.Smddevices = nil
+	ctrlrPBwHealth.SmdDevices = nil
+	ctrlrPBBasic := proto.MockNvmeController()
+	ctrlrPBBasic.HealthStats = nil
+	ctrlrPBBasic.SmdDevices = nil
+	ctrlrPBBasic.FwRev = ""
+	ctrlrPBBasic.Model = ""
 
 	for name, tc := range map[string]struct {
 		multiIO     bool
@@ -232,6 +237,28 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 		},
+		"scan bdev with nvme basic set": {
+			req: &ctlpb.StorageScanReq{
+				Scm: &ctlpb.ScanScmReq{},
+				Nvme: &ctlpb.ScanNvmeReq{
+					Basic: true,
+				},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &bdev.ScanResponse{
+					Controllers: storage.NvmeControllers{ctrlr},
+				},
+			},
+			expResp: ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{ctrlrPBBasic},
+					State:  new(ctlpb.ResponseState),
+				},
+				Scm: &ctlpb.ScanScmResp{
+					State: new(ctlpb.ResponseState),
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -321,11 +348,11 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		}
 		ctrlr.Model = fmt.Sprintf("model-%d", sIdx)
 		ctrlr.Serial = common.MockUUID(sIdx)
-		ctrlr.Healthstats = proto.MockNvmeHealth(idx + 1)
-		ctrlr.Smddevices = nil
+		ctrlr.HealthStats = proto.MockNvmeHealth(idx + 1)
+		ctrlr.SmdDevices = nil
 
 		bioHealthResp := new(ctlpb.BioHealthResp)
-		if err := convert.Types(ctrlr.Healthstats, bioHealthResp); err != nil {
+		if err := convert.Types(ctrlr.HealthStats, bioHealthResp); err != nil {
 			t.Fatal(err)
 		}
 		bioHealthResp.TotalBytes = uint64(idx) * uint64(humanize.TByte)
@@ -347,19 +374,19 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 	newCtrlrMeta := func(ctrlrIdx int32, smdIndexes ...int32) (*ctlpb.NvmeController, *ctlpb.SmdDevResp) {
 		ctrlr := proto.MockNvmeController(ctrlrIdx)
 		ctrlr.Serial = common.MockUUID(ctrlrIdx)
-		ctrlr.Healthstats = nil
+		ctrlr.HealthStats = nil
 
 		if len(smdIndexes) == 0 {
 			smdIndexes = append(smdIndexes, ctrlrIdx)
 		}
 		smdDevRespDevices := make([]*ctlpb.SmdDevResp_Device, len(smdIndexes))
-		ctrlr.Smddevices = make([]*ctlpb.NvmeController_SmdDevice, len(smdIndexes))
+		ctrlr.SmdDevices = make([]*ctlpb.NvmeController_SmdDevice, len(smdIndexes))
 		ctrlr.Namespaces = make([]*ctlpb.NvmeController_Namespace, len(smdIndexes))
 		for i, idx := range smdIndexes {
-			sd := proto.MockSmdDevice(ctrlr.Pciaddr, idx+1)
+			sd := proto.MockSmdDevice(ctrlr.PciAddr, idx+1)
 			sd.Rank = uint32(ctrlrIdx)
-			sd.TrAddr = ctrlr.Pciaddr
-			ctrlr.Smddevices[i] = sd
+			sd.TrAddr = ctrlr.PciAddr
+			ctrlr.SmdDevices[i] = sd
 
 			smdPB := new(ctlpb.SmdDevResp_Device)
 			if err := convert.Types(sd, smdPB); err != nil {
@@ -368,8 +395,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			smdDevRespDevices[i] = smdPB
 
 			// expect resultant controller to have updated utilization values
-			ctrlr.Smddevices[i].TotalBytes = uint64(idx) * uint64(humanize.TByte)
-			ctrlr.Smddevices[i].AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
+			ctrlr.SmdDevices[i].TotalBytes = uint64(idx) * uint64(humanize.TByte)
+			ctrlr.SmdDevices[i].AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
 			ctrlr.Namespaces[i] = proto.MockNvmeNamespace(int32(i + 1))
 		}
 
@@ -1008,7 +1035,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						Pciaddr: mockNvmeController0.PciAddr,
+						PciAddr: mockNvmeController0.PciAddr,
 						State:   new(ctlpb.ResponseState),
 					},
 				},
@@ -1041,7 +1068,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						Pciaddr: "/tmp/daos-bdev",
+						PciAddr: "/tmp/daos-bdev",
 						State:   new(ctlpb.ResponseState),
 					},
 				},
@@ -1074,7 +1101,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						Pciaddr: mockNvmeController0.PciAddr,
+						PciAddr: mockNvmeController0.PciAddr,
 						State:   new(ctlpb.ResponseState),
 					},
 				},
@@ -1105,7 +1132,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						Pciaddr: "<nil>",
+						PciAddr: "<nil>",
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1141,7 +1168,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						Pciaddr: "<nil>",
+						PciAddr: "<nil>",
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1183,7 +1210,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						Pciaddr: mockNvmeController0.PciAddr,
+						PciAddr: mockNvmeController0.PciAddr,
 						State:   new(ctlpb.ResponseState),
 					},
 				},
@@ -1210,7 +1237,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						Pciaddr: "<nil>",
+						PciAddr: "<nil>",
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1252,7 +1279,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						Pciaddr: mockNvmeController0.PciAddr,
+						PciAddr: mockNvmeController0.PciAddr,
 						State:   new(ctlpb.ResponseState),
 					},
 				},
@@ -1314,14 +1341,14 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						Pciaddr: mockNvmeController0.PciAddr,
+						PciAddr: mockNvmeController0.PciAddr,
 						State:   new(ctlpb.ResponseState),
 					},
 					{
 						// this should be id 1 but mock
 						// backend spits same output for
 						// both I/O Engine instances
-						Pciaddr: mockNvmeController0.PciAddr,
+						PciAddr: mockNvmeController0.PciAddr,
 						State:   new(ctlpb.ResponseState),
 					},
 				},
