@@ -295,10 +295,10 @@ bio_alloc_init(struct utest_context *utx, bio_addr_t *addr, const void *src,
 
 	addr->ba_type = DAOS_MEDIA_SCM;
 	if (src == NULL) {
-		addr->ba_hole = 1;
+		BIO_ADDR_SET_HOLE(addr);
 		return 0;
 	} else {
-		addr->ba_hole = 0;
+		BIO_ADDR_SET_NOT_HOLE(addr);
 	}
 	rc = utest_alloc(utx, &umoff, size, init_mem, src);
 

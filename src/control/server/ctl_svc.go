@@ -7,6 +7,7 @@
 package server
 
 import (
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -17,6 +18,7 @@ import (
 // ControlService implements the control plane control service, satisfying
 // ctlpb.CtlSvcServer, and is the data container for the service.
 type ControlService struct {
+	ctlpb.UnimplementedCtlSvcServer
 	StorageControlService
 	harness *EngineHarness
 	srvCfg  *config.Server

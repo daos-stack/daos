@@ -251,7 +251,7 @@ rebuild_status_completed_lookup(const uuid_t pool_uuid)
 	return rs;
 }
 
-int
+static int
 rebuild_status_completed_update(const uuid_t pool_uuid,
 				struct daos_rebuild_status *rs)
 {
@@ -498,12 +498,17 @@ static void
 rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 			    struct rebuild_global_pool_tracker *rgt)
 {
-	double		last_print = 0;
-	unsigned int	total;
-	int		rc;
+	double			last_print = 0;
+	unsigned int		total;
 	struct sched_req_attr	attr = { 0 };
+	d_rank_t		myrank;
+	int			rc;
 
 	rc = crt_group_size(pool->sp_group, &total);
+	if (rc)
+		return;
+
+	rc = crt_group_rank(pool->sp_group, &myrank);
 	if (rc)
 		return;
 
@@ -550,7 +555,14 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 			D_FREE(targets);
 		}
 
+		if (myrank != pool->sp_iv_ns->iv_master_rank &&
+		    pool->sp_iv_ns->iv_master_rank != -1)
+			D_DEBUG(DB_REBUILD, DF_UUID" leader is being changed"
+				" %u->%u.\n", DP_UUID(pool->sp_uuid), myrank,
+				pool->sp_iv_ns->iv_master_rank);
+
 		if (!rgt->rgt_abort &&
+		    myrank == pool->sp_iv_ns->iv_master_rank &&
 		    ((!is_rebuild_global_pull_done(rgt) &&
 		      is_rebuild_global_scan_done(rgt)) ||
 		      !rgt->rgt_notify_stable_epoch)) {
@@ -823,7 +835,6 @@ rebuild_scan_broadcast(struct ds_pool *pool,
 	crt_rpc_t		*rpc;
 	int			rc;
 
-retry:
 	/* Send rebuild RPC to all targets of the pool to initialize rebuild.
 	 * XXX this should be idempotent as well as query and fini.
 	 */
@@ -852,12 +863,6 @@ retry:
 	rso = crt_reply_get(rpc);
 	if (rc == 0)
 		rc = rso->rso_status;
-	if (rc == -DER_BUSY) {
-		crt_req_decref(rpc);
-		D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" scan retry\n",
-			DP_UUID(pool->sp_uuid));
-		goto retry;
-	}
 
 	rgt->rgt_init_scan = 1;
 	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
@@ -1264,6 +1269,21 @@ iv_stop:
 	 * rebuild.
 	 */
 	if (rgt->rgt_init_scan) {
+		d_rank_t	myrank;
+		int		ret;
+
+		ret = crt_group_rank(pool->sp_group, &myrank);
+		D_ASSERT(ret == 0);
+		if (myrank != pool->sp_iv_ns->iv_master_rank) {
+			/* If master has been changed, then let's skip
+			 * iv sync, and the new leader will take over
+			 * the rebuild process anyway.
+			 */
+			D_DEBUG(DB_REBUILD, "rank %u != master %u\n",
+				myrank, pool->sp_iv_ns->iv_master_rank);
+			D_GOTO(try_reschedule, rc);
+		}
+
 		uuid_copy(iv.riv_pool_uuid, task->dst_pool_uuid);
 		iv.riv_master_rank	= pool->sp_iv_ns->iv_master_rank;
 		iv.riv_ver		= rgt->rgt_rebuild_ver;
@@ -1294,7 +1314,8 @@ try_reschedule:
 		 * rebuild sequence, which has to be done by failure
 		 * sequence order.
 		 */
-		rgt->rgt_status.rs_done = 0;
+		if (rgt)
+			rgt->rgt_status.rs_done = 0;
 		ret = ds_rebuild_schedule(pool, task->dst_map_ver,
 					  &task->dst_tgts,
 					  task->dst_rebuild_op, 5);

@@ -39,7 +39,6 @@ class GlobalHandle(TestWithServers):
         pool = DaosPool(self.context)
         pool.set_uuid_str(uuidstr)
         pool.set_svc(rank)
-        pool.group = "daos_server"
 
         # note that the handle is stored inside the pool as well
         dummy_local_handle = pool.global2local(self.context, iov_len,

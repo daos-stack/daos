@@ -47,9 +47,9 @@ is_nvme_enabled(test_arg_t *arg)
 	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;
 }
 
-/* Online faulty reaction */
+/* Online/Offline faulty reaction */
 static void
-nvme_recov_1(void **state)
+nvme_fault_reaction(void **state, int mode)
 {
 	test_arg_t		*arg = *state;
 	daos_obj_id_t		 oid;
@@ -66,10 +66,48 @@ nvme_recov_1(void **state)
 	int			 n_tgtidx = 0;
 	int			 per_node_tgt_cnt = 0;
 	int			 i, j, k, rc;
+	int			 faulty_disk_idx = 0;
+	uuid_t			 offline_pool_uuid;
 
 	if (!is_nvme_enabled(arg)) {
 		print_message("NVMe isn't enabled.\n");
 		skip();
+	}
+
+	/**
+	* If test need multiple pool with both mode offline and online
+	* create the another pool which will be offline by default.
+	*/
+	if (mode == 2) {
+		char	*env;
+		int	size_gb;
+		daos_size_t	scm_size = (daos_size_t)4 << 30/*Default 4G*/;
+		daos_size_t	nvme_size;
+
+		/* Use the SCM size if set with environment */
+		env = getenv("POOL_SCM_SIZE");
+		if (env) {
+			size_gb = atoi(env);
+			if (size_gb != 0)
+				scm_size = (daos_size_t)size_gb << 30;
+		}
+
+		/* NVMe size is 4x of SCM size */
+		nvme_size = scm_size * 4;
+		print_message("Creating another offline pool mode, ");
+		print_message("Size: SCM = %" PRId64 " NVMe =%" PRId64 "\n",
+			      scm_size, nvme_size);
+
+		/* create another offline pool*/
+		print_message("create another offline pool");
+		rc = dmg_pool_create(dmg_config_file,
+				     geteuid(), getegid(),
+				     arg->group, NULL /* tgts */,
+				     scm_size, nvme_size,
+				     NULL /* prop */,
+				     arg->pool.svc /* svc */,
+				     offline_pool_uuid);
+		assert_rc_equal(rc, 0);
 	}
 
 	/**
@@ -87,6 +125,9 @@ nvme_recov_1(void **state)
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank != rank)
 			continue;
+		else
+			faulty_disk_idx = i;
+
 		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s tgts=",
 			      devices[i].rank, DP_UUID(devices[i].device_id),
 			      devices[i].state, devices[i].host);
@@ -134,6 +175,14 @@ nvme_recov_1(void **state)
 	}
 	print_message("All targets are in UPIN\n");
 
+	if (mode == 0) {
+		print_message("Disconnect the pool for offline failure\n");
+		rc = daos_cont_close(arg->coh, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_pool_disconnect(arg->pool.poh, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
 	/** Inject error on random target index */
 	srand(time(NULL));
 	fail_loc_tgt = rand() % per_node_tgt_cnt;
@@ -141,6 +190,28 @@ nvme_recov_1(void **state)
 		      " faulty.\n", fail_loc_tgt);
 	set_fail_loc(arg, rank, fail_loc_tgt,
 		     DAOS_NVME_FAULTY | DAOS_FAIL_ALWAYS);
+
+	if (mode == 0) {
+		/**
+		*  Continue to check blobstore until state is "OUT"
+		*  or max test retry count is hit (5 min).
+		*/
+		rc = wait_and_verify_blobstore_state(
+			devices[faulty_disk_idx].device_id,
+			/*expected state*/"out", arg->group);
+		assert_rc_equal(rc, 0);
+
+		/**
+		* Connect the pool for query check.
+		 */
+		print_message("Connect the pool to get the pool query\n");
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+				       DAOS_PC_RW, &arg->pool.poh,
+				       &arg->pool.pool_info, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		/* Set container handle as invalid so it does not close again*/
+		arg->coh = DAOS_HDL_INVAL;
+	}
 
 	/* Verify that the DAOS_NVME_FAULTY reaction got triggered. Target should
 	 * be in the DOWN state to trigger rebuild (or DOWNOUT if rebuild already
@@ -199,6 +270,24 @@ nvme_recov_1(void **state)
 	print_message("Done\n");
 }
 
+static void
+offline_fault_recovery(void **state)
+{
+	nvme_fault_reaction(state, 0 /* Offline */);
+}
+
+static void
+online_fault_recovery(void **state)
+{
+	nvme_fault_reaction(state, 1 /* Online */);
+}
+
+static void
+offline_and_online_fault_recovery(void **state)
+{
+	nvme_fault_reaction(state, 2 /* Offline and Online */);
+}
+
 /* Verify device states after NVMe set to faulty*/
 static void
 nvme_test_verify_device_stats(void **state)
@@ -236,6 +325,7 @@ nvme_test_verify_device_stats(void **state)
 
 	if (ndisks <= 1) {
 		print_message("Need Minimum 2 disks for test\n");
+		D_FREE(devices);
 		skip();
 	}
 
@@ -267,6 +357,9 @@ nvme_test_verify_device_stats(void **state)
 	if (rc) {
 		print_message("Log Mask != DEBUG in %s.\n",
 			      server_config_file);
+		D_FREE(server_config_file);
+		D_FREE(devices);
+		D_FREE(log_file);
 		skip();
 	}
 
@@ -653,13 +746,17 @@ nvme_test_simulate_IO_error(void **state)
 
 static const struct CMUnitTest nvme_recov_tests[] = {
 	{"NVMe Recovery 1: Online faulty reaction",
-	 nvme_recov_1, NULL, test_case_teardown},
+	 online_fault_recovery, NULL, test_case_teardown},
 	{"NVMe Recovery 2: Verify device states after NVMe set to Faulty",
 	 nvme_test_verify_device_stats, NULL, test_case_teardown},
 	{"NVMe Recovery 3: Verify blobstore state NORMAL->OUT transition",
 	 nvme_test_get_blobstore_state, NULL, test_case_teardown},
 	{"NVMe Recovery 4: Verify NVMe IO error and notification",
 	 nvme_test_simulate_IO_error, NULL, test_case_teardown},
+	{"NVMe Recovery 5: Offline faulty reaction",
+	 offline_fault_recovery, NULL, test_case_teardown},
+	{"NVMe Recovery 6: Mixed type pool faulty reaction",
+	 offline_and_online_fault_recovery, NULL, test_case_teardown},
 };
 
 static int

@@ -16,15 +16,16 @@
 #include <daos_prop.h>
 
 int
-crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
+crt_proc_struct_dtx_id(crt_proc_t proc, crt_proc_op_t proc_op,
+		       struct dtx_id *dti)
 {
 	int rc;
 
-	rc = crt_proc_uuid_t(proc, &dti->dti_uuid);
+	rc = crt_proc_uuid_t(proc, proc_op, &dti->dti_uuid);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint64_t(proc, &dti->dti_hlc);
+	rc = crt_proc_uint64_t(proc, proc_op, &dti->dti_hlc);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -32,18 +33,14 @@ crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
 }
 
 int
-crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data)
+crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
+			 struct daos_acl **data)
 {
-	int		rc;
 	d_iov_t		iov = {0};
-	crt_proc_op_t	proc_op;
+	int		rc = 0;
 
 	if (proc == NULL || data == NULL)
 		return -DER_INVAL;
-
-	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return rc;
 
 	switch (proc_op) {
 	case CRT_PROC_ENCODE:
@@ -57,8 +54,8 @@ crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data)
 		}
 		/* fall through to copy it */
 	case CRT_PROC_DECODE:
-		rc = crt_proc_d_iov_t(proc, &iov);
-		if (!rc && proc_op == CRT_PROC_DECODE)
+		rc = crt_proc_d_iov_t(proc, proc_op, &iov);
+		if (!rc && DECODING(proc_op))
 			*data = (struct daos_acl *)iov.iov_buf;
 		break;
 	case CRT_PROC_FREE:
@@ -73,7 +70,7 @@ crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data)
 }
 
 static int
-crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t opc, daos_prop_t *prop)
+crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*entry;
 	int			 i;
@@ -81,10 +78,10 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t opc, daos_prop_t *prop)
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		rc = crt_proc_uint32_t(proc, &entry->dpe_type);
+		rc = crt_proc_uint32_t(proc, proc_op, &entry->dpe_type);
 		if (rc)
 			break;
-		rc = crt_proc_uint32_t(proc, &entry->dpe_reserv);
+		rc = crt_proc_uint32_t(proc, proc_op, &entry->dpe_reserv);
 		if (rc)
 			break;
 
@@ -94,21 +91,22 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t opc, daos_prop_t *prop)
 		    entry->dpe_type == DAOS_PROP_CO_OWNER ||
 		    entry->dpe_type == DAOS_PROP_PO_OWNER_GROUP ||
 		    entry->dpe_type == DAOS_PROP_CO_OWNER_GROUP) {
-			rc = crt_proc_d_string_t(proc, &entry->dpe_str);
+			rc = crt_proc_d_string_t(proc, proc_op,
+						 &entry->dpe_str);
 
 		} else if (entry->dpe_type == DAOS_PROP_PO_ACL ||
 			 entry->dpe_type == DAOS_PROP_CO_ACL) {
-			rc = crt_proc_struct_daos_acl(proc,
+			rc = crt_proc_struct_daos_acl(proc, proc_op,
 						      (struct daos_acl **)
 						      &entry->dpe_val_ptr);
 
 		} else if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST) {
-			rc = crt_proc_d_rank_list_t(proc,
+			rc = crt_proc_d_rank_list_t(proc, proc_op,
 					(d_rank_list_t **)&entry->dpe_val_ptr);
 		} else if (entry->dpe_type == DAOS_PROP_CO_ROOTS) {
 			struct daos_prop_co_roots *roots;
 
-			if (opc == CRT_PROC_DECODE) {
+			if (DECODING(proc_op)) {
 				D_ALLOC(entry->dpe_val_ptr, sizeof(*roots));
 				if (!entry->dpe_val_ptr) {
 					rc = -DER_NOMEM;
@@ -116,12 +114,13 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t opc, daos_prop_t *prop)
 				}
 			}
 			roots = entry->dpe_val_ptr;
-			rc = crt_proc_memcpy(proc, roots, sizeof(*roots));
+			rc = crt_proc_memcpy(proc, proc_op,
+					      roots, sizeof(*roots));
 
-			if (opc == CRT_PROC_FREE)
+			if (FREEING(proc_op))
 				D_FREE(entry->dpe_val_ptr);
 		} else {
-			rc = crt_proc_uint64_t(proc, &entry->dpe_val);
+			rc = crt_proc_uint64_t(proc, proc_op, &entry->dpe_val);
 		}
 		if (rc)
 			break;
@@ -130,45 +129,41 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t opc, daos_prop_t *prop)
 }
 
 int
-crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data)
+crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t **data)
 {
 	daos_prop_t		*prop;
-	crt_proc_op_t		 proc_op;
 	uint32_t		 nr = 0, tmp = 0;
 	int			 rc;
 
 	if (proc == NULL || data == NULL)
 		return -DER_INVAL;
 
-	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc)
-		return rc;
 	switch (proc_op) {
 	case CRT_PROC_ENCODE:
 		prop = *data;
 		if (prop == NULL || prop->dpp_nr == 0 ||
 		    prop->dpp_entries == NULL) {
 			nr = 0;
-			rc = crt_proc_uint32_t(proc, &nr);
+			rc = crt_proc_uint32_t(proc, proc_op, &nr);
 			return rc;
 		}
-		rc = crt_proc_uint32_t(proc, &prop->dpp_nr);
+		rc = crt_proc_uint32_t(proc, proc_op, &prop->dpp_nr);
 		if (rc != 0)
 			return rc;
-		rc = crt_proc_uint32_t(proc, &prop->dpp_reserv);
+		rc = crt_proc_uint32_t(proc, proc_op, &prop->dpp_reserv);
 		if (rc != 0)
 			return rc;
 		rc = crt_proc_prop_entries(proc, proc_op, prop);
 		return rc;
 	case CRT_PROC_DECODE:
-		rc = crt_proc_uint32_t(proc, &nr);
+		rc = crt_proc_uint32_t(proc, proc_op, &nr);
 		if (rc)
 			return rc;
 		if (nr == 0) {
 			*data = NULL;
 			return rc;
 		}
-		rc = crt_proc_uint32_t(proc, &tmp);
+		rc = crt_proc_uint32_t(proc, proc_op, &tmp);
 		if (rc != 0)
 			return rc;
 		if (nr > DAOS_PROP_ENTRIES_MAX_NR) {

@@ -75,7 +75,7 @@ def scons():
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
                     os.path.join('../include', 'cart', header))
 
-    denv = env.Clone()
+    denv = env.Clone(LIBS=[])
 
     denv.AppendUnique(LIBS=['gurt'])
     prereqs.require(denv, 'mercury')

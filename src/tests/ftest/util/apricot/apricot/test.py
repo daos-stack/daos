@@ -206,12 +206,6 @@ class Test(avocadoTest):
                                           "PR.  Test will not be "
                                           "skipped", ticket)
                             return
-                        # there is no commit that fixes it
-                        self.log.info("This test variant is included "
-                                      "in the skip list for ticket %s "
-                                      "with no fix yet "
-                                      "available.", ticket)
-                        cancel_for_ticket(ticket, skip_list)
                 except exceptions.TestCancel: # pylint: disable=try-except-raise
                     raise
                 except Exception as excpt: # pylint: disable=broad-except
@@ -239,7 +233,14 @@ class Test(avocadoTest):
                     self.log.info("Skipping due to being on the "
                                   "skip list for ticket %s, and "
                                   "the fix in %s is not in the "
-                                  "current code", ticket, vals[1])
+                                  "current code: %s", ticket, vals[1], commits)
+                    cancel_for_ticket(ticket, skip_list)
+                else:
+                    # there is no commit that fixes it
+                    self.log.info("This test variant is included "
+                                  "in the skip list for ticket %s "
+                                  "with no fix yet "
+                                  "available.", ticket)
                     cancel_for_ticket(ticket, skip_list)
 
     def _check_variant_skip(self, cancel_list):

@@ -225,10 +225,8 @@ dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF1:
-		if (rdd == DAOS_OCH_RDD_RP) {
-			cid = OC_RP_2GX;
-		} else if (rdd == DAOS_OCH_RDD_EC || ofeats & DAOS_OF_ARRAY ||
-			 ofeats & DAOS_OF_ARRAY_BYTE) {
+		if (rdd == DAOS_OCH_RDD_EC || ofeats & DAOS_OF_ARRAY ||
+		    ofeats & DAOS_OF_ARRAY_BYTE) {
 			if (domain_nr >= 10)
 				cid = OC_EC_8P1GX;
 			else if (domain_nr >= 6)
@@ -240,10 +238,8 @@ dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF2:
-		if (rdd == DAOS_OCH_RDD_RP) {
-			cid = OC_RP_3GX;
-		} else if (rdd == DAOS_OCH_RDD_EC || ofeats & DAOS_OF_ARRAY ||
-			 ofeats & DAOS_OF_ARRAY_BYTE) {
+		if (rdd == DAOS_OCH_RDD_EC || ofeats & DAOS_OF_ARRAY ||
+		    ofeats & DAOS_OF_ARRAY_BYTE) {
 			if (domain_nr >= 10)
 				cid = OC_EC_8P2GX;
 			else if (domain_nr >= 6)
@@ -264,16 +260,7 @@ dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
 		break;
 	}
 
-	/*
-	 * If there are no sharding hints, we can return.
-	 */
-	if (shd == 0) {
-		oc = oclass_fit_max(cid, domain_nr, target_nr);
-		if (oc)
-			*oc_id_p = oc->oc_id;
-
-		return oc ? 0 : -DER_NONEXIST;
-	}
+	/** we have determined the resilience part, now set the grp size */
 
 	oc = oclass_ident2cl(cid);
 	if (!oc)
@@ -284,7 +271,14 @@ dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
 
 	/** adjust the group size based on the sharding hint */
 	switch (shd) {
+	case 0:
 	case DAOS_OCH_SHD_DEF:
+		if (ofeats & DAOS_OF_ARRAY || ofeats & DAOS_OF_ARRAY_BYTE ||
+		    ofeats & DAOS_OF_KV_FLAT)
+			ca.ca_grp_nr = DAOS_OBJ_GRP_MAX;
+		else
+			ca.ca_grp_nr = 1;
+		break;
 	case DAOS_OCH_SHD_MAX:
 		ca.ca_grp_nr = DAOS_OBJ_GRP_MAX;
 		break;

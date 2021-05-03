@@ -11,9 +11,9 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 450
+timeout: 1000
 timeouts:
-  test_daos_dfs_unit: 500
+  test_daos_dfs_unit: 1000
   test_daos_dfs_parallel: 200
 pool:
   scm_size: 8G
@@ -27,8 +27,6 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      bdev_class: nvme
-      bdev_list: ["0000:81:00.0"]
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
@@ -38,8 +36,6 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      bdev_class: nvme
-      bdev_list: ["0000:da:00.0"]
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1

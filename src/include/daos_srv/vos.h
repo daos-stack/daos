@@ -47,6 +47,16 @@ int
 vos_dtx_pin(struct dtx_handle *dth, bool persistent);
 
 /**
+ * Check whether DTX entry attached to the DTX handle is still valid or not.
+ *
+ * \param dth		[IN]	The dtx handle
+ *
+ * \return		The DTX entry status.
+ */
+int
+vos_dtx_validation(struct dtx_handle *dth);
+
+/**
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
  *
@@ -123,9 +133,10 @@ vos_dtx_aggregate(daos_handle_t coh);
  *
  * \param coh	[IN]	Container open handle.
  * \param stat	[OUT]	The structure to hold the DTXs information.
+ * \param flags	[IN]	The flags for stat operation.
  */
 void
-vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
+vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags);
 
 /**
  * Set the DTX committable as committable.
@@ -382,13 +393,14 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  * \param csum_func  [IN]	Pointer to csum recalculation function
  * \param yield_func [IN]	Pointer to customized yield function
  * \param yield_arg  [IN]	Argument of yield function
+ * \param full_scan  [IN]	Full scan for snapshot deletion
  *
  * \return			Zero on success, negative value if error
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
-	      void *yield_arg);
+	      void *yield_arg, bool full_scan);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -1050,8 +1062,8 @@ int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
-vos_gc_pool_run(daos_handle_t poh, int credits,
-		bool (*yield_func)(void *arg), void *yield_arg);
+vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
+	    void *yield_arg);
 bool
 vos_gc_pool_idle(daos_handle_t poh);
 

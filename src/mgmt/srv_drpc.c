@@ -59,10 +59,10 @@ ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to prep shutdown %u\n", req->rank);
 
 #ifndef DRPC_TEST
-	ds_pool_disable_evict();
+	ds_pool_disable_exclude();
 #endif
 
-	/* TODO: disable auto evict and pool rebuild here */
+	/* TODO: disable auto exclude and pool rebuild here */
 	D_INFO("Service rank %d is being prepared for controlled shutdown\n",
 		req->rank);
 
@@ -321,8 +321,6 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				 req->scmbytes, req->nvmebytes,
 				 prop, req->numsvcreps, &svc,
 				 req->n_faultdomains, req->faultdomains);
-	if (targets != NULL)
-		d_rank_list_free(targets);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -354,6 +352,8 @@ out:
 	mgmt__pool_create_req__free_unpacked(req, &alloc.alloc);
 
 	daos_prop_free(prop);
+	if (targets != NULL)
+		d_rank_list_free(targets);
 
 	D_FREE(resp.svc_reps);
 }

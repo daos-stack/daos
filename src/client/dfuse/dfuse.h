@@ -262,6 +262,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
  * so set LARGEFILE here for debugging
  */
 #define LARGEFILE 0100000
+#define FMODE_EXEC 0x20
 #define LOG_FLAGS(HANDLE, INPUT) do {					\
 		int _flag = (INPUT);					\
 		LOG_MODE((HANDLE), _flag, O_APPEND);			\
@@ -284,8 +285,9 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		LOG_MODE((HANDLE), _flag, O_SYNC);			\
 		LOG_MODE((HANDLE), _flag, O_TRUNC);			\
 		LOG_MODE((HANDLE), _flag, O_NOFOLLOW);			\
+		LOG_MODE((HANDLE), _flag, FMODE_EXEC);			\
 		if (_flag)						\
-			DFUSE_TRA_ERROR(HANDLE, "Flags 0%o", _flag);	\
+			DFUSE_TRA_ERROR(HANDLE, "Flags %#o", _flag);	\
 	} while (0)
 
 /** Dump the file mode to the logfile. */

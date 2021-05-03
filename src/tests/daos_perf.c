@@ -362,7 +362,7 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		if (rc)
 			return rc;
 
-		rc = bio_iod_prep(vos_ioh2desc(ioh));
+		rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO);
 		if (rc)
 			goto end;
 

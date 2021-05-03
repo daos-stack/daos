@@ -12,12 +12,16 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize/english"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+)
+
+var (
+	errNoMsResponse = errors.New("response did not contain a management service response")
 )
 
 type (
@@ -164,7 +168,7 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 	}
 
 	if len(ur.Responses) == 0 {
-		return nil, errors.New("response did not contain a management service response")
+		return nil, errNoMsResponse
 	}
 
 	// As we may have sent the request to multiple MS replicas, just pick
@@ -177,6 +181,10 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 		}
 
 		break
+	}
+
+	if msResp == nil {
+		return nil, errNoMsResponse
 	}
 
 	if msResp.Error != nil {

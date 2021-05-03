@@ -147,7 +147,7 @@ RUN if $QUICKBUILD; then                                                        
                    $repo:$branch:$build_number;                                                                  \
         done;                                                                                                    \
         echo "Installing: $QUICKBUILD_DEPS";                                                                     \
-        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 zypper --non-interactive install;                      \
+        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' | xargs -0 zypper --non-interactive install;     \
     fi
 
 RUN zypper addlock fuse fuse-libs fuse-devel libraft0 raft-devel mercury mercury-devel

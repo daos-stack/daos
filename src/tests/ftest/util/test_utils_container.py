@@ -221,7 +221,7 @@ class TestContainerData():
                 status = False
                 continue
 
-            expect = "" if record_info["punched"] else record_info["data"]
+            expect = b"" if record_info["punched"] else record_info["data"]
             if actual != expect:
                 self.log.error(
                     "    Error data mismatch (akey=%s, dkey=%s, punched=%s): "

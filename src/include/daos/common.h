@@ -80,6 +80,9 @@ struct daos_sgl_idx {
 	daos_off_t	iov_offset; /** byte offset of iov buf */
 };
 
+#define DF_SGL_IDX "{idx: %d, offset: "DF_U64"}"
+#define DP_SGL_IDX(i) (i)->iov_idx, (i)->iov_offset
+
 /*
  * add bytes to the sgl index offset. If the new offset is greater than or
  * equal to the indexed iov len, move the index to the next iov in the sgl.
@@ -88,19 +91,27 @@ static inline void
 sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
 {
 	sgl_idx->iov_offset += bytes;
+	D_DEBUG(DB_TRACE, "Moving sgl index formward by %lu bytes."
+			  "Idx: "DF_SGL_IDX"\n",
+		bytes, DP_SGL_IDX(sgl_idx));
 
 	/** move to next iov if necessary */
-	if (sgl_idx->iov_offset >= sgl->sg_iovs[sgl_idx->iov_idx].iov_len) {
+	if (sgl_idx->iov_offset >= sgl->sg_iovs[sgl_idx->iov_idx].iov_buf_len) {
 		sgl_idx->iov_idx++;
 		sgl_idx->iov_offset = 0;
+		D_DEBUG(DB_TRACE, "Moving to next iov in sgl\n");
 	}
+	D_DEBUG(DB_TRACE, "Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
 }
 
 static inline void *
 sgl_indexed_byte(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx)
 {
-	if (sgl_idx->iov_idx > sgl->sg_nr_out - 1)
+	D_DEBUG(DB_TRACE, "Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+	if (sgl_idx->iov_idx > sgl->sg_nr_out - 1) {
+		D_DEBUG(DB_TRACE, "Index too high. Returning NULL\n");
 		return NULL;
+	}
 	return sgl->sg_iovs[sgl_idx->iov_idx].iov_buf + sgl_idx->iov_offset;
 }
 
@@ -111,11 +122,13 @@ sgl_indexed_byte(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx)
 static inline void
 sgl_test_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
 {
+	D_DEBUG(DB_TRACE, "Before Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
 	if (sgl_idx->iov_offset + bytes >
 	    sgl->sg_iovs[sgl_idx->iov_idx].iov_len) {
 		sgl_idx->iov_idx++;
 		sgl_idx->iov_offset = 0;
 	}
+	D_DEBUG(DB_TRACE, "After Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
 }
 
 /*
@@ -711,6 +724,7 @@ enum {
 #define DAOS_DTX_SPEC_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x45)
 #define DAOS_DTX_SRV_RESTART		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x46)
 #define DAOS_DTX_NO_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x47)
+#define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
@@ -743,6 +757,8 @@ enum {
 
 #define DAOS_VOS_GC_CONT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x94)
 #define DAOS_VOS_GC_CONT_NULL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x95)
+
+#define DAOS_OBJ_SKIP_PARITY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x96)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
@@ -813,9 +829,12 @@ daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
-int crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti);
-int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
-int crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data);
+int crt_proc_struct_dtx_id(crt_proc_t proc, crt_proc_op_t proc_op,
+			   struct dtx_id *dti);
+int crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			 daos_prop_t **data);
+int crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
+			     struct daos_acl **data);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);

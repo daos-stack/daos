@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
@@ -141,6 +141,10 @@ func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *even
 		return errors.New("can't start: harness already started")
 	}
 
+	if cfg == nil {
+		return errors.New("nil cfg supplied to Start()")
+	}
+
 	// Now we want to block any RPCs that might try to mess with storage
 	// (format, firmware update, etc) before attempting to start I/O Engines
 	// which are using the storage.
@@ -149,25 +153,23 @@ func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *even
 
 	instances := h.Instances()
 
-	if cfg != nil {
-		drpcSetupReq := &drpcServerSetupReq{
-			log:     h.log,
-			sockDir: cfg.SocketDir,
-			engines: instances,
-			tc:      cfg.TransportConfig,
-			sysdb:   db,
-			events:  ps,
-		}
-		// Single daos_server dRPC server to handle all engine requests
-		if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
-			return errors.WithMessage(err, "dRPC server setup")
-		}
-		defer func() {
-			if err := drpcCleanup(cfg.SocketDir); err != nil {
-				h.log.Errorf("error during dRPC cleanup: %s", err)
-			}
-		}()
+	drpcSetupReq := &drpcServerSetupReq{
+		log:     h.log,
+		sockDir: cfg.SocketDir,
+		engines: instances,
+		tc:      cfg.TransportConfig,
+		sysdb:   db,
+		events:  ps,
 	}
+	// Single daos_server dRPC server to handle all engine requests
+	if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
+		return errors.WithMessage(err, "dRPC server setup")
+	}
+	defer func() {
+		if err := drpcCleanup(cfg.SocketDir); err != nil {
+			h.log.Errorf("error during dRPC cleanup: %s", err)
+		}
+	}()
 
 	for _, ei := range instances {
 		ei.Run(ctx, cfg.RecreateSuperblocks)

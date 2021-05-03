@@ -12,9 +12,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -25,18 +26,6 @@ import (
 const (
 	defaultRetryAfter = 250 * time.Millisecond
 )
-
-type daosStatusResp struct {
-	Status int32 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
-}
-
-func (dsr *daosStatusResp) String() string {
-	return ""
-}
-
-func (dsr *daosStatusResp) Reset() {}
-
-func (dsr *daosStatusResp) ProtoMessage() {}
 
 type retryableDrpcReq struct {
 	proto.Message
@@ -241,7 +230,7 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 				return nil, err
 			}
 
-			dsr := new(daosStatusResp)
+			dsr := new(mgmtpb.DaosResp)
 			if uErr := proto.Unmarshal(drpcResp.Body, dsr); uErr != nil {
 				return
 			}

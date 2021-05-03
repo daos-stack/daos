@@ -853,6 +853,7 @@ ds_iv_fini(void)
 	struct ds_iv_class	*class_tmp;
 
 	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
+		d_list_del_init(&ns->iv_ns_link);
 		iv_ns_destroy_internal(ns);
 	}
 

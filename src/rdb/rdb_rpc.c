@@ -18,15 +18,15 @@
 #include "rdb_internal.h"
 
 static int
-crt_proc_msg_requestvote_response_t(crt_proc_t proc,
+crt_proc_msg_requestvote_response_t(crt_proc_t proc, crt_proc_op_t proc_op,
 				    msg_requestvote_response_t *p)
 {
 	int rc;
 
-	rc = crt_proc_int64_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, proc_op, &p->term);
 	if (unlikely(rc))
 		return rc;
-	rc = crt_proc_int32_t(proc, &p->vote_granted);
+	rc = crt_proc_int32_t(proc, proc_op, &p->vote_granted);
 	if (unlikely(rc))
 		return rc;
 
@@ -34,44 +34,39 @@ crt_proc_msg_requestvote_response_t(crt_proc_t proc,
 }
 
 static int
-crt_proc_msg_entry_t(crt_proc_t proc, msg_entry_t *p)
+crt_proc_msg_entry_t(crt_proc_t proc, crt_proc_op_t proc_op, msg_entry_t *p)
 {
-	crt_proc_op_t	proc_op;
-	int		rc;
+	int rc;
 
-	rc = crt_proc_get_op(proc, &proc_op);
-	if (unlikely(rc))
-		return rc;
-
-	if (proc_op == CRT_PROC_FREE) {
+	if (FREEING(proc_op)) {
 		D_FREE(p->data.buf);
 		return 0;
 	}
 
-	rc = crt_proc_int64_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, proc_op, &p->term);
 	if (unlikely(rc))
 		return rc;
-	rc = crt_proc_int32_t(proc, &p->id);
+	rc = crt_proc_int32_t(proc, proc_op, &p->id);
 	if (unlikely(rc))
 		return rc;
-	rc = crt_proc_int32_t(proc, &p->type);
+	rc = crt_proc_int32_t(proc, proc_op, &p->type);
 	if (unlikely(rc))
 		return rc;
-	rc = crt_proc_uint32_t(proc, &p->data.len);
+	rc = crt_proc_uint32_t(proc, proc_op, &p->data.len);
 	if (unlikely(rc))
 		return rc;
 
 	if (p->data.len == 0)
 		return 0;
 
-	if (proc_op == CRT_PROC_DECODE) {
+	if (DECODING(proc_op)) {
 		D_ALLOC(p->data.buf, p->data.len);
 		if (p->data.buf == NULL)
 			return -DER_NOMEM;
 	}
-	rc = crt_proc_memcpy(proc, p->data.buf, p->data.len);
+	rc = crt_proc_memcpy(proc, proc_op, p->data.buf, p->data.len);
 	if (unlikely(rc)) {
-		if (proc_op == CRT_PROC_DECODE)
+		if (DECODING(proc_op))
 			D_FREE(p->data.buf);
 		return rc;
 	}
@@ -80,66 +75,63 @@ crt_proc_msg_entry_t(crt_proc_t proc, msg_entry_t *p)
 }
 
 static int
-crt_proc_msg_appendentries_t(crt_proc_t proc, msg_appendentries_t *p)
+crt_proc_msg_appendentries_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			     msg_appendentries_t *p)
 {
-	crt_proc_op_t	proc_op;
 	int		i;
 	int		rc;
 
-	rc = crt_proc_get_op(proc, &proc_op);
+	rc = crt_proc_int64_t(proc, proc_op, &p->term);
 	if (unlikely(rc))
 		return rc;
-
-	rc = crt_proc_int64_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, proc_op, &p->prev_log_idx);
 	if (unlikely(rc))
 		return rc;
-	rc = crt_proc_int64_t(proc, &p->prev_log_idx);
+	rc = crt_proc_int64_t(proc, proc_op, &p->prev_log_term);
 	if (unlikely(rc))
 		return rc;
-	rc = crt_proc_int64_t(proc, &p->prev_log_term);
+	rc = crt_proc_int64_t(proc, proc_op, &p->leader_commit);
 	if (unlikely(rc))
 		return rc;
-	rc = crt_proc_int64_t(proc, &p->leader_commit);
-	if (unlikely(rc))
-		return rc;
-	rc = crt_proc_int32_t(proc, &p->n_entries);
+	rc = crt_proc_int32_t(proc, proc_op, &p->n_entries);
 	if (unlikely(rc))
 		return rc;
 
 	if (p->n_entries == 0 && proc_op != CRT_PROC_FREE)
 		return 0;
 
-	if (proc_op == CRT_PROC_DECODE) {
+	if (DECODING(proc_op)) {
 		D_ALLOC_ARRAY(p->entries, p->n_entries);
 		if (p->entries == NULL)
 			return -DER_NOMEM;
 	}
 	for (i = 0; i < p->n_entries; i++) {
-		rc = crt_proc_msg_entry_t(proc, &p->entries[i]);
+		rc = crt_proc_msg_entry_t(proc, proc_op, &p->entries[i]);
 		if (unlikely(rc)) {
-			if (proc_op == CRT_PROC_DECODE)
+			if (DECODING(proc_op))
 				D_FREE(p->entries);
 			return rc;
 		}
 	}
-	if (proc_op == CRT_PROC_FREE)
+	if (FREEING(proc_op))
 		D_FREE(p->entries);
 
 	return 0;
 }
 
 static int
-crt_proc_msg_installsnapshot_t(crt_proc_t proc, msg_installsnapshot_t *p)
+crt_proc_msg_installsnapshot_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			       msg_installsnapshot_t *p)
 {
 	int rc;
 
-	rc = crt_proc_int64_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, proc_op, &p->term);
 	if (unlikely(rc))
 		return rc;
-	rc = crt_proc_int64_t(proc, &p->last_idx);
+	rc = crt_proc_int64_t(proc, proc_op, &p->last_idx);
 	if (unlikely(rc))
 		return rc;
-	rc = crt_proc_int64_t(proc, &p->last_term);
+	rc = crt_proc_int64_t(proc, proc_op, &p->last_term);
 	if (unlikely(rc))
 		return rc;
 
@@ -147,18 +139,18 @@ crt_proc_msg_installsnapshot_t(crt_proc_t proc, msg_installsnapshot_t *p)
 }
 
 static int
-crt_proc_msg_installsnapshot_response_t(crt_proc_t proc,
+crt_proc_msg_installsnapshot_response_t(crt_proc_t proc, crt_proc_op_t proc_op,
 					msg_installsnapshot_response_t *p)
 {
 	int rc;
 
-	rc = crt_proc_int64_t(proc, &p->term);
+	rc = crt_proc_int64_t(proc, proc_op, &p->term);
 	if (unlikely(rc))
 		return rc;
-	rc = crt_proc_int64_t(proc, &p->last_idx);
+	rc = crt_proc_int64_t(proc, proc_op, &p->last_idx);
 	if (unlikely(rc))
 		return rc;
-	rc = crt_proc_int32_t(proc, &p->complete);
+	rc = crt_proc_int32_t(proc, proc_op, &p->complete);
 	if (unlikely(rc))
 		return rc;
 
@@ -166,13 +158,29 @@ crt_proc_msg_installsnapshot_response_t(crt_proc_t proc,
 }
 
 static int
-crt_proc_struct_rdb_local(crt_proc_t proc, struct rdb_local *p)
+crt_proc_struct_rdb_local(crt_proc_t proc, crt_proc_op_t proc_op,
+			  struct rdb_local *p)
 {
 	/* Ignore this local field. */
 	return 0;
 }
 
 CRT_RPC_DEFINE(rdb_op, DAOS_ISEQ_RDB_OP, DAOS_OSEQ_RDB_OP)
+
+static int
+crt_proc_struct_rdb_op_in(crt_proc_t proc, crt_proc_op_t proc_op,
+			  struct rdb_op_in *data)
+{
+	return crt_proc_rdb_op_in(proc, data);
+}
+
+static int
+crt_proc_struct_rdb_op_out(crt_proc_t proc, crt_proc_op_t proc_op,
+			   struct rdb_op_out *data)
+{
+	return crt_proc_rdb_op_out(proc, data);
+}
+
 CRT_RPC_DEFINE(rdb_requestvote, DAOS_ISEQ_RDB_REQUESTVOTE,
 		DAOS_OSEQ_RDB_REQUESTVOTE)
 CRT_RPC_DEFINE(rdb_appendentries, DAOS_ISEQ_RDB_APPENDENTRIES,

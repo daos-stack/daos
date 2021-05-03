@@ -9,7 +9,7 @@ from pydaos.raw import DaosContainer, DaosApiError
 from avocado.core.exceptions import TestFail
 from test_utils_pool import TestPool
 
-RESULT_PASS = "PASS"
+RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
 
 
@@ -37,7 +37,7 @@ class Permission(TestWithServers):
         Test Description:
             Test pool connections with specific permissions.
 
-        :avocado: tags=pool,permission,connectpermission
+        :avocado: tags=all,daily_regression,pool,permission,connectpermission
         """
         # parameter used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
@@ -88,7 +88,7 @@ class Permission(TestWithServers):
             Test whether file modification happens as expected under different
             permission levels.
 
-        :avocado: tags=pool,permission,filemodification
+        :avocado: tags=all,daily_regression,pool,permission,filemodification
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
@@ -108,6 +108,7 @@ class Permission(TestWithServers):
         self.test_log.debug("Pool initialization successful")
         self.pool.get_params(self)
         self.pool.mode.value = createmode
+        self.pool.create()
         self.test_log.debug("Pool Creation successful")
 
         try:

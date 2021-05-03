@@ -132,8 +132,10 @@ class OSADmgNegativeTest(OSAUtils):
 
         Test Description: Test
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_dmg_negative_test,dmg_negative_test
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_dmg_negative_test,dmg_negative_test
         """
         # Perform testing with a single pool
         self.run_osa_dmg_test(1, False)
@@ -145,8 +147,10 @@ class OSADmgNegativeTest(OSAUtils):
 
         Test Description: Test
 
-        :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_dmg_negative_test,dmg_negative_test_extend
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_dmg_negative_test,dmg_negative_test_extend
         """
         # Perform extend testing with 1 pool
         self.run_osa_dmg_test(1, True)

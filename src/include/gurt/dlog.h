@@ -326,6 +326,11 @@ int d_log_allocfacility(const char *aname, const char *lname);
 int d_log_init(void);
 
 /**
+ * Callback to get XS id and ULT id
+ */
+typedef void (*d_log_id_cb_t)(uint32_t *xs_id, uint64_t *ult_id);
+
+/**
  * Advanced version of log initialing function. User can specify log tag,
  * output log file, the default log mask and the mask for output errors.
  *
@@ -334,11 +339,12 @@ int d_log_init(void);
  * \param[in] flavor		Flavor controlling output
  * \param[in] def_mask		Default log mask
  * \param[in] err_mask		Output errors mask
+ * \param[in] id_cb		callback to get tid/ult id.
  *
  * \return			0 on success, -1 on failure
  */
 int d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
-		   d_dbug_t def_mask, d_dbug_t err_mask);
+		   d_dbug_t def_mask, d_dbug_t err_mask, d_log_id_cb_t id_cb);
 
 /**
  * Remove a reference on the default cart log.  Calls d_log_close
@@ -371,11 +377,12 @@ void d_log_sync_mask(void);
  *				in d_log).
  * \param[in] logfile		log file name, or null if no log file
  * \param[in] flags		STDERR, LOGPID
+ * \param[in] id_cb		callback to get tid/ult id.
  *
  * \return			0 on success, -1 on error.
  */
 int d_log_open(char *tag, int maxfac_hint, int default_mask,
-	       int stderr_mask, char *logfile, int flags);
+	       int stderr_mask, char *logfile, int flags, d_log_id_cb_t id_cb);
 
 /**
  * set the logmask for a given facility.

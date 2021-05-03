@@ -63,6 +63,7 @@ class ChecksumContainerValidation(TestWithServers):
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
         :avocado: tags=all,full_regression,daily_regression
+        :avocado: tags=checksum
         :avocado: tags=basic_checksum_object
         """
         self.d_log.info("Writing the Single Dataset")

@@ -1039,6 +1039,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	struct dc_object		*obj = dcsr->dcsr_obj;
 	struct dcs_layout		*singv_los = NULL;
 	struct daos_oclass_attr		*oca = NULL;
+	struct cont_props		 props;
 	int				 rc = 0;
 
 	oca = obj_get_oca(obj);
@@ -1091,18 +1092,25 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	else
 		dcu->dcu_iod_array.oia_oiod_nr = 0;
 
-	if (daos_csummer_initialized(csummer)) {
-		rc = daos_csummer_calc_key(csummer, &dcsr->dcsr_dkey,
-					   &dcu->dcu_dkey_csum);
-		if (rc != 0)
-			return rc;
+	if (!daos_csummer_initialized(csummer))
+		goto pack;
 
-		rc = daos_csummer_calc_iods(csummer, dcsr->dcsr_sgls,
-					    dcu->dcu_iod_array.oia_iods, NULL,
-					    dcsr->dcsr_nr, false, singv_los, -1,
-					    &dcu->dcu_iod_array.oia_iod_csums);
-	}
+	props = dc_cont_hdl2props(obj->cob_coh);
+	if (!obj_csum_dedup_candidate(&props, dcu->dcu_iod_array.oia_iods,
+				      dcsr->dcsr_nr))
+		goto pack;
 
+	rc = daos_csummer_calc_key(csummer, &dcsr->dcsr_dkey,
+				   &dcu->dcu_dkey_csum);
+	if (rc != 0)
+		return rc;
+
+	rc = daos_csummer_calc_iods(csummer, dcsr->dcsr_sgls,
+				    dcu->dcu_iod_array.oia_iods, NULL,
+				    dcsr->dcsr_nr, false, singv_los, -1,
+				    &dcu->dcu_iod_array.oia_iod_csums);
+
+pack:
 	if (rc == 0)
 		rc = daos_sgls_packed_size(dcsr->dcsr_sgls,
 					   dcsr->dcsr_nr, NULL);

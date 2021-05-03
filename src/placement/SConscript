@@ -11,15 +11,16 @@ def scons():
 
     denv = env.Clone()
 
-    denv.AppendUnique(LIBS=['isal'])
+    libraries = ['isal']
 
     # Common placement code
     common_tgts = denv.SharedObject(['pl_map.c', 'ring_map.c',
                                      'jump_map.c', 'pl_map_common.c'])
 
     # generate server module
+    print("libs = %s" % denv.subst("$LIBS"))
     srv = daos_build.library(denv, 'placement', common_tgts,
-                             install_off="../..")
+                             install_off="../..", LIBS=libraries)
     denv.Install('$PREFIX/lib64/daos_srv', srv)
 
     # placement client library

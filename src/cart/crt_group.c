@@ -822,7 +822,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 	if (li->li_tag_addr[tag] == NULL) {
 		li->li_tag_addr[tag] = *hg_addr;
 	} else {
-		D_WARN("NA address already exits. "
+		D_INFO("NA address already exits. "
 		       " grp_priv %p ctx_idx %d, rank: %d, tag %d, rlink %p\n",
 		       grp_priv, ctx_idx, rank, tag, &li->li_link);
 		rc = crt_hg_addr_free(&crt_ctx->cc_hg_ctx, *hg_addr);
@@ -1532,8 +1532,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		ul_out->ul_uri = tmp_uri;
 		ul_out->ul_tag = ul_in->ul_tag;
 		if (crt_gdata.cg_use_sensors)
-			(void)d_tm_increment_counter(&crt_gdata.cg_uri_self,
-						     1, NULL);
+			d_tm_inc_counter(crt_gdata.cg_uri_self, 1);
 		D_GOTO(out, rc);
 	}
 
@@ -1545,8 +1544,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 
 	if (ul_out->ul_uri != NULL) {
 		if (crt_gdata.cg_use_sensors)
-			(void)d_tm_increment_counter(&crt_gdata.cg_uri_other,
-						     1, NULL);
+			d_tm_inc_counter(crt_gdata.cg_uri_other, 1);
 		D_GOTO(out, rc);
 	}
 

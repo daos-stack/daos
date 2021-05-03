@@ -17,18 +17,17 @@ ARG REPO_URL
 # This is largely the same as the centos.7 code, however this sets priority for
 # the new repo, and leaves the default ones enabled as there is some metadata
 # that is not available locally.
-RUN if [ -n "$REPO_URL" ]; then						\
-      cversion=$(cut -d ' ' -f4 /etc/centos-release);			\
-      version=${cversion%.*} ;						\
-      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";	\
-      MY_NAME="${MY_REPO#*//}";						\
-      MY_NAME="${MY_NAME//\//_}";					\
+RUN if [ -n "$REPO_URL" ]; then						                           \
+      version=$(sed -e 's/.* \([0-9\.]*\)\.[0-9]*.*/\1/' /etc/centos-release); \
+      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";         \
+      MY_NAME="${MY_REPO#*//}";						                           \
+      MY_NAME="${MY_NAME//\//_}";					                           \
       echo -e "[${MY_NAME}]\n\
 name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 priority=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;		\
+gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;                 \
     fi
 
 # Install basic tools to build DAOS

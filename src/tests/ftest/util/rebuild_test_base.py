@@ -9,6 +9,7 @@ from command_utils_base import ObjectWithParameters, BasicParameter
 
 
 class RebuildTestParams(ObjectWithParameters):
+    # pylint: disable=too-few-public-methods
     """Class for gathering test parameters."""
 
     def __init__(self):

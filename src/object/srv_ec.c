@@ -46,7 +46,7 @@ obj_ec_is_valid_tgt(struct daos_cpd_ec_tgts *tgt_map, uint32_t map_size,
 int
 obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 		    uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
-		    void *tgt_map, uint32_t map_size,
+		    uint32_t leader_id, void *tgt_map, uint32_t map_size,
 		    uint32_t tgt_nr, struct daos_shard_tgt *tgts,
 		    struct obj_ec_split_req **split_req)
 {
@@ -61,13 +61,14 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 	struct dcs_iod_csums	*iod_csums = iod_array->oia_iod_csums;
 	struct dcs_iod_csums	*split_iod_csum = NULL;
 	struct dcs_iod_csums	*split_iod_csums;
-	uint32_t		 i, tgt_max_idx, self_tgt_idx;
+	uint32_t		 i, tgt_max_idx;
 	daos_size_t		 req_size, iods_size;
 	daos_size_t		 csums_size = 0, singv_ci_size = 0;
 	uint8_t			 tgt_bit_map[OBJ_TGT_BITMAP_LEN] = {0};
 	bool			 with_csums = (iod_csums != NULL);
 	void			*buf = NULL;
 	uint32_t		 tgt_idx;
+	uint32_t		 leader;
 	int			 count = 0;
 	int			 rc = 0;
 
@@ -80,7 +81,6 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 	D_ASSERT((oiods[0].oiod_flags & OBJ_SIOD_SINGV) ||
 		 oiods[0].oiod_nr >= 2);
 
-	self_tgt_idx = oid.id_shard - start_shard;
 	if (tgt_map != NULL)
 		tgt_max_idx = 0;
 	else
@@ -127,8 +127,19 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 
 	if (tgt_map != NULL) {
 		D_ASSERT(count == map_size);
+
+		/* If leader is not any EC shard, neither parity nor data,
+		 * then temporarily set leader as tgt_max_idx, that is not
+		 * important since current server will not take part in EC
+		 * update, the temporary leader is only for split handling.
+		 */
+		if (!obj_ec_is_valid_tgt(tgt_map, map_size, leader_id, &leader))
+			leader = tgt_max_idx;
 	} else {
-		setbit(tgt_bit_map, self_tgt_idx);
+		D_ASSERT(leader_id == PO_COMP_ID_ALL);
+
+		leader = oid.id_shard - start_shard;
+		setbit(tgt_bit_map, leader);
 		count++;
 	}
 
@@ -138,8 +149,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	req->osr_tgt_oiods = tgt_oiods;
-	tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, count, tgt_max_idx);
-	D_ASSERT(tgt_oiod != NULL && tgt_oiod->oto_tgt_idx == tgt_max_idx);
+	tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, count, leader);
+	D_ASSERT(tgt_oiod != NULL && tgt_oiod->oto_tgt_idx == leader);
 
 	req->osr_offs = tgt_oiod->oto_offs;
 	split_iods = req->osr_iods;
@@ -180,7 +191,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 					split_iod_csum->ic_data = split_ci;
 					split_ci->cs_nr = 1;
 					split_ci->cs_csum +=
-						tgt_max_idx * ci->cs_len;
+						leader * ci->cs_len;
 					split_ci->cs_buf_len = ci->cs_len;
 				}
 			}

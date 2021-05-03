@@ -25,10 +25,6 @@
 
 #include "obj_ec.h"
 
-#define ENCODING(proc_op) (proc_op == CRT_PROC_ENCODE)
-#define DECODING(proc_op) (proc_op == CRT_PROC_DECODE)
-#define FREEING(proc_op)  (proc_op == CRT_PROC_FREE)
-
 /* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
  * for other RPC fields and cart/HG headers.
  */
@@ -97,7 +93,7 @@
 		0, &CQF_obj_ec_agg,					\
 		ds_obj_ec_agg_handler, NULL, "ec_agg")			\
 	X(DAOS_OBJ_RPC_EC_REPLICATE,					\
-		0, &CQF_obj_ec_agg,					\
+		0, &CQF_obj_ec_rep,					\
 		ds_obj_ec_rep_handler, NULL, "ec_rep")			\
 	X(DAOS_OBJ_RPC_CPD,						\
 		0, &CQF_obj_cpd,					\
