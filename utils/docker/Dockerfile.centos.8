@@ -62,7 +62,6 @@ repo_gpgcheck=1\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
       dnf config-manager --assumeyes --quiet --disable          \
           appstream;                                            \
-      dnf clean all;                                            \
     fi
 
 # If a local DAOS repository is supplied, then we should use it

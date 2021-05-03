@@ -12,6 +12,8 @@ LABEL maintainer="daos@daos.groups.io"
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
+# Switch to using DNF instead of yum.
+#
 # If a local distro repository is supplied, then we should use it
 # and disable using the distro repositories.
 # The Docker image starts out with the DISTRO provided GPG keys
@@ -33,19 +35,19 @@ baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
-      yum -y install --disablerepo=extras                       \
+      sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
+          -i /etc/yum.conf;                                     \
+      yum -y install --disablerepo=base,extras,updates          \
              dnf dnf-plugins-core epel-release-7-11;            \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7;         \
       yum clean all;                                            \
-      dnf clean all;                                            \
-      dnf config-manager --assumeyes --quiet                    \
-                         --disable base extras epel updates;    \
-      sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
-          -i /etc/yum.conf;                                     \
+      dnf config-manager --assumeyes --quiet --disable epel;    \
     else                                                        \
       yum -y install dnf dnf-plugins-core epel-release-7-11;    \
-      yum clean all;                                            \
-    fi
+    fi;                                                         \
+    dnf -y upgrade epel-release;                                \
+    yum clean all;                                              \
+    dnf clean all
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
@@ -109,6 +111,7 @@ RUN dnf -y upgrade && \
         nasm \
         ndctl \
         numactl-devel \
+        openmpi3-devel \
         openssl-devel \
         pandoc \
         patch \
@@ -130,9 +133,6 @@ RUN dnf -y upgrade && \
         valgrind-devel \
         yasm && \
     dnf clean all
-
-# Install this individually because of potential conflicts
-RUN dnf -y install openmpi3-devel && dnf clean all
 
 ARG UID=1000
 
