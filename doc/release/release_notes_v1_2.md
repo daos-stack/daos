@@ -295,37 +295,6 @@ The regression has been fixed in the CentOS7.9 kernel.
 
 A fix for this is not planned.
 
-### PSM over OPA is not fully functional
-If you must evaluate DAOS on an OPA fabric, we recommend using IP over
-fabric/sockets for evaluation.  For benchmarking, PSM2 over OPA offers a
-better picture of DAOS performance, but the PSM2 provider is not fully
-functional. 
-
-For a discussion of issues and options, contact us via the
-[mailing list](https://daos.groups.io/g/daos).
-
-### Replication and Self-healing
-While replication and self-healing features have been fully implemented,
-those features haven't been thoroughly tested in 1.2. As a result, they are
-supported as preview features and will be fully supported in the next release.
-The storage node fault detection has thus been disabled by default and failed
-storage nodes have to be excluded manually to trigger automatic repair.
-Please refer to the [Pool Modifications] (https://daos-stack.github.io/admin/pool_operations/#pool-modifications)
-section of the administration guide for more information.
-
-### Limited bandwidth to SCM with some update/write operations
-With a configuration of only Intel(R) Optane Pmem for storage in a DAOS pool
-(no SSDs), a known limitation currently exists on the write/update performance
-with bulk transfers to the SCM with all network providers which limits the BW
-per storage server.
-
-### Aggregation Issue
-The aggregation service is only activated after the system has idled for more
-than 5 seconds, so the aggregation is always suspended if there are sustained
-I/O requests from application. As a result, storage node will run out of SCM
-space even there is plenty of free space in SSD.
-
-
 ## Fixed Issues Details
 ### PSM over OPA is not fully functional
 If you must evaluate DAOS on an OPA fabric, we recommend using IP over
