@@ -437,12 +437,13 @@ void bio_xsctxt_free(struct bio_xs_context *ctxt);
  * NVMe poller to poll NVMe I/O completions.
  *
  * \param[IN] ctxt	Per-xstream NVMe context
+ * \param[IN] bypass	Set to bypass the health check
  *
  * \return		0: If no work was done
  *			1: If work was done
  *			-1: If thread has exited
  */
-int bio_nvme_poll(struct bio_xs_context *ctxt);
+int bio_nvme_poll(struct bio_xs_context *ctxt,  bool bypass);
 
 /*
  * Create per VOS instance blob.
