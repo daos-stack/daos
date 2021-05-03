@@ -88,7 +88,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				15
+#define POOL_DF_VER_1				16
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_VER_1
 
@@ -119,6 +119,8 @@ struct vos_pool_df {
 	uint64_t				pd_nvme_sz;
 	/** # of containers in this pool */
 	uint64_t				pd_cont_nr;
+	/** offset for the btree of the dedup table (placeholder) */
+	umem_off_t				pd_dedup;
 	/** Typed PMEMoid pointer for the container index table */
 	struct btr_root				pd_cont_root;
 	/** Free space tracking for NVMe device */

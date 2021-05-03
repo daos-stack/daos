@@ -361,9 +361,17 @@ ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 	return 0;
 }
 
+/** Get a reference to the leader fields of \a svc. */
+void
+ds_rsvc_get_leader(struct ds_rsvc *svc)
+{
+	ds_rsvc_get(svc);
+	get_leader(svc);
+}
+
 /**
- * As a convenience for general replicated service RPC handlers, this function
- * puts svc returned by ds_rsvc_lookup_leader.
+ * Put the reference returned by ds_rsvc_lookup_leader or ds_rsvc_get_leader to
+ * the leader fields of \a svc.
  */
 void
 ds_rsvc_put_leader(struct ds_rsvc *svc)
@@ -454,7 +462,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		rc = 0;
 		goto out_mutex;
 	} else if (rc != 0) {
-		D_ERROR("%s: failed to step up as leader "DF_U64": "DF_RC"\n",
+		D_DEBUG(DB_MD, "%s: failed to step up to "DF_U64": "DF_RC"\n",
 			svc->s_name, term, DP_RC(rc));
 		if (map_distd_initialized)
 			drain_map_distd(svc);

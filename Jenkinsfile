@@ -753,7 +753,7 @@ pipeline {
                     post {
                       always {
                             unitTestPost artifacts: ['nlt_logs/*'],
-                                         testResults: 'None',
+                                         testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
