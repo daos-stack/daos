@@ -41,6 +41,7 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/ctl/ctl.pb.go\
 		   common/proto/ctl/network.pb.go\
 		   common/proto/ctl/firmware.pb.go\
+		   common/proto/ctl/ranks.pb.go\
 		   common/proto/srv/srv.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\
@@ -51,7 +52,7 @@ uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 
 all: proto-go proto-c
 
-clean:
+clean: clean-gen
 	rm -f $(GO_TARGETS) $(C_TARGETS)
 
 PROTOC := $(shell which protoc 2>/dev/null)
@@ -65,42 +66,69 @@ $(PROTOC):
 	@false
 
 GOPATH ?= $(shell go env GOPATH)
-PROTOC_GEN_GO_MOD_TAG = $(shell awk '/protobuf/ {print $$2}' $(DAOS_ROOT)/src/control/go.mod)
+PROTOC_GEN_GO_PKG := google.golang.org/protobuf
+PROTOC_GEN_GO_IMP := $(PROTOC_GEN_GO_PKG)/cmd/protoc-gen-go
+PROTOC_GEN_GO_MOD_TAG = $(shell awk '/$(subst /,\/,$(PROTOC_GEN_GO_PKG))/ {print $$2}' $(DAOS_ROOT)/src/control/go.mod)
 PROTOC_GEN_GO_TAG ?= $(PROTOC_GEN_GO_MOD_TAG)
-PROTOC_GEN_GO_IMP := github.com/golang/protobuf/protoc-gen-go
-PROTOC_GEN_GO := $(GOPATH)/bin/protoc-gen-go
+PROTOC_GEN_GO := $(GOPATH)/bin/$(notdir $(PROTOC_GEN_GO_IMP))
 
 $(PROTOC_GEN_GO): $(PROTOC)
-	@echo "Installing protobuf generator for Go..."
+	@echo "Installing protobuf generator ($(PROTOC_GEN_GO_TAG)) for Go..."
 	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) ] &&\
 		cd $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) &&\
-		git checkout master
+		git checkout master || true
 	go get -u $(PROTOC_GEN_GO_IMP) &&\
 	cd $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) &&\
 	git checkout $(PROTOC_GEN_GO_TAG) &&\
 	go install $(PROTOC_GEN_GO_IMP)
 
+PROTOC_GEN_GO_GRPC_PKG := google.golang.org/grpc
+PROTOC_GEN_GO_GRPC_IMP := $(PROTOC_GEN_GO_GRPC_PKG)/cmd/protoc-gen-go-grpc
+PROTOC_GEN_GO_GRPC_MOD_TAG = $(shell awk '/$(subst /,\/,$(PROTOC_GEN_GO_GRPC_PKG))/ {print $$2}' $(DAOS_ROOT)/src/control/go.mod)
+PROTOC_GEN_GO_GRPC_TAG ?= $(PROTOC_GEN_GO_GRPC_MOD_TAG)
+PROTOC_GEN_GO_GRPC := $(GOPATH)/bin/$(notdir $(PROTOC_GEN_GO_GRPC_IMP))
+
+$(PROTOC_GEN_GO_GRPC): $(PROTOC)
+	@echo "Installing gRPC protobuf generator ($(PROTOC_GEN_GO_GRPC_TAG)) for Go..."
+	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) ] &&\
+		cd $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) &&\
+		git checkout master || true
+	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_PKG) ] &&\
+		cd $(GOPATH)/src/$(PROTOC_GEN_GO_PKG) &&\
+		git checkout master || true
+	go get -u $(PROTOC_GEN_GO_GRPC_IMP) &&\
+	cd $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) &&\
+	git checkout $(PROTOC_GEN_GO_GRPC_TAG) &&\
+	go install $(PROTOC_GEN_GO_GRPC_IMP)
+
+clean-gen:
+	rm -f $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC)
+
 GO_TARGETS = $(addprefix $(CTRL_SOURCE_ROOT)/,$(GO_CONTROL_FILES))
 GO_PKG_DIRS = $(call uniq,$(dir $(GO_TARGETS)))
 
-proto-go: $(PROTOC_GEN_GO) $(GO_PKG_DIRS) $(GO_TARGETS)
+proto-go: $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC) $(GO_PKG_DIRS) $(GO_TARGETS)
 
 $(GO_PKG_DIRS):
 	mkdir -p $@
 
 $(CTRL_SOURCE_ROOT)/common/proto/%.pb.go: $(PROTO_SOURCE_DIR)/%.proto
-	protoc -I $(PROTO_SOURCE_DIR) --go_out=plugins=grpc:$(shell dirname $(dir $@)) --go_opt=paths=source_relative $<
+	protoc -I $(PROTO_SOURCE_DIR) --go_out=$(shell dirname $(dir $@)) --go_opt=paths=source_relative \
+				      --go-grpc_out=$(shell dirname $(dir $@)) --go-grpc_opt=paths=source_relative $<
 
 # Some of these don't follow a regular pattern, so define
 # one-off recipes for them.
 $(CTRL_SOURCE_ROOT)/drpc/%.pb.go: $(PROTO_SOURCE_DIR)/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) --go_opt=paths=source_relative $<
+	protoc -I $(dir $<) --go_out=$(dir $@) --go_opt=paths=source_relative \
+			    --go-grpc_out=$(dir $@) --go-grpc_opt=paths=source_relative $<
 
 $(CTRL_SOURCE_ROOT)/security/auth/%.pb.go: $(PROTO_SOURCE_DIR)/security/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) --go_opt=paths=source_relative $<
+	protoc -I $(dir $<) --go_out=$(dir $@) --go_opt=paths=source_relative \
+			    --go-grpc_out=$(dir $@) --go-grpc_opt=paths=source_relative $<
 
 $(CTRL_SOURCE_ROOT)/cmd/drpc_test/hello/%.pb.go: $(PROTO_SOURCE_DIR)/test/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) --go_opt=paths=source_relative $<
+	protoc -I $(dir $<) --go_out=$(dir $@) --go_opt=paths=source_relative \
+			    --go-grpc_out=$(dir $@) --go-grpc_opt=paths=source_relative $<
 
 PROTOC_GEN_C := $(shell which protoc-gen-c 2>/dev/null)
 ifeq ($(PROTOC_GEN_C),)

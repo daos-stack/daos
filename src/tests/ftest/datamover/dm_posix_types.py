@@ -161,12 +161,10 @@ class DmPosixTypesTest(DataMoverTestBase):
             ["POSIX"] + posix1,
             ["DAOS_UNS"] + p1_c2])
 
-        # FS_COPY does not yet support this
-        if self.tool != "FS_COPY":
-            copy_list.append([
-                "POSIX -> POSIX",
-                ["POSIX"] + posix1,
-                ["POSIX"] + posix2])
+        copy_list.append([
+            "POSIX -> POSIX",
+            ["POSIX"] + posix1,
+            ["POSIX"] + posix2])
 
         # Run and verify each copy.
         # Each src or dst is a list of params:
@@ -188,11 +186,15 @@ class DmPosixTypesTest(DataMoverTestBase):
                 dst_path = join(dst[1], basename(src[1]))
             self.read_verify_location(dst[0], dst_path, dst[2], dst[3])
 
+            # The cases below use a UNS sub path, which is
+            # not supported by FS_COPY
+            if (self.tool == "FS_COPY" and
+                    src[0] == "DAOS_UNS" or dst[0] == "DAOS_UNS"):
+                continue
+
             # file -> file variation
             # A UNS subset is not supported for both src and dst.
-            # FS_COPY only supports directories.
-            if (not (src[0] == "DAOS_UNS" and dst[0] == "DAOS_UNS") and
-                    self.tool != "FS_COPY"):
+            if not (src[0] == "DAOS_UNS" and dst[0] == "DAOS_UNS"):
                 self.run_datamover(
                     test_desc + " (file->file)",
                     src[0], join(src[1], self.test_file), src[2], src[3],
@@ -201,9 +203,8 @@ class DmPosixTypesTest(DataMoverTestBase):
 
             # file -> dir variation
             # This works because the destination dir is already created above.
-            # FS_COPY only supports directories.
             # DSYNC overwrites existing directories with the source file.
-            if self.tool not in ("FS_COPY", "DSYNC"):
+            if self.tool != "DSYNC":
                 self.run_datamover(
                     test_desc + " (file->dir)",
                     src[0], join(src[1], self.test_file), src[2], src[3],
