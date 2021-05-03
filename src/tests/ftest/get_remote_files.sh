@@ -147,7 +147,6 @@ scp_files() {
     local rc=0
     copied=()
     # shellcheck disable=SC2045,SC2086
-
     for file in $(ls -d ${1})
     do
         file_name=${file##*/}
