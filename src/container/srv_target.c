@@ -45,7 +45,7 @@
  */
 #define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
-#define DAOS_AGG_LAZY_RATE	1000 /* ms */
+#define DAOS_AGG_LAZY_RATE	50 /* ms */
 
 static inline bool
 agg_rate_ctl(void *arg)
@@ -60,15 +60,12 @@ agg_rate_ctl(void *arg)
 	switch (pool->sp_reclaim) {
 	case DAOS_RECLAIM_DISABLED:
 		return true;
-	case DAOS_RECLAIM_LAZY:
+	default:
 		if (dss_xstream_is_busy() &&
 		    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE)
 			sched_req_sleep(req, DAOS_AGG_LAZY_RATE);
 		else
 			sched_req_yield(req);
-		return false;
-	default:
-		sched_req_yield(req);
 		return false;
 	}
 }
@@ -203,14 +200,15 @@ cont_aggregate_runnable(struct ds_cont_child *cont)
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct sched_request	*req = cont->sc_agg_req;
 
-	if (unlikely(pool->sp_map == NULL)) {
+	if (unlikely(pool->sp_map == NULL) || pool->sp_stopping) {
 		/* If it does not get the pool map from the pool leader,
 		 * see pool_iv_pre_sync(), the IV fetch from the following
 		 * ds_cont_csummer_init() will fail anyway.
 		 */
 		D_DEBUG(DB_EPC, DF_CONT": skip aggregation "
-			"No pool map yet\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+			"No pool map yet or stopping %d\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			pool->sp_stopping);
 		return false;
 	}
 
@@ -2334,7 +2332,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 		struct dss_coll_ops	coll_ops = { 0 };
 		struct dss_coll_args	coll_args = { 0 };
 
-		if (pool->sp_map == NULL)
+		if (pool->sp_map == NULL || pool->sp_stopping)
 			goto yield;
 
 		/* collective operations */
