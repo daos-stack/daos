@@ -10,7 +10,8 @@ set -e
 
 ./utils/setup_daos_admin.sh
 
-# Debug.
-ldd /opt/daos/bin/daos_server
+# Needed for CentOS 8
+export LD_LIBRARY_PATH=/opt/daos/prereq/release/spdk/lib/
+
 
 ./utils/node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
