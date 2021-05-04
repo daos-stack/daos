@@ -168,8 +168,8 @@ pipeline {
                     when {
                       beforeAgent true
                       expression { ! (skipStage(stage: 'python-bandit',
-		                                 def_val: 'false') ||
-		                        quickFunctional()) }
+                                                def_val: 'false') ||
+                                      quickFunctional()) }
                     }
                     agent {
                         dockerfile {
@@ -437,6 +437,7 @@ pipeline {
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
+                            args '--tmpfs /mnt/daos'
                         }
                     }
                     steps {
@@ -444,6 +445,8 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
+                        sh (script:"""sudo ./utils/docker_nlt.sh --class-name centos7.release --test cont_copy""",
+                            label: 'Run NLT smoke test')
                     }
                     post {
                         always {
@@ -451,6 +454,7 @@ pipeline {
                                          aggregatingResults: true,
                                          tool: gcc4(pattern: 'centos7-gcc-release-build.log',
                                                     id: "analysis-gcc-centos7-release")
+                            junit testResults: 'nlt-junit.xml'
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
