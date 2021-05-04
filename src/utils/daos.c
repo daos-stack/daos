@@ -550,7 +550,10 @@ args_free(struct cmd_args_s *ap)
 	D_FREE(ap->dst);
 	D_FREE(ap->snapname_str);
 	D_FREE(ap->epcrange_str);
+
 	daos_prop_free(ap->props);
+	ap->props = NULL;
+
 	D_FREE(ap->outfile);
 	D_FREE(ap->aclfile);
 	D_FREE(ap->entry);
