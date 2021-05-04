@@ -15,6 +15,7 @@
 #include <daos/event.h>
 #include <daos/pool.h>
 #include <daos/container.h>
+#include <daos/cont_props.h>
 #include <daos/array.h>
 #include <daos/object.h>
 #include <daos/placement.h>
@@ -47,8 +48,6 @@
 #define DFS_LAYOUT_VERSION	1
 /** Array object stripe size for regular files */
 #define DFS_DEFAULT_CHUNK_SIZE	1048576
-/** default object class for files & dirs */
-#define DFS_DEFAULT_OBJ_CLASS	OC_SX
 /** Magic value for serializing / deserializing a DFS handle */
 #define DFS_GLOB_MAGIC		0xda05df50
 /** Magic value for serializing / deserializing a DFS object handle */
@@ -298,10 +297,6 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 	if (oclass == 0)
 		oclass = dfs->attr.da_oclass_id;
 
-	rc = dfs_oclass_select(dfs->poh, oclass, &oclass);
-	if (rc)
-		return rc;
-
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */
 	if (dfs->oid.hi >= MAX_OID_HI) {
@@ -326,7 +321,11 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 			DAOS_OF_ARRAY_BYTE;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
-	daos_obj_set_oid(oid, feat, oclass, 0);
+	rc = daos_obj_generate_oid(dfs->coh, oid, feat, oclass, 0, 0);
+	if (rc) {
+		D_ERROR("daos_obj_generate_oid() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
 
 	return 0;
 }
@@ -1094,10 +1093,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 		else
 			chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 
-		if (attr->da_oclass_id != OC_UNKNOWN)
-			oclass = attr->da_oclass_id;
-		else
-			oclass = DFS_DEFAULT_OBJ_CLASS;
+		oclass = attr->da_oclass_id;
 
 		rc = daos_obj_update(*oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT,
 				     &dkey, SB_AKEYS, iods, sgls, NULL);
@@ -1145,8 +1141,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 
 	attr->da_chunk_size = (chunk_size) ? chunk_size :
 		DFS_DEFAULT_CHUNK_SIZE;
-	attr->da_oclass_id = (oclass != OC_UNKNOWN) ? oclass :
-		DFS_DEFAULT_OBJ_CLASS;
+	attr->da_oclass_id = oclass;
 
 	return 0;
 err:
@@ -1180,11 +1175,11 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	daos_handle_t		coh, super_oh;
 	struct dfs_entry	entry = {0};
 	daos_prop_t		*prop = NULL;
+	uint64_t		rf_factor;
 	daos_cont_info_t	co_info;
 	dfs_t			*dfs;
 	dfs_attr_t		dattr;
 	struct daos_prop_co_roots roots;
-	daos_oclass_id_t	oclass;
 	int			rc;
 
 	if (_dfs && _coh == NULL) {
@@ -1209,30 +1204,35 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 			D_GOTO(err_prop, rc);
 		}
 	}
-	if (attr && attr->da_oclass_id != OC_UNKNOWN)
+
+	/** set the oclass id from passed in attr, otherwise use default (0) */
+	if (attr)
 		dattr.da_oclass_id = attr->da_oclass_id;
 	else
-		dattr.da_oclass_id = DFS_DEFAULT_OBJ_CLASS;
+		dattr.da_oclass_id = 0;
+
+	/** check if RF factor is set on property */
+	rf_factor = daos_cont_prop2redunfac(prop);
 
 	/* select oclass and generate SB OID */
-	rc = dfs_oclass_select(poh, OC_RP_XSF, &oclass);
-	if (rc) {
-		rc = daos_der2errno(rc);
-		D_GOTO(err_prop, rc);
-	}
 	roots.cr_oids[0].lo = RESERVED_LO;
 	roots.cr_oids[0].hi = SB_HI;
-	daos_obj_set_oid(&roots.cr_oids[0], 0, oclass, 0);
+	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[0],
+					 0, dattr.da_oclass_id, 0, 0);
+	if (rc) {
+		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
 
 	/* select oclass and generate ROOT OID */
-	rc = dfs_oclass_select(poh, dattr.da_oclass_id, &oclass);
-	if (rc) {
-		rc = daos_der2errno(rc);
-		D_GOTO(err_prop, rc);
-	}
 	roots.cr_oids[1].lo = RESERVED_LO;
 	roots.cr_oids[1].hi = ROOT_HI;
-	daos_obj_set_oid(&roots.cr_oids[1], 0, oclass, 0);
+	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[1],
+					 0, dattr.da_oclass_id, 0, 0);
+	if (rc) {
+		D_ERROR("Failed to generate ROOT OID "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
 
 	/* store SB & root OIDs as container property */
 	roots.cr_oids[2] = roots.cr_oids[3] = DAOS_OBJ_NIL;
