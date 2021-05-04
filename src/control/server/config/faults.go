@@ -33,7 +33,12 @@ var (
 	FaultConfigBadControlPort = serverConfigFault(
 		code.ServerConfigBadControlPort,
 		"invalid control port in configuration",
-		"specify a nonzero control port in configuration ('port' parameter) and restart the control server",
+		"specify a positive non-zero network port in configuration ('port' parameter) and restart the control server",
+	)
+	FaultConfigBadTelemetryPort = serverConfigFault(
+		code.ServerConfigBadTelemetryPort,
+		"invalid telemetry port in configuration",
+		"specify a positive non-zero network port in configuration ('telemetry_port' parameter) and restart the control server",
 	)
 	FaultConfigBadAccessPoints = serverConfigFault(
 		code.ServerConfigBadAccessPoints,

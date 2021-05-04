@@ -28,9 +28,9 @@ timeouts:
     test_daos_drain_simple: 500
     test_daos_oid_allocator: 320
     test_daos_checksum: 240
-    test_daos_rebuild_ec: 900
+    test_daos_rebuild_ec: 1500
     test_daos_degraded_ec_0to6: 900
-    test_daos_degraded_ec_8to22: 900
+    test_daos_degraded_ec_8to23: 950
     test_daos_dedup: 220
 pool:
   #This will create 8G of SCM and 16G of NVMe size of pool.
@@ -88,6 +88,7 @@ daos_tests:
     test_daos_distributed_tx: DAOS_Distributed_TX
     test_daos_verify_consistency: DAOS_Verify_Consistency
     test_daos_io: DAOS_IO
+    test_daos_ec_io: DAOS_EC_IO
     test_daos_object_array: DAOS_Object_Array
     test_daos_array: DAOS_Array
     test_daos_kv: DAOS_KV
@@ -101,7 +102,7 @@ daos_tests:
     test_daos_rebuild_ec: DAOS_Rebuild_EC
     test_daos_aggregate_ec: DAOS_Aggregate_EC
     test_daos_degraded_ec_0to6: DAOS_Degraded_EC_0to6
-    test_daos_degraded_ec_8to22: DAOS_Degraded_EC_8to22
+    test_daos_degraded_ec_8to23: DAOS_Degraded_EC_8to23
     test_daos_dedup: DAOS_Dedup
     test_daos_capability: DAOS_Capability
     test_daos_epoch_recovery: DAOS_Epoch_Recovery
@@ -114,7 +115,7 @@ daos_tests:
     test_daos_rebuild_ec: DAOS_Rebuild_EC
     test_daos_aggregate_ec: DAOS_Aggregate_EC
     test_daos_degraded_ec_0to6: DAOS_Degraded_EC_0to6
-    test_daos_degraded_ec_8to22: DAOS_Degraded_EC_8to22
+    test_daos_degraded_ec_8to23: DAOS_Degraded_EC_8to23
     test_daos_dedup: DAOS_Dedup
   daos_test:
     test_daos_degraded_mode: d
@@ -126,6 +127,7 @@ daos_tests:
     test_daos_distributed_tx: T
     test_daos_verify_consistency: V
     test_daos_io: i
+    test_daos_ec_io: i
     test_daos_object_array: A
     test_daos_array: D
     test_daos_kv: K
@@ -140,11 +142,12 @@ daos_tests:
     test_daos_rebuild_ec: S
     test_daos_aggregate_ec: Z
     test_daos_degraded_ec_0to6: X
-    test_daos_degraded_ec_8to22: X
+    test_daos_degraded_ec_8to23: X
     test_daos_dedup: U
   args:
     test_daos_degraded_ec_0to6: -u subtests="0-6"
-    test_daos_degraded_ec_8to22: -u subtests="8-22"
+    test_daos_degraded_ec_8to23: -u subtests="8-23"
+    test_daos_ec_io: -l"EC_4P2G1"
   scalable_endpoint:
     test_daos_degraded_mode: True
   stopped_ranks:

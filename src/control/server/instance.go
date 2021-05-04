@@ -12,8 +12,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
@@ -28,6 +28,7 @@ import (
 
 type (
 	systemJoinFn     func(context.Context, *control.SystemJoinReq) (*control.SystemJoinResp, error)
+	onAwaitFormatFn  func(context.Context, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
 	onInstanceExitFn func(context.Context, system.Rank, error) error
@@ -54,6 +55,7 @@ type EngineInstance struct {
 	fsRoot            string
 	hostFaultDomain   *system.FaultDomain
 	joinSystem        systemJoinFn
+	onAwaitFormat     []onAwaitFormatFn
 	onStorageReady    []onStorageReadyFn
 	onReady           []onReadyFn
 	onInstanceExit    []onInstanceExitFn
@@ -109,6 +111,12 @@ func (ei *EngineInstance) isStarted() bool {
 // drpc and storage ready states, and currently active.
 func (ei *EngineInstance) isReady() bool {
 	return ei.ready.Load() && ei.isStarted()
+}
+
+// OnAwaitFormat adds a list of callbacks to invoke when the instance
+// requires formatting.
+func (ei *EngineInstance) OnAwaitFormat(fns ...onAwaitFormatFn) {
+	ei.onAwaitFormat = append(ei.onAwaitFormat, fns...)
 }
 
 // OnStorageReady adds a list of callbacks to invoke when the instance

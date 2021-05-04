@@ -17,6 +17,20 @@
 #include <daos_srv/control.h>
 #include <abt.h>
 
+#define BIO_ADDR_IS_HOLE(addr) ((addr)->ba_flags == BIO_FLAG_HOLE)
+#define BIO_ADDR_SET_HOLE(addr) ((addr)->ba_flags |= BIO_FLAG_HOLE)
+#define BIO_ADDR_SET_NOT_HOLE(addr) ((addr)->ba_flags &= ~(BIO_FLAG_HOLE))
+#define BIO_ADDR_IS_DEDUP(addr) ((addr)->ba_flags == BIO_FLAG_DEDUP)
+#define BIO_ADDR_SET_DEDUP(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP)
+#define BIO_ADDR_SET_NOT_DEDUP(addr) ((addr)->ba_flags &= ~(BIO_FLAG_DEDUP))
+
+/* Can support up to 16 flags for a BIO address */
+enum BIO_FLAG {
+	/* The address is a hole */
+	BIO_FLAG_HOLE = (1 << 0),
+	BIO_FLAG_DEDUP = (1 << 1),
+};
+
 typedef struct {
 	/*
 	 * Byte offset within PMDK pmemobj pool for SCM;
@@ -24,11 +38,11 @@ typedef struct {
 	 */
 	uint64_t	ba_off;
 	/* DAOS_MEDIA_SCM or DAOS_MEDIA_NVME */
-	uint16_t	ba_type;
-	/* Is the address a hole ? */
-	uint16_t	ba_hole;
-	uint16_t	ba_dedup;
-	uint16_t	ba_padding;
+	uint8_t		ba_type;
+	uint8_t		ba_pad1;
+	/* See BIO_FLAG enum */
+	uint16_t	ba_flags;
+	uint32_t	ba_pad2;
 } bio_addr_t;
 
 struct sys_db;
@@ -104,13 +118,16 @@ bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
 static inline bool
 bio_addr_is_hole(const bio_addr_t *addr)
 {
-	return addr->ba_hole != 0;
+	return BIO_ADDR_IS_HOLE(addr);
 }
 
 static inline void
 bio_addr_set_hole(bio_addr_t *addr, uint16_t hole)
 {
-	addr->ba_hole = hole;
+	if (hole == 0)
+		BIO_ADDR_SET_NOT_HOLE(addr);
+	else
+		BIO_ADDR_SET_HOLE(addr);
 }
 
 static inline void
@@ -264,7 +281,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
 		d_iov_t	*iov = &sgl->sg_iovs[i];
 
 		/* Skip bulk transfer for deduped extent */
-		if (biov->bi_addr.ba_dedup && deduped_skip)
+		if (BIO_ADDR_IS_DEDUP(&biov->bi_addr) && deduped_skip)
 			iov->iov_buf = NULL;
 		else
 			iov->iov_buf = bio_iov2req_buf(biov);
@@ -420,12 +437,13 @@ void bio_xsctxt_free(struct bio_xs_context *ctxt);
  * NVMe poller to poll NVMe I/O completions.
  *
  * \param[IN] ctxt	Per-xstream NVMe context
+ * \param[IN] bypass	Set to bypass the health check
  *
  * \return		0: If no work was done
  *			1: If work was done
  *			-1: If thread has exited
  */
-int bio_nvme_poll(struct bio_xs_context *ctxt);
+int bio_nvme_poll(struct bio_xs_context *ctxt,  bool bypass);
 
 /*
  * Create per VOS instance blob.

@@ -9,8 +9,8 @@ storage hardware provisioning and would typically be run from a login
 node.
 
 After `daos_server` instances have been started on each storage node for the
-first time, `dmg storage prepare` will set PMem storage into the necessary
-state for use with DAOS.
+first time, `daos_server storage prepare --scm-only` will set PMem storage
+into the necessary state for use with DAOS when run on each host.
 Then `dmg storage format` formats persistent storage devices (specified in the
 server configuration file) on the storage nodes and writes necessary metadata
 before starting DAOS Engine processes that will operate across the fabric.
@@ -416,15 +416,12 @@ regions (interleaved mode) in groups of modules local to a specific socket
 (NUMA), and resultant nvdimm namespaces are defined by a device identifier
 (e.g., /dev/pmem0).
 
-PMem preparation is required once per DAOS installation and
-requires the DAOS Control Servers to be running as root.
+PMem preparation is required once per DAOS installation.
 
-This step requires a reboot to enable PMem resource allocation
-changes to be read by BIOS.
+This step requires a reboot to enable PMem resource allocation changes to be
+read by BIOS.
 
-PMem preparation can be performed from the management tool
-`dmg storage prepare --scm-only` or using the Control Server directly
-`sudo daos_server storage prepare --scm-only`.
+PMem preparation can be performed with `daos_server storage prepare --scm-only`.
 
 The first time the command is run, the SCM interleaved regions will be created
 as resource allocations on any available PMem modules (one region per NUMA
@@ -435,58 +432,29 @@ the storage node(s) in order for the BIOS to activate the new storage
 allocations.
 The storage prepare command does not initiate the reboot itself.
 
-After running the command a reboot will be required, then the Control
-Servers will then need to be started again and the command run for a
-second time to expose the namespace device to be used by DAOS.
+After running the command a reboot will be required, the command will then need
+to be run for a second time to expose the namespace device to be used by DAOS.
 
 Example usage:
 
-- `dmg -l wolf-[118-121,130-133] -i storage prepare --scm-only`
+- `clush -w wolf-[118-121,130-133] daos_server storage prepare --scm-only`
 after running, the user should be prompted for a reboot.
 
 - `clush -w wolf-[118-121,130-133] reboot`
 
-- `clush -w wolf-[118-121,130-133] daos_server start -o utils/config/examples/daos_server_sockets.yml`
-
-- `dmg -l wolf-[118-121,130-133] -i storage prepare --scm-only`
-after running, `/dev/pmemX` devices should be available on each of the hosts.
-
-`sudo daos_server storage prepare --scm-only` should be run for a second time after
-system reboot to create the pmem kernel devices (/dev/pmemX
-namespaces created on the new SCM regions).
+- `clush -w wolf-[118-121,130-133] daos_server storage prepare --scm-only`
+after running, PMem devices (/dev/pmemX namespaces created on the new SCM
+regions) should be available on each of the hosts.
 
 On the second run, one namespace per region is created, and each namespace may
 take up to a few minutes to create. Details of the pmem devices will be
 displayed in JSON format on command completion.
 
-Example output from the initial call (with the SCM modules set to default MemoryMode):
-
-```bash
-Memory allocation goals for SCM will be changed and namespaces modified, this
-will be a destructive operation.  ensure namespaces are unmounted and SCM is
-otherwise unused.
-A reboot is required to process new memory allocation goals.
-```
-
-Example output from the subsequent call (SCM modules configured to interleaved
-mode, and host rebooted):
-
-```bash
-Memory allocation goals for SCM will be changed and namespaces modified. This
-will be a destructive operation. Ensure namespaces are unmounted and the SCM
-is otherwise unused.
-creating SCM namespace, may take a few minutes...
-creating SCM namespace, may take a few minutes...
-Persistent memory kernel devices:
-[{UUID:5d2f2517-9217-4d7d-9c32-70731c9ac11e Blockdev:pmem1 Dev:namespace1.0 NumaNode:1} {UUID:2bfe6c40-f79a-4b8e-bddf-ba81d4427b9b Blockdev:pmem0 Dev:namespace0.0 NumaNode:0}]
-```
-
 Upon successful creation of the pmem devices, the Intel(R) Optane(TM)
 persistent memory is configured and one can move on to the next step.
 
-If required, the pmem devices can be destroyed via the --reset option:
-
-`sudo daos_server [<app_opts>] storage prepare [--scm-only|-s] --reset [<cmd_opts>]`
+If required, the pmem devices can be destroyed with the command
+`daos_server storage prepare --scm-only --reset`.
 
 All namespaces are disabled and destroyed. The SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
@@ -496,19 +464,6 @@ devices are mounted before running reset (as per the printed warning).
 
 A subsequent reboot is required for BIOS to read the new resource
 allocations.
-
-Example output when resetting the SCM modules:
-
-```bash
-Memory allocation goals for SCM will be changed and namespaces modified, this
-will be a destructive operation.  ensure namespaces are unmounted and SCM is
-otherwise unused.
-removing SCM namespace, may take a few minutes...
-removing SCM namespace, may take a few minutes...
-resetting SCM memory allocations
-A reboot is required to process new memory allocation goals.
-```
-
 
 
 ### Storage Selection
@@ -523,10 +478,11 @@ administrator wants to have finer control over the storage selection.
 `dmg storage scan` can be run to query remote running `daos_server`
 processes over the management network.
 
-`sudo daos_server storage scan` can be used to query `daos_server`
-directly (scans locally-attached SSDs and Intel Persistent Memory
-Modules usable by DAOS). Output will be equivalent running
-`dmg storage scan --verbose` remotely.
+`daos_server storage scan` can be used to query `daos_server` directly
+(scans locally-attached SSDs and Intel Persistent Memory Modules usable by
+DAOS) but SSDs need to be made accessible first by running
+`daos_server storage prepare --nvme-only -u <current_user` first.
+The output will be equivalent running `dmg storage scan --verbose` remotely.
 
 ```bash
 bash-4.2$ dmg storage scan
