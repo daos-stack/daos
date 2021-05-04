@@ -39,7 +39,7 @@ func (c *Counter) Value() uint64 {
 
 	var val C.uint64_t
 
-	res := C.d_tm_get_counter(&val, c.handle.shmem, c.node, nil)
+	res := C.d_tm_get_counter(c.handle.ctx, &val, c.node)
 	if res == C.DER_SUCCESS {
 		return uint64(val)
 	}

@@ -42,7 +42,7 @@ cmd_push_arg(char *args[], int *argcount, const char *fmt, ...)
 		return NULL;
 	}
 
-	D_REALLOC(tmp, args, sizeof(char *) * (*argcount + 1));
+	D_REALLOC_ARRAY(tmp, args, *argcount, *argcount + 1);
 	if (tmp == NULL) {
 		D_ERROR("realloc failed\n");
 		D_FREE(arg);
@@ -61,13 +61,13 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 {
 	char		*tmp = NULL;
 	char		*cmd_str = NULL;
-	size_t		size;
+	size_t		size, old;
 	int		i;
 
 	if (cmd_base == NULL)
 		return NULL;
 
-	size = strnlen(cmd_base, ARG_MAX - 1) + 1;
+	old = size = strnlen(cmd_base, ARG_MAX - 1) + 1;
 	D_STRNDUP(cmd_str, cmd_base, size);
 	if (cmd_str == NULL)
 		return NULL;
@@ -80,13 +80,14 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 			return NULL;
 		}
 
-		D_REALLOC(tmp, cmd_str, size);
+		D_REALLOC(tmp, cmd_str, old, size);
 		if (tmp == NULL) {
 			D_FREE(cmd_str);
 			return NULL;
 		}
 		strncat(tmp, args[i], size);
 		cmd_str = tmp;
+		old = size;
 	}
 
 	return cmd_str;
@@ -150,7 +151,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 				D_GOTO(out_jbuf, rc = -DER_REC2BIG);
 			}
 
-			D_REALLOC(temp, jbuf, size);
+			D_REALLOC(temp, jbuf, total, size);
 			if (temp == NULL)
 				D_GOTO(out_jbuf, rc = -DER_NOMEM);
 			jbuf = temp;
@@ -163,7 +164,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		total += n;
 	}
 
-	D_REALLOC(temp, jbuf, total + 1);
+	D_REALLOC(temp, jbuf, total, total + 1);
 	if (temp == NULL)
 		D_GOTO(out_jbuf, rc = -DER_NOMEM);
 	jbuf = temp;
@@ -469,6 +470,11 @@ dmg_pool_create(const char *dmg_config_file,
 	if (svc == NULL)
 		goto out_svc;
 
+	if (pool_info.mgpi_svc->rl_nr == 0) {
+		D_ERROR("unexpected zero-length pool svc ranks list\n");
+		rc = -DER_INVAL;
+		goto out_svc;
+	}
 	rc = d_rank_list_copy(svc, pool_info.mgpi_svc);
 	if (rc != 0) {
 		D_ERROR("failed to dup svc rank list\n");

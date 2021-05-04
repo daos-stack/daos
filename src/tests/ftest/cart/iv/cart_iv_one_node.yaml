@@ -10,6 +10,7 @@ ENV:
     - OFI_INTERFACE: "eth0"
     - test_servers_CRT_CTX_NUM: "2"
     - test_clients_CRT_CTX_NUM: "2"
+    - CRT_TEST_CONT: "1"
 env_CRT_CTX_SHARE_ADDR: !mux
   sep:
     env: sep

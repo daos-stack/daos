@@ -19,9 +19,6 @@
 int dts_obj_class	= OC_RP_2G1;
 int dts_obj_replica_cnt	= 2;
 
-int dts_ec_obj_class	= OC_EC_2P2G1;
-int dts_ec_grp_size	= 4;
-
 void
 ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	   daos_iod_type_t iod_type, test_arg_t *arg)
@@ -1321,7 +1318,7 @@ enumerate_akey(daos_handle_t th, char *dkey, uint32_t *number,
 	return rc;
 }
 
-static void
+void
 enumerate_rec(daos_handle_t th, char *dkey, char *akey,
 	      daos_size_t *size, uint32_t *number, daos_recx_t *recxs,
 	      daos_epoch_range_t *eprs, daos_anchor_t *anchor, bool incr,
@@ -2129,7 +2126,6 @@ basic_byte_array(void **state)
 	char		 *buf;
 	char		 *buf_out;
 	int		 buf_len, tmp_len;
-	bool		 test_ec = false;
 	int		 step = 1;
 	int		 rc;
 
@@ -2140,14 +2136,7 @@ basic_byte_array(void **state)
 	dts_buf_render(stack_buf, STACK_BUF_LEN);
 	dts_buf_render(bulk_buf, TEST_BULK_BUF_LEN);
 
-test_ec_obj:
-	/** open object */
-	if (test_ec)
-		oid = daos_test_oid_gen(arg->coh, dts_ec_obj_class, 0, 0,
-					arg->myrank);
-	else
-		oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0,
-					arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -2258,13 +2247,6 @@ next_step:
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
-
-	if (test_runable(arg, dts_ec_grp_size) && !test_ec) {
-		print_message("\nrun same test fr EC object ...\n");
-		test_ec = true;
-		step = 1;
-		goto test_ec_obj;
-	}
 
 	print_message("all good\n");
 	D_FREE(bulk_buf);

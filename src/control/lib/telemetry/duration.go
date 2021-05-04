@@ -32,7 +32,7 @@ func (d *Duration) Value() time.Duration {
 
 	var tms C.struct_timespec
 
-	res := C.d_tm_get_duration(&tms, &d.stats, d.handle.shmem, d.node, nil)
+	res := C.d_tm_get_duration(d.handle.ctx, &tms, &d.stats, d.node)
 	if res == C.DER_SUCCESS {
 		return time.Duration(tms.tv_sec)*time.Second + time.Duration(tms.tv_nsec)
 	}

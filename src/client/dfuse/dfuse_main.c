@@ -297,7 +297,11 @@ main(int argc, char **argv)
 			dfuse_info->di_mountpoint = optarg;
 			break;
 		case 'S':
+			/* Set it to be single threaded, but allow an extra one
+			 * for the event queue processing
+			 */
 			dfuse_info->di_threaded = false;
+			dfuse_info->di_thread_count = 2;
 			break;
 		case 't':
 			dfuse_info->di_thread_count = atoi(optarg);

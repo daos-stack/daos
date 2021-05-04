@@ -334,6 +334,7 @@ int run_daos_pool_test(int rank, int size);
 int run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_capa_test(int rank, int size);
 int run_daos_io_test(int rank, int size, int *tests, int test_size);
+int run_daos_ec_io_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_epoch_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_obj_array_test(int rank, int size);
 int run_daos_array_test(int rank, int size);
