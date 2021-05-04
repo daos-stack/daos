@@ -13,6 +13,6 @@ set -e
 uptime
 
 # Needed for CentOS 8
-export LD_LIBRARY_PATH=/opt/daos/prereq/release/spdk/lib/:$LD_LIBRARY_PATH
+# export LD_LIBRARY_PATH=/opt/daos/prereq/release/spdk/lib/:$LD_LIBRARY_PATH
 
 ./utils/node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
