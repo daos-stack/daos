@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,10 +13,12 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 /*
@@ -49,10 +51,10 @@ type containerCmd struct {
 	GetProperty    containerGetPropertyCmd    `command:"get-property" alias:"get-prop" description:"get container user-defined attribute"`
 	SetProperty    containerSetPropertyCmd    `command:"set-property" alias:"set-prop" description:"set container user-defined attribute"`
 
-	GetACL       containerGetACLCmd       `command:"get" description:"get a container's ACL"`
-	OverwriteACL containerOverwriteACLCmd `command:"overwrite" alias:"replace" description:"replace a container's ACL"`
-	UpdateACL    containerUpdateACLCmd    `command:"update" description:"update a container's ACL"`
-	DeleteACL    containerDeleteACLCmd    `command:"delete" description:"delete a container's ACL"`
+	GetACL       containerGetACLCmd       `command:"get-acl" description:"get a container's ACL"`
+	OverwriteACL containerOverwriteACLCmd `command:"overwrite-acl" alias:"replace" description:"replace a container's ACL"`
+	UpdateACL    containerUpdateACLCmd    `command:"update-acl" description:"update a container's ACL"`
+	DeleteACL    containerDeleteACLCmd    `command:"delete-acl" description:"delete a container's ACL"`
 	SetOwner     containerSetOwnerCmd     `command:"set-owner" description:"change ownership for a container"`
 
 	CreateSnapshot   containerSnapshotCreateCmd   `command:"create-snapshot" alias:"create-snap" description:"create container snapshot"`
@@ -568,16 +570,58 @@ func (cmd *containerDeletePropertyCmd) Execute(args []string) error {
 
 type containerGetPropertyCmd struct {
 	existingContainerCmd
+
+	Properties GetPropertiesFlag `long:"properties" description:"container properties to get" default:"all"`
 }
 
 func (cmd *containerGetPropertyCmd) Execute(args []string) error {
+	props := cmd.Properties.props
+	defer cmd.Properties.Cleanup()
+
+	cleanup, err := cmd.resolveAndConnect(nil)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	rc := C.daos_cont_query(cmd.cContHandle, nil, props, nil)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to query container %s", cmd.contUUID)
+	}
+
+	if len(cmd.Properties.fetchedProperties) == len(propHdlrs) {
+		aclProps, cleanupAcl, err := getContAcl(cmd.cContHandle)
+		if err != nil && err != drpc.DaosNoPermission {
+			return errors.Wrapf(err,
+				"failed to query ACL for container %s", cmd.contUUID)
+		}
+		if cleanupAcl != nil {
+			defer cleanupAcl()
+		}
+		if len(aclProps) != 0 {
+			cmd.Properties.fetchedProperties = append(cmd.Properties.fetchedProperties,
+				aclProps[0])
+		}
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(cmd.Properties.fetchedProperties, nil)
+	}
+
+	var bld strings.Builder
+	printProperties(&bld, fmt.Sprintf("Properties for container %s", cmd.contUUID),
+		cmd.Properties.fetchedProperties...)
+
+	cmd.log.Info(bld.String())
+
 	return nil
 }
 
 type containerSetPropertyCmd struct {
 	existingContainerCmd
 
-	Properties SetPropertiesFlag `long:"properties" required:"1" description:"container properties"`
+	Properties SetPropertiesFlag `long:"properties" required:"1" description:"container properties to set"`
 }
 
 func (cmd *containerSetPropertyCmd) Execute(args []string) error {
