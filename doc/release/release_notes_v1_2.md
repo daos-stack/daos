@@ -63,9 +63,9 @@ supported by DAOS. Both NVMe 3D-NAND and Optane SSDs are supported.
 NVMe-oF devices should theoretically work with the user-space storage stack
 but have not been tested.
 
-A recommended  ratio of 6% SCM to SSD capacity will guarantee that DAOS has
-enough space in SCM to store its internal metadata (e.g., pool metadata,
-SSD block allocation tracking).
+A ratio of 6% SCM to SSD capacity is recommended to reserve enough space
+in SCM to store internal metadata (e.g., pool metadata, SSD block allocation
+tracking).
 
 For testing purposes, SCM can be emulated with DRAM by mounting a tmpfs
 filesystem, and NVMe SSDs can be also emulated with DRAM or a loopback
@@ -75,7 +75,7 @@ file. Any data written using a tmpfs will not be persistent across a reboot.
 DAOS 1.2 validation efforts were focused on anticipated initial use cases.
 Testing has been completed in the following areas:
 
-- Testing has been performed on CentOS 7.9, OpenSuse 15.2,with CentOS  being
+- Testing has been performed on CentOS 7.9, OpenSuse 15.2, with CentOS being
   used in the majority of the test cycles. Smaller scale testing has been done
   on OpenSuse 15.2, and no testing performed on Ubuntu and MOFED 5.1x
 - Testing has been conducted using Intel Xeon processors, Intel 3D NAND and
@@ -88,8 +88,8 @@ Testing has been completed in the following areas:
 - All DAOS 1.2 supported functionality has been tested with an emphasis on use
   cases with positive outcomes error cases (e.g., DAOS server failure) have
   limited test cycles at this time.
-- Maximum scale-out of DAOS servers during test runs was 128.
-  Maximum scale-out of DAOS clients was 2048.
+- Maximum scale-out of DAOS servers during test runs was 128. The number of
+  client processes was scaled up to 512.
 - Soak testing with an emphasis on I/O jobs in combination with basic
   administrative actions has been run and found to be error free for periods up
   to 48 hours. As with functional testing the focus has been on positive path
@@ -131,9 +131,7 @@ This is reflected in the set of supported [container permissions](https://daos-s
 
 [More information](https://daos-stack.github.io/user/container/#access-control-lists)
 
-### Improved Control Plane
-
-#### External Device States (via DMG)
+### External Device States (via dmg)
 
 The device states that are returned from a device query by the administrator
 are dependent on both the persistently stored device state in SMD, and the
@@ -146,7 +144,7 @@ in-memory BIO device list.
 
 [More information](https://daos-stack.github.io/admin/administration/#nvme-ssd-health-monitoring)
 
-#### User Interfaces
+### User Interface Improvement
 
 The DAOS dmg management utility can be used to query NVMe SSD health data, as
 well as provide useful commands for NVMe SSD eviction, hot plug, and device
@@ -164,8 +162,8 @@ until DAOS 2.2 release.
 
 ### Replication and Self Healing
 
-In DAOS, if the data is replicated with multiple copies on different targets,
-once one of the targets fail, the data on it will be rebuilt on the other
+In DAOS, if the data is replicated with multiple copies on different storage
+nodes, once one of the node fail, the data on it will be rebuilt on the other
 targets. This reduces the data redundancy that would be impacted by the target
 failure.
 
@@ -322,6 +320,3 @@ With a configuration of only Intel(R) Optane Pmem for storage in a DAOS pool
 (no SSDs), a known limitation currently exists on the write/update performance
 with bulk transfers to the SCM with all network providers which limits the BW
 per storage server.
-
-## Change Log
-No changes for this release.
