@@ -340,7 +340,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_create_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -349,7 +348,8 @@ out:
 
 	mgmt__pool_create_req__free_unpacked(req, &alloc.alloc);
 
-	daos_prop_free(prop);
+	if (prop)
+		daos_prop_free(prop);
 	if (targets != NULL)
 		d_rank_list_free(targets);
 
@@ -408,7 +408,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_destroy_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -494,7 +493,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_evict_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -584,7 +582,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_exclude_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -633,7 +630,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_drain_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -752,7 +748,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_reintegrate_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -767,7 +762,7 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolSetPropReq	*req = NULL;
 	Mgmt__PoolSetPropResp	 resp = MGMT__POOL_SET_PROP_RESP__INIT;
-	daos_prop_t		*new_prop = NULL;
+	daos_prop_t		*new_prop;
 	daos_prop_t		*result = NULL;
 	struct daos_prop_entry	*entry = NULL;
 	uuid_t			 uuid;
@@ -803,7 +798,7 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (req->property_case != MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER) {
 		D_ERROR("Pool property request must be numeric\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out_prop_free, rc = -DER_INVAL);
 	}
 	new_prop->dpp_entries[0].dpe_type = req->number;
 
@@ -811,14 +806,14 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
 		if (req->strval == NULL) {
 			D_ERROR("string value is NULL\n");
-			D_GOTO(out, rc = -DER_PROTO);
+			D_GOTO(out_prop_free, rc = -DER_PROTO);
 		}
 
 		entry = &new_prop->dpp_entries[0];
 		D_STRNDUP(entry->dpe_str, req->strval,
 			  DAOS_PROP_LABEL_MAX_LEN);
 		if (entry->dpe_str == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_prop_free, rc = -DER_NOMEM);
 		break;
 	case MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL:
 		new_prop->dpp_entries[0].dpe_val = req->numval;
@@ -826,12 +821,12 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	default:
 		D_ERROR("Pool property request with no value (%d)\n",
 			req->value_case);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out_prop_free, rc = -DER_INVAL);
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_prop_free, rc = -DER_NOMEM);
 
 	rc = ds_mgmt_pool_set_prop(uuid, svc_ranks, new_prop, &result);
 	if (rc != 0) {
@@ -884,15 +879,15 @@ out_result:
 	daos_prop_free(result);
 out_ranks:
 	d_rank_list_free(svc_ranks);
-out:
+out_prop_free:
 	daos_prop_free(new_prop);
+out:
 
 	resp.status = rc;
 	len = mgmt__pool_set_prop_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_set_prop_resp__pack(&resp, body);
 		drpc_resp->body.len  = len;
@@ -984,7 +979,6 @@ pack_acl_resp(Mgmt__ACLResp *acl_resp, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate buffer for packed ACLResp\n");
 	} else {
 		mgmt__aclresp__pack(acl_resp, body);
 		drpc_resp->body.len = len;
@@ -1983,7 +1977,6 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_FREE(resp);
 }
-
 
 void
 ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
