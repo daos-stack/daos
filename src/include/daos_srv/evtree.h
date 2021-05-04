@@ -125,7 +125,7 @@ struct evt_filter {
 
 /** Log format of extent */
 #define DF_EXT				\
-	DF_U64"-"DF_U64
+	DF_X64"-"DF_X64
 
 /** Log format of rectangle */
 #define DF_RECT				\

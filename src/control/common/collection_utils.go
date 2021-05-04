@@ -144,16 +144,18 @@ func DedupeStringSlice(in []string) []string {
 }
 
 // StringSliceHasDuplicates checks whether there are duplicate strings in the
-// slice. If so, it returns true.
+// slice. Comparisons are case insensitive. If duplicates found, return true.
 func StringSliceHasDuplicates(slice []string) bool {
-	found := make(map[string]bool)
+	seen := make(map[string]struct{})
 
 	for _, s := range slice {
-		if _, ok := found[s]; ok {
+		sl := strings.ToLower(s)
+		if _, already := seen[sl]; already {
 			return true
 		}
-		found[s] = true
+		seen[sl] = struct{}{}
 	}
+
 	return false
 }
 

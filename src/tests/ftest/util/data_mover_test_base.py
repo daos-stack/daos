@@ -84,11 +84,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # List of daos test paths to keep track of
         self.daos_test_paths = []
 
-        # Keep track of dcp compatibility options
-        # Defaulting to the newer options
-        self.dcp_has_src_pool = False
-        self.dcp_has_bufsize = True
-
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
@@ -118,13 +113,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         tool = self.params.get("tool", "/run/datamover/*")
         if tool:
             self.set_tool(tool)
-
-        # Get and save dcp compatibility options
-        self.dcp_cmd = Dcp(self.hostlist_clients, self.tmp)
-        self.dcp_cmd.get_params(self)
-        self.dcp_cmd.query_compatibility()
-        self.dcp_has_src_pool = self.dcp_cmd.has_src_pool
-        self.dcp_has_bufsize = self.dcp_cmd.has_bufsize
 
     def pre_tear_down(self):
         """Tear down steps to run before tearDown().
@@ -315,7 +303,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         return pool
 
     def create_cont(self, pool, use_dfuse_uns=False,
-                    dfuse_uns_pool=None, dfuse_uns_cont=None):
+                    dfuse_uns_pool=None, dfuse_uns_cont=None,
+                    cont_type=None):
         # pylint: disable=arguments-differ
         """Create a TestContainer object.
 
@@ -330,6 +319,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             dfuse_uns_cont (TestContainer, optional): container in the
                 dfuse mount for which to create a UNS path.
                 Default assumes dfuse is running for a specific container.
+            cont_type (str, optional): the container type.
 
         Returns:
             TestContainer: the container object
@@ -352,6 +342,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 path = join(path, dfuse_uns_cont.uuid)
             path = join(path, "uns{}".format(str(len(self.container))))
             container.path.update(path)
+
+        if cont_type:
+            container.type.update(cont_type)
 
         # Create container
         container.create()
@@ -629,8 +622,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             assert src_path is None # nosec
             assert dst_type in (None, "DAOS", "DAOS_UUID") # nosec
             assert dst_path is None # nosec
-            self.set_cont_clone_params(src_pool, src_cont,
-                                       dst_pool, dst_cont)
+            self._set_cont_clone_params(src_pool, src_cont,
+                                        dst_pool, dst_cont)
         else:
             self.fail("Invalid tool: {}".format(str(self.tool)))
 
@@ -675,50 +668,44 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.fail("dst params require dst_type")
 
         # First, initialize a new dcp command
-        self.dcp_cmd = Dcp(self.hostlist_clients, self.tmp)
+        self.dcp_cmd = Dcp(self.hostlist_clients)
         self.dcp_cmd.get_params(self)
-
-        # Set the compatibility options
-        self.dcp_cmd.set_compatibility(self.dcp_has_src_pool,
-                                       self.dcp_has_bufsize)
 
         # Set the source params
         if src_type == "POSIX":
             self.dcp_cmd.set_dcp_params(
-                src_path=src_path)
+                src=str(src_path))
         elif src_type == "DAOS_UUID":
+            param = self._format_daos_path(src_pool, src_cont, src_path)
             self.dcp_cmd.set_dcp_params(
-                src_path=src_path,
-                src_pool=self._uuid_from_obj(src_pool),
-                src_cont=self._uuid_from_obj(src_cont))
+                src=param)
         elif src_type == "DAOS_UNS":
             if src_cont:
                 if src_path == "/":
                     self.dcp_cmd.set_dcp_params(
-                        src_path=src_cont.path.value)
+                        src=src_cont.path.value)
                 else:
                     self.dcp_cmd.set_dcp_params(
                         prefix=src_cont.path.value,
-                        src_path=src_cont.path.value + src_path)
+                        src=src_cont.path.value + src_path)
 
         # Set the destination params
         if dst_type == "POSIX":
             self.dcp_cmd.set_dcp_params(
-                dst_path=dst_path)
+                dst=dst_path)
         elif dst_type == "DAOS_UUID":
+            param = self._format_daos_path(dst_pool, dst_cont, dst_path)
             self.dcp_cmd.set_dcp_params(
-                dst_path=dst_path,
-                dst_pool=self._uuid_from_obj(dst_pool),
-                dst_cont=self._uuid_from_obj(dst_cont))
+                dst=param)
         elif dst_type == "DAOS_UNS":
             if dst_cont:
                 if dst_path == "/":
                     self.dcp_cmd.set_dcp_params(
-                        dst_path=dst_cont.path.value)
+                        dst=dst_cont.path.value)
                 else:
                     self.dcp_cmd.set_dcp_params(
                         prefix=dst_cont.path.value,
-                        dst_path=dst_cont.path.value + dst_path)
+                        dst=dst_cont.path.value + dst_path)
 
     def _set_dsync_params(self,
                           src_type=None, src_path=None,
@@ -992,7 +979,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                                              pool, None)
 
     def run_ior_with_params(self, param_type, path, pool=None, cont=None,
-                            path_suffix=None, flags=None, display=True):
+                            path_suffix=None, flags=None, display=True,
+                            display_space=False):
         """Set the ior params and run ior.
 
         Args:
@@ -1003,11 +991,14 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             path_suffix: see set_ior_params
             flags: see set_ior_params
             display (bool, optional): print updated params. Defaults to True.
+            display_space (bool, optional): Whether to display the pool
+                space. Defaults to False.
         """
         self.set_ior_params(param_type, path, pool, cont,
                             path_suffix, flags, display)
         self.run_ior(self.get_ior_job_manager_command(), self.ior_processes,
-                     display_space=(bool(pool)), pool=pool)
+                     display_space=(display_space and bool(pool)),
+                     pool=pool)
 
     def set_mdtest_params(self, param_type, path, pool=None, cont=None,
                           flags=None, display=True):
@@ -1156,7 +1147,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 if not processes:
                     processes = self.dsync_processes
                 # If we expect an rc other than 0, don't fail
-                self.dcp_cmd.exit_status_exception = (expected_rc == 0)
+                self.dsync_cmd.exit_status_exception = (expected_rc == 0)
                 result = self.dsync_cmd.run(self.workdir, processes)
             elif self.tool== "DSERIAL":
                 if not processes:
@@ -1187,6 +1178,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 self.fail("stdout expected {}: {}".format(s, test_desc))
         for s in expected_err:
             if s not in result.stderr_text:
-                self.fail("stderr xpected {}: {}".format(s, test_desc))
+                self.fail("stderr expected {}: {}".format(s, test_desc))
 
         return result

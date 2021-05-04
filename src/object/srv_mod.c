@@ -151,7 +151,7 @@ obj_tls_init(int xs_id, int tgt_id)
 					   tgt_id, opc ? "fetch" : "update",
 					   bucket_max / (1024 * 1024));
 			else /** >4MB */
-				D_ASPRINTF(path, "io/%u/%s_latency_>4MB",
+				D_ASPRINTF(path, "io/%u/%s_latency_GT4MB",
 					   tgt_id, opc ? "fetch" : "update");
 			rc = d_tm_add_metric(&tm[opc][i], D_TM_GAUGE,
 					     "Per-I/O size RPC processing time "

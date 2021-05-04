@@ -77,6 +77,7 @@ type server struct {
 	grpcServer   *grpc.Server
 
 	onEnginesStarted []func(context.Context) error
+	onShutdown       []func()
 }
 
 func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
@@ -133,6 +134,7 @@ func (srv *server) createServices(ctx context.Context) error {
 
 	// Create event distribution primitives.
 	srv.pubSub = events.NewPubSub(ctx, srv.log)
+	srv.OnShutdown(srv.pubSub.Close)
 	srv.evtForwarder = control.NewEventForwarder(rpcClient, srv.cfg.AccessPoints)
 	srv.evtLogger = control.NewEventLogger(srv.log)
 
@@ -144,12 +146,21 @@ func (srv *server) createServices(ctx context.Context) error {
 	return nil
 }
 
+// OnEnginesStarted adds callback functions to be called when all engines have
+// started up.
 func (srv *server) OnEnginesStarted(fns ...func(context.Context) error) {
 	srv.onEnginesStarted = append(srv.onEnginesStarted, fns...)
 }
 
+// OnShutdown adds callback functions to be called when the server shuts down.
+func (srv *server) OnShutdown(fns ...func()) {
+	srv.onShutdown = append(srv.onShutdown, fns...)
+}
+
 func (srv *server) shutdown() {
-	srv.pubSub.Close()
+	for _, fn := range srv.onShutdown {
+		fn()
+	}
 }
 
 // initNetwork resolves local address and starts TCP listener then calls
