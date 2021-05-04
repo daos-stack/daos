@@ -27,7 +27,7 @@ RUN apt-get -y update &&						\
 	python3-dev golang-go git libyaml-dev python3-tabulate		\
 	python3-pyxattr openjdk-8-jdk maven libipmctl-dev		\
 	libcunit1-dev libopenmpi-dev numactl doxygen libunwind-dev	\
-	python3-junit.xml sudo &&					\
+	python3-junit.xml sudo pciutils &&				\
     apt-get clean all
 
 # hack the default shell to bash instead of dash
