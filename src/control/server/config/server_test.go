@@ -202,6 +202,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 
 	var numaNode0 uint = 0
 	var numaNode1 uint = 1
+	var bypass = true
 
 	// Next, construct a config to compare against the first one. It should be
 	// possible to construct an identical configuration with the helpers.
@@ -242,6 +243,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode0).
+				WithBypassHealthChk(&bypass).
 				WithEnvVars("CRT_TIMEOUT=30").
 				WithLogFile("/tmp/daos_engine.0.log").
 				WithLogMask("WARN"),
@@ -338,12 +340,29 @@ func TestServerConfig_Validation(t *testing.T) {
 		expErr      error
 	}{
 		"example config": {},
-		"nil server entry": {
+		"nil engine entry": {
 			extraConfig: func(c *Server) *Server {
 				var nilEngineConfig *engine.Config
 				return c.WithEngines(nilEngineConfig)
 			},
 			expErr: errors.New("validation"),
+		},
+		"no engine entries": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines()
+			},
+		},
+		"no fabric provider": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithFabricProvider("")
+			},
+			expErr: FaultConfigNoProvider,
+		},
+		"no access point": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints()
+			},
+			expErr: FaultConfigBadAccessPoints,
 		},
 		"single access point": {
 			extraConfig: func(c *Server) *Server {
@@ -363,9 +382,26 @@ func TestServerConfig_Validation(t *testing.T) {
 		},
 		"multiple access points (dupes)": {
 			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4", "5.6.7.8", "1.2.3.4")
+			},
+			expErr: FaultConfigBadAccessPoints,
+		},
+		"multiple access points (dupes with ports)": {
+			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.2.3.4:1234")
 			},
-			expErr: FaultConfigEvenAccessPoints,
+			expErr: FaultConfigBadAccessPoints,
+		},
+		"multiple access points (dupes with and without ports)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:10001", "5.6.7.8:5678", "1.2.3.4")
+			},
+			expErr: FaultConfigBadAccessPoints,
+		},
+		"multiple access points (dupes with different ports)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:10002", "5.6.7.8:5678", "1.2.3.4")
+			},
 		},
 		"no access points": {
 			extraConfig: func(c *Server) *Server {
@@ -385,11 +421,56 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"single access point including invalid port": {
+		"single access point including invalid port (alphanumeric)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:0a0")
+			},
+			expErr: FaultConfigBadControlPort,
+		},
+		"single access point including invalid port (zero)": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:0")
 			},
 			expErr: FaultConfigBadControlPort,
+		},
+		"single access point including negative port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:-10002")
+			},
+			expErr: FaultConfigBadControlPort,
+		},
+		"single access point hostname including negative port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("hostX:-10002")
+			},
+			expErr: FaultConfigBadControlPort,
+		},
+		"good control port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlPort(1234)
+			},
+		},
+		"bad control port (zero)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlPort(0)
+			},
+			expErr: FaultConfigBadControlPort,
+		},
+		"good telemetry port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithTelemetryPort(1234)
+			},
+		},
+		"good telemetry port (zero)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithTelemetryPort(0)
+			},
+		},
+		"bad telemetry port (negative)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithTelemetryPort(-123)
+			},
+			expErr: FaultConfigBadTelemetryPort,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

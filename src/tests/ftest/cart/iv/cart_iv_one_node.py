@@ -472,7 +472,8 @@ class CartIvOneNodeTest(CartTest):
 
         ]
 
-        time.sleep(2)
+        # wait for servers to come up.
+        time.sleep(4)
 
         failed = False
 
@@ -496,10 +497,10 @@ class CartIvOneNodeTest(CartTest):
         # Note: due to CART-408 issue, rank 0 needs to shutdown last
         # Request each server shut down gracefully
         for rank in reversed(list(range(1, int(srv_ppn) * num_servers))):
-            clicmd += " -o shutdown -r " + str(rank)
-            self.print("\nClient cmd : {}\n".format(clicmd))
+            clicmdt = clicmd + " -o shutdown -r " + str(rank)
+            self.print("\nClient cmd : {}\n".format(clicmdt))
             try:
-                subprocess.call(shlex.split(clicmd))
+                subprocess.call(shlex.split(clicmdt))
             # pylint: disable=broad-except
             except Exception as e:
                 failed = True
@@ -517,6 +518,7 @@ class CartIvOneNodeTest(CartTest):
             failed = True
             self.print("Exception in launching client : {}".format(e))
 
+        # wait for servers to finish shutting down
         time.sleep(2)
 
         # Stop the server if it is still running

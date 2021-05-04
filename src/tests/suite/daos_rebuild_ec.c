@@ -15,9 +15,11 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_iotest.h"
+#include "dfs_test.h"
 #include <daos/pool.h>
 #include <daos/mgmt.h>
 #include <daos/container.h>
+
 static void
 rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 		    int kill_parity_nr, int write_type)
@@ -404,6 +406,208 @@ rebuild_dfs_fail_data_parity_s3p0(void **state)
 	dfs_ec_rebuild_io(state, shards, 2);
 }
 
+void
+dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
+{
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	uuid_t		co_uuid;
+	test_arg_t	*arg = *state;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	dfs_obj_t	*obj;
+	daos_size_t	buf_size = 16 * 1048576;
+	daos_size_t	chunk_size = 16 * 1048576;
+	char		filename[32];
+	d_rank_t	ranks[4] = { -1 };
+	int		idx = 0;
+	d_sg_list_t	small_sgl;
+	d_iov_t		small_iov;
+	char		*small_buf;
+	char		*small_vbuf;
+	int		small_buf_size = 32;
+	daos_obj_id_t	oid;
+	char		*buf;
+	char		*vbuf;
+	int		i;
+	int		rc;
+
+	uuid_generate(co_uuid);
+	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
+			     &dfs_mt);
+	assert_int_equal(rc, 0);
+	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	D_ALLOC(buf, buf_size);
+	assert_true(buf != NULL);
+	D_ALLOC(vbuf, buf_size);
+	assert_true(vbuf != NULL);
+
+	d_iov_set(&iov, buf, buf_size);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+
+	dts_buf_render(buf, buf_size);
+	memcpy(vbuf, buf, buf_size);
+
+	/* Full stripe update */
+	sprintf(filename, "rebuild_file");
+	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
+		      NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/* partial stripe update */
+	D_ALLOC(small_buf, small_buf_size);
+	assert_true(small_buf != NULL);
+	D_ALLOC(small_vbuf, small_buf_size);
+	assert_true(small_vbuf != NULL);
+	d_iov_set(&small_iov, small_buf, small_buf_size);
+	small_sgl.sg_nr = 1;
+	small_sgl.sg_nr_out = 1;
+	small_sgl.sg_iovs = &small_iov;
+	dts_buf_render(small_buf, small_buf_size);
+	memcpy(small_vbuf, small_buf, small_buf_size);
+	for (i = 0; i < 30; i++) {
+		daos_off_t	offset;
+
+		offset = (i + 20) * 4 * 1048576;
+		rc = dfs_write(dfs_mt, obj, &small_sgl, offset, NULL);
+		assert_int_equal(rc, 0);
+		offset += 1048576 - 10;
+		rc = dfs_write(dfs_mt, obj, &small_sgl, offset, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	dfs_obj2id(obj, &oid);
+	while (shards_nr-- > 0) {
+		daos_size_t fetch_size = 0;
+
+		ranks[idx] = get_rank_by_oid_shard(arg, oid, shards[idx]);
+		rebuild_pools_ranks(&arg, 1, &ranks[idx], 1, false);
+		idx++;
+
+		/* Verify full stripe */
+		d_iov_set(&iov, buf, buf_size);
+		memset(buf, 0, buf_size);
+		rc = dfs_read(dfs_mt, obj, &sgl, 0, &fetch_size, NULL);
+		assert_int_equal(rc, 0);
+		assert_int_equal(fetch_size, buf_size);
+		assert_memory_equal(buf, vbuf, buf_size);
+		for (i = 0; i < 30; i++) {
+			daos_off_t	offset;
+
+			memset(small_buf, 0, small_buf_size);
+			offset = (i + 20) * 4 * 1048576;
+			rc = dfs_read(dfs_mt, obj, &small_sgl, offset,
+				      &fetch_size, NULL);
+			assert_int_equal(rc, 0);
+			assert_int_equal(fetch_size, small_buf_size);
+			assert_memory_equal(small_buf, small_vbuf,
+					    small_buf_size);
+			offset += 1048576 - 10;
+			memset(small_buf, 0, small_buf_size);
+			rc = dfs_read(dfs_mt, obj, &small_sgl, offset,
+				      &fetch_size, NULL);
+			assert_int_equal(fetch_size, small_buf_size);
+			assert_int_equal(rc, 0);
+			assert_memory_equal(small_buf, small_vbuf,
+					    small_buf_size);
+		}
+	}
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	D_FREE(buf);
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	assert_rc_equal(rc, 0);
+
+#if 0
+	while (idx > 0)
+		rebuild_add_back_tgts(arg, ranks[--idx], NULL, 1);
+#endif
+}
+
+static void
+rebuild_dfs_fail_seq_s0s1(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 1;
+	dfs_ec_seq_fail(state, shards, 2);
+}
+
+static void
+rebuild_dfs_fail_seq_s1s2(void **state)
+{
+	int shards[2];
+
+	shards[0] = 1;
+	shards[1] = 2;
+	dfs_ec_seq_fail(state, shards, 2);
+}
+
+static void
+rebuild_dfs_fail_seq_s2s3(void **state)
+{
+	int shards[2];
+
+	shards[0] = 2;
+	shards[1] = 3;
+	dfs_ec_seq_fail(state, shards, 2);
+}
+
+static void
+rebuild_dfs_fail_seq_s0s3(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 3;
+	dfs_ec_seq_fail(state, shards, 2);
+}
+
+static void
+rebuild_dfs_fail_seq_s0p0(void **state)
+{
+	int shards[2];
+
+	shards[0] = 0;
+	shards[1] = 4;
+	dfs_ec_seq_fail(state, shards, 2);
+}
+
+static void
+rebuild_dfs_fail_seq_s3p1(void **state)
+{
+	int shards[2];
+
+	shards[0] = 3;
+	shards[1] = 5;
+	dfs_ec_seq_fail(state, shards, 2);
+}
+
+static void
+rebuild_dfs_fail_seq_p0p1(void **state)
+{
+	int shards[2];
+
+	shards[0] = 4;
+	shards[1] = 5;
+	dfs_ec_seq_fail(state, shards, 2);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -484,6 +688,27 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD28: rebuild dfs io with 1data 1parity(s2, p0)",
 	 rebuild_dfs_fail_data_parity_s2p0, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD29: rebuild dfs io with sequential data(s0, s1) fail",
+	 rebuild_dfs_fail_seq_s0s1, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD30: rebuild dfs io with sequential data(s1, s2) fail",
+	 rebuild_dfs_fail_seq_s1s2, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD31: rebuild dfs io with sequential data(s2, s3) fail",
+	 rebuild_dfs_fail_seq_s2s3, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD32: rebuild dfs io with sequential data(s0, s3) fail",
+	 rebuild_dfs_fail_seq_s0s3, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD33: rebuild dfs io with data and parity(s0, p0) fail",
+	 rebuild_dfs_fail_seq_s0p0, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD34: rebuild dfs io with data and parity(s3, p1) fail",
+	 rebuild_dfs_fail_seq_s3p1, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD35: rebuild dfs io with 2 parities(p0, p1) fail",
+	 rebuild_dfs_fail_seq_p0p1, rebuild_ec_8nodes_setup,
 	 test_teardown},
 
 };
