@@ -75,12 +75,16 @@ class NLTConf():
         self.wf = None
         self.args = None
         self.max_log_size = None
+        self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
+                                                 prefix='dnt_dfuse_')
         self.tmp_dir = None
         if args.class_name:
             self.tmp_dir = os.path.join('nlt_logs', args.class_name)
+            if os.path.exists(self.tmp_dir):
+                for old_file in os.listdir(self.tmp_dir):
+                    os.unlink(os.path.join(self.tmp_dir, old_file))
+                os.rmdir(self.tmp_dir)
             os.makedirs(self.tmp_dir)
-        self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
-                                                 prefix='dnt_dfuse_')
 
     def __del__(self):
         os.rmdir(self.dfuse_parent_dir)

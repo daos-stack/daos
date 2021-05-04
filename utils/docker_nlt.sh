@@ -10,4 +10,7 @@ set -e
 
 ./utils/setup_daos_admin.sh
 
+# Debug.
+ldd /opt/daos/bin/daos_server
+
 ./utils/node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
