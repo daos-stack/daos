@@ -451,7 +451,7 @@ struct dc_obj_verify_args {
 };
 
 int
-dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
+dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
 	      daos_oclass_id_t *oc_id_);
 

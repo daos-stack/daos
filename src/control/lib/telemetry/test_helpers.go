@@ -106,6 +106,7 @@ func setupTestMetrics(t *testing.T) (context.Context, testMetricsMap) {
 	return ctx, testMetrics
 }
 
-func cleanupTestMetrics(t *testing.T) {
+func cleanupTestMetrics(ctx context.Context, t *testing.T) {
+	Detach(ctx)
 	C.d_tm_fini()
 }

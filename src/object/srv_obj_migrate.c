@@ -558,7 +558,8 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		 */
 		void *p;
 
-		D_REALLOC(p, csum_iov_fetch->iov_buf, csum_iov_fetch->iov_len);
+		D_REALLOC(p, csum_iov_fetch->iov_buf,
+			  csum_iov_fetch->iov_buf_len, csum_iov_fetch->iov_len);
 		if (p == NULL)
 			return -DER_NOMEM;
 		csum_iov_fetch->iov_buf_len = csum_iov_fetch->iov_len;
@@ -1781,7 +1782,8 @@ struct enum_unpack_arg {
 	struct iter_obj_arg	*arg;
 	daos_epoch_range_t	epr;
 	d_list_t		merge_list;
-	uint32_t		iterate_parity:1;
+	uint32_t		iterate_parity:1,
+				invalid_inline_sgl:1;
 };
 
 static int
@@ -1850,7 +1852,8 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 	for (i = 0; i < iod_eph_total; i++) {
 		int j;
 
-		if (sgls[i].sg_nr == 0 || sgls[i].sg_iovs == NULL) {
+		if (sgls[i].sg_nr == 0 || sgls[i].sg_iovs == NULL ||
+		    arg->invalid_inline_sgl) {
 			inline_copy = false;
 			break;
 		}
@@ -1960,6 +1963,11 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 				if (rc)
 					return rc;
 
+				/* To avoid aligning  inline sgl, so let's set
+				 * invalid_inline_sgl and force re-fetching
+				 * the online data.
+				 */
+				arg->invalid_inline_sgl = 1;
 				/* No data needs to be migrate. */
 				if (iod->iod_nr == 0)
 					continue;
@@ -2149,6 +2157,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 				      DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
 				      DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION);
 retry:
+		unpack_arg.invalid_inline_sgl = 0;
 		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, NULL,
 				     &num, kds, &sgl, &anchor,
 				     &dkey_anchor, &akey_anchor, &csum);

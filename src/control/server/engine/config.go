@@ -44,6 +44,7 @@ type FabricConfig struct {
 	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
 	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
 	PinnedNumaNode  *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
+	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 }
@@ -344,6 +345,12 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 // WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
 func (c *Config) WithPinnedNumaNode(numa *uint) *Config {
 	c.Fabric.PinnedNumaNode = numa
+	return c
+}
+
+// WithBypassHealthChk sets the NVME health check bypass for this instance
+func (c *Config) WithBypassHealthChk(bypass *bool) *Config {
+	c.Fabric.BypassHealthChk = bypass
 	return c
 }
 

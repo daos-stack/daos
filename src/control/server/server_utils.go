@@ -304,7 +304,12 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 
 	srv.OnEnginesStarted(func(ctxIn context.Context) error {
 		srv.log.Debug("starting Prometheus exporter")
-		return startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances())
+		cleanup, err := startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances())
+		if err != nil {
+			return err
+		}
+		srv.OnShutdown(cleanup)
+		return nil
 	})
 }
 
