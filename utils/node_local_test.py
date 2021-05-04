@@ -75,7 +75,10 @@ class NLTConf():
         self.wf = None
         self.args = None
         self.max_log_size = None
-
+        self.tmp_dir = None
+        if args.class_name:
+            self.tmp_dir = os.path.join('nlt_logs', args.class_name)
+            os.makedirs(self.tmp_dir)
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
                                                  prefix='dnt_dfuse_')
 
@@ -372,12 +375,15 @@ class DaosServer():
         self._agent = None
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
+                                                       dir=conf.tmp_dir,
                                                        delete=False)
         self.agent_log = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
                                                      suffix='.log',
+                                                     dir=conf.tmp_dir,
                                                      delete=False)
         self.server_log = tempfile.NamedTemporaryFile(prefix='dnt_server_',
                                                       suffix='.log',
+                                                      dir=conf.tmp_dir,
                                                       delete=False)
         self.__process_name = 'daos_engine'
         if self.valgrind:
@@ -1051,6 +1057,7 @@ def run_daos_cmd(conf,
     prefix = 'dnt_cmd_{}_'.format(get_inc_id())
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                            suffix='.log',
+                                           dir=conf.tmp_dir,
                                            delete=False)
 
     cmd_env['D_LOG_FILE'] = log_file.name

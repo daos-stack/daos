@@ -458,6 +458,8 @@ pipeline {
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
                                              allowEmptyArchive: true
+                            archiveArtifacts artifacts: 'nlt_logs/centos7.release/',
+                                             allowEmptyArchive: true
                         }
                     }
                 }
