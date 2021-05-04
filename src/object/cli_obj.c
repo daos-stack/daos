@@ -798,7 +798,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	if (epoch != NULL && !obj_auxi->req_reasbed)
 		reasb_req->orr_epoch = *epoch;
 	reasb_req->orr_size_set = 0;
-	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetch) {
+	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetched) {
 		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n",
 			DP_OID(oid));
 		return 0;
@@ -3549,6 +3549,7 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 		}
 	}
 
+	obj_auxi->reasb_req.orr_size_fetched = 1;
 	usgls = obj_auxi->reasb_req.orr_usgls;
 	if (usgls == NULL)
 		return;
