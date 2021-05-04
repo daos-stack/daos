@@ -143,13 +143,17 @@ func newEventLogger(logBasic logging.Logger, newSyslogger newSysloggerFn) *Event
 		sysloggers: make(map[events.RASSeverityID]*log.Logger),
 	}
 
+	// syslog writer will prepend timestamp in message header so don't add
+	// duplicate timestamp in log entries
+	flags := log.LstdFlags &^ (log.Ldate | log.Ltime)
+
 	for _, sev := range []events.RASSeverityID{
 		events.RASSeverityUnknown,
 		events.RASSeverityError,
 		events.RASSeverityWarning,
 		events.RASSeverityNotice,
 	} {
-		sl, err := newSyslogger(sev.SyslogPriority(), log.LstdFlags)
+		sl, err := newSyslogger(sev.SyslogPriority(), flags)
 		if err != nil {
 			logBasic.Errorf("failed to create syslogger with priority %s: %s",
 				sev.SyslogPriority(), err)

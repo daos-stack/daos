@@ -79,8 +79,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.running.SetTrue()
 	defer r.running.SetFalse()
 
-	return errors.Wrapf(common.GetExitStatus(cmd.Wait()),
-		"%s (instance %d) exited", binPath, r.Config.Index)
+	return errors.Wrapf(common.GetExitStatus(cmd.Wait()), "%s exited", binPath)
 }
 
 // Start asynchronously starts the Engine instance.

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -142,10 +143,13 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 // to a given priority, here we just check the correct prefix (maps to severity)
 // is printed which verifies the event was written to the correct logger.
 func TestControl_EventLogger_OnEvent(t *testing.T) {
-	var evtIDMarker = " id: "
-	var mockSyslogBuf *strings.Builder
-	mockNewSyslogger := func(prio syslog.Priority, _ int) (*log.Logger, error) {
-		return log.New(mockSyslogBuf, fmt.Sprintf("prio%d ", prio), log.LstdFlags), nil
+	var (
+		evtIDMarker   = " id: "
+		mockSyslogBuf *strings.Builder
+	)
+
+	mockNewSyslogger := func(prio syslog.Priority, flags int) (*log.Logger, error) {
+		return log.New(mockSyslogBuf, fmt.Sprintf("prio%d ", prio), flags), nil
 	}
 	mockNewSysloggerFail := func(prio syslog.Priority, _ int) (*log.Logger, error) {
 		return nil, errors.Errorf("failed to create new syslogger (prio %d)", prio)
@@ -159,6 +163,7 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 		newSyslogger       newSysloggerFn
 		expShouldLog       bool
 		expShouldLogSyslog bool
+		expSyslogOut       string
 	}{
 		"nil event": {
 			event: nil,
@@ -183,6 +188,14 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 			newSyslogger:       mockNewSysloggerFail,
 			expShouldLog:       true,
 			expShouldLogSyslog: false,
+		},
+		"exp syslog output": {
+			event:              rasEventEngineDied,
+			expShouldLog:       false,
+			expShouldLogSyslog: true,
+			expSyslogOut: `
+prio27 id: [engine_died] ts: [%s] host: [foo] type: [STATE_CHANGE] sev: [ERROR] msg: [DAOS engine 0 exited unexpectedly: process exited with 0] pid: [1234] rank: [0]
+`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -219,6 +232,16 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 				"syslog output missing severity")
 			common.AssertTrue(t, strings.HasPrefix(slStr, prioStr),
 				"syslog output missing syslog priority")
+
+			if tc.expSyslogOut == "" {
+				return
+			}
+			// hack to avoid mismatch on timestamp
+			tc.expSyslogOut = fmt.Sprintf(tc.expSyslogOut, tc.event.Timestamp)
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expSyslogOut, "\n"), slStr); diff != "" {
+				t.Fatalf("Unexpected syslog output (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
