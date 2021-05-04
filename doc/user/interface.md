@@ -9,7 +9,7 @@ available under `src/tests`.
 ## DAOS API Reference
 
 `libdaos` is written in C and uses Doxygen comments that are added to C header
-files. The Doxygen documentation is available 
+files. The Doxygen documentation is available
 [here](https://daos-stack.github.io/html/).
 
 ## Python Bindings
@@ -140,8 +140,7 @@ C function being cast via ctypes. This also demonstrates struct representation v
 
 int
 daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
-                          const d_rank_list_t *svc, struct d_tgt_list *tgts,
-                          daos_event_t *ev);
+                          struct d_tgt_list *tgts, daos_event_t *ev);
 ```
 
 All input parameters must be represented via ctypes. If a struct is required as
@@ -179,14 +178,13 @@ p_ranks = DaosPool.__pylist_to_array([2])
 # cast python variables via ctypes as necessary
 c_uuid = str_to_c_uuid(p_uuid)
 c_grp = ctypes.create_string_buffer(b"daos_group_name")
-c_svc = ctypes.POINTER(2) # ensure pointers are cast/passed as such
 c_tgt_list = ctypes.POINTER(DTgtList(p_ranks, p_tgts, 2))) # again, DTgtList must be passed as pointer
 
 # load the shared object
 my_lib = ctypes.CDLL('/full/path/to/daos_exclude.so')
 
 # now call it
-my_lib.daos_pool_tgt_exclude_out(c_uuid, c_grp, c_svc, c_tgt_list, None)
+my_lib.daos_pool_tgt_exclude_out(c_uuid, c_grp, c_tgt_list, None)
 ```
 
 #### Error Handling

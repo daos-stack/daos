@@ -24,7 +24,7 @@
 |[ISA-L](https://01.org/intel®-storage-acceleration-library-open-source-version)|Intel Storage Acceleration Library|
 |I/O|Input/Output|
 |KV store|Key-Value store|
-|libfabric|A user-space library that exports the Open Fabrics Interface|
+|[libfabric](https://ofiwg.github.io/libfabric/)|Open Fabrics Interface|
 |Mercury|A user-space RPC library that can use libfabrics as a transport|
 |MTBF|Mean Time Between Failures|
 |NVM|Non-Volatile Memory|
