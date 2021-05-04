@@ -8,7 +8,9 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -24,6 +26,7 @@ import (
 type EngineRunner interface {
 	Start(context.Context, chan<- error) error
 	IsRunning() bool
+	GetLastPid() uint64
 	Signal(os.Signal) error
 	GetConfig() *engine.Config
 }
@@ -114,13 +117,13 @@ func (ei *EngineInstance) finishStartup(ctx context.Context, ready *srvpb.Notify
 // publishInstanceExitFn returns onInstanceExitFn which will publish an exit
 // event using the provided publish function.
 func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string) onInstanceExitFn {
-	return func(_ context.Context, engineIdx uint32, rank system.Rank, exitErr error) error {
+	return func(_ context.Context, engineIdx uint32, rank system.Rank, exitErr error, exPid uint64) error {
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")
 		}
 
 		evt := events.NewEngineDiedEvent(hostname, engineIdx, rank.Uint32(),
-			common.ExitStatus(exitErr.Error()))
+			common.ExitStatus(exitErr.Error()), exPid)
 
 		// set forwardable if there is a rank for the MS to operate on
 		publishFn(evt.WithForwardable(!rank.Equals(system.NilRank)))
@@ -129,10 +132,8 @@ func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string) on
 	}
 }
 
-func (ei *EngineInstance) exit(ctx context.Context, exitErr error, exPid int) {
+func (ei *EngineInstance) exit(ctx context.Context, exitErr error) {
 	engineIdx := ei.Index()
-
-	ei.log.Infof("instance %d exited: %s", engineIdx, common.GetExitStatus(exitErr))
 
 	rank, err := ei.GetRank()
 	if err != nil {
@@ -140,9 +141,18 @@ func (ei *EngineInstance) exit(ctx context.Context, exitErr error, exPid int) {
 	}
 
 	ei._lastErr = exitErr
-	if err := ei.removeSocket(); err != nil {
-		ei.log.Errorf("removing socket file: %s", err)
+	exPid := ei.runner.GetLastPid()
+
+	details := []string{fmt.Sprintf("instance %d", engineIdx)}
+	if exPid != 0 {
+		details = append(details, fmt.Sprintf("pid %d", exPid))
 	}
+	if !rank.Equals(system.NilRank) {
+		details = append(details, fmt.Sprintf("rank %d", rank))
+	}
+	strDetails := strings.Join(details, ", ")
+
+	ei.log.Infof("%s exited with status: %s", strDetails, common.GetExitStatus(exitErr))
 
 	// After we know that the instance has exited, fire off
 	// any callbacks that were waiting for this state.
@@ -151,6 +161,10 @@ func (ei *EngineInstance) exit(ctx context.Context, exitErr error, exPid int) {
 		if err != nil {
 			ei.log.Errorf("onExit: %s", err)
 		}
+	}
+
+	if err := ei.removeSocket(); err != nil {
+		ei.log.Errorf("removing socket file: %s", err)
 	}
 }
 
@@ -214,10 +228,7 @@ func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
 					return
 				}
 
-				err := ei.run(ctx, recreateSBs)
-				// engine should have exited, retrieve pid
-				7ei.
-				ei.exit(ctx, 
+				ei.exit(ctx, ei.run(ctx, recreateSBs))
 			}
 		}
 	}()

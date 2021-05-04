@@ -8,6 +8,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -28,26 +30,34 @@ func TestIOEngineInstance_exit(t *testing.T) {
 			rxEvts = append(rxEvts, evt)
 		}
 		exitErr = errors.New("killed")
+		exitMsg = "DAOS engine %d exited unexpectedly: killed"
 	)
 
 	for name, tc := range map[string]struct {
+		trc              *engine.TestRunnerConfig
 		rankInSuperblock bool
 		instanceIdx      uint32
 		exitErr          error
 		expShouldForward bool
 		expEvtMsg        string
+		expExPid         uint64
 	}{
 		"without rank": {
-			expEvtMsg: "DAOS engine 0 exited unexpectedly",
+			expEvtMsg: fmt.Sprintf(exitMsg, 0),
 		},
 		"with rank": {
 			rankInSuperblock: true,
 			expShouldForward: true,
-			expEvtMsg:        "DAOS engine 0 exited unexpectedly",
+			expEvtMsg:        fmt.Sprintf(exitMsg, 0),
 		},
 		"instance 1": {
 			instanceIdx: 1,
-			expEvtMsg:   "DAOS engine 1 exited unexpectedly",
+			expEvtMsg:   fmt.Sprintf(exitMsg, 1),
+		},
+		"with pid": {
+			trc:       &engine.TestRunnerConfig{LastPid: 1234},
+			expEvtMsg: fmt.Sprintf(exitMsg, 0),
+			expExPid:  1234,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -55,7 +65,9 @@ func TestIOEngineInstance_exit(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			rxEvts = []*events.RASEvent{}
-			runner := engine.NewRunner(log, &engine.Config{})
+
+			runner := engine.NewTestRunner(tc.trc, &engine.Config{})
+
 			engine := NewEngineInstance(log, nil, nil, nil, runner)
 			engine.setIndex(tc.instanceIdx)
 
@@ -63,6 +75,9 @@ func TestIOEngineInstance_exit(t *testing.T) {
 				engine.setSuperblock(&Superblock{
 					Rank: system.NewRankPtr(0), ValidRank: true,
 				})
+			}
+			if tc.expExPid == 0 {
+				tc.expExPid = uint64(os.Getpid())
 			}
 
 			engine.OnInstanceExit(publishInstanceExitFn(fakePublish,
@@ -75,9 +90,10 @@ func TestIOEngineInstance_exit(t *testing.T) {
 			common.AssertEqual(t, rxEvts[0].ShouldForward(),
 				tc.expShouldForward, "unexpected forwarding state")
 			if diff := cmp.Diff(tc.expEvtMsg, rxEvts[0].Msg); diff != "" {
-				t.Fatalf("unexpected event message (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected message (-want, +got):\n%s\n", diff)
 			}
-
+			common.AssertEqual(t, tc.expExPid, rxEvts[0].ProcID,
+				"unexpected process ID in event")
 		})
 	}
 }

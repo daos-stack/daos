@@ -118,7 +118,15 @@ func (r *Runner) Signal(signal os.Signal) error {
 	return r.cmd.Process.Signal(signal)
 }
 
-// GetPid retrieves the Runner process PID
+// GetLastPid returns the PID after runner has exited, return
+// zero if no cmd or ProcessState exists.
+func (r *Runner) GetLastPid() uint64 {
+	if r.cmd == nil || r.cmd.ProcessState == nil {
+		return 0
+	}
+
+	return uint64(r.cmd.ProcessState.Pid())
+}
 
 // GetConfig returns the runner's configuration
 func (r *Runner) GetConfig() *Config {

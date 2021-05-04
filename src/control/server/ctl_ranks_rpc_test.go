@@ -43,6 +43,11 @@ var (
 	)
 )
 
+func mockEngineDiedEvt(t *testing.T) *events.RASEvent {
+	t.Helper()
+	return events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit, 1234)
+}
+
 // checkUnorderedRankResults fails if results slices contain any differing results,
 // regardless of order. Ignore result "Msg" field as RankResult.Msg generation
 // is tested separately in TestServer_CtlSvc_DrespToRankResult unit tests.
@@ -385,9 +390,8 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				*srv._superblock.Rank = system.Rank(i + 1)
 
 				srv.OnInstanceExit(
-					func(_ context.Context, _ uint32, _ system.Rank, _ error) error {
-						svc.events.Publish(events.NewEngineDiedEvent("foo",
-							0, 0, common.NormalExit))
+					func(_ context.Context, _ uint32, _ system.Rank, _ error, _ uint64) error {
+						svc.events.Publish(mockEngineDiedEvt(t))
 						return nil
 					})
 			}

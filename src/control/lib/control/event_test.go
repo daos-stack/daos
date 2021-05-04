@@ -23,8 +23,13 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+func mockEngineDiedEvt(t *testing.T) *events.RASEvent {
+	t.Helper()
+	return events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit, 1234)
+}
+
 func TestControl_eventNotify(t *testing.T) {
-	rasEventEngineDied := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit)
+	rasEventEngineDied := mockEngineDiedEvt(t)
 
 	for name, tc := range map[string]struct {
 		seq    uint64
@@ -79,9 +84,8 @@ func TestControl_eventNotify(t *testing.T) {
 }
 
 func TestControl_EventForwarder_OnEvent(t *testing.T) {
-	rasEventEngineDiedFwdable := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit)
-	rasEventEngineDied := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit).
-		WithForwardable(false)
+	rasEventEngineDied := mockEngineDiedEvt(t).WithForwardable(false)
+	rasEventEngineDiedFwdable := mockEngineDiedEvt(t).WithForwardable(true)
 
 	for name, tc := range map[string]struct {
 		aps            []string
@@ -147,9 +151,8 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 		return nil, errors.Errorf("failed to create new syslogger (prio %d)", prio)
 	}
 
-	rasEventEngineDied := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit)
-	rasEventEngineDiedFwded := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit).
-		WithForwarded(true)
+	rasEventEngineDied := mockEngineDiedEvt(t).WithForwarded(false)
+	rasEventEngineDiedFwded := mockEngineDiedEvt(t).WithForwarded(true)
 
 	for name, tc := range map[string]struct {
 		event              *events.RASEvent
@@ -203,8 +206,7 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 			slStr := mockSyslogBuf.String()
 			t.Logf("syslog out: %s", slStr)
 			if !tc.expShouldLogSyslog {
-				common.AssertTrue(t, slStr == "",
-					"expected syslog to be empty")
+				common.AssertTrue(t, slStr == "", "expected syslog to be empty")
 				return
 			}
 			prioStr := fmt.Sprintf("prio%d ", tc.event.Severity.SyslogPriority())
