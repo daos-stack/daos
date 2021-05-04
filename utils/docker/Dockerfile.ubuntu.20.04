@@ -25,9 +25,8 @@ RUN apt-get -y update &&						\
 	uuid-dev libssl-dev fuse3 libfuse3-dev curl libjson-c-dev 	\
 	liblz4-dev libibverbs-dev librdmacm-dev libaio-dev yasm		\
 	python3-dev golang-go git libyaml-dev python3-tabulate		\
-	python3-pyxattr openjdk-8-jdk maven libipmctl-dev		\
-	libcunit1-dev libopenmpi-dev numactl doxygen libunwind-dev	\
-	python3-junit.xml sudo &&					\
+	python3-pyxattr openjdk-8-jdk maven libipmctl-dev 		\
+	libcunit1-dev libopenmpi-dev numactl doxygen libunwind-dev && 	\
     apt-get clean all
 
 # hack the default shell to bash instead of dash
@@ -45,7 +44,6 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
