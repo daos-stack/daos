@@ -534,7 +534,7 @@ class LogTest():
 
                     if new_pointer != '(nil)' and old_pointer != '(nil)':
                         exp_sz = regions[old_pointer].calloc_size()
-                        if old_sz not in [0, exp_sz, new_sz]:
+                        if old_sz not in (0, exp_sz, new_sz):
                             show_line(line, 'HIGH',
                                       'realloc used invalid old size')
                         memsize.subtract(exp_sz)
