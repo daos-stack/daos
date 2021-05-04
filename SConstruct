@@ -382,7 +382,7 @@ def scons(): # pylint: disable=too-many-locals
         daos_build.load_mpi_path(env)
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
-        env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
+        env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
 
     AddOption('--deps-only',
               dest='deps_only',
