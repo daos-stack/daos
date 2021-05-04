@@ -3844,9 +3844,9 @@ parse_acl_file(const char *path, struct daos_acl **acl)
 	D_GOTO(out, rc = 0);
 
 parse_err:
-	D_FREE(line);
 	daos_acl_free(tmp_acl);
 out:
+	D_FREE(line);
 	fclose(instream);
 	return rc;
 }
