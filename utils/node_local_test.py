@@ -528,7 +528,8 @@ class DaosServer():
                      '--runtime_dir', self.agent_dir,
                      '--logfile', self.agent_log.name]
 
-        agent_cmd.append('--debug')
+        if not self.conf.args.server_debug:
+            agent_cmd.append('--debug')
 
         self._agent = subprocess.Popen(agent_cmd)
         self.conf.agent_dir = self.agent_dir
@@ -2729,7 +2730,10 @@ def main():
     setup_log_test(conf)
 
     server = DaosServer(conf, test_class='first')
-    server.start(clean=False)
+    clean=True
+    if args.no_root:
+        clean=False
+    server.start(clean=clean)
 
     fatal_errors = BoolRatchet()
     fi_test = False
