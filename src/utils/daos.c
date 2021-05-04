@@ -164,11 +164,11 @@ cmd_args_print(struct cmd_args_s *ap)
 	D_INFO("\tcont UUID: "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
 
 	D_INFO("\tattr: name=%s, value=%s\n",
-	       ap->attrname_str ? ap->attrname_str : "NULL",
+		ap->attrname_str ? ap->attrname_str : "NULL",
 		ap->value_str ? ap->value_str : "NULL");
 
 	D_INFO("\tpath=%s, type=%s, oclass=%s, chunk_size="DF_U64"\n",
-	       ap->path ? ap->path : "NULL",
+		ap->path ? ap->path : "NULL",
 		type, oclass, ap->chunk_size);
 	D_INFO("\tsnapshot: name=%s, epoch="DF_U64", epoch range=%s "
 		"("DF_U64"-"DF_U64")\n",
@@ -244,6 +244,7 @@ tobytes(const char *str)
 	return size;
 }
 
+
 static int
 epoch_range_parse(struct cmd_args_s *ap)
 {
@@ -252,7 +253,7 @@ epoch_range_parse(struct cmd_args_s *ap)
 	long long int	parsed_end = 0;
 
 	rc = sscanf(ap->epcrange_str, "%lld-%lld",
-		    &parsed_begin, &parsed_end);
+			&parsed_begin, &parsed_end);
 	if ((rc != 2) || (parsed_begin < 0) || (parsed_end < 0))
 		D_GOTO(out_invalid_format, -1);
 
@@ -291,7 +292,7 @@ daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 	if (*end != '.')
 		return -1;
 
-	ptr = end + 1;
+	ptr = end+1;
 
 	lo = strtoull(ptr, &end, 10);
 	if (ptr[0] == '-')
@@ -533,30 +534,6 @@ enum {
 	DAOS_PROPERTIES_OPTION = 1,
 };
 
-static void
-args_free(struct cmd_args_s *ap)
-{
-	D_FREE(ap->sysname);
-	D_FREE(ap->attrname_str);
-	D_FREE(ap->value_str);
-	D_FREE(ap->path);
-	D_FREE(ap->src);
-	D_FREE(ap->dst);
-	D_FREE(ap->snapname_str);
-	D_FREE(ap->epcrange_str);
-	if (ap->props) {
-		/* restore number of entries in array for freeing */
-		ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
-		daos_prop_free(ap->props);
-	}
-	D_FREE(ap->outfile);
-	D_FREE(ap->aclfile);
-	D_FREE(ap->entry);
-	D_FREE(ap->principal);
-	D_FREE(ap->user);
-	D_FREE(ap->group);
-}
-
 /* resource and command arguments (ie "container create" for example) can be
  * skipped for options evaluation
  */
@@ -747,7 +724,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			daos_parse_ctype(optarg, &ap->type);
 			if (ap->type == DAOS_PROP_CO_LAYOUT_UNKOWN) {
 				fprintf(stderr, "unknown container type %s\n",
-					optarg);
+						optarg);
 				D_GOTO(out_free, rc = RC_PRINT_HELP);
 			}
 			break;
@@ -755,7 +732,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			ap->oclass = daos_oclass_name2id(optarg);
 			if (ap->oclass == OC_UNKNOWN) {
 				fprintf(stderr, "unknown object class: %s\n",
-					optarg);
+						optarg);
 				D_GOTO(out_free, rc = RC_PRINT_HELP);
 			}
 			break;
@@ -1240,7 +1217,7 @@ obj_op_hdlr(struct cmd_args_s *ap)
 	}
 
 	rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
-			    &ap->cont, &cont_info, NULL);
+			&ap->cont, &cont_info, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to open container "DF_UUIDF
 			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
@@ -1414,6 +1391,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	fprintf(stream, "daos command (v%s), libdaos %d.%d.%d\n",
 		DAOS_VERSION, DAOS_API_VERSION_MAJOR,
 		DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
+
 
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
