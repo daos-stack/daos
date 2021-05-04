@@ -29,7 +29,7 @@ server_config:
       scm_mount: /mnt/daos0
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,rebuild
+        - DD_MASK=all
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -43,7 +43,7 @@ server_config:
       scm_mount: /mnt/daos1
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,rebuild
+        - DD_MASK=all
 pool:
   mode: 146
   name: daos_server
