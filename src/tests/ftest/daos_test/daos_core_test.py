@@ -6,7 +6,6 @@
 """
 from daos_core_base import DaosCoreBase
 
-
 class DaosCoreTest(DaosCoreBase):
     # pylint: disable=too-many-ancestors,too-many-public-methods
     """Runs just the non-rebuild daos_test tests.

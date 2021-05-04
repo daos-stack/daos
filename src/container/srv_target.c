@@ -45,7 +45,7 @@
  */
 #define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
-#define DAOS_AGG_LAZY_RATE	1000 /* ms */
+#define DAOS_AGG_LAZY_RATE	50 /* ms */
 
 static inline bool
 agg_rate_ctl(void *arg)
@@ -60,15 +60,12 @@ agg_rate_ctl(void *arg)
 	switch (pool->sp_reclaim) {
 	case DAOS_RECLAIM_DISABLED:
 		return true;
-	case DAOS_RECLAIM_LAZY:
+	default:
 		if (dss_xstream_is_busy() &&
 		    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE)
 			sched_req_sleep(req, DAOS_AGG_LAZY_RATE);
 		else
 			sched_req_yield(req);
-		return false;
-	default:
-		sched_req_yield(req);
 		return false;
 	}
 }
@@ -203,14 +200,15 @@ cont_aggregate_runnable(struct ds_cont_child *cont)
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct sched_request	*req = cont->sc_agg_req;
 
-	if (unlikely(pool->sp_map == NULL)) {
+	if (unlikely(pool->sp_map == NULL) || pool->sp_stopping) {
 		/* If it does not get the pool map from the pool leader,
 		 * see pool_iv_pre_sync(), the IV fetch from the following
 		 * ds_cont_csummer_init() will fail anyway.
 		 */
 		D_DEBUG(DB_EPC, DF_CONT": skip aggregation "
-			"No pool map yet\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+			"No pool map yet or stopping %d\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			pool->sp_stopping);
 		return false;
 	}
 
@@ -1814,7 +1812,7 @@ cont_snap_update_one(void *vin)
 		size_t	 bufsize;
 
 		bufsize = args->snap_count * sizeof(*args->snapshots);
-		D_REALLOC(buf, cont->sc_snapshots, bufsize);
+		D_REALLOC_NZ(buf, cont->sc_snapshots, bufsize);
 		if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out_cont;
@@ -1848,7 +1846,7 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	args.snapshots = snapshots;
 	D_DEBUG(DB_EPC, DF_UUID": refreshing snapshots %d\n",
 		DP_UUID(cont_uuid), snap_count);
-	return dss_thread_collective(cont_snap_update_one, &args, 0);
+	return dss_task_collective(cont_snap_update_one, &args, 0);
 }
 
 void
@@ -1976,7 +1974,7 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_thread_collective(cont_epoch_aggregate_one, NULL, 0);
+	rc = dss_task_collective(cont_epoch_aggregate_one, NULL, 0);
 	if (rc != 0)
 		D_ERROR(DF_CONT": Aggregation failed: "DF_RC"\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
@@ -2334,7 +2332,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 		struct dss_coll_ops	coll_ops = { 0 };
 		struct dss_coll_args	coll_args = { 0 };
 
-		if (pool->sp_map == NULL)
+		if (pool->sp_map == NULL || pool->sp_stopping)
 			goto yield;
 
 		/* collective operations */
@@ -2345,8 +2343,8 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 		coll_args.ca_aggregator = pool;
 		coll_args.ca_func_args	= &coll_args.ca_stream_args;
 
-		rc = dss_thread_collective_reduce(&coll_ops, &coll_args,
-						  DSS_ULT_FL_PERIODIC);
+		rc = dss_task_collective_reduce(&coll_ops, &coll_args,
+						DSS_ULT_FL_PERIODIC);
 		if (rc) {
 			D_ERROR(DF_UUID": Can not collect min epoch: %d\n",
 				DP_UUID(pool->sp_uuid), rc);
