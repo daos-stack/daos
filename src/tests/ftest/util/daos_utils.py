@@ -73,6 +73,22 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("pool", "query"), pool=pool, sys_name=sys_name, sys=sys)
 
+    def pool_autotest(self, pool):
+        """Runs autotest for pool
+
+        Args:
+            pool (str): pool UUID
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool autotest command fails.
+        """
+        return self._get_result(
+            ("pool", "autotest"), pool=pool)
+
     def container_create(self, pool, sys_name=None, cont=None,
                          path=None, cont_type=None, oclass=None,
                          chunk_size=None, properties=None, acl_file=None):
