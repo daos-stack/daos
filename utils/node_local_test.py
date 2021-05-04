@@ -321,9 +321,6 @@ class WarningsFactory():
         if self.ts:
             # This is a controlled shutdown, so wipe the error saying forced
             # exit.
-            print('Removing test failure')
-            print(self.ts.test_cases)
-            print(self.ts.test_cases[1])
             self.ts.test_cases[1].errors = []
             self.ts.test_cases[1].error_message = []
             self._write_test_file()

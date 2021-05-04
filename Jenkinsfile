@@ -451,14 +451,15 @@ pipeline {
                                          aggregatingResults: true,
                                          tool: gcc4(pattern: 'centos7-gcc-release-build.log',
                                                     id: "analysis-gcc-centos7-release")
+                            junit testResults: 'nlt-junit.xml'
+                            archiveArtifacts artifacts: 'nlt_logs/centos7.release/',
+                                             allowEmptyArchive: true
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-gcc-release
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
-                                             allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'nlt_logs/centos7.release/',
                                              allowEmptyArchive: true
                         }
                     }
