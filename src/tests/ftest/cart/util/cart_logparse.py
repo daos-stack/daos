@@ -355,7 +355,7 @@ class LogLine():
         """Returns the size of the allocation"""
         if self.get_field(5) == '*':
             if self.is_realloc():
-                field = -7
+                field = -8
             else:
                 field = -3
             count = int(self.get_field(field).split(':')[-1])

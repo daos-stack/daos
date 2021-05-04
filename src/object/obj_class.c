@@ -193,18 +193,16 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 }
 
 int
-dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
+dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
 	      daos_oclass_id_t *oc_id_p)
 {
-	uint64_t		rf_factor;
 	daos_oclass_id_t	cid = 0;
 	struct daos_obj_class	*oc;
 	struct daos_oclass_attr	ca;
 	uint16_t		shd, rdd;
 	int			grp_size;
 
-	rf_factor = dc_cont_hdl2redunfac(coh);
 	rdd = hints & DAOS_OCH_RDD_MASK;
 	shd = hints & DAOS_OCH_SHD_MASK;
 
