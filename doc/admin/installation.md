@@ -38,7 +38,7 @@ repositories.
 
 Add the DAOS package repository via zypper:
 ``` bash
-$ sudo zypper ar http://packages.daos.io/v1.2/Leap15/packages x86_64/daos_packages
+$ sudo zypper ar http://packages.daos.io/v1.2/Leap15/packages/x86_64/ daos_packages
 $ sudo rpm --import http://packages.daos.io/RPM-GPG-KEY
 $ sudo zypper --non-interactive ref
 ```
