@@ -152,7 +152,7 @@ iov_alloc_for_csum_info(d_iov_t *iov, struct dcs_csum_info *csum_info)
 		size_t	 new_size = max(iov->iov_buf_len * 2,
 					      iov->iov_len + size_needed);
 
-		D_REALLOC(p, iov->iov_buf, new_size);
+		D_REALLOC(p, iov->iov_buf, iov->iov_buf_len, new_size);
 		if (p == NULL)
 			return -DER_NOMEM;
 		iov->iov_buf = p;
@@ -644,7 +644,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		" rsize "DF_U64" ver %u kd_len "DF_U64" type %d sgl_idx %d/%zd"
 		"kds_len %d inline "DF_U64" epr "DF_U64"/"DF_U64"\n",
 		key_ent->ie_recx.rx_idx, key_ent->ie_recx.rx_nr,
-		key_ent->ie_rsize, rec->rec_version,
+		rec->rec_size, rec->rec_version,
 		arg->kds[arg->kds_len].kd_key_len, type, arg->sgl_idx,
 		iovs[arg->sgl_idx].iov_len, arg->kds_len,
 		rec->rec_flags & RECX_INLINE ? data_size : 0,
@@ -730,11 +730,9 @@ grow_array(void **arrayp, size_t elem_size, int old_len, int new_len)
 	void *p;
 
 	D_ASSERTF(old_len < new_len, "%d < %d\n", old_len, new_len);
-	D_REALLOC(p, *arrayp, elem_size * new_len);
+	D_REALLOC(p, *arrayp, elem_size * old_len, elem_size * new_len);
 	if (p == NULL)
 		return -DER_NOMEM;
-	/* Until D_REALLOC does this, zero the new segment. */
-	memset(p + elem_size * old_len, 0, elem_size * (new_len - old_len));
 	*arrayp = p;
 	return 0;
 }

@@ -73,8 +73,8 @@ pipeline {
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: "daily_regression",
-               description: 'Test-tag to use for this run (i.e pr, daily_regression, full_regression, etc.')
+               defaultValue: "",
+               description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
     }
 
     stages {
@@ -168,8 +168,8 @@ pipeline {
                     when {
                       beforeAgent true
                       expression { ! (skipStage(stage: 'python-bandit',
-		                                 def_val: 'false') ||
-		                        quickFunctional()) }
+                                                def_val: 'false') ||
+                                      quickFunctional()) }
                     }
                     agent {
                         dockerfile {
@@ -753,7 +753,7 @@ pipeline {
                     post {
                       always {
                             unitTestPost artifacts: ['nlt_logs/*'],
-                                         testResults: 'None',
+                                         testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,

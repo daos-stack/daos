@@ -312,15 +312,15 @@ class LogTest():
                 if wf:
                     wf.reset_pending()
             try:
-              self._check_pid_from_log_file(pid,
-                                abort_on_warning,
-                                leak_wf,
-                                show_memleaks=show_memleaks)
+                self._check_pid_from_log_file(pid,
+                                              abort_on_warning,
+                                              leak_wf,
+                                              show_memleaks=show_memleaks)
             except LogCheckError as error:
-              if to_raise is None:
-                 to_raise = error
+                if to_raise is None:
+                    to_raise = error
         if to_raise:
-           raise to_raise
+            raise to_raise
 
     def check_dfuse_io(self):
         """Parse dfuse i/o"""
@@ -436,12 +436,18 @@ class LogTest():
                         # that fail during shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
+                    # Disable checking for a number of conditions, either
+                    # because these errors/lines are badly formatted or because
+                    # they're intermittent and we don't want noise in the test
+                    # results.
                     if line.fac == 'external':
                         show = False
-                    if show and server_shutdown and line.get_msg().endswith(
+                    elif show and server_shutdown and line.get_msg().endswith(
                             "DER_SHUTDOWN(-2017): 'Service should shut down'"):
                         show = False
-                    if show and line.function == 'sched_watchdog_post':
+                    elif show and line.function == 'rdb_stop':
+                        show = False
+                    elif show and line.function == 'sched_watchdog_post':
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
@@ -536,10 +542,16 @@ class LogTest():
                     else:
                         self.save_nill_free(line)
                 elif line.is_realloc():
-                    new_pointer = line.get_field(-3)
-                    old_pointer = line.get_field(-1)[:-2].split(':')[-1]
+                    new_pointer = line.get_field(-6)
+                    old_pointer = line.get_field(-1)[0:-2]
+                    old_sz = int(line.get_field(-3))
+                    new_sz = line.calloc_size()
                     if new_pointer != '(nil)' and old_pointer != '(nil)':
-                        memsize.subtract(regions[old_pointer].calloc_size())
+                        exp_sz = regions[old_pointer].calloc_size()
+                        if old_sz not in [0, exp_sz, new_sz]:
+                            show_line(line, 'HIGH',
+                                      'realloc used invalid old size')
+                        memsize.subtract(exp_sz)
                     regions[new_pointer] = line
                     memsize.add(line.calloc_size())
                     if old_pointer not in (new_pointer, '(nil)'):
