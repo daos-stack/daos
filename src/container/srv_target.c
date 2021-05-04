@@ -1806,7 +1806,6 @@ cont_snap_update_one(void *vin)
 		uint64_t *snaps;
 
 		D_REALLOC_ARRAY_NZ(snaps, cont->sc_snapshots,
-				   cont->sc_snapshots_nr,
 				   args->snap_count);
 		if (snaps == NULL) {
 			rc = -DER_NOMEM;
