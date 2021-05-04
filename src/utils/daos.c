@@ -554,6 +554,7 @@ args_free(struct cmd_args_s *ap)
 		/* restore number of entries in array for freeing */
 		ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
 		daos_prop_free(ap->props);
+		ap->props = NULL;
 	}
 	D_FREE(ap->outfile);
 	D_FREE(ap->aclfile);
