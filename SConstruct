@@ -3,6 +3,7 @@ import sys
 import os
 import platform
 import subprocess
+from subprocess import call
 import time
 import errno
 import SCons.Warnings
@@ -139,6 +140,12 @@ def set_defaults(env, daos_version):
               action='store_true',
               default=False,
               help='Disable rpath')
+    AddOption('--build-edv',
+              dest='daos_ssd',
+              action='store_true',
+              default=False,
+              help='enable build in edv')
+
 
     env.Append(API_VERSION_MAJOR=API_VERSION_MAJOR)
     env.Append(API_VERSION_MINOR=API_VERSION_MINOR)
@@ -164,6 +171,14 @@ def set_defaults(env, daos_version):
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
+
+    if GetOption("daos_ssd"):
+        patchfile = "/opt/crtdc/daos/master/patches/edv_build_latest.patch"
+        if os.path.exists(patchfile):
+            print("Endeavor patch exists")
+            call(["git", "apply", patchfile])
+        else:
+            print("Missing patchfile, not in endeavor?.. skip patching")
 
     if env.get('BUILD_TYPE') != 'release':
         env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
