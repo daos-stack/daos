@@ -514,6 +514,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: quickBuild(),
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos8 "
+                            args '--tmpfs /mnt/daos'
                         }
                     }
                     steps {
@@ -521,6 +522,8 @@ pipeline {
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no",
                                    scons_exe: 'scons-3'
+                        sh (script:"""sudo ./utils/docker_nlt.sh --class-name centos8 --test cont_copy""",
+                            label: 'Run NLT smoke test')
                     }
                     post {
                         always {
@@ -528,6 +531,9 @@ pipeline {
                                          aggregatingResults: true,
                                          tool: gcc4(pattern: 'centos8-gcc-build.log',
                                                     id: "analysis-centos8-gcc")
+                            junit testResults: 'nlt-junit.xml'
+                            archiveArtifacts artifacts: 'nlt_logs/centos8/',
+                                             allowEmptyArchive: true
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
@@ -583,12 +589,15 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-ubuntu20.04"
+                            args '--tmpfs /mnt/daos'
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
+                        sh (script:"""sudo ./utils/docker_nlt.sh --class-name ubuntu.clang --test cont_copy""",
+                            label: 'Run NLT smoke test')
                     }
                     post {
                         always {
@@ -596,6 +605,9 @@ pipeline {
                                          aggregatingResults: true,
                                          tool: clang(pattern: 'ubuntu20.04-clang-build.log',
                                                      id: "analysis-ubuntu20-clang")
+                            junit testResults: 'nlt-junit.xml'
+                            archiveArtifacts artifacts: 'nlt_logs/ubuntu.clang/',
+                                             allowEmptyArchive: true
                         }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
