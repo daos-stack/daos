@@ -540,7 +540,7 @@ class DaosServer():
         # /mnt/daos is mounted but empty.  It will be remounted and formatted
         # /mnt/daos exists and has data in.  It will be used as is.
         start = time.time()
-        max_start_time = 90
+        max_start_time = 120
 
         error_resolutions = {
             'system_erase': (
