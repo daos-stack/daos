@@ -202,6 +202,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 
 	var numaNode0 uint = 0
 	var numaNode1 uint = 1
+	var bypass = true
 
 	// Next, construct a config to compare against the first one. It should be
 	// possible to construct an identical configuration with the helpers.
@@ -242,6 +243,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode0).
+				WithBypassHealthChk(&bypass).
 				WithEnvVars("CRT_TIMEOUT=30").
 				WithLogFile("/tmp/daos_engine.0.log").
 				WithLogMask("WARN"),

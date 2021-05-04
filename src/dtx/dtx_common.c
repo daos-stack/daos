@@ -341,7 +341,7 @@ dtx_batched_commit(void *arg)
 			sleep_time = 0;
 			dtx_get_dbca(dbca);
 			cont->sc_dtx_aggregating = 1;
-			rc = dss_ult_create(dtx_aggregate, cont, DSS_XS_SELF,
+			rc = dss_ult_create(dtx_aggregate, dbca, DSS_XS_SELF,
 					    0, 0, NULL);
 			if (rc != 0) {
 				cont->sc_dtx_aggregating = 0;
@@ -356,7 +356,7 @@ dtx_batched_commit(void *arg)
 			sleep_time = 0;
 			dtx_get_dbca(dbca);
 			cont->sc_dtx_cleanup_stale = 1;
-			rc = dss_ult_create(dtx_cleanup_stale, cont,
+			rc = dss_ult_create(dtx_cleanup_stale, dbca,
 					    DSS_XS_SELF, 0, 0, NULL);
 			if (rc != 0) {
 				cont->sc_dtx_cleanup_stale = 0;

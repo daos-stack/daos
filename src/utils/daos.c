@@ -562,6 +562,30 @@ args_free(struct cmd_args_s *ap)
  */
 #define SKIP_RES_AND_CMD_ARGS 2
 
+static void
+args_free(struct cmd_args_s *ap)
+{
+	D_FREE(ap->sysname);
+	D_FREE(ap->attrname_str);
+	D_FREE(ap->value_str);
+	D_FREE(ap->path);
+	D_FREE(ap->src);
+	D_FREE(ap->dst);
+	D_FREE(ap->snapname_str);
+	D_FREE(ap->epcrange_str);
+	if (ap->props) {
+		/* restore number of entries in array for freeing */
+		ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
+		daos_prop_free(ap->props);
+	}
+	D_FREE(ap->outfile);
+	D_FREE(ap->aclfile);
+	D_FREE(ap->entry);
+	D_FREE(ap->user);
+	D_FREE(ap->group);
+	D_FREE(ap->principal);
+}
+
 static int
 common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 {
@@ -1630,6 +1654,7 @@ main(int argc, char *argv[])
 	/* Call resource-specific handler function */
 	rc = hdlr(&dargs);
 
+	/* Free all args */
 	args_free(&dargs);
 
 	daos_fini();
