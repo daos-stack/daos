@@ -1812,7 +1812,7 @@ cont_snap_update_one(void *vin)
 		size_t	 bufsize;
 
 		bufsize = args->snap_count * sizeof(*args->snapshots);
-		D_REALLOC(buf, cont->sc_snapshots, bufsize);
+		D_REALLOC_NZ(buf, cont->sc_snapshots, bufsize);
 		if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out_cont;
