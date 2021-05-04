@@ -145,16 +145,20 @@ class WarningsFactory():
         self._flush()
 
         if junit:
+            # Insert a test-case and force it to failed.  Save this to file
+            # and keep it there, until close() method is called, then remove
+            # it and re-save.  This means any crash will result in there
+            # being a results file with an error recorded.
+            tc = junit_xml.TestCase('Sanity',
+                                    classname=self._class_name('core'))
+            tc.add_error_info('NLT exited abnormally')
             test_case = junit_xml.TestCase('Startup',
                                            classname=self._class_name('core'))
             self.ts = junit_xml.TestSuite('Node Local Testing',
-                                          test_cases=[test_case])
-            self.tc = junit_xml.TestCase('Sanity',
-                                         classname=self._class_name('core'))
+                                          test_cases=[test_case, tc])
             self._write_test_file()
         else:
             self.ts = None
-            self.tc = None
 
     def _class_name(self, class_name):
         """Return a formatted ID string for class"""
@@ -178,8 +182,9 @@ class WarningsFactory():
         entry['severity'] = 'ERROR'
         self.issues.append(entry)
 
-        if self.ts:
-            self.tc.add_failure_info('NLT exited abnormally')
+        # Do not try and write the junit file here, as that does not work
+        # during teardown.
+        self.ts = None
         self.close()
 
     def add_test_case(self, name, failure=None, test_class='core'):
@@ -311,7 +316,13 @@ class WarningsFactory():
         print('Closed JSON file {} with {} errors'.format(self.filename,
                                                           len(self.issues)))
         if self.ts:
-            self.ts.test_cases.append(self.tc)
+            # This is a controlled shutdown, so wipe the error saying forced
+            # exit.
+            print('Removing test failure')
+            print(self.ts.test_cases)
+            print(self.ts.test_cases[1])
+            self.ts.test_cases[1].errors = []
+            self.ts.test_cases[1].error_message = []
             self._write_test_file()
 
 def load_conf(args):
@@ -393,7 +404,11 @@ class DaosServer():
             os.unlink(server_file)
         if os.path.exists(self.server_log.name):
             log_test(self.conf, self.server_log.name)
-        os.rmdir(self.agent_dir)
+        try:
+            os.rmdir(self.agent_dir)
+        except OSError as error:
+            print(os.listdir(self.agent_dir))
+            raise error
 
     def _add_test_case(self, op, failure=None):
         """Add a test case to the server instance
