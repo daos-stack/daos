@@ -10,6 +10,8 @@ set -e
 
 ./utils/setup_daos_admin.sh
 
+uptime
+
 # Needed for CentOS 8
 export LD_LIBRARY_PATH=/opt/daos/prereq/release/spdk/lib/:$LD_LIBRARY_PATH
 
