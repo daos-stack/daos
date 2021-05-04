@@ -1490,7 +1490,7 @@ rdb_compactd(void *arg)
 				": %d\n", DP_DB(db), base, rc);
 			break;
 		}
-		vos_gc_pool_run(db->d_pool, -1, rdb_gc_yield, NULL);
+		vos_gc_pool(db->d_pool, -1, rdb_gc_yield, NULL);
 	}
 	D_DEBUG(DB_MD, DF_DB": compactd stopping\n", DP_DB(db));
 }

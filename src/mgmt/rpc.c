@@ -13,6 +13,13 @@
 
 CRT_GEN_PROC_FUNC(server_entry, DAOS_SEQ_SERVER_ENTRY);
 
+static int
+crt_proc_struct_server_entry(crt_proc_t proc, crt_proc_op_t proc_op,
+			     struct server_entry *data)
+{
+	return crt_proc_server_entry(proc, data);
+}
+
 CRT_RPC_DEFINE(mgmt_svc_rip, DAOS_ISEQ_MGMT_SVR_RIP, DAOS_OSEQ_MGMT_SVR_RIP)
 CRT_RPC_DEFINE(mgmt_params_set, DAOS_ISEQ_MGMT_PARAMS_SET,
 		DAOS_OSEQ_MGMT_PARAMS_SET)

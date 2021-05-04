@@ -111,10 +111,18 @@ type storageScanCmd struct {
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(_ []string) error {
 	if cmd.NvmeHealth && cmd.NvmeMeta {
-		return errors.New("Cannot use --nvme-health and --nvme-meta together")
+		return errors.New("cannot use --nvme-health and --nvme-meta together")
+	}
+	if cmd.Verbose && (cmd.NvmeHealth || cmd.NvmeMeta) {
+		return errors.New("cannot use --verbose with --nvme-health or --nvme-meta")
 	}
 
-	req := &control.StorageScanReq{NvmeHealth: cmd.NvmeHealth, NvmeMeta: cmd.NvmeMeta}
+	req := &control.StorageScanReq{
+		NvmeHealth: cmd.NvmeHealth,
+		NvmeMeta:   cmd.NvmeMeta,
+		// don't strip nvme details if verbose or health or meta set
+		NvmeBasic: !(cmd.Verbose || cmd.NvmeHealth || cmd.NvmeMeta),
+	}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StorageScan(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -280,7 +288,7 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 
 // storageIdentifyCmd is the struct representing the identify storage subcommand.
 type storageIdentifyCmd struct {
-	VMD vmdIdentifyCmd `command:"vmd" alias:"n" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification."`
+	VMD vmdIdentifyCmd `command:"vmd" alias:"n" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification. Duration of LED event can be configured by setting the VMD_LED_PERIOD environment variable, otherwise default is 60 seconds."`
 }
 
 // vmdIdentifyCmd is the struct representing the identify vmd storage subcommand.

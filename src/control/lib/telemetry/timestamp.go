@@ -31,7 +31,7 @@ func (t *Timestamp) Value() time.Time {
 		return zero
 	}
 	var clk C.time_t
-	res := C.d_tm_get_timestamp(&clk, t.handle.shmem, t.node, nil)
+	res := C.d_tm_get_timestamp(t.handle.ctx, &clk, t.node)
 	if res == C.DER_SUCCESS {
 		return time.Unix(int64(clk), 0)
 	}
