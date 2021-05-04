@@ -595,7 +595,8 @@ func createPropSlice(props *C.daos_prop_t, numProps int) propSlice {
 // interfaces in order to provide a custom flag type for converting
 // command-line arguments into a *C.daos_prop_t array suitable for
 // creating a container. Use the SetPropertiesFlag type for setting
-// properties on an existing container.
+// properties on an existing container and the GetPropertiesFlag type
+// for getting properties on an existing container.
 type PropertiesFlag struct {
 	props   *C.daos_prop_t
 	entries propSlice

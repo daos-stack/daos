@@ -122,6 +122,9 @@ type containerCreateCmd struct {
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
+	if cmd.PoolFlag != "" {
+		cmd.Args.Pool = cmd.PoolFlag
+	}
 	if err = cmd.resolvePool(cmd.Args.Pool); err != nil {
 		return
 	}
@@ -232,9 +235,10 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 type existingContainerCmd struct {
 	containerBaseCmd
 
-	Args struct {
+	ContFlag string `long:"cont" description:"container UUID (deprecated; use positional arg)"`
+	Args     struct {
 		Container string `positional-arg-name:"<container name or UUID>"`
-	} `positional-args:"yes" required:"yes"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *existingContainerCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (cleanFn func(), err error) {
@@ -244,6 +248,9 @@ func (cmd *existingContainerCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (cle
 		return
 	}
 
+	if cmd.ContFlag != "" {
+		cmd.Args.Container = cmd.ContFlag
+	}
 	if err = cmd.resolveContainer(cmd.Args.Container); err != nil {
 		return
 	}
