@@ -266,6 +266,7 @@ class SoakTestBase(TestWithServers):
         self.log.info("<<Job_Setup %s >> at %s", self.test_name, time.ctime())
         for job in jobs:
             jobscript = []
+            commands = []
             nodesperjob = self.params.get(
                 "nodesperjob", "/run/" + job + "/*", [1])
             taskspernode = self.params.get(
@@ -436,8 +437,6 @@ class SoakTestBase(TestWithServers):
 
         """
         job_script_list = []
-        # unique numbers per pass
-        self.used = []
         # Update the remote log directories from new loop/pass
         self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
         self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
@@ -492,6 +491,7 @@ class SoakTestBase(TestWithServers):
         self.all_failed_harassers = []
         self.soak_errors = []
         self.check_errors = []
+        self.used = []
         test_to = self.params.get("test_timeout", test_param + "*")
         self.test_name = self.params.get("name", test_param + "*")
         single_test_pool = self.params.get(
