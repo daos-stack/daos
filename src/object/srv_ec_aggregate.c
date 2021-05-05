@@ -383,7 +383,8 @@ agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry,
 	} else {
 		unsigned int *buf = NULL;
 
-		D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf, ent_buf_len);
+		D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf,
+			  sgl->sg_iovs[iov_entry].iov_buf_len, ent_buf_len);
 		 if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
