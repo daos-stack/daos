@@ -112,9 +112,9 @@ create_entry(struct dfuse_projection_info *fs_handle,
 
 	entry->attr_timeout = parent->ie_dfs->dfc_attr_timeout;
 	if (S_ISDIR(ie->ie_stat.st_mode))
-		entry->entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
+		entry->entry_timeout = parent->ie_dfs->dfc_dentry_dir_timeout;
 	else
-		entry->entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
+		entry->entry_timeout = parent->ie_dfs->dfc_dentry_timeout;
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
