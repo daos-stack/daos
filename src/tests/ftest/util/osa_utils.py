@@ -16,7 +16,7 @@ from mdtest_test_base import MdtestBase
 from command_utils import CommandFailure
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
-from general_utils import create_string_buffer
+from general_utils import create_string_buffer, run_command
 
 
 class OSAUtils(MdtestBase, IorTestBase):
@@ -49,6 +49,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.test_during_aggregation = False
         self.test_during_rebuild = False
         self.test_with_checksum = True
+        self.test_with_blank_node = False
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -66,7 +67,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         """Get the rebuild status.
 
         Returns:
-            str: reuild status
+            str: reuild status-
 
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
@@ -114,6 +115,53 @@ class OSAUtils(MdtestBase, IorTestBase):
         """
         data = self.dmg_command.pool_query(self.pool.uuid)
         return int(data["response"]["version"])
+
+    @fail_on(CommandFailure)
+    def get_ipaddr_for_rank(self, rank=None):
+        """Remove the /mnt/daos/<pool_uid> pool directory
+        for a particular rank.
+
+        Args:
+            rank (int): daos_engine rank. Defaults to None.
+        Returns:
+            ip_addr (str) : IPAddress for the rank.
+            port_num (str) : Port number for the rank.
+        """
+        output = self.dmg_command.system_query()
+        members_length = len(output["response"]["members"])
+        for i in range(0, members_length):
+            if rank == int(output["response"]["members"][i]["rank"]):
+                temp = output["response"]["members"][i]["addr"]
+                ip_addr = temp.split(":")
+                temp = output["response"]["members"][i]["fabric_uri"]
+                port_num = temp.split(":")            
+                return ip_addr[0], port_num[2]
+
+    @fail_on(CommandFailure)
+    def remove_pool_dir(self, ip_addr=None, port_num=None):
+        """Remove the /mnt/daos[x]/<pool_uuid>/vos-* directory
+
+        Args:
+            ip_addr (str): IP address of the daos server.
+                           Defaults to None.
+            port_number (str) : Port number the daos server. 
+        """
+        if ip_addr is None or port_num is None:
+            self.log.info("ip_addr : %s port_number: %s",ip_addr, port_num)
+            self.fail("No IP Address or Port number provided")
+        else:
+            expected_ib0_ports = ["31317", "31416"]
+            expected_ib1_ports = ["31417", "31516"]
+            if port_num in expected_ib0_ports:
+                port_val = 0
+            elif port_num in expected_ib1_ports:
+                port_val = 1
+            else:
+                self.log.info("port_number: %s",port_num)
+                self.fail("Invalid port number")
+            cmd = "/usr/bin/ssh {} sudo rm -rf /mnt/daos{}/{}/vos-*". \
+                  format(ip_addr, port_val, self.pool.uuid)
+            run_command(cmd)
 
     def set_container(self, container):
         """Set the OSA utils container object.
