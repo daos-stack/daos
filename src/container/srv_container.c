@@ -766,7 +766,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 out_kvs:
-	daos_prop_free(prop_dup);
+	if (prop_dup)
+		daos_prop_free(prop_dup);
 	rdb_path_fini(&kvs);
 out:
 	return rc;
@@ -1606,7 +1607,6 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		goto out;
 
-
 out:
 	if (rc == 0) {
 		/**
@@ -1616,7 +1616,6 @@ out:
 		 */
 		rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop);
 		out->coo_prop = prop;
-
 	}
 	if (rc != 0 && cont_hdl_opened)
 		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
@@ -2491,11 +2490,11 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 	set_prop_co_status_pre_process(pool, cont, prop_in);
 	prop_iv = daos_prop_merge(prop_old, prop_in);
 	if (prop_iv == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_old, rc = -DER_NOMEM);
 
 	rc = cont_prop_write(tx, &cont->c_prop, prop_in);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out_iv, rc);
 
 	/* Update prop IV with merged prop */
 	rc = cont_iv_prop_update(pool->sp_iv_ns, cont->c_uuid, prop_iv);
@@ -2503,9 +2502,11 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 		D_ERROR(DF_UUID": failed to update prop IV for cont, "
 			"%d.\n", DP_UUID(cont->c_uuid), rc);
 
-out:
-	daos_prop_free(prop_old);
+out_iv:
 	daos_prop_free(prop_iv);
+out_old:
+	daos_prop_free(prop_old);
+out:
 	return rc;
 }
 
@@ -3169,13 +3170,14 @@ out:
 
 		prop = cqo->cqo_prop;
 	} else if (opc == CONT_OPEN) {
-		struct cont_open_out *coo = crt_reply_get(rpc);
+		struct cont_open_out *coup = crt_reply_get(rpc);
 
 		prop = coo->coo_prop;
 	}
 	out->co_rc = rc;
 	crt_reply_send(rpc);
-	daos_prop_free(prop);
+	if (prop)
+		daos_prop_free(prop);
 
 	return;
 }
