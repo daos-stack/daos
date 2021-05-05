@@ -14,6 +14,8 @@ hosts:
 # it'll be used as one of the servers at test startup time, so use something
 # other than hosts.
 timeout: 1000
+setup:
+  start_servers_once: False
 server_config:
     engines_per_host: 2
     name: daos_server

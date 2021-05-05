@@ -112,6 +112,8 @@ class NvmePoolExtend(OSAUtils):
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()
+                if not self.out_queue.empty():
+                    self.assert_on_exception()
             # Verify the data after pool extend
             self.run_ior_thread("Read", oclass, test)
             # Get the pool space at the end of the test

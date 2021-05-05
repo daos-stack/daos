@@ -81,8 +81,6 @@ class NvmePoolExclude(OSAUtils):
                 threads.append(threading.Thread(target=self.run_ior_thread,
                                                 kwargs={"action": "Write",
                                                         "oclass": oclass,
-                                                        "single_cont_read":
-                                                        False,
                                                         "test": test}))
                 # Launch the IOR threads
                 for thrd in threads:
@@ -110,6 +108,8 @@ class NvmePoolExclude(OSAUtils):
                 # Wait to finish the threads
                 for thrd in threads:
                     thrd.join()
+                    if not self.out_queue.empty():
+                        self.assert_on_exception()
                 # Verify the data after pool exclude
                 self.run_ior_thread("Read", oclass, test)
                 display_string = "Pool{} space at the End".format(val)
@@ -130,4 +130,4 @@ class NvmePoolExclude(OSAUtils):
         :avocado: tags=nvme,checksum,nvme_osa
         :avocado: tags=nvme_pool_exclude
         """
-        self.run_nvme_pool_exclude(2)
+        self.run_nvme_pool_exclude(1)
