@@ -172,13 +172,11 @@ $ daos container info --path <path to entry point>
 
 ### Enabling Caching
 
-DFuse in normal mode simply provides a communication path between the kernel and
-DAOS. However, this can come with a performance impact. To help alleviate this
-it is possible to turn on caching, both within dfuse itself and by allowing the
-kernel to cache certain data.  Where and when data is cached, there is no attempt
-made to invalidate the caches based on changes to DAOS, other than simple timeouts.
+For perforamnce reasons caching will be enabled by default in DFuse, including both
+data and metadata caching.  It is possible to tune these settings both at a high level
+on the DFuse command line and fine grained control via container attributes.
 
-Enabling this option will turn on the following features:
+The following types of data will be cached by default.
 
 * Kernel caching of dentries
 * Kernel caching of negative dentries
@@ -187,10 +185,36 @@ Enabling this option will turn on the following features:
 * Readahead in dfuse and inserting data into kernel cache
 * MMAP write optimization
 
-To turn on caching use the `--enable-caching` command-line option for dfuse. This
-will enable the feature for all accessed containers.  When this option is used,
-the containers accessed should only be accessed from one node, so it may
-be necessary to create a container per node in this model.
+To selectively control caching within a container the following container
+attributes should be used, if any attribute is set then the rest are assumed
+to be set to 0 or off, except dentry-dir-time which defaults to dentry-time
+
+| **Attribute name**    | **Description**                                                  |
+| --------------------- | ---------------------------------------------------------------- |
+| dfuse-attr-time       | How long file attributes are cached                              |
+| dfuse-dentry-time     | How long directory entries are cached                            |
+| dfuse-dentry-dir-time | How long dentries are cached, if the entry is itself a directory |
+| dfuse-ndentry-time    | How long negative dentries are cached                            |
+| dfuse-data-cache      | Data caching enabled for this file ("on"/"off")                  |
+
+For metadata caching attributes specify the duration that the cache should be
+valid for, specified in seconds, and allowing 'S' or 'M' suffix.
+
+dfuse-data-cache should be set to "on", or "off" if set, any other value will
+log an error, and result in the cache being off.
+
+With no options specified attr and dentry timeouts will be 1 second, dentry-dir
+and ndentry timeouts will be 5 seconds, and data caching will be enabled.
+
+These are two command line options to control the DFuse process itself.
+
+| **Command line option | **Description**           |
+| --------------------- | ------------------------- |
+| --disable-caching     | Disables all caching      |
+| --disable-wb-caching  | Disables write-back cache |
+
+These will affect all containers accessed via DFuse, regardless of any
+container attributes.
 
 ### Stopping DFuse
 

@@ -469,27 +469,34 @@ err:
 }
 
 #define ATTR_COUNT 5
+
+char const *const
+cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
+			       "dfuse-dentry-time",
+			       "dfuse-dentry-dir-time",
+			       "dfuse-ndentry-time",
+			       "dfuse-data-cache"};
+
 /* Setup caching attributes for a container.
  *
  * These are read from pool attributes, or can be overwritten on the command
  * line, but only for the root dfc in that case, so to use caching with
  * multiple containers it needs to be set via attributes.
+ *
+ * Returns a  error code on error, or ENODATA if no attributes are
+ * set.
  */
 static int
-dfuse_cont_init(struct dfuse_cont *dfc)
+dfuse_cont_get_cache(struct dfuse_cont *dfc)
 {
-	char const *const names[ATTR_COUNT] = {"dfuse-attr-time",
-					       "dfuse-dentry-time",
-					       "dfuse-dentry-dir-time",
-					       "dfuse-ndentry-time",
-					       "dfuse-data-cache"};
 	size_t		size;
 	char		*buff;
 	int		rc;
 	int		i;
 	unsigned int	value;
-	bool have_dentry = false;
-	bool have_dentry_dir = false;
+	bool		have_dentry = false;
+	bool		have_dentry_dir = false;
+	bool		have_attr = false;
 
 	D_ALLOC(buff, 128);
 	if (buff == NULL)
@@ -498,27 +505,28 @@ dfuse_cont_init(struct dfuse_cont *dfc)
 	for (i = 0; i < ATTR_COUNT; i++) {
 		size = 128;
 
-		rc = daos_cont_get_attr(dfc->dfs_coh, 1, &names[i],
+		rc = daos_cont_get_attr(dfc->dfs_coh, 1, &cont_attr_names[i],
 					(void * const*)&buff,
 					&size, NULL);
 		if (rc == -DER_NONEXIST) {
 			continue;
 		} else if (rc != -DER_SUCCESS) {
 			DFUSE_TRA_WARNING(dfc, "Failed to load value for '%s' "
-					  DF_RC, names[i], DP_RC(rc));
+					  DF_RC, cont_attr_names[i], DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
+		have_attr = true;
 
 		if (i == 4) {
 			if (strncmp(buff, "on", size) == 0) {
-				dfc->dfs_data_caching = true;
+				dfc->dfc_data_caching = true;
 			} else if (strncmp(buff, "off", size) == 0) {
-				dfc->dfs_data_caching = false;
+				dfc->dfc_data_caching = false;
 			} else {
 				DFUSE_TRA_WARNING(dfc,
 						  "Failed to parse '%s' for '%s'",
-						  buff, names[i]);
-				dfc->dfs_data_caching = false;
+						  buff, cont_attr_names[i]);
+				dfc->dfc_data_caching = false;
 			}
 			continue;
 		}
@@ -529,25 +537,28 @@ dfuse_cont_init(struct dfuse_cont *dfc)
 		rc = dfuse_parse_time(buff, size, &value);
 		if (rc != 0) {
 			DFUSE_TRA_WARNING(dfc, "Failed to parse '%s' for '%s'",
-					  buff, names[i]);
+					  buff, cont_attr_names[i]);
 			continue;
 		}
-		DFUSE_TRA_INFO(dfc, "setting '%s' is %u", names[i], value);
+		DFUSE_TRA_INFO(dfc, "setting '%s' is %u",
+			       cont_attr_names[i], value);
 		if (i == 0) {
-			dfc->dfs_attr_timeout = value;
+			dfc->dfc_attr_timeout = value;
 		} else if (i == 1) {
 			have_dentry = true;
-			dfc->dfs_dentry_timeout = value;
+			dfc->dfc_dentry_timeout = value;
 		} else if (i == 2) {
 			have_dentry_dir = true;
-			dfc->dfs_dentry_dir_timeout = value;
+			dfc->dfc_dentry_dir_timeout = value;
 		} else if (i == 3) {
-			dfc->dfs_ndentry_timeout = value;
+			dfc->dfc_ndentry_timeout = value;
 		}
 	}
 	if (have_dentry && !have_dentry_dir)
-		dfc->dfs_dentry_dir_timeout = dfc->dfs_dentry_timeout;
+		dfc->dfc_dentry_dir_timeout = dfc->dfc_dentry_timeout;
 	rc = 0;
+	if (!have_attr)
+		rc = ENODATA;
 out:
 	D_FREE(buff);
 	return rc;
@@ -613,8 +624,9 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		/* Turn on some caching of metadata, otherwise container
 		 * operations will be very frequent
 		 */
-		dfc->dfs_attr_timeout = 5;
-		dfc->dfs_ndentry_timeout = 5;
+		dfc->dfc_attr_timeout = 5;
+		dfc->dfc_dentry_dir_timeout = 5;
+		dfc->dfc_ndentry_timeout = 5;
 
 	} else {
 		dfc->dfs_ops = &dfuse_dfs_ops;
@@ -646,9 +658,22 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 				D_GOTO(err_close, rc);
 			}
 
-			rc = dfuse_cont_init(dfc);
-			if (rc != 0)
-				D_GOTO(err_close, rc);
+			if (fs_handle->dpi_info->di_caching) {
+				rc = dfuse_cont_get_cache(dfc);
+				if (rc == ENODATA) {
+					/* If there is no container specific
+					 * attributes then use defaults
+					 */
+					dfc->dfc_attr_timeout = 1;
+					dfc->dfc_dentry_timeout = 1;
+					dfc->dfc_dentry_dir_timeout = 5;
+					dfc->dfc_ndentry_timeout = 5;
+					dfc->dfc_data_caching = true;
+					rc = 0;
+				} else if (rc != 0) {
+					D_GOTO(err_close, rc);
+				}
+			}
 		}
 	}
 

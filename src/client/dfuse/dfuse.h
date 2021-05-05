@@ -32,8 +32,8 @@ struct dfuse_info {
 	uint32_t			di_thread_count;
 	bool				di_threaded;
 	bool				di_foreground;
-	bool				di_direct_io;
 	bool				di_caching;
+	bool				di_wb_cache;
 };
 
 struct dfuse_projection_info {
@@ -209,11 +209,11 @@ struct dfuse_cont {
 	ino_t			dfs_ino;
 
 	/** Caching data */
-	double			dfs_attr_timeout;
-	double			dfs_dentry_timeout;
-	double			dfs_dentry_dir_timeout;
-	double			dfs_ndentry_timeout;
-	bool			dfs_data_caching;
+	double			dfc_attr_timeout;
+	double			dfc_dentry_timeout;
+	double			dfc_dentry_dir_timeout;
+	double			dfc_ndentry_timeout;
+	bool			dfc_data_caching;
 	pthread_mutex_t		dfs_read_mutex;
 };
 
@@ -357,7 +357,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 				(attr)->st_ino,				\
 				(attr)->st_mode);			\
 		__rc = fuse_reply_attr(req, attr,			\
-				(ie)->ie_dfs->dfs_attr_timeout);	\
+				(ie)->ie_dfs->dfc_attr_timeout);	\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_attr returned %d:%s", \
@@ -402,7 +402,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(oh, "Returning open");			\
-		if ((oh)->doh_ie->ie_dfs->dfs_data_caching) {		\
+		if ((oh)->doh_ie->ie_dfs->dfc_data_caching) {		\
 			(_fi)->keep_cache = 1;				\
 		}							\
 		__rc = fuse_reply_open(req, _fi);			\

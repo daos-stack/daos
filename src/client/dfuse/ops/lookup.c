@@ -26,12 +26,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_dfs);
 
 	if (S_ISDIR(ie->ie_stat.st_mode))
-		entry.entry_timeout = ie->ie_dfs->dfs_dentry_dir_timeout;
+		entry.entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
 	else
-		entry.entry_timeout = ie->ie_dfs->dfs_dentry_timeout;
+		entry.entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
 
 	/* Set the attr caching attributes of this entry */
-	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+	entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 
 	ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
 
@@ -252,10 +252,10 @@ out_release:
 	dfs_release(ie->ie_obj);
 out_free:
 	D_FREE(ie);
-	if (rc == ENOENT && parent->ie_dfs->dfs_ndentry_timeout > 0) {
+	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
 		struct fuse_entry_param entry = {};
 
-		entry.entry_timeout = parent->ie_dfs->dfs_ndentry_timeout;
+		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 
 	} else {

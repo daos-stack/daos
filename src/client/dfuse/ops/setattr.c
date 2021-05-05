@@ -46,8 +46,11 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	/* Only set this when caching is enabled as dfs doesn't fully support
 	 * ctime, but rather uses mtime instead.  In practice this is only
 	 * seen when using writeback cache.
+	 *
+	 * TODO: Pass in if this is a open file with caching enabled, and
+	 * selectively enable this based on file specifics.
 	 */
-	if (ie->ie_dfs->dfs_data_caching && to_set & FUSE_SET_ATTR_CTIME) {
+	if (ie->ie_dfs->dfc_data_caching && to_set & FUSE_SET_ATTR_CTIME) {
 		DFUSE_TRA_DEBUG(ie, "ctime %#lx", attr->st_ctime);
 		to_set &= ~FUSE_SET_ATTR_CTIME;
 		attr->st_mtime = attr->st_ctime;
@@ -59,7 +62,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 				attr->st_size);
 		to_set &= ~(FUSE_SET_ATTR_SIZE);
 		dfs_flags |= DFS_SET_ATTR_SIZE;
-		if (ie->ie_dfs->dfs_data_caching &&
+		if (ie->ie_dfs->dfc_data_caching &&
 		    ie->ie_stat.st_size == 0 && attr->st_size > 0) {
 			DFUSE_TRA_DEBUG(ie, "truncating 0-size file");
 			ie->ie_truncated = true;

@@ -73,7 +73,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	oh->doh_dfs = parent->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
 
-	if (parent->ie_dfs->dfs_data_caching) {
+	if (parent->ie_dfs->dfc_data_caching) {
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
 		else

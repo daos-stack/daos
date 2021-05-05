@@ -798,7 +798,7 @@ class DFuse():
                  pool=None,
                  container=None,
                  path=None,
-                 caching=False):
+                 caching=True):
         if path:
             self.dir = path
         else:
@@ -869,8 +869,8 @@ class DFuse():
         if single_threaded:
             cmd.append('-S')
 
-        if self.caching:
-            cmd.append('--enable-caching')
+        if not self.caching:
+            cmd.append('--disable-caching')
 
         if self.pool:
             cmd.extend(['--pool', self.pool])
@@ -1132,6 +1132,7 @@ def needs_dfuse_single(method):
     def _helper(self):
         self.dfuse = DFuse(self.server,
                            self.conf,
+                           caching=False,
                            pool=self.pool,
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__, single_threaded=True)
@@ -1147,8 +1148,8 @@ def needs_dfuse_with_cache(method):
     def _helper(self):
         self.dfuse = DFuse(self.server,
                            self.conf,
-                           pool=self.pool,
                            caching=True,
+                           pool=self.pool,
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__)
         rc = method(self)
