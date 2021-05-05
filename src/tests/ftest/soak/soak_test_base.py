@@ -286,7 +286,10 @@ class SoakTestBase(TestWithServers):
                     elif "fio" in job:
                         commands = create_fio_cmdline(self, job, pool)
                     elif "daos_racer" in job:
-                        commands = create_racer_cmdline(self, job, pool)
+                        self.add_cancel_ticket(
+                            "DAOS-7436", "daos_racer pool issue")
+                        # Uncomment the following when DAOS-7436 is fixed
+                        # commands = create_racer_cmdline(self, job, pool)
                     else:
                         raise SoakTestError(
                             "<<FAILED: Job {} is not supported. ".format(
