@@ -570,7 +570,7 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 	*_ino = hi ^ (oid->lo << 32);
 };
 
-extern char *duns_xattr_name;
+extern char *dfuse_xattr_names[];
 
 int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
@@ -683,8 +683,8 @@ void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
 		  struct fuse_file_info *fi_out,
-		  bool is_new,
-		  fuse_req_t req);
+		  fuse_req_t req,
+		  bool have_uid);
 
 /* dfuse_cont.c */
 void

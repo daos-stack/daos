@@ -37,26 +37,13 @@ out:
 	return rc;
 }
 
-static int
-set_uid(struct dfuse_inode_entry *ie, fuse_req_t req)
-{
-	const struct fuse_ctx *ctx = fuse_req_ctx(req);
-	struct uid_entry entry;
-	int rc;
-
-	entry.uid = ctx->uid;
-	entry.gid = ctx->gid;
-
-	rc = dfs_setxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_XID_XATTR_NAME,
-			  &entry, sizeof(entry), 0);
-	return rc;
-}
-
 void
 dfuse_cb_mknod_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
+	struct uid_entry		entry;
 	struct dfuse_inode_entry	*ie = NULL;
 	daos_obj_id_t			oid;
 	int				rc;
@@ -90,7 +77,11 @@ dfuse_cb_mknod_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_dfs = parent->ie_dfs;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	rc = set_uid(ie, req);
+	entry.uid = ctx->uid;
+	entry.gid = ctx->gid;
+
+	rc = dfs_setxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_XID_XATTR_NAME,
+			  &entry, sizeof(entry), 0);
 	if (rc)
 		D_GOTO(unlink, rc);
 
@@ -98,8 +89,11 @@ dfuse_cb_mknod_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc)
 		D_GOTO(release, rc);
 
+	ie->ie_stat.st_uid = entry.uid;
+	ie->ie_stat.st_gid = entry.gid;
+
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, req, true);
 
 	return;
 

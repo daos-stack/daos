@@ -47,7 +47,7 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 			    &ie->ie_stat.st_ino);
 
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, req, false);
 
 	return;
 err:

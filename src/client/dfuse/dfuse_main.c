@@ -225,6 +225,7 @@ show_help(char *name)
 		"	-m --mountpoint=PATHSTR	Mount point to use\n"
 		"	   --pool=UUID		pool UUID\n"
 		"	   --container=UUID	container UUID\n"
+		"          --multi-user         Allow multiple users\n"
 		"	   --sys-name=STR	DAOS system name context for servers\n"
 		"	-S --singlethreaded	Single threaded\n"
 		"	-t --thread-count=COUNT Number of fuse threads to use\n"
@@ -377,7 +378,6 @@ main(int argc, char **argv)
 				exit(1);
 			}
 		}
-
 	} else if (dfuse_info->di_cont) {
 		printf("Pool uuid required with container uuid\n");
 		exit(1);

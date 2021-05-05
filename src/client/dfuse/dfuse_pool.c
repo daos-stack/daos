@@ -138,7 +138,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	ie->ie_stat.st_ino = dfc->dfs_ino;
 
-	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
+	/* TODO: Possibly pass true here to avoid dfuse_get_uid() */
+	dfuse_reply_entry(fs_handle, ie, NULL, req, false);
 
 	return;
 decref:

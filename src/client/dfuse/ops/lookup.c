@@ -9,14 +9,15 @@
 
 #include "daos_uns.h"
 
-char *duns_xattr_name = DUNS_XATTR_NAME;
+char *dfuse_xattr_names[] = {DUNS_XATTR_NAME,
+			     DFUSE_XID_XATTR_NAME};
 
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *ie,
 		  struct fuse_file_info *fi_out,
-		  bool is_new,
-		  fuse_req_t req)
+		  fuse_req_t req,
+		  bool have_uid)
 {
 	struct fuse_entry_param	entry = {0};
 	d_list_t		*rlink;
@@ -29,7 +30,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	if (!S_ISDIR(ie->ie_stat.st_mode))
 		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
 
-	if (ie->ie_dfs->dfs_multi_user) {
+	if (!have_uid && ie->ie_dfs->dfs_multi_user) {
 		rc = dfuse_get_uid(ie);
 		if (rc)
 			D_GOTO(out_err, rc);
@@ -205,8 +206,15 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 	char				out[DUNS_MAX_XATTR_LEN];
-	char				*outp = &out[0];
-	daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
+	char				*outp[2];
+	daos_size_t			attr_len[2];
+	struct uid_entry		uid_entry;
+	int				attr_count;
+
+	outp[0] = &out[0];
+	outp[1] = (char *)&uid_entry;
+	attr_len[0] = DUNS_MAX_XATTR_LEN;
+	attr_len[1] = sizeof(struct uid_entry);
 
 	DFUSE_TRA_DEBUG(fs_handle,
 			"Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
@@ -220,9 +228,14 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
+	attr_count = 1;
+
+	if (ie->ie_dfs->dfs_multi_user)
+		attr_count = 2;
+
 	rc = dfs_lookupx(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			 O_RDWR | O_NOFOLLOW, &ie->ie_obj, NULL, &ie->ie_stat,
-			 1, &duns_xattr_name, (void **)&outp, &attr_len);
+			 attr_count, dfuse_xattr_names, (void **)&outp, &attr_len[0]);
 	if (rc) {
 		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
 				strerror(rc));
@@ -230,7 +243,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(out_free, rc);
 	}
 
-	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
+	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len[0]);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
@@ -241,15 +254,22 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
 			    &ie->ie_stat.st_ino);
 
-	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
-		rc = check_for_uns_ep(fs_handle, ie, out, attr_len);
+	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len[0]) {
+		rc = check_for_uns_ep(fs_handle, ie, out, attr_len[0]);
 		DFUSE_TRA_DEBUG(ie,
 				"check_for_uns_ep() returned %d", rc);
 		if (rc != 0)
 			D_GOTO(out_release, rc);
 	}
 
-	dfuse_reply_entry(fs_handle, ie, NULL, false, req);
+	if (ie->ie_dfs->dfs_multi_user && attr_len[1]) {
+		if (attr_len[1] != sizeof(struct uid_entry))
+			D_GOTO(out_release, rc = EIO);
+		ie->ie_stat.st_uid = uid_entry.uid;
+		ie->ie_stat.st_gid = uid_entry.gid;
+	}
+
+	dfuse_reply_entry(fs_handle, ie, NULL, req, true);
 	return;
 
 out_release:

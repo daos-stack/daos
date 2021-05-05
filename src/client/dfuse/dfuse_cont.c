@@ -119,7 +119,7 @@ dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, req, false);
 	return;
 close:
 	D_FREE(ie);
