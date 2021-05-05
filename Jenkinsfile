@@ -437,6 +437,7 @@ pipeline {
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
+                            args '--tmpfs /mnt/daos'
                         }
                     }
                     steps {
@@ -444,6 +445,8 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
+                        sh (script:"""sudo ./utils/docker_nlt.sh --class-name centos8 --test cont_copy""",
+                            label: 'Run NLT smoke test')
                     }
                     post {
                         always {
