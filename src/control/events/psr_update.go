@@ -7,6 +7,8 @@
 package events
 
 import (
+	"fmt"
+
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 )
@@ -45,9 +47,9 @@ func PoolSvcInfoToProto(psi *PoolSvcInfo) (*sharedpb.RASEvent_PoolSvcInfo, error
 }
 
 // NewPoolSvcReplicasUpdateEvent creates a specific PoolSvcRanksUpdate event from given inputs.
-func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string, svcReplicas []uint32, leaderTerm uint64) *RASEvent {
+func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string, svcReps []uint32, leaderTerm uint64) *RASEvent {
 	return New(&RASEvent{
-		Msg:      "DAOS pool service replica rank list updated",
+		Msg:      fmt.Sprintf("DAOS pool service replica list updated to %v", svcReps),
 		ID:       RASPoolRepsUpdate,
 		Hostname: hostname,
 		Rank:     rank,
@@ -55,7 +57,7 @@ func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string
 		Type:     RASTypeStateChange,
 		Severity: RASSeverityError,
 		ExtendedInfo: &PoolSvcInfo{
-			SvcReplicas:    svcReplicas,
+			SvcReplicas:    svcReps,
 			RaftLeaderTerm: leaderTerm,
 		},
 	})

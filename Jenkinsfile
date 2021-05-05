@@ -168,8 +168,8 @@ pipeline {
                     when {
                       beforeAgent true
                       expression { ! (skipStage(stage: 'python-bandit',
-		                                 def_val: 'false') ||
-		                        quickFunctional()) }
+                                                def_val: 'false') ||
+                                      quickFunctional()) }
                     }
                     agent {
                         dockerfile {
@@ -499,11 +499,50 @@ pipeline {
                         }
                     }
                 }
+                stage('Build on CentOS 7 with Clang debug') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.centos.7'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(qb: quickBuild(),
+                                                                deps_build: true) +
+                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quickBuildDeps('centos7') + '"' +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallelBuild(),
+                                   scons_exe: 'scons-3',
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         tool: clang(pattern: 'centos7-clang-debug-build.log',
+                                                     id: "analysis-centos7-debug-clang")
+                        }
+                        unsuccessful {
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos7-clang-debug
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos7-clang-debug',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
                 stage('Build on CentOS 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
-                     }
+                    }
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.8'
