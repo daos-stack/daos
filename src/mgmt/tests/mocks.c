@@ -53,7 +53,8 @@ mock_ds_mgmt_pool_get_acl_setup(void)
 void
 mock_ds_mgmt_pool_get_acl_teardown(void)
 {
-	daos_prop_free(ds_mgmt_pool_get_acl_return_acl);
+	if (ds_mgmt_pool_get_acl_return_acl)
+		daos_prop_free(ds_mgmt_pool_get_acl_return_acl);
 	ds_mgmt_pool_get_acl_return_acl = NULL;
 }
 
@@ -90,7 +91,8 @@ void
 mock_ds_mgmt_pool_overwrite_acl_teardown(void)
 {
 	daos_acl_free(ds_mgmt_pool_overwrite_acl_acl);
-	daos_prop_free(ds_mgmt_pool_overwrite_acl_result);
+	if (ds_mgmt_pool_overwrite_acl_result)
+		daos_prop_free(ds_mgmt_pool_overwrite_acl_result);
 }
 
 int		ds_mgmt_pool_update_acl_return;
@@ -125,7 +127,8 @@ void
 mock_ds_mgmt_pool_update_acl_teardown(void)
 {
 	daos_acl_free(ds_mgmt_pool_update_acl_acl);
-	daos_prop_free(ds_mgmt_pool_update_acl_result);
+	if (ds_mgmt_pool_update_acl_result)
+		daos_prop_free(ds_mgmt_pool_update_acl_result);
 }
 
 int		ds_mgmt_pool_delete_acl_return;
@@ -158,7 +161,8 @@ mock_ds_mgmt_pool_delete_acl_setup(void)
 void
 mock_ds_mgmt_pool_delete_acl_teardown(void)
 {
-	daos_prop_free(ds_mgmt_pool_delete_acl_result);
+	if (ds_mgmt_pool_delete_acl_result)
+		daos_prop_free(ds_mgmt_pool_delete_acl_result);
 }
 
 int		ds_mgmt_pool_set_prop_return;
@@ -196,8 +200,10 @@ mock_ds_mgmt_pool_set_prop_setup(void)
 void
 mock_ds_mgmt_pool_set_prop_teardown(void)
 {
-	daos_prop_free(ds_mgmt_pool_set_prop_result);
-	daos_prop_free(ds_mgmt_pool_set_prop_prop);
+	if (ds_mgmt_pool_set_prop_result)
+		daos_prop_free(ds_mgmt_pool_set_prop_result);
+	if (ds_mgmt_pool_set_prop_prop)
+		daos_prop_free(ds_mgmt_pool_set_prop_prop);
 }
 
 /*
@@ -242,10 +248,7 @@ mock_ds_mgmt_pool_list_cont_setup(void)
 
 void mock_ds_mgmt_pool_list_cont_teardown(void)
 {
-	if (ds_mgmt_pool_list_cont_out != NULL) {
-		D_FREE(ds_mgmt_pool_list_cont_out);
-		ds_mgmt_pool_list_cont_out = NULL;
-	}
+	D_FREE(ds_mgmt_pool_list_cont_out);
 }
 
 int			ds_mgmt_pool_query_return;
@@ -307,6 +310,7 @@ mock_ds_mgmt_cont_set_owner_setup(void)
 	ds_mgmt_cont_set_owner_user = NULL;
 	ds_mgmt_cont_set_owner_group = NULL;
 }
+
 void mock_ds_mgmt_cont_set_owner_teardown(void)
 {
 	D_FREE(ds_mgmt_cont_set_owner_user);
