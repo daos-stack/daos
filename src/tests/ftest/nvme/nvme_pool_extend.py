@@ -93,7 +93,7 @@ class NvmePoolExtend(OSAUtils):
                     scan_info = self.get_dmg_command().system_query()
                     if not check_system_query_status(scan_info):
                         if retry == 9:
-                            self.fail("One or more servers not in expected status")
+                            self.fail("One/More servers status not correct")
                     else:
                         break
             self.log.info("Pool Version at the beginning %s", pver_begin)
