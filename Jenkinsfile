@@ -763,7 +763,7 @@ pipeline {
                         label 'ci_nlt_1'
                     }
                     steps {
-                        unitTest timeout_time: 30,
+                        unitTest timeout_time: 45,
                                  inst_repos: prRepos(),
                                  test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unitPackages()

@@ -666,6 +666,7 @@ class DaosServer():
             self.conf.wf.issues.append(entry)
 
         rc = self.run_dmg(['system', 'stop'])
+        print(rc)
         assert rc.returncode == 0
 
         start = time.time()
