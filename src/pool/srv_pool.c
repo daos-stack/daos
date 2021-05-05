@@ -50,7 +50,7 @@ struct pool_svc {
 	struct ds_pool	       *ps_pool;
 };
 
-static bool pool_disable_exclude = false;
+static bool pool_disable_exclude;
 static int pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc,
 			  uint64_t bits, daos_prop_t **prop_out);
 static int pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc,
@@ -881,7 +881,7 @@ pool_exclude_rank_ult(void *data)
 		DP_UUID(arg->svc->ps_uuid), arg->rank, rc);
 
 	pool_svc_put_leader(arg->svc);
-	D_FREE_PTR(arg);
+	D_FREE(arg);
 }
 
 /* Disable all pools exclusion */
@@ -914,7 +914,7 @@ pool_exclude_rank(struct pool_svc *svc, d_rank_t rank)
 			    0, 0, NULL);
 	if (rc) {
 		pool_svc_put_leader(svc);
-		D_FREE_PTR(ult_arg);
+		D_FREE(ult_arg);
 	}
 out:
 	if (rc)
@@ -1085,7 +1085,7 @@ check_map:
 			 */
 			D_DEBUG(DB_MD, DF_UUID": new db\n",
 				DP_UUID(svc->ps_uuid));
-			rc = +DER_UNINIT;
+			rc = + DER_UNINIT;
 		} else {
 			D_ERROR(DF_UUID": failed to read pool map buffer: "DF_RC
 				"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -1271,8 +1271,7 @@ out:
 		if (svc->ps_pool != NULL)
 			fini_svc_pool(svc);
 	}
-	if (map_buf != NULL)
-		D_FREE(map_buf);
+	D_FREE(map_buf);
 	if (prop != NULL)
 		daos_prop_free(prop);
 	return rc;
@@ -1331,8 +1330,7 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
 			DP_UUID(svc->ps_uuid), map_version, rc);
 
 out:
-	if (map_buf != NULL)
-		D_FREE(map_buf);
+	D_FREE(map_buf);
 	return rc;
 }
 
@@ -2204,8 +2202,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 					    &out->pco_space);
 out_map_version:
 	out->pco_op.po_map_version = ds_pool_get_version(svc->ps_pool);
-	if (map_buf)
-		D_FREE(map_buf);
+	D_FREE(map_buf);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -2687,10 +2684,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 	}
 
 out_free_cont_buf:
-	if (cont_buf) {
-		D_FREE(cont_buf);
-		cont_buf = NULL;
-	}
+	D_FREE(cont_buf);
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->plco_op.po_hint);
 	pool_svc_put_leader(svc);
@@ -2852,8 +2846,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 
 out_map_version:
 	out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
-	if (map_buf)
-		D_FREE(map_buf);
+	D_FREE(map_buf);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -2870,14 +2863,14 @@ out:
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
-	daos_prop_free(prop);
+	if (prop)
+		daos_prop_free(prop);
 }
 
 /* Convert pool_comp_state_t to daos_target_state_t */
 static daos_target_state_t
 enum_pool_comp_state_to_tgt_state(int tgt_state)
 {
-
 	switch (tgt_state) {
 	case PO_COMP_ST_UNKNOWN: return DAOS_TS_UNKNOWN;
 	case PO_COMP_ST_NEW: return DAOS_TS_NEW;
@@ -4192,7 +4185,7 @@ get_open_handles_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		/* Since this probably changed the hdls pointer, adjust the
 		 * next pointer correspondingly
 		 */
-		*(arg->hdls) = newbuf;
+		*arg->hdls = newbuf;
 		arg->next = (struct pool_iv_conn *)
 			(((char *)*arg->hdls) + arg->hdls_used);
 		arg->hdls_size = size_needed;
@@ -5468,7 +5461,6 @@ out:
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pagi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
-
 }
 
 void
@@ -5672,7 +5664,6 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
 			    0, 0, NULL);
 	return rc;
 }
-
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bits,
 		       daos_prop_t **prop_out)
