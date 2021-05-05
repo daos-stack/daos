@@ -3170,7 +3170,7 @@ out:
 
 		prop = cqo->cqo_prop;
 	} else if (opc == CONT_OPEN) {
-		struct cont_open_out *coup = crt_reply_get(rpc);
+		struct cont_open_out *coo = crt_reply_get(rpc);
 
 		prop = coo->coo_prop;
 	}
