@@ -2628,7 +2628,7 @@ out:
 	return rc;
 }
 
-inline void
+static inline void
 set_dm_args_default(struct dm_args *dm)
 {
 	dm->src = NULL;
@@ -2902,7 +2902,7 @@ out:
 	return rc;
 }
 
-inline void
+static inline void
 file_set_defaults_dfs(struct file_dfs *file_dfs)
 {
 	/* set defaults for file_dfs struct */
@@ -3195,7 +3195,7 @@ cont_clone_recx_array(daos_key_t *dkey,
 		}
 		buf_len *= size;
 		if (buf_len > buf_len_alloc) {
-			D_REALLOC(buf, prev_buf, buf_len);
+			D_REALLOC_NZ(buf, prev_buf, buf_len);
 			if (buf == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			buf_len_alloc = buf_len;
