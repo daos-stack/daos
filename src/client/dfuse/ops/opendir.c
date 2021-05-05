@@ -33,7 +33,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie,
 	fi_out.fh = (uint64_t)oh;
 
 #if HAVE_CACHE_READDIR
-	if (ie->ie_dfs->dfs_dentry_timeout > 0)
+	if (ie->ie_dfs->dfc_dentry_timeout > 0)
 		fi_out.cache_readdir = 1;
 #endif
 
