@@ -869,8 +869,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	return 0;
 
 out_free:
-	/* restore number of entries in array for freeing */
-	ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
+	if (ap->props != NULL)
+		/* restore number of entries in array for freeing */
+		ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
 	args_free(ap);
 	D_FREE(cmdname);
 	return rc;
