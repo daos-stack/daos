@@ -664,6 +664,8 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 					/* If there is no container specific
 					 * attributes then use defaults
 					 */
+					DFUSE_TRA_INFO(dfc,
+						       "Using default caching values");
 					dfc->dfc_attr_timeout = 1;
 					dfc->dfc_dentry_timeout = 1;
 					dfc->dfc_dentry_dir_timeout = 5;
@@ -673,6 +675,9 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 				} else if (rc != 0) {
 					D_GOTO(err_close, rc);
 				}
+			} else {
+				DFUSE_TRA_INFO(dfc,
+					"Caching disabled");
 			}
 		}
 	}
