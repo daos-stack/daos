@@ -15,7 +15,7 @@ import (
 	"unsafe"
 
 	"github.com/dustin/go-humanize"
-	flags "github.com/jessevdk/go-flags"
+	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -591,6 +591,56 @@ func createPropSlice(props *C.daos_prop_t, numProps int) propSlice {
 		unsafe.Pointer(props.dpp_entries))[:numProps:numProps]
 }
 
+func allocProps(numProps int) (props *C.daos_prop_t, entries propSlice, err error) {
+	props = C.daos_prop_alloc(C.uint(numProps))
+	if props == nil {
+		return nil, nil, errors.New("failed to allocate properties list")
+	}
+
+	props.dpp_nr = 0
+	entries = createPropSlice(props, numProps)
+
+	return
+}
+
+func getContainerProperties(hdl C.daos_handle_t, props *C.daos_prop_t, names ...string) (out []*property, err error) {
+	var entries propSlice
+	if props == nil {
+		props, entries, err = allocProps(len(names))
+		if err != nil {
+			return
+		}
+		defer C.daos_prop_free(props)
+	} else {
+		entries = createPropSlice(props, len(names))
+	}
+
+	for _, name := range names {
+		var hdlr *propHdlr
+		hdlr, err = propHdlrs.get(name)
+		if err != nil {
+			return
+		}
+		entries[props.dpp_nr].dpe_type = C.uint(hdlr.dpeType)
+
+		out = append(out, &property{
+			entry:       &entries[props.dpp_nr],
+			toString:    hdlr.toString,
+			Name:        name,
+			Description: hdlr.shortDesc,
+		})
+
+		props.dpp_nr++
+	}
+
+	rc := C.daos_cont_query(hdl, nil, props, nil)
+	if err = daosError(rc); err != nil {
+		return nil, err
+	}
+
+	return
+}
+
 // PropertiesFlag implements the flags.Unmarshaler and flags.Completer
 // interfaces in order to provide a custom flag type for converting
 // command-line arguments into a *C.daos_prop_t array suitable for
@@ -598,23 +648,9 @@ func createPropSlice(props *C.daos_prop_t, numProps int) propSlice {
 // properties on an existing container and the GetPropertiesFlag type
 // for getting properties on an existing container.
 type PropertiesFlag struct {
-	props   *C.daos_prop_t
-	entries propSlice
+	props *C.daos_prop_t
 
 	allowedProps map[string]struct{}
-}
-
-func (f *PropertiesFlag) allocProps() error {
-	numProps := len(propHdlrs)
-	f.props = C.daos_prop_alloc(C.uint(numProps))
-	if f.props == nil {
-		return errors.New("failed to allocate properties list")
-	}
-
-	f.props.dpp_nr = 0
-	f.entries = createPropSlice(f.props, numProps)
-
-	return nil
 }
 
 func (f *PropertiesFlag) setAllowedProps(props ...string) {
@@ -673,8 +709,10 @@ func (f *PropertiesFlag) UnmarshalFlag(fv string) (err error) {
 			f.Cleanup()
 		}
 	}()
-	if err := f.allocProps(); err != nil {
-		return err
+	var entries propSlice
+	f.props, entries, err = allocProps(len(propHdlrs))
+	if err != nil {
+		return
 	}
 
 	for _, propStr := range strings.Split(fv, ",") {
@@ -711,10 +749,10 @@ func (f *PropertiesFlag) UnmarshalFlag(fv string) (err error) {
 				name)
 		}
 
-		if err = hdlr.execute(&f.entries[f.props.dpp_nr], value); err != nil {
+		if err = hdlr.execute(&entries[f.props.dpp_nr], value); err != nil {
 			return
 		}
-		f.entries[f.props.dpp_nr].dpe_type = C.uint(hdlr.dpeType)
+		entries[f.props.dpp_nr].dpe_type = C.uint(hdlr.dpeType)
 
 		f.props.dpp_nr++
 	}
@@ -758,7 +796,7 @@ func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
 type GetPropertiesFlag struct {
 	PropertiesFlag
 
-	fetchedProperties []*property
+	names []string
 }
 
 func (f *GetPropertiesFlag) UnmarshalFlag(fv string) (err error) {
@@ -767,19 +805,21 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) (err error) {
 			f.Cleanup()
 		}
 	}()
-	if err := f.allocProps(); err != nil {
-		return err
-	}
 
 	// Accept a list of property names to fetch, if specified,
 	// otherwise just fetch all known properties.
-	names := strings.Split(fv, ",")
-	if len(names) == 0 || names[0] == "all" {
-		names = propHdlrs.keys()
+	f.names = strings.Split(fv, ",")
+	if len(f.names) == 0 || f.names[0] == "all" {
+		f.names = propHdlrs.keys()
 	}
 
-	for _, name := range names {
-		name = strings.TrimSpace(name)
+	f.props, _, err = allocProps(len(f.names))
+	if err != nil {
+		return
+	}
+
+	for i, name := range f.names {
+		f.names[i] = strings.TrimSpace(name)
 		if len(name) == 0 {
 			return propError("name must not be empty")
 		}
@@ -787,22 +827,6 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) (err error) {
 			return propError("name too long (%d > %d)",
 				len(name), maxNameLen)
 		}
-
-		var hdlr *propHdlr
-		hdlr, err = propHdlrs.get(name)
-		if err != nil {
-			return
-		}
-		f.entries[f.props.dpp_nr].dpe_type = C.uint(hdlr.dpeType)
-
-		f.fetchedProperties = append(f.fetchedProperties, &property{
-			entry:       &f.entries[f.props.dpp_nr],
-			toString:    hdlr.toString,
-			Name:        name,
-			Description: hdlr.shortDesc,
-		})
-
-		f.props.dpp_nr++
 	}
 
 	return nil

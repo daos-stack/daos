@@ -10,15 +10,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"unsafe"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
+	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 /*
@@ -46,10 +49,8 @@ type containerCmd struct {
 	GetAttribute    containerGetAttributeCmd    `command:"get-attribute" alias:"get-attr" description:"get container user-defined attribute"`
 	SetAttribute    containerSetAttributeCmd    `command:"set-attribute" alias:"set-attr" description:"set container user-defined attribute"`
 
-	ListProperties containerListPropertiesCmd `command:"list-properties" alias:"list-props" description:"list container user-defined attributes"`
-	DeleteProperty containerDeletePropertyCmd `command:"delete-property" alias:"del-prop" description:"delete container user-defined attribute"`
-	GetProperty    containerGetPropertyCmd    `command:"get-property" alias:"get-prop" description:"get container user-defined attribute"`
-	SetProperty    containerSetPropertyCmd    `command:"set-property" alias:"set-prop" description:"set container user-defined attribute"`
+	GetProperty containerGetPropertyCmd `command:"get-property" alias:"get-prop" description:"get container user-defined attribute"`
+	SetProperty containerSetPropertyCmd `command:"set-property" alias:"set-prop" description:"set container user-defined attribute"`
 
 	GetACL       containerGetACLCmd       `command:"get-acl" description:"get a container's ACL"`
 	OverwriteACL containerOverwriteACLCmd `command:"overwrite-acl" alias:"replace" description:"replace a container's ACL"`
@@ -74,13 +75,16 @@ func (cmd *containerBaseCmd) contUUIDPtr() *C.uchar {
 	return (*C.uchar)(unsafe.Pointer(&cmd.contUUID[0]))
 }
 
-func (cmd *containerBaseCmd) resolveContainer(id string) (err error) {
+func (cmd *containerBaseCmd) resolveContainer(id ContainerID) error {
 	// TODO: Resolve label.
-
-	cmd.contUUID, err = uuid.Parse(id)
-	if err != nil {
-		return errors.Wrap(err, "")
+	if id.HasLabel() {
+		return errors.New("no support for container labels yet")
 	}
+
+	if !id.HasUUID() {
+		return errors.New("no container UUID provided")
+	}
+	cmd.contUUID = id.UUID
 
 	return nil
 }
@@ -235,10 +239,17 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 type existingContainerCmd struct {
 	containerBaseCmd
 
-	ContFlag string `long:"cont" description:"container UUID (deprecated; use positional arg)"`
+	ContFlag ContainerID `long:"cont" description:"container UUID (deprecated; use positional arg)"`
 	Args     struct {
-		Container string `positional-arg-name:"<container name or UUID>"`
+		Container ContainerID `positional-arg-name:"<container name or UUID>"`
 	} `positional-args:"yes"`
+}
+
+func (cmd *existingContainerCmd) ContainerID() ContainerID {
+	if !cmd.ContFlag.Empty() {
+		return cmd.ContFlag
+	}
+	return cmd.Args.Container
 }
 
 func (cmd *existingContainerCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (cleanFn func(), err error) {
@@ -248,10 +259,7 @@ func (cmd *existingContainerCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (cle
 		return
 	}
 
-	if cmd.ContFlag != "" {
-		cmd.Args.Container = cmd.ContFlag
-	}
-	if err = cmd.resolveContainer(cmd.Args.Container); err != nil {
+	if err = cmd.resolveContainer(cmd.ContainerID()); err != nil {
 		return
 	}
 
@@ -559,22 +567,6 @@ func (cmd *containerSetAttributeCmd) Execute(args []string) error {
 	return nil
 }
 
-type containerListPropertiesCmd struct {
-	existingContainerCmd
-}
-
-func (cmd *containerListPropertiesCmd) Execute(args []string) error {
-	return nil
-}
-
-type containerDeletePropertyCmd struct {
-	existingContainerCmd
-}
-
-func (cmd *containerDeletePropertyCmd) Execute(args []string) error {
-	return nil
-}
-
 type containerGetPropertyCmd struct {
 	existingContainerCmd
 
@@ -582,7 +574,6 @@ type containerGetPropertyCmd struct {
 }
 
 func (cmd *containerGetPropertyCmd) Execute(args []string) error {
-	props := cmd.Properties.props
 	defer cmd.Properties.Cleanup()
 
 	cleanup, err := cmd.resolveAndConnect(nil)
@@ -591,13 +582,14 @@ func (cmd *containerGetPropertyCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	rc := C.daos_cont_query(cmd.cContHandle, nil, props, nil)
-	if err := daosError(rc); err != nil {
+	props, err := getContainerProperties(cmd.cContHandle, cmd.Properties.props, cmd.Properties.names...)
+	if err != nil {
 		return errors.Wrapf(err,
-			"failed to query container %s", cmd.contUUID)
+			"failed to fetch properties for container %s",
+			cmd.ContainerID())
 	}
 
-	if len(cmd.Properties.fetchedProperties) == len(propHdlrs) {
+	if len(cmd.Properties.names) == len(propHdlrs) {
 		aclProps, cleanupAcl, err := getContAcl(cmd.cContHandle)
 		if err != nil && err != drpc.DaosNoPermission {
 			return errors.Wrapf(err,
@@ -607,18 +599,16 @@ func (cmd *containerGetPropertyCmd) Execute(args []string) error {
 			defer cleanupAcl()
 		}
 		if len(aclProps) != 0 {
-			cmd.Properties.fetchedProperties = append(cmd.Properties.fetchedProperties,
-				aclProps[0])
+			props = append(props, aclProps[0])
 		}
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(cmd.Properties.fetchedProperties, nil)
+		return cmd.outputJSON(props, nil)
 	}
 
 	var bld strings.Builder
-	printProperties(&bld, fmt.Sprintf("Properties for container %s", cmd.contUUID),
-		cmd.Properties.fetchedProperties...)
+	printProperties(&bld, fmt.Sprintf("Properties for container %s", cmd.contUUID), props...)
 
 	cmd.log.Info(bld.String())
 
@@ -653,4 +643,77 @@ func (cmd *containerSetPropertyCmd) Execute(args []string) error {
 	}
 
 	return nil
+}
+
+// Experiment below with container ID completion.
+
+type cmplCmd struct {
+	cliOptions
+
+	// Consume these to leave the pool id as the only
+	// positional argument.
+	Args struct {
+		Object  string
+		Command string
+	} `positional-args:"yes"`
+}
+
+type poolFlagCmd struct {
+	cmplCmd
+	poolBaseCmd
+}
+
+func parsePoolFlag() *poolFlagCmd {
+	// Avoid recursion when doing completion resolution.
+	gfcVal, gfcActive := os.LookupEnv("GO_FLAGS_COMPLETION")
+	os.Unsetenv("GO_FLAGS_COMPLETION")
+	defer func() {
+		if gfcActive {
+			os.Setenv("GO_FLAGS_COMPLETION", gfcVal)
+		}
+	}()
+
+	var pfc poolFlagCmd
+	parser := flags.NewParser(&pfc, flags.HelpFlag|flags.PassDoubleDash|flags.IgnoreUnknown)
+	parser.ParseArgs(os.Args[1:])
+
+	return &pfc
+}
+
+type ContainerID struct {
+	labelOrUUID
+}
+
+// Implement the completion handler to provide a list of container IDs
+// as completion items.
+func (f *ContainerID) Complete(match string) (comps []flags.Completion) {
+	pf := parsePoolFlag()
+	pf.log = &logging.LeveledLogger{}
+
+	fini, err := pf.initDAOS()
+	if err != nil {
+		return
+	}
+	defer fini()
+
+	cleanup, err := pf.resolveAndConnect(nil)
+	if err != nil {
+		return
+	}
+	defer cleanup()
+
+	contIDs, err := poolListContainers(pf.cPoolHandle)
+	if err != nil {
+		return
+	}
+
+	for _, id := range contIDs {
+		if strings.HasPrefix(id.String(), match) {
+			comps = append(comps, flags.Completion{
+				Item: id.String(),
+			})
+		}
+	}
+
+	return
 }

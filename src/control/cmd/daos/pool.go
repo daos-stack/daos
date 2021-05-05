@@ -86,11 +86,13 @@ func (cmd *poolBaseCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (func(), erro
 		cmd.Args.Pool = cmd.PoolFlag
 	}
 	if err := cmd.resolvePool(cmd.Args.Pool); err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err,
+			"failed to resolve pool ID %q", cmd.Args.Pool)
 	}
 
 	if err := cmd.connectPool(); err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err,
+			"failed to connect to pool %s", cmd.poolUUID)
 	}
 
 	if ap != nil {
@@ -123,25 +125,19 @@ type poolContainersListCmd struct {
 	poolBaseCmd
 }
 
-func (cmd *poolContainersListCmd) Execute(_ []string) error {
+func poolListContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 	extra_cont_margin := C.size_t(16)
-
-	cleanup, err := cmd.resolveAndConnect(nil)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
 
 	// First call gets the current number of containers.
 	var ncont C.daos_size_t
-	rc := C.daos_pool_list_cont(cmd.cPoolHandle, &ncont, nil, nil)
+	rc := C.daos_pool_list_cont(hdl, &ncont, nil, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Wrap(err, "pool list containers failed")
+		return nil, errors.Wrap(err, "pool list containers failed")
 	}
 
 	// No containers.
 	if ncont == 0 {
-		return nil
+		return nil, nil
 	}
 
 	var cConts *C.struct_daos_pool_cont_info
@@ -150,29 +146,56 @@ func (cmd *poolContainersListCmd) Execute(_ []string) error {
 	ncont += extra_cont_margin
 	cConts = (*C.struct_daos_pool_cont_info)(C.calloc(C.sizeof_struct_daos_pool_cont_info, ncont))
 	if cConts == nil {
-		return errors.New("malloc() failed")
+		return nil, errors.New("calloc() for containers failed")
 	}
-	defer C.free(unsafe.Pointer(cConts))
+	dpciSlice := (*[1 << 30]C.struct_daos_pool_cont_info)(
+		unsafe.Pointer(cConts))[:ncont:ncont]
+	cleanup := func() {
+		C.free(unsafe.Pointer(cConts))
+	}
 
-	rc = C.daos_pool_list_cont(cmd.cPoolHandle, &ncont, cConts, nil)
+	rc = C.daos_pool_list_cont(hdl, &ncont, cConts, nil)
 	if err := daosError(rc); err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	out := make([]*ContainerID, ncont)
+	for i := range out {
+		out[i] = new(ContainerID)
+		out[i].UUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
+		// FIXME: The label should be returned as part of
+		// the list payload. The alternative is to open each
+		// container sequentially in order to query the label
+		// property, which would be terrible for performance.
+	}
+
+	return out, nil
+}
+
+func (cmd *poolContainersListCmd) Execute(_ []string) error {
+	cleanup, err := cmd.resolveAndConnect(nil)
+	if err != nil {
 		return err
 	}
+	defer cleanup()
 
-	// Create a Go slice backed by the C array in order to easily
-	// iterate over it.
-	conts := (*[1 << 30]C.struct_daos_pool_cont_info)(unsafe.Pointer(cConts))[:ncont:ncont]
-	contUUIDs := make([]uuid.UUID, ncont)
-	for i, cont := range conts {
-		contUUIDs[i] = uuid.Must(uuidFromC(cont.pci_uuid))
+	contIDs, err := poolListContainers(cmd.cPoolHandle)
+	if err != nil {
+		return errors.Wrapf(err,
+			"unable to list containers for pool %s", cmd.poolUUID)
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(contUUIDs, nil)
+		return cmd.outputJSON(contIDs, nil)
 	}
 
-	for _, cont := range contUUIDs {
-		cmd.log.Infof("%s", cont)
+	for _, id := range contIDs {
+		if id.HasLabel() {
+			cmd.log.Info(id.Label)
+			continue
+		}
+		cmd.log.Infof("%s", id.UUID)
 	}
 
 	return nil

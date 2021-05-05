@@ -13,7 +13,7 @@ import (
 	"os"
 	"path"
 
-	flags "github.com/jessevdk/go-flags"
+	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -173,7 +173,7 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 		}
 
 		if daosCmd, ok := cmd.(daosCaller); ok {
-			fini, err := daosCmd.initDAOS(log)
+			fini, err := daosCmd.initDAOS()
 			if err != nil {
 				return err
 			}
