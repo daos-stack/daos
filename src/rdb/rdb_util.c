@@ -232,6 +232,7 @@ rdb_vos_set_iods(enum rdb_vos_op op, int n, d_iov_t akeys[],
 		iods[i].iod_name = akeys[i];
 		iods[i].iod_type = DAOS_IOD_SINGLE;
 		iods[i].iod_size = 0;
+		iods[i].iod_flags = 0;
 		iods[i].iod_recxs = NULL;
 		if (op == RDB_VOS_UPDATE) {
 			D_ASSERT(values[i].iov_len > 0);
