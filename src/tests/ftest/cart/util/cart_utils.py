@@ -29,6 +29,7 @@ class CartTest(TestWithoutServers):
         self.module_init = False
         self.provider = None
         self.module = lambda *x: False
+        self.supp_file = "/etc/daos/memcheck-cart.supp"
 
     def setUp(self):
         """Set up the test case."""
@@ -52,6 +53,7 @@ class CartTest(TestWithoutServers):
                     self.print("\nAdding {} to PATH\n".format(added_path))
                     found_path = True
                 elif os.path.basename(path_dirname) == "install":
+                    self.supp_file = path_dirname + "/etc/memcheck-cart.supp"
                     added_path = os.path.join(path_dirname,
                                               test_dirs["install"])
                     if os.path.isdir(added_path):
@@ -282,7 +284,7 @@ class CartTest(TestWithoutServers):
                   r"valgrind.%q\{PMIX_ID\}.memcheck " + \
                   "--fair-sched=try --partial-loads-ok=yes " + \
                   "--leak-check=yes --gen-suppressions=all " + \
-                  "--suppressions=/etc/daos/memcheck-cart.supp " + \
+                  "--suppressions=" + self.supp_file + \
                   "--show-reachable=yes "
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
