@@ -15,27 +15,6 @@ from job_manager_utils import Orterun
 from general_utils import get_log_file
 
 
-class SelfTest(ExecutableCommand):
-    """Defines a CaRT self test command."""
-
-    def __init__(self, path=""):
-        """Create a SelfTest object.
-
-        Uses Avocado's utils.process module to run self_test with parameters.
-
-        Args:
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
-        """
-        super().__init__("/run/self_test/*", "self_test", path)
-
-        self.group_name = FormattedParameter("--group-name {}")
-        self.endpoint = FormattedParameter("--endpoint {0}")
-        self.message_sizes = FormattedParameter("--message-sizes {0}")
-        self.max_inflight_rpcs = FormattedParameter("--max-inflight-rpcs {0}")
-        self.repetitions = FormattedParameter("--repetitions {0}")
-        self.attach_info = FormattedParameter("--path {0}")
-
 
 class CartSelfTest(TestWithServers):
     """Runs a few variations of CaRT self-test.
@@ -44,6 +23,27 @@ class CartSelfTest(TestWithServers):
 
     :avocado: recursive
     """
+
+    class SelfTest(ExecutableCommand):
+        """Defines a CaRT self test command."""
+
+        def __init__(self, path=""):
+            """Create a SelfTest object.
+
+            Uses Avocado's utils.process module to run self_test with parameters.
+
+            Args:
+                path (str, optional): path to location of command binary file.
+                    Defaults to "".
+            """
+            super().__init__("/run/self_test/*", "self_test", path)
+
+            self.group_name = FormattedParameter("--group-name {}")
+            self.endpoint = FormattedParameter("--endpoint {0}")
+            self.message_sizes = FormattedParameter("--message-sizes {0}")
+            self.max_inflight_rpcs = FormattedParameter("--max-inflight-rpcs {0}")
+            self.repetitions = FormattedParameter("--repetitions {0}")
+            self.attach_info = FormattedParameter("--path {0}")
 
     def __init__(self, *args, **kwargs):
         """Initialize a CartSelfTest object."""
