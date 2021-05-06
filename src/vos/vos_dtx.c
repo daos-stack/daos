@@ -1761,7 +1761,7 @@ vos_dtx_prepared(struct dtx_handle *dth)
 			dae->dae_oids = &dae->dae_oid_inline;
 		} else {
 			size = sizeof(daos_unit_oid_t) * dth->dth_oid_cnt;
-			D_ALLOC(dae->dae_oids, size);
+			D_ALLOC_NZ(dae->dae_oids, size);
 			if (dae->dae_oids == NULL) {
 				/* Not fatal. */
 				D_WARN("No DRAM to store ACT DTX OIDs "
