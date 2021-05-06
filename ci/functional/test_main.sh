@@ -2,12 +2,12 @@
 
 set -eux
 
-test_tag=$(git show -s --format=%B | \
-           sed -ne "/^Test-tag$PRAGMA_SUFFIX:/s/^.*: *//p")
-if [ -z "$test_tag" ]; then
-    # shellcheck disable=SC2153
-    test_tag=$TEST_TAG
+if [ -z "$TEST_TAG" ]; then
+    echo "TEST_TAG must be set"
+    exit 1
 fi
+
+test_tag="$TEST_TAG"
 
 tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-"$NODE_COUNT")
 first_node=${NODELIST%%,*}
