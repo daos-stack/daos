@@ -411,8 +411,9 @@ class DaosServer():
         server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
         if os.path.exists(server_file):
             os.unlink(server_file)
-        if os.path.exists(self.server_log.name):
-            log_test(self.conf, self.server_log.name)
+        for log in self.server_logs:
+            if os.path.exists(server_log.name):
+                log_test(self.conf, log.name)
         try:
             os.rmdir(self.agent_dir)
         except OSError as error:
