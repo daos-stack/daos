@@ -161,7 +161,7 @@ scp_files() {
                 fi
             fi
         else
-            echo "  Failed to archive ${file} to ${2} (error code: $?"
+            echo "  Failed to archive ${file} to ${2} (error code: ${PIPESTATUS[0]})"
             rc=1
         fi
     done
