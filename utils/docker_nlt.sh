@@ -10,6 +10,10 @@ set -e
 
 ./utils/setup_daos_admin.sh
 
+echo LDD of daos_engine
 ldd /opt/daos/bin/daos_engine
+
+echo LDD of daos_server
+ldd /opt/daos/bin/daos_server
 
 ./utils/node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
