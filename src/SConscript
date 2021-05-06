@@ -29,7 +29,7 @@ def generate_daos_version_header(env):
 def scons():
     """Execute build"""
 
-    Import('env')
+    Import('env', 'il_env')
 
     # For Common library (tse.h)
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
@@ -47,6 +47,8 @@ def scons():
     # Generic DAOS includes
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('include')])
+    il_env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
+    il_env.AppendUnique(CPPPATH=[Dir('include')])
     generate_daos_version_header(env)
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include'), 'include/%s' % header)
