@@ -75,9 +75,16 @@ class NLTConf():
         self.wf = None
         self.args = None
         self.max_log_size = None
-
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
                                                  prefix='dnt_dfuse_')
+        self.tmp_dir = None
+        if args.class_name:
+            self.tmp_dir = os.path.join('nlt_logs', args.class_name)
+            if os.path.exists(self.tmp_dir):
+                for old_file in os.listdir(self.tmp_dir):
+                    os.unlink(os.path.join(self.tmp_dir, old_file))
+                os.rmdir(self.tmp_dir)
+            os.makedirs(self.tmp_dir)
 
     def __del__(self):
         os.rmdir(self.dfuse_parent_dir)
@@ -132,10 +139,11 @@ class WarningsFactory():
 
     # Error levels supported by the reporting are LOW, NORMAL, HIGH, ERROR.
 
-    def __init__(self, filename, junit=False):
+    def __init__(self, filename, junit=False, class_id=None):
         self._fd = open(filename, 'w')
         self.filename = filename
         self.issues = []
+        self._class_id = class_id
         self.pending = []
         self._running = True
         # Save the filename of the object, as __file__ does not
@@ -144,13 +152,27 @@ class WarningsFactory():
         self._flush()
 
         if junit:
-            test_case = junit_xml.TestCase('Startup', classname='NLT.core')
+            # Insert a test-case and force it to failed.  Save this to file
+            # and keep it there, until close() method is called, then remove
+            # it and re-save.  This means any crash will result in there
+            # being a results file with an error recorded.
+            tc = junit_xml.TestCase('Sanity',
+                                    classname=self._class_name('core'))
+            tc.add_error_info('NLT exited abnormally')
+            test_case = junit_xml.TestCase('Startup',
+                                           classname=self._class_name('core'))
             self.ts = junit_xml.TestSuite('Node Local Testing',
-                                          test_cases=[test_case])
-            self.tc = junit_xml.TestCase('Sanity', classname='NLT.core')
+                                          test_cases=[test_case, tc])
+            self._write_test_file()
         else:
             self.ts = None
-            self.tc = None
+
+    def _class_name(self, class_name):
+        """Return a formatted ID string for class"""
+
+        if self._class_id:
+            return 'NLT.{}.{}'.format(self._class_id, class_name)
+        return 'NLT.{}'.format(class_name)
 
     def __del__(self):
         """Ensure the file is flushed on exit, but if it hasn't already
@@ -167,8 +189,9 @@ class WarningsFactory():
         entry['severity'] = 'ERROR'
         self.issues.append(entry)
 
-        if self.ts:
-            self.tc.add_failure_info('NLT exited abnormally')
+        # Do not try and write the junit file here, as that does not work
+        # during teardown.
+        self.ts = None
         self.close()
 
     def add_test_case(self, name, failure=None, test_class='core'):
@@ -181,7 +204,7 @@ class WarningsFactory():
         if not self.ts:
             return
 
-        tc = junit_xml.TestCase(name, classname='NLT.{}'.format(test_class))
+        tc = junit_xml.TestCase(name, classname=self._class_name(test_class))
         if failure:
             tc.add_failure_info(failure)
         self.ts.test_cases.append(tc)
@@ -300,7 +323,10 @@ class WarningsFactory():
         print('Closed JSON file {} with {} errors'.format(self.filename,
                                                           len(self.issues)))
         if self.ts:
-            self.ts.test_cases.append(self.tc)
+            # This is a controlled shutdown, so wipe the error saying forced
+            # exit.
+            self.ts.test_cases[1].errors = []
+            self.ts.test_cases[1].error_message = []
             self._write_test_file()
 
 def load_conf(args):
@@ -350,12 +376,15 @@ class DaosServer():
         self._agent = None
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
+                                                       dir=conf.tmp_dir,
                                                        delete=False)
         self.agent_log = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
                                                      suffix='.log',
+                                                     dir=conf.tmp_dir,
                                                      delete=False)
         self.server_log = tempfile.NamedTemporaryFile(prefix='dnt_server_',
                                                       suffix='.log',
+                                                      dir=conf.tmp_dir,
                                                       delete=False)
         self.__process_name = 'daos_engine'
         if self.valgrind:
@@ -377,7 +406,16 @@ class DaosServer():
     def __del__(self):
         if self.running:
             self.stop(None)
-        os.rmdir(self.agent_dir)
+        server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
+        if os.path.exists(server_file):
+            os.unlink(server_file)
+        if os.path.exists(self.server_log.name):
+            log_test(self.conf, self.server_log.name)
+        try:
+            os.rmdir(self.agent_dir)
+        except OSError as error:
+            print(os.listdir(self.agent_dir))
+            raise error
 
     def _add_test_case(self, op, failure=None):
         """Add a test case to the server instance
@@ -475,6 +513,9 @@ class DaosServer():
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
                'start', '-t', '4', '--insecure', '-d', self.agent_dir]
 
+        if self.conf.args.no_root:
+            cmd.append('--recreate-superblocks')
+
         self._sp = subprocess.Popen(cmd)
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
@@ -492,7 +533,6 @@ class DaosServer():
 
         self._agent = subprocess.Popen(agent_cmd)
         self.conf.agent_dir = self.agent_dir
-        self.running = True
 
         # Configure the storage.  DAOS wants to mount /mnt/daos itself if not
         # already mounted, so let it do that.
@@ -501,7 +541,7 @@ class DaosServer():
         # /mnt/daos is mounted but empty.  It will be remounted and formatted
         # /mnt/daos exists and has data in.  It will be used as is.
         start = time.time()
-        max_start_time = 30
+        max_start_time = 120
 
         error_resolutions = {
             'system_erase': (
@@ -518,7 +558,13 @@ class DaosServer():
 
         cmd = ['storage', 'format', '--json']
         while True:
-            time.sleep(0.5)
+            try:
+                self._sp.wait(timeout=5)
+                res = 'daos server died waiting for start'
+                self._add_test_case('format', failure=res)
+                raise Exception(res)
+            except subprocess.TimeoutExpired:
+                pass
             rc = self.run_dmg(cmd)
 
             data = json.loads(rc.stdout.decode('utf-8'))
@@ -559,9 +605,10 @@ class DaosServer():
                 elif cmd == error_resolutions['storage_force_format'][1]:
                     break
 
-            self._check_timing("format", start, max_start_time)
+            self._check_timing('format', start, max_start_time)
         self._add_test_case('format')
         print('Format completion in {:.2f} seconds'.format(time.time() - start))
+        self.running = True
 
         # Now wait until the system is up, basically the format to happen.
         while True:
@@ -619,20 +666,17 @@ class DaosServer():
             self.conf.wf.issues.append(entry)
 
         rc = self.run_dmg(['system', 'stop'])
+        print(rc)
         assert rc.returncode == 0
 
         start = time.time()
-        max_stop_time = 5
+        max_stop_time = 30
         while True:
             time.sleep(0.5)
             if self._check_system_state('stopped'):
                 break
-            try:
-                self._check_timing("stop", start, max_stop_time)
-            except NLTestTimeout as e:
-                print('Failed to stop: {}'.format(e))
-                if time.time() - start > 30:
-                    raise
+            self._check_timing("stop", start, max_stop_time)
+
         self._add_test_case('stop')
         print('Server stopped in {:.2f} seconds'.format(time.time() - start))
 
@@ -804,11 +848,9 @@ class DFuse():
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
 
-    def start(self, v_hint=None):
+    def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
-
-        single_threaded = False
 
         pre_inode = os.stat(self.dir).st_ino
 
@@ -1017,6 +1059,7 @@ def run_daos_cmd(conf,
     prefix = 'dnt_cmd_{}_'.format(get_inc_id())
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                            suffix='.log',
+                                           dir=conf.tmp_dir,
                                            delete=False)
 
     cmd_env['D_LOG_FILE'] = log_file.name
@@ -1102,6 +1145,22 @@ def needs_dfuse(method):
         return rc
     return _helper
 
+def needs_dfuse_single(method):
+    """Decorator function for starting dfuse single threaded
+    under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           pool=self.pool,
+                           container=self.container)
+        self.dfuse.start(v_hint=method.__name__, single_threaded=True)
+        rc = method(self)
+        if self.dfuse.stop():
+            self.fatal_errors = True
+        return rc
+    return _helper
+
 def needs_dfuse_with_cache(method):
     """Decorator function for starting dfuse under posix_tests class"""
     @functools.wraps(method)
@@ -1175,6 +1234,11 @@ class posix_tests():
         print(files)
         print(len(files))
         assert len(files) == count
+
+    @needs_dfuse_single
+    def test_single_threaded(self):
+        """Test single-threaded mode"""
+        self.readdir_test(10)
 
     @needs_dfuse
     def test_open_replaced(self):
@@ -1458,6 +1522,27 @@ class posix_tests():
         assert uns_stat.st_ino == direct_stat.st_ino
         if dfuse.stop():
             self.fatal_errors = True
+
+    def test_cont_copy(self):
+        """Verify that copying into a container works"""
+
+        # Create a temporary directory, with one file into it and copy it into
+        # the container.  Check the returncode only, do not verify the data.
+        # tempfile() will remove the directory on completion.
+        src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
+        ofd = open(os.path.join(src_dir.name, 'file'), 'w')
+        ofd.write('hello')
+        ofd.close()
+
+        cmd = ['filesystem',
+               'copy',
+               '--src',
+               src_dir.name,
+               '--dst',
+               'daos://{}/{}'.format(self.pool, self.container)]
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests
@@ -2606,8 +2691,11 @@ def main():
         description='Run DAOS client on local node')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--dfuse-debug', default=None)
+    parser.add_argument('--class-name', default=None,
+                        help='class name to use for junit')
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
+    parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--dfuse-dir', default='/tmp',
                         help='parent directory for all dfuse mounts')
@@ -2631,7 +2719,9 @@ def main():
 
     conf = load_conf(args)
 
-    wf = WarningsFactory('nlt-errors.json', junit=True)
+    wf = WarningsFactory('nlt-errors.json',
+                         junit=True,
+                         class_id=args.class_name)
 
     wf_server = WarningsFactory('nlt-server-leaks.json')
     wf_client = WarningsFactory('nlt-client-leaks.json')
@@ -2641,7 +2731,10 @@ def main():
     setup_log_test(conf)
 
     server = DaosServer(conf, test_class='first')
-    server.start()
+    clean=True
+    if args.no_root:
+        clean=False
+    server.start(clean=clean)
 
     fatal_errors = BoolRatchet()
     fi_test = False

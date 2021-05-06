@@ -418,7 +418,8 @@ obj_auxi_add_failed_tgt(struct obj_auxi_args *obj_auxi, uint32_t tgt)
 		}
 	}
 
-	D_REALLOC_ARRAY(tgts, tgt_list->tl_tgts, tgt_list->tl_nr + 1);
+	D_REALLOC_ARRAY(tgts, tgt_list->tl_tgts, tgt_list->tl_nr,
+			tgt_list->tl_nr + 1);
 	if (tgts == NULL) {
 		if (allocated)
 			D_FREE(tgt_list);
@@ -798,7 +799,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	if (epoch != NULL && !obj_auxi->req_reasbed)
 		reasb_req->orr_epoch = *epoch;
 	reasb_req->orr_size_set = 0;
-	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetch) {
+	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetched) {
 		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n",
 			DP_OID(oid));
 		return 0;
@@ -3549,6 +3550,7 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 		}
 	}
 
+	obj_auxi->reasb_req.orr_size_fetched = 1;
 	usgls = obj_auxi->reasb_req.orr_usgls;
 	if (usgls == NULL)
 		return;
@@ -3763,15 +3765,17 @@ obj_comp_cb(tse_task_t *task, void *data)
 				obj_ec_recov_cb(task, obj, obj_auxi);
 			}
 		} else {
-			if (obj_auxi->is_ec_obj && task->dt_result == 0 &&
+			if (obj_auxi->is_ec_obj &&
+			    (task->dt_result == 0 ||
+			     task->dt_result == -DER_REC2BIG) &&
 			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
 
+				obj_ec_update_iod_size(&obj_auxi->reasb_req,
+						       args->nr);
 				if (obj_auxi->bulks != NULL)
 					obj_ec_fetch_set_sgl(
 						&obj_auxi->reasb_req, args->nr);
-				obj_ec_update_iod_size(&obj_auxi->reasb_req,
-						       args->nr);
 			}
 
 			obj_bulk_fini(obj_auxi);
@@ -5487,10 +5491,45 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
 		attr.pa_domain_nr, attr.pa_target_nr);
 
-	/** TODO - unsupported for now */
+	if (cid == OC_UNKNOWN) {
+		uint64_t rf_factor;
+
+		rf_factor = dc_cont_hdl2redunfac(coh);
+		rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
+				   attr.pa_target_nr, ofeats, hints, &cid);
+	} else {
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
+					 attr.pa_target_nr, &cid);
+	}
+
+	if (rc)
+		return rc;
+
+	daos_obj_set_oid(oid, ofeats, cid, args);
+
+	return rc;
+}
+
+int
+daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
+			    daos_obj_id_t *oid, daos_ofeat_t ofeats,
+			    daos_oclass_id_t cid, daos_oclass_hints_t hints,
+			    uint32_t args)
+{
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr;
+	int			rc;
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+
 	if (cid == OC_UNKNOWN)
-		rc = dc_set_oclass(coh, attr.pa_domain_nr, attr.pa_target_nr,
-				   ofeats, hints, &cid);
+		rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
+				   attr.pa_target_nr, ofeats, hints, &cid);
 	else
 		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
 					 attr.pa_target_nr, &cid);

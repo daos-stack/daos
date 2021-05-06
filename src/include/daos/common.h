@@ -23,12 +23,6 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
-#ifdef DAOS_HAS_VALGRIND
-#include <valgrind/valgrind.h>
-#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
-#else
-#define DAOS_ON_VALGRIND 0
-#endif
 
 #include <daos_errno.h>
 #include <daos/debug.h>
@@ -42,6 +36,8 @@
 #include <daos/profile.h>
 #include <daos/dtx.h>
 #include <daos/cmd_parser.h>
+
+#define DAOS_ON_VALGRIND D_ON_VALGRIND
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -829,9 +825,12 @@ daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
-int crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti);
-int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
-int crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data);
+int crt_proc_struct_dtx_id(crt_proc_t proc, crt_proc_op_t proc_op,
+			   struct dtx_id *dti);
+int crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			 daos_prop_t **data);
+int crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
+			     struct daos_acl **data);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);

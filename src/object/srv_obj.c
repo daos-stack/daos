@@ -381,7 +381,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			if (rc)
 				break;
 
-			if (length > remote_bulk_size) {
+			if ((offset + length) > remote_bulk_size) {
 				D_DEBUG(DLOG_DBG, DF_U64 " > %zu : %d\n",
 					length,	remote_bulk_size,
 					-DER_OVERFLOW);
@@ -1729,7 +1729,7 @@ out:
 	dss_rpc_cntr_enter(DSS_RC_OBJ);
 	/** increment active request counter and start the chrono */
 	tls = obj_tls_get();
-	(void)d_tm_increment_gauge(&tls->ot_op_active[opc], 1, NULL);
+	d_tm_inc_gauge(tls->ot_op_active[opc], 1);
 	ioc->ioc_start_time = daos_get_ntime();
 	ioc->ioc_began = 1;
 	return rc;
@@ -1757,11 +1757,11 @@ static inline void
 obj_update_sensors(struct obj_io_context *ioc, int err)
 {
 	struct obj_tls		*tls = obj_tls_get();
-	struct d_tm_node_t	**lat;
+	struct d_tm_node_t	*lat;
 	uint32_t		opc = ioc->ioc_opc;
 	uint64_t		time;
 
-	(void)d_tm_decrement_gauge(&tls->ot_op_active[opc], 1, NULL);
+	d_tm_dec_gauge(tls->ot_op_active[opc], 1);
 	d_tm_inc_counter(tls->ot_op_total[opc], 1);
 
 	if (unlikely(err != 0))
@@ -1778,16 +1778,16 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_TGT_UPDATE:
 		d_tm_inc_counter(tls->ot_update_bytes, ioc->ioc_io_size);
-		lat = &tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
+		lat = tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	case DAOS_OBJ_RPC_FETCH:
 		d_tm_inc_counter(tls->ot_fetch_bytes, ioc->ioc_io_size);
-		lat = &tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
+		lat = tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	default:
-		lat = &tls->ot_op_lat[opc];
+		lat = tls->ot_op_lat[opc];
 	}
-	(void)d_tm_set_gauge(lat, time, NULL);
+	d_tm_set_gauge(lat, time);
 }
 
 static void
@@ -4122,10 +4122,10 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 				    dth.dth_modification_cnt > 0 ?
 				    true : false);
 
-	/* For the case of only containing read sub operations,
-	 *  we will generate DTX entry for DTX recovery.
+	/* For the case of only containing read sub operations, we will
+	 * generate DTX entry for DTX recovery. Similarly for noop case.
 	 */
-	if (rc == 0 && dth.dth_modification_cnt == 0)
+	if (rc == 0 && (dth.dth_modification_cnt == 0 || !dth.dth_active))
 		rc = vos_dtx_pin(&dth, true);
 
 	rc = dtx_end(&dth, ioc->ioc_coc, rc);

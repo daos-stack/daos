@@ -12,8 +12,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
@@ -28,10 +28,10 @@ import (
 
 type (
 	systemJoinFn     func(context.Context, *control.SystemJoinReq) (*control.SystemJoinResp, error)
-	onAwaitFormatFn  func(context.Context, string) error
+	onAwaitFormatFn  func(context.Context, uint32, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
-	onInstanceExitFn func(context.Context, system.Rank, error) error
+	onInstanceExitFn func(context.Context, uint32, system.Rank, error, uint64) error
 )
 
 // EngineInstance encapsulates control-plane specific configuration
