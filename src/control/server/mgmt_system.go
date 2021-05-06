@@ -603,21 +603,17 @@ func fanout2pbStopResp(act string, fr *fanoutResponse) (*mgmtpb.SystemStopResp, 
 	return sr, nil
 }
 
-// raiseSystemStopFailed raises a system_stop_failed RAS event when system stop
-// fails and will indicate which ranks failed to stop.
-func raiseSystemStopFailed(act, errs string, publisher events.Publisher) {
-	publisher.Publish(events.New(&events.RASEvent{
-		ID:       events.RASSystemStopFailed,
-		Severity: events.RASSeverityError,
-		Type:     events.RASTypeInfoOnly,
-		Msg:      fmt.Sprintf("System shutdown failed during %q action, %s", act, errs),
-		Rank:     uint32(system.NilRank),
-	}))
+func newSystemStopFailedEvent(act, errs string) *events.RASEvent {
+	return events.NewGenericEvent(events.RASSystemStopFailed, events.RASSeverityError,
+		fmt.Sprintf("System shutdown failed during %q action, %s", act, errs), "")
 }
 
+// processStopResp will raise failed event if the response results contain
+// errors, no event will be raised if user requested ranks or hosts that are
+// absent in the membership. Fanout response will then be converted to protouf.
 func processStopResp(act string, fr *fanoutResponse, publisher events.Publisher) (*mgmtpb.SystemStopResp, error) {
 	if fr.Results.Errors() != nil {
-		raiseSystemStopFailed(act, fr.Results.Errors().Error(), publisher)
+		publisher.Publish(newSystemStopFailedEvent(act, fr.Results.Errors().Error()))
 	}
 
 	return fanout2pbStopResp(act, fr)
@@ -633,14 +629,10 @@ func processStopResp(act string, fr *fanoutResponse, publisher events.Publisher)
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected ranks.
 func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (resp *mgmtpb.SystemStopResp, err error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
-		return nil, err
+	if err = svc.checkLeaderRequest(req); err != nil {
+		return
 	}
 	svc.log.Debug("Received SystemStop RPC")
-
-	if !req.GetPrep() && !req.GetKill() {
-		return nil, errors.New("invalid request, no action specified")
-	}
 
 	defer func() {
 		if err == nil {
@@ -653,26 +645,27 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 		Ranks: req.GetRanks(),
 		Force: req.GetForce(),
 	}
+	var fResp *fanoutResponse
 
-	if req.GetPrep() {
-		fReq.Method = control.PrepShutdownRanks
-		fResp, _, err := svc.rpcFanout(ctx, fReq, false)
-		if err != nil {
-			return nil, err
-		}
-		if !req.GetKill() || (!fReq.Force && fResp.Results.Errors() != nil) {
-			// return early if prep shutdown fails
-			return processStopResp("prep shutdown", fResp, svc.events)
-		}
+	fReq.Method = control.PrepShutdownRanks
+	fResp, _, err = svc.rpcFanout(ctx, fReq, false)
+	if err != nil {
+		return
+	}
+	if !fReq.Force && fResp.Results.Errors() != nil {
+		// return early if not forced and prep shutdown fails
+		resp, err = processStopResp("prep shutdown", fResp, svc.events)
+		return
 	}
 
 	fReq.Method = control.StopRanks
-	fResp, _, err := svc.rpcFanout(ctx, fReq, true)
+	fResp, _, err = svc.rpcFanout(ctx, fReq, true)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	return processStopResp("stop", fResp, svc.events)
+	resp, err = processStopResp("stop", fResp, svc.events)
+	return
 }
 
 // SystemStart implements the method defined for the Management Service.
