@@ -157,14 +157,14 @@ daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src)
 		return 0;
 
 	total = dst->sg_nr + src->sg_nr;
-	D_REALLOC_ARRAY(new_iovs, dst->sg_iovs, total);
+	D_REALLOC_ARRAY(new_iovs, dst->sg_iovs, dst->sg_nr, total);
 	if (new_iovs == NULL)
 		return -DER_NOMEM;
 
 	for (i = dst->sg_nr; i < total; i++) {
 		int idx = i - dst->sg_nr;
 
-		D_ALLOC(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
+		D_ALLOC_NZ(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
 		if (new_iovs[i].iov_buf == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
 
@@ -237,7 +237,8 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size)
 	if (sgl->sg_iovs[idx].iov_buf_len >= new_size)
 		return 0;
 
-	D_REALLOC(new_buf, sgl->sg_iovs[idx].iov_buf, new_size);
+	D_REALLOC(new_buf, sgl->sg_iovs[idx].iov_buf,
+		  sgl->sg_iovs[idx].iov_buf_len, new_size);
 	if (new_buf == NULL)
 		return -DER_NOMEM;
 
