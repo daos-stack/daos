@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -211,7 +211,7 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 }
 
 type daosCaller interface {
-	initDAOS(logging.Logger) (func(), error)
+	initDAOS() (func(), error)
 }
 
 type daosCmd struct {
@@ -219,7 +219,7 @@ type daosCmd struct {
 	logCmd
 }
 
-func (dc *daosCmd) initDAOS(log logging.Logger) (func(), error) {
+func (dc *daosCmd) initDAOS() (func(), error) {
 	if rc := C.daos_init(); rc != 0 {
 		// Do some inspection of the RC to display an informative error to the user
 		// e.g. "No DAOS Agent detected"...
@@ -227,9 +227,45 @@ func (dc *daosCmd) initDAOS(log logging.Logger) (func(), error) {
 	}
 
 	return func() {
-		if rc := C.daos_fini(); rc != 0 {
-			// Not much to do I guess?
-			log.Errorf("daos_fini() failed: %s", daosError(rc))
-		}
+		C.daos_fini()
 	}, nil
+}
+
+type labelOrUUID struct {
+	UUID  uuid.UUID
+	Label string
+}
+
+func (f labelOrUUID) Empty() bool {
+	return !f.HasLabel() && !f.HasUUID()
+}
+
+func (f labelOrUUID) HasLabel() bool {
+	return f.Label != ""
+}
+
+func (f labelOrUUID) HasUUID() bool {
+	return f.UUID != uuid.Nil
+}
+
+func (f labelOrUUID) String() string {
+	switch {
+	case f.HasLabel():
+		return f.Label
+	case f.HasUUID():
+		return f.UUID.String()
+	default:
+		return "<no label or uuid set>"
+	}
+}
+
+func (f *labelOrUUID) UnmarshalFlag(fv string) error {
+	uuid, err := uuid.Parse(fv)
+	if err == nil {
+		f.UUID = uuid
+		return nil
+	}
+
+	f.Label = fv
+	return nil
 }

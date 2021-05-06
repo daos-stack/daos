@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,38 +37,27 @@ type poolBaseCmd struct {
 
 	cPoolHandle C.daos_handle_t
 
-	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
-	Args    struct {
+	SysName  string `long:"sys-name" short:"G" description:"DAOS system name"`
+	PoolFlag string `long:"pool" description:"pool UUID (deprecated; use positional arg)"`
+	Args     struct {
 		Pool string `positional-arg-name:"<pool name or UUID>"`
-	} `positional-args:"yes" required:"yes"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
 	return (*C.uchar)(unsafe.Pointer(&cmd.poolUUID[0]))
 }
 
-func (cmd *poolBaseCmd) resolvePool() (err error) {
-	// TODO: Resolve name
-	cmd.poolUUID, err = uuid.Parse(cmd.Args.Pool)
+func (cmd *poolBaseCmd) resolvePool(id string) (err error) {
+	// TODO: Resolve label.
+
+	cmd.poolUUID, err = uuid.Parse(id)
 	if err != nil {
-		return
+		return errors.Wrapf(err,
+			"unable to resolve pool id %q as UUID", id)
 	}
 
 	return
-}
-
-func (cmd *poolBaseCmd) resolveAndConnect() (func(), error) {
-	if err := cmd.resolvePool(); err != nil {
-		return nil, err
-	}
-
-	if err := cmd.connectPool(); err != nil {
-		return nil, err
-	}
-
-	return func() {
-		cmd.disconnectPool()
-	}, nil
 }
 
 func (cmd *poolBaseCmd) connectPool() error {
@@ -85,10 +74,37 @@ func (cmd *poolBaseCmd) connectPool() error {
 }
 
 func (cmd *poolBaseCmd) disconnectPool() {
+	cmd.log.Debugf("disconnecting pool %s", cmd.poolUUID)
 	rc := C.daos_pool_disconnect(cmd.cPoolHandle, nil)
 	if err := daosError(rc); err != nil {
 		cmd.log.Errorf("pool disconnect failed: %s", err)
 	}
+}
+
+func (cmd *poolBaseCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (func(), error) {
+	if cmd.PoolFlag != "" {
+		cmd.Args.Pool = cmd.PoolFlag
+	}
+	if err := cmd.resolvePool(cmd.Args.Pool); err != nil {
+		return nil, errors.Wrapf(err,
+			"failed to resolve pool ID %q", cmd.Args.Pool)
+	}
+
+	if err := cmd.connectPool(); err != nil {
+		return nil, errors.Wrapf(err,
+			"failed to connect to pool %s", cmd.poolUUID)
+	}
+
+	if ap != nil {
+		if err := copyUUID(&ap.p_uuid, cmd.poolUUID); err != nil {
+			return nil, err
+		}
+		ap.pool = cmd.cPoolHandle
+	}
+
+	return func() {
+		cmd.disconnectPool()
+	}, nil
 }
 
 func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
@@ -99,7 +115,7 @@ type poolCmd struct {
 	ListContainers poolContainersListCmd `command:"list-containers" alias:"list-cont" alias:"ls" description:"container operations for the specified pool"`
 	Query          poolQueryCmd          `command:"query" description:"query pool info"`
 	ListAttrs      poolListAttrsCmd      `command:"list-attributes" alias:"list-attrs" description:"list pool attributes"`
-	GetAttr        poolGetAttrCmd        `command:"get-atttribute" alias:"get-attr" description:"get pool attribute"`
+	GetAttr        poolGetAttrCmd        `command:"get-attribute" alias:"get-attr" description:"get pool attribute"`
 	SetAttr        poolSetAttrCmd        `command:"set-attribute" alias:"set-attr" description:"set pool attribute"`
 	DelAttr        poolDelAttrCmd        `command:"delete-attribute" alias:"del-attr" description:"delete pool attribute"`
 	AutoTest       poolAutoTestCmd       `command:"autotest" description:"verify setup with smoke tests"`
@@ -109,25 +125,19 @@ type poolContainersListCmd struct {
 	poolBaseCmd
 }
 
-func (cmd *poolContainersListCmd) Execute(_ []string) error {
+func poolListContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 	extra_cont_margin := C.size_t(16)
-
-	cleanup, err := cmd.resolveAndConnect()
-	if err != nil {
-		return err
-	}
-	defer cleanup()
 
 	// First call gets the current number of containers.
 	var ncont C.daos_size_t
-	rc := C.daos_pool_list_cont(cmd.cPoolHandle, &ncont, nil, nil)
+	rc := C.daos_pool_list_cont(hdl, &ncont, nil, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Wrap(err, "pool list containers failed")
+		return nil, errors.Wrap(err, "pool list containers failed")
 	}
 
 	// No containers.
 	if ncont == 0 {
-		return nil
+		return nil, nil
 	}
 
 	var cConts *C.struct_daos_pool_cont_info
@@ -136,29 +146,56 @@ func (cmd *poolContainersListCmd) Execute(_ []string) error {
 	ncont += extra_cont_margin
 	cConts = (*C.struct_daos_pool_cont_info)(C.calloc(C.sizeof_struct_daos_pool_cont_info, ncont))
 	if cConts == nil {
-		return errors.New("malloc() failed")
+		return nil, errors.New("calloc() for containers failed")
 	}
-	defer C.free(unsafe.Pointer(cConts))
+	dpciSlice := (*[1 << 30]C.struct_daos_pool_cont_info)(
+		unsafe.Pointer(cConts))[:ncont:ncont]
+	cleanup := func() {
+		C.free(unsafe.Pointer(cConts))
+	}
 
-	rc = C.daos_pool_list_cont(cmd.cPoolHandle, &ncont, cConts, nil)
+	rc = C.daos_pool_list_cont(hdl, &ncont, cConts, nil)
 	if err := daosError(rc); err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	out := make([]*ContainerID, ncont)
+	for i := range out {
+		out[i] = new(ContainerID)
+		out[i].UUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
+		// FIXME: The label should be returned as part of
+		// the list payload. The alternative is to open each
+		// container sequentially in order to query the label
+		// property, which would be terrible for performance.
+	}
+
+	return out, nil
+}
+
+func (cmd *poolContainersListCmd) Execute(_ []string) error {
+	cleanup, err := cmd.resolveAndConnect(nil)
+	if err != nil {
 		return err
 	}
+	defer cleanup()
 
-	// Create a Go slice backed by the C array in order to easily
-	// iterate over it.
-	conts := (*[1 << 30]C.struct_daos_pool_cont_info)(unsafe.Pointer(cConts))[:ncont:ncont]
-	contUUIDs := make([]uuid.UUID, ncont)
-	for i, cont := range conts {
-		contUUIDs[i] = uuid.Must(uuidFromC(cont.pci_uuid))
+	contIDs, err := poolListContainers(cmd.cPoolHandle)
+	if err != nil {
+		return errors.Wrapf(err,
+			"unable to list containers for pool %s", cmd.poolUUID)
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(contUUIDs, nil)
+		return cmd.outputJSON(contIDs, nil)
 	}
 
-	for _, cont := range contUUIDs {
-		cmd.log.Infof("%s", cont)
+	for _, id := range contIDs {
+		if id.HasLabel() {
+			cmd.log.Info(id.Label)
+			continue
+		}
+		cmd.log.Infof("%s", id.UUID)
 	}
 
 	return nil
@@ -242,7 +279,7 @@ const (
 )
 
 func (cmd *poolQueryCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
+	cleanup, err := cmd.resolveAndConnect(nil)
 	if err != nil {
 		return err
 	}
@@ -283,7 +320,7 @@ type poolListAttrsCmd struct {
 }
 
 func (cmd *poolListAttrsCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
+	cleanup, err := cmd.resolveAndConnect(nil)
 	if err != nil {
 		return err
 	}
@@ -317,7 +354,7 @@ type poolGetAttrCmd struct {
 }
 
 func (cmd *poolGetAttrCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
+	cleanup, err := cmd.resolveAndConnect(nil)
 	if err != nil {
 		return err
 	}
@@ -353,7 +390,7 @@ type poolSetAttrCmd struct {
 }
 
 func (cmd *poolSetAttrCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
+	cleanup, err := cmd.resolveAndConnect(nil)
 	if err != nil {
 		return err
 	}
@@ -380,7 +417,7 @@ type poolDelAttrCmd struct {
 }
 
 func (cmd *poolDelAttrCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
+	cleanup, err := cmd.resolveAndConnect(nil)
 	if err != nil {
 		return err
 	}
@@ -400,17 +437,17 @@ type poolAutoTestCmd struct {
 }
 
 func (cmd *poolAutoTestCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect()
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(nil)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 
 	ap.pool = cmd.cPoolHandle
 	if err := copyUUID(&ap.p_uuid, cmd.poolUUID); err != nil {
