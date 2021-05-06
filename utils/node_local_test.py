@@ -412,7 +412,7 @@ class DaosServer():
         if os.path.exists(server_file):
             os.unlink(server_file)
         for log in self.server_logs:
-            if os.path.exists(server_log.name):
+            if os.path.exists(log.name):
                 log_test(self.conf, log.name)
         try:
             os.rmdir(self.agent_dir)
