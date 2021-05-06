@@ -343,7 +343,6 @@ typedef struct {
 	int		(*to_rec_update)(struct btr_instance *tins,
 					 struct btr_record *rec,
 					 d_iov_t *key, d_iov_t *val);
-
 	/**
 	 * Optional:
 	 * Return key and value size of the record.
