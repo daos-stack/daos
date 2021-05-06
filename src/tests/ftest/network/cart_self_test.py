@@ -7,34 +7,10 @@
 import os
 
 from apricot import TestWithServers
-
-from command_utils_base import \
-    EnvironmentVariables, FormattedParameter, CommandFailure
-from command_utils import ExecutableCommand
+from cart_self_test_utils import CartSelfTestCommand
+from command_utils_base import EnvironmentVariables, CommandFailure
 from job_manager_utils import Orterun
 from general_utils import get_log_file
-
-
-class SelfTest(ExecutableCommand):
-    """Defines a CaRT self test command."""
-
-    def __init__(self, path=""):
-        """Create a SelfTest object.
-
-        Uses Avocado's utils.process module to run self_test with parameters.
-
-        Args:
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
-        """
-        super().__init__("/run/self_test/*", "self_test", path)
-
-        self.group_name = FormattedParameter("--group-name {}")
-        self.endpoint = FormattedParameter("--endpoint {0}")
-        self.message_sizes = FormattedParameter("--message-sizes {0}")
-        self.max_inflight_rpcs = FormattedParameter("--max-inflight-rpcs {0}")
-        self.repetitions = FormattedParameter("--repetitions {0}")
-        self.attach_info = FormattedParameter("--path {0}")
 
 
 class CartSelfTest(TestWithServers):
@@ -93,7 +69,7 @@ class CartSelfTest(TestWithServers):
         :avocado: tags=all,pr,daily_regression,smoke,unittest,tiny,cartselftest
         """
         # Setup the orterun command
-        orterun = Orterun(SelfTest(self.bin))
+        orterun = Orterun(CartSelfTestCommand(self.bin))
         orterun.map_by.update(None, "orterun/map_by")
         orterun.enable_recovery.update(False, "orterun/enable_recovery")
 
@@ -113,3 +89,4 @@ class CartSelfTest(TestWithServers):
             self.test_log.info(
                 "CaRT self_test returned non-zero: %s", str(error))
             self.fail("CaRT self_test returned non-zero")
+
