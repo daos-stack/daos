@@ -550,11 +550,10 @@ args_free(struct cmd_args_s *ap)
 	D_FREE(ap->dst);
 	D_FREE(ap->snapname_str);
 	D_FREE(ap->epcrange_str);
-	if (ap->props) {
-		/* restore number of entries in array for freeing */
-		ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
-		daos_prop_free(ap->props);
-	}
+
+	daos_prop_free(ap->props);
+	ap->props = NULL;
+
 	D_FREE(ap->outfile);
 	D_FREE(ap->aclfile);
 	D_FREE(ap->entry);
@@ -873,6 +872,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	return 0;
 
 out_free:
+	if (ap->props != NULL)
+		/* restore number of entries in array for freeing */
+		ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
 	args_free(ap);
 	D_FREE(cmdname);
 	return rc;

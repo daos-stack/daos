@@ -2678,7 +2678,7 @@ out:
 	return rc;
 }
 
-inline void
+static inline void
 set_dm_args_default(struct dm_args *dm)
 {
 	dm->src = NULL;
@@ -2954,7 +2954,7 @@ out:
 	return rc;
 }
 
-inline void
+static inline void
 file_set_defaults_dfs(struct file_dfs *file_dfs)
 {
 	/* set defaults for file_dfs struct */
@@ -3904,9 +3904,9 @@ parse_acl_file(struct cmd_args_s *ap, const char *path, struct daos_acl **acl)
 	D_GOTO(out, rc = 0);
 
 parse_err:
-	D_FREE(line);
 	daos_acl_free(tmp_acl);
 out:
+	D_FREE(line);
 	fclose(instream);
 	return rc;
 }
