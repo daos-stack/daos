@@ -45,7 +45,7 @@ def scons():
     daos_obj = [cmd_parser, dc_credit]
     daos_src = ['daos.c', 'daos_obj_ctl.c']
 
-    daos = daos_build.program(denv, 'daos', [daos_src, daos_obj], LIBS=libs)
+    daos = daos_build.program(denv, 'daos_old', [daos_src, daos_obj], LIBS=libs)
     denv.Install('$PREFIX/bin/', daos)
 
 if __name__ == "SCons.Script":

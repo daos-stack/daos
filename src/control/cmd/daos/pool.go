@@ -23,10 +23,8 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../../utils
-#cgo LDFLAGS: -ldaos_cmd_hdlrs
+#include <daos.h>
 
-#include "daos.h"
 #include "daos_hdlr.h"
 */
 import "C"
@@ -80,7 +78,7 @@ func (cmd *poolBaseCmd) connectPool() error {
 	}
 
 	cSysName := C.CString(sysName)
-	defer C.free(unsafe.Pointer(cSysName))
+	defer freeString(cSysName)
 	rc := C.daos_pool_connect(cmd.poolUUIDPtr(), cSysName,
 		C.DAOS_PC_RW, &cmd.cPoolHandle, nil, nil)
 	return daosError(rc)
@@ -95,9 +93,11 @@ func (cmd *poolBaseCmd) disconnectPool() {
 }
 
 func (cmd *poolBaseCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (func(), error) {
-	if err := cmd.resolvePool(cmd.PoolID()); err != nil {
-		return nil, errors.Wrapf(err,
-			"failed to resolve pool ID %q", cmd.PoolID())
+	if cmd.poolUUID == uuid.Nil {
+		if err := cmd.resolvePool(cmd.PoolID()); err != nil {
+			return nil, errors.Wrapf(err,
+				"failed to resolve pool ID %q", cmd.PoolID())
+		}
 	}
 
 	if err := cmd.connectPool(); err != nil {

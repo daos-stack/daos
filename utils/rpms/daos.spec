@@ -339,6 +339,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
+%{_libdir}/libcart.so*
+%{_libdir}/libgurt.so*
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
@@ -391,7 +393,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
-%{_bindir}/daos_new
+%{_bindir}/daos_old
 %{_libdir}/libdaos_cmd_hdlrs.so*
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION

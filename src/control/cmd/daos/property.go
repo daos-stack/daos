@@ -489,7 +489,7 @@ func (phm propHdlrMap) get(prop string) (*propHdlr, error) {
 
 func cksumHdlr(e *C.struct_daos_prop_entry, v string) error {
 	csumVal := C.CString(v)
-	defer C.free(unsafe.Pointer(csumVal))
+	defer freeString(csumVal)
 	csumType := C.daos_str2csumcontprop(csumVal)
 
 	if csumType < 0 {
@@ -502,7 +502,7 @@ func cksumHdlr(e *C.struct_daos_prop_entry, v string) error {
 
 func compressHdlr(e *C.struct_daos_prop_entry, v string) error {
 	compVal := C.CString(v)
-	defer C.free(unsafe.Pointer(compVal))
+	defer freeString(compVal)
 	compType := C.daos_str2compresscontprop(compVal)
 
 	if compType < 0 {
@@ -515,7 +515,7 @@ func compressHdlr(e *C.struct_daos_prop_entry, v string) error {
 
 func encryptHdlr(e *C.struct_daos_prop_entry, v string) error {
 	encVal := C.CString(v)
-	defer C.free(unsafe.Pointer(encVal))
+	defer freeString(encVal)
 	encType := C.daos_str2encryptcontprop(encVal)
 
 	if encType < 0 {
@@ -799,23 +799,12 @@ type GetPropertiesFlag struct {
 	names []string
 }
 
-func (f *GetPropertiesFlag) UnmarshalFlag(fv string) (err error) {
-	defer func() {
-		if err != nil {
-			f.Cleanup()
-		}
-	}()
-
+func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 	// Accept a list of property names to fetch, if specified,
 	// otherwise just fetch all known properties.
 	f.names = strings.Split(fv, ",")
 	if len(f.names) == 0 || f.names[0] == "all" {
 		f.names = propHdlrs.keys()
-	}
-
-	f.props, _, err = allocProps(len(f.names))
-	if err != nil {
-		return
 	}
 
 	for i, name := range f.names {

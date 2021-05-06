@@ -8,17 +8,13 @@ package main
 
 import (
 	"fmt"
-	"unsafe"
 
 	"github.com/pkg/errors"
 )
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../../utils
-#cgo LDFLAGS: -ldaos_cmd_hdlrs -ldfs -lduns
+#include <daos.h>
 
-#include <stdlib.h>
-#include "daos.h"
 #include "daos_hdlr.h"
 */
 import "C"
@@ -48,7 +44,7 @@ func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
 	}
 	if cmd.Name != "" {
 		ap.snapname_str = C.CString(cmd.Name)
-		defer C.free(unsafe.Pointer(ap.snapname_str))
+		defer freeString(ap.snapname_str)
 	}
 
 	rc := C.cont_create_snap_hdlr(ap)
@@ -155,7 +151,7 @@ func (cmd *containerSnapshotRollbackCmd) Execute(args []string) error {
 	}
 	if cmd.Name != "" {
 		ap.snapname_str = C.CString(cmd.Name)
-		defer C.free(unsafe.Pointer(ap.snapname_str))
+		defer freeString(ap.snapname_str)
 	}
 
 	rc := C.cont_rollback_hdlr(ap)

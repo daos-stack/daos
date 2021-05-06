@@ -22,15 +22,16 @@ import (
 )
 
 /*
+// NB: There should only be one set of CFLAGS/LDFLAGS definitions
+// for the whole package!
 #cgo CFLAGS: -I${SRCDIR}/../../../utils
-#cgo LDFLAGS: -lgurt -lcart -ldaos -ldaos_common
+#cgo LDFLAGS: -lgurt -lcart -ldaos -ldaos_common -lduns -ldfs -luuid -ldaos_cmd_hdlrs
 
-#include <stdlib.h>
+#include <sys/stat.h>
 #include <daos.h>
 #include <daos/common.h>
-#include <daos/debug.h>
 
-#include "daos_hdlr.h"
+#include "util.h"
 
 void
 init_op_vals(struct cmd_args_s *ap)
@@ -115,12 +116,19 @@ func iterStringsBuf(cBuf unsafe.Pointer, expected C.size_t, cb func(string)) err
 
 func fd2FILE(fd uintptr, modeStr string) (out *C.FILE, err error) {
 	cModeStr := C.CString(modeStr)
-	defer C.free(unsafe.Pointer(cModeStr))
+	defer freeString(cModeStr)
 	out = C.fdopen(C.int(fd), cModeStr)
 	if out == nil {
 		return nil, errors.New("fdopen() failed")
 	}
 	return
+}
+
+func freeString(str *C.char) {
+	if str == nil {
+		return
+	}
+	C.free(unsafe.Pointer(str))
 }
 
 func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(), error) {
@@ -164,14 +172,12 @@ func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(
 	}, nil
 }
 
-func deallocCmdArgs(ap *C.struct_cmd_args_s) {
+func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	if ap == nil {
 		return
 	}
 
-	if ap.sysname != nil {
-		C.free(unsafe.Pointer(ap.sysname))
-	}
+	freeString(ap.sysname)
 
 	if ap.props != nil {
 		ap.props.dpp_nr = C.DAOS_PROP_ENTRIES_MAX_NR
@@ -206,7 +212,7 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 	return ap, func() {
 		outCleanup()
 		errCleanup()
-		deallocCmdArgs(ap)
+		freeCmdArgs(ap)
 	}, nil
 }
 
@@ -229,6 +235,25 @@ func (dc *daosCmd) initDAOS() (func(), error) {
 	return func() {
 		C.daos_fini()
 	}, nil
+}
+
+func resolveDunsPath(path string, ap *C.struct_cmd_args_s) error {
+	if path == "" {
+		return errors.New("empty path")
+	}
+	if ap == nil {
+		return errors.New("nil ap")
+	}
+
+	ap.path = C.CString(path)
+	defer freeString(ap.path)
+
+	rc := C.resolve_duns_path(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err, "failed to resolve path %s", path)
+	}
+
+	return nil
 }
 
 type labelOrUUID struct {

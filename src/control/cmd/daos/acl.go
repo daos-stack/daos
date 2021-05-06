@@ -7,11 +7,7 @@
 package main
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../../utils
-#cgo LDFLAGS: -ldaos_common -ldaos_cmd_hdlrs
-
 #include <daos.h>
-#include <daos_security.h>
 #include <gurt/common.h>
 
 #include "daos_hdlr.h"
