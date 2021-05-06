@@ -17,8 +17,8 @@ class GroupTest(CartTest):
     def test_group(self):
         """Test CaRT NoPmix Launcher.
 
-        :avocado: tags=all,cart,pr,daily_regression
-        :avocado: tags=group_test,one_node,memcheck
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=cart,group_test,one_node,memcheck
         """
         cmd = self.build_cmd(self.env, "test_servers")
         self.launch_test(cmd)
