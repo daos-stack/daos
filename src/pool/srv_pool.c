@@ -5593,7 +5593,7 @@ out:
  */
 int
 ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version)
+			 uint32_t version, bool check_shard)
 {
 	struct pool_target	*target;
 	d_rank_t		 myrank;
@@ -5618,11 +5618,13 @@ ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc < 0)
 		return rc;
 
-	if (myrank != target->ta_comp.co_rank ||
-	    oid->id_shard != leader_shard)
+	if (myrank != target->ta_comp.co_rank) {
 		rc = 0;
-	else
+	} else {
 		rc = 1;
+		if (check_shard && oid->id_shard != leader_shard)
+			rc = 0;
+	}
 
 	return rc;
 }
