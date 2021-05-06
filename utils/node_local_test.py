@@ -2621,6 +2621,55 @@ class AllocFailTest():
 
         return aftf
 
+def test_alloc_fail_copy(server, conf, wf):
+    """Run the Interception library with fault injection
+
+    Run container (filesystem) copy under fault injection.
+
+    TODO: Complete this test and resolve some issues:
+    Each copy will be to the same container, so in a lot of them the destination
+    will exist.  Two options here are either to run in serial, or create a
+    container per iteration, neither of which are ideal.  Another option might
+    be to copy from a container to a posix directory, as creating a target
+    directory per iteration would be cheap.  If container copy can work with
+    subdirs and create them automatically this would be preferred.
+
+    Handle stderr from the command when it runs with no faults.  This is
+    currently logging "file exists", see above.
+
+    Remove the container when complete.
+
+    Check output of the command itself.  This probably just needs enabling.
+    """
+
+    pools = get_pool_list()
+
+    while len(pools) < 1:
+        pools = make_pool(server)
+
+    pool = pools[0]
+
+    container = create_cont(conf, pool, posix=True)
+
+    src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
+    ofd = open(os.path.join(src_dir.name, 'file'), 'w')
+    ofd.write('hello')
+    ofd.close()
+
+    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+           'filesystem',
+           'copy',
+           '--src',
+           src_dir.name,
+           '--dst',
+           'daos://{}/{}'.format(pool, container)]
+
+    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd.wf = wf
+
+    rc = test_cmd.launch()
+    return rc
+
 def test_alloc_fail_cat(server, conf, wf):
     """Run the Interception library with fault injection
 
@@ -2795,9 +2844,11 @@ def main():
         server = DaosServer(conf, test_class='no-debug')
         server.start(clean=False)
         if fi_test:
-            fatal_errors.add_result(test_alloc_fail_cat(server,
-                                                        conf, wf_client))
-            fatal_errors.add_result(test_alloc_fail(server, conf))
+            fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+            # For now disable the other fault injection tests for run-time.
+#            fatal_errors.add_result(test_alloc_fail_cat(server,
+#                                                        conf, wf_client))
+#            fatal_errors.add_result(test_alloc_fail(server, conf))
         if args.perf_check:
             check_readdir_perf(server, conf)
         if server.stop(wf_server) != 0:
