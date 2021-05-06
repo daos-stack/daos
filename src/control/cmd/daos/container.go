@@ -126,10 +126,7 @@ type containerCreateCmd struct {
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
-	if cmd.PoolFlag != "" {
-		cmd.Args.Pool = cmd.PoolFlag
-	}
-	if err = cmd.resolvePool(cmd.Args.Pool); err != nil {
+	if err = cmd.resolvePool(cmd.PoolID()); err != nil {
 		return
 	}
 
@@ -302,7 +299,8 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
-			"failed to destroy container %s", cmd.contUUID)
+			"failed to destroy container %s",
+			cmd.ContainerID())
 	}
 
 	return nil
@@ -442,7 +440,8 @@ func (cmd *containerCloneCmd) Execute(_ []string) error {
 
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
-			"failed to clone container %s", cmd.contUUID)
+			"failed to clone container %s",
+			cmd.ContainerID())
 	}
 
 	return nil
@@ -464,7 +463,8 @@ func (cmd *containerListAttributesCmd) Execute(args []string) error {
 	attrs, err := listDaosAttributes(cmd.cContHandle, contAttr, cmd.Verbose)
 	if err != nil {
 		return errors.Wrapf(err,
-			"failed to list attributes for container %s", cmd.contUUID)
+			"failed to list attributes for container %s",
+			cmd.ContainerID())
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -472,7 +472,7 @@ func (cmd *containerListAttributesCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	title := fmt.Sprintf("Attributes for container %s:", cmd.contUUID)
+	title := fmt.Sprintf("Attributes for container %s:", cmd.ContainerID())
 	printAttributes(&bld, title, attrs...)
 
 	cmd.log.Info(bld.String())
@@ -498,7 +498,7 @@ func (cmd *containerDeleteAttributeCmd) Execute(args []string) error {
 	if err := delDaosAttribute(cmd.cContHandle, contAttr, cmd.Args.Name); err != nil {
 		return errors.Wrapf(err,
 			"failed to delete attribute %q on container %s",
-			cmd.Args.Name, cmd.contUUID)
+			cmd.Args.Name, cmd.ContainerID())
 	}
 
 	return nil
@@ -523,7 +523,7 @@ func (cmd *containerGetAttributeCmd) Execute(args []string) error {
 	if err != nil {
 		return errors.Wrapf(err,
 			"failed to get attribute %q from container %s",
-			cmd.Args.Name, cmd.contUUID)
+			cmd.Args.Name, cmd.ContainerID())
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -531,7 +531,7 @@ func (cmd *containerGetAttributeCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	title := fmt.Sprintf("Attributes for container %s:", cmd.contUUID)
+	title := fmt.Sprintf("Attributes for container %s:", cmd.ContainerID())
 	printAttributes(&bld, title, attr)
 
 	cmd.log.Info(bld.String())
@@ -561,7 +561,7 @@ func (cmd *containerSetAttributeCmd) Execute(args []string) error {
 	}); err != nil {
 		return errors.Wrapf(err,
 			"failed to set attribute %q on container %s",
-			cmd.Args.Name, cmd.contUUID)
+			cmd.Args.Name, cmd.ContainerID())
 	}
 
 	return nil
@@ -593,13 +593,17 @@ func (cmd *containerGetPropertyCmd) Execute(args []string) error {
 		aclProps, cleanupAcl, err := getContAcl(cmd.cContHandle)
 		if err != nil && err != drpc.DaosNoPermission {
 			return errors.Wrapf(err,
-				"failed to query ACL for container %s", cmd.contUUID)
+				"failed to query ACL for container %s",
+				cmd.ContainerID())
 		}
 		if cleanupAcl != nil {
 			defer cleanupAcl()
 		}
-		if len(aclProps) != 0 {
-			props = append(props, aclProps[0])
+		for _, prop := range aclProps {
+			if prop.entry.dpe_type == C.DAOS_PROP_CO_ACL {
+				props = append(props, prop)
+				break
+			}
 		}
 	}
 
@@ -607,8 +611,9 @@ func (cmd *containerGetPropertyCmd) Execute(args []string) error {
 		return cmd.outputJSON(props, nil)
 	}
 
+	title := fmt.Sprintf("Properties for container %s", cmd.ContainerID())
 	var bld strings.Builder
-	printProperties(&bld, fmt.Sprintf("Properties for container %s", cmd.contUUID), props...)
+	printProperties(&bld, title, props...)
 
 	cmd.log.Info(bld.String())
 
@@ -639,7 +644,7 @@ func (cmd *containerSetPropertyCmd) Execute(args []string) error {
 	rc := C.cont_set_prop_hdlr(ap)
 	if err := daosError(rc); err != nil {
 		return errors.Errorf("failed to set properties on container %s",
-			cmd.contUUID)
+			cmd.ContainerID())
 	}
 
 	return nil

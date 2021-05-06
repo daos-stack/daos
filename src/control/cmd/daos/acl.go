@@ -7,12 +7,14 @@
 package main
 
 /*
-#cgo LDFLAGS: -ldaos_common
+#cgo CFLAGS: -I${SRCDIR}/../../../utils
+#cgo LDFLAGS: -ldaos_common -ldaos_cmd_hdlrs
 
 #include <daos.h>
 #include <daos_security.h>
 #include <gurt/common.h>
 
+#include "daos_hdlr.h"
 #include "property.h"
 
 void
@@ -109,25 +111,108 @@ func getContAcl(hdl C.daos_handle_t) ([]*property, func(), error) {
 
 type containerOverwriteACLCmd struct {
 	existingContainerCmd
+
+	File string `long:"acl-file" short:"f" required:"1"`
 }
 
 func (cmd *containerOverwriteACLCmd) Execute(args []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(ap)
+	if err != nil {
+		return nil
+	}
+	defer cleanup()
+
+	ap.aclfile = C.CString(cmd.File)
+	defer C.free(unsafe.Pointer(ap.aclfile))
+
+	rc := C.cont_overwrite_acl_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to overwrite ACL for container %s",
+			cmd.ContainerID())
+	}
+
 	return nil
 }
 
 type containerUpdateACLCmd struct {
 	existingContainerCmd
+
+	Entry string `long:"entry" short:"e"`
+	File  string `long:"acl-file" short:"f"`
 }
 
 func (cmd *containerUpdateACLCmd) Execute(args []string) error {
+	if cmd.Entry != "" && cmd.File != "" {
+		return errors.New("only one of entry or acl-file may be supplied")
+	}
+
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(ap)
+	if err != nil {
+		return nil
+	}
+	defer cleanup()
+
+	switch {
+	case cmd.Entry != "":
+		ap.entry = C.CString(cmd.Entry)
+		defer C.free(unsafe.Pointer(ap.entry))
+	case cmd.File != "":
+		ap.aclfile = C.CString(cmd.File)
+		defer C.free(unsafe.Pointer(ap.aclfile))
+	}
+
+	rc := C.cont_update_acl_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to update ACL for container %s",
+			cmd.ContainerID())
+	}
+
 	return nil
 }
 
 type containerDeleteACLCmd struct {
 	existingContainerCmd
+
+	Principal string `long:"principal" short:"p" required:"1"`
 }
 
 func (cmd *containerDeleteACLCmd) Execute(args []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(ap)
+	if err != nil {
+		return nil
+	}
+	defer cleanup()
+
+	ap.principal = C.CString(cmd.Principal)
+	defer C.free(unsafe.Pointer(ap.principal))
+
+	rc := C.cont_delete_acl_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to delete ACL for container %s",
+			cmd.ContainerID())
+	}
+
 	return nil
 }
 
@@ -153,9 +238,9 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 		return cmd.outputJSON(aclProps, nil)
 	}
 
+	title := fmt.Sprintf("ACL for container %s", cmd.contUUID)
 	var bld strings.Builder
-	printProperties(&bld, fmt.Sprintf("ACL for container %s", cmd.contUUID),
-		aclProps...)
+	printProperties(&bld, title, aclProps...)
 
 	cmd.log.Info(bld.String())
 
@@ -164,8 +249,43 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 
 type containerSetOwnerCmd struct {
 	existingContainerCmd
+
+	User  string `long:"user" short:"u" description:"user who will own the container"`
+	Group string `long:"group" short:"g" description:"group who will own the container"`
 }
 
 func (cmd *containerSetOwnerCmd) Execute(args []string) error {
+	if cmd.User == "" && cmd.Group == "" {
+		return errors.New("at least one of user or group must be supplied")
+	}
+
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(ap)
+	if err != nil {
+		return nil
+	}
+	defer cleanup()
+
+	if cmd.User != "" {
+		ap.user = C.CString(cmd.User)
+		defer C.free(unsafe.Pointer(ap.user))
+	}
+	if cmd.Group != "" {
+		ap.group = C.CString(cmd.Group)
+		defer C.free(unsafe.Pointer(ap.group))
+	}
+
+	rc := C.cont_set_owner_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to set owner for container %s",
+			cmd.ContainerID())
+	}
+
 	return nil
 }

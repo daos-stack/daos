@@ -31,6 +31,10 @@ import (
 */
 import "C"
 
+type PoolID struct {
+	labelOrUUID
+}
+
 type poolBaseCmd struct {
 	daosCmd
 	poolUUID uuid.UUID
@@ -38,9 +42,9 @@ type poolBaseCmd struct {
 	cPoolHandle C.daos_handle_t
 
 	SysName  string `long:"sys-name" short:"G" description:"DAOS system name"`
-	PoolFlag string `long:"pool" description:"pool UUID (deprecated; use positional arg)"`
+	PoolFlag PoolID `long:"pool" description:"pool UUID (deprecated; use positional arg)"`
 	Args     struct {
-		Pool string `positional-arg-name:"<pool name or UUID>"`
+		Pool PoolID `positional-arg-name:"<pool name or UUID>"`
 	} `positional-args:"yes"`
 }
 
@@ -48,16 +52,25 @@ func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
 	return (*C.uchar)(unsafe.Pointer(&cmd.poolUUID[0]))
 }
 
-func (cmd *poolBaseCmd) resolvePool(id string) (err error) {
-	// TODO: Resolve label.
+func (cmd *poolBaseCmd) PoolID() PoolID {
+	if !cmd.PoolFlag.Empty() {
+		return cmd.PoolFlag
+	}
+	return cmd.Args.Pool
+}
 
-	cmd.poolUUID, err = uuid.Parse(id)
-	if err != nil {
-		return errors.Wrapf(err,
-			"unable to resolve pool id %q as UUID", id)
+func (cmd *poolBaseCmd) resolvePool(id PoolID) error {
+	// TODO: Resolve label.
+	if id.HasLabel() {
+		return errors.New("no support for pool labels yet")
 	}
 
-	return
+	if !id.HasUUID() {
+		return errors.New("no pool UUID provided")
+	}
+	cmd.poolUUID = id.UUID
+
+	return nil
 }
 
 func (cmd *poolBaseCmd) connectPool() error {
@@ -74,7 +87,7 @@ func (cmd *poolBaseCmd) connectPool() error {
 }
 
 func (cmd *poolBaseCmd) disconnectPool() {
-	cmd.log.Debugf("disconnecting pool %s", cmd.poolUUID)
+	cmd.log.Debugf("disconnecting pool %s", cmd.PoolID())
 	rc := C.daos_pool_disconnect(cmd.cPoolHandle, nil)
 	if err := daosError(rc); err != nil {
 		cmd.log.Errorf("pool disconnect failed: %s", err)
@@ -82,17 +95,14 @@ func (cmd *poolBaseCmd) disconnectPool() {
 }
 
 func (cmd *poolBaseCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (func(), error) {
-	if cmd.PoolFlag != "" {
-		cmd.Args.Pool = cmd.PoolFlag
-	}
-	if err := cmd.resolvePool(cmd.Args.Pool); err != nil {
+	if err := cmd.resolvePool(cmd.PoolID()); err != nil {
 		return nil, errors.Wrapf(err,
-			"failed to resolve pool ID %q", cmd.Args.Pool)
+			"failed to resolve pool ID %q", cmd.PoolID())
 	}
 
 	if err := cmd.connectPool(); err != nil {
 		return nil, errors.Wrapf(err,
-			"failed to connect to pool %s", cmd.poolUUID)
+			"failed to connect to pool %s", cmd.PoolID())
 	}
 
 	if ap != nil {
@@ -183,7 +193,7 @@ func (cmd *poolContainersListCmd) Execute(_ []string) error {
 	contIDs, err := poolListContainers(cmd.cPoolHandle)
 	if err != nil {
 		return errors.Wrapf(err,
-			"unable to list containers for pool %s", cmd.poolUUID)
+			"unable to list containers for pool %s", cmd.PoolID())
 	}
 
 	if cmd.jsonOutputEnabled() {
