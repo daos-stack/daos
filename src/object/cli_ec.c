@@ -1597,9 +1597,8 @@ obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 	 * request to server to query it, and then retry the IO request to do
 	 * the real fetch. If only with single-value, need not size_fetch ahead.
 	 */
-	if (reasb_req->orr_size_fetch) {
+	if (reasb_req->orr_size_fetched) {
 		reasb_req->orr_size_fetch = 0;
-		reasb_req->orr_size_fetched = 1;
 		iods = reasb_req->orr_uiods;
 	} else if (!update) {
 		for (i = 0; i < iod_nr; i++) {
