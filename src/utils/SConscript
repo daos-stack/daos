@@ -8,7 +8,7 @@ def scons():
     if not prereqs.client_requested():
         return
 
-    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
+    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart', 'dl']
 
     daos_build.add_build_rpath(env)
     daos_build.add_build_rpath(base_env)
