@@ -196,6 +196,7 @@ class OSAOfflineParallelTest(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
+    @skipForTicket("DAOS-7247")
     def test_osa_offline_parallel_test(self):
         """
         JIRA ID: DAOS-4752
@@ -210,7 +211,6 @@ class OSAOfflineParallelTest(OSAUtils):
         self.log.info("Offline Parallel Test: Basic Test")
         self.run_offline_parallel_test(1, data=True)
 
-    @skipForTicket("DAOS-7247")
     def test_osa_offline_parallel_test_without_csum(self):
         """
         JIRA ID: DAOS-7161
