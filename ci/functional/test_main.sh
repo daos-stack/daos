@@ -8,6 +8,7 @@ if [ -z "$TEST_TAG" ]; then
 fi
 
 test_tag="$TEST_TAG"
+test_repeat="${TEST_REPEAT:-1}"
 
 tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-"$NODE_COUNT")
 first_node=${NODELIST%%,*}
@@ -41,7 +42,8 @@ if $TEST_RPMS; then
       "TEST_TAG=\"$test_tag\"                        \
        TNODES=\"$tnodes\"                            \
        FTEST_ARG=\"$FTEST_ARG\"                      \
+       TEST_REPEAT=\"$test_repeat\"                  \
        $(cat ci/functional/test_main_node.sh)"
 else
-    ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
+    ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG" "$test_repeat"
 fi
