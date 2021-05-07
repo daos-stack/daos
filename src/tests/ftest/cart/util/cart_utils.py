@@ -284,7 +284,7 @@ class CartTest(TestWithoutServers):
                   r"valgrind.%q\{PMIX_ID\}.memcheck " + \
                   "--fair-sched=try --partial-loads-ok=yes " + \
                   "--leak-check=yes --gen-suppressions=all " + \
-                  "--suppressions=" + self.supp_file + \
+                  "--suppressions=" + self.supp_file + " " + \
                   "--show-reachable=yes "
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
