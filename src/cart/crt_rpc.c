@@ -1831,9 +1831,6 @@ out:
 	return rc;
 }
 
-typedef void
-(*crt_hlc_error_cb) (void *arg);
-
 int
 crt_register_hlc_error_cb(crt_hlc_error_cb event_handler, void *arg)
 {
