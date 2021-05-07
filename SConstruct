@@ -50,11 +50,12 @@ def run_checks(env, p):
     config = Configure(cenv)
 
     if config.CheckHeader('stdatomic.h'):
+        config.Finish()
         env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
     else:
+        config.Finish()
         p.require(env, 'openpa', headers_only=True)
 
-    config.Finish()
 
 def get_version():
     """ Read version from VERSION file """
