@@ -209,7 +209,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
-		D_GOTO(out_free, rc = ENOMEM);
+		D_GOTO(out, rc = ENOMEM);
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
@@ -252,12 +252,12 @@ out_release:
 	dfs_release(ie->ie_obj);
 out_free:
 	D_FREE(ie);
+out:
 	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
 		struct fuse_entry_param entry = {};
 
 		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
 		DFUSE_REPLY_ENTRY(parent, req, entry);
-
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	}

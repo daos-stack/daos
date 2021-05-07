@@ -170,9 +170,9 @@ read with the following command.
 $ daos container info --path <path to entry point>
 ```
 
-### Enabling Caching
+### Caching
 
-For perforamnce reasons caching will be enabled by default in DFuse, including both
+For performance reasons caching will be enabled by default in DFuse, including both
 data and metadata caching.  It is possible to tune these settings both at a high level
 on the DFuse command line and fine grained control via container attributes.
 
@@ -184,6 +184,11 @@ The following types of data will be cached by default.
 * Kernel caching of file contents
 * Readahead in dfuse and inserting data into kernel cache
 * MMAP write optimization
+
+!note
+Caching is enabled by default in dfuse. This might cause some parallel
+applications to fail. Please disable caching if you experience this or want
+up to date data sharing between nodes.
 
 To selectively control caching within a container the following container
 attributes should be used, if any attribute is set then the rest are assumed

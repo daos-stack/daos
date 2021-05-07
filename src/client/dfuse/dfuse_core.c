@@ -477,6 +477,17 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
 			       "dfuse-ndentry-time",
 			       "dfuse-data-cache"};
 
+#define ATTR_TIME_INDEX		0
+#define ATTR_DENTRY_INDEX	1
+#define ATTR_DENTRY_DIR_INDEX	2
+#define ATTR_NDENTRY_INDEX	3
+#define ATTR_DATA_CACHE_INDEX	4
+
+/* Attribute values are of the form "120M", so the buffer does not need to be
+ * large.
+ */
+#define ATTR_VALUE_LEN 128
+
 /* Setup caching attributes for a container.
  *
  * These are read from pool attributes, or can be overwritten on the command
@@ -498,12 +509,12 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 	bool		have_dentry_dir = false;
 	bool		have_attr = false;
 
-	D_ALLOC(buff, 128);
+	D_ALLOC(buff, ATTR_VALUE_LEN);
 	if (buff == NULL)
 		return ENOMEM;
 
 	for (i = 0; i < ATTR_COUNT; i++) {
-		size = 128;
+		size = ATTR_VALUE_LEN - 1;
 
 		rc = daos_cont_get_attr(dfc->dfs_coh, 1, &cont_attr_names[i],
 					(void * const*)&buff,
@@ -517,7 +528,7 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 		}
 		have_attr = true;
 
-		if (i == 4) {
+		if (i == ATTR_DATA_CACHE_INDEX) {
 			if (strncmp(buff, "on", size) == 0) {
 				dfc->dfc_data_caching = true;
 			} else if (strncmp(buff, "off", size) == 0) {
@@ -531,7 +542,9 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 			continue;
 		}
 
-		/* DAOS-6709 */
+		/* Ensure the character after the fetch string is zero, in case
+		 * of non-null terminated strings.
+		 */
 		buff[size] = '\0';
 
 		rc = dfuse_parse_time(buff, size, &value);
@@ -542,15 +555,15 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 		}
 		DFUSE_TRA_INFO(dfc, "setting '%s' is %u",
 			       cont_attr_names[i], value);
-		if (i == 0) {
+		if (i == ATTR_TIME_INDEX) {
 			dfc->dfc_attr_timeout = value;
-		} else if (i == 1) {
+		} else if (i == ATTR_DENTRY_INDEX) {
 			have_dentry = true;
 			dfc->dfc_dentry_timeout = value;
-		} else if (i == 2) {
+		} else if (i == ATTR_DENTRY_DIR_INDEX) {
 			have_dentry_dir = true;
 			dfc->dfc_dentry_dir_timeout = value;
-		} else if (i == 3) {
+		} else if (i == ATTR_NDENTRY_INDEX) {
 			dfc->dfc_ndentry_timeout = value;
 		}
 	}
