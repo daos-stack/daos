@@ -34,7 +34,7 @@ server_config:
         scm_class: dcpm
         scm_list: [/dev/pmem0]
         bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     transport_config:
       allow_insecure: True
 agent_config:
@@ -60,9 +60,10 @@ pool_reserved:
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    oclass: SX
     control_method: daos
 container_reserved:
-    oclass: OC_RP_2G1
+    oclass: OC_SX
     akey_size: 5
     dkey_size: 5
     data_size: 4096
@@ -90,12 +91,6 @@ smoke:
     name: soak_smoke
     # smoke test timeout in hours
     test_timeout: 0.4
-    # maximum timeout for a single job in test in minutes
-    job_timeout: 10
-    nodesperjob:
-        - 1
-    taskspernode:
-        - 1
     joblist:
         - ior_smoke
         - fio_smoke
@@ -105,6 +100,12 @@ smoke:
 # IOR params -a DFS and -a MPIIO
 # sequential
 ior_smoke:
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 10
+    nodesperjob:
+        - 1
+    taskspernode:
+        - 1
     api:
         - DFS
         - MPIIO
@@ -123,38 +124,37 @@ ior_smoke:
     segment_count: 1
     dfs_oclass:
         - 'SX'
-        - 'RP_2G1'
 fio_smoke:
-  names:
-      - global
-      - test
-  global:
-    directory: "/tmp/daos_dfuse/"
-    ioengine: 'libaio'
-    thread: 1
-    group_reporting: 1
-    direct: 1
-    verify: 'crc64'
-    iodepth: 16
-  test:
+    # maximum timeout for a single job in test in minutes
+    names:
+        - global
+        - test
+    global:
+        directory: "/tmp/daos_dfuse/"
+        ioengine: 'libaio'
+        thread: 1
+        group_reporting: 1
+        direct: 1
+        verify: 'crc64'
+        iodepth: 16
+    test:
     numjobs: 1
-  soak:
-    blocksize:
-        - '1M'
-    size:
-        - '1G'
-    rw:
-        - 'rw'
-        - 'randrw'
-    oclass:
-        - 'SX'
-        - 'RP_2G1'
+    soak:
+        blocksize:
+            - '1M'
+        size:
+            - '1G'
+        rw:
+            - 'rw'
+            - 'randrw'
+        oclass:
+            - 'SX'
 daos_racer:
-  runtime: 120
-  container:
-      type: POSIX
-      control_method: daos
-      oclass: 'SX'
+    runtime: 120
+    container:
+        type: POSIX
+        control_method: daos
+        oclass: 'SX'
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_direct_io: True
@@ -166,3 +166,4 @@ events:
 monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
+    - "ps -C daos_engine -o %mem,%cpu,cmd"
