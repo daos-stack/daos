@@ -26,14 +26,18 @@ class EcOfflineRebuild(ErasureCodeIor):
                   kill single server, Wait to finish rebuild,
                   verify all IOR read data and verified.
 
-        :avocado: tags=all,hw,large,ib2,full_regression
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_offline_rebuild
+        :avocado: tags=ec_offline_rebuild_array
+
         """
         # Write IOR data set with different EC object and different sizes
         self.ior_write_dataset()
 
         # Kill the last server rank
-        self.get_dmg_command().system_stop(True, self.server_count - 1)
+        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log,
+                                           force=True)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True)
@@ -45,7 +49,8 @@ class EcOfflineRebuild(ErasureCodeIor):
         self.ior_read_dataset()
 
         # Kill the another server rank
-        self.get_dmg_command().system_stop(True, self.server_count - 2)
+        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
+                                           force=True
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True)
