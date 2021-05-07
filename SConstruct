@@ -39,7 +39,7 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
-def run_checks(env):
+def run_checks(env, p):
     """Run all configure time checks"""
     if GetOption('help') or GetOption('clean'):
         return
@@ -51,6 +51,8 @@ def run_checks(env):
 
     if config.CheckHeader('stdatomic.h'):
         env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
+    else:
+        p.require(env, 'openpa', headers_only=True)
 
     config.Finish()
 
@@ -392,10 +394,10 @@ def scons(): # pylint: disable=too-many-locals
     if env['CC'] == 'clang':
         il_env = env.Clone()
         il_env['CC'] = 'gcc'
-        run_checks(env)
-        run_checks(il_env)
+        run_checks(env, prereqs)
+        run_checks(il_env, prereqs)
     else:
-        run_checks(env)
+        run_checks(env, prereqs)
         il_env = env.Clone()
 
     res = GetOption('deps_only')
