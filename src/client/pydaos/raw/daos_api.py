@@ -311,32 +311,6 @@ class DaosPool():
         """Query information of storage targets within a DAOS pool."""
         raise NotImplementedError("Target_query not yet implemented in C API.")
 
-    def destroy(self, force, cb_func=None):
-        """Destroy DAOS pool."""
-        if not len(self.uuid) == 16 or self.attached == 0:
-            raise DaosApiError("No existing UUID for pool.")
-
-        c_force = ctypes.c_uint(force)
-        func = self.context.get_function('destroy-pool')
-
-        if cb_func is None:
-            ret = func(self.uuid, self.group, c_force, None)
-            if ret != 0:
-                raise DaosApiError("Pool destroy returned non-zero. RC: {0}"
-                                   .format(ret))
-            else:
-                self.attached = 0
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, c_force, event]
-
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func, self))
-            thread.start()
-
     def set_svc(self, rank):
         """Set svc.
 
