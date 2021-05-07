@@ -61,31 +61,6 @@ uint64_t crt_hlc_get(void)
 	return ret;
 }
 
-typedef void
-(*crt_hlc_error_cb) (void *arg);
-
-int
-crt_register_hlc_error_cb(crt_hlc_error_cb event_handler, void *arg)
-{
-	int rc = 0;
-
-	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
-	crt_plugin_gdata.hlc_error_cb = event_handler;
-	crt_plugin_gdata.hlc_error_cb_arg = arg;
-	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
-
-	return rc;
-}
-
-void
-crt_trigger_hlc_error_cb(void)
-{
-	if (crt_plugin_gdata.hlc_error_cb) {
-		crt_plugin_gdata.hlc_error_cb(
-					crt_plugin_gdata.hlc_error_cb_arg);
-	}
-}
-
 int crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset)
 {
 	uint64_t pt = crt_hlc_localtime_get();
