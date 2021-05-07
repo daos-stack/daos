@@ -512,8 +512,7 @@ class SoakTestBase(TestWithServers):
         obj_class = self.params.get("oclass", "/run/container_reserved/*")
         if harassers:
             run_harasser = True
-            self.log.info("<< Initial harasser list = %s>>", " ".join(
-                [harasser for harasser in harassers]))
+            self.log.info("<< Initial harasser list = %s>>", harassers)
             harasserlist = harassers[:]
         # Create the reserved pool with data
         # self.pool is a list of all the pools used in soak

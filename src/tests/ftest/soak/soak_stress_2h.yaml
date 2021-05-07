@@ -137,9 +137,9 @@ mdtest_stress:
     flags: '-L -F -N 1 -P -v'
     write_bytes:
         - 3901
-    read_bytes: 
+    read_bytes:
         - 3901
-    depth: 
+    depth:
         - 5
     dfs_oclass:
         - 'SX'

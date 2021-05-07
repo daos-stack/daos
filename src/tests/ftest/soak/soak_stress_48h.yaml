@@ -176,7 +176,7 @@ mdtest_stress:
         - 3901
     read_bytes:
         - 3901
-    depth: 
+    depth:
         - 10
         - 0
     dfs_oclass:

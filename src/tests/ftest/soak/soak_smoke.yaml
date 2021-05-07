@@ -175,9 +175,9 @@ mdtest_smoke:
     flags: '-L -F -N 1 -P -v'
     write_bytes:
         - 4096
-    read_bytes: 
+    read_bytes:
         - 4096
-    depth: 
+    depth:
         - 0
     dfs_oclass:
         - 'SX'
