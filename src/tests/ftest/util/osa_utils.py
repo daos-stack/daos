@@ -49,6 +49,9 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.test_during_aggregation = False
         self.test_during_rebuild = False
         self.test_with_checksum = True
+        # By default, test_with_rf is set to False.
+        # It is upto invidual test to enable it.
+        self.test_with_rf = False
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -412,6 +415,8 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.pool = pool
         self.ior_cmd.get_params(self)
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
+        self.log.info("Ravi")
+        self.log.info(self.test_with_rf)
         self.ior_cmd.dfs_oclass.update(oclass)
         self.ior_cmd.dfs_dir_oclass.update(oclass)
         if single_cont_read is True:
@@ -432,6 +437,17 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.transfer_size.update(test[2])
         self.ior_cmd.block_size.update(test[3])
         self.ior_cmd.flags.update(flags)
+        self.log.info("Ravi")
+        self.log.info(self.test_with_rf)
+        # Update oclass settings if using redundancy factor
+        # and self.test_with_rf is True.
+        if self.test_with_rf is True and \
+           "rf" in self.container.properties.value:
+            self.log.info(
+                "Detected container redundancy factor: %s",
+                self.container.properties.value)
+            self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
+            self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
         try:
             self.run_ior_with_pool(create_pool=False, create_cont=False,
                                    fail_on_warning=fail_on_warning)
