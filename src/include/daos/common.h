@@ -46,7 +46,7 @@
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
 #define DF_BOOL "%s"
 #define DP_BOOL(b) ((b) ? "true" : "false")
-#define DF_IOV "<%p, %lu/%lu>"
+#define DF_IOV "<%p, %zu/%zu>"
 #define DP_IOV(i) (i)->iov_buf, (i)->iov_len, (i)->iov_buf_len
 #define MAX_TREE_ORDER_INC	7
 

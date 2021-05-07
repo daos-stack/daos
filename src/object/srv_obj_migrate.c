@@ -680,15 +680,28 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			D_DEBUG(DB_TRACE, "update start %d cnt %d\n",
 				start, iod_cnt);
 
-			rc = daos_csummer_alloc_iods_csums_with_packed(
-				csummer,
-				&mrone->mo_iods[start],
-				iod_cnt, &tmp_csum_iov,
-				&iod_csums);
-			if (rc != 0) {
-				D_ERROR("setting up iods csums failed: "
-						DF_RC"\n", DP_RC(rc));
-				break;
+			if (DAOS_OC_IS_EC(oca)) {
+				rc = daos_csummer_calc_iods(csummer,
+					&sgls[start],  &mrone->mo_iods[start],
+					NULL, iod_cnt, false, NULL, 0,
+					&iod_csums);
+				if (rc != 0) {
+					D_ERROR("Error calculating checksums: "
+						DF_RC"\n",
+						DP_RC(rc));
+					break;
+				}
+			} else {
+				rc = daos_csummer_alloc_iods_csums_with_packed(
+					csummer,
+					&mrone->mo_iods[start],
+					iod_cnt, &tmp_csum_iov,
+					&iod_csums);
+				if (rc != 0) {
+					D_ERROR("setting up iods csums failed: "
+							DF_RC"\n", DP_RC(rc));
+					break;
+				}
 			}
 
 			rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
@@ -720,6 +733,29 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				DP_RC(rc), fetch ? "FETCHED" : "INLINE");
 			D_GOTO(out, rc);
 		}
+
+		if (DAOS_OC_IS_EC(oca)) {
+			rc = daos_csummer_calc_iods(csummer,
+						    &sgls[start],  &mrone->mo_iods[start],
+						    NULL, iod_cnt, false, NULL, 0,
+						    &iod_csums);
+			if (rc != 0) {
+				D_ERROR("Error calculating checksums: "
+						DF_RC"\n",
+					DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+		} else {
+			rc = daos_csummer_alloc_iods_csums_with_packed(
+				csummer, &mrone->mo_iods[start],
+				iod_cnt, &tmp_csum_iov, &iod_csums);
+			if (rc != 0) {
+				D_ERROR("setting up iods csums failed: "
+						DF_RC"\n", DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+		}
+
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_update_epoch,
 				    mrone->mo_version,
@@ -836,7 +872,8 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 		rc = daos_csummer_calc_iods(csummer, &tmp_sgl, iod, NULL, 1,
 					    false, NULL, 0, &iod_csums);
 		if (rc != 0) {
-			D_ERROR("Error allocating iods");
+			D_ERROR("Error calculating checksums: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 
