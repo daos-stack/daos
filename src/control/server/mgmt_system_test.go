@@ -241,7 +241,7 @@ func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
 }
 
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
-	eventEngineDied := events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit)
+	eventEngineDied := mockEngineDiedEvt(t)
 
 	for name, tc := range map[string]struct {
 		nilReq        bool

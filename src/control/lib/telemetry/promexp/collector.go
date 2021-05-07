@@ -43,17 +43,21 @@ type (
 	labelMap map[string]string
 )
 
-func NewEngineSource(parent context.Context, idx uint32, rank uint32) (*EngineSource, error) {
+func NewEngineSource(parent context.Context, idx uint32, rank uint32) (*EngineSource, func(), error) {
 	ctx, err := telemetry.Init(parent, idx)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to init telemetry")
+		return nil, nil, errors.Wrap(err, "failed to init telemetry")
+	}
+
+	cleanupFn := func() {
+		telemetry.Detach(ctx)
 	}
 
 	return &EngineSource{
 		ctx:   ctx,
 		Index: idx,
 		Rank:  rank,
-	}, nil
+	}, cleanupFn, nil
 }
 
 func defaultCollectorOpts() *CollectorOpts {
