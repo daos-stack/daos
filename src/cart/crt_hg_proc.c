@@ -324,6 +324,7 @@ do {									\
 									\
 	if (rhse_now >= next_hlc_sync_err_report) {			\
 		D_CRIT(fmt, ## __VA_ARGS__);				\
+		crt_trigger_hlc_error_cb();				\
 		next_hlc_sync_err_report = rhse_now + 3600 /* 1h */;	\
 	}								\
 } while (0)
@@ -399,11 +400,11 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 				    rpc_priv->crp_req_hdr.cch_hlc,
 				    clock_offset,
 				    rpc_priv->crp_req_hdr.cch_src_rank);
+
 		/* Fail all but SWIM requests. */
-		if (!crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc)) {
-			crt_trigger_hlc_error_cb();
+		if (!crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc))
 			rpc_priv->crp_fail_hlc = 1;
-		}
+
 		rc = 0;
 	}
 
@@ -639,10 +640,8 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 							    clock_offset,
 							    hdr->cch_dst_rank);
 					/* Fail all but SWIM replies. */
-					if (!crt_opc_is_swim(hdr->cch_opc)) {
-						crt_trigger_hlc_error_cb();
+					if (!crt_opc_is_swim(hdr->cch_opc))
 						rpc_priv->crp_fail_hlc = 1;
-					}
 
 					rc = 0;
 				}
