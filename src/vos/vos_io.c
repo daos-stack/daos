@@ -689,7 +689,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		D_GOTO(out, rc = (rc == 0 ? -DER_INPROGRESS : rc));
 
 	if (rc == -DER_NONEXIST) {
-		rbund.rb_rsize = 0;
+		rbund.rb_gsize = 0;
 		bio_addr_set_hole(&biov.bi_addr, 1);
 		rc = 0;
 	} else if (rc != 0) {
@@ -699,7 +699,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		 * punch when incarnation log is available
 		 */
 		rc = 0;
-		rbund.rb_rsize = 0;
+		rbund.rb_gsize = 0;
 		bio_addr_set_hole(&biov.bi_addr, 1);
 	} else if (key.sk_epoch > epr->epr_hi) {
 		/* Uncertainty violation */
