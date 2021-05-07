@@ -147,7 +147,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                 temp = output["response"]["members"][i]["addr"]
                 ip_addr = temp.split(":")
                 temp = output["response"]["members"][i]["fabric_uri"]
-                port_num = temp.split(":")            
+                port_num = temp.split(":")
                 return ip_addr[0], port_num[2]
         return ip_addr[0], port_num[0]
 
@@ -158,10 +158,10 @@ class OSAUtils(MdtestBase, IorTestBase):
         Args:
             ip_addr (str): IP address of the daos server.
                            Defaults to None.
-            port_number (str) : Port number the daos server. 
+            port_number (str) : Port number the daos server.
         """
         if ip_addr is None or port_num is None:
-            self.log.info("ip_addr : %s port_number: %s",ip_addr, port_num)
+            self.log.info("ip_addr : %s port_number: %s", ip_addr, port_num)
             self.fail("No IP Address or Port number provided")
         else:
             expected_ib0_ports = ["31317", "31416"]
@@ -171,7 +171,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             elif port_num in expected_ib1_ports:
                 port_val = 1
             else:
-                self.log.info("port_number: %s",port_num)
+                self.log.info("port_number: %s", port_num)
                 self.fail("Invalid port number")
             cmd = "/usr/bin/ssh {} -oStrictHostKeyChecking=no \
                   sudo rm -rf /mnt/daos{}/{}/vos-*". \
