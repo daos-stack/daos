@@ -82,6 +82,7 @@ struct cmd_args_s {
 	char			*path;		/* --path cont namespace */
 	char			*src;		/* --src path for fs copy */
 	char			*dst;		/* --dst path for fs copy */
+	char			*preserve;	/* --path to metadata file */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
 	daos_size_t		chunk_size;	/* --chunk_size of cont objs */
@@ -174,6 +175,15 @@ int pool_autotest_hdlr(struct cmd_args_s *ap);
 /* TODO: implement these pool op functions
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
+
+/* general datamover operations */
+void dm_cont_free_usr_attrs(int n, char ***_names, void ***_buffers,
+			    size_t **_sizes);
+int dm_cont_get_usr_attrs(daos_handle_t coh, int *_n, char ***_names,
+			  void ***_buffers, size_t **_sizes);
+int dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props,
+			  bool get_oid);
+int dm_copy_usr_attrs(daos_handle_t src_coh, daos_handle_t dst_coh);
 
 /* filesystem operations */
 int fs_copy_hdlr(struct cmd_args_s *ap);

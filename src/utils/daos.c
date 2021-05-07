@@ -548,6 +548,7 @@ args_free(struct cmd_args_s *ap)
 	D_FREE(ap->path);
 	D_FREE(ap->src);
 	D_FREE(ap->dst);
+	D_FREE(ap->preserve);
 	D_FREE(ap->snapname_str);
 	D_FREE(ap->epcrange_str);
 
@@ -577,6 +578,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"path",	required_argument,	NULL,	'd'},
 		{"src",		required_argument,	NULL,	'S'},
 		{"dst",		required_argument,	NULL,	'D'},
+		{"preserve",	required_argument,	NULL,	'm'},
 		{"type",	required_argument,	NULL,	't'},
 		{"oclass",	required_argument,	NULL,	'o'},
 		{"chunk_size",	required_argument,	NULL,	'z'},
@@ -717,6 +719,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		case 'D':
 			D_STRNDUP(ap->dst, optarg, strlen(optarg));
 			if (ap->dst == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'm':
+			D_STRNDUP(ap->preserve, optarg, strlen(optarg));
+			if (ap->preserve == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 't':
@@ -1326,6 +1333,7 @@ do { \
 	" filesystem copy options (copy):\n" \
 	"	--src=daos://<pool/cont> | <path>\n" \
 	"	--dst=daos://<pool/cont> | <path>\n" \
+	"	--preserve=<filename>\n" \
 	"	\t type is daos, only specified if pool/cont used\n"); \
 	fprintf(stream, "\n"); \
 } while (0)
