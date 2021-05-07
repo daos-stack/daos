@@ -1183,10 +1183,9 @@ def archive_config_files(avocado_logs_dir, args):
     print("Archiving config files from {} in {}".format(host_list, destination))
 
     # Copy any config files
-    base_dir = get_build_environment(args)["PREFIX"]
-    configs_dir = get_temporary_directory(args, base_dir)
+    configs_dir = os.path.join(os.sep, "etc", "daos")
     task = archive_files(
-        destination, host_list, "{}/*_*_*.yaml".format(configs_dir), False,
+        destination, host_list, "{}/daos_*.yml".format(configs_dir), False,
         args)
 
     status = 0
