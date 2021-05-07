@@ -14,8 +14,6 @@ from command_utils import ExecutableCommand
 from job_manager_utils import Orterun
 from general_utils import get_log_file
 
-
-
 class CartSelfTest(TestWithServers):
     """Runs a few variations of CaRT self-test.
 
@@ -93,7 +91,7 @@ class CartSelfTest(TestWithServers):
         :avocado: tags=all,pr,daily_regression,smoke,unittest,tiny,cartselftest
         """
         # Setup the orterun command
-        orterun = Orterun(SelfTest(self.bin))
+        orterun = Orterun(self.SelfTest(self.bin))
         orterun.map_by.update(None, "orterun/map_by")
         orterun.enable_recovery.update(False, "orterun/enable_recovery")
 
