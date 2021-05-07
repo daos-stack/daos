@@ -2890,7 +2890,7 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		size_t	realloc_elems = (ap->conts_len == 0) ? 1 :
 					ap->conts_len * 2;
 
-		D_REALLOC_ARRAY(ptr, ap->conts, realloc_elems);
+		D_REALLOC_ARRAY(ptr, ap->conts, ap->conts_len, realloc_elems);
 		if (ptr == NULL)
 			return -DER_NOMEM;
 		ap->conts = ptr;

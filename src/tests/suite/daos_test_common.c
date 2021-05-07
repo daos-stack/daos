@@ -824,6 +824,13 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	assert_int_equal(rc, 0);
 }
 
+int
+daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
+		   const char *value)
+{
+	return dmg_pool_set_prop(dmg_config_file, name, value, pool_uuid);
+}
+
 void
 daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 		    const char *dmg_config,

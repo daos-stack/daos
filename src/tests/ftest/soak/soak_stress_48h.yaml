@@ -102,6 +102,7 @@ ior_stress:
         - 8
     # used for performance benchmarks
     taskspernode:
+        - 1
         - 16
         - 32
     api:

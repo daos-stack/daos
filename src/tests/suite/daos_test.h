@@ -142,7 +142,8 @@ typedef struct {
 	uint64_t		fail_value;
 	uint32_t		overlap:1,
 				not_check_result:1,
-				idx_no_jump:1;
+				idx_no_jump:1,
+				no_rebuild:1;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
@@ -399,6 +400,8 @@ void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 void daos_reint_server(const uuid_t pool_uuid, const char *grp,
 		       const char *dmg_config,
 		       d_rank_t rank);
+int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
+		       const char *value);
 
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,

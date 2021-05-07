@@ -444,7 +444,6 @@ class SoakTestBase(TestWithServers):
 
         """
         job_script_list = []
-        # unique numbers per pass
         # Update the remote log directories from new loop/pass
         self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
         self.test_log_dir = self.log_dir + "/pass" + str(self.loop)

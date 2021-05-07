@@ -27,7 +27,7 @@ RUN apt-get -y update &&						\
 	python3-dev golang-go git libyaml-dev python3-tabulate		\
 	python3-pyxattr openjdk-8-jdk maven libipmctl-dev		\
 	libcunit1-dev libopenmpi-dev numactl doxygen libunwind-dev	\
-	python3-junit.xml sudo &&					\
+	python3-junit.xml sudo pciutils &&				\
     apt-get clean all
 
 # hack the default shell to bash instead of dash
@@ -108,7 +108,6 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 

@@ -1,11 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from daos_core_base import DaosCoreBase
-
 
 class DaosCoreTest(DaosCoreBase):
     # pylint: disable=too-many-ancestors,too-many-public-methods
