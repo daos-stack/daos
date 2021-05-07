@@ -14,15 +14,17 @@ container handle where the namespace will be located.
 When the file system is created (i.e. when the DAOS container is initialized as
 an encapsulated namespace), a reserved object (with a predefined object ID) will
 be added to the container and will record superblock (SB) information about the
-namespace. The SB object is replicated with object class `OC_RP_XSF`, and has the
-reserved OID 0.0.
+namespace. The SB object has the reserved OID 0.0. The object class is
+determined either through the oclass parameter passed to container creation or
+through automatic selection based on container properties such as the redundancy
+factor.
 
 The SB object contains an entry with a magic value to indicate it is a POSIX
 filesystem. The SB object will contain also an entry to the root directory of
 the filesystem, which will be another reserved object with a predefined OID
-(1.0), replicated with object class `OC_RP_XSF`, and will have the same
-representation as a directory (see next section). The OID of the root id will be
-inserted as an entry in the superblock object.
+(1.0) and will have the same representation as a directory (see next
+section). The OID of the root id will be inserted as an entry in the superblock
+object.
 
 The SB will look like this:
 
