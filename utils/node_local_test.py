@@ -1547,7 +1547,7 @@ class posix_tests():
     def test_cont_clone(self):
         """Verify that cloning a container works
 
-        This extents cont_copy, to also clone it afterwards.
+        This extends cont_copy, to also clone it afterwards.
         """
 
         # Create a temporary directory, with one file into it and copy it into
@@ -1568,7 +1568,8 @@ class posix_tests():
         print(rc)
         assert rc.returncode == 0
 
-        # Now create a container and do a object based copy.
+        # Now create a container uuid and do an object based copy.
+        # The daos command will create the target container on demand.
         container = str(uuid.uuid4())
         cmd = ['container',
                'clone',
