@@ -138,6 +138,8 @@ class OSAUtils(MdtestBase, IorTestBase):
             ip_addr (str) : IPAddress for the rank.
             port_num (str) : Port number for the rank.
         """
+        ip_addr = [None]
+        port_num = [None]
         output = self.dmg_command.system_query()
         members_length = len(output["response"]["members"])
         for i in range(0, members_length):
@@ -147,6 +149,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                 temp = output["response"]["members"][i]["fabric_uri"]
                 port_num = temp.split(":")            
                 return ip_addr[0], port_num[2]
+        return ip_addr[0], port_num[0]
 
     @fail_on(CommandFailure)
     def remove_pool_dir(self, ip_addr=None, port_num=None):
