@@ -1286,8 +1286,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "prep shutdown failed",
-								// FIXME: why does this not fail?
-								State: stateString(system.MemberStateJoined),
+								State: stateString(system.MemberStateErrored),
 							},
 							{
 								Rank: 1, State: stateString(system.MemberStateStopping),
@@ -1300,7 +1299,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				{
 					Rank: 0, Action: "prep shutdown", Errored: true,
 					Msg: "prep shutdown failed", Addr: common.MockHostAddr(1).String(),
-					State: stateString(system.MemberStateJoined),
+					State: stateString(system.MemberStateErrored),
 				},
 				{
 					Rank: 1, Action: "prep shutdown", Addr: common.MockHostAddr(1).String(),
@@ -1308,7 +1307,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				},
 			},
 			expMembers: system.Members{
-				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 0, 1, "errored"), // updated to err on prep fail if not forced
 				mockMember(t, 1, 1, "stopping"),
 			},
 			expDispatched: []*events.RASEvent{
@@ -1321,93 +1320,6 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				mockMember(t, 0, 1, "joined"),
 				mockMember(t, 1, 1, "joined"),
 				mockMember(t, 3, 2, "joined"),
-			},
-			mResps: []*control.HostResponse{
-				{
-					Addr: common.MockHostAddr(1).String(),
-					Message: &mgmtpb.SystemStopResp{
-						Results: []*sharedpb.RankResult{
-							{
-								Rank: 0, Errored: true, Msg: "prep shutdown failed",
-								State: stateString(system.MemberStateJoined),
-							},
-							{
-								Rank: 1, State: stateString(system.MemberStateStopping),
-							},
-						},
-					},
-				},
-			},
-			expResults: []*sharedpb.RankResult{
-				{
-					Rank: 0, Action: "prep shutdown", Errored: true,
-					Msg: "prep shutdown failed", Addr: common.MockHostAddr(1).String(),
-					State: stateString(system.MemberStateJoined),
-				},
-				{
-					Rank: 1, Action: "prep shutdown", Addr: common.MockHostAddr(1).String(),
-					State: stateString(system.MemberStateStopping),
-				},
-			},
-			expMembers: system.Members{
-				mockMember(t, 0, 1, "joined"),
-				mockMember(t, 1, 1, "stopping"),
-				mockMember(t, 3, 2, "joined"),
-			},
-			expAbsentRanks: "9",
-			expDispatched: []*events.RASEvent{
-				newSystemStopFailedEvent("prep shutdown", "failed rank 0"),
-			},
-		},
-		"filtered and oversubscribed hosts prep fail": {
-			req: &mgmtpb.SystemStopReq{Hosts: "10.0.0.[1,3]"},
-			members: system.Members{
-				mockMember(t, 0, 1, "joined"),
-				mockMember(t, 1, 1, "joined"),
-				mockMember(t, 3, 2, "joined"),
-			},
-			mResps: []*control.HostResponse{
-				{
-					Addr: common.MockHostAddr(1).String(),
-					Message: &mgmtpb.SystemStopResp{
-						Results: []*sharedpb.RankResult{
-							{
-								Rank: 0, Errored: true, Msg: "prep shutdown failed",
-								State: stateString(system.MemberStateJoined),
-							},
-							{
-								Rank: 1, State: stateString(system.MemberStateStopping),
-							},
-						},
-					},
-				},
-			},
-			expResults: []*sharedpb.RankResult{
-				{
-					Rank: 0, Action: "prep shutdown", Errored: true,
-					Msg: "prep shutdown failed", Addr: common.MockHostAddr(1).String(),
-					State: stateString(system.MemberStateJoined),
-				},
-				{
-					Rank: 1, Action: "prep shutdown", Addr: common.MockHostAddr(1).String(),
-					State: stateString(system.MemberStateStopping),
-				},
-			},
-			expMembers: system.Members{
-				mockMember(t, 0, 1, "joined"),
-				mockMember(t, 1, 1, "stopping"),
-				mockMember(t, 3, 2, "joined"),
-			},
-			expAbsentHosts: "10.0.0.3",
-			expDispatched: []*events.RASEvent{
-				newSystemStopFailedEvent("prep shutdown", "failed rank 0"),
-			},
-		},
-		"prep fail with force": {
-			req: &mgmtpb.SystemStopReq{Force: true},
-			members: system.Members{
-				mockMember(t, 0, 1, "joined"),
-				mockMember(t, 1, 1, "joined"),
 			},
 			mResps: []*control.HostResponse{
 				{
@@ -1439,11 +1351,98 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expMembers: system.Members{
 				mockMember(t, 0, 1, "joined"),
 				mockMember(t, 1, 1, "stopping"),
+				mockMember(t, 3, 2, "joined"),
 			},
+			expAbsentRanks: "9",
 			expDispatched: []*events.RASEvent{
 				newSystemStopFailedEvent("prep shutdown", "failed rank 0"),
 			},
 		},
+		//		"filtered and oversubscribed hosts prep fail": {
+		//			req: &mgmtpb.SystemStopReq{Hosts: "10.0.0.[1,3]"},
+		//			members: system.Members{
+		//				mockMember(t, 0, 1, "joined"),
+		//				mockMember(t, 1, 1, "joined"),
+		//				mockMember(t, 3, 2, "joined"),
+		//			},
+		//			mResps: []*control.HostResponse{
+		//				{
+		//					Addr: common.MockHostAddr(1).String(),
+		//					Message: &mgmtpb.SystemStopResp{
+		//						Results: []*sharedpb.RankResult{
+		//							{
+		//								Rank: 0, Errored: true, Msg: "prep shutdown failed",
+		//								State: stateString(system.MemberStateJoined),
+		//							},
+		//							{
+		//								Rank: 1, State: stateString(system.MemberStateStopping),
+		//							},
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expResults: []*sharedpb.RankResult{
+		//				{
+		//					Rank: 0, Action: "prep shutdown", Errored: true,
+		//					Msg: "prep shutdown failed", Addr: common.MockHostAddr(1).String(),
+		//					State: stateString(system.MemberStateJoined),
+		//				},
+		//				{
+		//					Rank: 1, Action: "prep shutdown", Addr: common.MockHostAddr(1).String(),
+		//					State: stateString(system.MemberStateStopping),
+		//				},
+		//			},
+		//			expMembers: system.Members{
+		//				mockMember(t, 0, 1, "joined"),
+		//				mockMember(t, 1, 1, "stopping"),
+		//				mockMember(t, 3, 2, "joined"),
+		//			},
+		//			expAbsentHosts: "10.0.0.3",
+		//			expDispatched: []*events.RASEvent{
+		//				newSystemStopFailedEvent("prep shutdown", "failed rank 0"),
+		//			},
+		//		},
+		//		"prep fail with force": {
+		//			req: &mgmtpb.SystemStopReq{Force: true},
+		//			members: system.Members{
+		//				mockMember(t, 0, 1, "joined"),
+		//				mockMember(t, 1, 1, "joined"),
+		//			},
+		//			mResps: []*control.HostResponse{
+		//				{
+		//					Addr: common.MockHostAddr(1).String(),
+		//					Message: &mgmtpb.SystemStopResp{
+		//						Results: []*sharedpb.RankResult{
+		//							{
+		//								Rank: 0, Errored: true, Msg: "prep shutdown failed",
+		//								State: stateString(system.MemberStateErrored),
+		//							},
+		//							{
+		//								Rank: 1, State: stateString(system.MemberStateStopping),
+		//							},
+		//						},
+		//					},
+		//				},
+		//			},
+		//			expResults: []*sharedpb.RankResult{
+		//				{
+		//					Rank: 0, Action: "prep shutdown", Errored: true,
+		//					Msg: "prep shutdown failed", Addr: common.MockHostAddr(1).String(),
+		//					State: stateString(system.MemberStateJoined),
+		//				},
+		//				{
+		//					Rank: 1, Action: "prep shutdown", Addr: common.MockHostAddr(1).String(),
+		//					State: stateString(system.MemberStateStopping),
+		//				},
+		//			},
+		//			expMembers: system.Members{
+		// mockMember(t, 0, 1, "joined"), // not updated to err on prep fail if forced
+		//				mockMember(t, 1, 1, "stopping"),
+		//			},
+		//			expDispatched: []*events.RASEvent{
+		//				newSystemStopFailedEvent("prep shutdown", "failed rank 0"),
+		//			},
+		//		},
 		//		"unfiltered rank results": {
 		//			req: &mgmtpb.SystemStopReq{},
 		//			members: system.Members{

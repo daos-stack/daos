@@ -648,7 +648,8 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	var fResp *fanoutResponse
 
 	fReq.Method = control.PrepShutdownRanks
-	fResp, _, err = svc.rpcFanout(ctx, fReq, false)
+	// if not forced, update membership on rank error
+	fResp, _, err = svc.rpcFanout(ctx, fReq, !req.Force)
 	if err != nil {
 		return
 	}
