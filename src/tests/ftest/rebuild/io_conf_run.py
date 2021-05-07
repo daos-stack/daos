@@ -29,7 +29,7 @@ class DaosRunIoConf(IoConfTestBase):
         Use Cases:
             Verify rebuild with data verification.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=rebuild,iorebuild
         """
