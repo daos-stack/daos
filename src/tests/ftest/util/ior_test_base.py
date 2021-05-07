@@ -37,6 +37,7 @@ class IorTestBase(DfuseTestBase):
         self.processes = None
         self.hostfile_clients_slots = None
         self.container = None
+        self.disable_caching = True
 
     def setUp(self):
         """Set up each test case."""
