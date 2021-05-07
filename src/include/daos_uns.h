@@ -43,7 +43,7 @@ struct duns_attr_t {
 	char			*da_rel_path;
 	/** IN: (Optional Container props to be added with duns_path_create */
 	daos_prop_t		*da_props;
-	/** OUT: This is set to trye if path is on Lustre filesystem */
+	/** OUT: This is set to true if path is on Lustre filesystem */
 	bool			da_on_lustre;
 	/** IN: String does not include daos:// prefix
 	 *

@@ -121,13 +121,6 @@ void *d_realloc(void *, size_t);
 			      strnlen(s, n + 1) + 1, 0, #ptr, 0);	\
 	} while (0)
 
-#define D_STRDUP(ptr, s)						\
-	do {								\
-		(ptr) = strdup(s);					\
-		D_CHECK_ALLOC(strdup, true, ptr, #ptr,			\
-			      strlen(s) + 1, 0, #ptr, 0);		\
-	} while (0)
-
 #define D_ASPRINTF(ptr, ...)						\
 	do {								\
 		int _rc;						\

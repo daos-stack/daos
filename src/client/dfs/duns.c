@@ -247,7 +247,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 
 #define UUID_REGEX "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}){1}"
 #define DAOS_FORMAT "^daos://"UUID_REGEX"/"UUID_REGEX"[/]?"
-#define DAOS_FORMAT_NO_PREFIX "^/[/]?"UUID_REGEX"/"UUID_REGEX"[/]?"
+#define DAOS_FORMAT_NO_PREFIX "^[/]+"UUID_REGEX"/"UUID_REGEX"[/]?"
 #define DAOS_FORMAT_NO_CONT "^daos://"UUID_REGEX"[/]?$"
 
 static int
@@ -424,7 +424,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		return err;
 	}
 
-	realp = realpath(path, NULL);
+	D_REALPATH(realp, path);
 	if (realp == NULL)
 		return errno;
 
@@ -436,7 +436,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	if (rel_path == NULL)
 		D_GOTO(out, rc = ENOMEM);
 
-	D_STRDUP(dir_path, realp);
+	D_STRNDUP(dir_path, realp, path_len);
 	if (dir_path == NULL)
 		D_GOTO(out, rc = ENOMEM);
 
@@ -500,7 +500,7 @@ parse:
 
 	if (cur_idx != path_len) {
 		D_ASSERT(rel_path);
-		attr->da_rel_path = strdup(rel_path);
+		attr->da_rel_path = strndup(rel_path, rel_len);
 		if (attr->da_rel_path == NULL)
 			D_GOTO(out, rc = ENOMEM);
 	}
@@ -508,8 +508,7 @@ parse:
 out:
 	D_FREE(rel_path);
 	D_FREE(dir_path);
-	if (realp)
-		free(realp);
+	D_FREE(realp);
 	return rc;
 }
 
