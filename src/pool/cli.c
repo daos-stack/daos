@@ -504,10 +504,55 @@ out:
 	return rc;
 }
 
-int
-dc_pool_connect(tse_task_t *task)
+/* allocate and initialize a dc_pool by label or uuid */
+static int
+init_pool(const char *label, uuid_t uuid, uint64_t capas, const char *grp,
+	  struct dc_pool **poolp)
 {
-	daos_pool_connect_t	*args;
+	struct dc_pool	*pool;
+	int		 rc;
+
+	pool = dc_pool_alloc(DC_POOL_DEFAULT_COMPONENTS_NR);
+	if (pool == NULL)
+		return -DER_NOMEM;
+
+	if (label) {
+		uuid_clear(pool->dp_pool);
+		D_STRNDUP(pool->dp_label, label, DAOS_PROP_LABEL_MAX_LEN);
+	} else {
+		uuid_copy(pool->dp_pool, uuid);
+	}
+	uuid_generate(pool->dp_pool_hdl);
+	pool->dp_capas = capas;
+
+	/** attach to the server group and initialize rsvc_client */
+	rc = dc_mgmt_sys_attach(grp, &pool->dp_sys);
+	if (rc != 0)
+		D_GOTO(err_pool, rc);
+
+	/** Agent configuration data from pool->dp_sys->sy_info */
+	/** sy_info.provider */
+	/** sy_info.interface */
+	/** sy_info.domain */
+	/** sy_info.crt_ctx_share_addr */
+	/** sy_info.crt_timeout */
+
+	rc = rsvc_client_init(&pool->dp_client, NULL);
+	if (rc != 0)
+		D_GOTO(err_pool, rc);
+
+	*poolp = pool;
+	return 0;
+
+err_pool:
+	dc_pool_put(pool);
+	return rc;
+}
+
+static int
+dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
+			 daos_handle_t *poh)
+{
 	struct dc_pool		*pool;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
@@ -516,71 +561,35 @@ dc_pool_connect(tse_task_t *task)
 	struct pool_connect_arg	 con_args;
 	int			 rc;
 
-	args = dc_task_get_args(task);
 	pool = dc_task_get_priv(task);
-
-	if (pool == NULL) {
-		if (!args->label && !daos_uuid_valid(args->uuid))
-			D_GOTO(out_task, rc = -DER_INVAL);
-		if (!flags_are_valid(args->flags) || args->poh == NULL)
-			D_GOTO(out_task, rc = -DER_INVAL);
-
-		/** allocate and fill in pool connection */
-		pool = dc_pool_alloc(DC_POOL_DEFAULT_COMPONENTS_NR);
-		if (pool == NULL)
-			D_GOTO(out_task, rc = -DER_NOMEM);
-		if (args->label == NULL)
-			uuid_copy(pool->dp_pool, args->uuid);
-		uuid_generate(pool->dp_pool_hdl);
-		pool->dp_capas = args->flags;
-
-		/** attach to the server group and initialize rsvc_client */
-		rc = dc_mgmt_sys_attach(args->grp, &pool->dp_sys);
-		if (rc != 0)
-			D_GOTO(out_pool, rc);
-
-		/** Agent configuration data from pool->dp_sys->sy_info */
-		/** sy_info.provider */
-		/** sy_info.interface */
-		/** sy_info.domain */
-		/** sy_info.crt_ctx_share_addr */
-		/** sy_info.crt_timeout */
-
-		rc = rsvc_client_init(&pool->dp_client, NULL);
-		if (rc != 0)
-			D_GOTO(out_pool, rc);
-
-		daos_task_set_priv(task, pool);
-		D_DEBUG(DF_DSMC, DF_UUID": connecting: hdl="DF_UUIDF
-			" flags=%x\n", DP_UUID(args->uuid),
-			DP_UUID(pool->dp_pool_hdl), args->flags);
-	}
-
 	/** Choose an endpoint and create an RPC. */
 	ep.ep_grp = pool->dp_sys->sy_group;
-	if (args->label) {
-		rc = dc_pool_choose_svc_rank_bylabel(args->label,
+	if (pool->dp_label) {
+		rc = dc_pool_choose_svc_rank_bylabel(pool->dp_label,
 						     pool->dp_pool,
 						     &pool->dp_client,
 						     &pool->dp_client_lock,
 						     pool->dp_sys, &ep);
 	} else {
-		rc = dc_pool_choose_svc_rank(pool->dp_pool, &pool->dp_client,
+		rc = dc_pool_choose_svc_rank(pool->dp_pool,
+					     &pool->dp_client,
 					     &pool->dp_client_lock,
 					     pool->dp_sys, &ep);
 	}
 	if (rc != 0) {
 		D_ERROR("%s: "DF_UUID": cannot find pool service: "DF_RC"\n",
-			args->label ? args->label : "",
+			pool->dp_label ? pool->dp_label : "",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
-		goto out_pool;
+		goto out;
 	}
+
+	/** Pool connect RPC by UUID (provide, or looked up by label above) */
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_CONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_pool, rc);
+		D_GOTO(out, rc);
 	}
-	/** for con_argss */
+	/** for con_args */
 	crt_req_addref(rpc);
 
 	/** fill in request buffer */
@@ -596,8 +605,8 @@ dc_pool_connect(tse_task_t *task)
 
 	uuid_copy(pci->pci_op.pi_uuid, pool->dp_pool);
 	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
-	pci->pci_flags = args->flags;
-	pci->pci_query_bits = pool_query_bits(args->info, NULL);
+	pci->pci_flags = pool->dp_capas;
+	pci->pci_query_bits = pool_query_bits(info, NULL);
 
 	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf,
 			     pool_buf_nr(pool->dp_map_sz));
@@ -605,10 +614,10 @@ dc_pool_connect(tse_task_t *task)
 		D_GOTO(out_cred, rc);
 
 	/** Prepare "con_args" for pool_connect_cp(). */
-	con_args.pca_info = args->info;
+	con_args.pca_info = info;
 	con_args.pca_map_buf = map_buf;
 	con_args.rpc = rpc;
-	con_args.hdlp = args->poh;
+	con_args.hdlp = poh;
 
 	rc = tse_task_register_comp_cb(task, pool_connect_cp, &con_args,
 				       sizeof(con_args));
@@ -626,6 +635,86 @@ out_cred:
 out_req:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc); /* free req */
+out:
+	return rc;
+}
+
+int
+dc_pool_connect(tse_task_t *task)
+{
+	daos_pool_connect_t	*args;
+	struct dc_pool		*pool = NULL;
+	int			 rc;
+
+	args = dc_task_get_args(task);
+	pool = dc_task_get_priv(task);
+
+	if (pool == NULL) {
+		if (!daos_uuid_valid(args->uuid))
+			D_GOTO(out_task, rc = -DER_INVAL);
+		if (!flags_are_valid(args->flags) || args->poh == NULL)
+			D_GOTO(out_task, rc = -DER_INVAL);
+
+		/** allocate and fill in pool connection */
+		rc = init_pool(NULL /* label */, args->uuid, args->flags,
+			       args->grp, &pool);
+		if (rc)
+			goto out_task;
+
+		daos_task_set_priv(task, pool);
+		D_DEBUG(DF_DSMC, DF_UUID": connecting: hdl="DF_UUIDF
+			" flags=%x\n", DP_UUID(args->uuid),
+			DP_UUID(pool->dp_pool_hdl), args->flags);
+	}
+
+	rc = dc_pool_connect_internal(task, args->info, args->poh);
+	if (rc)
+		goto out_pool;
+
+	return rc;
+
+out_pool:
+	dc_pool_put(pool);
+out_task:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+int
+dc_pool_connect_lbl(tse_task_t *task)
+{
+	daos_pool_connect_lbl_t *args;
+	struct dc_pool		*pool = NULL;
+	uuid_t			 null_uuid;
+	int			 rc;
+
+	args = dc_task_get_args(task);
+	pool = dc_task_get_priv(task);
+	uuid_clear(null_uuid);
+
+	if (pool == NULL) {
+		if (args->label == NULL)
+			D_GOTO(out_task, rc = -DER_INVAL);
+		if (!flags_are_valid(args->flags) || args->poh == NULL)
+			D_GOTO(out_task, rc = -DER_INVAL);
+
+		/** allocate and fill in pool connection */
+		rc = init_pool(args->label, null_uuid, args->flags, args->grp,
+			       &pool);
+		if (rc)
+			goto out_task;
+
+		daos_task_set_priv(task, pool);
+		D_DEBUG(DF_DSMC, "%s: connecting: hdl="DF_UUIDF" flags=%x\n",
+			args->label,  DP_UUID(pool->dp_pool_hdl), args->flags);
+	}
+
+	rc = dc_pool_connect_internal(task, args->info, args->poh);
+	if (rc)
+		goto out_pool;
+
+	return rc;
+
 out_pool:
 	dc_pool_put(pool);
 out_task:

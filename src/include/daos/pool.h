@@ -53,6 +53,7 @@ struct dc_pool {
 	pthread_rwlock_t	dp_co_list_lock;
 	/* pool uuid */
 	uuid_t			dp_pool;
+	char		       *dp_label;
 	struct dc_mgmt_sys     *dp_sys;
 	pthread_mutex_t		dp_client_lock;
 	struct rsvc_client	dp_client;
@@ -86,6 +87,7 @@ void dc_pool_put(struct dc_pool *pool);
 int dc_pool_local2global(daos_handle_t poh, d_iov_t *glob);
 int dc_pool_global2local(d_iov_t glob, daos_handle_t *poh);
 int dc_pool_connect(tse_task_t *task);
+int dc_pool_connect_lbl(tse_task_t *task);
 int dc_pool_disconnect(tse_task_t *task);
 int dc_pool_query(tse_task_t *task);
 int dc_pool_query_target(tse_task_t *task);
