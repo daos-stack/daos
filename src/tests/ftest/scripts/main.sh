@@ -223,7 +223,8 @@ fi
 
 launch_args="-jcrisa"
 # can only process cores on EL7 currently
-if [ "$(lsb_release -s -i)" = "CentOS" ]; then
+if [ "$(lsb_release -s -i)" = "CentOS" ] ||
+   [ "$(lsb_release -s -i)" = "openSUSE" ]; then
     launch_args="-jcrispa"
 fi
 
