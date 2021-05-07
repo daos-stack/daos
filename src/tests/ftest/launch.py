@@ -1193,6 +1193,7 @@ def archive_config_files(avocado_logs_dir, args):
         status = 16
     return status
 
+
 def archive_cov_usrlib_logs(avocado_logs_dir, args):
     """Archive daos cov files to the avocado results directory.
     Args:
@@ -1218,6 +1219,7 @@ def archive_cov_usrlib_logs(avocado_logs_dir, args):
     if not check_remote_output(task, "archive_daos_covs command"):
         status |= 16
     return status
+
 
 def archive_files(destination, hosts, source_files, cart, args):
     """Archive all of the remote files to the destination directory.
@@ -2018,6 +2020,12 @@ def main():
         action="store_true",
         help="rename the avocado test logs directory to include the test name")
     parser.add_argument(
+        "-re", "--repeat",
+        action="store",
+        default=1,
+        type=int,
+        help="number of times to repeat test execution")
+    parser.add_argument(
         "-p", "--process_cores",
         action="store_true",
         help="process core files from tests")
@@ -2102,7 +2110,11 @@ def main():
     generate_certs()
 
     # Run all the tests
-    status = run_tests(test_files, tag_filter, args)
+    status = 0
+    for loop in range(1, args.repeat + 1):
+        if args.repeat > 1:
+            print("Starting test loop {}/{}".format(loop, args.repeat + 1))
+        status |= run_tests(test_files, tag_filter, args)
 
     # Process the avocado run return codes and only treat job and command
     # failures as errors.

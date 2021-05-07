@@ -61,6 +61,12 @@ if [ -n "${3}" ]; then
     NVME_ARG="-n ${3}"
 fi
 
+# Number of times to repeat the tests run by launch.py
+TEST_REPEAT=""
+if [ -n "${4}" ]; then
+    TEST_REPEAT="--repeat ${4}"
+fi
+
 # Log size threshold
 LOGS_THRESHOLD="1G"
 
@@ -148,6 +154,7 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      TEST_TAG_ARG=\"$TEST_TAG_ARG\"
      TEST_NODES=\"$TEST_NODES\"
      NVME_ARG=\"$NVME_ARG\"
+     TEST_REPEAT=\"$TEST_REPEAT\"
      LOGS_THRESHOLD=\"$LOGS_THRESHOLD\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}
