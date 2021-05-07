@@ -736,9 +736,9 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 
 		if (DAOS_OC_IS_EC(oca)) {
 			rc = daos_csummer_calc_iods(csummer,
-						    &sgls[start],  &mrone->mo_iods[start],
-						    NULL, iod_cnt, false, NULL, 0,
-						    &iod_csums);
+					&sgls[start],  &mrone->mo_iods[start],
+					NULL, iod_cnt, false, NULL, 0,
+					&iod_csums);
 			if (rc != 0) {
 				D_ERROR("Error calculating checksums: "
 						DF_RC"\n",
