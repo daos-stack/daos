@@ -50,7 +50,11 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	 * TODO: Pass in if this is a open file with caching enabled, and
 	 * selectively enable this based on file specifics.
 	 */
-	if (ie->ie_dfs->dfc_data_caching && to_set & FUSE_SET_ATTR_CTIME) {
+	if (to_set & FUSE_SET_ATTR_CTIME) {
+		if (!ie->ie_dfs->dfc_data_caching) {
+			DFUSE_TRA_INFO(ie, "CTIME set without data caching");
+			D_GOTO(err, rc = ENOTSUP);
+		}
 		DFUSE_TRA_DEBUG(ie, "ctime %#lx", attr->st_ctime);
 		to_set &= ~FUSE_SET_ATTR_CTIME;
 		attr->st_mtime = attr->st_ctime;
@@ -60,7 +64,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	if (to_set & FUSE_SET_ATTR_SIZE) {
 		DFUSE_TRA_DEBUG(ie, "size %#lx",
 				attr->st_size);
-		to_set &= ~(FUSE_SET_ATTR_SIZE);
+		to_set &= ~FUSE_SET_ATTR_SIZE;
 		dfs_flags |= DFS_SET_ATTR_SIZE;
 		if (ie->ie_dfs->dfc_data_caching &&
 		    ie->ie_stat.st_size == 0 && attr->st_size > 0) {

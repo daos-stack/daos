@@ -692,6 +692,13 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 				DFUSE_TRA_INFO(dfc,
 					"Caching disabled");
 			}
+		} else {
+			/* Set attributes for containers created via mkdir */
+			dfc->dfc_attr_timeout = 1;
+			dfc->dfc_dentry_timeout = 1;
+			dfc->dfc_dentry_dir_timeout = 5;
+			dfc->dfc_ndentry_timeout = 5;
+			dfc->dfc_data_caching = true;
 		}
 	}
 
