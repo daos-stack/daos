@@ -4057,21 +4057,6 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 
 	replace_failed_replicas(svc, map);
 
-	if (opc == POOL_ADD_IN) {
-		/*
-		 * If we are setting ranks from UP -> UPIN, schedule a reclaim
-		 * operation to garbage collect any unreachable data moved
-		 * during reintegration/addition
-		 */
-		rc = ds_rebuild_schedule(svc->ps_pool, map_version, tgts,
-					 RB_OP_RECLAIM, 0);
-		if (rc != 0) {
-			D_ERROR("failed to schedule reclaim rc: "DF_RC"\n",
-				DP_RC(rc));
-			goto out_map_buf;
-		}
-	}
-
 out_map_buf:
 	pool_buf_free(map_buf);
 out_map:
@@ -4185,7 +4170,7 @@ get_open_handles_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (size_needed > arg->hdls_size) {
 		void *newbuf = NULL;
 
-		D_REALLOC(newbuf, *arg->hdls, size_needed);
+		D_REALLOC(newbuf, *arg->hdls, arg->hdls_size, size_needed);
 		if (newbuf == NULL)
 			D_GOTO(out_hdl, rc = -DER_NOMEM);
 

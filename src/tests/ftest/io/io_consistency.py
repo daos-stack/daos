@@ -30,7 +30,9 @@ class IoConsistency(IorTestBase):
             Try to re-create to the same file name after deletion, which should
             work without issues.
             Repeat the same steps as above for SSF this time.
-        :avocado: tags=all,daosio,hw,large,pr,daily_regression,ioconsistency
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daosio,ioconsistency,mpich
         :avocado: tags=DAOS_5610
         """
 

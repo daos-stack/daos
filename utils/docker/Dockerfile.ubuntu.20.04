@@ -50,13 +50,16 @@ RUN apt-get -y update && apt-get -y install apt-utils && \
     openjdk-8-jdk \
     pandoc \
     patchelf \
+    pciutils \
     pkg-config \
     python3-dev \
     python3-distro \
     python3-distutils \
+    python3-junit.xml \
     python3-pyxattr \
     python3-tabulate \
     scons \
+    sudo \
     valgrind \
     uuid-dev \
     yasm \
@@ -79,6 +82,7 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
+RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
@@ -141,7 +145,6 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 

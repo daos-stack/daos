@@ -45,8 +45,8 @@ server_config:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 6000000000
-    nvme_size: 54000000000
+    scm_size: 12000000000
+    nvme_size: 108000000000
     svcn: 4
     control_method: dmg
 container:
@@ -82,7 +82,7 @@ ior:
     #   - [scmsize, nvmesize, transfersize, blocksize]
     #    The values are set to be in the multiples of 10.
     #    Values are appx GB.
-      - [6000000000, 54000000000, 500000, 500000000]
+      - [12000000000, 108000000000, 500000, 500000000]
 mdtest:
   api: DFS
   client_processes:

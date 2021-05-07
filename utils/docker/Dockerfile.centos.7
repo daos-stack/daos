@@ -71,7 +71,8 @@ gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
-RUN dnf -y upgrade && \
+RUN dnf -y install deltarpm && \
+    dnf -y upgrade && \
     dnf -y install \
         boost-python36-devel \
         clang-analyzer \
@@ -109,6 +110,7 @@ RUN dnf -y upgrade && \
         maven \
         nasm \
         ndctl \
+        numactl \
         numactl-devel \
         openmpi3-devel \
         openssl-devel \
@@ -116,10 +118,10 @@ RUN dnf -y upgrade && \
         patch \
         patchelf \
         pciutils \
-        python3-pip \
         python36-Cython \
         python36-devel \
         python36-distro \
+        python36-junit_xml \
         python36-numpy \
         python36-paramiko \
         python36-pylint \
@@ -129,6 +131,7 @@ RUN dnf -y upgrade && \
         python36-PyYAML \
         python36-scons \
         sg3_utils \
+        sudo \
         valgrind-devel \
         yasm && \
     dnf clean all
@@ -141,9 +144,7 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-
-# Add codespell to path.
-ENV PATH=$PATH:/home/daos/.local/bin
+RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
@@ -255,7 +256,6 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 

@@ -68,14 +68,16 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 {
 	daos_obj_id_t inflight_oid;
 
+#if 0
+	/* Disable it due to DAOS-7420 */
 	if (oid != NULL) {
 		inflight_oid = *oid;
 	} else {
-		inflight_oid = daos_test_oid_gen(arg->coh,
-						 DAOS_OC_R3S_SPEC_RANK, 0,
-						 0, arg->myrank);
-		inflight_oid = dts_oid_set_rank(inflight_oid, rank);
-	}
+#endif
+	inflight_oid = daos_test_oid_gen(arg->coh,
+					 DAOS_OC_R3S_SPEC_RANK, 0,
+					 0, arg->myrank);
+	inflight_oid = dts_oid_set_rank(inflight_oid, rank);
 
 	arg->rebuild_cb = reintegrate_inflight_io;
 	arg->rebuild_cb_arg = &inflight_oid;

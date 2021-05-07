@@ -200,14 +200,15 @@ cont_aggregate_runnable(struct ds_cont_child *cont)
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct sched_request	*req = cont->sc_agg_req;
 
-	if (unlikely(pool->sp_map == NULL)) {
+	if (unlikely(pool->sp_map == NULL) || pool->sp_stopping) {
 		/* If it does not get the pool map from the pool leader,
 		 * see pool_iv_pre_sync(), the IV fetch from the following
 		 * ds_cont_csummer_init() will fail anyway.
 		 */
 		D_DEBUG(DB_EPC, DF_CONT": skip aggregation "
-			"No pool map yet\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+			"No pool map yet or stopping %d\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			pool->sp_stopping);
 		return false;
 	}
 
@@ -1811,7 +1812,7 @@ cont_snap_update_one(void *vin)
 		size_t	 bufsize;
 
 		bufsize = args->snap_count * sizeof(*args->snapshots);
-		D_REALLOC(buf, cont->sc_snapshots, bufsize);
+		D_REALLOC_NZ(buf, cont->sc_snapshots, bufsize);
 		if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out_cont;
@@ -2331,7 +2332,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 		struct dss_coll_ops	coll_ops = { 0 };
 		struct dss_coll_args	coll_args = { 0 };
 
-		if (pool->sp_map == NULL)
+		if (pool->sp_map == NULL || pool->sp_stopping)
 			goto yield;
 
 		/* collective operations */
