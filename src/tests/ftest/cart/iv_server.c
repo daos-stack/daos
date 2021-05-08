@@ -1331,9 +1331,6 @@ int main(int argc, char **argv)
 	 */
 	wait_for_namespace();
 
-	rc = crt_swim_init(0);
-	assert(rc == 0);
-
 	if (g_my_rank == 0) {
 		rc = crt_group_config_save(grp, true);
 		D_ASSERTF(rc == 0, "crt_group_config_save failed %d\n", rc);

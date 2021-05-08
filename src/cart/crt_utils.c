@@ -114,7 +114,8 @@ crtu_progress_fn(void *data)
 		sleep(opts.delay_shutdown_sec);
 
 	rc = crt_context_destroy(*p_ctx, 1);
-	D_ASSERTF(rc == 0, "Failed to destroy context rc=%d\n", rc);
+	D_ASSERTF(rc == 0, "Failed to destroy context %p rc=%d\n",
+		  p_ctx, rc);
 
 	pthread_exit(rc ? *p_ctx : NULL);
 

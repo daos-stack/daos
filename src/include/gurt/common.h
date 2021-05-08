@@ -28,6 +28,12 @@
 #include <pthread.h>
 #include <byteswap.h>
 #include <daos_errno.h>
+#ifdef D_HAS_VALGRIND
+#include <valgrind/valgrind.h>
+#define D_ON_VALGRIND RUNNING_ON_VALGRIND
+#else
+#define D_ON_VALGRIND 0
+#endif
 
 #include <gurt/types.h>
 #include <gurt/debug.h>
@@ -60,6 +66,7 @@ extern "C" {
 /* memory allocating macros */
 void  d_free(void *);
 void *d_calloc(size_t, size_t);
+void *d_malloc(size_t);
 void *d_realloc(void *, size_t);
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
@@ -100,6 +107,13 @@ void *d_realloc(void *, size_t);
 			      count, #count, 0);			\
 	} while (0)
 
+#define D_ALLOC_CORE_NZ(ptr, size, count)				\
+	do {								\
+		(ptr) = (__typeof__(ptr))d_malloc((count) * (size));	\
+		D_CHECK_ALLOC(malloc, true, ptr, #ptr, size,		\
+			      count, #count, 0);			\
+	} while (0)
+
 #define D_STRNDUP(ptr, s, n)						\
 	do {								\
 		(ptr) = strndup(s, n);					\
@@ -130,10 +144,11 @@ void *d_realloc(void *, size_t);
  * there is no way to tell the difference between successful and
  * failed realloc.
  */
-#define D_REALLOC_COMMON(newptr, oldptr, size, cnt)			\
+#define D_REALLOC_COMMON(newptr, oldptr, oldsize, size, cnt)		\
 	do {								\
 		size_t _esz = (size_t)(size);				\
 		size_t _sz = (size_t)(size) * (cnt);			\
+		size_t _oldsz = (size_t)(oldsize);			\
 		size_t _cnt = (size_t)(cnt);				\
 		/* Compiler check to ensure type match */		\
 		__typeof__(newptr) optr = oldptr;			\
@@ -157,16 +172,21 @@ void *d_realloc(void *, size_t);
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
 					"': %zu at %p (old '" #oldptr	\
-					"':%p).\n",			\
-					_esz, (newptr), (oldptr));	\
+					"': %zu at %p).\n",		\
+					_esz, (newptr), _oldsz,		\
+					(oldptr));			\
 			else						\
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
 					"': %zu * '" #cnt		\
 					"':%zu at %p (old '" #oldptr	\
-					"':%p).\n",			\
-					_esz, _cnt, (newptr), (oldptr));\
+					"': %zu at %p).\n",		\
+					_esz, _cnt, (newptr), _oldsz,	\
+					(oldptr));			\
 			(oldptr) = NULL;				\
+			if (_oldsz < _sz)				\
+				memset((char *)(newptr) + _oldsz, 0,	\
+				       _sz - _oldsz);			\
 			break;						\
 		}							\
 		if (_cnt <= 1)						\
@@ -179,11 +199,37 @@ void *d_realloc(void *, size_t);
 				_esz, _cnt);				\
 	} while (0)
 
-#define D_REALLOC(newptr, oldptr, size)					\
-	D_REALLOC_COMMON(newptr, oldptr, size, 1)
+#define D_REALLOC(newptr, oldptr, oldsize, size)			\
+	D_REALLOC_COMMON(newptr, oldptr, oldsize, size, 1)
 
-#define D_REALLOC_ARRAY(newptr, oldptr, count)				\
-	D_REALLOC_COMMON(newptr, oldptr, sizeof(*(oldptr)), count)
+#define D_REALLOC_ARRAY(newptr, oldptr, oldcount, count)		\
+	D_REALLOC_COMMON(newptr, oldptr,				\
+			 (oldcount) * sizeof(*(oldptr)),		\
+					     sizeof(*(oldptr)), count)
+
+#define D_REALLOC_NZ(newptr, oldptr, size)				\
+	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
+
+#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
+	D_REALLOC_COMMON(newptr, oldptr,				\
+			 (count) * sizeof(*(oldptr)),			\
+			 sizeof(*(oldptr)), count)
+
+/** realloc macros that do not clear the new memory */
+#define D_REALLOC_NZ(newptr, oldptr, size)				\
+	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
+
+#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
+	D_REALLOC_COMMON(newptr, oldptr,				\
+			 (count) * sizeof(*(oldptr)),			\
+			 sizeof(*(oldptr)), count)
+
+/** realloc macros that clear the whole allocation */
+#define D_REALLOC_Z(newptr, oldptr, size)				\
+	D_REALLOC_COMMON(newptr, oldptr, 0, size, 1)
+
+#define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
+	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
 
 #define D_FREE(ptr)							\
 	do {								\
@@ -195,6 +241,9 @@ void *d_realloc(void *, size_t);
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
 #define D_ALLOC_PTR(ptr)	D_ALLOC(ptr, sizeof(*ptr))
 #define D_ALLOC_ARRAY(ptr, count) D_ALLOC_CORE(ptr, sizeof(*ptr), count)
+#define D_ALLOC_NZ(ptr, size)	D_ALLOC_CORE_NZ(ptr, size, 1)
+#define D_ALLOC_PTR_NZ(ptr)	D_ALLOC_NZ(ptr, sizeof(*ptr))
+#define D_ALLOC_ARRAY_NZ(ptr, count) D_ALLOC_CORE_NZ(ptr, sizeof(*ptr), count)
 #define D_FREE_PTR(ptr)		D_FREE(ptr)
 
 #define D_GOTO(label, rc)			\
