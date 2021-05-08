@@ -28,7 +28,8 @@ class CartSelfTest(TestWithServers):
         def __init__(self, path=""):
             """Create a SelfTest object.
 
-            Uses Avocado's utils.process module to run self_test with parameters.
+            Uses Avocado's utils.process module to run self_test with 
+            parameters.
 
             Args:
                 path (str, optional): path to location of command binary file.
@@ -39,7 +40,10 @@ class CartSelfTest(TestWithServers):
             self.group_name = FormattedParameter("--group-name {}")
             self.endpoint = FormattedParameter("--endpoint {0}")
             self.message_sizes = FormattedParameter("--message-sizes {0}")
-            self.max_inflight_rpcs = FormattedParameter("--max-inflight-rpcs {0}")
+
+            max_rpc_opt = "--max-inflight-rpcs {0}"
+            self.max_inflight_rpcs = FormattedParameter(max_rpc_opt)
+
             self.repetitions = FormattedParameter("--repetitions {0}")
             self.attach_info = FormattedParameter("--path {0}")
 
