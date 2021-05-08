@@ -28,7 +28,7 @@ class CartSelfTest(TestWithServers):
         def __init__(self, path=""):
             """Create a SelfTest object.
 
-            Uses Avocado's utils.process module to run self_test with 
+            Uses Avocado's utils.process module to run self_test with
             parameters.
 
             Args:
