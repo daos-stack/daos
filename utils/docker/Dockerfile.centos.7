@@ -40,7 +40,8 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
       yum -y install --disablerepo=base,extras,updates          \
              dnf dnf-plugins-core epel-release-7-11;            \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7;         \
-      dnf config-manager --assumeyes --quiet --disable epel;    \
+      dnf config-manager --assumeyes --quiet                    \
+          --disable base epel extras updates;                   \
     else                                                        \
       yum -y install dnf dnf-plugins-core epel-release-7-11;    \
     fi;                                                         \
