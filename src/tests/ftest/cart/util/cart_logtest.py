@@ -548,7 +548,8 @@ class LogTest():
                     memsize.add(new_size)
                     if old_pointer not in (new_pointer, '(nil)'):
                         if old_pointer in regions:
-                            old_regions[old_pointer] = [regions[old_pointer], line]
+                            old_regions[old_pointer] = [regions[old_pointer],
+                                                        line]
                             del regions[old_pointer]
                         else:
                             show_line(line, 'NORMAL',

@@ -35,7 +35,6 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 """
 LogIter class definition.
 LogLine class definition.
@@ -687,7 +686,8 @@ class LogIter():
         while True:
             self._iter_index += 1
 
-            if self._pid is not None and self._iter_index > self._iter_last_index:
+            if self._pid is not None and \
+               self._iter_index > self._iter_last_index:
                 assert self._iter_count == self._iter_pid['line_count']  # nosec
                 raise StopIteration
 
