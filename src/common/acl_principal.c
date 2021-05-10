@@ -30,9 +30,10 @@
 	int	__rc = 0;						\
 	char	*new_buf = NULL;					\
 	size_t	buflen = DEFAULT_BUF_LEN;				\
+	size_t	oldlen = 0; /* default to clearing buffer */		\
 									\
 	do {								\
-		D_REALLOC(new_buf, _buf, buflen);			\
+		D_REALLOC(new_buf, _buf, oldlen, buflen);		\
 		if (new_buf == NULL) {					\
 			__rc = -DER_NOMEM;				\
 			break;						\
@@ -41,6 +42,7 @@
 									\
 		__rc = _func(_arg1, _arg2, _buf, buflen, _result);	\
 									\
+		oldlen = buflen;					\
 		buflen *= 2;						\
 	} while (__rc == ERANGE);					\
 	__rc;								\

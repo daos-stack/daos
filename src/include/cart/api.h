@@ -1724,6 +1724,22 @@ int
 crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
 
 
+typedef void
+(*crt_hlc_error_cb) (void *arg);
+
+/**
+ * This function registers an event handler for hlc synchronization errors.
+ * Only a single hlc error event handler can be registered at a time.
+ *
+ * \param[in] event_handler    event handler to register
+ * \param[in] arg              arg to event_handler
+ *
+ * \return                     DER_SUCCESS on success, negative value on error
+ */
+int
+crt_register_hlc_error_cb(crt_hlc_error_cb event_handler, void *arg);
+
+
 /**
  * A protocol is a set of RPCs. A protocol has a base opcode and a version,
  * member RPCs have opcodes that are contiguous numbers starting from

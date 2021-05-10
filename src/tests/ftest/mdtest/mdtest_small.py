@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2019-2021 Intel Corporation.
 
@@ -33,8 +33,8 @@ class MdtestSmall(MdtestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=mdtest,checksum,DAOS_5610
-        :avocado: tags=mdtestsmall
+        :avocado: tags=mdtest,checksum,mdtestsmall,mpich
+        :avocado: tags=DAOS_5610
         """
         # local params
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")

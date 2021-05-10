@@ -146,7 +146,8 @@ func TestConstructedConfig(t *testing.T) {
 		WithServiceThreadCore(8).
 		WithTargetCount(12).
 		WithHelperStreamCount(1).
-		WithPinnedNumaNode(&numaNode)
+		WithPinnedNumaNode(&numaNode).
+		WithBypassHealthChk(nil)
 
 	if *update {
 		outFile, err := os.Create(goldenPath)
@@ -367,6 +368,14 @@ func TestEngine_FabricConfigValidation(t *testing.T) {
 			},
 			expErr: errors.New("fabric_iface_port"),
 		},
+		"negative port number": {
+			cfg: FabricConfig{
+				Provider:      "foo",
+				Interface:     "bar",
+				InterfacePort: -42,
+			},
+			expErr: errors.New("fabric_iface_port"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := tc.cfg.Validate()
@@ -392,6 +401,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		serviceCore     = 8
 		index           = 2
 		pinnedNumaNode  = uint(1)
+		bypass          = true
 		crtCtxShareAddr = uint32(1)
 		crtTimeout      = uint32(30)
 	)
@@ -404,6 +414,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithFabricInterface(interfaceName).
 		WithFabricInterfacePort(interfacePort).
 		WithPinnedNumaNode(&pinnedNumaNode).
+		WithBypassHealthChk(&bypass).
 		WithModules(modules).
 		WithSocketDir(socketDir).
 		WithLogFile(logFile).
@@ -426,6 +437,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		"-n", cfgPath,
 		"-I", strconv.Itoa(index),
 		"-p", strconv.FormatUint(uint64(pinnedNumaNode), 10),
+		"-b",
 	}
 	wantEnv := []string{
 		"OFI_INTERFACE=" + interfaceName,

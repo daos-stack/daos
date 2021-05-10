@@ -72,14 +72,17 @@ RUN zypper --non-interactive update && \
     pandoc \
     patch \
     patchelf \
+    pciutils \
     python3-devel \
     python3-distro \
+    python3-junit-xml \
     python3-pip \
     python3-pyxattr  \
     python3-PyYAML \
     python3-tabulate \
     scons \
     sg3_utils \
+    sudo \
     valgrind-devel \
     which \
     yasm && \
@@ -112,6 +115,7 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
+RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
@@ -209,7 +213,6 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
