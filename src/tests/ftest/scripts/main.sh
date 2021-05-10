@@ -224,6 +224,9 @@ if [[ "${TEST_TAG_ARG}" =~ memcheck ]]; then
   export WITH_VALGRIND="memcheck"
 fi
 
+# need to increase the number of oopen files (on EL8 at least)
+ulimit -n 4096
+
 launch_args="-jcrisa"
 # can only process cores on EL7 currently
 if [ "$(lsb_release -s -i)" = "CentOS" ]; then
