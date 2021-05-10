@@ -4305,7 +4305,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	if (!obj_auxi->io_retry) {
 		rc = obj_csum_update(obj, args, obj_auxi);
 		if (rc) {
-			D_ERROR("obj_csum_update error: "DF_RC"\n", DP_RC(rc));
+			D_ERROR("obj_csum_update failed: "DF_RC"\n", DP_RC(rc));
 			goto out_task;
 		}
 	}
