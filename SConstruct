@@ -45,6 +45,7 @@ def run_checks(env, p):
         return
     cenv = env.Clone()
     cenv.Append(CFLAGS='-Werror')
+    daos_build.clear_icc_env(cenv)
     if cenv.get("COMPILER") == 'icc':
         cenv.Replace(CC='gcc', CXX='g++')
     config = Configure(cenv)
