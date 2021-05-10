@@ -350,7 +350,7 @@ class LogLine():
         old_pointer = self.get_field(-1).rstrip('.')
 
         # Working out the old pointer is tricky, realloc will have two or three
-        # strings representing variables, each of which can have spaces in it
+        # strings representing variables, some of which can have spaces in them
         # so patch the line back together, split on ' which marks the end of
         # these and work for there.  The field we want will be after 1 or 2
         # entries, but always 1 from the end, so use that.
@@ -358,30 +358,37 @@ class LogLine():
         tick_fields = msg.split("'")
         short_msg = tick_fields[-3]
         fields = short_msg.split(' ')
-        np = fields[3]
-        new_pointer = self.get_field(-6)
-        if (np != new_pointer):
-            print(np, new_pointer)
-            print(self)
-            print(short_msg)
+        new_pointer = fields[2]
         return (new_pointer, old_pointer)
+
+    def realloc_sizes(self):
+        """Returns a tuple of old and new memory region sizes"""
+
+        # See comment in realloc_pointers() for basic method here.
+        # new_size is made by combining count and elem size,
+        # old_size is simply a size which is the only oddity.
+        elem_size = int(self.get_field(3).split(':')[-1])
+        if self.get_field(4) == '*':
+            msg = ' '.join(self._fields)
+            tick_fields = msg.split("'")
+            short_msg = tick_fields[4]
+            fields = short_msg.split(' ')
+            count = int(fields[0].lstrip(':'))
+            new_size = count * elem_size
+        else:
+            new_size = elem_size
+        old_size = int(self.get_field(-3).split(':')[-1])
+        return (new_size, old_size)
 
     def calloc_size(self):
         """Returns the size of the allocation"""
+        if self.is_realloc():
+            (new_size, _) = self.realloc_sizes()
+            return new_size
         if self.get_field(4) == '*':
-            if self.is_realloc():
-                msg = ' '.join(self._fields)
-                tick_fields = msg.split("'")
-                short_msg = tick_fields[4]
-                fields = short_msg.split(' ')
-                print(short_msg)
-                count = fields[0].lstrip(':')
-                print(count, msg)
-            else:
-                field = -3
-                count = int(self.get_field(field).split(':')[-1])
+            count = int(self.get_field(-3).split(':')[-1])
             return count * int(self.get_field(3).split(':')[-1])
-        return int(self.get_field(4).split(':')[-1])
+        return int(self.get_field(3).split(':')[-1])
 
     def is_free(self):
         """Returns True if line is a call to free"""
