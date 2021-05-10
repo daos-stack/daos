@@ -172,7 +172,7 @@ log_event(Shared__RASEvent *evt)
 
 out:
 	fclose(stream);
-	D_DEBUG(DB_MGMT, "&&& RAS EVENT%s", buf);
+	D_INFO("&&& RAS EVENT%s\n", buf);
 	D_FREE(buf);
 }
 

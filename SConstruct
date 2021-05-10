@@ -381,7 +381,7 @@ def scons(): # pylint: disable=too-many-locals
         daos_build.load_mpi_path(env)
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
-        env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
+        env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
 
     AddOption('--deps-only',
               dest='deps_only',
@@ -389,7 +389,14 @@ def scons(): # pylint: disable=too-many-locals
               default=False,
               help='Download and build dependencies only, do not build daos')
 
-    run_checks(env)
+    if env['CC'] == 'clang':
+        il_env = env.Clone()
+        il_env['CC'] = 'gcc'
+        run_checks(env)
+        run_checks(il_env)
+    else:
+        run_checks(env)
+        il_env = env.Clone()
 
     res = GetOption('deps_only')
     if res:
@@ -405,7 +412,7 @@ def scons(): # pylint: disable=too-many-locals
     platform_arm = is_platform_arm()
     daos_version = get_version()
     # Export() is handled specially by pylint so do not merge these two lines.
-    Export('daos_version', 'API_VERSION', 'env', 'prereqs')
+    Export('daos_version', 'API_VERSION', 'env', 'il_env', 'prereqs')
     Export('platform_arm', 'conf_dir')
 
     if env['PLATFORM'] == 'darwin':

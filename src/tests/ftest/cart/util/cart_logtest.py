@@ -528,10 +528,16 @@ class LogTest():
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
                 elif line.is_realloc():
-                    new_pointer = line.get_field(-3)
-                    old_pointer = line.get_field(-1)[:-2].split(':')[-1]
+                    new_pointer = line.get_field(-6)
+                    old_pointer = line.get_field(-1)[0:-2]
+                    old_sz = int(line.get_field(-3))
+                    new_sz = line.calloc_size()
                     if new_pointer != '(nil)' and old_pointer != '(nil)':
-                        memsize.subtract(regions[old_pointer].calloc_size())
+                        exp_sz = regions[old_pointer].calloc_size()
+                        if old_sz not in [0, exp_sz, new_sz]:
+                            show_line(line, 'HIGH',
+                                      'realloc used invalid old size')
+                        memsize.subtract(exp_sz)
                     regions[new_pointer] = line
                     memsize.add(line.calloc_size())
                     if old_pointer not in (new_pointer, '(nil)'):

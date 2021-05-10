@@ -429,6 +429,11 @@ int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
 void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 
+int daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
+				daos_obj_id_t *oid, daos_ofeat_t ofeats,
+				daos_oclass_id_t cid, daos_oclass_hints_t hints,
+				uint32_t args);
+
 int dc_obj_init(void);
 void dc_obj_fini(void);
 
@@ -583,7 +588,8 @@ daos_recx_ep_add(struct daos_recx_ep_list *list, struct daos_recx_ep *recx)
 		if (list->re_total == 0)
 			D_ALLOC_ARRAY(new_items, nr);
 		else
-			D_REALLOC_ARRAY(new_items, list->re_items, nr);
+			D_REALLOC_ARRAY(new_items, list->re_items,
+					list->re_total, nr);
 		if (new_items == NULL)
 			return -DER_NOMEM;
 		list->re_items = new_items;

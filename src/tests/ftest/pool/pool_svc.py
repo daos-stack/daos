@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -65,7 +65,6 @@ class PoolSvc(TestWithServers):
         """
         # parameter used in pool create
         svc_params = self.params.get("svc_params")
-
         # Setup the TestPool object
         self.add_pool(create=False)
 
@@ -130,6 +129,9 @@ class PoolSvc(TestWithServers):
                         "DaosServerManager.stop_ranks([{}])".format(
                             pool_leader))
 
+                self.pool.wait_for_rebuild(to_start=True, interval=1)
+                self.pool.wait_for_rebuild(to_start=False, interval=1)
+
                 # Verify the pool leader has changed
                 pool_leader = self.check_leader(pool_leader, True)
                 non_leader_ranks.remove(pool_leader)
@@ -148,6 +150,8 @@ class PoolSvc(TestWithServers):
                         "Error stopping a pool non-leader - "
                         "DaosServerManager.stop_ranks([{}])".format(non_leader))
 
+                self.pool.wait_for_rebuild(to_start=True, interval=1)
+                self.pool.wait_for_rebuild(to_start=False, interval=1)
                 # Verify the pool leader has not changed
                 self.check_leader(pool_leader, False)
 

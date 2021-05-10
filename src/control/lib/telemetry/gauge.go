@@ -39,7 +39,7 @@ func (g *Gauge) Value() uint64 {
 
 	var val C.uint64_t
 
-	res := C.d_tm_get_gauge(&val, &g.stats, g.handle.shmem, g.node, nil)
+	res := C.d_tm_get_gauge(g.handle.ctx, &val, &g.stats, g.node)
 	if res == C.DER_SUCCESS {
 		return uint64(val)
 	}
