@@ -669,6 +669,33 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	return
 }
 
+func newSystemStartFailedEvent(errs string) *events.RASEvent {
+	return events.NewGenericEvent(events.RASSystemStartFailed, events.RASSeverityError,
+		fmt.Sprintf("System startup failed, %s", errs), "")
+}
+
+// processStartResp will raise failed event if the response results contain
+// errors, no event will be raised if user requested ranks or hosts that are
+// absent in the membership. Fanout response will then be converted to protouf.
+func processStartResp(fr *fanoutResponse, publisher events.Publisher) (*mgmtpb.SystemStartResp, error) {
+	if fr.Results.Errors() != nil {
+		publisher.Publish(newSystemStartFailedEvent(fr.Results.Errors().Error()))
+	}
+
+	sr := &mgmtpb.SystemStartResp{}
+	sr.Absentranks = fr.AbsentRanks.String()
+	sr.Absenthosts = fr.AbsentHosts.String()
+
+	if err := convert.Types(fr.Results, &sr.Results); err != nil {
+		return nil, err
+	}
+	for _, r := range sr.Results {
+		r.Action = "start"
+	}
+
+	return sr, nil
+}
+
 // SystemStart implements the method defined for the Management Service.
 //
 // Initiate controlled start of DAOS system instances (system members)
@@ -677,49 +704,29 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 //
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected ranks.
-func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartReq) (*mgmtpb.SystemStartResp, error) {
-	if err := svc.checkLeaderRequest(pbReq); err != nil {
-		return nil, err
+func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq) (resp *mgmtpb.SystemStartResp, err error) {
+	if err = svc.checkLeaderRequest(req); err != nil {
+		return
 	}
 	svc.log.Debug("Received SystemStart RPC")
 
-	// TODO DAOS-7264: system_start_failed event should be raised in the
-	//                 case that operation failed and should indicate which
-	//                 ranks did not start.
-	//
-	// Raise event on systemwide start
-	// if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
-	// 	svc.events.Publish(events.New(&events.RASEvent{
-	// 		ID:   events.RASSystemStart,
-	// 		Type: events.RASTypeInfoOnly,
-	// 		Msg:  "System-wide start requested",
-	// 		Rank: uint32(system.NilRank),
-	// 	}))
-	// }
+	defer func() {
+		if err == nil {
+			svc.log.Debugf("Responding to SystemStart RPC: %+v", resp)
+		}
+	}()
 
-	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
+	fResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.StartRanks,
-		Hosts:  pbReq.GetHosts(),
-		Ranks:  pbReq.GetRanks(),
+		Hosts:  req.GetHosts(),
+		Ranks:  req.GetRanks(),
 	}, true)
 	if err != nil {
 		return nil, err
 	}
 
-	pbResp := &mgmtpb.SystemStartResp{
-		Absentranks: fanResp.AbsentRanks.String(),
-		Absenthosts: fanResp.AbsentHosts.String(),
-	}
-	if err := convert.Types(fanResp.Results, &pbResp.Results); err != nil {
-		return nil, err
-	}
-	for _, result := range pbResp.Results {
-		result.Action = "start"
-	}
-
-	svc.log.Debugf("Responding to SystemStart RPC: %+v", pbResp)
-
-	return pbResp, nil
+	resp, err = processStartResp(fResp, svc.events)
+	return
 }
 
 // ClusterEvent management service gRPC handler receives ClusterEvent requests

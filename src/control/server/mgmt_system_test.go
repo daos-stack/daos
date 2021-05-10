@@ -1037,24 +1037,33 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			Message: &mgmtpb.SystemStartResp{Results: rrs},
 		}
 	}
+	expEventsStartFail := []*events.RASEvent{
+		newSystemStartFailedEvent("failed rank 0"),
+	}
 
 	for name, tc := range map[string]struct {
-		nilReq         bool
-		ranks          string
-		hosts          string
+		req            *mgmtpb.SystemStartReq
 		members        system.Members
 		mResps         []*control.HostResponse
 		expMembers     system.Members
 		expResults     []*sharedpb.RankResult
 		expAbsentRanks string
 		expAbsentHosts string
-		expErrMsg      string
+		expAPIErr      error
+		expDispatched  []*events.RASEvent
 	}{
 		"nil req": {
-			nilReq:    true,
-			expErrMsg: "nil request",
+			req:       (*mgmtpb.SystemStartReq)(nil),
+			expAPIErr: errors.New("nil request"),
+		},
+		"not system leader": {
+			req: &mgmtpb.SystemStartReq{
+				Sys: "quack",
+			},
+			expAPIErr: FaultWrongSystem("quack", build.DefaultSystemName),
 		},
 		"unfiltered rank results": {
+			req: &mgmtpb.SystemStartReq{},
 			members: system.Members{
 				mockMember(t, 0, 1, "stopped"),
 				mockMember(t, 1, 1, "stopped"),
@@ -1077,15 +1086,16 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 2, 2, "ready"),
 				mockMember(t, 3, 2, "ready"),
 			},
+			expDispatched: expEventsStartFail,
 		},
 		"filtered and oversubscribed ranks": {
+			req: &mgmtpb.SystemStartReq{Ranks: "0-1,4-9"},
 			members: system.Members{
 				mockMember(t, 0, 1, "stopped"),
 				mockMember(t, 1, 1, "joined"),
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
 			},
-			ranks: "0-1,4-9",
 			mResps: []*control.HostResponse{
 				hr(1, mockRankFail("start", 0), mockRankSuccess("start", 1)),
 			},
@@ -1100,15 +1110,16 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 3, 2, "stopped"),
 			},
 			expAbsentRanks: "4-9",
+			expDispatched:  expEventsStartFail,
 		},
 		"filtered and oversubscribed hosts": {
+			req: &mgmtpb.SystemStartReq{Hosts: "10.0.0.[2-5]"},
 			members: system.Members{
 				mockMember(t, 0, 1, "stopped"),
 				mockMember(t, 1, 1, "joined"),
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
 			},
-			hosts: "10.0.0.[2-5]",
 			mResps: []*control.HostResponse{
 				hr(2, mockRankFail("start", 2), mockRankSuccess("start", 3)),
 			},
@@ -1123,15 +1134,18 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				mockMember(t, 3, 2, "ready"),
 			},
 			expAbsentHosts: "10.0.0.[3-5]",
+			expDispatched: []*events.RASEvent{
+				newSystemStartFailedEvent("failed rank 2"),
+			},
 		},
 		"filtered hosts": {
+			req: &mgmtpb.SystemStartReq{Hosts: "10.0.0.[1-2]"},
 			members: system.Members{
 				mockMember(t, 0, 1, "joined"),
 				mockMember(t, 1, 1, "joined"),
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "joined"),
 			},
-			hosts: "10.0.0.[1-2]",
 			mResps: []*control.HostResponse{
 				hr(1, mockRankSuccess("start", 0), mockRankSuccess("start", 1)),
 				hr(2, mockRankSuccess("start", 2), mockRankSuccess("start", 3)),
@@ -1156,17 +1170,21 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 
 			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
 
-			req := &mgmtpb.SystemStartReq{
-				Sys:   build.DefaultSystemName,
-				Ranks: tc.ranks, Hosts: tc.hosts,
-			}
-			if tc.nilReq {
-				req = nil
-			}
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			defer cancel()
 
-			gotResp, gotErr := svc.SystemStart(context.TODO(), req)
-			common.ExpectError(t, gotErr, tc.expErrMsg, name)
-			if tc.expErrMsg != "" {
+			ps := events.NewPubSub(ctx, log)
+			svc.events = ps
+
+			dispatched := &eventsDispatched{cancel: cancel}
+			svc.events.Subscribe(events.RASTypeInfoOnly, dispatched)
+
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+			gotResp, gotAPIErr := svc.SystemStart(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expAPIErr, gotAPIErr)
+			if tc.expAPIErr != nil {
 				return
 			}
 
@@ -1178,6 +1196,12 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			checkMembers(t, tc.expMembers, svc.membership)
 			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
+
+			<-ctx.Done()
+
+			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
+			}
 		})
 	}
 }
