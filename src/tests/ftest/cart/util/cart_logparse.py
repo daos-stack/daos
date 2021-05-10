@@ -347,19 +347,40 @@ class LogLine():
 
     def realloc_pointers(self):
         """Returns a tuple of old and new memory addresses"""
-        new_pointer = self.get_field(-5)
         old_pointer = self.get_field(-1).rstrip('.')
+
+        # Working out the old pointer is tricky, realloc will have two or three
+        # strings representing variables, each of which can have spaces in it
+        # so patch the line back together, split on ' which marks the end of
+        # these and work for there.  The field we want will be after 1 or 2
+        # entries, but always 1 from the end, so use that.
+        msg = ' '.join(self._fields)
+        tick_fields = msg.split("'")
+        short_msg = tick_fields[-3]
+        fields = short_msg.split(' ')
+        np = fields[3]
+        new_pointer = self.get_field(-6)
+        if (np != new_pointer):
+            print(np, new_pointer)
+            print(self)
+            print(short_msg)
         return (new_pointer, old_pointer)
 
     def calloc_size(self):
         """Returns the size of the allocation"""
-        if self.get_field(5) == '*':
+        if self.get_field(4) == '*':
             if self.is_realloc():
-                field = -8
+                msg = ' '.join(self._fields)
+                tick_fields = msg.split("'")
+                short_msg = tick_fields[4]
+                fields = short_msg.split(' ')
+                print(short_msg)
+                count = fields[0].lstrip(':')
+                print(count, msg)
             else:
                 field = -3
-            count = int(self.get_field(field).split(':')[-1])
-            return count * int(self.get_field(4))
+                count = int(self.get_field(field).split(':')[-1])
+            return count * int(self.get_field(3).split(':')[-1])
         return int(self.get_field(4))
 
     def is_free(self):

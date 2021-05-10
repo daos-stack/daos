@@ -80,23 +80,23 @@ void *d_realloc(void *, size_t);
 			if ((count) <= 1)				\
 				D_DEBUG(DB_MEM,				\
 					"alloc(" #func ") '" name	\
-					"': %i at %p.\n",		\
+					"':%i at %p.\n",		\
 					(int)(size), (ptr));		\
 			else						\
 				D_DEBUG(DB_MEM,				\
 					"alloc(" #func ") '" name	\
-					"': %i * '" cname "':%i at %p.\n", \
+					"':%i * '" cname "':%i at %p.\n", \
 					(int)(size), (int)(count), (ptr)); \
 			break;						\
 		}							\
 		(void)(on_error);					\
 		if ((count) >= 1)					\
 			D_ERROR("out of memory (tried to "		\
-				#func " '" name "': %i)\n",		\
+				#func " '" name "':%i)\n",		\
 				(int)((size) * (count)));		\
 		else							\
 			D_ERROR("out of memory (tried to "		\
-				#func " '" name "': %i)\n",		\
+				#func " '" name "':%i)\n",		\
 				(int)(size));				\
 	} while (0)
 
@@ -171,16 +171,16 @@ void *d_realloc(void *, size_t);
 			if (_cnt <= 1)					\
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
-					"': %zu at %p old '" #oldptr	\
-					"': %zu at %p.\n",		\
+					"':%zu at %p old '" #oldptr	\
+					"':%zu at %p.\n",		\
 					_esz, (newptr), _oldsz,		\
 					(oldptr));			\
 			else						\
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
-					"': %zu * '" #cnt		\
+					"':%zu * '" #cnt		\
 					"':%zu at %p old '" #oldptr	\
-					"': %zu at %p.\n",		\
+					"':%zu at %p.\n",		\
 					_esz, _cnt, (newptr), _oldsz,	\
 					(oldptr));			\
 			(oldptr) = NULL;				\
