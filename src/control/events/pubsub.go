@@ -105,7 +105,7 @@ func (ps *PubSub) EnableEventIDs(ids ...RASID) {
 }
 
 // Publish passes an event to the event channel to be processed by subscribers.
-// Ignore disabled events. Implements the Publisher interface.
+// Ignore disabled events.
 func (ps *PubSub) Publish(event *RASEvent) {
 	if common.InterfaceIsNil(event) {
 		ps.log.Error("nil event")

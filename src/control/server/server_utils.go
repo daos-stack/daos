@@ -316,7 +316,7 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 // registerFollowerSubscriptions stops handling received forwarded (in addition
 // to local) events and starts forwarding events to the new MS leader.
 // Log events on the host that they were raised (and first published) on.
-// This the initial behaviour before leadership has been determined.
+// This is the initial behavior before leadership has been determined.
 func registerFollowerSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
