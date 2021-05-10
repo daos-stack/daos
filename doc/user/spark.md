@@ -21,9 +21,6 @@ We assume that the DAOS servers and agents have already been deployed in the
 environment. Otherwise, they can be deployed by following the
 [DAOS Installation Guide](https://daos-stack.github.io/admin/installation/).
 
-!!! note DAOS support for Spark and Hadoop is not available in DAOS 1.0. 
-         It is targeted for the DAOS 1.2 release.
-
 ## Download DAOS Hadoop Filesystem
 
 There are two artifacts to download, daos-java and hadoop-daos, from maven.
@@ -109,7 +106,7 @@ loadable by Hadoop DAOS FileSystem.
 
 ### Validate Hadoop Access
 
-If everything goes well, you should see “/user” directory being listed after
+If everything goes well, you should see `/user` directory being listed after
 issuing below command.
 
 ```bash

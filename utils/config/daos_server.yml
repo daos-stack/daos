@@ -227,7 +227,7 @@
 #
 #  nr_xs_helpers: 6
 #
-#  # Use specific OFI interfaces.
+#  # Use specific network interface.
 #  # Specify the fabric network interface that will be used by this engine.
 #  # Optionally specify the fabric network interface port that will be used
 #  # by this engine but please only if you have a specific need, this will

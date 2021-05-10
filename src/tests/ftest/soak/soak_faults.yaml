@@ -33,7 +33,7 @@ server_config:
         scm_class: dcpm
         scm_list: [/dev/pmem0]
         bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     mode: 146
@@ -96,6 +96,13 @@ soak_faults:
     name: soak_faults
     # harasser test timeout in hours
     test_timeout: 24
+    joblist:
+        - ior_faults
+# Commandline parameters
+# Benchmark and application params
+# IOR params -a DFS and -a MPIIO
+# sequential
+ior_faults:
     # maximum timeout for a single job in test in minutes
     job_timeout: 20
     nodesperjob:
@@ -106,13 +113,6 @@ soak_faults:
         - 1
         - 16
         - 32
-    joblist:
-        - ior_faults
-# Commandline parameters
-# Benchmark and application params
-# IOR params -a DFS and -a MPIIO
-# sequential
-ior_faults:
     api:
         - DFS
         - MPIIO
@@ -138,5 +138,10 @@ dfuse:
     disable_direct_io: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
-
-
+events:
+    - "mce: [Hardware Error]: Machine check events logged"
+    - "Package temperature above threshold"
+monitor:
+    - "/usr/bin/free -h"
+    - "/usr/bin/vmstat -w"
+    - "ps -C daos_engine -o %mem,%cpu,cmd"

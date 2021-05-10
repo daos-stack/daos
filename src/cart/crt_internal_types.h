@@ -132,6 +132,10 @@ struct crt_plugin_gdata {
 	struct crt_event_cb_priv	*cpg_event_cbs;
 	struct crt_event_cb_priv	*cpg_event_cbs_old;
 	uint32_t			 cpg_inited:1;
+	/* hlc error event callback */
+	crt_hlc_error_cb		 hlc_error_cb;
+	void				*hlc_error_cb_arg;
+
 	/* mutex to protect all callbacks change only */
 	pthread_mutex_t			 cpg_mutex;
 };
