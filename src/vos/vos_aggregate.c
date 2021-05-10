@@ -782,7 +782,7 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_buf = NULL;
-			BIO_ADDR_SET_NOT_HOLE(
+			BIO_ADDR_CLEAR_HOLE(
 				&bsgl->bs_iovs[add_idx++].bi_addr);
 		}
 		if (bsgl->bs_iovs[i].bi_suffix_len) {
@@ -799,7 +799,7 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_buf = NULL;
-			BIO_ADDR_SET_NOT_HOLE(
+			BIO_ADDR_CLEAR_HOLE(
 				&bsgl->bs_iovs[add_idx++].bi_addr);
 		}
 

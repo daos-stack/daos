@@ -1070,7 +1070,7 @@ obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
 			 * failed to commit.
 			 */
 			biov->bi_addr.ba_off = biov_dup->bi_addr.ba_off;
-			BIO_ADDR_SET_NOT_DEDUP(&biov->bi_addr);
+			BIO_ADDR_CLEAR_DEDUP(&biov->bi_addr);
 			biov_dup->bi_addr.ba_off = UMOFF_NULL;
 
 			D_DEBUG(DB_IO, "Verify dedup extents failed, "

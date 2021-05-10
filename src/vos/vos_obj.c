@@ -1826,14 +1826,20 @@ sv_iter_corrupt(struct vos_obj_iter *oiter)
 
 	/* Fetch the key/value for the current iter cursor */
 	rc = dbtree_iter_fetch(oiter->it_hdl, &key, &val, &anchor);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("dbtree_iter_fetch failed: "DF_RC"\n", DP_RC(rc));
+		rc = umem_tx_end(umm, rc);
 		return rc;
+	}
 
 	addr_offset = offsetof(struct vos_irec_df, ir_ex_addr);
 	rc = umem_tx_add(umm, rbund.rb_off + addr_offset,
 			 sizeof(*irec) - addr_offset);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("umem_tx_add failed: "DF_RC"\n", DP_RC(rc));
+		rc = umem_tx_end(umm, rc);
 		return rc;
+	}
 
 	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted\n");
 	irec = umem_off2ptr(umm, rbund.rb_off);
@@ -1935,7 +1941,7 @@ vos_obj_iter_process(struct vos_iterator *iter, vos_iter_proc_op op,
 	case VOS_ITER_PROC_OP_MARK_CORRUPT:
 		if (iter->it_type == VOS_ITER_SINGLE)
 			return sv_iter_corrupt(oiter);
-		else if (iter->it_type == VOS_ITER_RECX)
+		if (iter->it_type == VOS_ITER_RECX)
 			return evt_iter_corrupt(oiter->it_hdl);
 	default:
 		D_ASSERT(0);

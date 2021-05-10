@@ -578,8 +578,11 @@ evt_iter_corrupt(daos_handle_t ih)
 	rc = umem_tx_add(&tcx->tc_umm,
 			 trace->tr_node + offsetof(struct evt_desc, dc_ex_addr),
 			 sizeof(*desc) - offsetof(struct evt_desc, dc_ex_addr));
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("umem_tx_add failed: "DF_RC"\n", DP_RC(rc));
+		rc = evt_tx_end(tcx, rc);
 		return rc;
+	}
 
 	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted\n");
 	BIO_ADDR_SET_CORRUPTED(&desc->dc_ex_addr);

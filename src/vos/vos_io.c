@@ -1483,7 +1483,7 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
 	/* Don't make this flag persistent */
-	BIO_ADDR_SET_NOT_DEDUP(&ent.ei_addr);
+	BIO_ADDR_CLEAR_DEDUP(&ent.ei_addr);
 
 	if (ioc->ic_remove)
 		return evt_remove_all(toh, &ent.ei_rect.rc_ex, &ioc->ic_epr);
