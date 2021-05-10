@@ -381,7 +381,7 @@ class LogLine():
                 field = -3
                 count = int(self.get_field(field).split(':')[-1])
             return count * int(self.get_field(3).split(':')[-1])
-        return int(self.get_field(4))
+        return int(self.get_field(5))
 
     def is_free(self):
         """Returns True if line is a call to free"""
