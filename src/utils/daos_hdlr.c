@@ -577,25 +577,13 @@ pool_query_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_QUERY);
 
-	if (ap->label) {
-		rc = daos_pool_connect_bylabel(ap->label, ap->sysname,
-					       DAOS_PC_RO, &ap->pool,
-					       NULL /* info */, NULL /* ev */);
-		if (rc != 0) {
-			fprintf(stderr, "failed to connect to pool %s: "
-				"%s (%d)\n", ap->label, d_errdesc(rc), rc);
-			D_GOTO(out, rc);
-		}
-	} else {
-		rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-				       DAOS_PC_RO, &ap->pool,
-				       NULL /* info */, NULL /* ev */);
-		if (rc != 0) {
-			fprintf(stderr, "failed to connect to pool "DF_UUIDF
-				": %s (%d)\n", DP_UUID(ap->p_uuid),
-				d_errdesc(rc), rc);
-			D_GOTO(out, rc);
-		}
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+			       DAOS_PC_RO, &ap->pool,
+			       NULL /* info */, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+		D_GOTO(out, rc);
 	}
 
 	pinfo.pi_bits = DPI_ALL;

@@ -104,13 +104,12 @@ int dc_pool_list_cont(tse_task_t *task);
 
 int dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
 int dc_pool_update_map(daos_handle_t ph, struct pool_map *map);
-int dc_pool_choose_svc_rank(const uuid_t puuid, struct rsvc_client *cli,
+int dc_pool_choose_svc_rank_ORIG(const uuid_t puuid, struct rsvc_client *cli,
 			    pthread_mutex_t *cli_lock, struct dc_mgmt_sys *sys,
 			    crt_endpoint_t *ep);
-int dc_pool_choose_svc_rank_bylabel(const char *label, uuid_t puuid,
-				    struct rsvc_client *cli,
-				    pthread_mutex_t *cli_lock,
-				    struct dc_mgmt_sys *sys,
-				    crt_endpoint_t *ep);
+int dc_pool_choose_svc_rank(const char *label, uuid_t puuid,
+			    struct rsvc_client *cli, pthread_mutex_t *cli_lock,
+			    struct dc_mgmt_sys *sys,
+			    crt_endpoint_t *ep);
 
 #endif /* __DD_POOL_H__ */

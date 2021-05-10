@@ -478,7 +478,9 @@ pool_properties(void **state)
 	/* label - set arg->pool_label to use daos_pool_connect_bylabel() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
 	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
+	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
 	D_STRNDUP(arg->pool_label, label, DAOS_PROP_LABEL_MAX_LEN);
+	assert_ptr_not_equal(arg->pool_label, NULL);
 
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	/* change daos_prop_alloc() above, specify 2 entries not 1 */

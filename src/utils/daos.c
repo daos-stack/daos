@@ -543,7 +543,6 @@ static void
 args_free(struct cmd_args_s *ap)
 {
 	D_FREE(ap->sysname);
-	D_FREE(ap->label);
 	D_FREE(ap->attrname_str);
 	D_FREE(ap->value_str);
 	D_FREE(ap->path);
@@ -573,7 +572,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"sys-name",	required_argument,	NULL,	'G'},
 		{"pool",	required_argument,	NULL,	'p'},
 		{"cont",	required_argument,	NULL,	'c'},
-		{"label",	required_argument,	NULL,	'l'},
 		{"attr",	required_argument,	NULL,	'a'},
 		{"value",	required_argument,	NULL,	'v'},
 		{"path",	required_argument,	NULL,	'd'},
@@ -685,13 +683,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 					optarg);
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
-			break;
-		case 'l':
-			if (ap->label != NULL) {
-				fprintf(stderr, "only one label is allowed\n");
-				D_GOTO(out_free, rc = RC_NO_HELP);
-			}
-			D_STRNDUP(ap->label, optarg, strlen(optarg));
 			break;
 		case 'a':
 			if (ap->attrname_str != NULL) {
@@ -899,7 +890,7 @@ pool_op_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	op = ap->p_op;
 
-	ARGS_VERIFY_POOL(ap, out, rc = RC_PRINT_HELP);
+	ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 
 	switch (op) {
 	case POOL_QUERY:
@@ -1056,7 +1047,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 				free(dattr.da_rel_path);
 		}
 	} else {
-		ARGS_VERIFY_POOL(ap, out, rc = RC_PRINT_HELP);
+		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
 
 	rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
@@ -1214,7 +1205,7 @@ obj_op_hdlr(struct cmd_args_s *ap)
 	op = ap->o_op;
 
 	rc = 0;
-	ARGS_VERIFY_POOL(ap, out, rc = RC_PRINT_HELP);
+	ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
 	ARGS_VERIFY_OID(ap, out, rc = RC_PRINT_HELP);
 
@@ -1276,7 +1267,7 @@ shell_op_hdlr(struct cmd_args_s *ap)
 	int rc;
 
 	assert(ap != NULL);
-	ARGS_VERIFY_POOL(ap, out, rc = EINVAL);
+	ARGS_VERIFY_PUUID(ap, out, rc = EINVAL);
 	rc = obj_ctl_shell(ap);
 
 out:

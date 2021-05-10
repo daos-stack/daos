@@ -341,12 +341,11 @@ ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 	d_rank_list_t		       *ranks;
 	int				rc;
 
-	D_ALLOC(frq.label, DAOS_PROP_LABEL_MAX_LEN+1);
+	D_STRNDUP(frq.label, label, DAOS_PROP_LABEL_MAX_LEN);
 	if (frq.label == NULL) {
-		D_ERROR("failed to allocate pool label\n");
+		D_ERROR("failed to duplicate pool label string\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
-	D_STRNDUP(frq.label, label, DAOS_PROP_LABEL_MAX_LEN);
 
 	D_DEBUG(DB_MGMT, "fetching svc_ranks for pool %s\n", label);
 
