@@ -1349,7 +1349,15 @@ class posix_tests():
             self.fail()
         except FileNotFoundError:
             print('Failed to fstat() unlinked file')
-        ofd.close()
+        # With caching enabled the kernel will do a setattr to set the times on
+        # close, so with caching enabled catch that and ignore it.
+        if self.dfuse.caching:
+            try:
+                ofd.close()
+            except FileNotFoundError:
+                pass
+        else:
+            ofd.close()
 
     @needs_dfuse
     def test_symlink_broken(self):
