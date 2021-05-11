@@ -656,43 +656,31 @@ populated as follows:
 port: 10001
 access_points: ["wolf-71"] # <----- updated
 <snip>
-servers:
+engines:
 -
-  targets: 8                # number of I/O service threads per-engine
-  first_core: 0             # offset of the first core for service threads
-  nr_xs_helpers: 2          # count of I/O offload threads per target
-  fabric_iface: eth0        # map to OFI_INTERFACE=eth0
-  fabric_iface_port: 31416  # map to OFI_PORT=31416
-  log_mask: ERR             # map to D_LOG_MASK=ERR
-  log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
-  env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
-  - DAOS_MD_CAP=1024
-  - CRT_CTX_SHARE_ADDR=0
-  - CRT_TIMEOUT=30
-  - FI_SOCKETS_MAX_CONN_RETRY=1
-  - FI_SOCKETS_CONN_TIMEOUT=2000
-  scm_mount: /mnt/daos  # map to -s /mnt/daos
-  scm_class: dcpm
-  scm_list: [/dev/pmem0] # <----- updated
-  bdev_class: nvme
-  bdev_list: ["0000:87:00.0", "0000:81:00.0"]  # <----- updated
+  targets: 16                 # number of I/O service threads per-engine
+  first_core: 0               # offset of the first core to bind service threads
+  nr_xs_helpers: 0            # count of I/O offload threads
+  fabric_iface: eth0          # network interface to use for this engine
+  fabric_iface_port: 31416    # network port
+  log_mask: ERR               # debug level to start with the engine with
+  log_file: /tmp/server1.log  # where to store engine logs
+  scm_mount: /mnt/daos        # where to mount SCM
+  scm_class: dcpm             # type of SCM
+  scm_list: [/dev/pmem0]      # <----- updated
+  bdev_class: nvme            # type of block device
+  bdev_list: ["0000:87:00.0"] # <----- updated
 -
-  targets: 8                # number of I/O service threads per-engine
-  first_core: 0             # offset of the first core for service threads
-  nr_xs_helpers: 2          # count of I/O offload threads per target
-  fabric_iface: eth0        # map to OFI_INTERFACE=eth0
-  fabric_iface_port: 31416  # map to OFI_PORT=31416
-  log_mask: ERR             # map to D_LOG_MASK=ERR
-  log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
-  env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
-  - DAOS_MD_CAP=1024
-  - CRT_CTX_SHARE_ADDR=0
-  - CRT_TIMEOUT=30
-  - FI_SOCKETS_MAX_CONN_RETRY=1
-  - FI_SOCKETS_CONN_TIMEOUT=2000
-  scm_mount: /mnt/daos  # map to -s /mnt/daos
+  targets: 16
+  first_core: 0
+  nr_xs_helpers: 0
+  fabric_iface: eth0
+  fabric_iface_port: 32416
+  log_mask: ERR
+  log_file: /tmp/server2.log
+  scm_mount: /mnt/daos
   scm_class: dcpm
-  scm_list: [/dev/pmem1] # <----- updated
+  scm_list: [/dev/pmem1]       # <----- updated
   bdev_class: nvme
   bdev_list: ["0000:da:00.0"]  # <----- updated
 <end>

@@ -24,7 +24,9 @@ class SoakFaultInject(SoakTestBase):
         This test will run for the time specified by test_timeout in
         the soak_faults config file.
 
-        :avocado: tags=soak,soak_faults
+        :avocado: tags=hw,large
+        :avocado: tags=soak
+        :avocado: tags=soak_faults
         """
         test_param = "/run/soak_faults/"
         self.run_soak(test_param)

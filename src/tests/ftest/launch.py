@@ -5,6 +5,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
+# this needs to be disabled as list_tests.py is still using python2
+# pylint: disable=raise-missing-from
 
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
@@ -1546,14 +1548,24 @@ def resolve_debuginfo_dnf(pkg):
     dnf_base = dnf.Base()
     dnf_base.conf.assumeyes = True
     dnf_base.read_all_repos()
-    dnf_base.fill_sack()
+    try:
+        dnf_base.fill_sack()
+    except OSError as error:
+        print("Got an OSError trying to fill_sack(): ", error)
+        raise RuntimeError("resolve_debuginfo_dnf() "
+                           "failed: ", error)
 
     query = dnf_base.sack.query()
     latest = query.latest()
     latest_info = latest.filter(name=pkg)
 
     debuginfo = None
-    package = list(latest_info)[0]
+    try:
+        package = list(latest_info)[0]
+    except IndexError as error:
+        raise RuntimeError("Could not find package info for "
+                           "{}".format(pkg))
+
     if package:
         debuginfo_map = {"glibc": "glibc-debuginfo-common"}
         try:
@@ -1575,13 +1587,18 @@ def resolve_debuginfo_dnf(pkg):
 
 def install_debuginfos():
     """Install debuginfo packages."""
-    install_pkgs = [{'name': 'gdb'}]
+    install_pkgs = [{'name': 'gdb'}, {'name': 'python3-debuginfo'}]
 
     cmds = []
 
     # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury', 'hdf5']:
-        debug_pkg = resolve_debuginfo(pkg)
+    for pkg in ['daos', 'systemd', 'ndctl', 'mercury', 'hdf5']:
+        try:
+            debug_pkg = resolve_debuginfo(pkg)
+        except RuntimeError as error:
+            print("Failed trying to install_debuginfos(): ", error)
+            raise
+
         if debug_pkg and debug_pkg not in install_pkgs:
             install_pkgs.append(debug_pkg)
 
@@ -1593,19 +1610,24 @@ def install_debuginfos():
 
     if USE_DEBUGINFO_INSTALL:
         distro_info = detect()
-        yum_args = ["--exclude", "ompi-debuginfo", "openmpi3"]
+        yum_args = ["--exclude", "ompi-debuginfo"]
         if "suse" in distro_info.name.lower():
-            yum_args.extend(["libpmemobj1", "python3"])
-        elif "centos" in distro_info.name.lower():
-            yum_args.extend(["libpmemobj", "python36"])
+            yum_args.extend(["libpmemobj1", "python3", "openmpi3"])
+        elif "centos" in distro_info.name.lower() and \
+             distro_info.version == "7":
+            yum_args.extend(["--exclude", "nvml-debuginfo", "libpmemobj",
+                             "python36", "openmpi3"])
+        elif "centos" in distro_info.name.lower() and \
+             distro_info.version == "8":
+            yum_args.extend(["libpmemobj", "python3", "openmpi"])
         else:
             raise RuntimeError(
                 "install_debuginfos(): Unsupported distro: {}".format(
                     distro_info))
-        cmds.append(["sudo", "yum", "-y", "install"] + yum_args)
+        cmds.append(["sudo", "dnf", "-y", "install"] + yum_args)
         cmds.append(
-            ["sudo", "debuginfo-install", "--enablerepo=*-debuginfo", "-y"] +
-            yum_args + ["daos-server", "gcc"])
+            ["sudo", "dnf", "debuginfo-install", "--enablerepo=*-debuginfo",
+             "-y"] + yum_args + ["daos-server", "gcc"])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
@@ -1626,7 +1648,7 @@ def install_debuginfos():
     # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
 
     # Now install a few pkgs that debuginfo-install wouldn't
-    cmd = ["sudo", "yum", "-y", "--enablerepo=*debug*", "install"]
+    cmd = ["sudo", "dnf", "-y", "--enablerepo=*debug*", "install"]
     for pkg in install_pkgs:
         try:
             cmd.append(
@@ -1648,7 +1670,7 @@ def install_debuginfos():
             break
     if retry:
         print("Going to refresh caches and try again")
-        cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
+        cmd_prefix = ["sudo", "dnf", "--enablerepo=*debug*"]
         cmds.insert(0, cmd_prefix + ["clean", "all"])
         cmds.insert(1, cmd_prefix + ["makecache"])
         for cmd in cmds:
