@@ -307,6 +307,9 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 	uint32_t	 svc_reps[4] = {0, 1, 2, 3};
 	d_rank_list_t	*svc_ranks;
 
+	/* Skip for DAOS-7424 */
+	skip();
+
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);
 

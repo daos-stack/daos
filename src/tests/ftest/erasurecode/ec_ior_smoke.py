@@ -22,7 +22,7 @@ class ErasureCodeIor(IorTestBase):
 
 	:avocado: tags=all,pr,daily_regression
 	:avocado: tags=hw,large
-	:avocado: tags=ec,ec_smoke
+	:avocado: tags=ec,ec_smoke,mpich
 	:avocado: tags=ec_ior
 
         """
