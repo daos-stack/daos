@@ -448,6 +448,7 @@ tse_task_prep_callback(tse_task_t *task)
 	struct tse_task_private	*dtp = tse_task2priv(task);
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
+	bool			 ret = true;
 	int			 rc;
 
 	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_prep_cb_list, dtc_list) {
@@ -461,12 +462,12 @@ tse_task_prep_callback(tse_task_t *task)
 
 		D_FREE(dtc);
 
-		/** Task was re-initialized; break */
+		/** Task was re-initialized; */
 		if (!dtp->dtp_running && !dtp->dtp_completing)
-			return false;
+			ret = false;
 	}
 
-	return true;
+	return ret;
 }
 
 /*
