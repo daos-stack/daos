@@ -11,7 +11,6 @@ import threading
 from test_utils_pool import TestPool
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
-from daos_utils import DaosCommand
 
 
 class NvmePoolExclude(OSAUtils):
@@ -26,7 +25,7 @@ class NvmePoolExclude(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = DaosCommand(self.bin)
+        self.daos_command = self.get_daos_command()
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
