@@ -28,7 +28,7 @@ Build-Depends: debhelper (>= 10),
                libboost-dev,
                libspdk-dev,
                libipmctl-dev,
-               libraft-dev (= 0.7.3-1382.g3fa7f4e),
+               libraft-dev (= 0.7.3-1384.gd3593cb),
                python3-tabulate,
                liblz4-dev
 Standards-Version: 4.1.2
