@@ -26,6 +26,13 @@ d_calloc(size_t count, size_t eltsize)
 }
 
 void *
+d_malloc(size_t size)
+{
+	return malloc(size);
+}
+
+
+void *
 d_realloc(void *ptr, size_t size)
 {
 	return realloc(ptr, size);
@@ -203,7 +210,7 @@ d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size)
 		d_rank_list_free(ptr);
 		return NULL;
 	}
-	D_REALLOC_ARRAY(new_rl_ranks, ptr->rl_ranks, size);
+	D_REALLOC_ARRAY(new_rl_ranks, ptr->rl_ranks, ptr->rl_nr, size);
 	if (new_rl_ranks != NULL) {
 		ptr->rl_ranks = new_rl_ranks;
 		ptr->rl_nr = size;
@@ -332,11 +339,10 @@ out:
 int
 d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank)
 {
-	uint32_t		 old_num;
+	uint32_t		 old_num = rank_list->rl_nr;
 	d_rank_list_t		*new_rank_list;
 	int			 rc = 0;
 
-	old_num = rank_list->rl_nr;
 	new_rank_list = d_rank_list_realloc(rank_list, old_num + 1);
 	if (new_rank_list == NULL) {
 		D_ERROR("d_rank_list_realloc() failed.\n");
@@ -625,7 +631,7 @@ d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 		}
 
 		size = buf->buf_size * 2;
-		D_REALLOC(new_buf, buf->str, size);
+		D_REALLOC(new_buf, buf->str, buf->buf_size, size);
 		if (new_buf == NULL) {
 			buf->status = -DER_NOMEM;
 			return -DER_NOMEM;

@@ -15,7 +15,7 @@ ARG CB0
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
-RUN yum clean all && \
+RUN yum -y install deltarpm && \
     yum -y install epel-release && \
     yum -y upgrade && \
     yum -y install \
@@ -55,17 +55,18 @@ RUN yum clean all && \
         maven \
         nasm \
         ndctl \
+        numactl \
         numactl-devel \
         openssl-devel \
         pandoc \
         patch \
         patchelf \
         pciutils \
-        python3-pip \
         python36-Cython \
         python36-devel \
         python36-distro \
         python36-jira \
+        python36-junit_xml \
         python36-numpy \
         python36-paramiko \
         python36-pylint \
@@ -73,8 +74,10 @@ RUN yum clean all && \
         python36-requests \
         python36-tabulate \
         python36-pyxattr \
+        python36-PyYAML \
         python36-scons \
         sg3_utils \
+        sudo \
         valgrind-devel \
         yasm && \
     yum clean all
@@ -89,24 +92,7 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-
-# Removing PyYAML 3.10 to allow pip install to upgrade
-RUN yum -y remove python36-PyYAML
-
-RUN python3 -m pip install --upgrade pip
-
-RUN python3 -m pip --no-cache-dir install \
-    "avocado-framework<70.0" \
-    "avocado-framework-plugin-result-html<70.0" \
-    "avocado-framework-plugin-varianter-yaml-to-mux<70.0" \
-    clustershell \
-    pep8 \
-    pygit2 \
-    python-magic
-
-# Add codespell to path.
-ENV PATH=$PATH:/home/daos/.local/bin
-
+RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
@@ -132,10 +118,9 @@ RUN if [ -n "$REPO_URL" ]; then                                                \
 name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;                 \
-      yum --assumeyes install yum-utils;                                       \
-      yum-config-manager --assumeyes --quiet                                   \
-                         --disable base epel extra updates;                    \
+gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;                \
+      yum-config-manager --assumeyes --quiet                                  \
+                         --disable base epel extra updates;                   \
     fi
 RUN if $QUICKBUILD; then                                                      \
         MY_REPO="${REPO_URL}${REPO_EL7}";                                     \
@@ -240,7 +225,6 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 

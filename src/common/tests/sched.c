@@ -17,7 +17,7 @@
 #include <daos/common.h>
 #include <daos/tse.h>
 
-#define TASK_COUNT		1000
+#define TASK_COUNT		(D_ON_VALGRIND ? 10 : 1000)
 #define SCHED_COUNT		5
 
 #define TSE_TEST_FMT	"-------- %s test_%s: %s\n"
@@ -321,7 +321,7 @@ out:
 	return rc;
 }
 
-#define REINITS 3000000
+#define REINITS (D_ON_VALGRIND ? 3000 : 3000000)
 
 static int
 comp_reinit_cb(tse_task_t *task, void *data)

@@ -164,19 +164,24 @@ def configure_fuse(cenv):
 def scons():
     """Scons function"""
 
-    Import('env prereqs')
+    Import('env', 'il_env', 'prereqs')
 
     # Set options which are used throughout the src.
     dfuse_env = env.Clone(LIBS=[])
     dfuse_env.AppendUnique(CPPPATH=['.'])
-    dfuse_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
+    dfuse_env.AppendUnique(CFLAGS=['-pthread'])
     dfuse_env.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
-
     dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid'])
 
-    libs = build_client_libs_shared(dfuse_env)
+    gcc_env = il_env.Clone(LIBS=[])
+    gcc_env.AppendUnique(CPPPATH=['.'])
+    gcc_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
+    gcc_env.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
+    gcc_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
 
-    static_env = dfuse_env.Clone()
+    libs = build_client_libs_shared(gcc_env)
+
+    static_env = gcc_env.Clone()
 
     # Set this after cloning environment used for interception library.
     # Otherwise, can't define open and open64 entry points
