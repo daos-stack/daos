@@ -247,7 +247,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 
 #define UUID_REGEX "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}){1}"
 #define DAOS_FORMAT "^daos://"UUID_REGEX"/"UUID_REGEX"[/]?"
-#define DAOS_FORMAT_NO_PREFIX "^/"UUID_REGEX"/"UUID_REGEX"[/]?"
+#define DAOS_FORMAT_NO_PREFIX "^[/]+"UUID_REGEX"/"UUID_REGEX"[/]?"
 #define DAOS_FORMAT_NO_CONT "^daos://"UUID_REGEX"[/]?$"
 
 static int
@@ -285,6 +285,51 @@ check_direct_format(const char *path, bool no_prefix, bool *pool_only)
 	return rc;
 }
 
+static int
+parse_path(const char *path, size_t path_len, size_t *cur_end_idx,
+	   size_t *rel_len, char *dir_path, char *rel_path)
+{
+	size_t	dir_name_len = 0;
+	size_t	i;
+	size_t	slash_idx = 0;
+
+	if (path == NULL)
+		return EINVAL;
+
+	/** Find end, not including trailing slashes */
+	for (i = *cur_end_idx - 1; i > 0; i--) {
+		if (path[i] != '/')
+			break;
+	}
+
+	/** Find last slash */
+	for (; i > 0; i--) {
+		if (path[i] == '/') {
+			slash_idx = i;
+			break;
+		}
+	}
+
+	/** Copy the dirname */
+	if (slash_idx == 0)
+		dir_name_len = 1;
+	else
+		dir_name_len = slash_idx;
+
+	/** Copy the remaining path rel_path */
+	*rel_len = path_len - dir_name_len + 1;
+	if (*rel_len > 0) {
+		strncpy(rel_path, path + slash_idx, *rel_len);
+		rel_path[*rel_len] = '\0';
+	}
+
+	strncpy(dir_path, path, dir_name_len);
+	dir_path[dir_name_len] = '\0';
+
+	*cur_end_idx = slash_idx;
+	return 0;
+}
+
 int
 duns_resolve_path(const char *path, struct duns_attr_t *attr)
 {
@@ -292,6 +337,12 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	char		str[DUNS_MAX_XATTR_LEN];
 	struct statfs	fs;
 	bool		pool_only = false;
+	char		*realp = NULL;
+	char		*rel_path = NULL;
+	char		*dir_path = NULL;
+	size_t		path_len;
+	size_t		cur_idx;
+	size_t		rel_len = 0;
 	int		rc;
 
 	rc = check_direct_format(path, attr->da_no_prefix, &pool_only);
@@ -373,39 +424,92 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		return err;
 	}
 
-#ifdef LUSTRE_INCLUDE
-	if (fs.f_type == LL_SUPER_MAGIC) {
-		rc = duns_resolve_lustre_path(path, attr);
-		if (rc == 0)
-			return 0;
+	D_REALPATH(realp, path);
+	if (realp == NULL)
+		return errno;
 
-		/* if Lustre specific method fails, fallback to try
-		 * the normal way...
-		 */
-	}
+	path_len = strnlen(realp, PATH_MAX);
+	if (path_len > PATH_MAX - 1)
+		D_GOTO(out, rc = ENAMETOOLONG);
+
+	D_ALLOC(rel_path, path_len + 1);
+	if (rel_path == NULL)
+		D_GOTO(out, rc = ENOMEM);
+
+	D_STRNDUP(dir_path, realp, path_len);
+	if (dir_path == NULL)
+		D_GOTO(out, rc = ENOMEM);
+
+	cur_idx = path_len;
+
+	while (1) {
+#ifdef LUSTRE_INCLUDE
+		if (fs.f_type == LL_SUPER_MAGIC) {
+			rc = duns_resolve_lustre_path(dir_path, attr);
+			if (rc == 0)
+				D_GOTO(out, rc);
+
+			/* if Lustre specific method fails, fallback to try the
+			 * normal way...
+			 */
+		}
 #endif
 
-	s = lgetxattr(path, DUNS_XATTR_NAME, &str, DUNS_MAX_XATTR_LEN);
-	if (s < 0 || s > DUNS_MAX_XATTR_LEN) {
-		int err = errno;
+		s = lgetxattr(dir_path, DUNS_XATTR_NAME, &str,
+			      DUNS_MAX_XATTR_LEN);
+		if (s < 0 || s > DUNS_MAX_XATTR_LEN) {
+			int err = errno;
 
-		if (err == ENOTSUP) {
-			D_INFO("Path is not in a filesystem that supports the"
-				" DAOS unified namespace\n");
-		} else if (err == ENODATA) {
-			D_INFO("Path does not represent a DAOS link\n");
-		} else if (s > DUNS_MAX_XATTR_LEN) {
-			err = EIO;
-			D_ERROR("Invalid xattr length\n");
-		} else {
-			D_ERROR("Invalid DAOS unified namespace xattr: %s\n",
-				strerror(err));
+			if (err == ENODATA) {
+				if (cur_idx == 0 || attr->da_no_reverse_lookup)
+					D_INFO("Path does not represent a DAOS"
+					       " link\n");
+				else
+					goto parse;
+			} else if (err == ENOTSUP) {
+				D_INFO("Path is not in a filesystem that"
+				       " supports the DAOS unified namespace\n");
+			} else if (s > DUNS_MAX_XATTR_LEN) {
+				err = EIO;
+				D_ERROR("Invalid xattr length\n");
+			} else {
+				D_ERROR("Invalid DAOS unified namespace xattr:"
+					" %s\n", strerror(err));
+			}
+
+			D_GOTO(out, rc = err);
 		}
 
-		return err;
+		/** On success, parse the attribute */
+		rc = duns_parse_attr(&str[0], s, attr);
+		if (rc) {
+			D_ERROR("Invalid xattr format\n");
+			D_GOTO(out, rc);
+		}
+		/** if the xattr parsing succeeds, break */
+		break;
+parse:
+		rc = parse_path(realp, path_len, &cur_idx, &rel_len, dir_path,
+				rel_path);
+		if (rc) {
+			D_ERROR("Failed to parse %s (%s)\n",
+				path, strerror(rc));
+			D_GOTO(out, rc);
+		}
 	}
 
-	return duns_parse_attr(&str[0], s, attr);
+	if (cur_idx != path_len) {
+		D_ASSERT(rel_path);
+		attr->da_rel_path = strndup(rel_path, rel_len);
+		if (attr->da_rel_path == NULL)
+			D_GOTO(out, rc = ENOMEM);
+	}
+
+out:
+	D_FREE(rel_path);
+	D_FREE(dir_path);
+	D_FREE(realp);
+	return rc;
 }
 
 int
