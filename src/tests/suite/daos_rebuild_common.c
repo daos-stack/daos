@@ -152,7 +152,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			args[i]->rebuild_cb(args[i]);
 
 	sleep(10); /* make sure the rebuild happens after exclude/add/kill */
-	if (args[0]->myrank == 0)
+	if (args[0]->myrank == 0 && !args[0]->no_rebuild)
 		test_rebuild_wait(args, args_cnt);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -694,19 +694,23 @@ verify_ec(struct ioreq *req, int index, char *verify_data, daos_off_t off,
 void
 write_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
 {
-	char	buffer[PARTIAL_DATA_SIZE];
+	char	*buffer;
 
+	buffer = (char *)malloc(PARTIAL_DATA_SIZE);
 	make_buffer(buffer, 'a', PARTIAL_DATA_SIZE);
 	write_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE);
+	free(buffer);
 }
 
 void
 verify_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
 {
-	char	buffer[PARTIAL_DATA_SIZE];
+	char	*buffer;
 
+	buffer = (char *)malloc(PARTIAL_DATA_SIZE);
 	make_buffer(buffer, 'a', PARTIAL_DATA_SIZE);
 	verify_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE);
+	free(buffer);
 }
 
 void
@@ -748,11 +752,13 @@ write_ec_partial_full(struct ioreq *req, int test_idx, daos_off_t off)
 void
 verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off)
 {
-	char	buffer[DATA_SIZE];
+	char	*buffer;
 
+	buffer = (char *)malloc(DATA_SIZE);
 	make_buffer(buffer, 'b', DATA_SIZE);
 	make_buffer(buffer, 'a', PARTIAL_DATA_SIZE);
 	verify_ec(req, test_idx, buffer, off, DATA_SIZE);
+	free(buffer);
 }
 
 void

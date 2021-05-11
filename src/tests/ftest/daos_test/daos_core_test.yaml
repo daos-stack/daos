@@ -24,11 +24,11 @@ timeouts:
     test_daos_capability: 104
     test_daos_epoch_recovery: 104
     test_daos_md_replication: 104
-    test_daos_rebuild_simple: 500
+    test_daos_rebuild_simple: 900
     test_daos_drain_simple: 500
     test_daos_oid_allocator: 320
-    test_daos_checksum: 240
-    test_daos_rebuild_ec: 1500
+    test_daos_checksum: 500
+    test_daos_rebuild_ec: 1800
     test_daos_degraded_ec_0to6: 900
     test_daos_degraded_ec_8to23: 950
     test_daos_dedup: 220
