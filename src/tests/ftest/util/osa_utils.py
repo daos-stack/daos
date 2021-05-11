@@ -50,7 +50,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.test_during_rebuild = False
         self.test_with_checksum = True
         # By default, test_with_rf is set to False.
-        # It is upto invidual test to enable it.
+        # It is up to individual test to enable it.
         self.test_with_rf = False
 
     @fail_on(CommandFailure)
