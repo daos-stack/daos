@@ -1043,6 +1043,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			ap->type = dattr.da_type;
 			uuid_copy(ap->p_uuid, dattr.da_puuid);
 			uuid_copy(ap->c_uuid, dattr.da_cuuid);
+			if (dattr.da_rel_path)
+				free(dattr.da_rel_path);
 		}
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
