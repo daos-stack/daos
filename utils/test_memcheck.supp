@@ -109,18 +109,6 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:definite
-   fun:malloc
-   fun:strndup
-   fun:prop_to_acl_response
-   ...
-   obj:/usr/lib64/libcmocka.so.*
-   fun:_cmocka_run_group_tests
-   fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    match-leak-kinds:reachable
    fun:malloc
    fun:xmalloc
@@ -211,13 +199,6 @@
    fun:run_gc_tests
    ...
    fun:main
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:User
-   fun:pmemobj_tx_add_snapshot
-   fun:pmemobj_tx_add_common.constprop.*
-   ...
 }
 {
    <insert_a_suppression_name_here>

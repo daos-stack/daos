@@ -36,6 +36,8 @@
 #include <daos/profile.h>
 #include <daos/dtx.h>
 
+#define DAOS_ON_VALGRIND D_ON_VALGRIND
+
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
 
