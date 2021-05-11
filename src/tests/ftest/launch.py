@@ -1150,7 +1150,8 @@ def archive_daos_dumps(avocado_logs_dir, test_files, args):
     print("Archiving host dumps from {} in {}".format(hosts, destination))
 
     # Copy any dump files
-    task = archive_files(destination, hosts, "/tmp/daos_dump*.txt*", False, args)
+    task = archive_files(destination, hosts, "/tmp/daos_dump*.txt*", False,
+                         args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
