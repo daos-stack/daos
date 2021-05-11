@@ -6,9 +6,10 @@
 """
 from apricot import TestWithServers
 from general_utils import pcmd, run_pcmd
+from control_test_base import ControlTestBase
 
 
-class SSDSocketTest(TestWithServers):
+class SSDSocketTest(ControlTestBase):
     """Test Class Description: Verify NVMe NUMA socket values.
 
     This test covers the requirement SRS-10-0034.
@@ -57,22 +58,16 @@ class SSDSocketTest(TestWithServers):
             hosts=self.hostlist_servers,
             command="hwloc-ls --whole-io --verbose")
 
-    def test_scan_ssd(self):
+    def verify_ssd_sockets(self, storage_dict):
+        """Main test component.
+
+        Args:
+            storage_dict (dict): Dictionary under "storage"
+
+        Returns:
+            list: List of errors.
         """
-        JIRA ID: DAOS-3584
-
-        Test Description: Verify NVMe NUMA socket values.
-
-        :avocado: tags=all,small,full_regression,hw,control,ssd_socket
-        """
-        # Call dmg storage scan --verbose and get the PCI addresses.
-        storage_out = self.get_dmg_command().storage_scan(verbose=True)
-
-        # Get nvme_devices and scm_namespaces list that are buried. There's a
-        # uint64 hash of the strcut under HostStorage.
-        temp_dict = storage_out["response"]["HostStorage"]
-        struct_hash = list(temp_dict.keys())[0]
-        nvme_devices = temp_dict[struct_hash]["storage"]["nvme_devices"]
+        nvme_devices = storage_dict["nvme_devices"]
 
         pci_addr_heads = []
         errors = []
@@ -111,4 +106,17 @@ class SSDSocketTest(TestWithServers):
             # them in CI, we need some debugging info when the test fails to
             # better understand the result.
             self.debug_numa_node(pci_addr_heads)
-            self.fail("Error found!\n{}".format("\n".join(errors)))
+
+        return errors
+
+    def test_scan_ssd(self):
+        """
+        JIRA ID: DAOS-3584
+
+        Test Description: Verify NVMe NUMA socket values.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=control,ssd_socket
+        """
+        self.verify_dmg_storage_scan(self.verify_ssd_sockets)
