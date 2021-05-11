@@ -128,17 +128,6 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Leak
-   match-leak-kinds:definite
-   fun:calloc
-   ...
-   fun:register_cb
-   fun:tse_task_register_cbs
-   fun:sched_test_2
-   ...
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
    ...
    fun:calloc
    fun:gc_bin_find_bag
