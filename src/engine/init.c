@@ -482,6 +482,18 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 }
 
 static void
+dss_crt_hlc_error_cb(void *arg)
+{
+	/* Rank will be populated automatically */
+	ds_notify_ras_eventf(RAS_ENGINE_CLOCK_DRIFT, RAS_TYPE_INFO,
+			     RAS_SEV_ERROR, NULL /* hwid */, NULL /* rank */,
+			     NULL /* jobid */, NULL /* pool */,
+			     NULL /* cont */, NULL /* objid */,
+			     NULL /* ctlop */, NULL /* data */,
+			     "clock drift detected");
+}
+
+static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
 	if (uid != NULL)
@@ -668,6 +680,10 @@ server_init(int argc, char *argv[])
 	D_INFO("Modules successfully set up\n");
 
 	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
+	if (rc)
+		D_GOTO(exit_init_state, rc);
+
+	rc = crt_register_hlc_error_cb(dss_crt_hlc_error_cb, NULL);
 	if (rc)
 		D_GOTO(exit_init_state, rc);
 
