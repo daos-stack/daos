@@ -12,6 +12,7 @@ from control_test_base import ControlTestBase
 
 
 class DmgStorageScanSCMTest(ControlTestBase):
+    # pylint: disable=pylint-too-many-ancestors
     """Test Class Description:
     This test partially covers the following requirement.
     (TR-1.0.34) admin can use daos_shell to collect information and create yaml

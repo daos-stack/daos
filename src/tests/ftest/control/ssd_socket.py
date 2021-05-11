@@ -10,6 +10,7 @@ from control_test_base import ControlTestBase
 
 
 class SSDSocketTest(ControlTestBase):
+    # pylint: disable=pylint-too-many-ancestors
     """Test Class Description: Verify NVMe NUMA socket values.
 
     This test covers the requirement SRS-10-0034.
