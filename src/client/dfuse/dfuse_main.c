@@ -391,6 +391,7 @@ main(int argc, char **argv)
 	if (rc != 0)
 		D_GOTO(out_debug, ret = rc);
 
+	duns_attr.da_no_reverse_lookup = true;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
 	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s",
 		       rc, strerror(rc));
