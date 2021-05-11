@@ -695,3 +695,17 @@ daos_recx_free(daos_recx_t *recx)
 {
 	D_FREE(recx);
 }
+
+void
+bio_size_init() {
+	char            *block_io_size;
+	block_io_size 	= getenv("BIO_BLOCK_CAPACITY");
+
+	if (block_io_size != NULL) {
+		blk_capacity = ((atoi(block_io_size) >= 4096) &&
+				(atoi(block_io_size)%4096 == 0))
+				? atoi(block_io_size) : 16777216;
+	} else {
+		blk_capacity = 16777216;
+	}
+}

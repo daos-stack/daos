@@ -60,6 +60,8 @@ enum {
 	VOS_OBJ_VISIBLE		= (1 << 0),
 	/** Create the object if it doesn't exist */
 	VOS_OBJ_CREATE		= (1 << 1),
+	/** Only return the object if it's visible in case of block IO */
+	VOS_OBJ_EXISTS          = (1 << 2),
 };
 
 /**

@@ -71,6 +71,8 @@ enum {
 	DAOS_OF_ARRAY_MD	= (1 << 6),
 	/** reserved: Byte Array with no metadata (eg DFS/POSIX) */
 	DAOS_OF_ARRAY_BYTE	= (1 << 7),
+	/** reserved:  Block IO Identifier */
+	DAOS_OF_BLOCK   	= (1 << 8),
 	/**
 	 * benchmark-only feature bit, I/O is a network echo, no data is going
 	 * to be stored/returned

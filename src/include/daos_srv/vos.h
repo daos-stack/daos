@@ -715,6 +715,21 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 struct dtx_handle *dth);
 
 /**
+ * This API uses same as the above except for the one listed below.
+ * This API is used for the block IO interface
+ * \param pm_ver [IN]   Memory Map
+ * \param block_capacity [IN]
+ * 			Single block capacity for block IO interface
+ */
+int
+vos_update_begin_block(daos_handle_t coh, daos_unit_oid_t oid,
+		       daos_epoch_t epoch, uint64_t flags, daos_key_t *dkey,
+		       unsigned int iod_nr, daos_iod_t *iods,
+		       struct dcs_iod_csums *iods_csums, bool dedup,
+		       uint32_t dedup_th, daos_handle_t *ioh,
+		       struct dtx_handle *dth, uint32_t pm_ver,
+		       uint32_t block_capacity);
+/**
  * Finish the current update and release the responding resources.
  *
  * \param ioh	[IN]	The I/O handle created by \a vos_update_begin
@@ -732,6 +747,10 @@ int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       struct dtx_handle *dth);
 
+/** This API is used as a replacement of  vos_update_end in Block IO */
+int
+vos_update_end_block(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey,
+		     int err, struct dtx_handle *dth);
 /**
  * Get the recx/epoch list.
  *

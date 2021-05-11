@@ -1156,6 +1156,7 @@ dss_srv_init(void)
 	int		 rc;
 	bool		 started = true;
 
+	bio_size_init();
 	xstream_data.xd_init_step  = XD_INIT_NONE;
 	xstream_data.xd_ult_signal = false;
 

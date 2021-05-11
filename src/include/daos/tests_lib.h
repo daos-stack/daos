@@ -60,7 +60,7 @@ void dts_key_gen(char *key, unsigned int key_len, const char *prefix);
 daos_obj_id_t dts_oid_gen(unsigned seed);
 
 /** generate a random and unique baseline object ID */
-daos_unit_oid_t dts_unit_oid_gen(daos_oclass_id_t oclass, uint8_t ofeats,
+daos_unit_oid_t dts_unit_oid_gen(daos_oclass_id_t oclass, uint16_t ofeats,
 				 uint32_t shard);
 
 /** Set rank into the oid */

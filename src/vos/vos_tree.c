@@ -996,6 +996,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 {
 	struct ilog_df		*ilog = NULL;
 	struct vos_krec_df	*krec = NULL;
+	daos_ofeat_t             ofeat= daos_obj_id2feat(obj->obj_id.id_pub);
 	struct dcs_csum_info	 csum;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 riov;
@@ -1037,6 +1038,10 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	case 0:
 		krec = rbund.rb_krec;
 		ilog = &krec->kr_ilog;
+		if ((ofeat & DAOS_OF_BLOCK) && (tclass == VOS_BTR_AKEY)) {
+			*krecp = krec;
+			 goto out;
+		}
 		/** fall through to cache re-cache entry */
 	case -DER_NONEXIST:
 		/** Key hash may already be calculated but isn't for some key
@@ -1067,6 +1072,10 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		krec = rbund.rb_krec;
 		vos_ilog_ts_mark(ts_set, &krec->kr_ilog);
 		created = true;
+		if ((ofeat & DAOS_OF_BLOCK) && (tclass == VOS_BTR_AKEY)) {
+			*krecp = krec;
+			 goto out;
+		}
 	}
 
 	if (sub_toh) {

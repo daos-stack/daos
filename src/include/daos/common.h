@@ -43,6 +43,9 @@
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
 
 #define MAX_TREE_ORDER_INC	7
+/** The following variable & function are for Block IO */
+uint32_t         	blk_capacity;
+void			bio_size_init();
 
 struct daos_node_overhead {
 	/** Node size in bytes for tree with only */

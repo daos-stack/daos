@@ -76,6 +76,10 @@ bool			ts_profile_vos;
 char			*ts_profile_vos_path = ".";
 int			ts_profile_vos_avg = 100;
 static ABT_xstream	abt_xstream;
+/** feature bit to test block I/O*/
+daos_ofeat_t		ts_ofeat = 0;
+/** block capacity */
+uint32_t		ts_block_capacity = 4096;
 
 #define PF_DKEY_PREF	"blade"
 #define PF_AKEY_PREF	"apple"
@@ -348,16 +352,29 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		struct bio_sglist	*bsgl;
 		daos_handle_t		 ioh;
 
-		if (op_type == TS_DO_UPDATE)
-			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoids[obj_idx],
-					      epoch, 0, &cred->tc_dkey, 1,
-					      &cred->tc_iod, NULL, false, 0,
-					      &ioh, NULL);
-		else
+		if (op_type == TS_DO_UPDATE) {
+			if (ts_ofeat & DAOS_OF_BLOCK) {
+				rc = vos_update_begin_block(ts_ctx.tsc_coh,
+							    ts_uoids[obj_idx],
+							    epoch, 0,
+							    &cred->tc_dkey, 1,
+							    &cred->tc_iod,
+							    NULL, false, 0,
+							    &ioh, NULL, 0,
+							    ts_block_capacity);
+			} else {
+				rc = vos_update_begin(ts_ctx.tsc_coh,
+						      ts_uoids[obj_idx],
+						      epoch, 0, &cred->tc_dkey,
+						      1, &cred->tc_iod, NULL,
+						      false, 0, &ioh, NULL);
+			}
+		} else {
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoids[obj_idx],
 					     epoch, &cred->tc_dkey, 1,
 					     &cred->tc_iod, 0, NULL, &ioh,
 					     NULL);
+		}
 		if (rc)
 			return rc;
 
@@ -382,10 +399,17 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 
 		rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
-		if (op_type == TS_DO_UPDATE)
-			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL);
-		else
+		if (op_type == TS_DO_UPDATE) {
+			if (ts_ofeat & DAOS_OF_BLOCK)
+				rc = vos_update_end_block(ioh, 0,
+							  &cred->tc_dkey,
+							  rc, NULL);
+			else
+				rc = vos_update_end(ioh, 0, &cred->tc_dkey,
+						    rc, NULL);
+		} else {
 			rc = vos_fetch_end(ioh, rc);
+		}
 	}
 
 	TS_TIME_END(duration, start);
@@ -602,10 +626,17 @@ objects_open(void)
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		if (!ts_oid_init) {
-			ts_oids[i] = daos_test_oid_gen(
+			if (ts_ofeat & DAOS_OF_BLOCK) {
+			        ts_oids[i] = daos_test_oid_gen(
+				ts_mode == TS_MODE_VOS ? DAOS_HDL_INVAL :
+				ts_ctx.tsc_coh, ts_class, ts_ofeat, 0,
+				ts_ctx.tsc_mpi_rank);
+			} else {
+				ts_oids[i] = daos_test_oid_gen(
 				ts_mode == TS_MODE_VOS ? DAOS_HDL_INVAL :
 				ts_ctx.tsc_coh, ts_class, 0, 0,
 				ts_ctx.tsc_mpi_rank);
+			}
 			if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 				ts_oids[i] = dts_oid_set_rank(ts_oids[i],
 							      RANK_ZERO);
@@ -1718,7 +1749,7 @@ main(int argc, char **argv)
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:n:s:R:g:G:zf:hwxpA::",
+				 "P:N:T:C:c:o:d:a:n:s:b:R:g:G:zf:hwxpA::",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1815,6 +1846,10 @@ main(int argc, char **argv)
 			break;
 		case 'p':
 			ts_profile_vos = true;
+			break;
+		case 'b':
+			ts_ofeat = DAOS_OF_BLOCK;
+			ts_block_capacity = atoi(optarg);
 			break;
 		case 'h':
 			if (ts_ctx.tsc_mpi_rank == 0)
@@ -1989,7 +2024,9 @@ main(int argc, char **argv)
 	if (ts_indices)
 		free(ts_indices);
 	stride_buf_fini();
-	dts_ctx_fini(&ts_ctx);
+	/** TODO: Bypassing for block IO full stack, vos mode works*/
+	if (!(ts_ofeat & DAOS_OF_BLOCK))
+		dts_ctx_fini(&ts_ctx);
 
 	MPI_Finalize();
 

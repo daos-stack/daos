@@ -21,7 +21,7 @@
 
 #include "daos.h"
 #include "daos_fs.h"
-
+#include <object.h>
 #include "dfs_internal.h"
 
 /** D-key name of SB metadata */
@@ -324,6 +324,11 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 	if (file)
 		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
 			DAOS_OF_ARRAY_BYTE;
+
+	/*if (file && (oclass == OC_SB)){
+		D_DEBUG(DB_IO, "oclass: %" PRId16 "\n", oclass);
+		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_ARRAY_BYTE | DAOS_OF_BLOCK;
+	}*/
 
 	/** generate the daos object ID (set the DAOS owned bits) */
 	daos_obj_set_oid(oid, feat, oclass, 0);
@@ -791,6 +796,7 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 				return rc;
 
 			/** Just open the file */
+			exists = 0;
 			if (exists)
 				goto fopen;
 		}
@@ -3165,6 +3171,9 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	daos_array_iod_t	iod;
 	daos_range_t		rg;
 	daos_size_t		buf_size;
+	daos_ofeat_t            ofeat;
+	uint64_t  		alignment_limit;
+	uint64_t 		length;
 	int			i;
 	int			rc;
 
@@ -3194,6 +3203,19 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	rg.rg_len = buf_size;
 	rg.rg_idx = off;
 	iod.arr_rgs = &rg;
+	alignment_limit = 4096;
+	length = iod.arr_rgs->rg_len;
+
+	/**
+	 * Number of records equals transfer size (per IOR terminology)
+	 * For block I/O, we want 4k aligmnet, so we can check here for
+	 * that condition.
+	 */
+	ofeat = daos_obj_id2feat(obj->oid);
+	if ((ofeat && DAOS_OF_BLOCK) & (length % alignment_limit != 0)) {
+		D_PRINT_ERR("Block size is not 4k aligned!\n");
+		return daos_der2errno(1);
+	}
 
 	D_DEBUG(DB_TRACE, "DFS Write: Off %"PRIu64", Len %zu\n", off, buf_size);
 

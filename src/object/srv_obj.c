@@ -28,6 +28,7 @@
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
+#include <daos/object.h>
 
 static int
 obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
@@ -85,6 +86,7 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 		daos_handle_t ioh, int status, struct dtx_handle *dth)
 {
 	struct obj_rw_in	*orwi = crt_req_get(rpc);
+	daos_ofeat_t             ofeat = daos_obj_id2feat(orwi->orw_oid.id_pub);
 	int			 rc;
 
 	if (daos_handle_is_valid(ioh)) {
@@ -93,9 +95,17 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 		if (update) {
 			rc = dtx_sub_init(dth, &orwi->orw_oid,
 					  orwi->orw_dkey_hash);
-			if (rc == 0)
-				rc = vos_update_end(ioh, map_version,
-						&orwi->orw_dkey, status, dth);
+			if (rc == 0) {
+				if (ofeat & DAOS_OF_BLOCK)
+					rc = vos_update_end_block(ioh,
+								  map_version,
+								  &orwi->orw_dkey,
+								  status, dth);
+				else
+					rc = vos_update_end(ioh, map_version,
+							    &orwi->orw_dkey,
+							    status, dth);
+			}
 		} else {
 			rc = vos_fetch_end(ioh, status);
 		}
@@ -382,6 +392,8 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 
 			rc = crt_bulk_get_len(remote_bulks[i],
 					      &remote_bulk_size);
+			D_DEBUG(DB_IO, DF_U64 "  %zu \n",
+				length, remote_bulk_size);
 			if (rc)
 				break;
 
@@ -1243,6 +1255,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
 	struct dcs_iod_csums		*iod_csums;
 	uint32_t			tag = dss_get_module_info()->dmi_tgt_id;
+	daos_ofeat_t                    ofeat;
 	daos_handle_t			ioh = DAOS_HDL_INVAL;
 	struct bio_desc			*biod;
 	daos_key_t			*dkey;
@@ -1264,6 +1277,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	offs = split_offs == NULL ? orw->orw_iod_array.oia_offs : split_offs;
 	iod_csums = split_csums == NULL ? orw->orw_iod_array.oia_iod_csums :
 					 split_csums;
+	ofeat =  daos_obj_id2feat(orw->orw_oid.id_pub);
 
 	if (daos_obj_is_echo(orw->orw_oid.id_pub) ||
 	    (daos_io_bypass & IOBP_TARGET)) {
@@ -1317,13 +1331,24 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			}
 		}
 
-		rc = vos_update_begin(ioc->ioc_vos_coh, orw->orw_oid,
-			      orw->orw_epoch, orw->orw_api_flags,
-			      dkey, orw->orw_nr, iods,
-			      iod_csums,
-			      ioc->ioc_coc->sc_props.dcp_dedup_enabled,
-			      ioc->ioc_coc->sc_props.dcp_dedup_size,
-			      &ioh, dth);
+		if (ofeat & DAOS_OF_BLOCK) {
+			rc =  vos_update_begin_block(ioc->ioc_vos_coh,
+				orw->orw_oid,
+				orw->orw_epoch,
+				orw->orw_api_flags,
+				dkey, orw->orw_nr, iods,
+				iod_csums,
+				ioc->ioc_coc->sc_props.dcp_dedup_enabled,
+				ioc->ioc_coc->sc_props.dcp_dedup_size,
+				&ioh, dth, ioc->ioc_map_ver, blk_capacity);
+		} else {
+			rc = vos_update_begin(ioc->ioc_vos_coh, orw->orw_oid,
+				orw->orw_epoch, orw->orw_api_flags,
+				dkey, orw->orw_nr, iods, iod_csums,
+				ioc->ioc_coc->sc_props.dcp_dedup_enabled,
+				ioc->ioc_coc->sc_props.dcp_dedup_size,
+				&ioh, dth);
+		}
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), DP_RC(rc));

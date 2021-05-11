@@ -544,7 +544,8 @@ dc_array_create(tse_task_t *task)
 		D_ERROR("Array Dkeys must be UINT64 Typed (OID feats).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
-	if (!(ofeat & DAOS_OF_KV_FLAT)) {
+	//if (!(ofeat & DAOS_OF_KV_FLAT)) {
+	if (!(ofeat && DAOS_OF_BLOCK) & !(ofeat & DAOS_OF_KV_FLAT)) {
 		D_ERROR("Array must be of type Flat KV (OID feats).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
@@ -735,7 +736,8 @@ dc_array_open(tse_task_t *task)
 		D_ERROR("Array Dkeys must be UINT64 Typed (OID feats).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
-	if (!(ofeat & DAOS_OF_KV_FLAT)) {
+	//if (!(ofeat & DAOS_OF_KV_FLAT)) {
+	if (!(ofeat && DAOS_OF_BLOCK) & !(ofeat & DAOS_OF_KV_FLAT)) {
 		D_ERROR("Array must be of type Flat KV (OID feats).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}

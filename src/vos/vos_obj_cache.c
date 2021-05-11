@@ -211,6 +211,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	uint32_t		 cond_mask = 0;
 	bool			 create;
 	bool			 visible_only;
+	bool			 test;
 
 	D_ASSERT(cont != NULL);
 	D_ASSERT(cont->vc_pool);
@@ -222,6 +223,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	create = flags & VOS_OBJ_CREATE;
 	visible_only = flags & VOS_OBJ_VISIBLE;
+	test = flags & VOS_OBJ_EXISTS; /** for block IO lookup only */
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
 		" create=%s epr="DF_U64"-"DF_U64"\n",
@@ -237,6 +239,9 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		D_GOTO(failed_2, rc);
 
 	obj = container_of(lret, struct vos_object, obj_llink);
+
+	if (test && !obj->obj_df)
+		return -DER_NONEXIST;
 
 	if (obj->obj_zombie)
 		D_GOTO(failed, rc = -DER_AGAIN);
@@ -267,6 +272,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	obj->obj_sync_epoch = 0;
 	if (!create) {
+		D_DEBUG(DB_IO, "Not create just find vos_oi_find");
 		rc = vos_oi_find(cont, oid, &obj->obj_df, ts_set);
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_TRACE, "non exist oid "DF_UOID"\n",
@@ -274,7 +280,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 			goto failed;
 		}
 	} else {
-
+		D_DEBUG(DB_IO, "Not create just find vos_oi_find_alloc");
 		rc = vos_oi_find_alloc(cont, oid, epr->epr_hi, false,
 				       &obj->obj_df, ts_set);
 		D_ASSERT(rc || obj->obj_df);

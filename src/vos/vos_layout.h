@@ -291,6 +291,17 @@ enum vos_krec_bf {
 	KREC_BF_DKEY			= (1 << 2),
 };
 
+/* The following information required by a block-object only */
+struct vos_blk_df {
+	uint32_t                        bo_version;
+	/* block size, minimum aligned I/O size */
+	uint32_t                        bo_blk_size;
+	/* capacity of the block */
+	uint64_t                        bo_capa;
+	/* Starting address of a block allocation*/
+	bio_addr_t                      bo_addr;
+};
+
 /**
  * Persisted VOS (d/a)key record, it is referenced by btr_record::rec_off
  * of btree VOS_BTR_DKEY/VOS_BTR_AKEY.
@@ -313,6 +324,8 @@ struct vos_krec_df {
 		struct btr_root			kr_btr;
 		/** evtree root, which is only used by akey */
 		struct evt_root			kr_evt;
+		/** this is the information about  block object pointed by the key */
+		struct vos_blk_df               kr_blk;
 	};
 	/* Checksum and key are stored after tree root */
 };

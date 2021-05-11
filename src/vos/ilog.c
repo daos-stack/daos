@@ -1079,8 +1079,8 @@ ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
 		.id_tx_id = 0,
 		.id_epoch = major_eph,
 	};
-
-	D_ASSERT(minor_eph != 0);
+	/** Commenting it off for Block IO Development */
+	//D_ASSERT(minor_eph != 0);
 
 	if (punch) {
 		id.id_punch_minor_eph = minor_eph;

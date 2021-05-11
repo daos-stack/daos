@@ -35,7 +35,7 @@ dts_oid_gen(unsigned seed)
 }
 
 daos_unit_oid_t
-dts_unit_oid_gen(daos_oclass_id_t oclass, uint8_t ofeats, uint32_t shard)
+dts_unit_oid_gen(daos_oclass_id_t oclass, uint16_t ofeats, uint32_t shard)
 {
 	daos_unit_oid_t	uoid;
 

@@ -481,6 +481,10 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 		return 0;
 	}
 
+	D_DEBUG(DB_IO, "bio_iov2len(biov)= %lu,  bio_iov2raw_len(biov)=%lu\n",
+			(unsigned long)bio_iov2len(biov),
+			(unsigned long)bio_iov2raw_len(biov));
+
 	D_ASSERT(biov->bi_addr.ba_type == DAOS_MEDIA_NVME);
 	bdb = iod_dma_buf(biod);
 	off = bio_iov2raw_off(biov);
@@ -488,6 +492,10 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 	pg_cnt = ((end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
 			(off >> BIO_DMA_PAGE_SHIFT);
 	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
+
+	D_DEBUG(DB_IO, "off = %lu, end = %lu, pg_cnt = %u, pg_off = %u\n",
+			(unsigned long)off, (unsigned long)end,
+			(unsigned)pg_cnt, (unsigned)pg_off);
 
 	/*
 	 * For huge IOV, we'll bypass our per-xstream DMA buffer cache and
@@ -696,8 +704,9 @@ dma_rw(struct bio_desc *biod, bool prep)
 	D_ASSERT(channel != NULL);
 	biod->bd_ctxt->bic_inflight_dmas++;
 
-	D_DEBUG(DB_IO, "DMA start, blob:%p, update:%d, rmw:%d\n",
-		blob, biod->bd_update, rmw_read);
+	D_DEBUG(DB_IO, "DMA start, blob:%p, update:%d, rmw:%d, total_reserved_region:%u\n",
+			blob, biod->bd_update, rmw_read,
+			rsrvd_dma->brd_rg_cnt);
 
 	for (i = 0; i < rsrvd_dma->brd_rg_cnt; i++) {
 		rg = &rsrvd_dma->brd_regions[i];
@@ -720,9 +729,12 @@ dma_rw(struct bio_desc *biod, bool prep)
 				bio_yield();
 
 			D_DEBUG(DB_IO, "%s blob:%p payload:%p, "
-				"pg_idx:"DF_U64", pg_cnt:"DF_U64"\n",
+				"pg_idx:"DF_U64", pg_cnt:"DF_U64","
+				"offset = %lu, length = %lu\n",
 				biod->bd_update ? "Write" : "Read",
-				blob, payload, pg_idx, pg_cnt);
+				blob, payload, pg_idx, pg_cnt,
+				(unsigned long)(page2io_unit(biod->bd_ctxt, pg_idx)),
+				(unsigned long)(page2io_unit(biod->bd_ctxt, pg_cnt)));
 
 			if (biod->bd_update)
 				spdk_blob_io_write(blob, channel, payload,

@@ -258,7 +258,7 @@ int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
 static inline daos_obj_id_t
-daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
+daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint16_t ofeats,
 		  daos_oclass_hints_t hints, unsigned seed)
 {
 	daos_obj_id_t	oid;

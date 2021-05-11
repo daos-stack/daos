@@ -143,7 +143,8 @@ bio_iov2off(const struct bio_iov *biov)
 static inline uint64_t
 bio_iov2len(const struct bio_iov *biov)
 {
-	D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
+	/** Commenting it off for Block IO */
+	//D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
 	return biov->bi_data_len;
 }
 

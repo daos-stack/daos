@@ -57,6 +57,10 @@ struct vos_io_context {
 	unsigned int		 ic_iod_nr;
 	/** deduplication threshold size */
 	uint32_t		 ic_dedup_th;
+	/** block capacity as a part of cont_prop for block IO */
+	uint32_t                 ic_block_capacity;
+	/** LBA of the starting offset */
+	uint64_t                 ic_block_start_lba;
 	/** dedup entries to be inserted after transaction done */
 	d_list_t		 ic_dedup_entries;
 	/** flags */
@@ -66,7 +70,10 @@ struct vos_io_context {
 				 ic_dedup:1, /** candidate for dedup */
 				 ic_read_ts_only:1,
 				 ic_check_existence:1,
-				 ic_remove:1;
+				 ic_remove:1,
+				 ic_location_reserved:1;
+	bool			 ic_obj_found;
+	bool			 ic_block_io;
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -1060,6 +1067,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	int			 i, rc;
 	int			 flags = 0;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
+	daos_ofeat_t             ofeat;
 	struct daos_recx_ep_list *shadow;
 
 	D_DEBUG(DB_IO, "akey "DF_KEY" fetch %s epr "DF_X64"-"DF_X64"\n",
@@ -1070,6 +1078,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	if (is_array)
 		flags |= SUBTR_EVT;
 
+	ofeat = daos_obj_id2feat(ioc->ic_obj->obj_id.id_pub);
 	rc = key_tree_prepare(ioc->ic_obj, ak_toh,
 			      VOS_BTR_AKEY, &iod->iod_name, flags,
 			      DAOS_INTENT_DEFAULT, &krec, &toh, ioc->ic_ts_set);
@@ -1100,9 +1109,12 @@ fetch_value:
 	if (ioc->ic_read_ts_only || ioc->ic_check_existence)
 		goto out; /* skip value fetch */
 
-	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size, ioc);
-		goto out;
+	if (!(ofeat & DAOS_OF_BLOCK)) {
+		if (iod->iod_type == DAOS_IOD_SINGLE) {
+			rc = akey_fetch_single(toh, &val_epr, &iod->iod_size,
+					       ioc);
+			goto out;
+		}
 	}
 
 	iod->iod_size = 0;
@@ -1121,21 +1133,45 @@ fetch_value:
 				(unsigned long)iod->iod_recxs[i].rx_nr);
 			continue;
 		}
+		if (ofeat & DAOS_OF_BLOCK) {
+			uint64_t		offset;
+			uint64_t		length;
+			struct bio_iov		biov = {0};
 
-		iod_recx = iod->iod_recxs[i];
-		while (iod_recx.rx_nr > 0) {
-			akey_fetch_recx_get(&iod_recx, shadow, &fetch_recx,
-					    &shadow_ep);
-			rc = akey_fetch_recx(toh, &val_epr, &fetch_recx,
-					     shadow_ep, &rsize, ioc);
+			offset = iod->iod_recxs[i].rx_idx;
+			length = iod->iod_recxs[i].rx_nr;
+			/** Set the base address of the allocation **/
+			bio_iov_set(&biov, krec->kr_blk.bo_addr, length);
+			/** Add proper offset to reach to the location of IO **/
+			biov.bi_addr.ba_off = biov.bi_addr.ba_off + offset;
 
-			if (vos_dtx_continue_detect(rc))
-				continue;
+			D_DEBUG(DB_IO, "Address to fetch the value from %lu\n",
+					(unsigned long)biov.bi_addr.ba_off);
 
-			if (rc != 0) {
-				VOS_TX_LOG_FAIL(rc, "Failed to fetch index %d: "
-						DF_RC"\n", i, DP_RC(rc));
-				goto out;
+			rc = iod_fetch(ioc, &biov);
+			rsize = krec->kr_blk.bo_blk_size;
+
+			D_DEBUG(DB_IO, "Read IOD at %d: idx %lu, nr %lu\n", i,
+					(unsigned long)iod->iod_recxs[i].rx_idx,
+					(unsigned long)iod->iod_recxs[i].rx_nr);
+			D_DEBUG(DB_IO, "IOD read offset "DF_U64" size %zd\n",
+					biov.bi_addr.ba_off, biov.bi_data_len);
+		} else {
+			iod_recx = iod->iod_recxs[i];
+			while (iod_recx.rx_nr > 0) {
+				akey_fetch_recx_get(&iod_recx, shadow,
+						    &fetch_recx, &shadow_ep);
+				rc = akey_fetch_recx(toh, &val_epr, &fetch_recx,
+						     shadow_ep, &rsize, ioc);
+
+				if (vos_dtx_continue_detect(rc))
+					continue;
+
+				if (rc != 0) {
+					VOS_TX_LOG_FAIL(rc, "Failed to fetch index %d: "DF_RC"\n",
+							     i, DP_RC(rc));
+					goto out;
+				}
 			}
 		}
 
@@ -1169,6 +1205,80 @@ out:
 		key_tree_release(toh, is_array);
 
 	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
+}
+
+static int
+akey_fetch_block(struct vos_io_context *ioc, daos_handle_t ak_toh)
+{
+        daos_iod_t              *iod = &ioc->ic_iods[ioc->ic_sgl_at];
+        struct vos_krec_df      *krec = NULL;
+        daos_handle_t            toh = DAOS_HDL_INVAL;
+        bool                     is_array = (iod->iod_type == DAOS_IOD_ARRAY);
+        daos_ofeat_t             ofeat;
+	int			 flags = 0;
+	int                      i;
+	int			 rc;
+
+	ofeat = daos_obj_id2feat(ioc->ic_obj->obj_id.id_pub);
+
+        D_DEBUG(DB_IO, "akey "DF_KEY" fetch %s epr "DF_X64"-"DF_X64"\n",
+		DP_KEY(&iod->iod_name),
+		iod->iod_type == DAOS_IOD_ARRAY ? "array" : "single",
+		ioc->ic_epr.epr_lo, ioc->ic_epr.epr_hi);
+
+        if (is_array)
+                flags |= SUBTR_EVT;
+
+        rc = key_tree_prepare(ioc->ic_obj, ak_toh,
+                              VOS_BTR_AKEY, &iod->iod_name, flags,
+                              DAOS_INTENT_DEFAULT, &krec, &toh, ioc->ic_ts_set);
+
+        if(rc!=0)
+                return rc;
+
+        iod->iod_size = 0;
+
+        for (i = 0; i < iod->iod_nr; i++) {
+		daos_size_t     rsize = 0;
+
+		if (iod->iod_recxs[i].rx_nr == 0) {
+			D_DEBUG(DB_IO,
+				"Skip empty read IOD at %d: idx %lu, nr %lu\n",
+				 i, (unsigned long)iod->iod_recxs[i].rx_nr,
+				 (unsigned long)iod->iod_recxs[i].rx_nr);
+			continue;
+                }
+
+                if (ofeat & DAOS_OF_BLOCK) {
+                        ioc->ic_block_start_lba = krec->kr_blk.bo_addr.ba_off;
+                        goto out;
+                }
+		/*
+                 * Empty tree or all holes, DAOS array API relies on zero
+                 * iod_size to see if an array cell is empty.
+                 */
+
+		if (rsize == 0)
+			continue;
+
+		/** Assigns the value */
+		if (iod->iod_size == DAOS_REC_ANY)
+			iod->iod_size = rsize;
+
+                if (iod->iod_size != rsize) {
+                        D_ERROR("Cannot support mixed record size "
+                                DF_U64"/"DF_U64"\n", iod->iod_size, rsize);
+                        rc = -DER_INVAL;
+                        goto out;
+                }
+        }
+
+        ioc_trim_tail_holes(ioc);
+out:
+        if (!daos_handle_is_inval(toh))
+                key_tree_release(toh, is_array);
+
+        return rc;
 }
 
 static void
@@ -1250,6 +1360,45 @@ out:
 		key_tree_release(toh, false);
 
 	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
+}
+
+static int
+dkey_fetch_block(struct vos_io_context *ioc, daos_key_t *dkey)
+{
+        struct vos_object       *obj = ioc->ic_obj;
+        struct vos_krec_df      *krec;
+        daos_handle_t            toh = DAOS_HDL_INVAL;
+        int                      i, rc;
+
+        D_DEBUG(DB_DF, "Open btree for object\n");
+
+        if (obj->obj_df->vo_tree.tr_class == 0)
+                return -DER_NONEXIST;
+        else
+		rc = dbtree_open_inplace_ex(&obj->obj_df->vo_tree,
+					    vos_obj2uma(obj),
+					    vos_cont2hdl(obj->obj_cont),
+					    vos_obj2pool(obj), &obj->obj_toh);
+	if (rc != 0)
+                return rc;
+
+        rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
+                              dkey, 0, DAOS_INTENT_DEFAULT, &krec,
+                              &toh, ioc->ic_ts_set);
+        if(rc!=0)
+                return rc;
+
+        for (i = 0; i < ioc->ic_iod_nr; i++) {
+                iod_set_cursor(ioc, i);
+                rc = akey_fetch_block(ioc, toh);
+                if (rc != 0)
+                        return rc;
+	}
+
+	if (!daos_handle_is_inval(toh))
+                key_tree_release(toh, false);
+
+        return rc;
 }
 
 int
@@ -1488,6 +1637,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	struct dcs_csum_info	*recx_csum = NULL;
 	uint32_t		 update_cond = 0;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
+	daos_ofeat_t             ofeat = daos_obj_id2feat(obj->obj_id.id_pub);
 	int			 flags = SUBTR_CREATE;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i;
@@ -1565,14 +1715,43 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 				(unsigned long)iod->iod_recxs[i].rx_nr);
 			continue;
 		}
+		if (ofeat & DAOS_OF_BLOCK) { /* For Block IO*/
+			struct bio_sglist	*bsgl;
+			struct bio_iov		 biov;
 
-		if (iod_csums != NULL)
-			recx_csum = &iod_csums[i];
-		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
-				      recx_csum, iod->iod_size, ioc,
-				      minor_epc);
-		if (rc != 0)
-			goto out;
+			krec->kr_blk.bo_version = 0;
+			krec->kr_blk.bo_blk_size = iod->iod_size;
+			/** Assign information about the block allocation */
+			krec->kr_blk.bo_capa = ioc->ic_block_capacity;
+			bsgl = bio_iod_sgl(ioc->ic_biod, ioc->ic_sgl_at);
+			biov = bsgl->bs_iovs[ioc->ic_iov_at];
+			/** Base address of the big block is assigned to durable format */
+			krec->kr_blk.bo_addr = biov.bi_addr;
+			biov.bi_addr.ba_off = biov.bi_addr.ba_off +
+					      iod->iod_recxs[i].rx_idx;
+			/**
+			 * Also update the length here to keep the space
+			 * reservation unimpacted the length is set to
+			 * 16MB for ex in the begining.
+			 * Now it is the time to set it to the proper IO size
+			 */
+			biov.bi_data_len = iod->iod_recxs[i].rx_nr *
+					   iod->iod_size;
+
+			D_DEBUG(DB_IO,
+				"Inside akey_update media %hu, offset "DF_U64", size %zd\n",
+				biov.bi_addr.ba_type,
+				biov.bi_addr.ba_off,
+				bio_iov2len(&biov));
+		} else {
+			if (iod_csums != NULL)
+				recx_csum = &iod_csums[i];
+			rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
+					recx_csum, iod->iod_size, ioc,
+					minor_epc);
+			if (rc != 0)
+				goto out;
+		}
 	}
 
 out:
@@ -1593,6 +1772,7 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 	bool			 subtr_created = false;
 	int			 i, rc;
 
+	D_DEBUG(DB_IO,"dkey "DF_KEY" \n", DP_KEY(dkey));
 	rc = obj_tree_init(obj);
 	if (rc != 0)
 		return rc;
@@ -1704,7 +1884,7 @@ vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
 	hint_ctxt = cont->vc_hint_ctxt[ios];
 	D_ASSERT(hint_ctxt);
 
-	blk_cnt = vos_byte2blkcnt(size);
+	blk_cnt = vos_byte2blkcnt(size); /** block count is the number of block allocated in terms of 4k blocks, 64 blocks for 256k */
 
 	rc = vea_reserve(vsi, blk_cnt, hint_ctxt, rsrvd_nvme);
 	if (rc)
@@ -1733,6 +1913,8 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 			ioc->ic_umoffs[ioc->ic_umoffs_cnt] = umoff;
 			ioc->ic_umoffs_cnt++;
 			*off = umoff;
+			D_DEBUG(DB_IO, "Reserved space length = %lu, offset = %u\n", (unsigned long)size,
+				       (unsigned)umoff);
 			return 0;
 		}
 		D_ERROR("Reserve "DF_U64" from SCM failed.\n", size);
@@ -1871,7 +2053,10 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	 * isn't aligned with 4K) on NVMe could be split into two evtree rects,
 	 * larger rect will be stored on NVMe and small reminder on SCM.
 	 */
-	rc = reserve_space(ioc, media, size, &off);
+	if (ioc->ic_block_io)
+		rc = reserve_space(ioc, media, ioc->ic_block_capacity, &off);
+	else
+		rc = reserve_space(ioc, media, size, &off);
 	if (rc) {
 		D_ERROR("Reserve recx failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -1925,6 +2110,86 @@ akey_update_begin(struct vos_io_context *ioc)
 	return 0;
 }
 
+/* This function is meant for block IO layer */
+static int
+akey_update_begin_block(struct vos_io_context *ioc, daos_key_t *dkey)
+{
+        struct dcs_csum_info    *iod_csums = vos_ioc2csum(ioc);
+        struct dcs_csum_info    *recx_csum;
+        daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
+        int			 i, rc;
+
+	for (i = 0; i < iod->iod_nr; i++) {
+                daos_size_t	size;
+                uint16_t	media;
+
+                size = iod->iod_recxs[i].rx_nr * iod->iod_size;
+
+                media = vos_media_select(vos_cont2pool(ioc->ic_cont),
+                                         iod->iod_type, size);
+
+                recx_csum = (iod_csums != NULL) ? &iod_csums[i] : NULL;
+		/**
+		 * if the large allocation already made then
+		 * no further allocation is required, Once we have the base_address
+		 * of the prior allocation, we need to calculate the location of the
+		 * IO based on that. This is similar to the flow in fetch
+		 */
+                rc = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont,
+				  ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
+                                  VOS_OBJ_VISIBLE | VOS_OBJ_EXISTS,
+				  DAOS_INTENT_DEFAULT, &ioc->ic_obj,
+				  ioc->ic_ts_set);
+
+		/* if there is no valid akey for the dkey inside the object found */
+                if (rc == 0) {
+                        ioc->ic_obj_found = true;
+                        D_DEBUG(DB_IO, "We find the object and calling dkey_fetch_block to find dkey\n");
+                        rc = dkey_fetch_block(ioc, dkey);
+                }
+
+		if (rc != 0) {
+			daos_size_t csum_len;
+			D_DEBUG(DB_IO, "Failed to fetch dkey\n");
+			csum_len = recx_csum_len(&iod->iod_recxs[i], recx_csum,
+						 iod->iod_size);
+			rc = vos_reserve_recx(ioc, media, size , recx_csum,
+					      csum_len);
+			if (rc)
+				return rc;
+		} else {
+			uint64_t		base_address;
+			uint64_t		offset;
+			struct bio_iov		biov;
+
+			base_address = ioc->ic_block_start_lba;
+			offset = iod->iod_recxs[i].rx_idx;
+			/* Check if the write exceeds the block capacity */
+			if (offset  >= ioc->ic_block_capacity)
+				return -DER_NOSPACE;
+
+			memset(&biov, 0, sizeof(biov));
+			/**
+			 * Retrive the base address of the
+			 * allocation for the dkey-akey
+			 */
+			 bio_addr_set(&biov.bi_addr, media,
+				      (base_address+offset));
+			/** Setting the length to the IO size */
+			bio_iov_set_len(&biov, size);
+			rc = iod_reserve(ioc, &biov);
+			/**
+			 * Setting the flag would avoid
+			 * unnecessary work in IO path
+			 */
+			ioc->ic_location_reserved = 1;
+			D_DEBUG(DB_IO, "The base_address is -- %lu\n",
+				       (unsigned long)biov.bi_addr.ba_off);
+		}
+	}
+	return 0;
+}
+
 static int
 dkey_update_begin(struct vos_io_context *ioc)
 {
@@ -1938,6 +2203,21 @@ dkey_update_begin(struct vos_io_context *ioc)
 	}
 
 	return rc;
+}
+
+/* This function is meant for the block io layer */
+static int
+dkey_update_begin_block(struct vos_io_context *ioc,  daos_key_t *dkey)
+{
+        int i, rc = 0;
+
+        for (i = 0; i < ioc->ic_iod_nr; i++) {
+                iod_set_cursor(ioc, i);
+                rc = akey_update_begin_block(ioc, dkey);
+                if (rc != 0)
+                        break;
+        }
+        return rc;
 }
 
 int
@@ -2132,6 +2412,20 @@ abort:
 	return err;
 }
 
+int
+vos_update_end_block(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey,
+		     int err, struct dtx_handle *dth)
+{
+        struct vos_io_context   *ioc = vos_ioh2ioc(ioh);
+        int c = ioc->ic_location_reserved;
+        vos_space_unhold(vos_cont2pool(ioc->ic_cont), &ioc->ic_space_held[0]);
+        vos_ioc_destroy(ioc, err != 0);
+        if (c == 0)
+        vos_dth_set(NULL);
+
+        return err;
+}
+
 static int
 vos_check_akeys(int iod_nr, daos_iod_t *iods)
 {
@@ -2178,8 +2472,9 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		return -DER_IO;
 
 	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
-		", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
-		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, flags);
+			  ", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
+			  dtx_is_valid_handle(dth) ?
+			  dth->dth_epoch :  epoch, flags);
 
 	rc = vos_check_akeys(iod_nr, iods);
 	if (rc != 0) {
@@ -2212,6 +2507,122 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 error:
 	vos_update_end(vos_ioc2ioh(ioc), 0, dkey, rc, dth);
 	return rc;
+}
+
+int
+vos_update_begin_block(daos_handle_t coh, daos_unit_oid_t oid,
+		       daos_epoch_t epoch, uint64_t flags,
+		       daos_key_t *dkey, unsigned int iod_nr,
+		       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
+	               bool dedup, uint32_t dedup_th, daos_handle_t *ioh,
+		       struct dtx_handle *dth, uint32_t pm_ver,
+		       uint32_t block_capacity)
+{
+        struct vos_io_context   *ioc;
+        int                      rc;
+
+        D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
+			  ", flags="DF_X64" block_capacity = %u\n",
+			   DP_UOID(oid), iod_nr,
+			   dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch,
+			   flags, (unsigned)block_capacity);
+
+        rc = vos_check_akeys(iod_nr, iods);
+
+        if (rc != 0) {
+                D_ERROR("Detected duplicate akeys, operation not allowed\n");
+                return rc;
+        }
+
+        rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums,
+                            flags, NULL, dedup, dedup_th, dth, &ioc);
+        if (rc != 0)
+                return rc;
+
+	/**
+	 * For just a value assignment we did not
+	 * change the function prototype or defined a new function
+	 */
+        ioc->ic_block_capacity = block_capacity;
+        ioc->ic_obj_found = false;
+        ioc->ic_block_io = true;
+
+        /* flags may have VOS_OF_CRIT to skip sys/held checks here */
+        rc = vos_space_hold(vos_cont2pool(ioc->ic_cont), flags, dkey, iod_nr,
+                            iods, iods_csums, &ioc->ic_space_held[0]);
+        if (rc != 0) {
+                D_ERROR(DF_UOID": Hold space failed. "DF_RC"\n",
+                        DP_UOID(oid), DP_RC(rc));
+                goto abort;
+        }
+
+        rc = dkey_update_begin_block(ioc,dkey);
+        if (rc != 0) {
+                D_ERROR(DF_UOID"dkey update begin failed. %d\n", DP_UOID(oid),
+			rc);
+                goto abort;
+        }
+
+        *ioh = vos_ioc2ioh(ioc);
+        /*
+	 * if this flag is set then avoid the following step
+         * the flag denote that space has been reserved for the
+         * dkey-akey, so no futher reservation is done. Hence
+         * we donot need these steps.
+         */
+	if (ioc->ic_location_reserved) {
+		return rc;
+        } else {
+                struct umem_instance    *umem;
+                bool			 tx_started = false;
+
+                if (!ioc->ic_obj_found)
+                        rc = vos_ts_set_add(ioc->ic_ts_set,
+					    ioc->ic_cont->vc_ts_idx,
+					    NULL, 0);
+
+                umem = vos_ioc2umm(ioc);
+                rc = vos_tx_begin(dth, umem);
+                if (rc != 0)
+                        goto abort;
+
+                tx_started = true;
+                vos_dth_set(dth);
+
+                if(!ioc->ic_obj_found)
+                        rc = vos_obj_hold(vos_obj_cache_current(),
+					  ioc->ic_cont, ioc->ic_oid,
+                                          &ioc->ic_epr, ioc->ic_bound,
+                                          VOS_OBJ_CREATE | VOS_OBJ_VISIBLE,
+					  DAOS_INTENT_UPDATE,
+                                          &ioc->ic_obj, ioc->ic_ts_set);
+
+                if (rc != 0)
+                        goto abort;
+
+                /** Update tree index */
+                rc = dkey_update(ioc, pm_ver, dkey,
+				 dtx_is_valid_handle(dth) ?
+				 dth->dth_op_seq : VOS_MINOR_EPC_MAX);
+
+                if (rc) {
+                        VOS_TX_LOG_FAIL(rc,
+			"Failed to update tree index: "DF_RC"\n", DP_RC(rc));
+			goto abort;
+                }
+
+                rc = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
+                                &ioc->ic_blk_exts, tx_started, rc);
+                if (rc!= 0) {
+                        update_cancel(ioc);
+                }
+                return rc;
+        }
+
+abort:
+        rc = vos_update_end_block(vos_ioc2ioh(ioc), 0, dkey, rc, dth);
+        return rc;
+
 }
 
 struct daos_recx_ep_list *
