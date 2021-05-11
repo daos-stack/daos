@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -14,29 +14,6 @@ from command_utils import ExecutableCommand
 from job_manager_utils import Orterun
 from general_utils import get_log_file
 
-
-class SelfTest(ExecutableCommand):
-    """Defines a CaRT self test command."""
-
-    def __init__(self, path=""):
-        """Create a SelfTest object.
-
-        Uses Avocado's utils.process module to run self_test with parameters.
-
-        Args:
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
-        """
-        super().__init__("/run/self_test/*", "self_test", path)
-
-        self.group_name = FormattedParameter("--group-name {}")
-        self.endpoint = FormattedParameter("--endpoint {0}")
-        self.message_sizes = FormattedParameter("--message-sizes {0}")
-        self.max_inflight_rpcs = FormattedParameter("--max-inflight-rpcs {0}")
-        self.repetitions = FormattedParameter("--repetitions {0}")
-        self.attach_info = FormattedParameter("--path {0}")
-
-
 class CartSelfTest(TestWithServers):
     """Runs a few variations of CaRT self-test.
 
@@ -44,6 +21,31 @@ class CartSelfTest(TestWithServers):
 
     :avocado: recursive
     """
+
+    class SelfTest(ExecutableCommand):
+        """Defines a CaRT self test command."""
+
+        def __init__(self, path=""):
+            """Create a SelfTest object.
+
+            Uses Avocado's utils.process module to run self_test with
+            parameters.
+
+            Args:
+                path (str, optional): path to location of command binary file.
+                    Defaults to "".
+            """
+            super().__init__("/run/self_test/*", "self_test", path)
+
+            self.group_name = FormattedParameter("--group-name {}")
+            self.endpoint = FormattedParameter("--endpoint {0}")
+            self.message_sizes = FormattedParameter("--message-sizes {0}")
+
+            max_rpc_opt = "--max-inflight-rpcs {0}"
+            self.max_inflight_rpcs = FormattedParameter(max_rpc_opt)
+
+            self.repetitions = FormattedParameter("--repetitions {0}")
+            self.attach_info = FormattedParameter("--path {0}")
 
     def __init__(self, *args, **kwargs):
         """Initialize a CartSelfTest object."""
@@ -93,7 +95,7 @@ class CartSelfTest(TestWithServers):
         :avocado: tags=all,pr,daily_regression,smoke,unittest,tiny,cartselftest
         """
         # Setup the orterun command
-        orterun = Orterun(SelfTest(self.bin))
+        orterun = Orterun(self.SelfTest(self.bin))
         orterun.map_by.update(None, "orterun/map_by")
         orterun.enable_recovery.update(False, "orterun/enable_recovery")
 

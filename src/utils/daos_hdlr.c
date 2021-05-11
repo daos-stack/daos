@@ -1617,13 +1617,26 @@ cont_query_hdlr(struct cmd_args_s *ap)
 {
 	daos_cont_info_t	cont_info;
 	char			oclass[10], type[10];
+	daos_prop_t		*prop = NULL;
+	uint64_t		cont_type;
 	int			rc;
 
-	rc = daos_cont_query(ap->cont, &cont_info, NULL, NULL);
+	prop = daos_prop_alloc(1);
+	if (prop == NULL) {
+		fprintf(stderr, "Failed to allocate prop");
+		D_GOTO(err_out, rc = -DER_NOMEM);
+	}
+
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+
+	rc = daos_cont_query(ap->cont, &cont_info, prop, NULL);
 	if (rc) {
+		daos_prop_free(prop);
 		fprintf(stderr, "Container query failed, result: %d\n", rc);
 		D_GOTO(err_out, rc);
 	}
+	cont_type = prop->dpp_entries[0].dpe_val;
+	daos_prop_free(prop);
 
 	printf("Pool UUID:\t"DF_UUIDF"\n", DP_UUID(ap->p_uuid));
 	printf("Container UUID:\t"DF_UUIDF"\n", DP_UUID(cont_info.ci_uuid));
@@ -1632,6 +1645,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 		(int)cont_info.ci_lsnapshot);
 	printf("Highest Aggregated Epoch: "DF_U64"\n", cont_info.ci_hae);
 	printf("Container redundancy factor: %d\n", cont_info.ci_redun_fac);
+	daos_unparse_ctype(cont_type, type);
+	printf("Container Type:\t%s\n", type);
 
 	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
 
@@ -1640,46 +1655,33 @@ cont_query_hdlr(struct cmd_args_s *ap)
 			DP_OID(ap->oid));
 	}
 
-	if (ap->path != NULL) {
-		/* cont_op_hdlr() already did resolve_by_path()
-		 * all resulting fields should be populated
-		 */
-		assert(ap->type != DAOS_PROP_CO_LAYOUT_UNKOWN);
+	if (cont_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		dfs_t		*dfs;
+		dfs_attr_t	attr;
 
-		printf("DAOS Unified Namespace Attributes on path %s:\n",
-			ap->path);
-		daos_unparse_ctype(ap->type, type);
-		printf("Container Type:\t%s\n", type);
+		rc = dfs_mount(ap->pool, ap->cont, O_RDONLY, &dfs);
+		if (rc) {
+			fprintf(stderr, "failed to mount container "
+				DF_UUIDF": %s (%d)\n",
+				DP_UUID(ap->c_uuid), strerror(rc), rc);
+			D_GOTO(err_out, rc = daos_errno2der(rc));
+		}
 
-		if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
-			dfs_t		*dfs;
-			dfs_attr_t	attr;
+		dfs_query(dfs, &attr);
+		daos_oclass_id2name(attr.da_oclass_id, oclass);
+		printf("Object Class:\t%s\n", oclass);
+		printf("Chunk Size:\t%zu\n", attr.da_chunk_size);
 
-			rc = dfs_mount(ap->pool, ap->cont, O_RDONLY, &dfs);
-			if (rc) {
-				fprintf(stderr, "failed to mount container "
-					DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->c_uuid), strerror(rc), rc);
-				D_GOTO(err_out, rc = daos_errno2der(rc));
-			}
-
-			dfs_query(dfs, &attr);
-			daos_oclass_id2name(attr.da_oclass_id, oclass);
-			printf("Object Class:\t%s\n", oclass);
-			printf("Chunk Size:\t%zu\n", attr.da_chunk_size);
-
-			rc = dfs_umount(dfs);
-			if (rc) {
-				fprintf(stderr, "failed to unmount container "
-					DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->c_uuid), strerror(rc), rc);
-				D_GOTO(err_out, rc = daos_errno2der(rc));
-			}
+		rc = dfs_umount(dfs);
+		if (rc) {
+			fprintf(stderr, "failed to unmount container "
+				DF_UUIDF": %s (%d)\n",
+				DP_UUID(ap->c_uuid), strerror(rc), rc);
+			D_GOTO(err_out, rc = daos_errno2der(rc));
 		}
 	}
 
 	return 0;
-
 err_out:
 	return rc;
 }
@@ -2662,7 +2664,7 @@ dm_get_cont_prop(daos_handle_t coh,
 
 	prop = daos_prop_alloc(size);
 	if (prop == NULL) {
-		fprintf(stderr, "Failed to allocate prop (%d)", rc);
+		fprintf(stderr, "Failed to allocate prop");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -2710,7 +2712,7 @@ dm_connect(bool is_posix_copy,
 		rc = daos_pool_connect(ca->src_p_uuid, sysname,
 				       DAOS_PC_RW, &ca->src_poh, NULL, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "failed to connect to destination "
+			fprintf(stderr, "failed to connect to source "
 				"pool: %d\n", rc);
 			D_GOTO(out, rc);
 		}
@@ -3006,7 +3008,8 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		file->type = POSIX;
 	}
 out:
-	D_FREE(dattr.da_rel_path);
+	if (dattr.da_rel_path)
+		free(dattr.da_rel_path);
 	return rc;
 }
 
@@ -3844,9 +3847,9 @@ parse_acl_file(const char *path, struct daos_acl **acl)
 	D_GOTO(out, rc = 0);
 
 parse_err:
-	D_FREE(line);
 	daos_acl_free(tmp_acl);
 out:
+	D_FREE(line);
 	fclose(instream);
 	return rc;
 }

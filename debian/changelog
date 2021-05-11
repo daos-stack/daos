@@ -1,3 +1,18 @@
+daos (1.3.0-15) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Update to build on EL8
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 06 May 2021 15:31:50 -0400
+
+daos (1.3.0-14) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Package /etc/daos/certs in main/common package so that both server
+    and client get it created
+  * Catch up the release to be in sync with the RPM build
+    - hence the missing (10-13 releases)
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Wed, 05 May 2021 14:10:50 -0400
+
 daos (1.3.0-9) unstable; urgency=medium
   [ Mohamad Chaarawi ]
   * Remove dfuse_hl

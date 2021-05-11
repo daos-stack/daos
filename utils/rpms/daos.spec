@@ -6,25 +6,42 @@
 %global libfabric_version 1.12.0
 %global __python %{__python3}
 
+%if (0%{?rhel} >= 8)
+# https://bugzilla.redhat.com/show_bug.cgi?id=1955184
+%define _use_internal_dependency_generator 0
+%define __find_requires %{_sourcedir}/bz-1955184_find-requires
+%endif
+
 Name:          daos
 Version:       1.3.0
-Release:       13%{?relval}%{?dist}
+Release:       15%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
+Source1:       bz-1955184_find-requires
 %if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
+BuildRequires: python3-scons >= 2.4
+%else
 BuildRequires: python36-scons >= 2.4
+%endif
 %else
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel = %{mercury_version}
+%if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
+%endif
 BuildRequires: gcc-c++
+%if (0%{?rhel} >= 8)
+BuildRequires: openmpi-devel
+%else
 BuildRequires: openmpi3-devel
+%endif
 BuildRequires: hwloc-devel
 %if ("%{?compiler_args}" == "COMPILER=covc")
 BuildRequires: bullseye
@@ -32,14 +49,22 @@ BuildRequires: bullseye
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.1
 BuildRequires: json-c-devel
+%if (0%{?rhel} >= 8)
+BuildRequires: boost-python3-devel
+%else
 BuildRequires: boost-python36-devel
+%endif
 %else
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
+%if (0%{?rhel} >= 8)
+BuildRequires: fuse3-devel >= 3
+%else
 BuildRequires: fuse3-devel >= 3.4.2
+%endif
 %if (0%{?suse_version} >= 1500)
 # NB: OpenSUSE is stupid about this... If we just
 # specify go >= 1.X, it installs go=1.11 AND 1.X.
@@ -59,7 +84,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel = 0.7.3
+BuildRequires: daos-raft-devel >= 0.7.3
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -73,7 +98,11 @@ BuildRequires: golang-bin >= 1.12
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
+%if (0%{?rhel} >= 8)
+BuildRequires: python3-distro
+%else
 BuildRequires: python36-distro
+%endif
 BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
@@ -150,14 +179,22 @@ Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
+%if (0%{?rhel} >= 8)
+Requires: fuse3 >= 3
+%else
 Requires: fuse3 >= 3.4.2
+%endif
 Obsoletes: cart < 1000
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
 %else
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
 # get it when fuse3 Requires: /etc/fuse.conf
+%if (0%{?rhel} >= 8)
+Requires: fuse3 >= 3
+%else
 Requires: fuse < 3, fuse3-libs >= 3.4.2
+%endif
 %endif
 %{?systemd_requires}
 
@@ -172,13 +209,10 @@ Summary: The DAOS test suite
 #present.
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-server%{?_isa} = %{version}-%{release}
-%if (0%{?rhel} >= 7)
-Requires: python36
+%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
 Requires: python36-distro
 Requires: python36-tabulate
-%endif
-%if (0%{?suse_version} >= 1500)
-Requires: python3
+%else
 Requires: python3-distro
 Requires: python3-tabulate
 %endif
@@ -265,7 +299,7 @@ install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
-mv %{buildroot}/%{_sysconfdir}/daos/bash_completion.d %{buildroot}/%{_sysconfdir}
+mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -293,10 +327,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files
 %defattr(-, root, root, -)
 %{_sysconfdir}/ld.so.conf.d/daos.conf
-%{_libdir}/libcart*
-%{_libdir}/libgurt*
-%{_sysconfdir}/daos/memcheck-cart.supp
-%dir %{_sysconfdir}/daos
+%dir %attr(0755,root,root) %{conf_dir}/certs
+%{conf_dir}/memcheck-cart.supp
+%dir %{conf_dir}
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
@@ -310,12 +343,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %doc
 
 %files server
-%config(noreplace) %{conf_dir}/daos_server.yml
-%dir %{conf_dir}/certs
-%attr(0755,root,root) %{conf_dir}/certs
-%dir %{conf_dir}/certs/clients
-%attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
-%attr(0644,root,root) %{conf_dir}/daos_server.yml
+%config(noreplace) %attr(0644,root,root) %{conf_dir}/daos_server.yml
+%dir %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_server in order to invoke daos_admin
@@ -338,16 +367,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
 %{_libdir}/libdaos_common_pmem.so
-%{_sysconfdir}/daos/vos_size_input.yaml
+%{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
 %{_libdir}/python3/site-packages/storage_estimator/*.py
 %dir %{_libdir}/python3/site-packages/storage_estimator
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
 %dir %{_libdir}/python3/site-packages/storage_estimator/__pycache__
 %{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
 %endif
 %{_datadir}/%{name}
-%exclude %{_datadir}/%{name}/ioil-ld-opts
+%{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 
 %files client
@@ -367,7 +396,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/python3/site-packages/pydaos/*.py
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
 %dir %{_libdir}/python3/site-packages/pydaos/__pycache__
 %{_libdir}/python3/site-packages/pydaos/__pycache__/*.pyc
 %dir %{_libdir}/python3/site-packages/pydaos/raw/__pycache__
@@ -384,11 +413,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
-%exclude %{_prefix}/lib/daos/TESTING/ftest/list_tests.py
+%{_prefix}/lib/daos/TESTING/ftest/list_tests.py
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/jobtest
-%exclude %{_bindir}/self_test
+%{_bindir}/self_test
 %{_libdir}/libdaos_tests.so
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
@@ -405,7 +434,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
 %{_bindir}/daos_metrics
-%{_sysconfdir}/daos/fault-inject-cart.yaml
+%{_bindir}/daos_test
+%{_bindir}/dfs_test
+%{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
@@ -416,16 +447,24 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_includedir}/*
 %{_libdir}/libdaos.so
 %{_libdir}/*.a
+%{_libdir}/*.so
 
 %files firmware
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Thu May 06 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-15
+- Update to build on EL8
+
+* Wed May 05 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-14
+- Package /etc/daos/certs in main/common package so that both server
+  and client get it created
+
 * Wed Apr 21 2021 Tom Nabarro <tom.nabarro@intel.com> - 1.3.0-13
 - Relax ipmctl version requirement on leap15 as we have runtime checks
 
-* Wed Apr 16 2021 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 1.3.0-12
+* Fri Apr 16 2021 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 1.3.0-12
 - remove dfuse_hl
 
 * Wed Apr 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.3.0-11
