@@ -563,14 +563,13 @@ def get_test_list(tags):
     return test_tags, test_list
 
 
-def get_test_files(test_list, args, tmp_dir):
+def get_test_files(test_list, args, yaml_dir):
     """Get a list of the test scripts to run and their yaml files.
 
     Args:
         test_list (list): list of test scripts to run
         args (argparse.Namespace): command line arguments for this program
-        tmp_dir (TemporaryDirectory): temporary directory object to use to
-            write modified yaml files
+        yaml_dir (str): directory in which to write the modified yaml files
 
     Returns:
         list: a list of dictionaries of each test script and yaml file; If
@@ -582,7 +581,7 @@ def get_test_files(test_list, args, tmp_dir):
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
         test_file["yaml"] = replace_yaml_file(
-            "{}.yaml".format(base), args, tmp_dir)
+            "{}.yaml".format(base), args, yaml_dir)
 
     return test_files
 
@@ -663,7 +662,7 @@ def find_pci_address(value):
     return re.findall(pattern, str(value))
 
 
-def replace_yaml_file(yaml_file, args, tmp_dir):
+def replace_yaml_file(yaml_file, args, yaml_dir):
     """Create a temporary test yaml file with any requested values replaced.
 
     Optionally replace the following test yaml file values if specified by the
@@ -691,8 +690,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     Args:
         yaml_file (str): test yaml file
         args (argparse.Namespace): command line arguments for this program
-        tmp_dir (TemporaryDirectory): temporary directory object to use to
-            write modified yaml files
+        yaml_dir (str): directory in which to write the modified yaml files
 
     Returns:
         str: the test yaml file; None if the yaml file contains placeholders
@@ -801,7 +799,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
         # ensure unique yaml files for tests with the same filename.
         orig_yaml_file = yaml_file
         yaml_name = get_test_category(yaml_file)
-        yaml_file = os.path.join(tmp_dir.name, "{}.yaml".format(yaml_name))
+        yaml_file = os.path.join(yaml_dir, "{}.yaml".format(yaml_name))
         print("Creating copy: {}".format(yaml_file))
         with open(yaml_file, "w") as yaml_buffer:
             yaml_buffer.write(yaml_data)
@@ -935,6 +933,7 @@ def run_tests(test_files, tag_filter, args):
         test_command_list = list(command_list)
         test_command_list.extend([
             "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
+        print("-" * 80)
         run_return_code = time_command(test_command_list)
         if run_return_code != 0:
             # Move any avocado crash files into job-results/latest/crashes
@@ -961,11 +960,47 @@ def run_tests(test_files, tag_filter, args):
         # Optionally store all of the server and client config files
         # and archive remote logs and report big log files, if any.
         if args.archive:
-            return_code |= archive_config_files(avocado_logs_dir, args)
-            return_code |= archive_daos_logs(
-                avocado_logs_dir, test_file, args)
-            return_code |= archive_cart_logs(
-                avocado_logs_dir, test_file, args)
+            test_hosts = get_hosts_from_yaml(test_file["yaml"], args)
+            test_log_dir = os.environ.get(
+                "DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+
+            # Archive local config files
+            return_code |= archive_files(
+                "local configuration files",
+                os.path.join(avocado_logs_dir, "latest", "daos_configs"),
+                socket.gethostname().split(".")[0:1],
+                "{}/*_*_*.yaml".format(
+                    get_temporary_directory(
+                        args, get_build_environment(args)["PREFIX"])),
+                args)
+
+            # Archive remote configuration files
+            return_code |= archive_files(
+                "remote config files",
+                os.path.join(avocado_logs_dir, "latest", "daos_configs"),
+                test_hosts,
+                "{}/daos_*.yml".format(os.path.join(os.sep, "etc", "daos")),
+                args)
+
+            # Archive remote daos log files
+            return_code |= archive_files(
+                "daos log files",
+                os.path.join(avocado_logs_dir, "latest", "daos_logs"),
+                test_hosts,
+                "{}/*.log*".format(test_log_dir),
+                args,
+                avocado_logs_dir,
+                get_test_category(test_file["py"]))
+
+            # Archive remote cart log files
+            return_code |= archive_files(
+                "cart log files",
+                os.path.join(avocado_logs_dir, "latest", "cart_logs"),
+                test_hosts,
+                "{}/*/*log*".format(test_log_dir),
+                args,
+                avocado_logs_dir,
+                get_test_category(test_file["py"]))
 
             # Compress any log file that haven't been remotely compressed.
             compress_log_files(avocado_logs_dir, args)
@@ -980,7 +1015,15 @@ def run_tests(test_files, tag_filter, args):
                 return_code |= 256
 
     if args.jenkinslog:
-        return_code |= archive_cov_usrlib_logs(avocado_logs_dir, args)
+        # Archive bullseye coverage files
+        hosts = list(args.test_servers)
+        hosts += socket.gethostname().split(".")[0:1]
+        return_code |= archive_files(
+            "bullseye coverage files",
+            os.path.join(avocado_logs_dir, "bullseye_coverage_files"),
+            hosts,
+            "/tmp/test.cov*",
+            args)
 
     return return_code
 
@@ -1066,6 +1109,7 @@ def clean_logs(test_yaml, args):
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
+    print("-" * 80)
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -1085,6 +1129,7 @@ def compress_log_files(avocado_logs_dir, args):
     Args:
         avocado_logs_dir (str): path to the avocado log files
     """
+    print("-" * 80)
     print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
     command = [
@@ -1094,142 +1139,24 @@ def compress_log_files(avocado_logs_dir, args):
     print(get_output(command, check=False))
 
 
-def archive_daos_logs(avocado_logs_dir, test_files, args):
-    """Archive daos log files to the avocado results directory.
+def archive_files(description, destination, hosts, source_files, args,
+                  avocado_logs_dir=None, test_name=None):
+    """Archive all of the remote files to a local directory.
 
     Args:
-        avocado_logs_dir (str): path to the avocado log files
-        test_files (dict): a list of dictionaries of each test script/yaml file
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        int: status code.
-
-    """
-    # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "latest", "daos_logs")
-
-    # Copy any DAOS logs created on any host under test
-    hosts = get_hosts_from_yaml(test_files["yaml"], args)
-    print("Archiving host logs from {} in {}".format(hosts, destination))
-
-    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    task = archive_files(
-        destination, hosts, "{}/*.log*".format(logs_dir), True, args)
-
-    # Determine if the command completed successfully across all the hosts
-    status = 0
-    if not check_remote_output(task, "archive_daos_logs command"):
-        status |= 16
-    if args.logs_threshold:
-        test_name = get_test_category(test_files["py"])
-        if not check_big_files(avocado_logs_dir, task, test_name, args):
-            status |= 32
-    return status
-
-
-def archive_cart_logs(avocado_logs_dir, test_files, args):
-    """Archive cart log files to the avocado results directory.
-
-    Args:
-        avocado_logs_dir (str): path to the avocado log files
-        test_files (dict): a list of dictionaries of each test script/yaml file
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        int: status code.
-
-    """
-    # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "latest", "cart_logs")
-
-    # Copy any DAOS logs created on any host under test
-    hosts = get_hosts_from_yaml(test_files["yaml"], args)
-    print("Archiving host logs from {} in {}".format(hosts, destination))
-
-    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    task = archive_files(
-        destination, hosts, "{}/*/*log*".format(logs_dir), True, args)
-
-    # Determine if the command completed successfully across all the hosts
-    status = 0
-    if not check_remote_output(task, "archive_cart_logs command"):
-        status |= 16
-    if args.logs_threshold:
-        test_name = get_test_category(test_files["py"])
-        if not check_big_files(avocado_logs_dir, task, test_name, args):
-            status |= 32
-    return status
-
-
-def archive_config_files(avocado_logs_dir, args):
-    """Copy all of the configuration files to the avocado results directory.
-
-    Args:
-        avocado_logs_dir (str): path to the avocado log files
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        int: status code.
-
-    """
-    # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "latest", "daos_configs")
-
-    # Config files can be copied from the local host as they are currently
-    # written to a shared directory
-    this_host = socket.gethostname().split(".")[0]
-    host_list = [this_host]
-    print("Archiving config files from {} in {}".format(host_list, destination))
-
-    # Copy any config files
-    configs_dir = os.path.join(os.sep, "etc", "daos")
-    task = archive_files(
-        destination, host_list, "{}/daos_*.yml".format(configs_dir), False,
-        args)
-
-    status = 0
-    if not check_remote_output(task, "archive_config_files"):
-        status = 16
-    return status
-
-def archive_cov_usrlib_logs(avocado_logs_dir, args):
-    """Archive daos cov files to the avocado results directory.
-    Args:
-        avocado_logs_dir (str): path to the avocado log files
-        args (argparse.Namespace): command line arguments for this program
-    Returns:
-        int: status code.
-    """
-    # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "daos_covs_usrlib")
-
-    # Copy any DAOS covs created on all hosts
-    hosts = list(args.test_servers)
-    hosts.append(socket.gethostname().split(".")[0])
-    print("Archiving host covs from {} in {}".format(hosts, destination))
-
-    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    task = archive_files(destination, hosts,
-                         "/tmp/test.cov*",False, args)
-
-    # Determine if the command completed successfully across all the hosts
-    status = 0
-    if not check_remote_output(task, "archive_daos_covs command"):
-        status |= 16
-    return status
-
-def archive_files(destination, hosts, source_files, cart, args):
-    """Archive all of the remote files to the destination directory.
-
-    Args:
-        destination (str): path to which to archive files
+        description (str): string identifying the archiving operation
+        destination (str): path in which to archive files
         hosts (list): hosts from which to archive files
         source_files (str): remote files to archive
         cart (str): enable running cart_logtest.py
         args (argparse.Namespace): command line arguments for this program
+        avocado_logs_dir (optional, str): path to the avocado log files.
+            Required for checking for large log files - see 'test_name'.
+            Defaults to None.
+        test_name (optional, str): current running testname. If specified the
+            cart_logtest.py will be run against each log file and the size of
+            each log file will be checked against the threshold (if enabled).
+            Defaults to None.
 
     Returns:
         Task: a Task object containing the result of the running the command on
@@ -1237,6 +1164,9 @@ def archive_files(destination, hosts, source_files, cart, args):
 
     """
     this_host = socket.gethostname().split(".")[0]
+
+    print("-" * 80)
+    print("Archiving {} from {} in {}".format(description, hosts, destination))
 
     # Create the destination directory
     if not os.path.exists(destination):
@@ -1253,13 +1183,24 @@ def archive_files(destination, hosts, source_files, cart, args):
         "-a \"{}:{}\"".format(this_host, destination),
         "-f \"{}\"".format(source_files),
     ]
-    if cart:
+    if test_name is not None:
         command.append("-c")
     if args.logs_threshold:
         command.append("-t \"{}\"".format(args.logs_threshold))
     if args.verbose:
         command.append("-v")
-    return get_remote_output(hosts, " ".join(command), 900)
+    task = get_remote_output(hosts, " ".join(command), 900)
+
+    # Determine if the command completed successfully across all the hosts
+    status = 0
+    cmd_description = "archive_files command for {}".format(description)
+    if not check_remote_output(task, cmd_description):
+        status |= 16
+    if test_name is not None and args.logs_threshold:
+        if not check_big_files(avocado_logs_dir, task, test_name, args):
+            status |= 32
+
+    return status
 
 
 def rename_logs(avocado_logs_dir, test_file, args):
@@ -1273,6 +1214,9 @@ def rename_logs(avocado_logs_dir, test_file, args):
     test_name = get_test_category(test_file)
     test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
+
+    print("-" * 80)
+    print("Renaming the avocado job-results directory")
 
     if args.jenkinslog:
         new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
@@ -1697,6 +1641,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
 
     # Create a subdirectory in the avocado logs directory for this test
+    print("-" * 80)
     print("Processing cores from {} in {}".format(host_list, daos_cores_dir))
     get_output(["mkdir", daos_cores_dir])
 
@@ -1829,6 +1774,7 @@ def stop_daos_agent_services(test_file, args):
 
     """
     service = "daos_agent.service"
+    print("-" * 80)
     print("Verifying {} after running '{}'".format(service, test_file))
     if args.test_clients:
         hosts = list(args.test_clients)
@@ -1852,6 +1798,7 @@ def stop_daos_server_service(test_file, args):
 
     """
     service = "daos_server.service"
+    print("-" * 80)
     print("Verifying {} after running '{}'".format(service, test_file))
     return stop_service(list(args.test_servers), service)
 
@@ -2082,6 +2029,13 @@ def main():
         "-j", "--jenkinslog",
         action="store_true",
         help="rename the avocado test logs directory for publishing in Jenkins")
+    parser.add_argument(
+        "-y", "--yaml_directory",
+        action="store",
+        default=None,
+        help="directory in which to write the modified yaml files. A temporary "
+             "directory - which only exists for the duration of the launch.py "
+             "command - is used by default.")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 
@@ -2110,10 +2064,16 @@ def main():
         sys.exit(0)
 
     # Create a temporary directory
-    tmp_dir = TemporaryDirectory()
+    if args.yaml_directory is None:
+        temp_dir = TemporaryDirectory()
+        yaml_dir = temp_dir.name
+    else:
+        yaml_dir = args.yaml_directory
+        if not os.path.exists(yaml_dir):
+            os.mkdir(yaml_dir)
 
     # Create a dictionary of test and their yaml files
-    test_files = get_test_files(test_list, args, tmp_dir)
+    test_files = get_test_files(test_list, args, yaml_dir)
     if args.modify:
         sys.exit(0)
 
