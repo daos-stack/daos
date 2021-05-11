@@ -309,9 +309,9 @@ class LogTest():
             except LogCheckError as error:
                 if to_raise is None:
                     to_raise = error
+        self.show_common_logs()
         if to_raise:
             raise to_raise
-        self.show_common_logs()
 
     def check_dfuse_io(self):
         """Parse dfuse i/o"""
