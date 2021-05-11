@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -38,7 +39,10 @@ const (
 	dcpmMountOpts = "dax,nodelalloc"
 
 	ramFsType = fsTypeTmpfs
+)
 
+// User facing messages.
+const (
 	MsgRebootRequired     = "A reboot is required to process new SCM memory allocation goals."
 	MsgNoModules          = "no SCM modules to prepare"
 	MsgNotInited          = "SCM storage could not be accessed"
@@ -165,6 +169,7 @@ type (
 	}
 )
 
+// CreateFormatRequest populates and returns a FormatRequest reference.
 func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatRequest, error) {
 	req := FormatRequest{
 		Mountpoint: scmCfg.MountPoint,
@@ -345,6 +350,8 @@ func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provi
 	return p
 }
 
+// WithForwardingDisabled returns a reference to the given Provider with the
+// disabled property set on the Provider's forwarder.
 func (p *Provider) WithForwardingDisabled() *Provider {
 	p.fwd.Disabled = true
 	return p
@@ -602,6 +609,43 @@ func (p *Provider) clearMount(req FormatRequest) error {
 	return nil
 }
 
+// makeMountPath will build the target path by creating any non-existent
+// subdirectories and setting ownership to target uid/gid to ensure that the
+// target user is able to access the created mount point if multiple layers
+// deep. If subdirectories in path already exist, their permissions will not be
+// modified.
+func (p *Provider) makeMountPath(req FormatRequest) error {
+	path := req.Mountpoint
+
+	if !filepath.IsAbs(path) {
+		return errors.Errorf("expecting absolute target path, got %q", path)
+	}
+	if _, err := os.Stat(path); err == nil {
+		return nil // path already exists
+	}
+	sep := string(filepath.Separator)
+	dirs := strings.Split(path, sep)[1:] // omit empty element
+
+	for i := range dirs {
+		ps := sep + filepath.Join(dirs[:i+1]...)
+
+		_, err := os.Stat(ps)
+		switch {
+		case os.IsNotExist(err):
+			// subdir missing, attempt to create and chown
+			os.Mkdir(ps, defaultMountPointPerms)
+			if err := os.Chown(ps, req.OwnerUID, req.OwnerGID); err != nil {
+				return errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
+					ps, req.OwnerUID, req.OwnerGID)
+			}
+		case err != nil:
+			return errors.Wrapf(err, "unable to stat %q", ps)
+		}
+	}
+
+	return nil
+}
+
 // Format attempts to fulfill the specified SCM format request.
 func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 	check, err := p.CheckFormat(req)
@@ -620,6 +664,10 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 
 	if err := p.clearMount(req); err != nil {
 		return nil, errors.Wrap(err, "failed to clear existing mount")
+	}
+
+	if err := p.makeMountPath(req); err != nil {
+		return nil, errors.Wrap(err, "failed to create mount path")
 	}
 
 	switch {
@@ -747,10 +795,6 @@ func (p *Provider) Mount(req MountRequest) (*MountResponse, error) {
 }
 
 func (p *Provider) mount(src, target, fsType string, flags uintptr, opts string) (*MountResponse, error) {
-	if err := os.MkdirAll(target, defaultMountPointPerms); err != nil {
-		return nil, errors.Wrapf(err, "failed to create mountpoint %s", target)
-	}
-
 	// make sure that we're not double-mounting over an existing mount
 	tgtMounted, err := p.sys.IsMounted(target)
 	if err != nil && !os.IsNotExist(err) {
