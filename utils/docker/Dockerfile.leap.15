@@ -17,13 +17,13 @@ ARG CB0
 # If a DISTRO repo is provided then use it.
 ARG REPO_URL=""
 ARG REPO_DISTRO=""
-RUN if [ -n "${REPO_DISTRO}" ]; then				                           \
-      rm -f /etc/zypp/repos.d/*.repo &&					                       \
+RUN if [ -n "${REPO_DISTRO}" ]; then                                           \
+      rm -f /etc/zypp/repos.d/*.repo &&                                        \
       zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
-            ${REPO_URL}${REPO_DISTRO}/  daos-stack-distro-group-repo &&        \
+            ${REPO_URL}${REPO_DISTRO}/ daos-stack-distro-group-repo &&         \
       zypper --non-interactive modifyrepo --gpgcheck-allow-unsigned-repo       \
              daos-stack-distro-group-repo &&                                   \
-      zypper clean --all;                                    \
+      zypper clean --all;                                                      \
     fi
 
 ARG REPO_DAOS=""
@@ -35,7 +35,7 @@ RUN if [ -n "${REPO_DAOS}" ]; then                                             \
       zypper addlock --repo daos-stack-daos-group-repo                         \
              'fuse<3' 'libfuse-devel<3' 'fuse-libs<3'                          \
              'fuse-debuginfo<3' 'ompi' &&                                      \
-      zypper clean --all;                                    \
+      zypper clean --all;                                                      \
     fi
 # Allow packages to change vendors
 RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
@@ -93,7 +93,6 @@ RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
     python3-devel \
     python3-distro \
     python3-junit-xml \
-    python3-pip \
     python3-pyxattr  \
     python3-PyYAML \
     python3-tabulate \
@@ -181,7 +180,8 @@ ARG DAOS_DEPS_BUILD=yes
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
-      zypper --non-interactive update && zypper clean --all; }
+      zypper --non-interactive update && \
+      zypper clean --all; }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1

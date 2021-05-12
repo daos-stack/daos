@@ -15,7 +15,7 @@ ARG CB0
 # If a local distro repository is supplied, then we should use it
 # and disable using the distro repositories that can be mirrored.
 # The Docker image starts out with the DISTRO provided GPG keys
-# on the disk, but not installed.  These must be isntalled before
+# on the disk, but not installed.  These must be installed before
 # adding any repo that needs GPG keys but does not provide meta
 # data for installing those keys.  Then the epel-release
 # package must be installed and the GPG key it provides must be
@@ -133,7 +133,6 @@ RUN dnf -y upgrade && \
         python3-junit_xml \
         python3-numpy \
         python3-paramiko \
-        python3-pip \
         python3-pylint \
         python3-pyxattr \
         python3-requests \
