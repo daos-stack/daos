@@ -398,13 +398,13 @@ def scons(): # pylint: disable=too-many-locals
         run_checks(env)
         il_env = env.Clone()
 
+    prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
+    opts.Save(opts_file, env)
+
     res = GetOption('deps_only')
     if res:
         print('Exiting because deps-only was set')
         Exit(0)
-
-    prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
-    opts.Save(opts_file, env)
 
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
