@@ -80,36 +80,30 @@ def scons():
     for test in SIMPLE_TEST_SRC:
         target = daos_build.test(tenv, [test, cart_utils_objs],
                                  install_off='../../../../')
-        tenv.Requires(target, [cart_lib, gurt_lib, cart_utils_objs])
         tenv.Install(tests_dir, target)
 
     for test in IV_TESTS:
         target = daos_build.test(tenv, [test, cart_utils_objs],
                                  install_off='../../../../')
-        tenv.Requires(target, [cart_lib, gurt_lib, cart_utils_objs])
         tenv.Install(tests_dir, target)
 
     for test in SWIM_TESTS:
         target = daos_build.test(tenv, [test, cart_utils_objs],
                                  install_off='../../../../')
-        tenv.Requires(target, [cart_lib, gurt_lib, cart_utils_objs])
         tenv.Install(tests_dir, target)
 
     for test in HLC_TESTS:
         target = daos_build.test(tenv, [test, cart_utils_objs],
                                  install_off='../../../../')
-        tenv.Requires(target, [cart_lib, gurt_lib, cart_utils_objs])
         tenv.Install(tests_dir, target)
 
     for test in TEST_GROUP_NP_TESTS:
         target = daos_build.test(tenv, [test, cart_utils_objs],
                                  install_off='../../../../')
-        tenv.Requires(target, [cart_lib, gurt_lib, cart_utils_objs])
         tenv.Install(tests_dir, target)
 
     # Build FAULT_STATUS_TEST separately and install it into bin/
     target = daos_build.test(tenv, FAULT_STATUS_TEST)
-    tenv.Requires(target, [cart_lib, gurt_lib, cart_utils_objs])
     tenv.Install(os.path.join("$PREFIX", 'bin'), target)
 
     benv = tenv.Clone()
