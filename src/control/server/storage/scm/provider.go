@@ -146,6 +146,7 @@ type (
 		Mkfs(fsType, device string, force bool) error
 		Getfs(device string) (string, error)
 		GetfsUsage(string) (uint64, uint64, error)
+		Stat(string) (os.FileInfo, error)
 	}
 
 	defaultSystemProvider struct {
@@ -227,8 +228,8 @@ func (r FormatRequest) Validate() error {
 	return nil
 }
 
-func checkDevice(device string) error {
-	st, err := os.Stat(device)
+func (dsp *defaultSystemProvider) checkDevice(device string) error {
+	st, err := dsp.Stat(device)
 	if err != nil {
 		return errors.Wrapf(err, "stat failed on %s", device)
 	}
@@ -242,13 +243,13 @@ func checkDevice(device string) error {
 
 // Mkfs attempts to create a filesystem of the supplied type, on the
 // supplied device.
-func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error {
+func (dsp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error {
 	cmdPath, err := exec.LookPath(fmt.Sprintf("mkfs.%s", fsType))
 	if err != nil {
 		return errors.Wrapf(err, "unable to find mkfs.%s", fsType)
 	}
 
-	if err := checkDevice(device); err != nil {
+	if err := dsp.checkDevice(device); err != nil {
 		return err
 	}
 
@@ -293,13 +294,13 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 
 // Getfs probes the specified device in an attempt to determine the
 // formatted filesystem type, if any.
-func (ssp *defaultSystemProvider) Getfs(device string) (string, error) {
+func (dsp *defaultSystemProvider) Getfs(device string) (string, error) {
 	cmdPath, err := exec.LookPath("file")
 	if err != nil {
 		return fsTypeNone, errors.Wrap(err, "unable to find file")
 	}
 
-	if err := checkDevice(device); err != nil {
+	if err := dsp.checkDevice(device); err != nil {
 		return fsTypeNone, err
 	}
 
@@ -313,6 +314,11 @@ func (ssp *defaultSystemProvider) Getfs(device string) (string, error) {
 	}
 
 	return parseFsType(string(out))
+}
+
+// Stat probes the specified path and returns os level file info.
+func (dsp *defaultSystemProvider) Stat(path string) (os.FileInfo, error) {
+	return os.Stat(path)
 }
 
 func parseFsType(input string) (string, error) {
@@ -587,22 +593,22 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	return res, nil
 }
 
-func (p *Provider) clearMount(req FormatRequest) error {
-	mounted, err := p.IsMounted(req.Mountpoint)
+func (p *Provider) clearMount(mntpt string) error {
+	mounted, err := p.IsMounted(mntpt)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
 	if mounted {
-		_, err := p.unmount(req.Mountpoint, defaultUnmountFlags)
+		_, err := p.unmount(mntpt, defaultUnmountFlags)
 		if err != nil {
 			return err
 		}
 	}
 
-	if err := os.RemoveAll(req.Mountpoint); err != nil {
+	if err := os.RemoveAll(mntpt); err != nil {
 		if !os.IsNotExist(err) {
-			return errors.Wrapf(err, "failed to remove %s", req.Mountpoint)
+			return errors.Wrapf(err, "failed to remove %s", mntpt)
 		}
 	}
 
@@ -614,30 +620,33 @@ func (p *Provider) clearMount(req FormatRequest) error {
 // target user is able to access the created mount point if multiple layers
 // deep. If subdirectories in path already exist, their permissions will not be
 // modified.
-func (p *Provider) makeMountPath(req FormatRequest) error {
-	path := req.Mountpoint
-
+func (p *Provider) makeMountPath(path string, tgtUID, tgtGID int) error {
+	p.log.Debugf("%s ,", path)
 	if !filepath.IsAbs(path) {
 		return errors.Errorf("expecting absolute target path, got %q", path)
 	}
-	if _, err := os.Stat(path); err == nil {
+	if _, err := p.Stat(path); err == nil {
 		return nil // path already exists
 	}
+	// don't need to validate request UID/GID as they are populated inside
+	// this package during CreateFormatRequest()
+
 	sep := string(filepath.Separator)
 	dirs := strings.Split(path, sep)[1:] // omit empty element
 
 	for i := range dirs {
 		ps := sep + filepath.Join(dirs[:i+1]...)
-		_, err := os.Stat(ps)
+		p.log.Debugf("%s , %v", ps, dirs)
+		_, err := p.Stat(ps)
 		switch {
 		case os.IsNotExist(err):
 			// subdir missing, attempt to create and chown
 			if err := os.Mkdir(ps, defaultMountPointPerms); err != nil {
 				return errors.Wrapf(err, "failed to create directory %q", ps)
 			}
-			if err := os.Chown(ps, req.OwnerUID, req.OwnerGID); err != nil {
+			if err := os.Chown(ps, tgtUID, tgtGID); err != nil {
 				return errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
-					ps, req.OwnerUID, req.OwnerGID)
+					ps, tgtUID, tgtGID)
 			}
 		case err != nil:
 			return errors.Wrapf(err, "unable to stat %q", ps)
@@ -663,11 +672,11 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 		return p.fwd.Format(req)
 	}
 
-	if err := p.clearMount(req); err != nil {
+	if err := p.clearMount(req.Mountpoint); err != nil {
 		return nil, errors.Wrap(err, "failed to clear existing mount")
 	}
 
-	if err := p.makeMountPath(req); err != nil {
+	if err := p.makeMountPath(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
 		return nil, errors.Wrap(err, "failed to create mount path")
 	}
 
@@ -833,6 +842,13 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 		Target:  target,
 		Mounted: false,
 	}, nil
+}
+
+// Stat probes the specified path and returns os level file info.
+func (p *Provider) Stat(path string) (os.FileInfo, error) {
+	i, e := p.sys.Stat(path)
+	p.log.Debugf("stat: %v", e)
+	return i, e
 }
 
 // IsMounted checks to see if the target device or directory is mounted and

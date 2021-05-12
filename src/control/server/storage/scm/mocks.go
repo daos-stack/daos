@@ -34,6 +34,9 @@ type (
 		sync.RWMutex
 		cfg       MockSysConfig
 		isMounted map[string]bool
+		// default return value for missing key is nil so
+		// add entries to indicate path failure e.g. perms or not-exist
+		statErrors map[string]error
 	}
 )
 
@@ -91,13 +94,21 @@ func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
 	return msp.cfg.GetfsUsageTotal, msp.cfg.GetfsUsageAvail, msp.cfg.GetfsUsageErr
 }
 
+func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {
+	msp.RLock()
+	defer msp.RUnlock()
+
+	return nil, msp.statErrors[path]
+}
+
 func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {
 	if cfg == nil {
 		cfg = &MockSysConfig{}
 	}
 	return &MockSysProvider{
-		cfg:       *cfg,
-		isMounted: make(map[string]bool),
+		cfg:        *cfg,
+		isMounted:  make(map[string]bool),
+		statErrors: make(map[string]error),
 	}
 }
 

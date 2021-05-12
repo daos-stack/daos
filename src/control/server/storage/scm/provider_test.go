@@ -27,7 +27,7 @@ var (
 	defaultNamespace = &storage.ScmNamespace{}
 )
 
-func TestProviderScan(t *testing.T) {
+func TestProvider_Scan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		rescan          bool
 		discoverErr     error
@@ -128,7 +128,7 @@ func TestProviderScan(t *testing.T) {
 	}
 }
 
-func TestProviderPrepare(t *testing.T) {
+func TestProvider_Prepare(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startInitialized bool
 		reset            bool
@@ -250,7 +250,7 @@ func TestProviderPrepare(t *testing.T) {
 	}
 }
 
-func TestProviderGetPmemState(t *testing.T) {
+func TestProvider_GetPmemState(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startInitialized bool
 		discoverErr      error
@@ -303,7 +303,7 @@ func TestProviderGetPmemState(t *testing.T) {
 	}
 }
 
-func TestProviderCheckFormat(t *testing.T) {
+func TestProvider_CheckFormat(t *testing.T) {
 	const (
 		goodMountPoint = "/mnt/daos"
 		goodDevice     = "/dev/pmem0"
@@ -474,7 +474,65 @@ func TestProviderCheckFormat(t *testing.T) {
 	}
 }
 
-func TestProviderFormat(t *testing.T) {
+func TestProvider_makeMountPath(t *testing.T) {
+	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(testDir)
+
+	for name, tc := range map[string]struct {
+		mntpt     string
+		statErrs  map[string]error
+		expCreate bool
+		expErr    error
+	}{
+		"existing nested": {
+			mntpt: "/mnt/daos/0",
+		},
+		"new nested": {
+			mntpt: "/mnt/daos/0",
+			statErrs: map[string]error{
+				"/mnt":        os.ErrNotExist,
+				"/mnt/daos":   os.ErrNotExist,
+				"/mnt/daos/0": os.ErrNotExist,
+			},
+			expCreate: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			testCaseDir := filepath.Join(testDir, "tc")
+			os.Mkdir(testCaseDir, defaultMountPointPerms)
+			defer os.RemoveAll(testCaseDir)
+
+			msp := MockSysProvider{
+				statErrors: make(map[string]error),
+			}
+			for mp, err := range tc.statErrs {
+				k := filepath.Join(testCaseDir, mp)
+				msp.statErrors[k] = err
+			}
+			p := NewProvider(log, DefaultMockBackend(), &msp)
+
+			tMntpt := filepath.Join(testCaseDir, tc.mntpt)
+
+			gotErr := p.makeMountPath(tMntpt, os.Getuid(), os.Getgid())
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil || tc.expCreate == false {
+				return
+			}
+
+			if _, err := os.Stat(tMntpt); err != nil {
+				t.Fatalf("Mount point not accessible: %s", err)
+			}
+		})
+	}
+}
+
+func TestProvider_Format(t *testing.T) {
 	const (
 		goodMountPoint     = "/mnt/daos"
 		nestedMountPoint   = "/mnt/daos/0"
