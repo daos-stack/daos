@@ -465,7 +465,7 @@ pipeline {
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
-                            args '--tmpfs /mnt/daos'
+                            args '--tmpfs /mnt/daos_0'
                         }
                     }
                     steps {
