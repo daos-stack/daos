@@ -55,17 +55,8 @@ trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 IFS=" " read -r -a nodes <<< "${2//,/ }"
 TEST_NODES=$(IFS=","; echo "${nodes[*]:1:8}")
 
-# Optional --nvme argument for launch.py
-NVME_ARG=""
-if [ -n "${3}" ]; then
-    NVME_ARG="-n ${3}"
-fi
-
-# Number of times to repeat the tests run by launch.py
-TEST_REPEAT="1"
-if [ -n "${4}" ]; then
-    TEST_REPEAT="--repeat ${4}"
-fi
+# Optional arguments for launch.py
+LAUNCH_OPT_ARGS="${3:-}"
 
 # Log size threshold
 LOGS_THRESHOLD="1G"
@@ -153,8 +144,7 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      SETUP_ONLY=\"${SETUP_ONLY:-false}\"
      TEST_TAG_ARG=\"$TEST_TAG_ARG\"
      TEST_NODES=\"$TEST_NODES\"
-     NVME_ARG=\"$NVME_ARG\"
-     TEST_REPEAT=\"$TEST_REPEAT\"
+     LAUNCH_OPT_ARGS=\"$LAUNCH_OPT_ARGS\"
      LOGS_THRESHOLD=\"$LOGS_THRESHOLD\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}

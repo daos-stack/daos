@@ -1278,7 +1278,8 @@ def rename_logs(avocado_logs_dir, test_file, args):
     test_logs_dir = os.path.realpath(test_logs_lnk)
 
     if args.jenkinslog:
-        new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
+        new_test_logs_dir = os.path.join(
+            avocado_logs_dir, test_file, str(args.repeat))
         try:
             os.makedirs(new_test_logs_dir)
         except OSError as error:

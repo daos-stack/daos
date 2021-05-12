@@ -9,5 +9,4 @@ export DAOS_TEST_SHARED_DIR
 export TEST_RPMS=true
 export REMOTE_ACCT=jenkins
 
-/usr/lib/daos/TESTING/ftest/ftest.sh \
-    "$TEST_TAG" "$TNODES" "$FTEST_ARG" "$TEST_REPEAT"
+/usr/lib/daos/TESTING/ftest/ftest.sh "$TEST_TAG" "$TNODES" "$FTEST_ARG"
