@@ -38,6 +38,7 @@ struct test_options {
 	volatile int	shutdown;
 	int		delay_shutdown_sec;
 	bool		is_swim_enabled;
+
 };
 
 struct test_options *crtu_get_opts();
