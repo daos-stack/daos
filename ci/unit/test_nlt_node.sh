@@ -21,6 +21,6 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
 
 # NLT will mount /mnt/daos itself.
 ./utils/node_local_test.py --max-log-size 400MiB \
-			   --engine-count 4 \
+			   --engine-count 2 \
 			   --dfuse-dir /localhome/jenkins/ \
 			   --perf-check all
