@@ -28,6 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -717,7 +718,9 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 
 				testDir, cleanup := common.CreateTestDir(t)
 				defer cleanup()
-				engineCfg := engine.NewConfig().WithScmMountPoint(testDir)
+				engineCfg := engine.NewConfig().WithStorage(
+					storage.NewConfig().WithScmMountPoint(testDir),
+				)
 
 				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {
@@ -727,7 +730,11 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				srv.runner = engine.NewTestRunner(trc, engineCfg)
 				srv.setIndex(uint32(i))
 
-				t.Logf("scm dir: %s", srv.scmConfig().MountPoint)
+				cfg, err := srv.storage.GetScmConfig()
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("scm dir: %s", cfg.Scm.MountPoint)
 				superblock := &Superblock{
 					Version: superblockVersion,
 					UUID:    common.MockUUID(),

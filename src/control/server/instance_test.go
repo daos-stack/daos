@@ -25,7 +25,7 @@ import (
 
 func getTestEngineInstance(logger logging.Logger) *EngineInstance {
 	runner := engine.NewRunner(logger, &engine.Config{})
-	return NewEngineInstance(logger, nil, nil, nil, runner)
+	return NewEngineInstance(logger, nil, nil, runner)
 }
 
 func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {

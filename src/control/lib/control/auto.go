@@ -536,9 +536,13 @@ func defaultEngineCfg(idx int) *engine.Config {
 	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
 		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx)).
-		WithScmClass(storage.ScmClassDCPM.String()).
-		WithBdevClass(storage.BdevClassNvme.String()).
-		WithBdevDeviceList([]string{}...)
+		WithStorage(
+			storage.NewConfig().
+				WithScmClass(storage.ClassDCPM.String()),
+			storage.NewConfig().
+				WithBdevClass(storage.ClassNvme.String()).
+				WithBdevDeviceList([]string{}...),
+		)
 }
 
 // genConfig generates server config file from details of available network,
@@ -566,9 +570,13 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 	engines := make([]*engine.Config, 0, nd.engineCount)
 	for nn := 0; nn < nd.engineCount; nn++ {
 		engineCfg := defaultEngineCfg(nn).
-			WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
-			WithScmDeviceList(sd.numaPMems[nn][0]).
-			WithBdevDeviceList(sd.numaSSDs[nn]...).
+			WithStorage(
+				storage.NewConfig().
+					WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
+					WithScmDeviceList(sd.numaPMems[nn][0]),
+				storage.NewConfig().
+					WithBdevDeviceList(sd.numaSSDs[nn]...),
+			).
 			WithTargetCount(ccs[nn].nrTgts).
 			WithHelperStreamCount(ccs[nn].nrHlprs)
 

@@ -210,9 +210,9 @@ func (cfg *Server) WithEngines(engineList ...*engine.Config) *Server {
 // specifying the SCM mountpoint via daos_server CLI flag. Future
 // versions will require the mountpoint to be set via configuration.
 func (cfg *Server) WithScmMountPoint(mp string) *Server {
-	if len(cfg.Engines) > 0 {
+	/*if len(cfg.Engines) > 0 {
 		cfg.Engines[0].WithScmMountPoint(mp)
-	}
+	}*/
 	return cfg
 }
 
@@ -534,8 +534,8 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	}
 
 	seenValues := make(map[string]int)
-	seenScmSet := make(map[string]int)
-	seenBdevSet := make(map[string]int)
+	//seenScmSet := make(map[string]int)
+	//seenBdevSet := make(map[string]int)
 
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
@@ -558,7 +558,7 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 			seenValues[logConfig] = idx
 		}
 
-		scmConf := engine.Storage.SCM
+		/*scmConf := engine.Storage.SCM
 		mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.MountPoint)
 		if seenIn, exists := seenValues[mountConfig]; exists {
 			log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
@@ -572,16 +572,16 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 				return FaultConfigDuplicateScmDeviceList(idx, seenIn)
 			}
 			seenScmSet[dev] = idx
-		}
+		}*/
 
-		bdevConf := engine.Storage.Bdev
+		/*bdevConf := engine.Storage.Bdev
 		for _, dev := range bdevConf.DeviceList {
 			if seenIn, exists := seenBdevSet[dev]; exists {
 				log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
 				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
 			}
 			seenBdevSet[dev] = idx
-		}
+		}*/
 	}
 
 	return nil

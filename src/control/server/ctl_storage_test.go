@@ -6,20 +6,7 @@
 
 package server
 
-import (
-	"testing"
-
-	"github.com/google/go-cmp/cmp"
-
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-)
-
-func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
+/*func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 	scanAddrs := []string{
 		"0000:90:00.0", "0000:d8:00.0", "5d0505:01:00.0", "0000:8e:00.0",
 		"0000:8a:00.0", "0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0",
@@ -163,4 +150,4 @@ func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 			}
 		})
 	}
-}
+}*/

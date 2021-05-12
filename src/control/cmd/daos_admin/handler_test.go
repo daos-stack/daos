@@ -42,10 +42,9 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 	testTarget, cleanup := common.CreateTestDir(t)
 	defer cleanup()
 
-	mountReqPayload, err := json.Marshal(scm.MountRequest{
-		Source: "/src",
+	mountReqPayload, err := json.Marshal(storage.ScmMountRequest{
+		Class:  storage.ClassRAM,
 		Target: testTarget,
-		FsType: "abc",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +54,7 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
 		smsc       *scm.MockSysConfig
-		expPayload *scm.MountResponse
+		expPayload *storage.ScmMountResponse
 		expErr     *fault.Fault
 	}{
 		"nil request": {
@@ -72,7 +71,7 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 				Method:  "ScmMount",
 				Payload: mountReqPayload,
 			},
-			expPayload: &scm.MountResponse{Target: testTarget, Mounted: true},
+			expPayload: &storage.ScmMountResponse{Target: testTarget, Mounted: true},
 		},
 		"ScmMount failure": {
 			req: &pbin.Request{
@@ -95,7 +94,7 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 				Method:  "ScmUnmount",
 				Payload: mountReqPayload,
 			},
-			expPayload: &scm.MountResponse{Target: testTarget, Mounted: false},
+			expPayload: &storage.ScmMountResponse{Target: testTarget, Mounted: false},
 		},
 		"ScmUnmount failure": {
 			req: &pbin.Request{
@@ -121,9 +120,9 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
 			}
 			if tc.expPayload == nil {
-				tc.expPayload = &scm.MountResponse{}
+				tc.expPayload = &storage.ScmMountResponse{}
 			}
-			expectPayload(t, resp, &scm.MountResponse{}, tc.expPayload)
+			expectPayload(t, resp, &storage.ScmMountResponse{}, tc.expPayload)
 		})
 	}
 }
@@ -132,11 +131,11 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 	testTarget, cleanup := common.CreateTestDir(t)
 	defer cleanup()
 
-	scmFormatReqPayload, err := json.Marshal(scm.FormatRequest{
+	scmFormatReqPayload, err := json.Marshal(storage.ScmFormatRequest{
 		Mountpoint: testTarget,
 		OwnerUID:   os.Getuid(),
 		OwnerGID:   os.Getgid(),
-		Ramdisk: &scm.RamdiskParams{
+		Ramdisk: &storage.RamdiskParams{
 			Size: 1,
 		},
 	})
@@ -150,7 +149,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
 		smsc       *scm.MockSysConfig
-		expPayload *scm.FormatResponse
+		expPayload *storage.ScmFormatResponse
 		expErr     *fault.Fault
 	}{
 		"nil request": {
@@ -167,7 +166,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 				Method:  "ScmFormat",
 				Payload: scmFormatReqPayload,
 			},
-			expPayload: &scm.FormatResponse{
+			expPayload: &storage.ScmFormatResponse{
 				Mountpoint: testTarget,
 				Mounted:    true,
 				Formatted:  true,
@@ -194,7 +193,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 				Method:  "ScmCheckFormat",
 				Payload: scmFormatReqPayload,
 			},
-			expPayload: &scm.FormatResponse{Mountpoint: testTarget},
+			expPayload: &storage.ScmFormatResponse{Mountpoint: testTarget},
 		},
 		"ScmCheckFormat failure": {
 			req: &pbin.Request{
@@ -220,15 +219,15 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
 			}
 			if tc.expPayload == nil {
-				tc.expPayload = &scm.FormatResponse{}
+				tc.expPayload = &storage.ScmFormatResponse{}
 			}
-			expectPayload(t, resp, &scm.FormatResponse{}, tc.expPayload)
+			expectPayload(t, resp, &storage.ScmFormatResponse{}, tc.expPayload)
 		})
 	}
 }
 
 func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
-	scmPrepareReqPayload, err := json.Marshal(scm.PrepareRequest{
+	scmPrepareReqPayload, err := json.Marshal(storage.ScmPrepareRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
 	if err != nil {
@@ -239,7 +238,7 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
 		smsc       *scm.MockSysConfig
-		expPayload *scm.PrepareResponse
+		expPayload *storage.ScmPrepareResponse
 		expErr     *fault.Fault
 	}{
 		"nil request": {
@@ -256,7 +255,7 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 				Method:  "ScmPrepare",
 				Payload: scmPrepareReqPayload,
 			},
-			expPayload: &scm.PrepareResponse{},
+			expPayload: &storage.ScmPrepareResponse{},
 		},
 		"ScmPrepare failure": {
 			req: &pbin.Request{
@@ -282,15 +281,15 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
 			}
 			if tc.expPayload == nil {
-				tc.expPayload = &scm.PrepareResponse{}
+				tc.expPayload = &storage.ScmPrepareResponse{}
 			}
-			expectPayload(t, resp, &scm.PrepareResponse{}, tc.expPayload)
+			expectPayload(t, resp, &storage.ScmPrepareResponse{}, tc.expPayload)
 		})
 	}
 }
 
 func TestDaosAdmin_ScmScanHandler(t *testing.T) {
-	scmScanReqPayload, err := json.Marshal(scm.ScanRequest{
+	scmScanReqPayload, err := json.Marshal(storage.ScmScanRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
 	if err != nil {
@@ -301,7 +300,7 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
 		smsc       *scm.MockSysConfig
-		expPayload *scm.ScanResponse
+		expPayload *storage.ScmScanResponse
 		expErr     *fault.Fault
 	}{
 		"nil request": {
@@ -318,7 +317,7 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 				Method:  "ScmScan",
 				Payload: scmScanReqPayload,
 			},
-			expPayload: &scm.ScanResponse{},
+			expPayload: &storage.ScmScanResponse{},
 		},
 		"ScmScan failure": {
 			req: &pbin.Request{
@@ -344,15 +343,15 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
 			}
 			if tc.expPayload == nil {
-				tc.expPayload = &scm.ScanResponse{}
+				tc.expPayload = &storage.ScmScanResponse{}
 			}
-			expectPayload(t, resp, &scm.ScanResponse{}, tc.expPayload)
+			expectPayload(t, resp, &storage.ScmScanResponse{}, tc.expPayload)
 		})
 	}
 }
 
 func TestDaosAdmin_BdevScanHandler(t *testing.T) {
-	bdevScanReqPayload, err := json.Marshal(bdev.ScanRequest{
+	bdevScanReqPayload, err := json.Marshal(storage.BdevScanRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
 	if err != nil {
@@ -362,7 +361,7 @@ func TestDaosAdmin_BdevScanHandler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
 		bmbc       *bdev.MockBackendConfig
-		expPayload *bdev.ScanResponse
+		expPayload *storage.BdevScanResponse
 		expErr     *fault.Fault
 	}{
 		"nil request": {
@@ -379,7 +378,7 @@ func TestDaosAdmin_BdevScanHandler(t *testing.T) {
 				Method:  "BdevScan",
 				Payload: bdevScanReqPayload,
 			},
-			expPayload: &bdev.ScanResponse{},
+			expPayload: &storage.BdevScanResponse{},
 		},
 		"BdevScan failure": {
 			req: &pbin.Request{
@@ -405,15 +404,15 @@ func TestDaosAdmin_BdevScanHandler(t *testing.T) {
 				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
 			}
 			if tc.expPayload == nil {
-				tc.expPayload = &bdev.ScanResponse{}
+				tc.expPayload = &storage.BdevScanResponse{}
 			}
-			expectPayload(t, resp, &bdev.ScanResponse{}, tc.expPayload)
+			expectPayload(t, resp, &storage.BdevScanResponse{}, tc.expPayload)
 		})
 	}
 }
 
 func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
-	bdevPrepareReqPayload, err := json.Marshal(bdev.PrepareRequest{
+	bdevPrepareReqPayload, err := json.Marshal(storage.BdevPrepareRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
 	if err != nil {
@@ -423,7 +422,7 @@ func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
 		bmbc       *bdev.MockBackendConfig
-		expPayload *bdev.PrepareResponse
+		expPayload *storage.BdevPrepareResponse
 		expErr     *fault.Fault
 	}{
 		"nil request": {
@@ -440,7 +439,7 @@ func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
 				Method:  "BdevPrepare",
 				Payload: bdevPrepareReqPayload,
 			},
-			expPayload: &bdev.PrepareResponse{},
+			expPayload: &storage.BdevPrepareResponse{},
 		},
 		"BdevPrepare failure": {
 			req: &pbin.Request{
@@ -466,17 +465,17 @@ func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
 				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
 			}
 			if tc.expPayload == nil {
-				tc.expPayload = &bdev.PrepareResponse{}
+				tc.expPayload = &storage.BdevPrepareResponse{}
 			}
-			expectPayload(t, resp, &bdev.PrepareResponse{}, tc.expPayload)
+			expectPayload(t, resp, &storage.BdevPrepareResponse{}, tc.expPayload)
 		})
 	}
 }
 
 func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
-	bdevFormatReqPayload, err := json.Marshal(bdev.FormatRequest{
+	bdevFormatReqPayload, err := json.Marshal(storage.BdevFormatRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
-		Class:              storage.BdevClassNvme,
+		Class:              storage.ClassNvme,
 		DeviceList:         []string{"foo"},
 	})
 	if err != nil {
@@ -486,7 +485,7 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
 		bmbc       *bdev.MockBackendConfig
-		expPayload *bdev.FormatResponse
+		expPayload *storage.BdevFormatResponse
 		expErr     *fault.Fault
 	}{
 		"nil request": {
@@ -504,17 +503,17 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 				Payload: bdevFormatReqPayload,
 			},
 			bmbc: &bdev.MockBackendConfig{
-				FormatRes: &bdev.FormatResponse{
-					DeviceResponses: bdev.DeviceFormatResponses{
-						"foo": &bdev.DeviceFormatResponse{
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						"foo": &storage.BdevDeviceFormatResponse{
 							Formatted: true,
 						},
 					},
 				},
 			},
-			expPayload: &bdev.FormatResponse{
-				DeviceResponses: bdev.DeviceFormatResponses{
-					"foo": &bdev.DeviceFormatResponse{
+			expPayload: &storage.BdevFormatResponse{
+				DeviceResponses: storage.BdevDeviceFormatResponses{
+					"foo": &storage.BdevDeviceFormatResponse{
 						Formatted: true,
 					},
 				},
@@ -544,9 +543,9 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
 			}
 			if tc.expPayload == nil {
-				tc.expPayload = &bdev.FormatResponse{}
+				tc.expPayload = &storage.BdevFormatResponse{}
 			}
-			expectPayload(t, resp, &bdev.FormatResponse{}, tc.expPayload)
+			expectPayload(t, resp, &storage.BdevFormatResponse{}, tc.expPayload)
 		})
 	}
 }

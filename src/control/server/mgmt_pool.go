@@ -110,7 +110,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	}
 
 	switch {
-	case len(instances[0].bdevConfig().DeviceList) == 0:
+	case !instances[0].storage.HasBlockDevices():
 		svc.log.Info("config has 0 bdevs; excluding NVMe from pool create request")
 		if req.GetScmbytes() == 0 {
 			req.Scmbytes = storagePerRank(req.GetTotalbytes())

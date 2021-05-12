@@ -164,7 +164,7 @@ func newTestEngine(log logging.Logger, isAP bool, engineCfg ...*engine.Config) *
 	rCfg.Running.SetTrue()
 	r := engine.NewTestRunner(rCfg, engineCfg[0])
 
-	srv := NewEngineInstance(log, nil, nil, nil, r)
+	srv := NewEngineInstance(log, nil, nil, r)
 	srv.setSuperblock(&Superblock{
 		Rank: system.NewRankPtr(0),
 	})

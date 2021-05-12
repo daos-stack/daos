@@ -26,72 +26,229 @@ const (
 	DefaultScmToNVMeRatio = 0.06
 )
 
-const (
-	maxScmDeviceLen = 1
-)
+type Class string
 
-// ScmClass definitions.
-const (
-	ScmClassNone ScmClass = ""
-	ScmClassDCPM ScmClass = "dcpm"
-	ScmClassRAM  ScmClass = "ram"
-)
-
-// ScmClass specifies device type for Storage Class Memory
-type ScmClass string
-
-// UnmarshalYAML implements yaml.Unmarshaler on ScmClass type
-func (s *ScmClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var class string
-	if err := unmarshal(&class); err != nil {
+func (c *Class) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var tmp string
+	if err := unmarshal(&tmp); err != nil {
 		return err
 	}
 
-	scmClass := ScmClass(class)
-	switch scmClass {
-	case ScmClassDCPM, ScmClassRAM:
-		*s = scmClass
+	class := Class(tmp)
+	switch class {
+	case ClassDCPM, ClassRAM,
+		ClassNvme, ClassFile, ClassKdev, ClassMalloc:
+		*c = class
 	default:
-		return errors.Errorf("scm_class value %q not supported in config (dcpm/ram)", scmClass)
+		return errors.Errorf("unsupported storage class %q", tmp)
 	}
 	return nil
 }
 
-func (s ScmClass) String() string {
+func (s Class) String() string {
 	return string(s)
 }
+
+const (
+	ClassNone   Class = ""
+	ClassDCPM   Class = "dcpm"
+	ClassRAM    Class = "ram"
+	ClassNvme   Class = "nvme"
+	ClassMalloc Class = "malloc"
+	ClassKdev   Class = "kdev"
+	ClassFile   Class = "file"
+)
+
+type Config struct {
+	Tier  int        `yaml:"tier"`
+	Class Class      `yaml:"class"`
+	Scm   ScmConfig  `yaml:",inline"`
+	Bdev  BdevConfig `yaml:",inline"`
+}
+
+func NewConfig() *Config {
+	return new(Config)
+}
+
+func (c *Config) IsSCM() bool {
+	switch c.Class {
+	case ClassDCPM, ClassRAM:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *Config) IsBdev() bool {
+	switch c.Class {
+	case ClassNvme, ClassFile, ClassKdev, ClassMalloc:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *Config) Validate() error {
+	if c.IsSCM() {
+		return c.Scm.Validate(c.Class)
+	}
+	if c.IsBdev() {
+		return c.Bdev.Validate(c.Class)
+	}
+
+	return errors.New("no storage class set")
+}
+
+func (c *Config) WithTier(tier int) *Config {
+	c.Tier = tier
+	return c
+}
+
+// WithScmClass defines the type of SCM storage to be configured.
+func (c *Config) WithScmClass(scmClass string) *Config {
+	c.Class = Class(scmClass)
+	return c
+}
+
+// WithScmMountPoint sets the path to the device used for SCM storage.
+func (c *Config) WithScmMountPoint(scmPath string) *Config {
+	c.Scm.MountPoint = scmPath
+	return c
+}
+
+// WithScmRamdiskSize sets the size (in GB) of the ramdisk used
+// to emulate SCM (no effect if ScmClass is not RAM).
+func (c *Config) WithScmRamdiskSize(size uint) *Config {
+	c.Scm.RamdiskSize = size
+	return c
+}
+
+// WithScmDeviceList sets the list of devices to be used for SCM storage.
+func (c *Config) WithScmDeviceList(devices ...string) *Config {
+	c.Scm.DeviceList = devices
+	return c
+}
+
+// WithBdevClass defines the type of block device storage to be used.
+func (c *Config) WithBdevClass(bdevClass string) *Config {
+	c.Class = Class(bdevClass)
+	return c
+}
+
+// WithBdevDeviceList sets the list of block devices to be used.
+func (c *Config) WithBdevDeviceList(devices ...string) *Config {
+	c.Bdev.DeviceList = devices
+	return c
+}
+
+// WithBdevDeviceCount sets the number of devices to be created when BdevClass is malloc.
+func (c *Config) WithBdevDeviceCount(count int) *Config {
+	c.Bdev.DeviceCount = count
+	return c
+}
+
+// WithBdevFileSize sets the backing file size (used when BdevClass is malloc or file).
+func (c *Config) WithBdevFileSize(size int) *Config {
+	c.Bdev.FileSize = size
+	return c
+}
+
+// WithBdevConfigPath sets the path to the generated NVMe config file used by SPDK.
+func (c *Config) WithBdevConfigPath(cfgPath string) *Config {
+	c.Bdev.ConfigPath = cfgPath
+	return c
+}
+
+// WithBdevHostname sets the hostname to be used when generating NVMe configurations.
+func (c *Config) WithBdevHostname(name string) *Config {
+	c.Bdev.Hostname = name
+	return c
+}
+
+// WithBdevVosEnv sets the VOS_BDEV_CLASS env variable.
+func (c *Config) WithBdevVosEnv(ve string) *Config {
+	c.Bdev.VosEnv = ve
+	return c
+}
+
+type Configs []*Config
+
+func (c Configs) Validate() error {
+	for _, cfg := range c {
+		if err := cfg.Validate(); err != nil {
+			return errors.Wrapf(err, "tier %d failed validation", cfg.Tier)
+		}
+	}
+
+	return nil
+}
+
+func (c Configs) ScmConfigs() (out []*Config) {
+	for _, cfg := range c {
+		if cfg.IsSCM() {
+			out = append(out, cfg)
+		}
+	}
+	return
+}
+
+func (c Configs) BdevConfigs() (out []*Config) {
+	for _, cfg := range c {
+		if cfg.IsBdev() {
+			out = append(out, cfg)
+		}
+	}
+	return
+}
+
+func (c *Configs) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var tmp []*Config
+	if err := unmarshal(&tmp); err != nil {
+		return err
+	}
+
+	for i := range tmp {
+		if tmp[i].Tier == 0 {
+			tmp[i].Tier = i
+		}
+	}
+	*c = tmp
+
+	return nil
+}
+
+const (
+	maxScmDeviceLen = 1
+)
 
 // ScmConfig represents a SCM (Storage Class Memory) configuration entry.
 type ScmConfig struct {
 	MountPoint  string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
-	Class       ScmClass `yaml:"scm_class,omitempty"`
-	RamdiskSize int      `yaml:"scm_size,omitempty"`
+	RamdiskSize uint     `yaml:"scm_size,omitempty"`
 	DeviceList  []string `yaml:"scm_list,omitempty"`
 }
 
 // Validate sanity checks engine scm config parameters.
-func (sc *ScmConfig) Validate() error {
+func (sc *ScmConfig) Validate(class Class) error {
 	if sc.MountPoint == "" {
 		return errors.New("no scm_mount set")
 	}
 
-	switch sc.Class {
-	case ScmClassDCPM:
+	switch class {
+	case ClassDCPM:
 		if sc.RamdiskSize > 0 {
 			return errors.New("scm_size may not be set when scm_class is dcpm")
 		}
 		if len(sc.DeviceList) == 0 {
 			return errors.New("scm_list must be set when scm_class is dcpm")
 		}
-	case ScmClassRAM:
+	case ClassRAM:
 		if sc.RamdiskSize == 0 {
 			return errors.New("scm_size may not be unset or 0 when scm_class is ram")
 		}
 		if len(sc.DeviceList) > 0 {
 			return errors.New("scm_list may not be set when scm_class is ram")
 		}
-	case ScmClassNone:
-		return errors.New("scm_class not set")
 	}
 
 	if len(sc.DeviceList) > maxScmDeviceLen {
@@ -100,89 +257,52 @@ func (sc *ScmConfig) Validate() error {
 	return nil
 }
 
-// BdevClass definitions.
-const (
-	BdevClassNone   BdevClass = ""
-	BdevClassNvme   BdevClass = "nvme"
-	BdevClassMalloc BdevClass = "malloc"
-	BdevClassKdev   BdevClass = "kdev"
-	BdevClassFile   BdevClass = "file"
-)
-
-// BdevClass specifies block device type for block device storage
-type BdevClass string
-
-// UnmarshalYAML implements yaml.Unmarshaler on BdevClass type
-func (b *BdevClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var class string
-	if err := unmarshal(&class); err != nil {
-		return err
-	}
-	bdevClass := BdevClass(class)
-	switch bdevClass {
-	// NB: It seems as if this is a valid default; configs generated by the test
-	// harness have no bdev entries and are expected to work.
-	case BdevClassNone:
-		*b = BdevClassNvme
-	case BdevClassNvme, BdevClassMalloc, BdevClassKdev, BdevClassFile:
-		*b = bdevClass
-	default:
-		return errors.Errorf("bdev_class value %q not supported in config (nvme/malloc/kdev/file)", bdevClass)
-	}
-	return nil
-}
-
-func (b BdevClass) String() string {
-	return string(b)
-}
-
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	ConfigPath  string    `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	Class       BdevClass `yaml:"bdev_class,omitempty"`
-	DeviceList  []string  `yaml:"bdev_list,omitempty"`
-	VmdDisabled bool      `yaml:"-"` // set during start-up
-	DeviceCount int       `yaml:"bdev_number,omitempty"`
-	FileSize    int       `yaml:"bdev_size,omitempty"`
-	MemSize     int       `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
-	VosEnv      string    `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
-	Hostname    string    `yaml:"-"` // used when generating templates
+	ConfigPath  string   `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	DeviceList  []string `yaml:"bdev_list,omitempty"`
+	VmdDisabled bool     `yaml:"-"` // set during start-up
+	DeviceCount int      `yaml:"bdev_number,omitempty"`
+	FileSize    int      `yaml:"bdev_size,omitempty"`
+	MemSize     int      `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
+	VosEnv      string   `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	Hostname    string   `yaml:"-"` // used when generating templates
 }
 
-func (bc *BdevConfig) checkNonZeroFileSize() error {
+func (bc *BdevConfig) checkNonZeroFileSize(class Class) error {
 	if bc.FileSize == 0 {
 		return errors.Errorf("bdev_class %s requires non-zero bdev_size",
-			bc.Class)
+			class)
 	}
 
 	return nil
 }
 
 // Validate sanity checks engine bdev config parameters.
-func (bc *BdevConfig) Validate() error {
+func (bc *BdevConfig) Validate(class Class) error {
 	if common.StringSliceHasDuplicates(bc.DeviceList) {
 		return errors.New("bdev_list contains duplicate pci addresses")
 	}
 
-	switch bc.Class {
-	case BdevClassFile:
-		if err := bc.checkNonZeroFileSize(); err != nil {
+	switch class {
+	case ClassFile:
+		if err := bc.checkNonZeroFileSize(class); err != nil {
 			return err
 		}
-	case BdevClassMalloc:
-		if err := bc.checkNonZeroFileSize(); err != nil {
+	case ClassMalloc:
+		if err := bc.checkNonZeroFileSize(class); err != nil {
 			return err
 		}
 		if bc.DeviceCount == 0 {
 			return errors.Errorf("bdev_class %s requires non-zero bdev_number",
-				bc.Class)
+				class)
 		}
-	case BdevClassKdev:
+	case ClassKdev:
 		if len(bc.DeviceList) == 0 {
 			return errors.Errorf("bdev_class %s requires non-empty bdev_list",
-				bc.Class)
+				class)
 		}
-	case BdevClassNvme:
+	case ClassNvme:
 		for _, pci := range bc.DeviceList {
 			_, _, _, _, err := common.ParsePCIAddress(pci)
 			if err != nil {
@@ -192,13 +312,4 @@ func (bc *BdevConfig) Validate() error {
 	}
 
 	return nil
-}
-
-// GetNvmeDevs retrieves device list only if class is nvme.
-func (bc *BdevConfig) GetNvmeDevs() []string {
-	if bc.Class == BdevClassNvme {
-		return bc.DeviceList
-	}
-
-	return []string{}
 }
