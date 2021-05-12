@@ -19,6 +19,7 @@ import sys
 import time
 import uuid
 import json
+import copy
 import signal
 import stat
 import errno
@@ -374,6 +375,7 @@ class DaosServer():
             self._test_class = None
         self.valgrind = valgrind
         self._agent = None
+        self.engines = conf.args.engine_count
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
                                                        dir=conf.tmp_dir,
@@ -382,10 +384,14 @@ class DaosServer():
                                                      suffix='.log',
                                                      dir=conf.tmp_dir,
                                                      delete=False)
-        self.server_log = tempfile.NamedTemporaryFile(prefix='dnt_server_',
-                                                      suffix='.log',
-                                                      dir=conf.tmp_dir,
-                                                      delete=False)
+        self.server_logs = []
+        for engine in range(self.engines):
+            prefix = 'dnt_server_{}_'.format(engine)
+            lf = tempfile.NamedTemporaryFile(prefix=prefix,
+                                             suffix='.log',
+                                             dir=conf.tmp_dir,
+                                             delete=False)
+            self.server_logs.append(lf)
         self.__process_name = 'daos_engine'
         if self.valgrind:
             self.__process_name = 'valgrind'
@@ -398,10 +404,6 @@ class DaosServer():
 
         self._yaml_file = None
         self._io_server_dir = None
-        self._size = os.statvfs('/mnt/daos')
-        capacity = self._size.f_blocks * self._size.f_bsize
-        mb = int(capacity / (1024*1024))
-        self.mb = mb
 
     def __del__(self):
         if self.running:
@@ -409,8 +411,9 @@ class DaosServer():
         server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
         if os.path.exists(server_file):
             os.unlink(server_file)
-        if os.path.exists(self.server_log.name):
-            log_test(self.conf, self.server_log.name)
+        for log in self.server_logs:
+            if os.path.exists(log.name):
+                log_test(self.conf, log.name)
         try:
             os.rmdir(self.agent_dir)
         except OSError as error:
@@ -439,18 +442,30 @@ class DaosServer():
             raise NLTestTimeout(res)
 
     def _check_system_state(self, desired_states):
+        """Check the system state for against list
+
+        Return true if all members are in a state specified by the
+        desired_states.
+        """
         if not isinstance(desired_states, list):
             desired_states = [desired_states]
 
         rc = self.run_dmg(['system', 'query', '--json'])
-        if rc.returncode == 0:
-            data = json.loads(rc.stdout.decode('utf-8'))
-            members = data['response']['members']
-            if members is not None:
-                for desired_state in desired_states:
-                    if members[0]['state'] == desired_state:
-                        return True
-        return False
+        if rc.returncode != 0:
+            return False
+        data = json.loads(rc.stdout.decode('utf-8'))
+        if data['error'] or data['status'] != 0:
+            return False
+        members = data['response']['members']
+        if members is None:
+            return False
+        if len(members) != self.engines:
+            return False
+
+        for member in members:
+            if member['state'] not in desired_states:
+                return False
+        return True
 
     def start(self, clean=True):
         """Start a DAOS server"""
@@ -494,7 +509,6 @@ class DaosServer():
         scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
 
         scyaml = yaml.safe_load(scfd)
-        scyaml['engines'][0]['log_file'] = self.server_log.name
         if self.conf.args.server_debug:
             scyaml['control_log_mask'] = 'ERROR'
             scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
@@ -503,6 +517,17 @@ class DaosServer():
         for (key, value) in server_env.items():
             scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
 
+        ref_engine = copy.deepcopy(scyaml['engines'][0])
+        ref_engine['scm_size'] = int(ref_engine['scm_size'] / self.engines)
+        scyaml['engines'] = []
+        server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
+        for idx in range(self.engines):
+            engine = copy.deepcopy(ref_engine)
+            engine['log_file'] = self.server_logs[idx].name
+            engine['first_core'] = ref_engine['targets'] * idx
+            engine['fabric_iface_port'] += server_port_count * idx
+            engine['scm_mount'] = '{}_{}'.format(ref_engine['scm_mount'], idx)
+            scyaml['engines'].append(engine)
         self._yaml_file = tempfile.NamedTemporaryFile(
             prefix='nlt-server-config-',
             suffix='.yaml')
@@ -655,16 +680,21 @@ class DaosServer():
                     procs.append(proc_id)
                     break
 
-        if len(procs) != 1:
+        if len(procs) != self.engines:
+            # Mark this as a warning, but not a failure.  This is currently
+            # expected when running with pre-existing data because the server
+            # is calling exec.  Do not mark as a test failure for the same
+            # reason.
             entry = {}
             entry['fileName'] = os.path.basename(self._file)
             entry['directory'] = os.path.dirname(self._file)
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
-            entry['severity'] = 'ERROR'
-            entry['message'] = 'daos_engine died during testing'
+            entry['severity'] = 'NORMAL'
+            message = 'Incorrect number of engines running ({} vs {})'\
+                      .format(len(procs), 1)
+            entry['message'] = message
             self.conf.wf.issues.append(entry)
-
         rc = self.run_dmg(['system', 'stop'])
         print(rc)
         assert rc.returncode == 0
@@ -687,7 +717,8 @@ class DaosServer():
         compress_file(self.agent_log.name)
         compress_file(self.control_log.name)
 
-        log_test(self.conf, self.server_log.name, leak_wf=wf)
+        for log in self.server_logs:
+            log_test(self.conf, log.name, leak_wf=wf)
         self.running = False
         return ret
 
@@ -983,18 +1014,21 @@ class DFuse():
         # prefix to the src dir.
         self.valgrind.convert_xml()
 
-def get_pool_list():
+def get_pool_list(server):
     """Return a list of valid pool names"""
     pools = []
 
-    for fname in os.listdir('/mnt/daos'):
-        if len(fname) != 36:
-            continue
-        try:
-            uuid.UUID(fname)
-        except ValueError:
-            continue
-        pools.append(fname)
+    for idx in range(server.engines):
+        for fname in os.listdir('/mnt/daos_{}'.format(idx)):
+            if len(fname) != 36:
+                continue
+            if fname in pools:
+                continue
+            try:
+                uuid.UUID(fname)
+            except ValueError:
+                continue
+            pools.append(fname)
     return pools
 
 def assert_file_size_fd(fd, size):
@@ -1111,7 +1145,7 @@ def destroy_container(conf, pool, container):
 def make_pool(daos):
     """Create a DAOS pool"""
 
-    size = int(daos.mb / 4)
+    size = 1024*2
 
     attempt = 0
     max_tries = 5
@@ -1128,7 +1162,7 @@ def make_pool(daos):
     print(rc)
     assert rc.returncode == 0
 
-    return get_pool_list()
+    return get_pool_list(daos)
 
 def needs_dfuse(method):
     """Decorator function for starting dfuse under posix_tests class"""
@@ -1597,7 +1631,7 @@ def run_posix_tests(server, conf, test=None):
         print('rc from {} is {}'.format(fn, rc))
         print('Took {:.1f} seconds'.format(duration))
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
     while len(pools) < 1:
         pools = make_pool(server)
     pool = pools[0]
@@ -1926,7 +1960,7 @@ def run_duns_overlay_test(server, conf):
     and expose the container.
     """
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
     while len(pools) < 1:
         pools = make_pool(server)
 
@@ -1963,7 +1997,7 @@ def run_dfuse(server, conf):
 
     fatal_errors = BoolRatchet()
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
     while len(pools) < 1:
         pools = make_pool(server)
 
@@ -2027,7 +2061,7 @@ def run_dfuse(server, conf):
 def run_il_test(server, conf):
     """Run a basic interception library test"""
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     # TODO:                       # pylint: disable=W0511
     # This doesn't work with two pools, partly related to
@@ -2102,7 +2136,7 @@ def run_in_fg(server, conf):
     Block until ctrl-c is pressed.
     """
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     while len(pools) < 1:
         pools = make_pool(server)
@@ -2195,7 +2229,7 @@ def check_readdir_perf(server, conf):
                                 headers=headers,
                                 floatfmt=".2f"))
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     while len(pools) < 1:
         pools = make_pool(server)
@@ -2323,7 +2357,7 @@ def test_pydaos_kv(server, conf):
     os.environ['D_LOG_FILE'] = pydaos_log_file.name
     daos = import_daos(server, conf)
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     while len(pools) < 1:
         pools = make_pool(server)
@@ -2666,7 +2700,7 @@ def test_alloc_fail_cat(server, conf, wf):
     itself yet.
     """
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     while len(pools) < 1:
         pools = make_pool(server)
@@ -2699,7 +2733,7 @@ def test_alloc_fail_cat(server, conf, wf):
 def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection"""
 
-    pools = get_pool_list()
+    pools = get_pool_list(server)
 
     while len(pools) < 1:
         pools = make_pool(server)
@@ -2735,6 +2769,8 @@ def main():
                         choices=['yes', 'no', 'some'])
     parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
+    parser.add_argument('--engine-count', type=int, default=1,
+                        help='Number of daos engines to run')
     parser.add_argument('--dfuse-dir', default='/tmp',
                         help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')
@@ -2816,7 +2852,7 @@ def main():
     if args.mode == 'server-valgrind':
         server = DaosServer(conf, valgrind=True, test_class='valgrind')
         server.start(clean=False)
-        pools = get_pool_list()
+        pools = get_pool_list(server)
         for pool in pools:
             cmd = ['pool', 'list-containers', '--pool', pool]
             run_daos_cmd(conf, cmd, valgrind=False)
