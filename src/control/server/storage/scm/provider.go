@@ -487,7 +487,7 @@ func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error)
 		if sr := p.createScanResponse(); len(sr.Namespaces) > 0 {
 			for _, ns := range sr.Namespaces {
 				nsDev := "/dev/" + ns.BlockDevice
-				isMounted, err := p.sys.IsMounted(nsDev)
+				isMounted, err := p.IsMounted(nsDev)
 				if err != nil {
 					if os.IsNotExist(errors.Cause(err)) {
 						continue
@@ -552,9 +552,9 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 		Formatted:  true,
 	}
 
-	isMounted, err := p.sys.IsMounted(req.Mountpoint)
+	isMounted, err := p.IsMounted(req.Mountpoint)
 	if err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrapf(err, "failed to check if %s is mounted", req.Mountpoint)
+		return nil, err
 	}
 	if isMounted {
 		res.Mounted = true
@@ -588,9 +588,9 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 }
 
 func (p *Provider) clearMount(req FormatRequest) error {
-	mounted, err := p.sys.IsMounted(req.Mountpoint)
+	mounted, err := p.IsMounted(req.Mountpoint)
 	if err != nil && !os.IsNotExist(err) {
-		return errors.Wrapf(err, "failed to check if %s is mounted", req.Mountpoint)
+		return err
 	}
 
 	if mounted {
@@ -628,12 +628,13 @@ func (p *Provider) makeMountPath(req FormatRequest) error {
 
 	for i := range dirs {
 		ps := sep + filepath.Join(dirs[:i+1]...)
-
 		_, err := os.Stat(ps)
 		switch {
 		case os.IsNotExist(err):
 			// subdir missing, attempt to create and chown
-			os.Mkdir(ps, defaultMountPointPerms)
+			if err := os.Mkdir(ps, defaultMountPointPerms); err != nil {
+				return errors.Wrapf(err, "failed to create directory %q", ps)
+			}
 			if err := os.Chown(ps, req.OwnerUID, req.OwnerGID); err != nil {
 				return errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
 					ps, req.OwnerUID, req.OwnerGID)
@@ -712,9 +713,9 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 		return nil, FaultFormatMissingParam
 	}
 
-	alreadyMounted, err := p.sys.IsMounted(req.Dcpm.Device)
+	alreadyMounted, err := p.IsMounted(req.Dcpm.Device)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to check if %s is already mounted", req.Dcpm.Device)
+		return nil, err
 	}
 	if alreadyMounted {
 		return nil, errors.Wrap(FaultDeviceAlreadyMounted, req.Dcpm.Device)
@@ -750,9 +751,9 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 // MountDcpm attempts to mount a DCPM device at the specified mountpoint.
 func (p *Provider) MountDcpm(device, target string) (*MountResponse, error) {
 	// make sure the source device is not already mounted somewhere else
-	devMounted, err := p.sys.IsMounted(device)
+	devMounted, err := p.IsMounted(device)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to check if %s is mounted", device)
+		return nil, err
 	}
 	if devMounted {
 		return nil, errors.Wrap(FaultDeviceAlreadyMounted, device)
@@ -796,9 +797,9 @@ func (p *Provider) Mount(req MountRequest) (*MountResponse, error) {
 
 func (p *Provider) mount(src, target, fsType string, flags uintptr, opts string) (*MountResponse, error) {
 	// make sure that we're not double-mounting over an existing mount
-	tgtMounted, err := p.sys.IsMounted(target)
+	tgtMounted, err := p.IsMounted(target)
 	if err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrapf(err, "unable to check if %s is mounted", target)
+		return nil, err
 	}
 	if tgtMounted {
 		return nil, errors.Wrap(FaultTargetAlreadyMounted, target)
@@ -834,10 +835,17 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 	}, nil
 }
 
-// IsMounted checks to see if the target device or directory
-// is mounted.
+// IsMounted checks to see if the target device or directory is mounted and
+// returns flag to specify whether mounted, flag to specify whether the mount
+// exists and a relevant fault.
 func (p *Provider) IsMounted(target string) (bool, error) {
-	return p.sys.IsMounted(target)
+	isMounted, err := p.sys.IsMounted(target)
+
+	if errors.Is(err, os.ErrPermission) {
+		return false, errors.Wrap(FaultPathAccessDenied(target), "check if mounted")
+	}
+
+	return isMounted, err
 }
 
 // GetfsUsage returns space utilization info for a mount point.

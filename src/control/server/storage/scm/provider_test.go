@@ -476,9 +476,11 @@ func TestProviderCheckFormat(t *testing.T) {
 
 func TestProviderFormat(t *testing.T) {
 	const (
-		goodMountPoint = "/mnt/daos"
-		badMountPoint  = "/this/should/not/work"
-		goodDevice     = "/dev/pmem0"
+		goodMountPoint     = "/mnt/daos"
+		nestedMountPoint   = "/mnt/daos/0"
+		relativeMountPoint = "mnt/daos/0"
+		badMountPoint      = "/this/should/not/work"
+		goodDevice         = "/dev/pmem0"
 	)
 
 	// NB: Some overlap here between this and CheckFormat tests,
@@ -546,6 +548,16 @@ func TestProviderFormat(t *testing.T) {
 				Mounted:    true,
 			},
 		},
+		"ramdisk: mountpoint not accessible": {
+			mountPoint:   nestedMountPoint,
+			isMountedErr: os.ErrPermission,
+			expResponse: &FormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+			expErr: FaultPathAccessDenied(nestedMountPoint),
+		},
 		"ramdisk: already mounted, no reformat": {
 			mountPoint:     goodMountPoint,
 			alreadyMounted: true,
@@ -611,6 +623,15 @@ func TestProviderFormat(t *testing.T) {
 			alreadyMounted: true,
 			mountErr:       errors.New("mount failed"),
 		},
+		"ramdisk: mountpoint doesn't exist; nested mountpoint": {
+			mountPoint:   nestedMountPoint,
+			isMountedErr: os.ErrNotExist,
+			expResponse: &FormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+		},
 		"dcpm: getFs fails": {
 			request: &FormatRequest{
 				Mountpoint: goodMountPoint,
@@ -630,6 +651,17 @@ func TestProviderFormat(t *testing.T) {
 			},
 			getFsStr: "reiserfs",
 			expErr:   FaultFormatNoReformat,
+		},
+		"dcpm: mountpoint not accessible": {
+			isMountedErr: os.ErrPermission,
+			request: &FormatRequest{
+				Mountpoint: nestedMountPoint,
+				Dcpm: &DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: "reiserfs",
+			expErr:   FaultPathAccessDenied(nestedMountPoint),
 		},
 		"dcpm: not mounted; already formatted; no reformat": {
 			request: &FormatRequest{
@@ -750,6 +782,35 @@ func TestProviderFormat(t *testing.T) {
 			},
 			expErr: FaultFormatMissingDevice("/bad/device"),
 		},
+		"dcpm: mountpoint doesn't exist; not formatted; nested mountpoint": {
+			isMountedErr: os.ErrNotExist,
+			request: &FormatRequest{
+				Mountpoint: nestedMountPoint,
+				Dcpm: &DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: fsTypeNone,
+			expResponse: &FormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+		},
+		"dcpm: not mounted; not formatted; nested mountpoint": {
+			request: &FormatRequest{
+				Mountpoint: nestedMountPoint,
+				Dcpm: &DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: fsTypeNone,
+			expResponse: &FormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -817,10 +878,18 @@ func TestProviderFormat(t *testing.T) {
 					}
 					t.Fatalf("%s leaked from IsMounted() check", err)
 				default:
-					if tc.expErr != nil && tc.expErr.Error() == errors.Cause(err).Error() {
-						return
+					if tc.expErr == nil {
+						t.Fatal(err)
 					}
-					t.Fatal(err)
+
+					// expErr will contain the original mountpoint
+					errStr := errors.Cause(err).Error()
+					errStr = strings.Replace(errStr, testDir, "", 1)
+					if diff := cmp.Diff(tc.expErr.Error(), errStr); diff != "" {
+						t.Fatalf("unexpected error (-want, +got):\n%s\n", diff)
+					}
+
+					return
 				}
 			}
 			cmpRes(t, tc.expResponse, res)

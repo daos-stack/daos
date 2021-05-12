@@ -116,6 +116,16 @@ func FaultFormatMissingDevice(device string) *fault.Fault {
 	)
 }
 
+// FaultPathAccessDenied represents an error where a mount point or device path for
+// a SCM storage target is inaccessible because of a permissions issue.
+func FaultPathAccessDenied(path string) *fault.Fault {
+	return scmFault(
+		code.ScmPathAccessDenied,
+		fmt.Sprintf("path %q has incompatible access permissions", path),
+		"verify the path is accessible by the user running daos_server and try again",
+	)
+}
+
 func scmFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "scm",
