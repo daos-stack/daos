@@ -953,8 +953,8 @@ def run_tests(test_files, tag_filter, args):
                     print(
                         "No avocado crash files found in {}".format(crash_dir))
         return_code |= run_return_code
-        return_code |= stop_daos_agent_services(test_file["py"], args)
-        return_code |= stop_daos_server_service(test_file["py"], args)
+        # return_code |= stop_daos_agent_services(test_file["py"], args)
+        # return_code |= stop_daos_server_service(test_file["py"], args)
 
         # Optionally store all of the server and client config files
         # and archive remote logs and report big log files, if any.
