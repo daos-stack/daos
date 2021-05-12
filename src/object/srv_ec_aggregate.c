@@ -383,7 +383,8 @@ agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry,
 	} else {
 		unsigned int *buf = NULL;
 
-		D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf, ent_buf_len);
+		D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf,
+			  sgl->sg_iovs[iov_entry].iov_buf_len, ent_buf_len);
 		 if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -2231,7 +2232,8 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = ds_pool_check_dtx_leader(agg_param->ap_pool_info.api_pool,
 				      &entry->ie_oid, agg_param->
-				      ap_pool_info.api_pool->sp_map_version);
+				      ap_pool_info.api_pool->sp_map_version,
+				      true);
 
 	if (rc == 1 && entry->ie_oid.id_shard >= oca->u.ec.e_k) {
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);

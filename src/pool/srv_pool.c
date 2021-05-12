@@ -4057,21 +4057,6 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 
 	replace_failed_replicas(svc, map);
 
-	if (opc == POOL_ADD_IN) {
-		/*
-		 * If we are setting ranks from UP -> UPIN, schedule a reclaim
-		 * operation to garbage collect any unreachable data moved
-		 * during reintegration/addition
-		 */
-		rc = ds_rebuild_schedule(svc->ps_pool, map_version, tgts,
-					 RB_OP_RECLAIM, 0);
-		if (rc != 0) {
-			D_ERROR("failed to schedule reclaim rc: "DF_RC"\n",
-				DP_RC(rc));
-			goto out_map_buf;
-		}
-	}
-
 out_map_buf:
 	pool_buf_free(map_buf);
 out_map:
@@ -4185,7 +4170,7 @@ get_open_handles_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (size_needed > arg->hdls_size) {
 		void *newbuf = NULL;
 
-		D_REALLOC(newbuf, *arg->hdls, size_needed);
+		D_REALLOC(newbuf, *arg->hdls, arg->hdls_size, size_needed);
 		if (newbuf == NULL)
 			D_GOTO(out_hdl, rc = -DER_NOMEM);
 
@@ -5544,7 +5529,7 @@ out:
 
 int
 ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version)
+			 uint32_t version, int *tgt_id)
 {
 	struct pl_map		*map;
 	struct pl_obj_layout	*layout;
@@ -5565,7 +5550,7 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 		goto out;
 
 	rc = pl_select_leader(oid->id_pub, oid->id_shard / layout->ol_grp_size,
-			      layout->ol_grp_size, true,
+			      layout->ol_grp_size, tgt_id,
 			      pl_obj_get_shard, layout);
 	pl_obj_layout_free(layout);
 	if (rc < 0)
@@ -5587,24 +5572,27 @@ out:
  * \param [IN]	version		The pool map version
  *
  * \return			+1 if leader is on current server.
- * \return			Zero if the leader resides on another server.
+ * \return			Zero if the leader resides on another server,
+ *				or the oid->id_shard is not the leader shard.
  * \return			Negative value if error.
  */
 int
 ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version)
+			 uint32_t version, bool check_shard)
 {
 	struct pool_target	*target;
 	d_rank_t		 myrank;
-	int			 leader;
+	int			 leader_tgt;
+	int			 leader_shard;
 	int			 rc;
 
-	leader = ds_pool_elect_dtx_leader(pool, oid, version);
-	if (leader < 0)
-		return leader;
+	rc = ds_pool_elect_dtx_leader(pool, oid, version, &leader_tgt);
+	if (rc < 0)
+		return rc;
+	leader_shard = rc;
 
-	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader);
-	rc = pool_map_find_target(pool->sp_map, leader, &target);
+	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader_tgt);
+	rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
 	if (rc < 0)
 		return rc;
 
@@ -5615,10 +5603,13 @@ ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc < 0)
 		return rc;
 
-	if (myrank != target->ta_comp.co_rank)
+	if (myrank != target->ta_comp.co_rank) {
 		rc = 0;
-	else
+	} else {
 		rc = 1;
+		if (check_shard && oid->id_shard != leader_shard)
+			rc = 0;
+	}
 
 	return rc;
 }
