@@ -2232,7 +2232,8 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = ds_pool_check_dtx_leader(agg_param->ap_pool_info.api_pool,
 				      &entry->ie_oid, agg_param->
-				      ap_pool_info.api_pool->sp_map_version);
+				      ap_pool_info.api_pool->sp_map_version,
+				      true);
 
 	if (rc == 1 && entry->ie_oid.id_shard >= oca->u.ec.e_k) {
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
