@@ -67,7 +67,6 @@ def macro_expand(target, source, env):
 def scons():
     """Scons function"""
 
-    print(" SAB: in src/cart: build library")
     # Generate the common libraries used by everyone
     SConscript('swim/SConscript')
     Default('swim')
