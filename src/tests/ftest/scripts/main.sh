@@ -220,6 +220,8 @@ if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
     fi
 fi
 
+# need to increase the number of oopen files (on EL8 at least)
+ulimit -n 4096
 
 launch_args="-jcrisa"
 # can only process cores on EL7 currently

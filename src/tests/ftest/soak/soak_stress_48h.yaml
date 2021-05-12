@@ -34,7 +34,7 @@ server_config:
         scm_class: dcpm
         scm_list: [/dev/pmem0]
         bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
         env_vars:
             - FI_UNIVERSE_SIZE=2048
 # pool_params - attributes of the pools to create; Currently only create one
@@ -84,18 +84,6 @@ soak_stress:
     name: soak_stress
     # stress test timeout in hours
     test_timeout: 48
-    # maximum timeout for a single job in test in minutes
-    job_timeout: 30
-    nodesperjob:
-        - 2
-        - 4
-        - 8
-        - -1
-    # used for performance benchmarks
-    taskspernode:
-        - 1
-        - 16
-        - 32
     joblist:
         - fio_stress
         - daos_racer
@@ -105,6 +93,17 @@ soak_stress:
 # IOR params -a DFS and -a MPIIO
 # sequential
 ior_stress:
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 30
+    nodesperjob:
+        - 2
+        - 4
+        - 8
+    # used for performance benchmarks
+    taskspernode:
+        - 1
+        - 16
+        - 32
     api:
         - DFS
         - MPIIO
@@ -153,11 +152,11 @@ fio_stress:
     oclass:
         - 'SX'
 daos_racer:
-  runtime: 7200
-  container:
-    type: POSIX
-    oclass: SX
-    control_method: daos
+    runtime: 7200
+    container:
+        type: POSIX
+        oclass: SX
+        control_method: daos
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_direct_io: True
@@ -169,3 +168,4 @@ events:
 monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
+    - "ps -C daos_engine -o %mem,%cpu,cmd"

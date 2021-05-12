@@ -3407,6 +3407,9 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	daos_recx_t		recx;
 	daos_key_t		dkey;
 	size_t			len;
+	dfs_obj_t		*sym;
+	mode_t			orig_mode;
+	const char		*entry_name;
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -3433,7 +3436,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		oh = parent->oh;
 	}
 
-	/** sticky bit, set-user-id and set-group-id, not supported yet */
+	/** sticky bit, set-user-id and set-group-id, are not supported */
 	if (mode & S_ISVTX || mode & S_ISGID || mode & S_ISUID) {
 		D_ERROR("setuid, setgid, & sticky bit are not supported.\n");
 		return EINVAL;
@@ -3450,8 +3453,6 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 	/** resolve symlink */
 	if (S_ISLNK(entry.mode)) {
-		dfs_obj_t *sym;
-
 		D_ASSERT(entry.value);
 
 		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym,
@@ -3465,13 +3466,28 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		rc = daos_obj_open(dfs->coh, sym->parent_oid, DAOS_OO_RW,
 				   &oh, NULL);
 		D_FREE(entry.value);
-		dfs_release(sym);
-		if (rc)
+		if (rc) {
+			dfs_release(sym);
 			return daos_der2errno(rc);
+		}
+
+		orig_mode = sym->mode;
+		entry_name = sym->name;
+	} else {
+		orig_mode = entry.mode;
+		entry_name = name;
 	}
 
+	if ((mode & S_IFMT) && (orig_mode & S_IFMT) != (mode & S_IFMT)) {
+		D_ERROR("Cannot change entry type\n");
+		D_GOTO(out, rc = EINVAL);
+	}
+
+	/** set the type mode in case user has not passed it */
+	mode |= orig_mode & S_IFMT;
+
 	/** set dkey as the entry name */
-	d_iov_set(&dkey, (void *)name, len);
+	d_iov_set(&dkey, (void *)entry_name, len);
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iod.iod_nr	= 1;
 	recx.rx_idx	= MODE_IDX;
@@ -3493,10 +3509,11 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
-	if (S_ISLNK(entry.mode))
-		daos_obj_close(oh, NULL);
-
 out:
+	if (S_ISLNK(entry.mode)) {
+		dfs_release(sym);
+		daos_obj_close(oh, NULL);
+	}
 	return rc;
 }
 
@@ -3524,9 +3541,17 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		return EPERM;
 	if ((obj->flags & O_ACCMODE) == O_RDONLY)
 		return EPERM;
-	if (flags & DFS_SET_ATTR_MODE)
+	if (flags & DFS_SET_ATTR_MODE) {
 		if ((stbuf->st_mode & S_IFMT) != (obj->mode & S_IFMT))
 			return EINVAL;
+		/** sticky bit, set-user-id and set-group-id not supported */
+		if (stbuf->st_mode & S_ISVTX || stbuf->st_mode & S_ISGID ||
+		    stbuf->st_mode & S_ISUID) {
+			D_DEBUG(DB_TRACE, "setuid, setgid, & sticky bit are not"
+				" supported.\n");
+			return EINVAL;
+		}
+	}
 
 	/** Open parent object and fetch entry of obj from it */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);

@@ -40,6 +40,7 @@
 	X(RAS_ENGINE_FORMAT_REQUIRED,	"engine_format_required")	\
 	X(RAS_ENGINE_DIED,		"engine_died")			\
 	X(RAS_ENGINE_ASSERTED,		"engine_asserted")		\
+	X(RAS_ENGINE_CLOCK_DRIFT,	"engine_clock_drift")		\
 	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")		\
 	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")	\
 	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")		\
@@ -113,7 +114,7 @@ ras_sev2str(ras_sev_t severity)
 }
 
 /**
- * Raise a RAS event and forward to the control-plane.
+ * Raise a RAS event and forward to the control plane.
  *
  * \param[in] id	Unique event identifier.
  * \param[in] msg	Human readable message.
@@ -149,7 +150,7 @@ ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
 		     const char *fmt, ...);
 
 /**
- * Notify control-plane of an update to a pool's service replicas and wait for
+ * Notify control plane of an update to a pool's service replicas and wait for
  * a response.
  *
  * \param[in] pool	UUID of DAOS pool with updated service replicas.
