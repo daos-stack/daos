@@ -5,13 +5,12 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import uuid
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosApiError, c_uuid_to_str
 from command_utils_base import CommandFailure
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from general_utils import create_string_buffer
-from apricot import skipForTicket
 
 
 class EvictTests(TestWithServers):
