@@ -581,7 +581,7 @@ obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver)
 	if (obj->cob_version == map_ver)
 		rc = pl_select_leader(obj->cob_md.omd_id,
 				      idx / obj->cob_grp_size,
-				      obj->cob_grp_size, false,
+				      obj->cob_grp_size, NULL,
 				      obj_get_shard, obj);
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
