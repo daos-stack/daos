@@ -44,6 +44,9 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*',
                                            default="")
         self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
+        self.server_count = len(self.hostlist_servers)
+        self.engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
         self.out_queue = queue.Queue()
         self.dmg_command.exit_status_exception = False
         self.test_during_aggregation = False
@@ -129,8 +132,8 @@ class OSAUtils(MdtestBase, IorTestBase):
 
     @fail_on(CommandFailure)
     def get_ipaddr_for_rank(self, rank=None):
-        """Remove the /mnt/daos/<pool_uid> pool directory
-        for a particular rank.
+        """Obtain the IPAddress and port number for a
+        particular server rank.
 
         Args:
             rank (int): daos_engine rank. Defaults to None.
@@ -138,10 +141,8 @@ class OSAUtils(MdtestBase, IorTestBase):
             ip_addr (str) : IPAddress for the rank.
             port_num (str) : Port number for the rank.
         """
-        ip_addr = [None]
-        port_num = [None]
         output = self.dmg_command.system_query()
-        members_length = len(output["response"]["members"])
+        members_length = self.server_count * self.engine_count
         for i in range(0, members_length):
             if rank == int(output["response"]["members"][i]["rank"]):
                 temp = output["response"]["members"][i]["addr"]
@@ -149,7 +150,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                 temp = output["response"]["members"][i]["fabric_uri"]
                 port_num = temp.split(":")
                 return ip_addr[0], port_num[2]
-        return ip_addr[0], port_num[0]
+        return None, None
 
     @fail_on(CommandFailure)
     def remove_pool_dir(self, ip_addr=None, port_num=None):
@@ -159,23 +160,36 @@ class OSAUtils(MdtestBase, IorTestBase):
             ip_addr (str): IP address of the daos server.
                            Defaults to None.
             port_number (str) : Port number the daos server.
-        """
+"""
+        # Create the expected port list
+        # expected_ports = [port0] - Single engine/server
+        # expected_ports = [port0, port1] - Two engine/server
+        expected_ports = [engine_param.get_value("fabric_iface_port")
+                          for engine_param in self.server_managers[-1].
+                          manager.job.yaml.engine_params]
+        self.log.info("Expected ports : %s", expected_ports)
         if ip_addr is None or port_num is None:
             self.log.info("ip_addr : %s port_number: %s", ip_addr, port_num)
             self.fail("No IP Address or Port number provided")
         else:
-            expected_ib0_ports = ["31317", "31416"]
-            expected_ib1_ports = ["31417", "31516"]
-            if port_num in expected_ib0_ports:
-                port_val = 0
-            elif port_num in expected_ib1_ports:
-                port_val = 1
+            if self.engine_count == 1:
+                self.log.info("Single Engine per Server")
+                cmd = "/usr/bin/ssh {} -oStrictHostKeyChecking=no \
+                      sudo rm -rf /mnt/daos/{}/vos-*". \
+                      format(ip_addr, self.pool.uuid)
+            elif self.engine_count == 2:
+                if port_num == str(expected_ports[0]):
+                    port_val = 0
+                elif port_num == str(expected_ports[1]):
+                    port_val = 1
+                else:
+                    self.log.info("port_number: %s", port_num)
+                    self.fail("Invalid port number")
+                cmd = "/usr/bin/ssh {} -oStrictHostKeyChecking=no \
+                      sudo rm -rf /mnt/daos{}/{}/vos-*". \
+                      format(ip_addr, port_val, self.pool.uuid)
             else:
-                self.log.info("port_number: %s", port_num)
-                self.fail("Invalid port number")
-            cmd = "/usr/bin/ssh {} -oStrictHostKeyChecking=no \
-                  sudo rm -rf /mnt/daos{}/{}/vos-*". \
-                  format(ip_addr, port_val, self.pool.uuid)
+                self.fail("Not supported engine per server configuration")
             run_command(cmd)
 
     def set_container(self, container):
