@@ -11,7 +11,7 @@ from command_utils_base import \
     CommandFailure, FormattedParameter, EnvironmentVariables, \
     CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import get_log_file
+from general_utils import get_log_file, run_pcmd
 from agent_utils_params import \
     DaosAgentTransportCredentials, DaosAgentYamlParameters
 
@@ -224,6 +224,13 @@ class DaosAgentManager(SubprocessManager):
         self.verify_socket_directory(getuser())
 
         super().start()
+
+    def dump_attachinfo(self):
+        # Run dump-attachinfo here ...
+        self.manager.job.set_sub_command("dump-attachinfo")
+        self.manager.job.sudo = True
+        self.attachinfo = run_pcmd(self.hosts, str(self.manager.job))[0]["stdout"]
+        self.log.info("Agent attachinfo: %s", self.attachinfo)
 
     def stop(self):
         """Stop the agent through the job manager.
