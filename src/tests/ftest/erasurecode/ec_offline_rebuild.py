@@ -7,7 +7,6 @@
 from ec_utils import ErasureCodeIor
 from apricot import skipForTicket
 
-
 class EcOfflineRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """
@@ -28,7 +27,7 @@ class EcOfflineRebuild(ErasureCodeIor):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_offline_rebuild
+        :avocado: tags=ec,ec_array,ec_offline_rebuild
         :avocado: tags=ec_offline_rebuild_array
 
         """
@@ -50,7 +49,7 @@ class EcOfflineRebuild(ErasureCodeIor):
 
         # Kill the another server rank
         self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
-                                           force=True
+                                           force=True)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True)

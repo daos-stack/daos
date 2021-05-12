@@ -10,7 +10,7 @@ from ec_utils import ErasureCodeSingle
 class EcDisabledRebuildSingle(ErasureCodeSingle):
     # pylint: disable=too-many-ancestors
     """
-    Test Class Description: To validate Erasure code object fir single data
+    Test Class Description: To validate Erasure code object for single data
             type, after killing servers when pool rebuild is off.
     :avocado: recursive
     """
@@ -25,7 +25,7 @@ class EcDisabledRebuildSingle(ErasureCodeSingle):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_disabled_rebuild
+        :avocado: tags=ec,ec_single,ec_disabled_rebuild
         :avocado: tags=ec_disabled_rebuild_single
 
         """

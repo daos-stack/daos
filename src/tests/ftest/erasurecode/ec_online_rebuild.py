@@ -32,7 +32,7 @@ class EcOnlineRebuild(ErasureCodeIor):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_online_rebuild
+        :avocado: tags=ec,ec_array,ec_online_rebuild
         :avocado: tags=ec_online_rebuild_array
         """
         # Kill last server rank
