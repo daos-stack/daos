@@ -160,7 +160,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             ip_addr (str): IP address of the daos server.
                            Defaults to None.
             port_number (str) : Port number the daos server.
-"""
+        """
         # Create the expected port list
         # expected_ports = [port0] - Single engine/server
         # expected_ports = [port0, port1] - Two engine/server
