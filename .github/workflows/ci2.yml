@@ -1,4 +1,4 @@
-name: DAOS Test Build.
+name: Build
 
 on:
    push:
@@ -42,7 +42,7 @@ jobs:
       run: docker images --all --filter label=DAOS=stage1 --quiet | xargs docker rmi --no-prune
 
   Build-and-test:
-    name: Run DAOS tests
+    name: Run DAOS/NLT tests
     needs: Prepare
     runs-on: ubuntu-20.04
     strategy:
