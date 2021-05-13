@@ -575,7 +575,8 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	if (rc) {
 		/** don't log error if conditional failed */
 		if (rc != -DER_EXIST)
-			D_ERROR("Failed to insert entry %s, "DF_RC"\n", name, DP_RC(rc));
+			D_ERROR("Failed to insert entry %s, "DF_RC"\n",
+				name, DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -1025,9 +1026,8 @@ set_daos_iod(bool create, daos_iod_t *iod, char *buf, size_t size)
 	iod->iod_recxs	= NULL;
 	iod->iod_type	= DAOS_IOD_SINGLE;
 
-	if (create) {
+	if (create)
 		iod->iod_size = size;
-	}
 }
 
 static void
@@ -1340,9 +1340,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		return EINVAL;
 
 	prop = daos_prop_alloc(0);
-	if (prop == NULL) {
+	if (prop == NULL)
 		return ENOMEM;
-	}
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc) {
@@ -1421,7 +1420,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	rc = open_dir(dfs, DAOS_TX_NONE, dfs->super_oh, amode | S_IFDIR, 0,
 		      &root_dir, 1, &dfs->root);
 	if (rc) {
-		D_ERROR("Failed to open root object, "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to open root object, %d\n", rc);
 		D_GOTO(err_super, rc);
 	}
 
@@ -3611,9 +3610,8 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		flags &= ~DFS_SET_ATTR_SIZE;
 	}
 
-	if (flags) {
+	if (flags)
 		D_GOTO(out_obj, rc = EINVAL);
-	}
 
 	if (set_size) {
 		rc = daos_array_set_size(obj->oh, th, stbuf->st_size, NULL);

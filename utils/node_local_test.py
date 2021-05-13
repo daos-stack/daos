@@ -2883,7 +2883,8 @@ def main():
         server = DaosServer(conf, test_class='no-debug')
         server.start(clean=False)
         if fi_test:
-            fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
+                                                         wf_client))
             # For now disable the other fault injection tests for run-time.
 #            fatal_errors.add_result(test_alloc_fail_cat(server,
 #                                                        conf, wf_client))

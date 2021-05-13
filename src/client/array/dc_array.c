@@ -1591,9 +1591,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			/** add another element to recxs */
 			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs,
 					iod->iod_nr, iod->iod_nr + 1);
-			if (new_recxs == NULL) {
+			if (new_recxs == NULL)
 				D_GOTO(err_stask, rc = -DER_NOMEM);
-			}
+
 			iod->iod_nr++;
 			iod->iod_recxs = new_recxs;
 
@@ -2487,8 +2487,8 @@ dc_array_set_size(tse_task_t *task)
 		num_records = array->chunk_size;
 		record_i = 0;
 	} else {
-		rc = compute_dkey(array, args->size - 1, &num_records, &record_i,
-				  &dkey_val);
+		rc = compute_dkey(array, args->size - 1, &num_records,
+				  &record_i, &dkey_val);
 		if (rc) {
 			D_ERROR("Failed to compute dkey\n");
 			D_GOTO(err_task, rc);
