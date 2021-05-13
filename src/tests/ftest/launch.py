@@ -1015,12 +1015,12 @@ def run_tests(test_files, tag_filter, args):
                 return_code |= 256
 
     if args.jenkinslog:
-        # Archive bullseye coverage files
+        # Archive bullseye coverage logs
         hosts = list(args.test_servers)
         hosts += socket.gethostname().split(".")[0:1]
         return_code |= archive_files(
-            "bullseye coverage files",
-            os.path.join(avocado_logs_dir, "bullseye_coverage_files"),
+            "bullseye coverage logs",
+            os.path.join(avocado_logs_dir, "bullseye_coverage_logs"),
             hosts,
             "/tmp/test.cov*",
             args)
