@@ -611,7 +611,7 @@ class SoakTestBase(TestWithServers):
             if self.loop == 1 and run_harasser:
                 self.harasser_loop_time = loop_time
             self.loop += 1
-        # verify reservered container data
+        # verify reserved container data
         final_resv_file = os.path.join(
             os.environ["DAOS_TEST_LOG_DIR"], "final", "resv_file")
         try:
