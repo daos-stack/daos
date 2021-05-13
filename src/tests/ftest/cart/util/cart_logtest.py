@@ -433,6 +433,11 @@ class LogTest():
                     elif show and server_shutdown and line.get_msg().endswith(
                             "DER_SHUTDOWN(-2017): 'Service should shut down'"):
                         show = False
+                    elif show and server_shutdown and \
+                         line.function == 'ds_obj_ec_aggregate' and \
+                         line.get_msg().endswith(
+                            "DER_NOTLEADER(-2008): 'Not service leader'"):
+                        show = False
                     elif show and line.function == 'rdb_stop':
                         show = False
                     elif show and line.function == 'sched_watchdog_post':
