@@ -37,23 +37,24 @@
  */
 #define RAS_EVENT_LIST							\
 	X(RAS_UNKNOWN_EVENT,		"unknown_ras_event")		\
-	X(RAS_RANK_UP,			"engine_status_up")		\
-	X(RAS_RANK_DOWN,		"engine_status_down")		\
-	X(RAS_RANK_NO_RESPONSE,		"engine_status_no_response")	\
+	X(RAS_ENGINE_FORMAT_REQUIRED,	"engine_format_required")	\
+	X(RAS_ENGINE_DIED,		"engine_died")			\
+	X(RAS_ENGINE_ASSERTED,		"engine_asserted")		\
+	X(RAS_ENGINE_CLOCK_DRIFT,	"engine_clock_drift")		\
 	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")		\
 	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")	\
 	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")		\
 	X(RAS_POOL_REPS_UPDATE,		"pool_replicas_updated")	\
 	X(RAS_POOL_DF_INCOMPAT,						\
 	  "pool_durable_format_incompatible")				\
-	X(RAS_SYSTEM_STOP,		"system_action_stop")		\
-	X(RAS_SYSTEM_START,		"system_action_start")		\
-	X(RAS_SWIM_RANK_ALIVE,		"swim_rank_alive")		\
-	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")		\
 	X(RAS_CONT_DF_INCOMPAT,						\
 	  "container_durable_format_incompatible")			\
 	X(RAS_RDB_DF_INCOMPAT,						\
-	  "rdb_durable_format_incompatible")
+	  "rdb_durable_format_incompatible")				\
+	X(RAS_SWIM_RANK_ALIVE,		"swim_rank_alive")		\
+	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")		\
+	X(RAS_SYSTEM_START_FAILED,	"system_start_failed")		\
+	X(RAS_SYSTEM_STOP_FAILED,	"system_stop_failed")
 
 /** Define RAS event enum */
 typedef enum {
@@ -94,30 +95,26 @@ ras_type2str(ras_type_t type)
 
 typedef enum {
 	RAS_SEV_UNKNOWN = 0,
-	RAS_SEV_FATAL,
-	RAS_SEV_WARN,
 	RAS_SEV_ERROR,
-	RAS_SEV_INFO,
+	RAS_SEV_WARNING,
+	RAS_SEV_NOTICE,
 } ras_sev_t;
 
 static inline char *
 ras_sev2str(ras_sev_t severity)
 {
 	switch (severity) {
-	case RAS_SEV_FATAL:
-		return "FATAL";
-	case RAS_SEV_WARN:
-		return "WARN";
 	case RAS_SEV_ERROR:
 		return "ERROR";
-	case RAS_SEV_INFO:
+	case RAS_SEV_WARNING:
+		return "WARNING";
 	default:
-		return "INFO";
+		return "NOTICE";
 	}
 }
 
 /**
- * Raise a RAS event and forward to the control-plane.
+ * Raise a RAS event and forward to the control plane.
  *
  * \param[in] id	Unique event identifier.
  * \param[in] msg	Human readable message.
@@ -153,7 +150,7 @@ ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
 		     const char *fmt, ...);
 
 /**
- * Notify control-plane of an update to a pool's service replicas and wait for
+ * Notify control plane of an update to a pool's service replicas and wait for
  * a response.
  *
  * \param[in] pool	UUID of DAOS pool with updated service replicas.

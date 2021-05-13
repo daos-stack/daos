@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # Copyright (c) 2019-2020 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy

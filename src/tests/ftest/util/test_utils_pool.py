@@ -204,9 +204,9 @@ class TestPool(TestDaosApiBase):
                 self.log.info("Destroying pool %s", self.uuid)
 
                 if self.control_method.value == self.USE_API:
-                    # Destroy the pool with the API method
-                    self._call_method(self.pool.destroy, {"force": force})
-                    status = True
+                    raise CommandFailure(
+                        "Error: control method {} not supported for create()"\
+                            .format(self.control_method.value))
 
                 elif self.control_method.value == self.USE_DMG and self.dmg:
                     # Destroy the pool with the dmg command

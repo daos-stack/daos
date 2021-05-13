@@ -325,7 +325,21 @@ vos_tls_fini(void *data)
 {
 	struct vos_tls *tls = data;
 
-	D_ASSERT(d_list_empty(&tls->vtl_gc_pools));
+	/* All GC callers should have exited, but they can still leave
+	 * uncleaned pools behind. It is OK to free these pool handles with
+	 * leftover, because GC can clean up leftover when it starts again.
+	 */
+	D_ASSERTF(tls->vtl_gc_running == 0, "GC running = %d\n",
+		  tls->vtl_gc_running);
+
+	while (!d_list_empty(&tls->vtl_gc_pools)) {
+		struct vos_pool *pool;
+
+		pool = d_list_entry(tls->vtl_gc_pools.next,
+				    struct vos_pool, vp_gc_link);
+		gc_del_pool(pool);
+	}
+
 	if (tls->vtl_ocache)
 		vos_obj_cache_destroy(tls->vtl_ocache);
 

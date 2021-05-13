@@ -418,6 +418,12 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	if (rc != -DER_CSUM) {
 		assert_rc_equal(rc, 0);
 		verify_view(arg, oid, dkey, akey, ds);
+	} else {
+		/*
+		 * not calling verify_view so must free ds->td_expected_view
+		 * here
+		 */
+		D_FREE(ds->td_expected_view);
 	}
 }
 

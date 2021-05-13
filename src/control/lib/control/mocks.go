@@ -12,8 +12,10 @@ import (
 	"testing"
 
 	"github.com/dustin/go-humanize"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/runtime/protoimpl"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -28,6 +30,9 @@ type MockMessage struct{}
 func (mm *MockMessage) Reset()         {}
 func (mm *MockMessage) String() string { return "mock" }
 func (mm *MockMessage) ProtoMessage()  {}
+func (mm *MockMessage) ProtoReflect() protoreflect.Message {
+	return (&protoimpl.MessageInfo{}).MessageOf(mm)
+}
 
 type (
 	// MockInvokerConfig defines the configured responses

@@ -297,7 +297,11 @@ main(int argc, char **argv)
 			dfuse_info->di_mountpoint = optarg;
 			break;
 		case 'S':
+			/* Set it to be single threaded, but allow an extra one
+			 * for the event queue processing
+			 */
 			dfuse_info->di_threaded = false;
+			dfuse_info->di_thread_count = 2;
 			break;
 		case 't':
 			dfuse_info->di_thread_count = atoi(optarg);
@@ -389,6 +393,7 @@ main(int argc, char **argv)
 	if (rc != 0)
 		D_GOTO(out_debug, ret = rc);
 
+	duns_attr.da_no_reverse_lookup = true;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
 	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s",
 		       rc, strerror(rc));

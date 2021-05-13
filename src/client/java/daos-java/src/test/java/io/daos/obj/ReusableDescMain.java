@@ -1,5 +1,6 @@
 package io.daos.obj;
 
+import com.sun.corba.se.impl.orbutil.concurrent.Sync;
 import io.daos.DaosClient;
 import io.netty.buffer.ByteBuf;
 
@@ -220,18 +221,18 @@ public class ReusableDescMain {
       throw new IOException("offset + nbrOfDkeys should not exceed reduces. " + (nbrOfDkeys + offset) + " > " + reduces);
     }
 
-    IODataDesc desc = object.createReusableDesc(20, 1, akeyValLen,
-        IODataDesc.IodType.ARRAY, 1, true);
+    IODataDescSync desc = object.createReusableDesc(20, 1, akeyValLen,
+        IODataDescSync.IodType.ARRAY, 1, true);
     populate(desc.getEntry(0).getDataBuffer());
     long start = System.nanoTime();
     try {
       for (int i = offset; i < end; i++) {
         for (int j = 0; j < maps; j++) {
           IODataDesc.Entry entry = desc.getEntry(0);
-          ByteBuf buf = entry.reuseBuffer();
+          ByteBuf buf = ((IODataDescSync.SyncEntry)entry).reuseBuffer();
           buf.writerIndex(akeyValLen);
           desc.setDkey(String.valueOf(i));
-          entry.setKey(String.valueOf(j), 0, buf);
+          ((IODataDescSync.SyncEntry)entry).setKey(String.valueOf(j), 0, buf);
           object.update(desc);
         }
       }
@@ -270,15 +271,15 @@ public class ReusableDescMain {
     int nbrOfEntries = sizeLimit/akeyValLen;
     int idx = 0;
     long start = System.nanoTime();
-    IODataDesc desc = object.createReusableDesc(20, nbrOfEntries,
+    IODataDescSync desc = object.createReusableDesc(20, nbrOfEntries,
         akeyValLen,
-        IODataDesc.IodType.ARRAY, 1, false);
+        IODataDescSync.IodType.ARRAY, 1, false);
 //    IODataDesc.Entry entry = desc.getEntry(0);
     try {
       for (int i = offset; i < end; i++) {
         for (int j = 0; j < maps; j++) {
           desc.setDkey(String.valueOf(i));
-          desc.getEntry(idx++).setKey(String.valueOf(j), 0, akeyValLen);
+          ((IODataDescSync.SyncEntry)desc.getEntry(idx++)).setKey(String.valueOf(j), 0, akeyValLen);
           if (idx == nbrOfEntries) {
             // read
             object.fetch(desc);

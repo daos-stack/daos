@@ -32,7 +32,7 @@ gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;                 \
 
 # Install basic tools to build DAOS
 
-RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
+RUN dnf -y install epel-release dnf-plugins-core && \
     dnf config-manager --set-enabled powertools && \
     dnf -y upgrade && \
     dnf -y install \
@@ -48,6 +48,7 @@ RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
         gcc \
         gcc-c++ \
         git \
+        glibc-langpack-en \
         golang \
         graphviz \
         hwloc-devel \
@@ -78,19 +79,20 @@ RUN dnf clean all && dnf -y install epel-release dnf-plugins-core && \
         patch \
         patchelf \
         pciutils \
-        python3-pip \
         python3-Cython \
         python3-devel \
         python3-distro \
-        python3-jira \
+        python3-junit_xml \
         python3-numpy \
         python3-paramiko \
         python3-pylint \
+        python3-pyxattr \
         python3-requests \
         python3-tabulate \
-        python3-pyxattr \
         python3-scons \
+        python3-yaml \
         sg3_utils \
+        sudo \
         valgrind-devel \
         yasm && \
     dnf clean all
@@ -102,6 +104,7 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
+RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
@@ -167,7 +170,6 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
