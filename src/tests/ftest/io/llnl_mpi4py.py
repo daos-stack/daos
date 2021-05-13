@@ -6,7 +6,6 @@
 """
 
 from mpio_test_base import MpiioTests
-from distutils.sysconfig import get_python_lib
 
 
 # pylint: disable=too-many-ancestors
