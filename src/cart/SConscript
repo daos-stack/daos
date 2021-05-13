@@ -29,9 +29,8 @@ LIB_SRC = ['crt_utils.c']
 ####################################
 def build_utility_shared_obj(denv, prereqs):
     """Build cart utility library"""
-    _denv = denv.Clone()
-    prereqs.require(_denv, 'mercury', headers_only=True)
-    cart_utils_objs  = _denv.SharedObject(LIB_SRC)
+    prereqs.require(denv, 'mercury', headers_only=True)
+    cart_utils_objs  = denv.SharedObject(LIB_SRC)
     Export('cart_utils_objs')
 
 # pylint: disable=unused-argument
