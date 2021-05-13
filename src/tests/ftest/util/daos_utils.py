@@ -19,7 +19,7 @@ class DaosCommand(DaosCommandBase):
         "container_create": r"container ([0-9a-f-]+)",
         # Sample pool query output.
         # 04/19-18:31:26.90 wolf-3 Pool 3e59b386-fda0-404e-af7e-3ff0a38d1f81,
-        #    ntarget=8, disabled=0
+        #    ntarget=8, disabled=0, version=1
         # 04/19-18:31:26.90 wolf-3 Pool space info:
         # 04/19-18:31:26.90 wolf-3 - Target(VOS) count:8
         # 04/19-18:31:26.90 wolf-3 - SCM:
@@ -31,11 +31,12 @@ class DaosCommand(DaosCommandBase):
         # 04/19-18:31:26.90 wolf-3   Free: 0, min:0, max:0, mean:0
         # 04/19-18:31:26.90 wolf-3 Rebuild idle, 0 objs, 0 recs
         "pool_query": r"(?:Pool\s*([A-Za-z0-9-]+),\s*ntarget=([0-9])," +
-                      r"\s*disabled=([0-9])|Target\(VOS\) count:\s*([0-9])|" +
+                      r"\s*disabled=([0-9]),\s*version=([ 0-9]+)" +
+                      r"|Target\(VOS\) count:\s*([0-9])|" +
                       r"(?:SCM:\s+.*|NVMe:\s+.*)Total\s+size:\s+([0-9]+)" +
                       r"\s+.*Free:\s+([0-9]+),\s+min:([0-9]+),\s+" +
                       r"max:([0-9]+),\s+mean:([0-9]+)|" +
-                      r"Rebuild\s*idle,\s*([0-9]+)\s*objs,\s*([0-9]+)\s*recs)",
+                      r"Rebuild\s*([a-z]+)+,\s*([0-9]+)\s*objs,\s*([0-9]+)\s*recs)",
         # Sample list-attrs output.
         # 04/19-21:16:31.62 wolf-3 Pool attributes:
         # 04/19-21:16:31.62 wolf-3 attr0

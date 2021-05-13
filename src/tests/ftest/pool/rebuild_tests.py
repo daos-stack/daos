@@ -1,11 +1,11 @@
-#!/usr/bin/python3
+#!/usthon3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-
+from test_utils_pool import TestPool
 
 class RebuildTests(TestWithServers):
     """Test class for rebuild tests.
@@ -15,6 +15,15 @@ class RebuildTests(TestWithServers):
 
     :avocado: recursive
     """
+
+    def create_pool_obj(self):
+        """Create a TestPool object to use with ior."""
+        # Get the pool params
+        pool = TestPool(self.context, self.get_dmg_command(),
+                        daos_command=self.get_daos_command())
+        pool.get_params(self)
+
+        return pool
 
     def run_rebuild_test(self, pool_quantity):
         """Run the rebuild test for the specified number of pools.
@@ -26,7 +35,7 @@ class RebuildTests(TestWithServers):
         self.pool = []
         self.container = []
         for _ in range(pool_quantity):
-            self.pool.append(self.get_pool(create=False))
+            self.pool.append(self.create_pool_obj())
             self.container.append(
                 self.get_container(self.pool[-1], create=False))
         rank = self.params.get("rank", "/run/testparams/*")

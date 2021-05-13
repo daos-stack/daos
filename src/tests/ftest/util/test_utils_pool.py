@@ -22,7 +22,8 @@ class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosPools objects."""
 
-    def __init__(self, context, dmg_command, cb_handler=None):
+    def __init__(self, context, dmg_command, cb_handler=None,
+                 daos_command=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -35,6 +36,9 @@ class TestPool(TestDaosApiBase):
             log (logging): logging object used to report the pool status
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
+            daos_command (DaosCommand): DaosCommand used to call daos command.
+                This value can be obtained from self.get_daos_command() from a
+                test. This will return a DaosCommand object
         """
         super().__init__("/run/pool/*", cb_handler)
         self.context = context
@@ -59,6 +63,7 @@ class TestPool(TestDaosApiBase):
         self.connected = False
 
         self.dmg = dmg_command
+        self.daos = daos_command
         self.query_data = []
 
     @fail_on(CommandFailure)
@@ -468,13 +473,21 @@ class TestPool(TestDaosApiBase):
         if self.control_method.value == self.USE_API:
             self.display_pool_rebuild_status()
             status = self.info.pi_rebuild_st.rs_done == 1
-        elif self.control_method.value == self.USE_DMG and self.dmg:
-            self.set_query_data()
-            self.log.info(
-                "Pool %s query data: %s\n", self.uuid, self.query_data)
-            status = self.query_data["response"]["rebuild"]["state"] == "done"
         elif self.control_method.value == self.USE_DMG:
-            self.log.error("Error: Undefined dmg command")
+            if self.daos:
+                # use daos command for pool query
+                self.set_query_data()
+                self.log.info(
+                    "Pool %s query data: %s\n", self.uuid, self.query_data)
+                status = self.query_data[4][10] == "done"
+            elif self.dmg:
+                # use dmg command for pool query
+                self.set_query_data()
+                self.log.info(
+                    "Pool %s query data: %s\n", self.uuid, self.query_data)
+                status = self.query_data["response"]["rebuild"]["state"] == "done"
+            else:
+                self.log.error("Error: Undefined dmg and daos commands")
         else:
             self.log.error(
                 "Error: Undefined control_method: %s",
@@ -715,7 +728,7 @@ class TestPool(TestDaosApiBase):
         """
         self.query_data = {}
         if self.pool:
-            if self.dmg:
+            if self.dmg or self.daos:
                 uuid = self.pool.get_uuid_str()
                 end_time = None
                 if self.pool_query_timeout.value is not None:
@@ -725,8 +738,17 @@ class TestPool(TestDaosApiBase):
                     end_time = time() + self.pool_query_timeout.value
                 while True:
                     try:
-                        self.query_data = self.dmg.pool_query(uuid)
-                        break
+                        if self.daos:
+                            kwargs = {
+                                "pool": uuid,
+                                "sys_name": None,
+                                "sys": None,
+                                }
+                            self.query_data = self.daos.get_output("pool_query", **kwargs)
+                            break
+                        elif self.dmg:
+                            self.query_data = self.dmg.pool_query(uuid)
+                            break
                     except CommandFailure as error:
                         if end_time is not None:
                             self.log.info(
@@ -744,7 +766,7 @@ class TestPool(TestDaosApiBase):
                         else:
                             raise CommandFailure(error) from error
             else:
-                self.log.error("Error: Undefined dmg command")
+                self.log.error("Error: Undefined dmg or daos command")
 
     @fail_on(CommandFailure)
     def reintegrate(self, rank, tgt_idx=None):
