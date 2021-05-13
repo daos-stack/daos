@@ -3218,9 +3218,9 @@ update_overlapped_recxs(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	d_iov_t	 dkey;
+	d_iov_t		dkey;
 	d_sg_list_t	 sgl;
-	d_iov_t	 sg_iov;
+	d_iov_t		sg_iov;
 	daos_iod_t	 iod;
 	daos_recx_t	 recx[128];
 	char		 buf[STACK_BUF_LEN];
@@ -3289,9 +3289,9 @@ io_obj_key_query(void **state)
 	daos_iod_t	iod = {0};
 	d_sg_list_t	sgl = {0};
 	uint32_t	update_var = 0xdeadbeef;
-	d_iov_t	val_iov;
-	d_iov_t	dkey;
-	d_iov_t	akey;
+	d_iov_t		val_iov;
+	d_iov_t		dkey;
+	d_iov_t		akey;
 	daos_recx_t	recx;
 	uint64_t	dkey_val, akey_val;
 	uint32_t	flags;
@@ -4449,6 +4449,100 @@ oclass_auto_setting(void **state)
 
 }
 
+static void
+int_key_setting(void **state)
+{
+	test_arg_t              *arg = *state;
+	daos_obj_id_t		oid;
+	daos_handle_t		oh;
+	d_iov_t			dkey;
+	char			dkey_buf[128];
+	char			akey_buf[128];
+	d_sg_list_t		sgl;
+	d_iov_t			sg_iov;
+	daos_iod_t		iod;
+	char			buf[STACK_BUF_LEN];
+	int                     rc;
+
+	/*
+	 * Object with integer dkey / akey should fail IO with -DER_INVAL if
+	 * key size is not correct.
+	 */
+	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OF_DKEY_UINT64, 0,
+				arg->myrank);
+
+	dts_buf_render(buf, STACK_BUF_LEN);
+	dts_buf_render(dkey_buf, 128);
+	dts_buf_render(akey_buf, 128);
+
+	/** init dkey */
+	d_iov_set(&dkey, dkey_buf, sizeof(dkey_buf));
+
+	/** init scatter/gather */
+	d_iov_set(&sg_iov, buf, sizeof(buf));
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	/** init I/O descriptor */
+	d_iov_set(&iod.iod_name, akey_buf, sizeof(akey_buf));
+	iod.iod_size    = STACK_BUF_LEN;
+	iod.iod_type	= DAOS_IOD_SINGLE;
+	iod.iod_recxs	= NULL;
+	iod.iod_nr	= 1;
+
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Update with invalid DKEY\n");
+	/** update record */
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("Fetch with invalid DKEY\n");
+	/** fetch record size */
+	iod.iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod,
+			    NULL, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("Punch with invalid DKEY\n");
+	/** Punch Dkey */
+	rc = daos_obj_punch_dkeys(oh, DAOS_TX_NONE, 0, 1, &dkey, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OF_AKEY_UINT64, 0,
+				arg->myrank);
+
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Update with invalid AKEY\n");
+	/** update record */
+	iod.iod_size	= STACK_BUF_LEN;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("Fetch with invalid AKEY\n");
+	/** fetch record size */
+	iod.iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod,
+			    NULL, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("Punch with invalid AKEY\n");
+	/** Punch Akey */
+	rc = daos_obj_punch_akeys(oh, DAOS_TX_NONE, 0, &dkey, 1,
+				  &iod.iod_name, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -4538,6 +4632,8 @@ static const struct CMUnitTest io_tests[] = {
 	  test_case_teardown},
 	{ "IO43: Object class selection",
 	  oclass_auto_setting, async_disable, test_case_teardown},
+	{ "IO44: INT dkey/akey checks",
+	  int_key_setting, async_disable, test_case_teardown},
 };
 
 int

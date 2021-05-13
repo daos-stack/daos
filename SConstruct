@@ -38,20 +38,24 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
-def run_checks(env):
+def run_checks(env, p):
     """Run all configure time checks"""
     if GetOption('help') or GetOption('clean'):
         return
     cenv = env.Clone()
     cenv.Append(CFLAGS='-Werror')
+    daos_build.clear_icc_env(cenv)
     if cenv.get("COMPILER") == 'icc':
         cenv.Replace(CC='gcc', CXX='g++')
     config = Configure(cenv)
 
     if config.CheckHeader('stdatomic.h'):
+        config.Finish()
         env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
+    else:
+        config.Finish()
+        p.require(env, 'openpa', headers_only=True)
 
-    config.Finish()
 
 def get_version():
     """ Read version from VERSION file """
@@ -391,19 +395,19 @@ def scons(): # pylint: disable=too-many-locals
     if env['CC'] == 'clang':
         il_env = env.Clone()
         il_env['CC'] = 'gcc'
-        run_checks(env)
-        run_checks(il_env)
+        run_checks(env, prereqs)
+        run_checks(il_env, prereqs)
     else:
-        run_checks(env)
+        run_checks(env, prereqs)
         il_env = env.Clone()
+
+    prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
+    opts.Save(opts_file, env)
 
     res = GetOption('deps_only')
     if res:
         print('Exiting because deps-only was set')
         Exit(0)
-
-    prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
-    opts.Save(opts_file, env)
 
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
