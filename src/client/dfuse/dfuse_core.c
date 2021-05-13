@@ -577,6 +577,29 @@ out:
 	return rc;
 }
 
+/* Set default cache values for a container.
+ *
+ * These are used by default if the container does not set any attributes
+ * itself, and there are no command-line settings to overrule them.
+ *
+ * It is intended to improve performance and usability on interactive
+ * nodes without preventing use across nodes, as such data cache is enabled
+ * and metadata cache is on but with relatively short timeouts.
+ *
+ * One second is used for attributes, dentries and negative dentries, however
+ * dentries which represent directories and are therefore referenced much
+ * more often during path-walk activities are set to five seconds.
+ */
+static void
+dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
+{
+	dfc->dfc_attr_timeout = 1;
+	dfc->dfc_dentry_timeout = 1;
+	dfc->dfc_dentry_dir_timeout = 5;
+	dfc->dfc_ndentry_timeout = 1;
+	dfc->dfc_data_caching = true;
+}
+
 /*
  * Return a container connection by uuid.
  *
@@ -679,11 +702,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 					 */
 					DFUSE_TRA_INFO(dfc,
 						       "Using default caching values");
-					dfc->dfc_attr_timeout = 1;
-					dfc->dfc_dentry_timeout = 1;
-					dfc->dfc_dentry_dir_timeout = 5;
-					dfc->dfc_ndentry_timeout = 5;
-					dfc->dfc_data_caching = true;
+					dfuse_set_default_cont_cache_values(dfc);
 					rc = 0;
 				} else if (rc != 0) {
 					D_GOTO(err_close, rc);
@@ -694,11 +713,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 			}
 		} else {
 			/* Set attributes for containers created via mkdir */
-			dfc->dfc_attr_timeout = 1;
-			dfc->dfc_dentry_timeout = 1;
-			dfc->dfc_dentry_dir_timeout = 5;
-			dfc->dfc_ndentry_timeout = 5;
-			dfc->dfc_data_caching = true;
+			dfuse_set_default_cont_cache_values(dfc);
 		}
 	}
 
