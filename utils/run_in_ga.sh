@@ -15,7 +15,8 @@ $SCONS PREFIX=/opt/daos --build-deps=yes --deps-only
 echo ::endgroup::
 
 echo ::group::Build type debug.
-$SCONS --jobs 10 PREFIX=/opt/daos COMPILER=$COMPILER TARGET_TYPE=release BUILD_TYPE=debug
+$SCONS --jobs 10 PREFIX=/opt/daos COMPILER="$COMPILER" TARGET_TYPE=release \
+       BUILD_TYPE=debug
 echo ::endgroup::
 
 cat daos.conf
@@ -31,6 +32,6 @@ echo ::endgroup::
 
 echo ::group::Container copy test
 # DAOS-7440
-export LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:/opt/daos/bin/../lib64/daos_srv/../../prereq/release/spdk/lib/:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/opt/daos/prereq/release/spdk/lib/
 ./utils/node_local_test.py --no-root --test cont_copy
 echo ::endgroup::

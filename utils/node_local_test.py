@@ -287,8 +287,10 @@ class WarningsFactory():
         self._flush()
         if self.post:
             # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
-          print('::warning file={},line={},::{}, {}'.format(line.filename, line.lineno, self.check,
-              message))
+            print('::warning file={},line={},::{}, {}'.format(line.filename,
+                                                              line.lineno,
+                                                              self.check,
+                                                              message))
 
     def reset_pending(self):
         """Reset the pending list
