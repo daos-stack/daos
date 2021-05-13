@@ -14,6 +14,7 @@ from ior_utils import IorCommand
 from fio_utils import FioCommand
 from mdtest_utils import MdtestCommand
 from daos_racer_utils import DaosRacerCommand
+from data_mover_utils import FsCopy
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
 from general_utils import get_host_data, get_random_string, \
@@ -84,6 +85,38 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
     self.container[-1].create()
 
 
+def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
+    """Move data between a POSIX file and a container.
+
+    Args:
+        text_file (str): posix path/file to write random data to
+        num_bytes (int): num of bytes to write to file
+        pool (TestPool obj): pool to read/write random data file
+        container (TestContainer obj): container to read/write random data file
+        cmd (str): whether the data is a read
+                    (daos->posix) or write(posix -> daos)
+    """
+    os.makedirs(os.path.dirname(file), exist_ok=True)
+    fscopy_cmd = FsCopy(self.get_daos_command(), self.log)
+    # writes random data to file and then copy the file to container
+    if cmd == "write":
+        with open(file, 'w') as src_file:
+            src_file.write(str(os.urandom(num_bytes)))
+            src_file.close()
+        dst_file = "daos://{}/{}".format(pool.uuid, container.uuid)
+        fscopy_cmd.set_fs_copy_params(src=file, dst=dst_file)
+        fscopy_cmd.run()
+    # reads file_name from container and writes to file
+    elif cmd == "read":
+        dst = os.path.split(file)
+        dst_name = dst[-1]
+        dst_path = dst[0]
+        src_file = "daos://{}/{}/{}".format(
+            pool.uuid, container.uuid, dst_name)
+        fscopy_cmd.set_fs_copy_params(src=src_file, dst=dst_path)
+        fscopy_cmd.run()
+
+
 def get_remote_logs(self):
     """Copy files from remote dir to local dir.
 
@@ -145,8 +178,9 @@ def run_event_check(self, since, until):
     # check events on all nodes
     hosts = list(set(self.hostlist_servers))
     if events:
-        command = "sudo /usr/bin/journalctl --system -t kernel -t "
-        "daos_server --since=\"{}\" --until=\"{}\"".format(since, until)
+        command = ("sudo /usr/bin/journalctl --system -t kernel -t "
+                   "daos_server --since=\"{}\" --until=\"{}\"".format(
+                       since, until))
         err = "Error gathering system log events"
         for event in events:
             for output in get_host_data(hosts, command, "journalctl", err):

@@ -57,17 +57,10 @@ container:
     oclass: SX
     control_method: daos
 container_reserved:
-    oclass: OC_SX
-    akey_size: 5
-    dkey_size: 5
-    data_size: 4096
-    object_qty: 20
-    record_qty: 1
-    record_size: 100
-    array_size: 1
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: API
+    oclass: SX
+    control_method: daos
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -112,7 +105,7 @@ ior_stress:
         - HDF5
         - HDF5-VOL
     test_file: daos:testFile
-    flags: -v -w -W -r -R -F -k
+    flags: -v -w -W -r -R -k
     block_size:
         - '64M'
     repetitions: 5

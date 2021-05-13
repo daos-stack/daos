@@ -11,8 +11,10 @@ from datetime import datetime, timedelta
 import multiprocessing
 import threading
 import random
+from filecmp import cmp
 from apricot import TestWithServers
 from general_utils import run_command, DaosTestError, get_log_file
+from command_utils_base import CommandFailure
 import slurm_utils
 from ClusterShell.NodeSet import NodeSet
 from getpass import getuser
@@ -23,7 +25,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
-    create_mdtest_cmdline
+    create_mdtest_cmdline, reserved_file_copy
 
 
 class SoakTestBase(TestWithServers):
@@ -508,8 +510,6 @@ class SoakTestBase(TestWithServers):
         self.dmg_command.copy_configuration(self.hostlist_clients)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
-        rank = self.params.get("rank", "/run/container_reserved/*")
-        obj_class = self.params.get("oclass", "/run/container_reserved/*")
         if harassers:
             run_harasser = True
             self.log.info("<< Initial harasser list = %s>>", harassers)
@@ -518,13 +518,18 @@ class SoakTestBase(TestWithServers):
         # self.pool is a list of all the pools used in soak
         # self.pool[0] will always be the reserved pool
         add_pools(self, ["pool_reserved"])
-        self.pool[0].connect()
-
-        # Create the container and populate with a known data
-        # TO-DO: use IOR to write and later read verify the data
+        # Create the reserved container
         resv_cont = self.get_container(
             self.pool[0], "/run/container_reserved/*", True)
-        resv_cont.write_objects(rank, obj_class)
+        # populate reserved container with a 500MB file
+        initial_resv_file = os.path.join(
+            os.environ["DAOS_TEST_LOG_DIR"], "initial", "resv_file")
+        try:
+            reserved_file_copy(self, initial_resv_file, self.pool[0], resv_cont,
+                      num_bytes=500000000, cmd="write")
+        except CommandFailure as error:
+            raise SoakTestError(
+                "<<FAILED: Soak reserved container write failed>>")
 
         # Create pool for jobs
         if single_test_pool:
@@ -606,10 +611,30 @@ class SoakTestBase(TestWithServers):
             if self.loop == 1 and run_harasser:
                 self.harasser_loop_time = loop_time
             self.loop += 1
-        # TO-DO: use IOR
-        if not resv_cont.read_objects():
+        # verify reservered container data
+        final_resv_file = os.path.join(
+            os.environ["DAOS_TEST_LOG_DIR"], "final", "resv_file")
+        try:
+            reserved_file_copy(self, final_resv_file, self.pool[0], resv_cont)
+        except CommandFailure as error:
+            raise SoakTestError(
+                "<<FAILED: Soak reserved container read failed>>")
+
+        if not cmp(initial_resv_file, final_resv_file):
             self.soak_errors.append("Data verification error on reserved pool"
                                     " after SOAK completed")
+        for file in [initial_resv_file, final_resv_file]:
+            if os.path.isfile(file):
+                file_name = os.path.split(os.path.dirname(file))[-1]
+                # save a copy of the POSIX file in self.outputsoakdir
+                copy_cmd = "cp -p {} {}/{}_resv_file".format(
+                    file, self.outputsoakdir, file_name)
+                try:
+                    run_command(copy_cmd, timeout=30)
+                except DaosTestError as error:
+                    self.soak_errors.append(
+                        "Reserved data file {} failed to archive".format(file))
+                os.remove(file)
         self.container.append(resv_cont)
         # Gather the daos logs from the client nodes
         self.log.info(
