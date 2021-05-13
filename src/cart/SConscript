@@ -100,10 +100,7 @@ def scons():
 
     compiler = env.get('COMPILER').lower()
     if compiler != 'covc':
-        pp_env = Environment(TOOLS=['default', 'extra'])
-        pp_env.AppendUnique(CPPPATH=[Dir('../include').srcnode(),
-                                     Dir('.').srcnode()])
-        prereqs.require(pp_env, 'mercury', headers_only=True)
+        pp_env = denv.Clone()
 
         # pylint: disable=no-member
         pp_files = pp_env.Preprocess(SRC)
