@@ -1,0 +1,107 @@
+name: DAOS Test Build.
+
+on:
+   push:
+     branches:
+       - master
+   pull_request:
+
+jobs:
+
+  # Build a base Docker image, and save it with a key based on the
+  # hash.
+  # If the source hasn't changed then this will be a cache-read, followed
+  # by a cache-write which will fail as the cache exists, but the read will
+  # put it to the front of the LRU queue.
+  # If the source has changed then the cache-read will fail, a new build will
+  # be performed and saved to the cache with a new key.
+  Prepare:
+    name: Build docker images
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [ubuntu.20.04, centos.8]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: satackey/action-docker-layer-caching@v0.0.11
+      with:
+        key: docker-${{ matrix.distro }}-${{ hashFiles('utils/sl', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-{hash}
+        restore-keys: docker-${{ matrix.distro }}-${{ hashFiles('utils/sl', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-
+    - name: Prepare base image in Docker
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_DEPS_BUILD=no --build-arg UID
+                          --build-arg DEPS_JOBS=10
+    - name: Build dependencies in Docker
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_BUILD=no
+                          --build-arg DEPS_JOBS=10
+    - name: Prune images not required for build.
+      run: docker images --all --filter label=DAOS=true --quiet | xargs docker rmi --no-prune
+    - name: Prune images not required for build.
+      run: docker images --all --filter label=DAOS=stage1 --quiet | xargs docker rmi --no-prune
+
+  Build-and-test:
+    name: Run DAOS tests
+    needs: Prepare
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # Only run on Ubuntu for now, centos 8 just isn't very stable.
+        distro: [ubuntu.20.04]
+        # ubuntu/gcc is broken right now DAOS-7601
+        compiler: [clang]
+    env:
+      COMPILER: ${{ matrix.compiler }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+    # https://github.com/marketplace/actions/docker-layer-caching
+    - uses: satackey/action-docker-layer-caching@v0.0.11
+      continue-on-error: true
+      with:
+        key: docker-${{ matrix.distro }}-${{ hashFiles('utils/sl', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-{hash}
+        restore-keys: docker-${{ matrix.distro }}-
+        skip-save: true
+    - name: Update dependencies in image.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --tag build-image
+    - name: Run
+      run: ./utils/run_in_ga_wrapper.sh
+
+  Build:
+    name: Build DAOS
+    needs: Prepare
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # Run this on distros where we don't test.
+        distro: [centos.8]
+        compiler: [clang, gcc]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+    # https://github.com/marketplace/actions/docker-layer-caching
+    - uses: satackey/action-docker-layer-caching@v0.0.11
+      continue-on-error: true
+      with:
+        key: docker-${{ matrix.distro }}-${{ hashFiles('utils/sl', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-{hash}
+        restore-keys: docker-${{ matrix.distro }}-
+        skip-save: true
+    - name: Update dependencies in image.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_BUILD=no
+                          --build-arg DEPS_JOBS=10
+    - name: Build in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_JAVA_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --build-arg COMPILER=${{ matrix.compiler }}
