@@ -4,7 +4,6 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
 import time
 import random
@@ -245,7 +244,6 @@ def wait_for_pool_rebuild(self, pool, name):
     rebuild_status = False
     self.log.info(
         "<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
-
     try:
         # Wait for rebuild to start
         pool.wait_for_rebuild(True)
@@ -259,7 +257,6 @@ def wait_for_pool_rebuild(self, pool, name):
     except TestFail as error1:
         self.log.error("<<<FAILED:{} rebuild failed due to test issue".format(
             name), exc_info=error1)
-
     return rebuild_status
 
 
@@ -382,7 +379,6 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
             status = False
         if status:
             status = wait_for_pool_rebuild(self, pool, name)
-
     elif name == "REINTEGRATE":
         if self.harasser_results["EXCLUDE"]:
             rank = self.harasser_args["EXCLUDE"]["rank"]
@@ -459,7 +455,6 @@ def launch_server_stop_start(self, pools, name, results, args):
                     status = drain_status
                 else:
                     status = False
-
         if status:
             # Shutdown the server
             try:
@@ -783,13 +778,14 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     num_of_files_dirs = self.params.get(
         "num_of_files_dirs", mdtest_params + "*")
     # update IOR cmdline for each additional IOR obj
+    # pylint: disable=too-many-nested-blocks
     for api in api_list:
+        if api in ["POSIX"] and ppn > 16:
+            continue
         for write_bytes in write_bytes_list:
             for read_bytes in read_bytes_list:
                 for depth in depth_list:
                     for oclass in oclass_list:
-                        if api in ["POSIX"] and ppn > 16:
-                            continue
                         # Get the parameters for Mdtest
                         mdtest_cmd = MdtestCommand()
                         mdtest_cmd.namespace = mdtest_params
@@ -837,6 +833,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             "<<MDTEST {} cmdlines>>:".format(api))
                         for cmd in sbatch_cmds:
                             self.log.info("%s", cmd)
+    # pylint: enable=too-many-nested-blocks
     return commands
 
 

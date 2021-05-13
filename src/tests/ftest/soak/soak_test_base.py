@@ -526,10 +526,10 @@ class SoakTestBase(TestWithServers):
             os.environ["DAOS_TEST_LOG_DIR"], "initial", "resv_file")
         try:
             reserved_file_copy(self, initial_resv_file, self.pool[0], resv_cont,
-                      num_bytes=500000000, cmd="write")
+                               num_bytes=500000000, cmd="write")
         except CommandFailure as error:
             raise SoakTestError(
-                "<<FAILED: Soak reserved container write failed>>")
+                "<<FAILED: Soak reserved container write failed>>") from error
 
         # Create pool for jobs
         if single_test_pool:
@@ -618,7 +618,7 @@ class SoakTestBase(TestWithServers):
             reserved_file_copy(self, final_resv_file, self.pool[0], resv_cont)
         except CommandFailure as error:
             raise SoakTestError(
-                "<<FAILED: Soak reserved container read failed>>")
+                "<<FAILED: Soak reserved container read failed>>") from error
 
         if not cmp(initial_resv_file, final_resv_file):
             self.soak_errors.append("Data verification error on reserved pool"

@@ -158,7 +158,7 @@ mdtest_stress:
     taskspernode:
         - 16
     test_dir: "/"
-    api: 
+    api:
         - 'DFS'
         - 'POSIX'
     iteration: 1
