@@ -655,6 +655,7 @@ bulk_cache_create(struct bio_dma_buffer *bdb)
 	int			 i;
 
 	D_ASSERT(bbc->bbc_grps == NULL);
+	D_INIT_LIST_HEAD(&bbc->bbc_grp_lru);
 
 	D_ALLOC_ARRAY(bbc->bbc_grps, BIO_BULK_GRPS_MAX);
 	if (bbc->bbc_grps == NULL)
@@ -667,7 +668,6 @@ bulk_cache_create(struct bio_dma_buffer *bdb)
 		return -DER_NOMEM;
 	}
 
-	D_INIT_LIST_HEAD(&bbc->bbc_grp_lru);
 	bbc->bbc_grp_max = BIO_BULK_GRPS_MAX;
 	bbc->bbc_grp_cnt = 0;
 
@@ -711,6 +711,7 @@ bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 	bsgl = &biod->bd_sgls[sgl_idx];
 	D_ASSERT(iov_idx < bsgl->bs_nr_out);
 	bulk_idx += iov_idx;
+	D_ASSERT(bulk_idx < biod->bd_bulk_cnt);
 
 	hdl = biod->bd_bulk_hdls[bulk_idx];
 	if (hdl == NULL)

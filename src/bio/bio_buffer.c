@@ -129,13 +129,15 @@ dma_buffer_create(unsigned int init_cnt)
 		return NULL;
 	}
 
-	rc = dma_buffer_grow(buf, init_cnt);
+	rc = bulk_cache_create(buf);
 	if (rc != 0) {
-		dma_buffer_destroy(buf);
+		ABT_mutex_free(&buf->bdb_mutex);
+		ABT_cond_free(&buf->bdb_wait_iods);
+		D_FREE(buf);
 		return NULL;
 	}
 
-	rc = bulk_cache_create(buf);
+	rc = dma_buffer_grow(buf, init_cnt);
 	if (rc != 0) {
 		dma_buffer_destroy(buf);
 		return NULL;
