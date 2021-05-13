@@ -181,8 +181,7 @@ class WarningsFactory():
             return
 
         entry = {}
-        entry['fileName'] = os.path.basename(self._file)
-        entry['directory'] = os.path.dirname(self._file)
+        entry['fileName'] = self._file
         # pylint: disable=protected-access
         entry['lineStart'] = sys._getframe().f_lineno
         entry['message'] = 'Tests exited without shutting down properly'
@@ -263,8 +262,7 @@ class WarningsFactory():
         Add it to the pending array, for later clarification
         """
         entry = {}
-        entry['directory'] = os.path.dirname(line.filename)
-        entry['fileName'] = os.path.basename(line.filename)
+        entry['fileName'] = line.filename
         if mtype:
             entry['type'] = mtype
         else:
@@ -304,8 +302,7 @@ class WarningsFactory():
             # When the test is running insert an error in case of abnormal
             # exit, so that crashes in this code can be identified.
             entry = {}
-            entry['fileName'] = os.path.basename(self._file)
-            entry['directory'] = os.path.dirname(self._file)
+            entry['fileName'] = self._file
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
@@ -657,8 +654,7 @@ class DaosServer():
 
         if len(procs) != 1:
             entry = {}
-            entry['fileName'] = os.path.basename(self._file)
-            entry['directory'] = os.path.dirname(self._file)
+            entry['fileName'] = self._file
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
