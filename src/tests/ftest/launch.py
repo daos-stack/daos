@@ -896,91 +896,88 @@ def run_tests(test_files, tag_filter, args):
 
     # Run each test
     skip_reason = None
-    for test_file in test_files:
-        if skip_reason is not None:
-            # An error was detected running clean_logs for a previous test.  As
-            # this is typically an indication of a communication issue with one
-            # of the hosts, do not attempt to run subsequent tests.
-            if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, skip_reason):
-                return_code |= 64
-            continue
-
-        if not isinstance(test_file["yaml"], str):
-            # The test was not run due to an error replacing host placeholders
-            # in the yaml file.  Treat this like a failed avocado command.
-            reason = "error replacing yaml file placeholders"
-            if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, reason):
-                return_code |= 64
-            return_code |= 4
-            continue
-
-        # Optionally clean the log files before running this test on the
-        # servers and clients specified for this test
-        if args.clean:
-            if not clean_logs(test_file["yaml"], args):
-                # Report errors for this skipped test
-                skip_reason = (
-                    "host communication error attempting to clean out "
-                    "leftover logs from a previous test run prior to "
-                    "running this test")
+    for loop in range(1, args.repeat + 1):
+        print("-" * 80)
+        print("Starting loop {}/{}".format(loop, args.repeat))
+        for test_file in test_files:
+            if skip_reason is not None:
+                # An error was detected running clean_logs for a previous test.
+                # As this is typically an indication of a communication issue
+                # with one of the hosts, do not attempt to run subsequent tests.
                 if not report_skipped_test(
                         test_file["py"], avocado_logs_dir, skip_reason):
                     return_code |= 64
-                return_code |= 128
                 continue
 
-        # Execute this test
-        test_command_list = list(command_list)
-        test_command_list.extend([
-            "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
-        run_return_code = time_command(test_command_list)
-        if run_return_code != 0:
-            # Move any avocado crash files into job-results/latest/crashes
-            data_dir = avocado_logs_dir.replace("job-results", "data")
-            crash_dir = os.path.join(data_dir, "crashes")
-            if os.path.isdir(crash_dir):
-                crash_files = [
-                    os.path.join(crash_dir, crash_file)
-                    for crash_file in os.listdir(crash_dir)
-                    if os.path.isfile(os.path.join(crash_dir, crash_file))]
-                if crash_files:
-                    latest_dir = os.path.join(avocado_logs_dir, "latest")
-                    latest_crash_dir = os.path.join(latest_dir, "crashes")
-                    run_command(["mkdir", latest_crash_dir])
-                    for crash_file in crash_files:
-                        run_command(["mv", crash_file, latest_crash_dir])
-                else:
-                    print(
-                        "No avocado crash files found in {}".format(crash_dir))
-        return_code |= run_return_code
-        return_code |= stop_daos_agent_services(test_file["py"], args)
-        return_code |= stop_daos_server_service(test_file["py"], args)
+            if not isinstance(test_file["yaml"], str):
+                # The test was not run due to an error replacing host
+                # placeholders in the yaml file.  Treat this like a failed
+                # avocado command.
+                reason = "error replacing yaml file placeholders"
+                if not report_skipped_test(
+                        test_file["py"], avocado_logs_dir, reason):
+                    return_code |= 64
+                return_code |= 4
+                continue
 
-        # Optionally store all of the server and client config files
-        # and archive remote logs and report big log files, if any.
-        if args.archive:
-            return_code |= archive_config_files(avocado_logs_dir, args)
-            return_code |= archive_daos_logs(
-                avocado_logs_dir, test_file, args)
-            return_code |= archive_cart_logs(
-                avocado_logs_dir, test_file, args)
+            # Optionally clean the log files before running this test on the
+            # servers and clients specified for this test
+            if args.clean:
+                if not clean_logs(test_file["yaml"], args):
+                    # Report errors for this skipped test
+                    skip_reason = (
+                        "host communication error attempting to clean out "
+                        "leftover logs from a previous test run prior to "
+                        "running this test")
+                    if not report_skipped_test(
+                            test_file["py"], avocado_logs_dir, skip_reason):
+                        return_code |= 64
+                    return_code |= 128
+                    continue
 
-            # Compress any log file that haven't been remotely compressed.
-            compress_log_files(avocado_logs_dir, args)
+            # Execute this test
+            test_command_list = list(command_list)
+            test_command_list.extend([
+                "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
+            run_return_code = time_command(test_command_list)
+            if run_return_code != 0:
+                collect_crash_files(avocado_logs_dir)
+            return_code |= run_return_code
 
-        # Optionally rename the test results directory for this test
-        if args.rename:
-            return_code |= rename_logs(avocado_logs_dir, test_file["py"], args)
+            # Stop any agents or servers running via systemd
+            return_code |= stop_daos_agent_services(test_file["py"], args)
+            return_code |= stop_daos_server_service(test_file["py"], args)
 
-        # Optionally process core files
-        if args.process_cores:
-            if not process_the_cores(avocado_logs_dir, test_file["yaml"], args):
-                return_code |= 256
+            # Optionally store all of the server and client config files
+            # and archive remote logs and report big log files, if any.
+            if args.archive:
+                return_code |= archive_config_files(avocado_logs_dir, args)
+                return_code |= archive_daos_logs(
+                    avocado_logs_dir, test_file, args)
+                return_code |= archive_cart_logs(
+                    avocado_logs_dir, test_file, args)
 
-    if args.jenkinslog:
-        return_code |= archive_cov_usrlib_logs(avocado_logs_dir, args)
+                # Compress any log file that haven't been remotely compressed.
+                compress_log_files(avocado_logs_dir, args)
+
+            # Optionally rename the test results directory for this test
+            if args.rename:
+                return_code |= rename_logs(
+                    avocado_logs_dir, test_file["py"], loop, args)
+
+            # Optionally process core files
+            if args.process_cores:
+                if not process_the_cores(
+                        avocado_logs_dir, test_file["yaml"], args):
+                    return_code |= 256
+
+        if args.jenkinslog:
+            # Create a subdirectory in the avocado logs directory for these logs
+            destination = os.path.join(
+                avocado_logs_dir, "bullseye_coverage_logs")
+            if args.repeat > 1:
+                destination = os.path.join(destination, str(loop))
+            return_code |= archive_bullseye_coverage_logs(destination, args)
 
     return return_code
 
@@ -1072,6 +1069,29 @@ def clean_logs(test_yaml, args):
         return False
 
     return True
+
+
+def collect_crash_files(avocado_logs_dir):
+    """Move any avocado crash files into job-results/latest/crashes.
+
+    Args:
+        avocado_logs_dir (str): path to the avocado log files.
+    """
+    data_dir = avocado_logs_dir.replace("job-results", "data")
+    crash_dir = os.path.join(data_dir, "crashes")
+    if os.path.isdir(crash_dir):
+        crash_files = [
+            os.path.join(crash_dir, crash_file)
+            for crash_file in os.listdir(crash_dir)
+            if os.path.isfile(os.path.join(crash_dir, crash_file))]
+        if crash_files:
+            latest_dir = os.path.join(avocado_logs_dir, "latest")
+            latest_crash_dir = os.path.join(latest_dir, "crashes")
+            run_command(["mkdir", latest_crash_dir])
+            for crash_file in crash_files:
+                run_command(["mv", crash_file, latest_crash_dir])
+        else:
+            print("No avocado crash files found in {}".format(crash_dir))
 
 
 def get_remote_file_command():
@@ -1197,29 +1217,30 @@ def archive_config_files(avocado_logs_dir, args):
     return status
 
 
-def archive_cov_usrlib_logs(avocado_logs_dir, args):
-    """Archive daos cov files to the avocado results directory.
+def archive_bullseye_coverage_logs(destination, args):
+    """Archive bullseye coverage logs to the avocado results directory.
+
     Args:
-        avocado_logs_dir (str): path to the avocado log files
+        destination (str): path in which to archive files
         args (argparse.Namespace): command line arguments for this program
+
     Returns:
         int: status code.
-    """
-    # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "daos_covs_usrlib")
 
-    # Copy any DAOS covs created on all hosts
+    """
+    # Copy any bullseye coverage logs created on all hosts
     hosts = list(args.test_servers)
     hosts.append(socket.gethostname().split(".")[0])
-    print("Archiving host covs from {} in {}".format(hosts, destination))
+    print(
+        "Archiving bullseye coverage logs from {} in {}".format(
+            hosts, destination))
 
-    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    task = archive_files(destination, hosts,
-                         "/tmp/test.cov*",False, args)
+    # Copy any bullseye coverage files written to the /tmp directory
+    task = archive_files(destination, hosts, "/tmp/test.cov*", False, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
-    if not check_remote_output(task, "archive_daos_covs command"):
+    if not check_remote_output(task, "archive_bullseye_coverage_logs command"):
         status |= 16
     return status
 
@@ -1228,7 +1249,7 @@ def archive_files(destination, hosts, source_files, cart, args):
     """Archive all of the remote files to the destination directory.
 
     Args:
-        destination (str): path to which to archive files
+        destination (str): path in which to archive files
         hosts (list): hosts from which to archive files
         source_files (str): remote files to archive
         cart (str): enable running cart_logtest.py
@@ -1243,7 +1264,7 @@ def archive_files(destination, hosts, source_files, cart, args):
 
     # Create the destination directory
     if not os.path.exists(destination):
-        get_output(["mkdir", destination])
+        get_output(["mkdir", "-p", destination])
 
     # Display available disk space prior to copy.  Allow commands to fail w/o
     # exiting this program.  Any disk space issues preventing the creation of a
@@ -1265,12 +1286,14 @@ def archive_files(destination, hosts, source_files, cart, args):
     return get_remote_output(hosts, " ".join(command), 900)
 
 
-def rename_logs(avocado_logs_dir, test_file, args):
+def rename_logs(avocado_logs_dir, test_file, loop, args):
     """Append the test name to its avocado job-results directory name.
 
     Args:
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
+        loop (int): test execution loop count
+        args (argparse.Namespace): command line arguments for this program
     """
     status = 0
     test_name = get_test_category(test_file)
@@ -1278,8 +1301,13 @@ def rename_logs(avocado_logs_dir, test_file, args):
     test_logs_dir = os.path.realpath(test_logs_lnk)
 
     if args.jenkinslog:
-        new_test_logs_dir = os.path.join(
-            avocado_logs_dir, test_file, str(args.repeat))
+        if args.repeat > 1:
+            # When repeating tests ensure jenkins-style avocado log directories
+            # are unique by including the loop count in the path
+            new_test_logs_dir = os.path.join(
+                avocado_logs_dir, test_file, str(loop))
+        else:
+            new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
         try:
             os.makedirs(new_test_logs_dir)
         except OSError as error:
@@ -2134,11 +2162,7 @@ def main():
     generate_certs()
 
     # Run all the tests
-    status = 0
-    for loop in range(1, args.repeat + 1):
-        if args.repeat > 1:
-            print("Starting test loop {}/{}".format(loop, args.repeat + 1))
-        status |= run_tests(test_files, tag_filter, args)
+    status = run_tests(test_files, tag_filter, args)
 
     # Process the avocado run return codes and only treat job and command
     # failures as errors.
