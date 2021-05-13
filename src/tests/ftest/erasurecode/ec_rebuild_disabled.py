@@ -6,6 +6,7 @@
 '''
 import time
 from ec_utils import ErasureCodeIor
+from apricot import skipForTicket
 
 class EcDisabledRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -15,6 +16,7 @@ class EcDisabledRebuild(ErasureCodeIor):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-7592")
     def test_ec_degrade(self):
         """Jira ID: DAOS-5893.
 
