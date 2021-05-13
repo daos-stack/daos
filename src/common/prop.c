@@ -712,17 +712,16 @@ int
 daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
 			     struct daos_prop_entry *src)
 {
-	struct daos_prop_co_roots *roots;
-
-	roots = src->dpe_val_ptr;
-	if (!dst->dpe_val_ptr)
-		D_ALLOC(dst->dpe_val_ptr, sizeof(*roots));
-
 	if (dst->dpe_val_ptr == NULL) {
-		D_ERROR("failed to dup roots\n");
-		return -DER_NOMEM;
+		D_ALLOC(dst->dpe_val_ptr, sizeof(struct daos_prop_co_roots));
+
+		if (dst->dpe_val_ptr == NULL)
+			return -DER_NOMEM;
 	}
-	memcpy(dst->dpe_val_ptr, roots, sizeof(*roots));
+
+	memcpy(dst->dpe_val_ptr,
+	       src->dpe_val_ptr,
+	       sizeof(struct daos_prop_co_roots));
 	return 0;
 }
 
