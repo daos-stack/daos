@@ -1,3 +1,17 @@
+daos (1.3.102-3) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Add back R: libuuid-devel to daos-devel package as it's always
+    necessary when building with libdaos
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 21 Jun 2021 15:30:23 -0400
+
+daos (1.3.102-2) unstable; urgency=medium
+  [ Jeff Olivier]
+  * Update to pmdk 1.11.0-rc1
+  * Remove dependence on libpmem since we use libpmemobj directly
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Mon, 14 Jun 2021 00:00:00 -0000
+
 daos (1.3.102-1) unstable; urgency=medium
   [ Johann Lombardi]
   * Version bump to 1.3.102 for 2.0 test build 2

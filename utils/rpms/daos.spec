@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.102
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -234,6 +234,7 @@ This is the package needed to run the DAOS test suite
 %if (0%{?suse_version} >= 1500)
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 %endif
+Requires: libuuid-devel
 Summary: The DAOS development libraries and headers
 
 %description devel
@@ -464,6 +465,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Mon Jun 21 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.102-3
+- Add back R: libuuid-devel to daos-devel package as it's always
+  necessary when building with libdaos
+
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
 - Update to pmdk 1.11.0-rc1
 - Remove dependence on libpmem since we use libpmemobj directly

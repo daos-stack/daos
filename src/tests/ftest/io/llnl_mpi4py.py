@@ -6,6 +6,7 @@
 """
 
 from mpio_test_base import MpiioTests
+from distutils.sysconfig import get_python_lib
 
 
 # pylint: disable=too-many-ancestors
@@ -27,7 +28,9 @@ class LlnlMpi4py(MpiioTests):
         test_nb_collective, test_nb_localpointer, test_nb_rdwr,
         test_nb_readwrite, test_rdwr, test_readwrite
 
-        :avocado: tags=all,mpiio,smoke,pr,daily_regression,small,mpich,lnl
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=large
+        :avocado: tags=mpiio,smoke,mpich,lnll
         """
         test_repo = self.params.get("llnl", '/run/test_repo/')
         self.run_test(test_repo, "llnl")
@@ -43,7 +46,9 @@ class LlnlMpi4py(MpiioTests):
         testReadWriteAtAllBeginEnd, testReadWriteAll
         testIReadIWriteAll, testReadWriteAllBeginEnd
 
-        :avocado: tags=all,mpiio,daily_regression,small,mpich,mpi4py
+        :avocado: tags=all,daily_regression
+        :avocado: tags=large
+        :avocado: tags=mpiio,mpich,mpi4py
         """
         test_repo = self.params.get("mpi4py", '/run/test_repo/')
         self.run_test(test_repo, "mpi4py")
