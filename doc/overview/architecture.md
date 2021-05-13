@@ -20,7 +20,7 @@ to manage metadata and data resilience.
 ## DAOS Features
 
 DAOS relies on OFI for low-latency communications and stores data on
-both storage-class memory and NVMe storage. DAOS presents a native
+both storage-class memory (SCM) and NVMe storage. DAOS presents a native
 key-array-value storage interface that offers a unified storage model
 over which domain-specific data models are ported, such as HDF5, MPI-IO,
 and Apache Arrow. A POSIX I/O emulation layer implementing files and
@@ -45,9 +45,9 @@ data, will typically be stored in the former, whereas checkpoints and
 bulk data will be stored in the latter. This approach allows DAOS to
 deliver the raw NVMe bandwidth for bulk data by streaming the data to
 NVMe storage and maintaining internal metadata index in SCM. The
-Persistent Memory Development Kit (PMDK)[^1] allows managing
+Persistent Memory Development Kit (PMDK) allows managing
 transactional access to SCM and the Storage Performance Development Kit
-(SPDK)[^2] enables user-space I/O to NVMe devices.
+(SPDK) enables user-space I/O to NVMe devices.
 
 ![](../admin/media/image1.png)
 Figure 2-1. DAOS Storage
@@ -91,44 +91,42 @@ DAOS aims at delivering:
 -   Mover agent to migrate datasets among DAOS pools and from parallel
     filesystems to DAOS and vice versa
 
-## DAOS Components
+## DAOS System
 
-A data center may have hundreds of thousands of compute nodes
-interconnected via a scalable high-performance fabric, where all, or a
-subset of the nodes called storage nodes, have direct access to NVM
+A data center may have hundreds of thousands of compute instances
+interconnected via a scalable high-performance network, where all, or a
+subset of the instances called storage nodes, have direct access to NVM
 storage. A DAOS installation involves several components that can be
 either collocated or distributed.
 
-### DAOS System, Storage Node, Server, I/O Engine, and Target
-
 A DAOS *system* is identified by a system name, and consists of a set of
-DAOS *storage nodes* connected to the same fabric. The DAOS storage nodes
+DAOS *storage nodes* connected to the same network. The DAOS storage nodes
 run one DAOS *server* instance per node, which in turn starts one
-DAOS *I/O Engine* process per physical socket. Membership of the DAOS
+DAOS *Engine* process per physical socket. Membership of the DAOS
 servers is recorded into the system map, that assigns a unique integer
-*rank* to each *I/O Engine* process. Two different DAOS systems comprise
+*rank* to each *Engine* process. Two different DAOS systems comprise
 two disjoint sets of DAOS servers, and do not coordinate with each other.
 
 The DAOS *server* is a multi-tenant daemon running on a Linux instance
 (either natively on the physical node or in a VM or container) of each
-*storage node*. Its *I/O Engine* sub-processes export the locally-attached
+*storage node*. Its *Engine* sub-processes export the locally-attached
 SCM and NVM storage through the network. It listens to a management port
 (addressed by an IP address and a TCP port number), plus one or more fabric
 endpoints (addressed by network URIs).
 The DAOS server is configured through a YAML file in /etc/daos,
-including the configuration of its I/O Engine sub-processes.
+including the configuration of its Engine sub-processes.
 The DAOS server startup can be integrated with different daemon management or
 orchestration frameworks (for example a systemd script, a Kubernetes service,
 or even via a parallel launcher like pdsh or srun).
 
-Inside a DAOS I/O Engine, the storage is statically partitioned across
+Inside a DAOS Engine, the storage is statically partitioned across
 multiple *targets* to optimize concurrency. To avoid contention, each
 target has its private storage, its own pool of service threads, and its
 dedicated network context that can be directly addressed over the fabric
 independently of the other targets hosted on the same storage node.
 The SCM modules are typically configured in *AppDirect interleaved* mode.
 They are thus presented to the operating system as a single PMEM namespace
-per socket (in `fsdax` mode). When *N* targets per I/O Engine are configured,
+per socket (in `fsdax` mode). When *N* targets per engine are configured,
 each target is using *1/N* of the capacity of the `fsdax` SCM capacity
 of that socket, independently of the other targets.
 Each target is also using a fraction of the NVMe capacity of the NVMe
@@ -144,14 +142,14 @@ A target is the unit of performance. Hardware components associated with
 the target, such as the backend storage medium, the CPU core(s), and the
 network, have limited capability and capacity.
 
-The number of targets exported by a DAOS I/O Engine instance is
+The number of targets exported by a DAOS Engine instance is
 configurable, and depends on the underlying hardware (in particular,
 the number of SCM modules and the number of NVMe SSDs that are served
-by this I/O Engine instance). As a best practice, the number of targets
-of an I/O Engine should be an integer multiple of the number of NVMe drives
-that are served by this I/O Engines.
+by this engine instance). As a best practice, the number of targets
+of an engine should be an integer multiple of the number of NVMe drives
+that are served by this engine.
 
-### Storage API, Application Interface and Tools
+## SDK and Tools
 
 Applications, users, and administrators can interact with a DAOS system
 through two different client APIs. The management API offers the ability
@@ -169,10 +167,10 @@ the native DAOS API, through an I/O middleware library (e.g. POSIX
 emulation, MPI-IO, HDF5) or through frameworks like Spark or TensorFlow
 that have already been integrated with the native DAOS storage model.
 
-### Agent
+## Agent
 
 The DAOS agent is a daemon residing on the client nodes that interacts
 with the DAOS library to authenticate the application processes. It is a
-trusted entity that can sign the DAOS Client credentials using
+trusted entity that can sign the DAOS library credentials using
 certificates. The agent can support different authentication frameworks,
-and uses a Unix Domain Socket to communicate with the client library.
+and uses a Unix Domain Socket to communicate with the DAOS library.

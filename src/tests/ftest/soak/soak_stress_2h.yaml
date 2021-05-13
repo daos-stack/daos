@@ -33,7 +33,7 @@ server_config:
         scm_class: dcpm
         scm_list: [/dev/pmem0]
         bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     transport_config:
       allow_insecure: True
 agent_config:
@@ -89,6 +89,13 @@ soak_stress:
     name: soak_stress
     # stress test timeout in hours
     test_timeout: 2
+    joblist:
+        - ior_stress
+# Commandline parameters
+# Benchmark and application params
+# IOR params -a DFS and -a MPIIO
+# sequential
+ior_stress:
     # maximum timeout for a single job in test in minutes
     job_timeout: 20
     nodesperjob:
@@ -99,13 +106,6 @@ soak_stress:
     taskspernode:
         - 1
         - 4
-    joblist:
-        - ior_stress
-# Commandline parameters
-# Benchmark and application params
-# IOR params -a DFS and -a MPIIO
-# sequential
-ior_stress:
     api:
         - DFS
         - MPIIO
