@@ -88,10 +88,10 @@ def scons():
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
                     os.path.join('../include', 'cart', header))
 
-    # Generate cart utility shared objects
-    build_utility_shared_obj(env, prereqs)
-
     denv = env.Clone()
+
+    # Generate cart utility shared objects
+    build_utility_shared_obj(denv, prereqs)
 
     denv.AppendUnique(LIBS=['gurt'])
     prereqs.require(denv, 'mercury')
