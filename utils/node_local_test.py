@@ -2522,13 +2522,10 @@ class AllocFailTestRun():
             # no src line to log them against, so simply assert.
             assert self.returncode == 0
 
-            # Disable checking of stdout/stderr here, as the container copy
-            # FI test is not complete yet.  Disabling this allows the test
-            # to complete, and hopefully re-run failing issues under valgrind.
-            # TODO: Re-enable before landing.
-            #assert self.stderr == b''
-            #if self.aft.expected_stdout is not None:
-            #    assert self.stdout == self.aft.expected_stdout
+            if self.check_post_stdout:
+                assert self.stderr == b''
+                if self.aft.expected_stdout is not None:
+                    assert self.stdout == self.aft.expected_stdout
             self.fault_injected = False
         if self.vh:
             self.vh.convert_xml()
@@ -2567,7 +2564,10 @@ class AllocFailTest():
         self.conf = conf
         self.cmd = cmd
         self.prefix = True
+        # Check stderr from commands where faults were injected.
         self.check_stderr = False
+        # Check stdout/error from commands where faults were not injected
+        self.check_post_stdout = True
         self.expected_stdout = None
         self.use_il = False
         self.wf = conf.wf
@@ -2661,9 +2661,7 @@ class AllocFailTest():
         return aftf
 
 def test_alloc_fail_copy(server, conf, wf):
-    """Run the Interception library with fault injection
-
-    Run container (filesystem) copy under fault injection.
+    """Run container (filesystem) copy under fault injection.
 
     TODO: Complete this test and resolve some issues:
     Each copy will be to the same container, so in a lot of them the destination
@@ -2705,6 +2703,9 @@ def test_alloc_fail_copy(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, cmd)
     test_cmd.wf = wf
+    # TODO: Remove this setting once test is updated to use new container for
+    # each iteration.
+    test_cmd.check_post_stdout = False
 
     rc = test_cmd.launch()
     return rc
@@ -2885,10 +2886,9 @@ def main():
         if fi_test:
             fatal_errors.add_result(test_alloc_fail_copy(server, conf,
                                                          wf_client))
-            # For now disable the other fault injection tests for run-time.
-#            fatal_errors.add_result(test_alloc_fail_cat(server,
-#                                                        conf, wf_client))
-#            fatal_errors.add_result(test_alloc_fail(server, conf))
+            fatal_errors.add_result(test_alloc_fail_cat(server,
+                                                        conf, wf_client))
+            fatal_errors.add_result(test_alloc_fail(server, conf))
         if args.perf_check:
             check_readdir_perf(server, conf)
         if server.stop(wf_server) != 0:
