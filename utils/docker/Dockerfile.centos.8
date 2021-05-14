@@ -148,6 +148,10 @@ RUN dnf -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercu
     dnf clean all
 USER daos_server:daos_server
 
+# Set a label.  This is useful for searching for DAOS images, but is also used
+# in github-actions to prune elements of the dockerfile below this point.
+LABEL DAOS=stage1
+
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
 COPY site_scons site_scons
@@ -171,6 +175,10 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
+
+USER root:root
+LABEL DAOS=true
+USER daos_server:daos_server
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/daos/src/client/java
