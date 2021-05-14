@@ -1197,12 +1197,12 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 		rc = -DER_INVAL;
 	} else {
 		D_PRINT("redundancy level:\t");
-		if (entry->dpe_val == DAOS_PROP_CO_REDUN_NODE)
-			D_PRINT("node (%d)\n", DAOS_PROP_CO_REDUN_NODE);
+		if (entry->dpe_val == DAOS_PROP_CO_REDUN_RANK)
+			D_PRINT("node (%d)\n", DAOS_PROP_CO_REDUN_RANK);
 		else
 			/* XXX: should be resolved to string */
-			D_PRINT("node+"DF_U64" ("DF_U64")\n",
-				entry->dpe_val - DAOS_PROP_CO_REDUN_NODE,
+			D_PRINT("rank+"DF_U64" ("DF_U64")\n",
+				entry->dpe_val - DAOS_PROP_CO_REDUN_RANK,
 				entry->dpe_val);
 	}
 

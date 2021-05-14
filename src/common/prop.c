@@ -385,7 +385,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			    val > DAOS_PROP_CO_REDUN_MAX) {
 				D_ERROR("invalid redundancy level "DF_U64
 					", must be within [%d - %d]\n",
-					val, DAOS_PROP_CO_REDUN_NODE,
+					val, DAOS_PROP_CO_REDUN_RANK,
 					DAOS_PROP_CO_REDUN_MAX);
 				return false;
 			}
