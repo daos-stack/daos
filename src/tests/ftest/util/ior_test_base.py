@@ -72,6 +72,11 @@ class IorTestBase(DfuseTestBase):
         # create container
         self.container.create()
 
+        # Set an attribute for the container to disable caching.
+        self.daos_cmd.container_set_attr(
+            pool=self.pool.uuid, cont=self.cont.uuid,
+            attr='dfuse-attr-time', val='0')
+
     def display_pool_space(self, pool=None):
         """Display the current pool space.
 
