@@ -58,7 +58,7 @@ dfuse_progress_thread(void *arg)
 /* Parse a string to a time, used for reading container attributes info
  * timeouts.
  */
-int
+static int
 dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 {
 	int		matched;
