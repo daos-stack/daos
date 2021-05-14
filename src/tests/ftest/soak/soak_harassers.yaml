@@ -168,7 +168,6 @@ fio_harasser:
         - 'RP_2G1'
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
-    disable_direct_io: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
 events:
