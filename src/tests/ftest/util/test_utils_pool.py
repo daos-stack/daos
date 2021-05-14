@@ -479,7 +479,7 @@ class TestPool(TestDaosApiBase):
                 self.set_query_data()
                 self.log.info(
                     "Pool %s query data: %s\n", self.uuid, self.query_data)
-                status = self.query_data[4][10] == "done"
+                status = self.query_data[3][10] == "done"
             elif self.dmg:
                 # use dmg command for pool query
                 self.set_query_data()
