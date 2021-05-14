@@ -125,6 +125,7 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		}
 		entry->attr.st_mode = ie->ie_stat.st_mode;
 		entry->attr.st_ino = ie->ie_stat.st_ino;
+		ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
 	}
 
 	entry->generation = 1;
@@ -155,7 +156,7 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		/* Update the existing object with the new name/parent */
 
 		DFUSE_TRA_DEBUG(inode,
-				"Maybe updating parent inode %#lx dfs_ino %lu",
+				"Maybe updating parent inode %#lx dfs_ino %#lx",
 				entry->ino, ie->ie_dfs->dfs_ino);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
@@ -172,16 +173,14 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
 
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
-		ie->ie_parent = 0;
-		ie->ie_root = 0;
-		ie_close(fs_handle, ie);
+		dfuse_ie_close(fs_handle, ie);
 		ie = inode;
 	}
 
 	*rlinkp = rlink;
 out:
 	if (rc != 0)
-		ie_close(fs_handle, ie);
+		dfuse_ie_close(fs_handle, ie);
 
 	return rc;
 }
@@ -341,13 +340,15 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 			if (plus)
 				rc = dfs_lookupx(oh->doh_dfs, oh->doh_obj,
-						 dre->dre_name, O_RDONLY, &obj,
+						 dre->dre_name,
+						 O_RDONLY | O_NOFOLLOW, &obj,
 						 &stbuf.st_mode, &stbuf,
 						 1, &duns_xattr_name,
 						 (void **)&outp, &attr_len);
 			else
 				rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
-						    dre->dre_name, O_RDONLY,
+						    dre->dre_name,
+						    O_RDONLY | O_NOFOLLOW,
 						    &obj, &stbuf.st_mode, NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");

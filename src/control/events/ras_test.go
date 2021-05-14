@@ -37,14 +37,16 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-var defEvtCmpOpts = []cmp.Option{cmpopts.IgnoreUnexported(RASEvent{})}
+var defEvtCmpOpts = append(common.DefaultCmpOpts(),
+	cmpopts.IgnoreUnexported(RASEvent{}),
+)
 
 func TestEvents_HandleClusterEvent(t *testing.T) {
-	genericEvent := mockGenericEvent()
+	genericEvent := mockGenericEvent(t)
 	pbGenericEvent, _ := genericEvent.ToProto()
-	rankDownEvent := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
-	pbRankDownEvent, _ := rankDownEvent.ToProto()
-	psrEvent := NewPoolSvcReplicasUpdateEvent("foo", 1, common.MockUUID(), []uint32{0, 1}, 1)
+	engineDiedEvent := mockDiedEvt(t)
+	pbEngineDiedEvent, _ := engineDiedEvent.ToProto()
+	psrEvent := mockSvcRepsEvt(t)
 	pbPSREvent, _ := psrEvent.ToProto()
 
 	for name, tc := range map[string]struct {
@@ -79,7 +81,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 		},
 		"rank down event": {
 			req: &sharedpb.ClusterEventReq{
-				Event: pbRankDownEvent,
+				Event: pbEngineDiedEvent,
 			},
 			subType:     RASTypeStateChange,
 			expEvtTypes: []string{RASTypeStateChange.String()},
@@ -87,7 +89,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 		},
 		"filtered rank down event": {
 			req: &sharedpb.ClusterEventReq{
-				Event: pbRankDownEvent,
+				Event: pbEngineDiedEvent,
 			},
 			subType: RASTypeInfoOnly,
 			expResp: &sharedpb.ClusterEventResp{},
@@ -135,7 +137,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			common.AssertStringsEqual(t, tc.expEvtTypes, tly1.getRx(),
 				"unexpected received events")
 
-			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+			if diff := cmp.Diff(tc.expResp, resp, defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})

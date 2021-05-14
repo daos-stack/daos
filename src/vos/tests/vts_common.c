@@ -32,8 +32,7 @@
 
 enum {
 	TCX_NONE,
-	TCX_PO_CREATE,
-	TCX_PO_OPEN,
+	TCX_PO_CREATE_OPEN,
 	TCX_CO_CREATE,
 	TCX_CO_OPEN,
 	TCX_READY,
@@ -105,22 +104,14 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	uuid_generate_time_safe(tcx->tc_co_uuid);
 
 	/* specify @psize as both NVMe size and SCM size */
-	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize);
+	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, 0,
+			     &tcx->tc_po_hdl);
 	if (rc) {
 		print_error("vpool create %s failed with error : %d\n",
 			    tcx->tc_po_name, rc);
 		goto failed;
 	}
-	tcx->tc_step = TCX_PO_CREATE;
-
-	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, false,
-			   &tcx->tc_po_hdl);
-	if (rc) {
-		print_error("vos pool open %s "DF_UUIDF" error: %d\n",
-			    tcx->tc_po_name, DP_UUID(tcx->tc_po_uuid), rc);
-		goto failed;
-	}
-	tcx->tc_step = TCX_PO_OPEN;
+	tcx->tc_step = TCX_PO_CREATE_OPEN;
 
 	rc = vos_cont_create(tcx->tc_po_hdl, tcx->tc_co_uuid);
 	if (rc) {
@@ -164,14 +155,13 @@ vts_ctx_fini(struct vos_test_ctx *tcx)
 		rc = vos_cont_destroy(tcx->tc_po_hdl, tcx->tc_co_uuid);
 		assert_rc_equal(rc, 0);
 		/* fallthrough */
-	case TCX_PO_OPEN:
+	case TCX_PO_CREATE_OPEN:
 		rc = vos_pool_close(tcx->tc_po_hdl);
 		assert_rc_equal(rc, 0);
-	case TCX_PO_CREATE:
 		rc = vos_pool_destroy(tcx->tc_po_name, tcx->tc_po_uuid);
 		assert_rc_equal(rc, 0);
-		/* fallthrough */
 		free(tcx->tc_po_name);
+		/* fallthrough */
 	}
 	memset(tcx, 0, sizeof(*tcx));
 }
@@ -278,14 +268,14 @@ pool_init(struct credit_context *tsc)
 	/* Use pool size as blob size for this moment. */
 	if (tsc_create_pool(tsc)) {
 		rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
-				     tsc->tsc_nvme_size);
+				     tsc->tsc_nvme_size, 0, &poh);
+		if (rc)
+			goto out;
+	} else {
+		rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, 0, &poh);
 		if (rc)
 			goto out;
 	}
-
-	rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, false, &poh);
-	if (rc)
-		goto out;
 
 	tsc->tsc_poh = poh;
  out:

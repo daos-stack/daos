@@ -560,7 +560,7 @@ rewait:
 			} else if (evp->ev_error == -DER_REC2BIG) {
 				char *new_buff;
 
-				D_REALLOC(new_buff, op->buf, op->size);
+				D_REALLOC_NZ(new_buff, op->buf, op->size);
 				if (new_buff == NULL) {
 					rc = -DER_NOMEM;
 					break;
@@ -623,7 +623,7 @@ rewait:
 				daos_event_fini(evp);
 				rc2 = daos_event_init(evp, eq, NULL);
 
-				D_REALLOC(new_buff, op->buf, op->size);
+				D_REALLOC_NZ(new_buff, op->buf, op->size);
 				if (new_buff == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 
@@ -802,6 +802,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	PyObject	*anchor_cap;
 	char		*enum_buf = NULL;
 	daos_size_t	 size;
+	daos_size_t	 oldsize;
 	char		*ptr;
 	uint32_t	 i;
 	int		 rc = 0;
@@ -813,6 +814,8 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 		rc = -DER_INVAL;
 		goto out;
 	}
+
+	oldsize = size;
 
 	/** Allocate an anchor for the first iteration */
 	if (anchor_cap == Py_None) {
@@ -875,11 +878,12 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 			size = kds[0].kd_key_len;
 
 			/** realloc buffer twice as big */
-			D_REALLOC(new_buf, enum_buf, size);
+			D_REALLOC(new_buf, enum_buf, oldsize, size);
 			if (new_buf == NULL) {
 				rc = -DER_NOMEM;
 				goto out;
 			}
+			oldsize = size;
 
 			/** refresh daos structures to point at new buffer */
 			d_iov_set(&iov, (void *)new_buf, size);
@@ -984,7 +988,6 @@ static PyMethodDef daosMethods[] = {
 	{NULL, NULL}
 };
 
-#if PY_MAJOR_VERSION >= 3
 struct module_struct {
 	PyObject *error;
 };
@@ -1006,7 +1009,7 @@ __daosbase_clear(PyObject *m)
 
 static struct PyModuleDef moduledef = {
 	PyModuleDef_HEAD_INIT,
-	"pydaos_shim_3",
+	"pydaos_shim",
 	NULL,
 	sizeof(struct module_struct),
 	daosMethods,
@@ -1016,19 +1019,12 @@ static struct PyModuleDef moduledef = {
 	NULL
 };
 
-PyMODINIT_FUNC PyInit_pydaos_shim_3(void)
-#else
-void
-initpydaos_shim_27(void)
-#endif
+PyMODINIT_FUNC PyInit_pydaos_shim(void)
+
 {
 	PyObject *module;
 
-#if PY_MAJOR_VERSION >= 3
 	module = PyModule_Create(&moduledef);
-#else
-	module = Py_InitModule("pydaos_shim_27", daosMethods);
-#endif
 
 #define DEFINE_PY_RETURN_CODE(name, desc, errstr) \
 	PyModule_AddIntConstant(module, ""#name, desc);
@@ -1044,7 +1040,5 @@ initpydaos_shim_27(void)
 	/** export container properties */
 	cont_prop_define(module);
 
-#if PY_MAJOR_VERSION >= 3
 	return module;
-#endif
 }

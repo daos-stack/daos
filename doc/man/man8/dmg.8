@@ -1,4 +1,4 @@
-.TH dmg 1 "18 March 2021"
+.TH dmg 1 "12 April 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -139,9 +139,6 @@ Per-server NVMe allocation for DAOS pool (manual)
 .TP
 \fB\fB\-r\fR, \fB\-\-ranks\fR\fP
 Storage server unique identifiers (ranks) for DAOS pool
-.TP
-\fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
-DAOS system that pool is to be a part of
 .SS pool delete-acl
 Delete an entry from a DAOS pool's Access Control List
 
@@ -198,9 +195,6 @@ Evict all pool connections to a DAOS pool
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
 Unique ID of DAOS pool
-.TP
-\fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
-DAOS system that the pools connections be evicted from.
 .SS pool exclude
 Exclude targets from a rank
 
@@ -357,14 +351,17 @@ Format SCM and NVMe storage attached to remote servers.
 Show results of each SCM & NVMe device format operation
 .TP
 \fB\fB\-\-reformat\fR\fP
-Reformat storage overwriting any existing filesystem (CAUTION: destructive operation)
+Alias for --force, will be removed in a future release
+.TP
+\fB\fB\-\-force\fR\fP
+Force storage format on a host, stopping any running engines (CAUTION: destructive operation)
 .SS storage identify
 Blink the status LED on a given VMD device for visual SSD identification.
 
 \fBAliases\fP: i
 
 .SS storage identify vmd
-Quickly blink the status LED on a VMD NVMe SSD for device identification.
+Quickly blink the status LED on a VMD NVMe SSD for device identification. Duration of LED event can be configured by setting the VMD_LED_PERIOD environment variable, otherwise default is 60 seconds.
 
 \fBUsage\fP: identify vmd [vmd-OPTIONS]
 .TP
@@ -534,6 +531,11 @@ Do not require confirmation
 Perform distributed tasks related to DAOS system
 
 \fBAliases\fP: sy
+
+.SS system erase
+Erase system metadata prior to reformat
+
+\fBAliases\fP: e
 
 .SS system leader-query
 Query for current Management Service leader

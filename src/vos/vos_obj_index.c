@@ -618,6 +618,9 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
 	}
 	it_entry->ie_child_type = VOS_ITER_DKEY;
+
+	vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
+			     &it_entry->ie_last_update);
 	return 0;
 }
 

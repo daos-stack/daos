@@ -17,7 +17,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct fuse_file_info	        fi_out = {0};
 	int rc;
 
-	DFUSE_TRA_INFO(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino,
+	DFUSE_TRA_INFO(parent, "Parent:%#lx '%s'", parent->ie_stat.st_ino,
 		       name);
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is

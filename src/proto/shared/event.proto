@@ -29,8 +29,8 @@ message RASEvent {
 	string cont_uuid = 13;	// (optional) Container UUID involved in event.
 	string obj_id = 14;	// (optional) Object involved in event.
 	string ctl_op = 15;	// (optional) Recommended automatic action.
-	// RankStateEventInfo defines extended fields for rank state change events.
-	message RankStateEventInfo {
+	// EngineStateEventInfo defines extended fields for state change events.
+	message EngineStateEventInfo {
 		uint32 instance = 1;	// Control-plane harness instance index.
 		bool errored = 2;	// Rank in error state.
 		string error = 3;	// Message associated with error.
@@ -42,7 +42,7 @@ message RASEvent {
 	}
 	oneof extended_info {	// Data specific to a given event ID.
 		string str_info = 16;	// Opaque data blob.
-		RankStateEventInfo rank_state_info = 17;
+		EngineStateEventInfo engine_state_info = 17;
 		PoolSvcEventInfo pool_svc_info = 18;
 	}
 }

@@ -116,8 +116,8 @@ type (
 	// NvmeNamespace represents an individual NVMe namespace on a device and
 	// mirrors C.struct_ns_t.
 	NvmeNamespace struct {
-		ID   uint32
-		Size uint64
+		ID   uint32 `json:"id"`
+		Size uint64 `json:"size"`
 	}
 
 	// SmdDevice contains DAOS storage device information, including
@@ -136,15 +136,15 @@ type (
 	// NvmeController represents a NVMe device controller which includes health
 	// and namespace information and mirrors C.struct_ns_t.
 	NvmeController struct {
-		Info        string
-		Model       string
-		Serial      string `hash:"ignore"`
-		PciAddr     string
-		FwRev       string
-		SocketID    int32
-		HealthStats *NvmeHealth
-		Namespaces  []*NvmeNamespace
-		SmdDevices  []*SmdDevice
+		Info        string           `json:"info"`
+		Model       string           `json:"model"`
+		Serial      string           `hash:"ignore" json:"serial"`
+		PciAddr     string           `json:"pci_addr"`
+		FwRev       string           `json:"fw_rev"`
+		SocketID    int32            `json:"socket_id"`
+		HealthStats *NvmeHealth      `json:"health_stats"`
+		Namespaces  []*NvmeNamespace `hash:"set" json:"namespaces"`
+		SmdDevices  []*SmdDevice     `hash:"set" json:"smd_devices"`
 	}
 
 	// NvmeControllers is a type alias for []*NvmeController.
@@ -284,7 +284,7 @@ func (nch *NvmeHealth) TempC() float32 {
 
 // TempF returns controller temperature in degrees Fahrenheit.
 func (nch *NvmeHealth) TempF() float32 {
-	return nch.TempC()*(9/5) + 32
+	return (nch.TempC() * (9.0 / 5.0)) + 32.0
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.

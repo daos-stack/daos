@@ -7,6 +7,7 @@
 package server
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestServer_Instance_createSuperblock(t *testing.T) {
@@ -40,7 +42,8 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			IsMountedBool: true,
 		}
 		mp := scm.NewMockProvider(log, nil, msc)
-		ei := NewEngineInstance(log, nil, mp, nil, r)
+		ei := NewEngineInstance(log, nil, mp, nil, r).
+			WithHostFaultDomain(system.MustCreateFaultDomainFromString("/host1"))
 		ei.fsRoot = testDir
 		if err := h.AddInstance(ei); err != nil {
 			t.Fatal(err)
@@ -66,6 +69,9 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		if i._superblock.Rank.Uint32() != uint32(idx) {
 			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
 		}
+
+		AssertEqual(t, i.hostFaultDomain.String(), i._superblock.HostFaultDomain, fmt.Sprintf("instance %d", idx))
+
 		if i == mi {
 			continue
 		}

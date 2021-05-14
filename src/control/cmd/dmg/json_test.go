@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -58,9 +57,10 @@ func TestDmg_JsonOutput(t *testing.T) {
 		cmdArgs = append(cmdArgs, cmd)
 	})
 
-	aclPath := filepath.Join(os.TempDir(), "testACLFile.txt")
-	createTestFile(t, aclPath, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
-	defer os.Remove(aclPath)
+	testDir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+	aclContent := "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n"
+	aclPath := common.CreateTestFile(t, testDir, aclContent)
 
 	for _, args := range cmdArgs {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {

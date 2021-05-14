@@ -156,7 +156,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				sort.Slice(r, func(i, j int) bool { return r[i].Rank < r[j].Rank })
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -212,6 +213,7 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 				if leader, _, _ := db.LeaderQuery(); leader != "" {
 					break
 				}
+				time.Sleep(250 * time.Millisecond)
 			}
 
 			gotResp, gotErr := mgmtSvc.LeaderQuery(context.TODO(), tc.req)
@@ -220,7 +222,8 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -238,7 +241,7 @@ func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
 }
 
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
-	eventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
+	eventEngineDied := mockEngineDiedEvt(t)
 
 	for name, tc := range map[string]struct {
 		nilReq        bool
@@ -253,12 +256,12 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			expErr: errors.New("nil request"),
 		},
 		"successful notification": {
-			event: eventRankDown,
+			event: eventEngineDied,
 			expResp: &sharedpb.ClusterEventResp{
 				Sequence: 1,
 			},
 			expDispatched: []*events.RASEvent{
-				eventRankDown.WithForwarded(true),
+				eventEngineDied.WithForwarded(true),
 			},
 		},
 	} {
@@ -302,7 +305,8 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 
 			<-ctx.Done()
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
@@ -954,7 +958,8 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expMembers, gotResp.Members, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expMembers, gotResp.Members, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expMembers, gotResp.Members, name)
@@ -1211,7 +1216,8 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
@@ -1602,7 +1608,8 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
@@ -1613,7 +1620,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 	}
 }
 
-func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
+func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilReq         bool
 		ranks          string
@@ -1640,7 +1647,7 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 			mResps: []*control.HostResponse{
 				{
 					Addr: common.MockHostAddr(1).String(),
-					Message: &mgmtpb.SystemResetFormatResp{
+					Message: &mgmtpb.SystemEraseResp{
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "something bad",
@@ -1654,7 +1661,7 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				},
 				{
 					Addr: common.MockHostAddr(2).String(),
-					Message: &mgmtpb.SystemResetFormatResp{
+					Message: &mgmtpb.SystemEraseResp{
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, State: stateString(system.MemberStateAwaitFormat),
@@ -1685,7 +1692,6 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 					State: stateString(system.MemberStateAwaitFormat),
 				},
 			},
-
 			expMembers: system.Members{
 				mockMember(t, 0, 1, "stopped"),
 				mockMember(t, 1, 1, "awaitformat"),
@@ -1700,11 +1706,10 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
 			},
-			ranks: "0-1,4-9",
 			mResps: []*control.HostResponse{
 				{
 					Addr: common.MockHostAddr(1).String(),
-					Message: &mgmtpb.SystemResetFormatResp{
+					Message: &mgmtpb.SystemEraseResp{
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "couldn't reset",
@@ -1734,7 +1739,6 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
 			},
-			expAbsentRanks: "4-9",
 		},
 		"filtered and oversubscribed hosts": {
 			members: system.Members{
@@ -1743,11 +1747,10 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
 			},
-			hosts: "10.0.0.[2-5]",
 			mResps: []*control.HostResponse{
 				{
 					Addr: common.MockHostAddr(2).String(),
-					Message: &mgmtpb.SystemResetFormatResp{
+					Message: &mgmtpb.SystemEraseResp{
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Errored: true, Msg: "couldn't reset",
@@ -1777,7 +1780,6 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 				mockMember(t, 2, 2, "stopped"),
 				mockMember(t, 3, 2, "awaitformat"),
 			},
-			expAbsentHosts: "10.0.0.[3-5]",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1786,27 +1788,25 @@ func TestServer_MgmtSvc_SystemResetFormat(t *testing.T) {
 
 			cs := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
 
-			req := &mgmtpb.SystemResetFormatReq{
-				Sys:   build.DefaultSystemName,
-				Ranks: tc.ranks, Hosts: tc.hosts,
+			req := &mgmtpb.SystemEraseReq{
+				Sys: build.DefaultSystemName,
 			}
 			if tc.nilReq {
 				req = nil
 			}
 
-			gotResp, gotErr := cs.SystemResetFormat(context.TODO(), req)
+			gotResp, gotErr := cs.SystemErase(context.TODO(), req)
 			common.ExpectError(t, gotErr, tc.expErrMsg, name)
 			if tc.expErrMsg != "" {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
 			checkMembers(t, tc.expMembers, cs.membership)
-			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
-			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 		})
 	}
 }

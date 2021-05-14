@@ -174,12 +174,6 @@ int main(void)
 		assert(0);
 	}
 
-	rc = crt_swim_init(0);
-	if (rc != 0) {
-		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
-		assert(0);
-	}
-
 	d_rank_list_free(rank_list);
 	rank_list = NULL;
 

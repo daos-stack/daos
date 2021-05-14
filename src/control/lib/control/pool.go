@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -110,7 +110,6 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		return nil, err
 	}
 
-	out.Sys = in.getSystem()
 	out.Uuid = uuid.New().String()
 
 	return
@@ -155,6 +154,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate PoolCreate request")
 	}
+	pbReq.Sys = req.getSystem(rpcClient)
 	// TODO: Set this timeout based on the SCM size, when we have a
 	// better understanding of the relationship.
 	req.SetTimeout(PoolCreateTimeout)
@@ -219,7 +219,7 @@ type (
 func PoolResolveID(ctx context.Context, rpcClient UnaryInvoker, req *PoolResolveIDReq) (*PoolResolveIDResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolResolveID(ctx, &mgmtpb.PoolResolveIDReq{
-			Sys:     req.getSystem(),
+			Sys:     req.getSystem(rpcClient),
 			HumanID: req.HumanID,
 		})
 	})
@@ -254,7 +254,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, &mgmtpb.PoolDestroyReq{
-			Sys:   req.getSystem(),
+			Sys:   req.getSystem(rpcClient),
 			Uuid:  req.UUID,
 			Force: req.Force,
 		})
@@ -280,7 +280,6 @@ type PoolEvictReq struct {
 	msRequest
 	unaryRequest
 	UUID    string
-	Sys     string
 	Handles []string
 }
 
@@ -292,8 +291,8 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, &mgmtpb.PoolEvictReq{
+			Sys:     req.getSystem(rpcClient),
 			Uuid:    req.UUID,
-			Sys:     req.getSystem(),
 			Handles: req.Handles,
 		})
 	})
@@ -412,7 +411,7 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{
-			Sys:  req.getSystem(),
+			Sys:  req.getSystem(rpcClient),
 			Uuid: req.UUID,
 		})
 	})
@@ -471,7 +470,7 @@ func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropRe
 	}
 
 	pbReq := &mgmtpb.PoolSetPropReq{
-		Sys:  req.getSystem(),
+		Sys:  req.getSystem(rpcClient),
 		Uuid: req.UUID,
 	}
 	pbReq.SetPropertyName(req.Property)
@@ -542,7 +541,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, &mgmtpb.PoolExcludeReq{
-			Sys:       req.getSystem(),
+			Sys:       req.getSystem(rpcClient),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,
@@ -585,7 +584,7 @@ func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) e
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, &mgmtpb.PoolDrainReq{
-			Sys:       req.getSystem(),
+			Sys:       req.getSystem(rpcClient),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,
@@ -613,7 +612,6 @@ func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err err
 	if err = convert.Types(in, out); err != nil {
 		return nil, err
 	}
-	out.Sys = in.getSystem()
 
 	return
 }
@@ -638,6 +636,7 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 	if err != nil {
 		return errors.Wrap(err, "failed to generate PoolExtend request")
 	}
+	pbReq.Sys = req.getSystem(rpcClient)
 
 	if err := checkUUID(req.UUID); err != nil {
 		return err
@@ -682,7 +681,7 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, &mgmtpb.PoolReintegrateReq{
-			Sys:       req.getSystem(),
+			Sys:       req.getSystem(rpcClient),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,

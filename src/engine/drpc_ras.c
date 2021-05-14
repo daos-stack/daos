@@ -20,16 +20,11 @@
 static void
 free_event(Shared__RASEvent *evt)
 {
-	if (evt->obj_id != NULL)
-		D_FREE(evt->obj_id);
-	if (evt->pool_uuid != NULL)
-		D_FREE(evt->pool_uuid);
-	if (evt->cont_uuid != NULL)
-		D_FREE(evt->cont_uuid);
-	if (evt->hostname != NULL)
-		D_FREE(evt->hostname);
-	if (evt->timestamp != NULL)
-		D_FREE(evt->timestamp);
+	D_FREE(evt->obj_id);
+	D_FREE(evt->pool_uuid);
+	D_FREE(evt->cont_uuid);
+	D_FREE(evt->hostname);
+	D_FREE(evt->timestamp);
 }
 
 static d_rank_t
@@ -119,11 +114,9 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	return 0;
 
 out_hn:
-	if (evt->hostname != NULL)
-		D_FREE(evt->hostname);
+	D_FREE(evt->hostname);
 out_ts:
-	if (evt->timestamp != NULL)
-		D_FREE(evt->timestamp);
+	D_FREE(evt->timestamp);
 out:
 	return rc;
 }
@@ -179,7 +172,7 @@ log_event(Shared__RASEvent *evt)
 
 out:
 	fclose(stream);
-	D_DEBUG(DB_MGMT, "&&& RAS EVENT%s", buf);
+	D_INFO("&&& RAS EVENT%s\n", buf);
 	D_FREE(buf);
 }
 
@@ -324,7 +317,7 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 
 	rc = raise_ras(RAS_POOL_REPS_UPDATE,
 		       "List of pool service replica ranks has been updated.",
-		       RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
+		       RAS_TYPE_STATE_CHANGE, RAS_SEV_NOTICE, NULL /* hwid */,
 		       &rank /* rank */, NULL /* jobid */, pool,
 		       NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
 		       &evt, true /* wait_for_resp */);
@@ -339,9 +332,8 @@ ds_notify_swim_rank_dead(d_rank_t rank)
 {
 	Shared__RASEvent	evt = SHARED__RASEVENT__INIT;
 
-	return raise_ras(RAS_SWIM_RANK_DEAD,
-			 "SWIM marked rank as dead.",
-			 RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
+	return raise_ras(RAS_SWIM_RANK_DEAD, "SWIM marked rank as dead.",
+			 RAS_TYPE_STATE_CHANGE, RAS_SEV_NOTICE, NULL /* hwid */,
 			 &rank /* rank */, NULL /* jobid */, NULL /* pool */,
 			 NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
 			 &evt, false /* wait_for_resp */);

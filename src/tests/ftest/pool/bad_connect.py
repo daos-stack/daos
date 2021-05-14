@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -53,7 +53,6 @@ class BadConnectTest(TestWithServers):
                 break
 
         puuid = (ctypes.c_ubyte * 16)()
-        pgroup = create_string_buffer(0)
         # initialize a python pool object then create the underlying
         # daos storage
         self.pool = TestPool(self.context, self.get_dmg_command())
@@ -61,11 +60,6 @@ class BadConnectTest(TestWithServers):
         self.pool.create()
         # save this uuid since we might trash it as part of the test
         ctypes.memmove(puuid, self.pool.pool.uuid, 16)
-
-        # trash the pool group value
-        pgroup = self.pool.pool.group
-        if connectset == 'NULLPTR':
-            self.pool.pool.group = None
 
         # trash the UUID value in various ways
         if connectuuid == 'NULLPTR':
@@ -89,7 +83,6 @@ class BadConnectTest(TestWithServers):
         finally:
             if self.pool is not None and self.pool.pool.attached == 1:
                 # restore values in case we trashed them during test
-                self.pool.pool.group = pgroup
                 if self.pool.pool.uuid is None:
                     self.pool.pool.uuid = (ctypes.c_ubyte * 16)()
                 ctypes.memmove(self.pool.pool.uuid, puuid, 16)

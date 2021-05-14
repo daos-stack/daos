@@ -32,7 +32,6 @@
 #define CTL_SEP		','
 #define CTL_BUF_LEN		512
 
-static long			 ctl_epoch;
 static daos_unit_oid_t		 ctl_oid;
 static daos_handle_t		 ctl_oh;	/* object open handle */
 static unsigned int		 ctl_abits;	/* see CTL_ARG_* */
@@ -41,13 +40,12 @@ static struct credit_context	 ctl_ctx;
 
 /* available input parameters */
 enum {
-	CTL_ARG_EPOCH	= (1 << 0),	/* has epoch */
 	CTL_ARG_OID	= (1 << 1),	/* has OID */
 	CTL_ARG_DKEY	= (1 << 2),	/* has dkey */
 	CTL_ARG_AKEY	= (1 << 3),	/* has akey */
 	CTL_ARG_VAL	= (1 << 4),	/* has value */
-	CTL_ARG_ALL	= (CTL_ARG_EPOCH | CTL_ARG_OID | CTL_ARG_DKEY |
-			   CTL_ARG_AKEY | CTL_ARG_VAL),
+	CTL_ARG_ALL	= (CTL_ARG_OID | CTL_ARG_DKEY | CTL_ARG_AKEY |
+			   CTL_ARG_VAL),
 };
 
 static int
@@ -157,10 +155,10 @@ ctl_print_usage(void)
 {
 	printf("daos shell -- interactive function testing shell for DAOS\n");
 	printf("Usage:\n");
-	printf("update\to=...,d=...,a=...,v=...,e=...\n");
-	printf("fetch\to=...d=...,a=...,e=...\n");
-	printf("list\to=...[,d=...][,e=...]\n");
-	printf("punch\to=...,e=...[,d=...][,a=...]\n");
+	printf("update\to=...,d=...,a=...,v=...\n");
+	printf("fetch\to=...d=...,a=...\n");
+	printf("list\to=...[,d=...]\n");
+	printf("punch\to=...[,d=...][,a=...]\n");
 	printf("quit\n");
 	fflush(stdout);
 }
@@ -199,11 +197,6 @@ ctl_cmd_run(char opc, char *args)
 			D_GOTO(out, rc = -1);
 
 		switch (str[0]) {
-		case 'e':
-		case 'E':
-			ctl_abits |= CTL_ARG_EPOCH;
-			ctl_epoch = strtol(&str[2], NULL, 0);
-			break;
 		case 'o':
 		case 'O':
 			ctl_abits |= CTL_ARG_OID;
@@ -295,8 +288,7 @@ ctl_cmd_run(char opc, char *args)
 		}
 		break;
 	case 'p':
-		if (!(ctl_abits & CTL_ARG_EPOCH) ||
-		    !(ctl_abits & CTL_ARG_OID)) {
+		if (!(ctl_abits & CTL_ARG_OID)) {
 			ctl_print_usage();
 			D_GOTO(out, rc = -1);
 		} else {
@@ -310,8 +302,6 @@ ctl_cmd_run(char opc, char *args)
 			ctl_print_usage();
 			D_GOTO(out, rc = -1);
 		} else {
-			if (!(ctl_abits & CTL_ARG_EPOCH))
-				ctl_epoch = DAOS_EPOCH_MAX;
 			ctl_obj_open(&opened);
 		}
 
@@ -456,11 +446,16 @@ daos_shell(struct cmd_args_s *ap)
 	assert(ap != NULL);
 
 	uuid_copy(ctl_ctx.tsc_pool_uuid, ap->p_uuid);
-	uuid_generate(ctl_ctx.tsc_cont_uuid);
+
+	if (uuid_is_null(ap->c_uuid)) {
+		uuid_generate(ctl_ctx.tsc_cont_uuid);
+	} else {
+		uuid_copy(ctl_ctx.tsc_cont_uuid, ap->c_uuid);
+	}
 
 	D_INFO("\tDAOS system name: %s\n", ap->sysname);
-	D_INFO("\tpool UUID: "DF_UUIDF"\n", DP_UUID(ap->p_uuid));
-	D_INFO("\tcont UUID: "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
+	D_INFO("\tpool UUID: "DF_UUIDF"\n", DP_UUID(ctl_ctx.tsc_pool_uuid));
+	D_INFO("\tcont UUID: "DF_UUIDF"\n", DP_UUID(ctl_ctx.tsc_cont_uuid));
 
 	ctl_ctx.tsc_cred_vsize	= 1024;	/* long enough for console input */
 	ctl_ctx.tsc_cred_nr	= -1;	/* sync mode all the time */

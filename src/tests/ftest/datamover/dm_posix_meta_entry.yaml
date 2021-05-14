@@ -16,7 +16,7 @@ container:
     control_method: daos
 dcp:
     client_processes:
-        np: 1
+        np: 3
     preserve_mux: !mux
         preserve_off:
             preserve: false

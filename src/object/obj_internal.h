@@ -450,6 +450,11 @@ struct dc_obj_verify_args {
 	struct dc_obj_verify_cursor	 cursor;
 };
 
+int
+dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
+	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
+	      daos_oclass_id_t *oc_id_);
+
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
 void dc_obj_shard_close(struct dc_obj_shard *shard);
@@ -501,6 +506,8 @@ int obj_shard_open(struct dc_object *obj, unsigned int shard,
 int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
 int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 			tse_task_t **taskp);
+bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
+			      uint32_t iod_nr);
 
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
 int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,

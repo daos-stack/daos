@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -187,9 +187,6 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		reqRanks := system.RanksFromUint32(req.GetRanks())
 		// Create a RankSet to sort/dedupe the ranks.
 		reqRanks = system.RankSetFromRanks(reqRanks).Ranks()
-		if err != nil {
-			return nil, err
-		}
 
 		if invalid := system.CheckRankMembership(allRanks, reqRanks); len(invalid) > 0 {
 			return nil, FaultPoolInvalidRanks(invalid)

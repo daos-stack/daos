@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2019-2021 Intel Corporation.
 
@@ -31,7 +31,9 @@ class MdtestSmall(MdtestBase):
             read bytes: 0|4K
             depth of hierarchical directory structure: 0|5
 
-        :avocado: tags=all,pr,daily_regression,hw,large,mdtest,mdtestsmall
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=mdtest,checksum,mdtestsmall,mpich
         :avocado: tags=DAOS_5610
         """
         # local params

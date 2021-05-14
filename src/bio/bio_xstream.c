@@ -28,9 +28,9 @@
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
 #define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
 /* DMA buffer parameters */
-#define DAOS_DMA_CHUNK_MB	2		/* 2MB DMA chunks */
-#define DAOS_DMA_CHUNK_CNT_INIT	128		/* Per-xstream init chunks */
-#define DAOS_DMA_CHUNK_CNT_MAX	512		/* Per-xstream max chunks */
+#define DAOS_DMA_CHUNK_MB	8		/* 8MB DMA chunks */
+#define DAOS_DMA_CHUNK_CNT_INIT	32		/* Per-xstream init chunks */
+#define DAOS_DMA_CHUNK_CNT_MAX	128		/* Per-xstream max chunks */
 #define DAOS_NVME_MAX_CTRLRS	1024		/* Max read from nvme_conf */
 
 /* Max inflight blob IOs per io channel */
@@ -67,7 +67,7 @@ struct bio_nvme_data {
 };
 
 static struct bio_nvme_data nvme_glb;
-uint64_t io_stat_period;
+uint64_t vmd_led_period;
 
 static int
 is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
@@ -110,7 +110,7 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		return 0;
 	}
 
-	D_REALLOC_ARRAY(new, tmp, count + 1);
+	D_REALLOC_ARRAY(new, tmp, count, count + 1);
 	if (new == NULL)
 		return -DER_NOMEM;
 
@@ -417,9 +417,9 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 
 	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
-	env = getenv("IO_STAT_PERIOD");
-	io_stat_period = env ? atoi(env) : 0;
-	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
+	env = getenv("VMD_LED_PERIOD");
+	vmd_led_period = env ? atoi(env) : 0;
+	vmd_led_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	nvme_glb.bd_shm_id = shm_id;
 	nvme_glb.bd_mem_size = mem_size;
@@ -573,10 +573,6 @@ xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 	/* Wait for the completion callback done or timeout */
 	while (*inflights != 0) {
 		spdk_thread_poll(ctxt->bxc_thread, 0, 0);
-
-		/* Called by standalone VOS */
-		if (ctxt->bxc_tgt_id == -1)
-			bio_xs_io_stat(ctxt, d_timeus_secdiff(0));
 
 		/* Completion is executed */
 		if (*inflights == 0)
@@ -1230,7 +1226,6 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	bool			 assigned = false;
 	int			 rc;
 
-	D_ASSERT(ctxt->bxc_desc == NULL);
 	D_ASSERT(ctxt->bxc_blobstore == NULL);
 	D_ASSERT(ctxt->bxc_io_channel == NULL);
 
@@ -1355,15 +1350,6 @@ retry:
 		goto out;
 	}
 
-	/* generic read only descriptor (currently used for IO stats) */
-	rc = spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb,
-				NULL, &ctxt->bxc_desc);
-	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, %d\n", d_bdev->bb_name, rc);
-		rc = daos_errno2der(-rc);
-		goto out;
-	}
-
 out:
 	D_ASSERT(dev_info != NULL);
 	smd_dev_free_info(dev_info);
@@ -1398,11 +1384,6 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			bio_fini_health_monitoring(ctxt->bxc_blobstore);
 
 		ctxt->bxc_blobstore = NULL;
-	}
-
-	if (ctxt->bxc_desc != NULL) {
-		spdk_bdev_close(ctxt->bxc_desc);
-		ctxt->bxc_desc = NULL;
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
@@ -1724,16 +1705,18 @@ void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_bdev         *d_bdev;
-	static uint64_t          led_event_period = NVME_MONITOR_PERIOD;
+
+	/*
+	 * Check VMD_LED_PERIOD environment variable, if not set use default
+	 * NVME_MONITOR_PERIOD of 60 seconds.
+	 */
+	if (vmd_led_period == 0)
+		vmd_led_period = NVME_MONITOR_PERIOD;
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if (d_bdev->bb_led_start_time != 0) {
-			/*
-			 * TODO: Make NVME_LED_EVENT_PERIOD configurable from
-			 * command line
-			 */
-			if (d_bdev->bb_led_start_time + led_event_period >= now)
+			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
 				continue;
 
 			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,
@@ -1747,13 +1730,14 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
  * Execute the messages on msg ring, call all registered pollers.
  *
  * \param[IN] ctxt	Per-xstream NVMe context
+ * \param[IN] bypass	Set to bypass the health check
  *
  * \returns		0: If mo work was done
  *			1: If work was done
  *			-1: If thread has exited
  */
 int
-bio_nvme_poll(struct bio_xs_context *ctxt)
+bio_nvme_poll(struct bio_xs_context *ctxt, bool bypass)
 {
 	uint64_t now = d_timeus_secdiff(0);
 	int rc;
@@ -1763,9 +1747,6 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 		return 0;
 
 	rc = spdk_thread_poll(ctxt->bxc_thread, 0, 0);
-
-	/* Print SPDK I/O stats for each xstream */
-	bio_xs_io_stat(ctxt, now);
 
 	/* To avoid complicated race handling (init xstream and starting
 	 * VOS xstream concurrently access global device list & xstream
@@ -1781,7 +1762,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	 */
 	if (ctxt->bxc_blobstore != NULL &&
 	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
-		bio_bs_monitor(ctxt, now);
+		bio_bs_monitor(ctxt, now, bypass);
 
 	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);

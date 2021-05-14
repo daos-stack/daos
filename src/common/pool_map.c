@@ -1473,7 +1473,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		D_GOTO(out_map_buf, rc = -DER_NOMEM);
 
 	/* Make a sorted target UUID array to determine target IDs. */
-	D_ALLOC_ARRAY(uuids, nnodes);
+	D_ALLOC_ARRAY_NZ(uuids, nnodes);
 	if (uuids == NULL)
 		D_GOTO(out_map_buf, rc = -DER_NOMEM);
 	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
@@ -1513,6 +1513,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		map_comp.co_rank = target_addrs->rl_ranks[i];
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
+		map_comp.co_flags = PO_COMPF_NONE;
 		map_comp.co_nr = dss_tgt_nr;
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
@@ -1540,6 +1541,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 			map_comp.co_rank = target_addrs->rl_ranks[i];
 			map_comp.co_ver = map_version;
 			map_comp.co_fseq = 1;
+			map_comp.co_flags = PO_COMPF_NONE;
 			map_comp.co_nr = 1;
 
 			rc = pool_buf_attach(map_buf, &map_comp, 1);
@@ -2857,7 +2859,8 @@ pool_target_id_list_append(struct pool_target_id_list *id_list,
 	if (pool_target_id_found(id_list, id))
 		return 0;
 
-	D_REALLOC_ARRAY(new_ids, id_list->pti_ids, id_list->pti_number + 1);
+	D_REALLOC_ARRAY(new_ids, id_list->pti_ids, id_list->pti_number,
+			id_list->pti_number + 1);
 	if (new_ids == NULL)
 		return -DER_NOMEM;
 

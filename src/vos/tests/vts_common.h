@@ -48,6 +48,7 @@ extern int gc;
 
 enum vts_ops_type {
 	CREAT,
+	CREAT_OPEN,
 	OPEN,
 	CLOSE,
 	DESTROY,

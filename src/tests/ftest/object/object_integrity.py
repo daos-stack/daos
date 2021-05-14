@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2020-2021 Intel Corporation.
 
@@ -80,7 +80,10 @@ class ObjectDataValidation(TestWithServers):
         Test Description:
             Write Avocado Test to verify commit tx and close tx
                           bad parameter behavior.
-        :avocado: tags=all,object,full_regression,small,invalid_tx
+        :avocado: tags=all,full_regression,small
+        :avocado: tags=object,objectvalidation
+        :avocado: tags=invalid_tx
+
         """
         self.d_log.info("==Writing the Single Dataset for negative test...")
         record_index = 0
@@ -184,7 +187,9 @@ class ObjectDataValidation(TestWithServers):
         Test ID: DAOS-707
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=all,object,full_regression,small,single_object
+        :avocado: tags=all,full_regression,small
+        :avocado: tags=object,objectvalidation
+        :avocado: tags=single_object
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
@@ -216,7 +221,7 @@ class ObjectDataValidation(TestWithServers):
                 val = self.ioreq.single_fetch(c_dkey,
                                               c_akey,
                                               len(indata)+1)
-                if indata != (repr(val.value)[1:-1]):
+                if indata != str(val.value, 'utf-8'):
                     self.d_log.error("ERROR:Data mismatch for "
                                      "dkey = {0}, "
                                      "akey = {1}".format(
@@ -237,7 +242,9 @@ class ObjectDataValidation(TestWithServers):
         Test ID: DAOS-707
         Test Description: Write Avocado Test to verify Array data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=all,object,full_regression,small,array_object
+        :avocado: tags=all,full_regression,small
+        :avocado: tags=object,objectvalidation
+        :avocado: tags=array_object
         """
         self.d_log.info("Writing the Array Dataset")
         record_index = 0
@@ -280,7 +287,7 @@ class ObjectDataValidation(TestWithServers):
                                                  c_rec_size)
 
                 for item in enumerate(indata):
-                    if indata[item[0]] != outdata[item[0]][:-1]:
+                    if indata[item[0]] != str(outdata[item[0]], 'utf-8')[:-1]:
                         self.d_log.error("ERROR:Data mismatch for "
                                          "dkey = {0}, "
                                          "akey = {1}".format(

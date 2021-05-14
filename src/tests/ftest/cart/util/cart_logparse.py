@@ -345,7 +345,7 @@ class LogLine():
         """Returns the size of the allocation"""
         if self.get_field(5) == '*':
             if self.is_realloc():
-                field = -5
+                field = -8
             else:
                 field = -3
             count = int(self.get_field(field).split(':')[-1])
@@ -604,7 +604,7 @@ class LogIter():
         self._raw = raw
 
         if stateful:
-            if not pid:
+            if pid is None:
                 raise InvalidPid
             return StateIter(self)
 
@@ -614,7 +614,7 @@ class LogIter():
         self._iter_index = 0
         self._iter_count = 0
         if self.__from_file:
-            if not self._pid or self.bz2:
+            if self._pid is None or self.bz2:
                 self._fd.seek(0)
             else:
                 self._fd.seek(self._iter_pid['file_pos'])
@@ -646,7 +646,7 @@ class LogIter():
         while True:
             self._iter_index += 1
 
-            if self._pid and self._iter_index > self._iter_last_index:
+            if self._pid is not None and self._iter_index > self._iter_last_index:
                 assert self._iter_count == self._iter_pid['line_count']  # nosec
                 raise StopIteration
 
@@ -658,7 +658,7 @@ class LogIter():
             if self._trace_only and not line.trace:
                 continue
 
-            if self._pid:
+            if self._pid is not None:
                 if line.pid != self._pid:
                     continue
 

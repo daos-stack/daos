@@ -22,8 +22,10 @@ extern "C" {
 
 #include <dirent.h>
 
-/** Maximum Path length */
-#define DFS_MAX_PATH		NAME_MAX
+/** Maximum Name length */
+#define DFS_MAX_NAME		NAME_MAX
+/** Maximum PATH length */
+#define DFS_MAX_PATH		PATH_MAX
 /** Maximum file size */
 #define DFS_MAX_FSIZE		(~0ULL)
 

@@ -51,16 +51,20 @@ def build_dts_library(env):
 
     denv.AppendUnique(CPPPATH=["../tests/suite"])
 
-    Import('dc_credit')
-    dts_lib = daos_build.library(denv, 'libdts', [dc_credit, 'dts.c'],
+    denv.Replace(SHOBJPREFIX='mpi_')
+    mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])
+    Export('mpi_cmd_parser')
+
+    dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'],
                                  LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dts_lib)
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'il_env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    il_env.AppendUnique(LIBPATH=[Dir('.')])
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path
@@ -85,11 +89,10 @@ def scons():
     tlib_env = denv.Clone()
     tlib_env.AppendUnique(LIBS=['json-c'])
 
-    dc_credit = denv.SharedObject(['credit.c'])
-    Export('dc_credit')
-
     cmd_parser = denv.SharedObject(['cmd_parser.c'])
     Export('cmd_parser')
+    dc_credit = denv.SharedObject(['credit.c'])
+    Export('dc_credit')
 
     prereqs.require(tlib_env, 'argobots')
 

@@ -356,6 +356,7 @@ class GitRepoRetriever():
 
         # Now checkout the commit_sha if specified
         passed_commit_sha = kw.get("commit_sha", None)
+        branch = kw.get("branch", None)
         if passed_commit_sha is None:
             comp = os.path.basename(subdir)
             print("""
@@ -366,28 +367,20 @@ build with random upstream changes.
 *********************** ERROR ************************\n""" % comp)
             raise DownloadFailure(self.url, subdir)
 
-        commands = ['git clone %s %s' % (self.url, subdir)]
-        if not RUNNER.run_commands(commands):
+        if (passed_commit_sha and not branch):
+            commands = ['git',
+                        'clone',
+                        self.url,
+                        '--branch',
+                        passed_commit_sha,
+                        '--single-branch',
+                        '--depth',
+                        '1',
+                        subdir]
+            if not RUNNER.run_commands([' '.join(commands)]):
+                raise DownloadFailure(self.url, subdir)
+        else:
             raise DownloadFailure(self.url, subdir)
-        self.get_specific(subdir, **kw)
-
-    def get_specific(self, subdir, **kw):
-        """Checkout the configured commit"""
-        # If the config overrides the branch, use it.  If a branch is
-        # specified, check it out first.
-        branch = kw.get("branch", None)
-        if branch is None:
-            branch = self.branch
-        self.branch = branch
-        if self.branch:
-            self.commit_sha = self.branch
-            self.checkout_commit(subdir)
-
-        # Now checkout the commit_sha if specified
-        passed_commit_sha = kw.get("commit_sha", None)
-        if passed_commit_sha is not None:
-            self.commit_sha = passed_commit_sha
-            self.checkout_commit(subdir)
 
         # Now apply any patches specified
         self.apply_patches(subdir, kw.get("patches", None))
@@ -643,7 +636,7 @@ class PreReqComponent():
                                    PathVariable.PathIsDirCreate))
 
         bdir = self._setup_build_type()
-        self.build_type = self.__env.get("BUILD_TYPE")
+        self.target_type = self.__env.get("TTYPE_REAL")
         self.__env["BUILD_DIR"] = bdir
         ensure_dir_exists(bdir, self.__dry_run)
         self.setup_path_var('BUILD_DIR')
@@ -776,6 +769,7 @@ class PreReqComponent():
         compiler_map = {'gcc': {'CC' : 'gcc', 'CXX' : 'g++'},
                         'covc' : {'CC' : '/opt/BullseyeCoverage/bin/gcc',
                                   'CXX' : '/opt/BullseyeCoverage/bin/g++',
+                                  'CVS' : '/opt/BullseyeCoverage/bin/covselect',
                                   'COV01' : '/opt/BullseyeCoverage/bin/cov01'},
                         'clang' : {'CC' : 'clang', 'CXX' : 'clang++'},
                         'icc' : {'CC' : 'icc', 'CXX' : 'icpc'},
@@ -820,7 +814,23 @@ class PreReqComponent():
             covfile = self.__top_dir + "/test.cov"
             if os.path.isfile(covfile):
                 os.remove(covfile)
-            commands = ['$COV01 -1', '$COV01 -s']
+            commands = ['$COV01 -1',
+                        '$COV01 -s',
+                        '$CVS --add \'!**/src/cart/test/utest/\'',
+                        '$CVS --add \'!**/src/common/tests/\'',
+                        '$CVS --add \'!**/src/gurt/tests/\'',
+                        '$CVS --add \'!**/src/iosrv/tests/\'',
+                        '$CVS --add \'!**/src/mgmt/tests/\'',
+                        '$CVS --add \'!**/src/object/tests/\'',
+                        '$CVS --add \'!**/src/placement/tests/\'',
+                        '$CVS --add \'!**/src/rdb/tests/\'',
+                        '$CVS --add \'!**/src/security/tests/\'',
+                        '$CVS --add \'!**/src/utils/self_test/\'',
+                        '$CVS --add \'!**/src/utils/ctl/\'',
+                        '$CVS --add \'!**/src/vea/tests/\'',
+                        '$CVS --add \'!**/src/vos/tests/\'',
+                        '$CVS --add \'!**/src/engine/tests/\'',
+                        '$CVS --add \'!**/src/tests/\'']
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
 

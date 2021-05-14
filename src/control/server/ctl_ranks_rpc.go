@@ -180,8 +180,8 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	}
 
 	// don't publish rank down events whilst performing controlled shutdown
-	svc.events.DisableEventIDs(events.RASRankDown)
-	defer svc.events.EnableEventIDs(events.RASRankDown)
+	svc.events.DisableEventIDs(events.RASEngineDied)
+	defer svc.events.EnableEventIDs(events.RASEngineDied)
 
 	for _, srv := range instances {
 		if !srv.isStarted() {
@@ -311,11 +311,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		if err := srv.RemoveSuperblock(); err != nil {
 			return nil, err
 		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case srv.startLoop <- true: // proceed to awaiting storage format
-		}
+		srv.requestStart(ctx)
 	}
 
 	// ignore poll results as we gather state immediately after
@@ -370,11 +366,7 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 		if srv.isStarted() {
 			continue
 		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case srv.startLoop <- true:
-		}
+		srv.requestStart(ctx)
 	}
 
 	// ignore poll results as we gather state immediately after

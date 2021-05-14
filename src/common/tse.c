@@ -35,7 +35,8 @@ int
 tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
 	       void *udata)
 {
-	struct tse_sched_private *dsp = tse_sched2priv(sched);
+	struct tse_sched_private	*dsp = tse_sched2priv(sched);
+	pthread_mutexattr_t		attr;
 	int rc;
 
 	D_CASSERT(sizeof(sched->ds_private) >= sizeof(*dsp));
@@ -54,6 +55,19 @@ tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
 	rc = D_MUTEX_INIT(&dsp->dsp_lock, NULL);
 	if (rc != 0)
 		return rc;
+
+	rc = pthread_mutexattr_init(&attr);
+	if (rc != 0) {
+		D_MUTEX_DESTROY(&dsp->dsp_lock);
+		return -DER_INVAL;
+	}
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+
+	rc = D_MUTEX_INIT(&dsp->dsp_comp_lock, &attr);
+	if (rc != 0) {
+		D_MUTEX_DESTROY(&dsp->dsp_lock);
+		return rc;
+	}
 
 	if (comp_cb != NULL) {
 		rc = tse_sched_register_comp_cb(sched, comp_cb, udata);
@@ -266,6 +280,7 @@ tse_sched_fini(tse_sched_t *sched)
 	D_ASSERT(d_list_empty(&dsp->dsp_complete_list));
 	D_ASSERT(d_list_empty(&dsp->dsp_sleeping_list));
 	D_MUTEX_DESTROY(&dsp->dsp_lock);
+	D_MUTEX_DESTROY(&dsp->dsp_comp_lock);
 }
 
 static inline void
@@ -433,6 +448,7 @@ tse_task_prep_callback(tse_task_t *task)
 	struct tse_task_private	*dtp = tse_task2priv(task);
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
+	bool			 ret = true;
 	int			 rc;
 
 	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_prep_cb_list, dtc_list) {
@@ -446,12 +462,12 @@ tse_task_prep_callback(tse_task_t *task)
 
 		D_FREE(dtc);
 
-		/** Task was re-initialized; break */
+		/** Task was re-initialized; */
 		if (!dtp->dtp_running && !dtp->dtp_completing)
-			return false;
+			ret = false;
 	}
 
-	return true;
+	return ret;
 }
 
 /*
@@ -466,10 +482,12 @@ static bool
 tse_task_complete_callback(tse_task_t *task)
 {
 	struct tse_task_private	*dtp = tse_task2priv(task);
+	struct tse_sched_private *dsp = dtp->dtp_sched;
 	uint32_t		 dep_cnt = dtp->dtp_dep_cnt;
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
 
+	D_MUTEX_LOCK(&dsp->dsp_comp_lock);
 	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
 		int ret;
 
@@ -483,6 +501,7 @@ tse_task_complete_callback(tse_task_t *task)
 		/** Task was re-initialized; break */
 		if (!dtp->dtp_completing) {
 			D_DEBUG(DB_TRACE, "re-init task %p\n", task);
+			D_MUTEX_UNLOCK(&dsp->dsp_comp_lock);
 			return false;
 		}
 
@@ -490,9 +509,11 @@ tse_task_complete_callback(tse_task_t *task)
 		if (dtp->dtp_dep_cnt > dep_cnt) {
 			D_DEBUG(DB_TRACE, "new dep-task added to task %p\n",
 				task);
+			D_MUTEX_UNLOCK(&dsp->dsp_comp_lock);
 			return false;
 		}
 	}
+	D_MUTEX_UNLOCK(&dsp->dsp_comp_lock);
 
 	return true;
 }
@@ -674,8 +695,8 @@ tse_sched_process_complete(struct tse_sched_private *dsp)
 	d_list_for_each_entry_safe(dtp, tmp, &comp_list, dtp_list) {
 		tse_task_t *task = tse_priv2task(dtp);
 
-		tse_task_post_process(task);
 		d_list_del_init(&dtp->dtp_list);
+		tse_task_post_process(task);
 		/* addref when the task add to dsp (tse_task_schedule) */
 		tse_sched_priv_decref(dsp);
 		tse_task_decref(task);  /* drop final ref */

@@ -304,13 +304,23 @@ dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags)
 static inline int
 sched_ult2xs(int xs_type, int tgt_id)
 {
+	uint32_t	xs_id;
+
 	D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
 	switch (xs_type) {
 	case DSS_XS_SELF:
 		return DSS_XS_SELF;
 	case DSS_XS_IOFW:
-		if (!dss_helper_pool)
-			return (DSS_MAIN_XS_ID(tgt_id) + 1) % DSS_XS_NR_TOTAL;
+		if (!dss_helper_pool) {
+			if (dss_tgt_offload_xs_nr > 0)
+				xs_id = DSS_MAIN_XS_ID(tgt_id) + 1;
+			else
+				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) %
+						       dss_tgt_nr);
+			D_ASSERT(xs_id < DSS_XS_NR_TOTAL &&
+				 xs_id >= dss_sys_xs_nr);
+			return xs_id;
+		}
 
 		if (dss_tgt_offload_xs_nr >= dss_tgt_nr)
 			return (dss_sys_xs_nr + dss_tgt_nr + tgt_id);
@@ -321,9 +331,17 @@ sched_ult2xs(int xs_type, int tgt_id)
 			return ((DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr +
 				dss_sys_xs_nr);
 	case DSS_XS_OFFLOAD:
-		if (!dss_helper_pool)
-			return DSS_MAIN_XS_ID(tgt_id) +
-			       dss_tgt_offload_xs_nr / dss_tgt_nr;
+		if (!dss_helper_pool) {
+			if (dss_tgt_offload_xs_nr > 0)
+				xs_id = DSS_MAIN_XS_ID(tgt_id) +
+					dss_tgt_offload_xs_nr / dss_tgt_nr;
+			else
+				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) %
+						       dss_tgt_nr);
+			D_ASSERT(xs_id < DSS_XS_NR_TOTAL &&
+				 xs_id >= dss_sys_xs_nr);
+			return xs_id;
+		}
 
 		if (dss_tgt_offload_xs_nr > dss_tgt_nr)
 			return (dss_sys_xs_nr + 2 * dss_tgt_nr +

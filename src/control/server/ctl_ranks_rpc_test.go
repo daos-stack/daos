@@ -14,9 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -36,7 +37,16 @@ var (
 	msWaitFormat = stateString(system.MemberStateAwaitFormat)
 	msStopped    = stateString(system.MemberStateStopped)
 	msErrored    = stateString(system.MemberStateErrored)
+
+	defRankCmpOpts = append(common.DefaultCmpOpts(),
+		protocmp.IgnoreFields(&sharedpb.RankResult{}, "msg"),
+	)
 )
+
+func mockEngineDiedEvt(t *testing.T) *events.RASEvent {
+	t.Helper()
+	return events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit, 1234)
+}
 
 // checkUnorderedRankResults fails if results slices contain any differing results,
 // regardless of order. Ignore result "Msg" field as RankResult.Msg generation
@@ -44,22 +54,16 @@ var (
 func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*sharedpb.RankResult) {
 	t.Helper()
 
-	isMsgField := func(path cmp.Path) bool {
-		return path.Last().String() == ".Msg"
-	}
-	opts := append(common.DefaultCmpOpts(),
-		cmp.FilterPath(isMsgField, cmp.Ignore()))
-
 	common.AssertEqual(t, len(gotResults), len(expResults), "number of rank results")
 	for _, exp := range expResults {
 		match := false
 		for _, got := range gotResults {
-			if diff := cmp.Diff(exp, got, opts...); diff == "" {
+			if diff := cmp.Diff(exp, got, defRankCmpOpts...); diff == "" {
 				match = true
 			}
 		}
 		if !match {
-			t.Fatalf("unexpected results: %s", cmp.Diff(expResults, gotResults, opts...))
+			t.Fatalf("unexpected results: %s", cmp.Diff(expResults, gotResults, defRankCmpOpts...))
 		}
 	}
 }
@@ -386,9 +390,8 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				*srv._superblock.Rank = system.Rank(i + 1)
 
 				srv.OnInstanceExit(
-					func(_ context.Context, _ system.Rank, _ error) error {
-						svc.events.Publish(events.NewRankDownEvent("foo",
-							0, 0, common.NormalExit))
+					func(_ context.Context, _ uint32, _ system.Rank, _ error, _ uint64) error {
+						svc.events.Publish(mockEngineDiedEvt(t))
 						return nil
 					})
 			}
@@ -402,15 +405,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			<-ctx.Done()
 			common.AssertEqual(t, 0, len(dispatched.rx), "number of events published")
 
-			// RankResult.Msg generation is tested in
-			// TestServer_CtlSvc_DrespToRankResult unit tests
-			isMsgField := func(path cmp.Path) bool {
-				return path.Last().String() == ".Msg"
-			}
-			opts := append(common.DefaultCmpOpts(),
-				cmp.FilterPath(isMsgField, cmp.Ignore()))
-
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, opts...); diff != "" {
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
@@ -747,7 +742,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 
 				// mimic srv.run, set "ready" on startLoop rx
 				go func(s *EngineInstance, startFails bool) {
-					<-s.startLoop
+					<-s.startRequested
 					if startFails {
 						return
 					}
@@ -769,15 +764,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				return
 			}
 
-			// RankResult.Msg generation is tested in
-			// TestServer_CtlSvc_DrespToRankResult unit tests
-			isMsgField := func(path cmp.Path) bool {
-				return path.Last().String() == ".Msg"
-			}
-			opts := append(common.DefaultCmpOpts(),
-				cmp.FilterPath(isMsgField, cmp.Ignore()))
-
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, opts...); diff != "" {
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -878,7 +865,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 
 				// mimic srv.run, set "ready" on startLoop rx
 				go func(s *EngineInstance, startFails bool) {
-					<-s.startLoop
+					<-s.startRequested
 					t.Logf("instance %d: start signal received", s.Index())
 					if startFails {
 						return
@@ -908,15 +895,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 				return
 			}
 
-			// RankResult.Msg generation is tested in
-			// TestServer_CtlSvc_DrespToRankResult unit tests
-			isMsgField := func(path cmp.Path) bool {
-				return path.Last().String() == ".Msg"
-			}
-			opts := append(common.DefaultCmpOpts(),
-				cmp.FilterPath(isMsgField, cmp.Ignore()))
-
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, opts...); diff != "" {
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})

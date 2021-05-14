@@ -153,6 +153,10 @@ test_run()
 	if (test.tg_save_cfg) {
 		rc = crt_group_detach(grp);
 		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
+	} else {
+		rc = crt_group_view_destroy(grp);
+		D_ASSERTF(rc == 0,
+			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
 	tc_progress_stop();

@@ -1,3 +1,53 @@
+daos (1.3.0-15) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Update to build on EL8
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 06 May 2021 15:31:50 -0400
+
+daos (1.3.0-14) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Package /etc/daos/certs in main/common package so that both server
+    and client get it created
+  * Catch up the release to be in sync with the RPM build
+    - hence the missing (10-13 releases)
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Wed, 05 May 2021 14:10:50 -0400
+
+daos (1.3.0-9) unstable; urgency=medium
+  [ Mohamad Chaarawi ]
+  * Remove dfuse_hl
+
+ -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>  Wed, 16 Apr 2021 17:57:00 -0400
+
+daos (1.3.0-8) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Remove client dependencies on PMDK, SPDK, and argobots
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 14 Apr 2021 13:27:00 -0400
+
+daos (1.3.0-7) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Update Argobots to 1.1
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 01 Apr 2021 11:39:10 -0400
+
+daos (1.3.0-6) unstable; urgency=medium
+  [ Maureen Jean ]
+  * Change pydaos_shim_3 to pydaos_shim
+
+ -- Maureen Jean <maureen.jean@intel.com>  Tue, 30 Mar 2021 12:00:00 -0400
+
+daos (1.3.0-5) unstable; urgency=medium
+  * Move libdts.so to the daos-tests subpackage
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 29 Mar 2021 10:57:14 -0400
+
+daos (1.3.0-4) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update to ofi v1.12.0 release
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com> Tue, 23 Mar 2021 05:00:01 -0000
+
 daos (1.3.0-2) unstable; urgency=medium
   [ Li Wei ]
   * Require raft-devel 0.7.3 that fixes an unstable leadership problem caused

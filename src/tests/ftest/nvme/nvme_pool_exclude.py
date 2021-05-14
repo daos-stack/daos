@@ -233,7 +233,9 @@ class NvmePoolExclude(TestWithServers):
         the avocado test infrastructure. This method invokes
         NVME pool exclude testing on multiple pools.
 
-        :avocado: tags=all,full_regression,hw,large,nvme
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme,checksum
         :avocado: tags=nvme_pool_exclude
         """
         for num_pool in range(1, 4):

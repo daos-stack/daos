@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2020-2021 Intel Corporation.
 
@@ -52,7 +52,8 @@ class SameKeyDifferentValue(TestWithServers):
                Trigger aggregation
                Insert same akey,dkey under same object with array value
                Result: should either pass or return -1001 ERR
-        :avocado: tags=object,samekeydifferentvalue,singletoarray,vm,small
+        :avocado: tags=all,daily_regression,object,samekeydifferentvalue
+        :avocado: tags=singletoarray,vm,small
         """
 
         # define akey,dkey, single value data and array value data
@@ -156,7 +157,8 @@ class SameKeyDifferentValue(TestWithServers):
                Trigger aggregation
                Insert same akey,dkey under same object with single value
                Result: should either pass or return -1001 ERR
-        :avocado: tags=object,samekeydifferentvalue,arraytosingle,vm,small
+        :avocado: tags=all,daily_regression,object,samekeydifferentvalue
+        :avocado: tags=arraytosingle,vm,small
         """
 
         # define akey,dkey, single value data and array value data

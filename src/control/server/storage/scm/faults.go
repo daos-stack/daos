@@ -58,8 +58,8 @@ var (
 	// on SCM storage that was already formatted.
 	FaultFormatNoReformat = scmFault(
 		code.StorageAlreadyFormatted,
-		"format request for already-formatted storage and reformat not specified",
-		"retry the operation with reformat option to overwrite existing format",
+		"format request for already-formatted storage",
+		"retry the operation with force option to overwrite existing data",
 	)
 
 	// FaultDeviceAlreadyMounted represents an error where a format was requested

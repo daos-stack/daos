@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -42,7 +42,9 @@ class ObjUpdateBadParam(TestWithServers):
 
         Test Description: Pass a bogus object handle, should return bad handle.
 
-        :avocado: tags=all,object,full_regression,small,objbadhand
+        :avocado: tags=all,full_regression,small
+        :avocado: tags=object,objupdatebadparam
+        :avocado: tags=objbadhand
         """
 
         try:
@@ -76,11 +78,13 @@ class ObjUpdateBadParam(TestWithServers):
 
         Test Description: Pass a dkey and an akey that is null.
 
-        :avocado: tags=all,object,full_regression,small,objupdatenull
+        :avocado: tags=all,full_regression,small
+        :avocado: tags=object,objupdatebadparam
+        :avocado: tags=objupdatenull
         """
 
         # data used in the test
-        thedata = "a string that I want to stuff into an object"
+        thedata = b"a string that I want to stuff into an object"
         thedatasize = len(thedata) + 1
 
         try:

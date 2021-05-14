@@ -2879,6 +2879,81 @@ dtx_38(void **state)
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 }
 
+static void
+dtx_39(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*akey1 = "akey_1";
+	char		*akey2 = "akey_2";
+	char		*akey3 = "akey_3";
+	struct ioreq	 req;
+	uint64_t	 val[2];
+	daos_handle_t	 th = { 0 };
+	d_rank_t	 kill_rank = CRT_NO_RANK;
+
+	print_message("DTX39: not restar the transaction with fixed epoch\n");
+
+	if (!test_runable(arg, 3))
+		skip();
+
+	if (arg->myrank == 0) {
+		daos_obj_id_t	oid;
+		daos_epoch_t	epoch;
+
+		oid = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, arg->myrank);
+		kill_rank = get_rank_by_oid_shard(arg, oid, 0);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+		val[0] = 1;
+		insert_single(dts_dtx_dkey, akey1, 0, &val[0], sizeof(val[0]),
+			      DAOS_TX_NONE, &req);
+		insert_single(dts_dtx_dkey, akey2, 0, &val[0], sizeof(val[0]),
+			      DAOS_TX_NONE, &req);
+
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+		insert_single(dts_dtx_dkey, akey3, 0, &val[0], sizeof(val[0]),
+			      th, &req);
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_hdl2epoch(th, &epoch));
+		MUST(daos_tx_close(th, NULL));
+
+		MUST(daos_tx_open_snap(arg->coh, epoch << 1, &th, NULL));
+
+		val[1] = 0;
+		lookup_single(dts_dtx_dkey, akey1, 0, &val[1], sizeof(val[1]),
+			      th, &req);
+		assert_int_equal(val[0], val[1]);
+
+		print_message("Exclude rank %d to trigger rebuild\n",
+			      kill_rank);
+	}
+
+	rebuild_single_pool_rank(arg, kill_rank, false);
+
+	if (arg->myrank == 0) {
+		print_message("Verifying data after rebuild...\n");
+
+		val[1] = 0;
+		/* This fetch will refresh the client side pool map,
+		 * then the TX's pm_ver will become stale.
+		 */
+		lookup_single(dts_dtx_dkey, akey2, 0, &val[1], sizeof(val[1]),
+			      DAOS_TX_NONE, &req);
+		assert_int_equal(val[0], val[1]);
+
+		val[1] = 0;
+		/* NOT restart the TX even if its pm_ver is stale. */
+		lookup_single(dts_dtx_dkey, akey3, 0, &val[1], sizeof(val[1]),
+			      th, &req);
+		assert_int_equal(val[0], val[1]);
+
+		MUST(daos_tx_close(th, NULL));
+		ioreq_fini(&req);
+	}
+
+	reintegrate_single_pool_rank(arg, kill_rank);
+}
+
 static test_arg_t *saved_dtx_arg;
 
 static int
@@ -2986,6 +3061,8 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_37, dtx_sub_setup, dtx_sub_teardown},
 	{"DTX38: resync - lost whole redundancy groups",
 	 dtx_38, dtx_sub_setup, dtx_sub_teardown},
+	{"DTX39: not restart the transaction with fixed epoch",
+	 dtx_39, dtx_sub_setup, dtx_sub_teardown},
 };
 
 static int

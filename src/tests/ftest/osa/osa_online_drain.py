@@ -123,8 +123,10 @@ class OSAOnlineDrain(OSAUtils):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain
 
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa,osa_drain
-        :avocado: tags=online_drain,DAOS_5610
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum,DAOS_5610
+        :avocado: tags=osa_drain,online_drain
         """
         # Perform drain testing with 1 to 2 pools
         for pool_num in range(1, 3):

@@ -46,7 +46,7 @@ message NvmeController {
 	message Namespace {
 		uint32 id = 1;			// namespace id
 		uint64 size = 2;		// device capacity in bytes
-		string ctrlrpciaddr = 3;	// parent controller PCI address
+		string ctrlr_pci_addr = 3;	// parent controller PCI address
 	}
 
 	// SmdDevice represents a blobstore created on a NvmeController_Namespace.
@@ -63,24 +63,24 @@ message NvmeController {
 
 	string model = 1;	// model name
 	string serial = 2;	// serial number
-	string pciaddr = 3;	// pci address
-	string fwrev = 4;	// firmware revision
-	int32 socketid = 5;	// NUMA socket ID
-	Health healthstats = 6;	// controller's health stats
+	string pci_addr = 3;	// pci address
+	string fw_rev = 4;	// firmware revision
+	int32 socket_id = 5;	// NUMA socket ID
+	Health health_stats = 6;	// controller's health stats
 	repeated Namespace namespaces = 7;	// controller's namespaces
-	repeated SmdDevice smddevices = 8;	// controller's blobstores
+	repeated SmdDevice smd_devices = 8;	// controller's blobstores
 }
 
 // NvmeControllerResult represents state of operation performed on controller.
 message NvmeControllerResult {
-	string pciaddr = 1;		// PCI address of NVMe controller
+	string pci_addr = 1;		// PCI address of NVMe controller
 	ResponseState state = 2;	// state of current operation
 }
 
 message PrepareNvmeReq {
-	string pciwhitelist = 1;	// Whitespace separated list of PCI addresses
-	int32 nrhugepages = 2;		// Number of hugepages to allocate (in MB)
-	string targetuser = 3;		// User to access NVMe devices
+	string pci_allow_list = 1;	// Whitespace separated list of PCI addresses
+	int32 nr_huge_pages = 2;		// Number of hugepages to allocate (in MB)
+	string target_user = 3;		// User to access NVMe devices
 	bool reset = 4;			// Reset SPDK returning devices to kernel
 }
 

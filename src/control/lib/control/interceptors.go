@@ -24,7 +24,8 @@ func connErrToFault(st *status.Status, target string) error {
 	case strings.Contains(st.Message(), "connection refused"):
 		return FaultConnectionRefused(target)
 	case strings.Contains(st.Message(), "connection closed"),
-		strings.Contains(st.Message(), "transport is closing"):
+		strings.Contains(st.Message(), "transport is closing"),
+		strings.Contains(st.Message(), "closed the connection"):
 		return FaultConnectionClosed(target)
 	case strings.Contains(st.Message(), "no route to host"):
 		return FaultConnectionNoRoute(target)

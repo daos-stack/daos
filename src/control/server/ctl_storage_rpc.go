@@ -8,6 +8,7 @@ package server
 
 import (
 	"fmt"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -40,16 +42,48 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 	return rs
 }
 
-// doNvmePrepare issues prepare request and returns response.
-func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) *ctlpb.PrepareNvmeResp {
-	_, err := c.NvmePrepare(bdev.PrepareRequest{
-		HugePageCount: int(req.GetNrhugepages()),
-		TargetUser:    req.GetTargetuser(),
-		PCIWhitelist:  req.GetPciwhitelist(),
-		ResetOnly:     req.GetReset_(),
-	})
+// TODO: de-duplicate logic to populate prepare request from server config after
+//       DAOS-7002 is completed
+func updateNvmePrepareReq(req *bdev.PrepareRequest, cfg *config.Server) {
+	if req.HugePageCount == 0 {
+		req.HugePageCount = minHugePageCount
+		if cfgHasBdevs(cfg) {
+			// The config value is intended to be per-engine, so we
+			// need to adjust based on the number of engines.
+			req.HugePageCount = cfg.NrHugepages * len(cfg.Engines)
+		}
+	}
+	if req.TargetUser == "" {
+		if runningUser, err := user.Current(); err == nil {
+			req.TargetUser = runningUser.Username
+		}
+	}
+	if req.PCIAllowlist == "" {
+		req.PCIAllowlist = strings.Join(cfg.BdevInclude, " ")
+	}
+	req.PCIBlocklist = strings.Join(cfg.BdevExclude, " ")
+	req.DisableVFIO = cfg.DisableVFIO
+	req.DisableVMD = cfg.DisableVMD || cfg.DisableVFIO || !iommuDetected()
+}
 
+// doNvmePrepare issues prepare request and returns response.
+func (c *ControlService) doNvmePrepare(pbReq *ctlpb.PrepareNvmeReq) *ctlpb.PrepareNvmeResp {
+	c.log.Debugf("performing nvme prep %v", pbReq)
 	pnr := new(ctlpb.PrepareNvmeResp)
+
+	req := bdev.PrepareRequest{
+		HugePageCount: int(pbReq.GetNrHugePages()),
+		TargetUser:    pbReq.GetTargetUser(),
+		PCIAllowlist:  pbReq.GetPciAllowList(),
+		ResetOnly:     pbReq.GetReset_(),
+		// Default to minimum necessary for scan to work correctly.
+	}
+
+	if !req.ResetOnly {
+		updateNvmePrepareReq(&req, c.srvCfg)
+	}
+
+	_, err := c.NvmePrepare(req)
 	pnr.State = newResponseState(err, ctlpb.ResponseStatus_CTL_ERR_NVME, "")
 
 	return pnr
@@ -78,24 +112,33 @@ func newPrepareScmResp(inResp *scm.PrepareResponse, inErr error) (*ctlpb.Prepare
 	return outResp, nil
 }
 
-func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (*ctlpb.PrepareScmResp, error) {
+func (c *ControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (*ctlpb.PrepareScmResp, error) {
+	c.log.Debugf("performing scm prep %v", req)
+
 	scmState, err := c.GetScmState()
 	if err != nil {
 		return newPrepareScmResp(nil, err)
 	}
 	c.log.Debugf("SCM state before prep: %s", scmState)
 
-	resp, err := c.ScmPrepare(scm.PrepareRequest{Reset: pbReq.Reset_})
+	resp, err := c.ScmPrepare(scm.PrepareRequest{Reset: req.Reset_})
 
 	return newPrepareScmResp(resp, err)
 }
 
-// StoragePrepare configures SSDs for user specific access with SPDK and
-// groups SCM modules in AppDirect/interleaved mode as kernel "pmem" devices.
-func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (*ctlpb.StoragePrepareResp, error) {
-	c.log.Debug("received StoragePrepare RPC; proceeding to instance storage preparation")
+// StoragePrepare configures resident host storage for use with DAOS, fails if
+// harness engine instances have started.
+func (c *ControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (*ctlpb.StoragePrepareResp, error) {
+	c.log.Debugf("received StoragePrepare RPC %v", req)
 
 	resp := new(ctlpb.StoragePrepareResp)
+
+	for _, ei := range c.harness.Instances() {
+		if ei.isStarted() {
+			return nil, errors.Errorf("instance %d: can't prepare storage if running",
+				ei.Index())
+		}
+	}
 
 	if req.Nvme != nil {
 		resp.Nvme = c.doNvmePrepare(req.Nvme)
@@ -191,8 +234,7 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 func stripNvmeDetails(pbc *ctlpb.NvmeController) {
 	pbc.Serial = ""
 	pbc.Model = ""
-	pbc.Fwrev = ""
-	pbc.Namespaces = nil
+	pbc.FwRev = ""
 }
 
 // newScanBdevResp populates protobuf NVMe scan response with controller info
@@ -214,10 +256,10 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 	// trim unwanted fields so responses can be coalesced from hash map
 	for _, pbc := range pbCtrlrs {
 		if !req.GetHealth() {
-			pbc.Healthstats = nil
+			pbc.HealthStats = nil
 		}
 		if !req.GetMeta() {
-			pbc.Smddevices = nil
+			pbc.SmdDevices = nil
 		}
 		if req.GetBasic() {
 			stripNvmeDetails(pbc)
@@ -358,7 +400,7 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
-	c.log.Debug("received StorageScan RPC")
+	c.log.Debugf("received StorageScan RPC %v", req)
 
 	if req == nil {
 		return nil, errors.New("nil request")
@@ -397,14 +439,14 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	resp.Crets = make([]*ctlpb.NvmeControllerResult, 0, len(instances))
 	scmChan := make(chan *ctlpb.ScmMountResult, len(instances))
 
-	c.log.Debugf("received StorageFormat RPC %v; proceeding to instance storage format", req)
+	c.log.Debugf("received StorageFormat RPC %v", req)
 
 	// TODO: enable per-instance formatting
 	formatting := 0
 	for _, srv := range instances {
 		formatting++
 		go func(s *EngineInstance) {
-			scmChan <- s.StorageFormatSCM(req.Reformat)
+			scmChan <- s.StorageFormatSCM(ctx, req.Reformat)
 		}(srv)
 	}
 
@@ -424,6 +466,10 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 	// TODO: perform bdev format in parallel
 	for _, srv := range instances {
+		if len(srv.bdevConfig().DeviceList) == 0 {
+			continue
+		}
+
 		if instanceErrored[srv.Index()] {
 			// if scm errored, indicate skipping bdev format
 			if len(srv.bdevConfig().DeviceList) > 0 {

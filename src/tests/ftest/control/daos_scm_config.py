@@ -44,7 +44,7 @@ class SCMConfigTest(TestWithServers):
         JIRA ID: DAOS-2972
 
         Test Description: Verify that an attempt to configure devices that have
-        already been configured and are in use by DAOS is handled.
+        already been configured and are in use by DAOS fails.
 
         :avocado: tags=all,small,pr,daily_regression,hw,scm_in_use,basic
         """
@@ -59,12 +59,21 @@ class SCMConfigTest(TestWithServers):
 
         # Run storage prepare
         if self.server_managers[-1].manager.job.using_dcpm:
-            self.log.info("==>    Verifying storage prepare is done")
+            self.log.info("==>    Verifying storage prepare fails")
             kwargs = {"scm": True, "force": True}
             try:
                 self.server_managers[-1].dmg.storage_prepare(**kwargs)
+                exception = None
             except CommandFailure as error:
-                self.fail("Storage prepare failure: {}".format(error))
+                exception = error
+
+            if exception is None:
+                self.log.error("dmg was expected to fail")
+                self.fail("Dmg command completed successfully when it was"
+                          "expected to fail")
+
+            self.log.info("Storage prepare fails as expected: "
+                          "{}".format(exception))
         else:
             self.fail("Detected dcpm not specified")
 

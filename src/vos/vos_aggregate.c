@@ -129,7 +129,8 @@ struct vos_agg_param {
 	daos_key_t		ap_dkey;	/* current dkey */
 	daos_key_t		ap_akey;	/* current akey */
 	unsigned int		ap_discard:1,
-				ap_csum_err:1;
+				ap_csum_err:1,
+				ap_full_scan:1;
 	struct umem_instance	*ap_umm;
 	bool			(*ap_yield_func)(void *arg);
 	void			*ap_yield_arg;
@@ -209,15 +210,43 @@ reset_agg_pos(vos_iter_type_t type, struct vos_agg_param *agg_param)
 	}
 }
 
+static inline bool
+need_aggregate(struct vos_agg_param *agg_param, vos_iter_entry_t *entry)
+{
+	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+
+	D_DEBUG(DB_EPC, "full_scan:%d, hae:"DF_U64", last_update:"DF_U64", "
+		"flags:%u\n", agg_param->ap_full_scan,
+		cont->vc_cont_df->cd_hae, entry->ie_last_update,
+		entry->ie_vis_flags);
+
+	/* Don't skip aggregation for full scan */
+	if (agg_param->ap_full_scan)
+		return true;
+
+	/* Don't skip aggregation when the obj/dkey/akey is punched */
+	if (entry->ie_vis_flags & VOS_VIS_FLAG_COVERED)
+		return true;
+
+	D_ASSERT(entry->ie_last_update != 0);
+	return entry->ie_last_update >= cont->vc_cont_df->cd_hae;
+}
+
 static int
 vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	    struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	D_ASSERT(agg_param != NULL);
 	if (daos_unit_oid_compare(agg_param->ap_oid, entry->ie_oid)) {
-		agg_param->ap_oid = entry->ie_oid;
-		reset_agg_pos(VOS_ITER_DKEY, agg_param);
-		reset_agg_pos(VOS_ITER_AKEY, agg_param);
+		if (need_aggregate(agg_param, entry)) {
+			agg_param->ap_oid = entry->ie_oid;
+			reset_agg_pos(VOS_ITER_DKEY, agg_param);
+			reset_agg_pos(VOS_ITER_AKEY, agg_param);
+		} else {
+			D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
+				DP_UOID(agg_param->ap_oid));
+			*acts |= VOS_ITER_CB_SKIP;
+		}
 	} else {
 		/*
 		 * When recursive vos_iterate() yield in sub tree, re-probe
@@ -249,8 +278,14 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	D_ASSERT(agg_param != NULL);
 	if (vos_agg_key_compare(agg_param->ap_dkey, entry->ie_key)) {
-		agg_param->ap_dkey = entry->ie_key;
-		reset_agg_pos(VOS_ITER_AKEY, agg_param);
+		if (need_aggregate(agg_param, entry)) {
+			agg_param->ap_dkey = entry->ie_key;
+			reset_agg_pos(VOS_ITER_AKEY, agg_param);
+		} else {
+			D_DEBUG(DB_EPC, "Skip untouched dkey: "DF_KEY"\n",
+				DP_KEY(&entry->ie_key));
+			*acts |= VOS_ITER_CB_SKIP;
+		}
 	} else {
 		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" aggregation on re-probe\n",
 			DP_KEY(&entry->ie_key));
@@ -326,7 +361,13 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	D_ASSERT(agg_param != NULL);
 	if (vos_agg_key_compare(agg_param->ap_akey, entry->ie_key)) {
-		agg_param->ap_akey = entry->ie_key;
+		if (need_aggregate(agg_param, entry)) {
+			agg_param->ap_akey = entry->ie_key;
+		} else {
+			D_DEBUG(DB_EPC, "Skip untouched akey: "DF_KEY"\n",
+				DP_KEY(&entry->ie_key));
+			*acts |= VOS_ITER_CB_SKIP;
+		}
 	} else {
 		D_DEBUG(DB_EPC, "Skip akey: "DF_KEY" aggregation on re-probe\n",
 			DP_KEY(&entry->ie_key));
@@ -459,7 +500,7 @@ csum_prepare_buf(struct agg_lgc_seg *segs, unsigned int seg_cnt,
 	int		 i;
 
 	if (new_len > cur_len) {
-		D_REALLOC(buffer, *csum_bufp, new_len);
+		D_REALLOC_NZ(buffer, *csum_bufp, new_len);
 		if (buffer == NULL)
 			return -DER_NOMEM;
 	} else
@@ -504,7 +545,7 @@ prepare_segments(struct agg_merge_window *mw)
 	D_ASSERT(mw->mw_phy_cnt > 0);
 	seg_max = MAX((mw->mw_lgc_cnt + mw->mw_phy_cnt), 200);
 	if (io->ic_seg_max < seg_max) {
-		D_REALLOC_ARRAY(lgc_seg, io->ic_segs, seg_max);
+		D_REALLOC_ARRAY_NZ(lgc_seg, io->ic_segs, seg_max);
 		if (lgc_seg == NULL)
 			return -DER_NOMEM;
 
@@ -720,7 +761,8 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 	void		*buffer;
 	unsigned int	 i, add_idx = bsgl->bs_nr;
 
-	D_REALLOC_ARRAY(buffer, bsgl->bs_iovs, bsgl->bs_nr + added_segs);
+	D_REALLOC_ARRAY(buffer, bsgl->bs_iovs, bsgl->bs_nr,
+			bsgl->bs_nr + added_segs);
 	if (buffer == NULL)
 		return -DER_NOMEM;
 	bsgl->bs_iovs = buffer;
@@ -740,7 +782,8 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_buf = NULL;
-			bsgl->bs_iovs[add_idx++].bi_addr.ba_hole = 0;
+			BIO_ADDR_SET_NOT_HOLE(
+				&bsgl->bs_iovs[add_idx++].bi_addr);
 		}
 		if (bsgl->bs_iovs[i].bi_suffix_len) {
 			/* Add the suffix. */
@@ -756,7 +799,8 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_buf = NULL;
-			bsgl->bs_iovs[add_idx++].bi_addr.ba_hole = 0;
+			BIO_ADDR_SET_NOT_HOLE(
+				&bsgl->bs_iovs[add_idx++].bi_addr);
 		}
 
 		/* Reset the parameters for the write (non-extended) data. */
@@ -877,7 +921,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		void *buffer;
 
 		/* An array of recalc structs (one per output segment). */
-		D_REALLOC_ARRAY(buffer, io->ic_csum_recalcs, seg_count);
+		D_REALLOC_ARRAY(buffer, io->ic_csum_recalcs,
+				io->ic_csum_recalc_cnt, seg_count);
 		if (buffer == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
@@ -956,7 +1001,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	if (io->ic_buf_len < buf_max + buf_add) {
 		void *buffer;
 
-		D_REALLOC(buffer, io->ic_buf, buf_max + buf_add);
+		D_REALLOC(buffer, io->ic_buf, io->ic_buf_len,
+			  buf_max + buf_add);
 		if (buffer == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -1048,18 +1094,13 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		size = sizeof(*io->ic_rsrvd_scm) *
 			sizeof(*scm_exts) * scm_max;
 
-		if (io->ic_rsrvd_scm == NULL)
-			D_ALLOC(rsrvd_scm, size);
-		else
-			D_REALLOC(rsrvd_scm, io->ic_rsrvd_scm, size);
+		D_REALLOC_Z(rsrvd_scm, io->ic_rsrvd_scm, size);
 		if (rsrvd_scm == NULL)
 			return -DER_NOMEM;
 
 		io->ic_rsrvd_scm = rsrvd_scm;
 		io->ic_rsrvd_scm->rs_actv_cnt = scm_max;
 	}
-	memset(io->ic_rsrvd_scm->rs_actv, 0,
-	       io->ic_rsrvd_scm->rs_actv_cnt * sizeof(*scm_exts));
 	D_ASSERT(io->ic_rsrvd_scm->rs_actv_at == 0);
 
 	for (i = 0; i < io->ic_seg_cnt; i++) {
@@ -1438,7 +1479,7 @@ enqueue_lgc_ent(struct agg_merge_window *mw, struct evt_extent *lgc_ext,
 	if (cnt == max) {
 		unsigned int new_max = max ? max * 2 : 10;
 
-		D_REALLOC_ARRAY(lgc_ent, mw->mw_lgc_ents, new_max);
+		D_REALLOC_ARRAY(lgc_ent, mw->mw_lgc_ents, max, new_max);
 		if (lgc_ent == NULL)
 			return -DER_NOMEM;
 
@@ -1769,7 +1810,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	/* Aggregation */
 	D_DEBUG(DB_EPC, "oid:"DF_UOID", lgc_ext:"DF_EXT", "
-		"phy_ext:"DF_EXT", epoch:"DF_U64".%d, flags: %x\n",
+		"phy_ext:"DF_EXT", epoch:"DF_X64".%d, flags: %x\n",
 		DP_UOID(agg_param->ap_oid), DP_EXT(&lgc_ext),
 		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_minor_epc,
 		entry->ie_vis_flags);
@@ -2046,7 +2087,7 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      void (*csum_func)(void *),
-	      bool (*yield_func)(void *arg), void *yield_arg)
+	      bool (*yield_func)(void *arg), void *yield_arg, bool full_scan)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	vos_iter_param_t	 iter_param = { 0 };
@@ -2085,6 +2126,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	agg_param.ap_yield_func = yield_func;
 	agg_param.ap_yield_arg = yield_arg;
 	merge_window_init(&agg_param.ap_window, csum_func);
+	/* A full scan caused by snapshot deletion */
+	agg_param.ap_full_scan = full_scan;
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,

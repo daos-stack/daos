@@ -153,10 +153,12 @@ scp_files() {
         archive_name="${file_name%%.*}.$(hostname -s).${file_name#*.}"
         if scp -r "${file}" "${2}"/"${archive_name}"; then
             copied+=("${file}")
-            if ! rm -fr "${file}"; then
-                echo "  Error removing ${file}"
-                echo "    $(ls -al ${file})"
-                rc=1
+            if [[ ! "${file}" =~ test.cov ]]; then
+                if ! rm -fr "${file}"; then
+                    echo "  Error removing ${file}"
+                    echo "    $(ls -al ${file})"
+                    rc=1
+                fi
             fi
         else
             echo "  Failed to archive ${file} to ${2}"

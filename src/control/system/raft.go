@@ -13,8 +13,8 @@ import (
 	"time"
 
 	transport "github.com/Jille/raft-grpc-transport"
-	boltdb "github.com/daos-stack/raft-boltdb"
 	"github.com/hashicorp/raft"
+	boltdb "github.com/hashicorp/raft-boltdb/v2"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
@@ -95,7 +95,23 @@ func (db *Database) ResignLeadership(cause error) error {
 func (db *Database) ShutdownRaft() error {
 	db.log.Debug("shutting down raft instance")
 	return db.raft.withReadLock(func(svc raftService) error {
-		return svc.Shutdown().Error()
+		// Call the raft implementation's shutdown and block
+		// until it completes.
+		shutdownErr := svc.Shutdown().Error()
+
+		// Try to run all of the defined shutdown callbacks. Logging
+		// any failures is the best we can do, as we really want to
+		// run as many of them as possible in order to clean things
+		// up.
+		if shutdownErr == nil {
+			for _, cb := range db.onRaftShutdown {
+				if cbErr := cb(); cbErr != nil {
+					db.log.Errorf("onRaftShutdown callback failed: %s", cbErr)
+				}
+			}
+		}
+
+		return shutdownErr
 	})
 }
 
@@ -136,6 +152,9 @@ func (db *Database) configureRaft() error {
 	// to peers as they're added. Instead, we just set everyone to start
 	// at rank 1 and increment from there as memberUpdate logs are applied.
 	db.data.NextRank = 1
+	db.OnRaftShutdown(func() error {
+		return boltDB.Close()
+	})
 
 	r, err := raft.NewRaft(rc, (*fsm)(db), boltDB, boltDB, snaps, db.raftTransport)
 	if err != nil {
@@ -405,10 +424,12 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 			db.data.SchemaVersion, CurrentSchemaVersion)
 	}
 
+	f.data.Lock()
 	f.data.Members = db.data.Members
 	f.data.Pools = db.data.Pools
 	f.data.NextRank = db.data.NextRank
 	f.data.MapVersion = db.data.MapVersion
+	f.data.Unlock()
 	f.log.Debugf("db snapshot loaded (map version %d)", db.data.MapVersion)
 	return nil
 }

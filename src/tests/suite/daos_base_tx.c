@@ -23,6 +23,7 @@ static const char *dts_dtx_akey	= "dtx_io akey";
 static void
 dtx_set_fail_loc(test_arg_t *arg, uint64_t fail_loc)
 {
+	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     fail_loc, 0, NULL);
@@ -652,6 +653,76 @@ dtx_17(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+dtx_resend_delay(test_arg_t *arg, uint16_t oclass)
+{
+	char		*update_buf;
+	char		*fetch_buf;
+	size_t		 size = 1 << 20; /* 1MB */
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+
+	D_ALLOC(update_buf, size);
+	assert_non_null(update_buf);
+	dts_buf_render(update_buf, size);
+
+	D_ALLOC(fetch_buf, size);
+	assert_non_null(fetch_buf);
+
+	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
+	arg->async = 0;
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	daos_fail_loc_set(DAOS_DTX_RESEND_DELAY1 | DAOS_FAIL_ALWAYS);
+	dtx_set_fail_loc(arg, DAOS_DTX_RESEND_DELAY1 | DAOS_FAIL_ALWAYS);
+
+	/* The update RPC will be resent because of RPC timeout. */
+	insert_single(dts_dtx_dkey, dts_dtx_akey, 0, update_buf, size,
+		      DAOS_TX_NONE, &req);
+
+	lookup_single(dts_dtx_dkey, dts_dtx_akey, 0, fetch_buf, size,
+		      DAOS_TX_NONE, &req);
+
+	/* The data correctness should NOT be affected by RPC resent. */
+	assert_int_equal(req.iod[0].iod_size, size);
+	assert_memory_equal(update_buf, fetch_buf, size);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
+	dtx_set_fail_loc(arg, 0);
+
+	D_FREE(update_buf);
+	D_FREE(fetch_buf);
+	ioreq_fini(&req);
+}
+
+static void
+dtx_18(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX resend during bulk data transfer - single rep\n");
+
+	dtx_resend_delay(arg, OC_SX);
+}
+
+static void
+dtx_19(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX resend during bulk data transfer - multiple reps\n");
+
+	if (!test_runable(arg, 2))
+		return;
+
+	dtx_resend_delay(arg, OC_RP_2G1);
+}
+
 static const struct CMUnitTest dtx_tests[] = {
 	{"DTX1: update/punch single value with DTX successfully",
 	 dtx_1, NULL, test_case_teardown},
@@ -687,6 +758,10 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_16, NULL, test_case_teardown},
 	{"DTX17: DTX resync during open-close",
 	 dtx_17, NULL, test_case_teardown},
+	{"DTX18: DTX resend during bulk data transfer - single rep",
+	 dtx_18, NULL, test_case_teardown},
+	{"DTX19: DTX resend during bulk data transfer - multiple reps",
+	 dtx_19, NULL, test_case_teardown},
 };
 
 static int

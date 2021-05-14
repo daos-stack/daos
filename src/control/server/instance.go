@@ -12,8 +12,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
@@ -28,9 +28,10 @@ import (
 
 type (
 	systemJoinFn     func(context.Context, *control.SystemJoinReq) (*control.SystemJoinResp, error)
+	onAwaitFormatFn  func(context.Context, uint32, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
-	onInstanceExitFn func(context.Context, system.Rank, error) error
+	onInstanceExitFn func(context.Context, uint32, system.Rank, error, uint64) error
 )
 
 // EngineInstance encapsulates control-plane specific configuration
@@ -50,10 +51,11 @@ type EngineInstance struct {
 	waitDrpc          atm.Bool
 	drpcReady         chan *srvpb.NotifyReadyReq
 	ready             atm.Bool
-	startLoop         chan bool // restart loop
+	startRequested    chan bool
 	fsRoot            string
 	hostFaultDomain   *system.FaultDomain
 	joinSystem        systemJoinFn
+	onAwaitFormat     []onAwaitFormatFn
 	onStorageReady    []onStorageReadyFn
 	onReady           []onReadyFn
 	onInstanceExit    []onInstanceExitFn
@@ -61,6 +63,7 @@ type EngineInstance struct {
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
+	_cancelCtx  context.CancelFunc
 	_drpcClient drpc.DomainSocketClient
 	_superblock *Superblock
 	_lastErr    error // populated when harness receives signal
@@ -80,7 +83,7 @@ func NewEngineInstance(log logging.Logger,
 		joinSystem:        joinFn,
 		drpcReady:         make(chan *srvpb.NotifyReadyReq),
 		storageReady:      make(chan bool),
-		startLoop:         make(chan bool),
+		startRequested:    make(chan bool),
 	}
 }
 
@@ -108,6 +111,12 @@ func (ei *EngineInstance) isStarted() bool {
 // drpc and storage ready states, and currently active.
 func (ei *EngineInstance) isReady() bool {
 	return ei.ready.Load() && ei.isStarted()
+}
+
+// OnAwaitFormat adds a list of callbacks to invoke when the instance
+// requires formatting.
+func (ei *EngineInstance) OnAwaitFormat(fns ...onAwaitFormatFn) {
+	ei.onAwaitFormat = append(ei.onAwaitFormat, fns...)
 }
 
 // OnStorageReady adds a list of callbacks to invoke when the instance
@@ -217,9 +226,40 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	return r, resp.LocalJoin, nil
 }
 
+func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
+	if ei.hostFaultDomain == nil {
+		return errors.New("engine instance has a nil fault domain")
+	}
+
+	superblock := ei.getSuperblock()
+	if superblock == nil {
+		return errors.New("nil superblock while updating fault domain")
+	}
+
+	newDomainStr := ei.hostFaultDomain.String()
+	if newDomainStr == superblock.HostFaultDomain {
+		// No change
+		return nil
+	}
+
+	ei.log.Infof("instance %d setting host fault domain to %q (previously %q)",
+		ei.Index(), ei.hostFaultDomain, superblock.HostFaultDomain)
+	superblock.HostFaultDomain = newDomainStr
+
+	ei.setSuperblock(superblock)
+	if err := ei.WriteSuperblock(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // handleReady determines the instance rank and sends a SetRank dRPC request
 // to the Engine.
 func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	if err := ei.updateFaultDomainInSuperblock(); err != nil {
+		ei.log.Error(err.Error()) // nonfatal
+	}
+
 	r, localJoin, err := ei.determineRank(ctx, ready)
 	if err != nil {
 		return err

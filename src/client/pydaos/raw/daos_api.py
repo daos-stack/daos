@@ -6,6 +6,9 @@
 """
 # pylint: disable=pylint-too-many-lines
 
+# pylint: disable=relative-beyond-top-level
+from .. import pydaos_shim
+# pylint: enable=relative-beyond-top-level
 
 import ctypes
 import threading
@@ -13,18 +16,13 @@ import uuid
 import os
 import inspect
 import sys
+import time
 import enum
 
 from . import daos_cref
 from . import conversion
 from .. import DaosClient
 
-# pylint: disable=import-error
-if sys.version_info < (3, 0):
-    from .. import pydaos_shim_27 as pydaos_shim
-else:
-    from .. import pydaos_shim_3 as pydaos_shim
-# pylint: enable=import-error
 
 DaosObjClass = enum.Enum(
     "DaosObjClass",
@@ -35,6 +33,7 @@ DaosContPropEnum = enum.Enum(
     "DaosContPropEnum",
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("DAOS_PROP_")})
+
 
 class DaosPool():
     """A python object representing a DAOS pool."""
@@ -311,32 +310,6 @@ class DaosPool():
     def target_query(self, tgt):
         """Query information of storage targets within a DAOS pool."""
         raise NotImplementedError("Target_query not yet implemented in C API.")
-
-    def destroy(self, force, cb_func=None):
-        """Destroy DAOS pool."""
-        if not len(self.uuid) == 16 or self.attached == 0:
-            raise DaosApiError("No existing UUID for pool.")
-
-        c_force = ctypes.c_uint(force)
-        func = self.context.get_function('destroy-pool')
-
-        if cb_func is None:
-            ret = func(self.uuid, self.group, c_force, None)
-            if ret != 0:
-                raise DaosApiError("Pool destroy returned non-zero. RC: {0}"
-                                   .format(ret))
-            else:
-                self.attached = 0
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, c_force, event]
-
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func, self))
-            thread.start()
 
     def set_svc(self, rank):
         """Set svc.
@@ -616,7 +589,16 @@ class DaosObj():
                                    "handle: {1}".format(ret, self.obj_handle))
             self.obj_handle = None
 
-    def create(self, rank=None, objcls=None):
+    def __str__(self):
+        """Get the string representation of this class."""
+        # pylint: disable=no-else-return
+        if self.c_oid:
+            # Return the object ID if  defined
+            return "{}.{}".format(self.c_oid.hi, self.c_oid.lo)
+        else:
+            return self.__repr__()
+
+    def create(self, rank=None, objcls=None, seed=None):
         """Create a DAOS object by generating an oid.
 
         Args:
@@ -624,20 +606,26 @@ class DaosObj():
             objcls (object, optional): the DAOS class for this object specified
                 as either one of the DAOS object class enumerations or an
                 enumeration name or value. Defaults to DaosObjClass.OC_RP_XSF.
+            seed (ctypes.c_uint, optional): seed for the dts_oid_gen function.
+                Defaults to None which will use seconds since epoch as the seed.
 
         Raises:
             DaosApiError: if the object class is invalid
 
         """
-        func = self.context.get_function('generate-oid')
-
         # Convert the object class into an valid object class enumeration value
         if objcls is None:
             obj_cls_int = DaosObjClass.OC_RP_XSF.value
         else:
             obj_cls_int = get_object_class(objcls).value
 
+        func = self.context.get_function('oid_gen')
+        if seed is None:
+            seed = ctypes.c_uint(int(time.time()))
         self.c_oid = daos_cref.DaosObjId()
+        self.c_oid.hi = func(seed)
+
+        func = self.context.get_function('generate-oid')
         ret = func(self.container.coh, ctypes.byref(self.c_oid), 0, obj_cls_int,
                    0, 0)
         if ret != 0:
@@ -1286,6 +1274,7 @@ class DaosContProperties(ctypes.Structure):
         self.chksum_type = ctypes.c_uint64(100)
         self.chunk_size = ctypes.c_uint64(0)
 
+
 class DaosInputParams():
     # pylint: disable=too-few-public-methods
     """ This is a helper python method
@@ -1310,6 +1299,7 @@ class DaosInputParams():
         create container method.
         """
         return self.co_prop
+
 
 class DaosContainer():
     # pylint: disable=too-many-public-methods
@@ -1357,20 +1347,20 @@ class DaosContainer():
         # 2. Enable checksum,
         # 3. Server Verfiy
         # 4. Chunk Size Allocation.
-        if ((self.cont_input_values.type != "Unknown")
+        if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
                 and (self.cont_input_values.enable_chksum is False)):
             # Only type like posix, hdf5 defined.
             num_prop = 1
-        elif ((self.cont_input_values.type == "Unknown")
+        elif ((self.cont_input_values.type.decode("UTF-8") == "Unknown")
               and (self.cont_input_values.enable_chksum is True)):
             # Obly checksum enabled.
             num_prop = 3
-        elif ((self.cont_input_values.type != "Unknown")
+        elif ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
               and (self.cont_input_values.enable_chksum is True)):
             # Both layout and checksum properties defined
             num_prop = 4
 
-        if ((self.cont_input_values.type != "Unknown")
+        if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
                 or (self.cont_input_values.enable_chksum is True)):
             self.cont_prop = daos_cref.DaosProperty(num_prop)
         # idx index is used to increment the dpp_entried array
@@ -1379,13 +1369,14 @@ class DaosContainer():
         # dpp_entries will start with idx=0. If layer is not
         # none, checksum dpp_entries will start at idx=1.]
         idx = 0
-        if self.cont_input_values.type != "Unknown":
+        if self.cont_input_values.type.decode("UTF-8") != "Unknown":
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
-            if self.cont_input_values.type in ("posix", "POSIX"):
+            if self.cont_input_values.type.decode(
+                    "UTF-8") in ("posix", "POSIX"):
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value)
-            elif self.cont_input_values.type == "hdf5":
+            elif self.cont_input_values.type.decode("UTF-8") == "hdf5":
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value)
             else:
@@ -2139,6 +2130,7 @@ class DaosSnapshot():
             raise Exception("Failed to destroy the snapshot. RC: {0}"
                             .format(retcode))
 
+
 class DaosContext():
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
@@ -2210,7 +2202,8 @@ class DaosContext():
             'set-pool-attr':   self.libdaos.daos_pool_set_attr,
             'stop-service':    self.libdaos.daos_pool_stop_svc,
             'test-event':      self.libdaos.daos_event_test,
-            'update-obj':      self.libdaos.daos_obj_update}
+            'update-obj':      self.libdaos.daos_obj_update,
+            'oid_gen':         self.libtest.dts_oid_gen}
 
     def get_function(self, function):
         """Call a function through the API."""

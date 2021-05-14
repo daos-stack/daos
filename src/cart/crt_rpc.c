@@ -150,6 +150,13 @@ static struct crt_corpc_ops crt_iv_sync_co_ops = {
 
 CRT_GEN_PROC_FUNC(crt_grp_cache, CRT_SEQ_GRP_CACHE);
 
+static int
+crt_proc_struct_crt_grp_cache(crt_proc_t proc, crt_proc_op_t proc_op,
+			      struct crt_grp_cache *data)
+{
+	return crt_proc_crt_grp_cache(proc, data);
+}
+
 /* !! All of the following 4 RPC definition should have the same input fields !!
  * All of them are verified in one function:
  * int verify_ctl_in_args(struct crt_ctl_ep_ls_in *in_args)
@@ -1822,4 +1829,32 @@ crt_req_dst_tag_get(crt_rpc_t *rpc, uint32_t *tag)
 	*tag = rpc_priv->crp_req_hdr.cch_dst_tag;
 out:
 	return rc;
+}
+
+int
+crt_register_hlc_error_cb(crt_hlc_error_cb event_handler, void *arg)
+{
+	int rc = 0;
+
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
+	crt_plugin_gdata.hlc_error_cb = event_handler;
+	crt_plugin_gdata.hlc_error_cb_arg = arg;
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
+
+	return rc;
+}
+
+void
+crt_trigger_hlc_error_cb(void)
+{
+	crt_hlc_error_cb	handler;
+	void			*arg;
+
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
+	handler = crt_plugin_gdata.hlc_error_cb;
+	arg = crt_plugin_gdata.hlc_error_cb_arg;
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
+
+	if (handler)
+		handler(arg);
 }

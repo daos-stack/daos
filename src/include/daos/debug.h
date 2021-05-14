@@ -84,6 +84,7 @@ DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
 
 /** initialize the debug system */
 int  daos_debug_init(char *logfile);
+void daos_debug_set_id_cb(d_log_id_cb_t id_cb);
 /** finalize the debug system */
 void daos_debug_fini(void);
 

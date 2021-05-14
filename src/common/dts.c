@@ -66,14 +66,15 @@ pool_init(struct credit_context *tsc)
 		if (tsc_create_pool(tsc)) {
 			/* Use pool size as blob size for this moment. */
 			rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
-					     tsc->tsc_nvme_size);
+					     tsc->tsc_nvme_size, 0, &poh);
+			if (rc)
+				goto out;
+		} else {
+			rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, 0,
+					   &poh);
 			if (rc)
 				goto out;
 		}
-
-		rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, false, &poh);
-		if (rc)
-			goto out;
 
 	} else if (tsc->tsc_mpi_rank == 0) { /* DAOS mode and rank zero */
 		d_rank_list_t	*svc = &tsc->tsc_svc;

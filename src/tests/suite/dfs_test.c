@@ -58,7 +58,7 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DFS unit tests..");
 			daos_test_print(rank, "=====================");
-			nr_failed = run_dfs_unit_test(rank, size);
+			nr_failed += run_dfs_unit_test(rank, size);
 			break;
 
 		default:

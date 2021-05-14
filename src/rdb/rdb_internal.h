@@ -102,7 +102,7 @@ DP_RANK(void)
 }
 
 #define DF_DB		DF_UUID"["DF_RANK"]"
-#define DP_DB(db)	DP_UUID(db->d_uuid), DP_RANK()
+#define DP_DB(db)	DP_UUID((db)->d_uuid), DP_RANK()
 
 /* Number of "base" references that the rdb_stop() path expects to remain */
 #define RDB_BASE_REFS 1

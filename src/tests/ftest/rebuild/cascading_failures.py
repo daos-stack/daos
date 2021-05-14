@@ -6,15 +6,12 @@
 """
 from rebuild_test_base import RebuildTestBase
 
-
 class CascadingFailures(RebuildTestBase):
     # pylint: disable=too-many-ancestors
     """Test cascading failures during rebuild.
 
     :avocado: recursive
     """
-
-    CANCEL_FOR_TICKET = [["DAOS-2799", "targets", 8]]
 
     def __init__(self, *args, **kwargs):
         """Initialize a CascadingFailures object."""

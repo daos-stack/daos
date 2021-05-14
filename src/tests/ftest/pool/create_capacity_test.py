@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
 (C) Copyright 2021 Intel Corporation.
 
@@ -39,7 +39,7 @@ class PoolCreateTests(PoolTestBase):
         quantity = self.params.get("quantity", "/run/pool/*", 1)
         ratio = 0.6 / quantity
         self.pool = self.get_pool_list(quantity, ratio, ratio, 1)
-        self.check_pool_creation(3)
+        self.check_pool_creation(10)
 
         # Verify DAOS can be restarted in less than 2 minutes
         try:

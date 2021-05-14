@@ -9,13 +9,15 @@ package server
 import (
 	"context"
 	"net"
+	"os"
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -23,7 +25,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -137,13 +138,13 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 const (
 	groupUpdateInterval = 500 * time.Millisecond
 	batchJoinInterval   = 250 * time.Millisecond
-	joinRespTimeout     = 10 * time.Millisecond
 )
 
 type (
 	batchJoinRequest struct {
 		mgmtpb.JoinReq
 		peerAddr *net.TCPAddr
+		joinCtx  context.Context
 		respCh   chan *batchJoinResponse
 	}
 
@@ -198,29 +199,35 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 				joinResps[i] = svc.join(parent, req)
 			}
 
-			for {
-				err := svc.doGroupUpdate(parent)
-				if err == nil || errors.Cause(err) == errInstanceNotReady {
-					break
-				}
-
-				err = errors.Wrap(err, "failed to perform CaRT group update")
-				for i, jr := range joinResps {
-					if jr.joinErr == nil {
-						joinResps[i] = &batchJoinResponse{joinErr: err}
+			// Reset groupUpdateNeeded here to avoid triggering it
+			// again by timer. Any requests that were made between
+			// the last timer and these join requests will be handled
+			// here.
+			groupUpdateNeeded = false
+			if err := svc.doGroupUpdate(parent); err != nil {
+				// If the call failed, however, make sure that
+				// it gets called again by the timer. We have to
+				// deal with the situation where a local MS service
+				// rank is joining but isn't ready to handle dRPC
+				// requests yet.
+				groupUpdateNeeded = true
+				if errors.Cause(err) != errInstanceNotReady {
+					err = errors.Wrap(err, "failed to perform CaRT group update")
+					for i, jr := range joinResps {
+						if jr.joinErr == nil {
+							joinResps[i] = &batchJoinResponse{joinErr: err}
+						}
 					}
 				}
-				break
 			}
 
 			svc.log.Debugf("sending %d join responses", len(joinReqs))
 			for i, req := range joinReqs {
-				ctx, cancel := context.WithTimeout(parent, joinRespTimeout)
-				defer cancel()
-
 				select {
-				case <-ctx.Done():
-					svc.log.Errorf("failed to send join response: %s", ctx.Err())
+				case <-parent.Done():
+					svc.log.Errorf("joinLoop shut down before response sent: %s", parent.Err())
+				case <-req.joinCtx.Done():
+					svc.log.Errorf("failed to send join response: %s", req.joinCtx.Err())
 				case req.respCh <- joinResps[i]:
 				}
 			}
@@ -386,6 +393,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	bjr := &batchJoinRequest{
 		JoinReq:  *req,
 		peerAddr: replyAddr,
+		joinCtx:  ctx,
 		respCh:   make(chan *batchJoinResponse),
 	}
 
@@ -553,7 +561,7 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debug("Received SystemQuery RPC")
+	svc.log.Debugf("Received SystemQuery RPC: %+v", req)
 
 	hitRanks, missRanks, missHosts, err := svc.resolveRanks(req.Hosts, req.Ranks)
 	if err != nil {
@@ -611,15 +619,19 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 		return nil, errors.New("invalid request, no action specified")
 	}
 
+	// TODO DAOS-7264: system_stop_failed event should be raised in the case
+	//                 that operation failed and should indicate which ranks
+	//                 did not stop.
+	//
 	// Raise event on systemwide shutdown
-	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
-		svc.events.Publish(events.New(&events.RASEvent{
-			ID:   events.RASSystemStop,
-			Type: events.RASTypeInfoOnly,
-			Msg:  "System-wide shutdown requested",
-			Rank: uint32(system.NilRank),
-		}))
-	}
+	// if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
+	// 	svc.events.Publish(events.New(&events.RASEvent{
+	// 		ID:   events.RASSystemStop,
+	// 		Type: events.RASTypeInfoOnly,
+	// 		Msg:  "System-wide shutdown requested",
+	// 		Rank: uint32(system.NilRank),
+	// 	}))
+	// }
 
 	pbResp := new(mgmtpb.SystemStopResp)
 
@@ -672,15 +684,19 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 	}
 	svc.log.Debug("Received SystemStart RPC")
 
+	// TODO DAOS-7264: system_start_failed event should be raised in the
+	//                 case that operation failed and should indicate which
+	//                 ranks did not start.
+	//
 	// Raise event on systemwide start
-	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
-		svc.events.Publish(events.New(&events.RASEvent{
-			ID:   events.RASSystemStart,
-			Type: events.RASTypeInfoOnly,
-			Msg:  "System-wide start requested",
-			Rank: uint32(system.NilRank),
-		}))
-	}
+	// if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
+	// 	svc.events.Publish(events.New(&events.RASEvent{
+	// 		ID:   events.RASSystemStart,
+	// 		Type: events.RASTypeInfoOnly,
+	// 		Msg:  "System-wide start requested",
+	// 		Rank: uint32(system.NilRank),
+	// 	}))
+	// }
 
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.StartRanks,
@@ -707,52 +723,6 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartRe
 	return pbResp, nil
 }
 
-// SystemResetFormat implements the method defined for the Management Service.
-//
-// Prepare to reformat DAOS system by resetting format state of each rank
-// and await storage format on each relevant instance (system member).
-//
-// This control service method is triggered from the control API method of the
-// same name in lib/control/system.go and returns results from all selected ranks.
-func (svc *mgmtSvc) SystemResetFormat(ctx context.Context, pbReq *mgmtpb.SystemResetFormatReq) (*mgmtpb.SystemResetFormatResp, error) {
-	if err := svc.checkLeaderRequest(pbReq); err != nil {
-		return nil, err
-	}
-	svc.log.Debug("Received SystemResetFormat RPC")
-
-	// We can't rely on the db being up and running, as one of the
-	// use cases for this command is to nuke the system from orbit
-	// regardless of what state it's in. But we should at least enforce
-	// that the RPC is being handled on a MS replica.
-	if err := svc.sysdb.CheckReplica(); err != nil {
-		return nil, err
-	}
-
-	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
-		Method: control.ResetFormatRanks,
-		Hosts:  pbReq.GetHosts(),
-		Ranks:  pbReq.GetRanks(),
-	}, false)
-	if err != nil {
-		return nil, err
-	}
-
-	pbResp := &mgmtpb.SystemResetFormatResp{
-		Absentranks: fanResp.AbsentRanks.String(),
-		Absenthosts: fanResp.AbsentHosts.String(),
-	}
-	if err := convert.Types(fanResp.Results, &pbResp.Results); err != nil {
-		return nil, err
-	}
-	for _, result := range pbResp.Results {
-		result.Action = "reset format"
-	}
-
-	svc.log.Debugf("Responding to SystemResetFormat RPC: %+v", pbResp)
-
-	return pbResp, nil
-}
-
 // ClusterEvent management service gRPC handler receives ClusterEvent requests
 // from control-plane instances attempting to notify the MS of a cluster event
 // in the DAOS system (this handler should only get called on the MS leader).
@@ -768,4 +738,106 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEvent
 	}
 
 	return resp, nil
+}
+
+// eraseAndRestart is called on MS replicas to shut down the raft DB and
+// remove its files before restarting the control plane server.
+func (svc *mgmtSvc) eraseAndRestart(pause bool) error {
+	svc.log.Infof("%s pid %d: erasing system db", build.ControlPlaneName, os.Getpid())
+
+	if err := svc.sysdb.Stop(); err != nil {
+		return errors.Wrap(err, "failed to stop system database")
+	}
+	if err := svc.sysdb.RemoveFiles(); err != nil {
+		return errors.Wrap(err, "failed to remove system database")
+	}
+
+	myPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		return errors.Wrap(err, "unable to determine path to self")
+	}
+
+	go func() {
+		if pause {
+			time.Sleep(50 * time.Millisecond)
+		}
+		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
+			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
+		}
+	}()
+
+	return nil
+}
+
+// SystemErase implements the gRPC handler for erasing system metadata.
+func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseReq) (*mgmtpb.SystemEraseResp, error) {
+	// At a minimum, ensure that this only runs on MS replicas.
+	if err := svc.checkReplicaRequest(pbReq); err != nil {
+		return nil, err
+	}
+
+	svc.log.Debug("Received SystemErase RPC")
+
+	// If this is called on a non-leader replica, nuke the local
+	// instance of the database and any superblocks, then restart.
+	//
+	// TODO (DAOS-7080): Rework this to remove redundancy and thoroughly
+	// wipe SCM rather than removing things piecemeal.
+	if !svc.sysdb.IsLeader() {
+		for _, engine := range svc.harness.Instances() {
+			if err := engine.Stop(unix.SIGKILL); err != nil {
+				svc.log.Errorf("instance %d failed to stop: %s", engine.Index(), err)
+			}
+			if err := engine.RemoveSuperblock(); err != nil {
+				svc.log.Errorf("instance %d failed to remove superblock: %s", engine.Index(), err)
+			}
+		}
+		svc.eraseAndRestart(false)
+	}
+
+	// On the leader, we should first tell all servers to prepare for
+	// reformat by wiping out their engine superblocks, etc.
+	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
+		Method: control.ResetFormatRanks,
+	}, false)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, mr := range fanResp.Results {
+		svc.log.Debugf("member response: %#v", mr)
+	}
+
+	pbResp := new(mgmtpb.SystemEraseResp)
+	if err := convert.Types(fanResp.Results, &pbResp.Results); err != nil {
+		return nil, err
+	}
+	for _, result := range pbResp.Results {
+		result.Action = "reset format"
+	}
+
+	if fanResp.Results.Errors() != nil {
+		return pbResp, nil
+	}
+
+	// Next, tell all of the replicas to lobotomize themselves and restart.
+	peers, err := svc.sysdb.PeerAddrs()
+	if err != nil {
+		return nil, err
+	}
+	for _, peer := range peers {
+		peerReq := new(control.SystemEraseReq)
+		peerReq.AddHost(peer.String())
+
+		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
+			if control.IsConnectionError(err) {
+				continue
+			}
+			return nil, err
+		}
+	}
+
+	// Finally, take care of the leader on the way out.
+	svc.eraseAndRestart(true)
+	return pbResp, nil
 }

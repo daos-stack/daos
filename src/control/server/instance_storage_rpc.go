@@ -7,9 +7,11 @@
 package server
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto"
@@ -43,7 +45,7 @@ func (ei *EngineInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeContro
 		info = fault.ShowResolutionFor(inErr)
 	}
 	return &ctlpb.NvmeControllerResult{
-		Pciaddr: pciAddr,
+		PciAddr: pciAddr,
 		State:   newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_NVME, info),
 	}
 }
@@ -114,7 +116,7 @@ func (ei *EngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeContro
 
 // StorageFormatSCM performs format on SCM and identifies if superblock needs
 // writing.
-func (ei *EngineInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMountResult) {
+func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, reformat bool) (mResult *ctlpb.ScmMountResult) {
 	engineIdx := ei.Index()
 	needsScmFormat := reformat
 
@@ -130,9 +132,18 @@ func (ei *EngineInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMou
 	}()
 
 	if ei.isStarted() {
-		scmErr = errors.Errorf("instance %d: can't format storage of running instance",
-			engineIdx)
-		return
+		if !reformat {
+			scmErr = errors.Errorf("instance %d: can't format storage of running instance",
+				engineIdx)
+			return
+		}
+
+		ei.log.Infof("forcibly stopping instance %d prior to reformat", ei.Index())
+		if scmErr = ei.Stop(unix.SIGKILL); scmErr != nil {
+			return
+		}
+
+		ei.requestStart(ctx)
 	}
 
 	// If not reformatting, check if SCM is already formatted.

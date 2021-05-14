@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2020-2021 Intel Corporation.
 
@@ -41,12 +41,10 @@ class NvmeIo(IorTestBase):
         # Loop for every IOR object type
         for obj_type in object_type:
             for ior_param in tests:
-                # There is an issue with replication for final test case
-                # in the yaml file. Hence, skip that case for all Replication
-                # object classes.
-                if obj_type.startswith("RP") and ior_param[2] == 33554432:
-                    self.log.warning("Replication test Fails with  DAOS-4738,")
-                    self.log.warning("hence skipping")
+                # There is an issue with 8 bytes transfer size Hence, skip
+                # tests case with 8 bytes Transfer size.
+                if ior_param[2] == 8:
+                    self.log.warning("Skip test because of DAOS-7021")
                     continue
 
                 # Create and connect to a pool

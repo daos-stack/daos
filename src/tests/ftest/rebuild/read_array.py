@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2019-2021 Intel Corporation.
 
@@ -13,8 +13,6 @@ class ReadArrayTest(RebuildTestBase):
 
     :avocado: recursive
     """
-
-    CANCEL_FOR_TICKET = [["DAOS-2799", "targets", 8]]
 
     def execute_during_rebuild(self):
         """Read the objects during rebuild."""
@@ -43,6 +41,7 @@ class ReadArrayTest(RebuildTestBase):
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
 
-        :avocado: tags=all,large,full_regression,rebuild,rebuildreadarray
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm,large,rebuild,rebuildreadarray
         """
         self.execute_rebuild_test()

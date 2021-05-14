@@ -97,7 +97,6 @@ dma_buffer_destroy(struct bio_dma_buffer *buf)
 	dma_buffer_shrink(buf, buf->bdb_tot_cnt);
 
 	D_ASSERT(buf->bdb_tot_cnt == 0);
-	buf->bdb_cur_chk = NULL;
 	ABT_mutex_free(&buf->bdb_mutex);
 	ABT_cond_free(&buf->bdb_wait_iods);
 
@@ -116,7 +115,6 @@ dma_buffer_create(unsigned int init_cnt)
 
 	D_INIT_LIST_HEAD(&buf->bdb_idle_list);
 	D_INIT_LIST_HEAD(&buf->bdb_used_list);
-	buf->bdb_cur_chk = NULL;
 	buf->bdb_tot_cnt = 0;
 	buf->bdb_active_iods = 0;
 
@@ -235,18 +233,22 @@ iod_release_buffer(struct bio_desc *biod)
 
 		D_ASSERT(chunk != NULL);
 		D_ASSERT(chunk->bdc_ref > 0);
+		D_ASSERT(chunk->bdc_type == biod->bd_chk_type);
 		chunk->bdc_ref--;
 
-		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u huge:%d\n",
-			chunk, chunk->bdc_ptr, chunk->bdc_pg_idx,
-			chunk->bdc_ref, dma_chunk_is_huge(chunk));
+		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u huge:%d "
+			"type:%u\n", chunk, chunk->bdc_ptr, chunk->bdc_pg_idx,
+			chunk->bdc_ref, dma_chunk_is_huge(chunk),
+			chunk->bdc_type);
 
 		if (dma_chunk_is_huge(chunk)) {
 			dma_free_chunk(chunk);
 		} else if (chunk->bdc_ref == 0) {
 			chunk->bdc_pg_idx = 0;
-			if (chunk == bdb->bdb_cur_chk)
-				bdb->bdb_cur_chk = NULL;
+			D_ASSERT(bdb->bdb_used_cnt[chunk->bdc_type] > 0);
+			bdb->bdb_used_cnt[chunk->bdc_type] -= 1;
+			if (chunk == bdb->bdb_cur_chk[chunk->bdc_type])
+				bdb->bdb_cur_chk[chunk->bdc_type] = NULL;
 			d_list_move_tail(&chunk->bdc_link, &bdb->bdb_idle_list);
 		}
 		rsrvd_dma->brd_dma_chks[i] = NULL;
@@ -357,9 +359,13 @@ chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_desc *biod)
 	if (d_list_empty(&bdb->bdb_idle_list)) {
 		if (bdb->bdb_tot_cnt == bio_chk_cnt_max) {
 			D_CRIT("Maximum per-xstream DMA buffer isn't big "
-			       "enough (chk_sz:%u chk_cnt:%u iods:%u) to "
-			       "sustain the workload.\n", bio_chk_sz,
-			       bio_chk_cnt_max, bdb->bdb_active_iods);
+			       "enough (chk_sz:%u chk_cnt:%u iods:%u "
+			       "used:%u,%u,%u) to sustain the workload.\n",
+			       bio_chk_sz, bio_chk_cnt_max,
+			       bdb->bdb_active_iods,
+			       bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
+			       bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL],
+			       bdb->bdb_used_cnt[BIO_CHK_TYPE_REBUILD]);
 
 			biod->bd_retry = 1;
 			return NULL;
@@ -454,13 +460,14 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 {
 	struct bio_rsrvd_region *last_rg;
 	struct bio_dma_buffer *bdb;
-	struct bio_dma_chunk *chk = NULL;
+	struct bio_dma_chunk *chk = NULL, *cur_chk;
 	uint64_t off, end;
 	unsigned int pg_cnt, pg_off, chk_pg_idx;
 	int rc;
 
 	D_ASSERT(arg == NULL);
 	D_ASSERT(biov && bio_iov2raw_len(biov) != 0);
+	D_ASSERT(biod && biod->bd_chk_type < BIO_CHK_TYPE_MAX);
 
 	if (bio_addr_is_hole(&biov->bi_addr)) {
 		bio_iov_set_raw_buf(biov, NULL);
@@ -520,6 +527,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 			last_rg->brr_off, last_rg->brr_end);
 
 		chk = last_rg->brr_chk;
+		D_ASSERT(biod->bd_chk_type == chk->bdc_type);
 		chk_pg_idx = last_rg->brr_pg_idx;
 		D_ASSERT(chk_pg_idx < bio_chk_sz);
 
@@ -544,6 +552,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 
 	/* Try to reserve from the last DMA chunk in io descriptor */
 	if (chk != NULL) {
+		D_ASSERT(biod->bd_chk_type == chk->bdc_type);
 		chk_pg_idx = chk->bdc_pg_idx;
 		bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx,
 							pg_cnt, pg_off));
@@ -559,8 +568,9 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 	 * per-xstream DMA buffer. It could be different with the last chunk
 	 * in io descriptor, because dma_map_one() may yield in the future.
 	 */
-	if (bdb->bdb_cur_chk != NULL && bdb->bdb_cur_chk != chk) {
-		chk = bdb->bdb_cur_chk;
+	cur_chk = bdb->bdb_cur_chk[biod->bd_chk_type];
+	if (cur_chk != NULL && cur_chk != chk) {
+		chk = cur_chk;
 		chk_pg_idx = chk->bdc_pg_idx;
 		bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx,
 							pg_cnt, pg_off));
@@ -579,7 +589,9 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 	if (chk == NULL)
 		return -DER_OVERFLOW;
 
-	bdb->bdb_cur_chk = chk;
+	chk->bdc_type = biod->bd_chk_type;
+	bdb->bdb_cur_chk[chk->bdc_type] = chk;
+	bdb->bdb_used_cnt[chk->bdc_type] += 1;
 	chk_pg_idx = chk->bdc_pg_idx;
 
 	D_ASSERT(chk_pg_idx == 0);
@@ -886,7 +898,7 @@ dma_drop_iod(struct bio_dma_buffer *bdb)
 }
 
 int
-bio_iod_prep(struct bio_desc *biod)
+bio_iod_prep(struct bio_desc *biod, unsigned int type)
 {
 	struct bio_dma_buffer *bdb;
 	int rc, retry_cnt = 0;
@@ -894,6 +906,7 @@ bio_iod_prep(struct bio_desc *biod)
 	if (biod->bd_buffer_prep)
 		return -DER_INVAL;
 
+	biod->bd_chk_type = type;
 retry:
 	rc = iterate_biov(biod, dma_map_one, NULL);
 	if (rc) {
@@ -1058,7 +1071,7 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 	bsgl->bs_nr_out = bsgl->bs_nr;
 
 	/* map the biov to DMA safe buffer, fill DMA buffer if read operation */
-	rc = bio_iod_prep(biod);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_LOCAL);
 	if (rc)
 		goto out;
 

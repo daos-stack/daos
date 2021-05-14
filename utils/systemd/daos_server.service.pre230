@@ -17,6 +17,7 @@ Restart=on-failure
 RestartSec=10
 LimitMEMLOCK=infinity
 LimitCORE=infinity
+LimitNOFILE=infinity
 StartLimitInterval=60
 StartLimitBurst=5
 

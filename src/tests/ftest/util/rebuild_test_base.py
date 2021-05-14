@@ -9,6 +9,7 @@ from command_utils_base import ObjectWithParameters, BasicParameter
 
 
 class RebuildTestParams(ObjectWithParameters):
+    # pylint: disable=too-few-public-methods
     """Class for gathering test parameters."""
 
     def __init__(self):
@@ -179,6 +180,10 @@ class RebuildTestBase(TestWithServers):
 
         # Confirm rebuild completes
         self.pool.wait_for_rebuild(False, 1)
+
+        # Refresh local pool and container
+        self.pool.check_pool_info()
+        self.container.check_container_info()
 
         # Verify the excluded rank is no longer used with the objects
         self.verify_rank_has_no_objects()
