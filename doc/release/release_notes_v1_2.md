@@ -316,7 +316,10 @@ For a discussion of issues and options, contact us via the
 [mailing list](https://daos.groups.io/g/daos).
 
 ### Limited bandwidth to SCM with some update/write operations
-With a configuration of only Intel(R) Optane Pmem for storage in a DAOS pool
-(no SSDs), a known limitation currently exists on the write/update performance
-with bulk transfers to the SCM with all network providers which limits the BW
-per storage server.
+When populating the scm_mount parameter of the server config file,
+nested subdirectories are not supported as a valid mount point.
+A value of /mnt/daos0 as a mount point will be created and used as intended,
+whereas because nested mount points are not currently supported,
+the value of /mnt/daos/0 may result in a permissions failure during format.
+
+This limitation will be addressed in an upcoming release.
