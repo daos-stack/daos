@@ -42,7 +42,6 @@ const struct daos_task_api dc_funcs[] = {
 
 	/** Pool */
 	{dc_pool_connect, sizeof(daos_pool_connect_t)},
-	{dc_pool_connect_lbl, sizeof(daos_pool_connect_lbl_t)},
 	{dc_pool_disconnect, sizeof(daos_pool_disconnect_t)},
 	{dc_pool_exclude, sizeof(daos_pool_update_t)},
 	{dc_pool_exclude_out, sizeof(daos_pool_update_t)},
@@ -123,6 +122,9 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_kv_put, sizeof(daos_kv_put_t)},
 	{dc_kv_remove, sizeof(daos_kv_remove_t)},
 	{dc_kv_list, sizeof(daos_kv_list_t)},
+
+	/** Pool additions */
+	{dc_pool_connect_lbl, sizeof(daos_pool_connect_lbl_t)},
 };
 
 /**

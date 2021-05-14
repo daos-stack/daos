@@ -61,7 +61,6 @@ daos_pool_connect_bylabel(const char *label, const char *grp,
 	args = dc_task_get_args(task);
 	args->grp		= grp;
 	args->flags		= flags;
-	D_ERROR("kccain: set args->flags=%x\n", args->flags);
 	args->poh		= poh;
 	args->info		= info;
 	args->label		= label;
