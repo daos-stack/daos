@@ -85,9 +85,7 @@ class PoolSecurityTestBase(TestWithServers):
 
         pool_permission_list = []
         for line in result.stdout_text.splitlines():
-            if not line.startswith("A:"):
-                continue
-            elif line.startswith("A::"):
+            if line.startswith("A::"):
                 found_user = re.search(r"A::(.+)@:(.*)", line)
                 if found_user:
                     pool_permission_list.append(line)
