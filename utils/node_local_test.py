@@ -181,8 +181,7 @@ class WarningsFactory():
             return
 
         entry = {}
-        entry['fileName'] = os.path.basename(self._file)
-        entry['directory'] = os.path.dirname(self._file)
+        entry['fileName'] = self._file
         # pylint: disable=protected-access
         entry['lineStart'] = sys._getframe().f_lineno
         entry['message'] = 'Tests exited without shutting down properly'
@@ -263,8 +262,7 @@ class WarningsFactory():
         Add it to the pending array, for later clarification
         """
         entry = {}
-        entry['directory'] = os.path.dirname(line.filename)
-        entry['fileName'] = os.path.basename(line.filename)
+        entry['fileName'] = line.filename
         if mtype:
             entry['type'] = mtype
         else:
@@ -304,8 +302,7 @@ class WarningsFactory():
             # When the test is running insert an error in case of abnormal
             # exit, so that crashes in this code can be identified.
             entry = {}
-            entry['fileName'] = os.path.basename(self._file)
-            entry['directory'] = os.path.dirname(self._file)
+            entry['fileName'] = self._file
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
@@ -674,8 +671,7 @@ class DaosServer():
 
         if len(procs) != 1:
             entry = {}
-            entry['fileName'] = os.path.basename(self._file)
-            entry['directory'] = os.path.dirname(self._file)
+            entry['fileName'] = self._file
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
@@ -1564,6 +1560,44 @@ class posix_tests():
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
+
+    def test_cont_clone(self):
+        """Verify that cloning a container works
+
+        This extends cont_copy, to also clone it afterwards.
+        """
+
+        # Create a temporary directory, with one file into it and copy it into
+        # the container.  Check the returncode only, do not verify the data.
+        # tempfile() will remove the directory on completion.
+        src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
+        ofd = open(os.path.join(src_dir.name, 'file'), 'w')
+        ofd.write('hello')
+        ofd.close()
+
+        cmd = ['filesystem',
+               'copy',
+               '--src',
+               src_dir.name,
+               '--dst',
+               'daos://{}/{}'.format(self.pool, self.container)]
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+
+        # Now create a container uuid and do an object based copy.
+        # The daos command will create the target container on demand.
+        container = str(uuid.uuid4())
+        cmd = ['container',
+               'clone',
+               '--src',
+               'daos://{}/{}'.format(self.pool, self.container),
+               '--dst',
+               'daos://{}/{}'.format(self.pool, container)]
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        destroy_container(self.conf, self.pool, container)
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests
