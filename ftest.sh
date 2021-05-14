@@ -58,7 +58,7 @@ TEST_NODES=$(IFS=","; echo "${nodes[*]:1:8}")
 # Optional arguments for launch.py
 LAUNCH_OPT_ARGS="${3:-}"
 
-# Add the missing '--nvme' argument identifier for backwards compatibilty with
+# Add the missing '--nvme' argument identifier for backwards compatibility with
 # the 'auto:Optane' optional argument specified without the identifier.
 if [[ "${LAUNCH_OPT_ARGS}" == "auto:Optane" ]]; then
     LAUNCH_OPT_ARGS="--nvme=${LAUNCH_OPT_ARGS}"
