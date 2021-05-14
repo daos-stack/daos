@@ -112,7 +112,7 @@ d_tm_get_root(struct d_tm_context *ctx)
  * \param ctx		Telemetry context
  * \param node		Telemetry node
  *
- * \return 		Pointer to first child
+ * \return		Pointer to first child
  *			NULL if not found
  */
 struct d_tm_node_t *
@@ -131,7 +131,7 @@ d_tm_get_child(struct d_tm_context *ctx, struct d_tm_node_t *node)
  * \param ctx		Telemetry context
  * \param node		Telemetry node
  *
- * \return 		Pointer to sibling
+ * \return		Pointer to sibling
  *			NULL if not found
  */
 struct d_tm_node_t *
@@ -150,7 +150,7 @@ d_tm_get_sibling(struct d_tm_context *ctx, struct d_tm_node_t *node)
  * \param ctx		Telemetry context
  * \param node		Telemetry node
  *
- * \return 		Name string
+ * \return		Name string
  *			NULL if not found
  */
 char *
@@ -395,8 +395,8 @@ is_cleared_link(struct d_tm_context *ctx, struct d_tm_node_t *node)
  * \param[in]	link	Link node
  *
  * \return	Node that the link points to
- * 		Original node (if not a link)
- * 		NULL if not found/invalid
+ *		Original node (if not a link)
+ *		NULL if not found/invalid
  */
 struct d_tm_node_t *
 d_tm_follow_link(struct d_tm_context *ctx, struct d_tm_node_t *link)
