@@ -18,7 +18,6 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 // newMntRet creates and populates SCM mount result.
@@ -88,7 +87,6 @@ func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
 // writing.
 func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mResult *ctlpb.ScmMountResult) {
 	engineIdx := ei.Index()
-	needsScmFormat := force
 
 	ei.log.Infof("Formatting scm storage for %s instance %d (reformat: %t)",
 		build.DataPlaneName, engineIdx, force)
@@ -123,21 +121,7 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 		ei.requestStart(ctx)
 	}
 
-	// If not reformatting, check if SCM is already formatted.
-	if !force {
-		needsScmFormat, scmErr = ei.NeedsScmFormat()
-		if scmErr == nil && !needsScmFormat {
-			scmErr = scm.FaultFormatNoReformat
-		}
-		if scmErr != nil {
-			return
-		}
-	}
-
-	if needsScmFormat {
-		mResult, scmErr = ei.scmFormat(true)
-	}
-
+	mResult, scmErr = ei.scmFormat(force)
 	return
 }
 

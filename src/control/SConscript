@@ -187,19 +187,25 @@ def scons():
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
                        sep=" ")
 
+    # Copy setup_spdk.sh script to be executed at daos_server runtime.
+    denv.Install(join('$PREFIX', 'share/daos/control'),
+                 join(gosrc, 'server/init/setup_spdk.sh'))
+
     agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
     dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
     drpcbin = install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
+    serverbin = install_go_bin(denv, gosrc, None, "daos_server",
+                               "daos_server")
 
-    AlwaysBuild([agentbin, dmgbin, drpcbin])
+    AlwaysBuild([agentbin, dmgbin, drpcbin, serverbin])
 
     SConscript('lib/spdk/SConscript', exports='denv')
 
-    senv = denv.Clone()
-    denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
-    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    aenv = denv.Clone()
+    aenv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
+    prereqs.require(aenv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
-    cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
+    cgolibdirs = aenv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/gurt "
                             "-L$BUILD_DIR/src/cart "
                             "-L$SPDK_PREFIX/lib "
@@ -215,22 +221,12 @@ def scons():
              " -lspdk_sock -lspdk_log -lspdk_notify" + \
              " -lspdk_blob_bdev -lspdk_vmd -lnuma -ldl"
 
-    senv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
-
-    senv.AppendENVPath("CGO_CFLAGS",
-                       senv.subst("-I$SPDK_PREFIX/include "
+    aenv.AppendENVPath("CGO_CFLAGS",
+                       aenv.subst("-I$SPDK_PREFIX/include "
                                   "-I$OFI_PREFIX/include"),
                        sep=" ")
 
-    # Copy setup_spdk.sh script to be executed at daos_server runtime.
-    senv.Install(join('$PREFIX', 'share/daos/control'),
-                 join(gosrc, 'server/init/setup_spdk.sh'))
-
-    serverbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_server",
-                               "daos_server")
-
     #Admin binary is expected to be relocated so origin based paths are useless
-    aenv = senv.Clone()
     aenv["ENV"]["CGO_LDFLAGS"] = old_cgold
     aenv.Replace(RPATH=[])
     # Sets CGO_LDFLAGS for rpath
@@ -239,7 +235,7 @@ def scons():
     adminbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_admin",
                               "daos_admin")
 
-    AlwaysBuild([serverbin, adminbin])
+    AlwaysBuild([adminbin])
 
     if is_firmware_mgmt_build(denv):
         print("(EXPERIMENTAL) Building DAOS firmware tools")
