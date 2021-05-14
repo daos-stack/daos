@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v1.0
+site_name: DAOS v2.0 - dev
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 site_url: http://daos.io
@@ -62,7 +62,7 @@ nav:
         - 'Spark and Hadoop': 'user/spark.md'
         - 'Data Mover': 'user/datamover.md'
     - Releases:
-        - 'Release Notes v1.0': 'release/release_notes_v1_0.md'
+        - 'Release Notes v2.0': 'release/release_notes_v2_0.md'
         - 'Support Matrix': 'release/support_matrix.md'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'

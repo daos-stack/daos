@@ -14,7 +14,6 @@ import "ctl/network.proto";
 import "ctl/firmware.proto";
 import "ctl/smd.proto";
 import "ctl/ranks.proto";
-import "shared/ranks.proto";
 
 // Service definitions for communications between gRPC management server and
 // client regarding tasks related to DAOS system and server hardware.

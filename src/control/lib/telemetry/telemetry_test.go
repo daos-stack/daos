@@ -14,7 +14,7 @@ import (
 
 func TestTelemetry_Basics(t *testing.T) {
 	ctx, testMetrics := setupTestMetrics(t)
-	defer cleanupTestMetrics(t)
+	defer cleanupTestMetrics(ctx, t)
 
 	var m Metric
 	var err error

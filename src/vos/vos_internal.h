@@ -102,7 +102,7 @@ enum {
 #define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
 /* Force aggregation/discard ULT yield on certain amount of tight loops */
-#define VOS_AGG_CREDITS_MAX	256
+#define VOS_AGG_CREDITS_MAX	32
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -194,6 +194,8 @@ struct vos_container {
 	d_list_t		vc_dtx_committed_list;
 	/* The temporary list for committed DTXs during re-index. */
 	d_list_t		vc_dtx_committed_tmp_list;
+	/* The list for active DTXs, roughly ordered in time. */
+	d_list_t		vc_dtx_act_list;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
 	/* The items count in vc_dtx_committed_tmp_list. */
@@ -248,6 +250,10 @@ struct vos_dtx_act_ent {
 	 * it is not fatal.
 	 */
 	daos_unit_oid_t			*dae_oids;
+	/* The time (hlc) when the DTX entry is created. */
+	daos_epoch_t			 dae_start_time;
+	/* Link into container::vc_dtx_act_list. */
+	d_list_t			 dae_link;
 
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
@@ -815,6 +821,7 @@ struct vos_iterator {
 	uint32_t		 it_from_parent:1,
 				 it_for_purge:1,
 				 it_for_migration:1,
+				 it_cleanup_stale_dtx:1,
 				 it_ignore_uncommitted:1;
 };
 

@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -42,6 +42,11 @@ var (
 		protocmp.IgnoreFields(&sharedpb.RankResult{}, "msg"),
 	)
 )
+
+func mockEngineDiedEvt(t *testing.T) *events.RASEvent {
+	t.Helper()
+	return events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit, 1234)
+}
 
 // checkUnorderedRankResults fails if results slices contain any differing results,
 // regardless of order. Ignore result "Msg" field as RankResult.Msg generation
@@ -385,9 +390,8 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				*srv._superblock.Rank = system.Rank(i + 1)
 
 				srv.OnInstanceExit(
-					func(_ context.Context, _ system.Rank, _ error) error {
-						svc.events.Publish(events.NewEngineDiedEvent("foo",
-							0, 0, common.NormalExit))
+					func(_ context.Context, _ uint32, _ system.Rank, _ error, _ uint64) error {
+						svc.events.Publish(mockEngineDiedEvt(t))
 						return nil
 					})
 			}

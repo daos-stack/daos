@@ -237,10 +237,10 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 
 func registerEngineCallbacks(engine *EngineInstance, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
-	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname(), engine.Index()))
+	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname()))
 
 	// Register callback to publish engine format requested events.
-	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, hostname(), engine.Index()))
+	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, hostname()))
 
 	var onceReady sync.Once
 	engine.OnReady(func(_ context.Context) error {
@@ -304,7 +304,12 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 
 	srv.OnEnginesStarted(func(ctxIn context.Context) error {
 		srv.log.Debug("starting Prometheus exporter")
-		return startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances())
+		cleanup, err := startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances())
+		if err != nil {
+			return err
+		}
+		srv.OnShutdown(cleanup)
+		return nil
 	})
 }
 
