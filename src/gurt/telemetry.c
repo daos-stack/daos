@@ -705,15 +705,17 @@ failure:
 void
 d_tm_fini(void)
 {
-	bool	needs_cleanup = false;
+	bool	destroy_shmem = false;
 
 	if (tm_shmem.ctx == NULL)
 		goto out;
 
-	if (tm_shmem.ctx->shmem_root != NULL && !tm_shmem.retain)
-		needs_cleanup = true;
+	if (!tm_shmem.retain)
+		destroy_shmem = true;
 
-	close_all_shmem(tm_shmem.ctx, needs_cleanup);
+	/* close with the option to destroy the shmem region if needed */
+	close_all_shmem(tm_shmem.ctx, destroy_shmem);
+	d_tm_close(&tm_shmem.ctx);
 
 out:
 	memset(&tm_shmem, 0, sizeof(tm_shmem));
