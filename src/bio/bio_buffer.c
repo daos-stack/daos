@@ -587,6 +587,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		if (chk == NULL)
 			return -DER_NOMEM;
 
+		chk->bdc_type = biod->bd_chk_type;
 		rc = iod_add_chunk(biod, chk);
 		if (rc) {
 			dma_free_chunk(chk);
