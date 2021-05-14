@@ -38,7 +38,7 @@ struct d_tm_shmem_hdr {
 	/**
 	 * List of all ephemeral regions attached to this shmem region.
 	 */
-	d_list_t	 	 sh_subregions;
+	d_list_t		 sh_subregions;
 };
 
 /** node in the linked list of open memory regions from local perspective */
@@ -159,7 +159,7 @@ open_shmem(key_t key, struct d_tm_shmem_hdr **shmem)
 	return attach_shmem(key, 0, 0, shmem);
 }
 
-inline static void
+static inline void
 close_shmem(struct d_tm_shmem_hdr *shmem)
 {
 	if (shmem == NULL)
@@ -170,7 +170,7 @@ close_shmem(struct d_tm_shmem_hdr *shmem)
 			strerror(errno));
 }
 
-inline static void
+static inline void
 destroy_shmem(int shmid)
 {
 	D_INFO("Destroying shared memory segment (shmid=%d)\n", shmid);
@@ -1783,7 +1783,7 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 	char			*rest;
 	char			*unit_string;
 	int			buff_len;
-	int			rc;
+	int			rc = 0;
 
 	rest = path;
 	parent_node = d_tm_get_root(ctx);
@@ -3155,7 +3155,7 @@ allocate_shared_memory(key_t key, size_t mem_size,
 
 	D_INIT_LIST_HEAD(&header->sh_subregions);
 
-	D_DEBUG(DB_MEM, "Created shared memory region for key 0x%d, size=%lu\n",
+	D_DEBUG(DB_MEM, "Created shared memory region for key 0x%x, size=%lu\n",
 		key, mem_size);
 
 	*shmem = header;
