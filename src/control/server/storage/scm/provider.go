@@ -621,7 +621,6 @@ func (p *Provider) clearMount(mntpt string) error {
 // deep. If subdirectories in path already exist, their permissions will not be
 // modified.
 func (p *Provider) makeMountPath(path string, tgtUID, tgtGID int) error {
-	p.log.Debugf("%s ,", path)
 	if !filepath.IsAbs(path) {
 		return errors.Errorf("expecting absolute target path, got %q", path)
 	}
@@ -636,7 +635,6 @@ func (p *Provider) makeMountPath(path string, tgtUID, tgtGID int) error {
 
 	for i := range dirs {
 		ps := sep + filepath.Join(dirs[:i+1]...)
-		p.log.Debugf("%s , %v", ps, dirs)
 		_, err := p.Stat(ps)
 		switch {
 		case os.IsNotExist(err):
@@ -846,9 +844,7 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 
 // Stat probes the specified path and returns os level file info.
 func (p *Provider) Stat(path string) (os.FileInfo, error) {
-	i, e := p.sys.Stat(path)
-	p.log.Debugf("stat: %v", e)
-	return i, e
+	return p.sys.Stat(path)
 }
 
 // IsMounted checks to see if the target device or directory is mounted and

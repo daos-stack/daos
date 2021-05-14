@@ -483,12 +483,20 @@ func TestProvider_makeMountPath(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		mntpt     string
+		existPath string
 		statErrs  map[string]error
 		expCreate bool
 		expErr    error
 	}{
 		"existing nested": {
 			mntpt: "/mnt/daos/0",
+		},
+		"existing nested; bad perms": {
+			mntpt: "/mnt/daos/0",
+			statErrs: map[string]error{
+				"/mnt/daos/0": os.ErrPermission,
+			},
+			expErr: os.ErrPermission,
 		},
 		"new nested": {
 			mntpt: "/mnt/daos/0",
@@ -499,23 +507,52 @@ func TestProvider_makeMountPath(t *testing.T) {
 			},
 			expCreate: true,
 		},
+		"partial existing nested": {
+			mntpt:     "/mnt/projects/daos/0",
+			existPath: "/mnt/projects",
+			statErrs: map[string]error{
+				"/mnt/projects/daos":   os.ErrNotExist,
+				"/mnt/projects/daos/0": os.ErrNotExist,
+			},
+			expCreate: true,
+		},
+		// similate situation where mount ancestor dir exists with
+		// incompatible permissions
+		"partial existing nested; bad perms": {
+			mntpt:     "/mnt/projects/daos/0",
+			existPath: "/mnt/projects",
+			statErrs: map[string]error{
+				"/mnt/projects/daos":   os.ErrPermission,
+				"/mnt/projects/daos/0": os.ErrNotExist,
+			},
+			expErr: os.ErrPermission,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
 			testCaseDir := filepath.Join(testDir, "tc")
-			os.Mkdir(testCaseDir, defaultMountPointPerms)
+			if err := os.Mkdir(testCaseDir, defaultMountPointPerms); err != nil {
+				t.Fatal(err)
+			}
 			defer os.RemoveAll(testCaseDir)
 
-			msp := MockSysProvider{
+			if tc.existPath != "" {
+				ep := filepath.Join(testCaseDir, tc.existPath)
+				if err := os.MkdirAll(ep, defaultMountPointPerms); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			msc := MockSysConfig{
 				statErrors: make(map[string]error),
 			}
 			for mp, err := range tc.statErrs {
 				k := filepath.Join(testCaseDir, mp)
-				msp.statErrors[k] = err
+				msc.statErrors[k] = err
 			}
-			p := NewProvider(log, DefaultMockBackend(), &msp)
+			p := NewMockProvider(log, nil, &msc)
 
 			tMntpt := filepath.Join(testCaseDir, tc.mntpt)
 
@@ -598,7 +635,7 @@ func TestProvider_Format(t *testing.T) {
 			isMountedErr: errors.New("is mounted check failed"),
 		},
 		"ramdisk: mountpoint doesn't exist": {
-			mountPoint:   goodMountPoint,
+			mountPoint: goodMountPoint,
 			isMountedErr: os.ErrNotExist,
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
@@ -682,7 +719,7 @@ func TestProvider_Format(t *testing.T) {
 			mountErr:       errors.New("mount failed"),
 		},
 		"ramdisk: mountpoint doesn't exist; nested mountpoint": {
-			mountPoint:   nestedMountPoint,
+			mountPoint: nestedMountPoint,
 			isMountedErr: os.ErrNotExist,
 			expResponse: &FormatResponse{
 				Mountpoint: nestedMountPoint,
@@ -874,21 +911,6 @@ func TestProvider_Format(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			mbc := &MockBackendConfig{
-				DiscoverErr:         tc.discoverErr,
-				DiscoverRes:         storage.ScmModules{defaultModule},
-				GetPmemNamespaceErr: tc.getNamespaceErr,
-			}
-			msc := &MockSysConfig{
-				IsMountedBool: tc.alreadyMounted,
-				IsMountedErr:  tc.isMountedErr,
-				GetfsStr:      tc.getFsStr,
-				GetfsErr:      tc.getFsErr,
-				MkfsErr:       tc.mkfsErr,
-				MountErr:      tc.mountErr,
-				UnmountErr:    tc.unmountErr,
-			}
-			p := NewMockProvider(log, mbc, msc)
 			cmpRes := func(t *testing.T, want, got *FormatResponse) {
 				t.Helper()
 				if diff := cmp.Diff(want, got); diff != "" {
@@ -901,6 +923,22 @@ func TestProvider_Format(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer os.RemoveAll(testDir)
+
+			mbc := MockBackendConfig{
+				DiscoverErr:         tc.discoverErr,
+				DiscoverRes:         storage.ScmModules{defaultModule},
+				GetPmemNamespaceErr: tc.getNamespaceErr,
+			}
+			msc := MockSysConfig{
+				IsMountedBool: tc.alreadyMounted,
+				IsMountedErr:  tc.isMountedErr,
+				GetfsStr:      tc.getFsStr,
+				GetfsErr:      tc.getFsErr,
+				MkfsErr:       tc.mkfsErr,
+				MountErr:      tc.mountErr,
+				UnmountErr:    tc.unmountErr,
+			}
+			p := NewMockProvider(log, &mbc, &msc)
 
 			req := tc.request
 			if req == nil {
