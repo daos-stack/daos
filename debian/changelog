@@ -1,3 +1,9 @@
+daos (1.3.0-16) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update to mercury v2.0.1
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Fri, 14 May 2021 15:31:50 -0400
+
 daos (1.3.0-15) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Update to build on EL8
