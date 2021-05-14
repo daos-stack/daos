@@ -164,7 +164,7 @@ mdtest_stress:
     iteration: 1
     num_of_files_dirs: 3000
     branching_factor: 1
-    flags: '-L -F -N 1 -P -v'
+    flags: '-v'
     write_bytes:
         - 3901
     read_bytes:
@@ -172,10 +172,8 @@ mdtest_stress:
     depth:
         - 10
         - 0
-    dfs_oclass:
-        - 'S1'
-    dfs_dir_oclass:
-        - 'SX'
+    dfs_oclass: 'SX'
+    dfs_dir_oclass: 'S1'
     dfs_destroy: False
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"

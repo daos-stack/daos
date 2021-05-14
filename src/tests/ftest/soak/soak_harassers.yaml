@@ -176,20 +176,18 @@ mdtest_harasser:
         - 'DFS'
         - 'POSIX'
     iteration: 1
-    num_of_files_dirs: 10000
+    num_of_files_dirs: 3000
     pre_iter: 10
-    flags: '-L -F -N 1 -P -v'
+    flags: '-v'
     write_bytes:
         - 3901
     read_bytes:
         - 3901
     depth:
-        - 20
-        - 5
-    dfs_oclass:
-        - 'RP_2G1'
-    dfs_dir_oclass:
-        - 'RP_2G1'
+        - 10
+        - 0
+    dfs_oclass: 'RP_2G1'
+    dfs_dir_oclass: 'RP_2G1'
     dfs_destroy: False
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"

@@ -165,17 +165,15 @@ mdtest_smoke:
     iteration: 1
     num_of_files_dirs: 100
     pre_iter: 10
-    flags: '-L -F -N 1 -P -v'
+    flags: '-v'
     write_bytes:
         - 4096
     read_bytes:
         - 4096
     depth:
         - 0
-    dfs_oclass:
-        - 'SX'
-    dfs_dir_oclass:
-        - 'SX'
+    dfs_oclass: 'SX'
+    dfs_dir_oclass: 'S1'
     dfs_destroy: False
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"

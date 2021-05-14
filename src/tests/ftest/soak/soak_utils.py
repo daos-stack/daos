@@ -768,72 +768,70 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     mdtest_params = "/run/" + job_spec + "/"
     mpi_module = self.params.get(
         "mpi_module", "/run/*", default="mpi/mpich-x86_64")
-    # IOR job specs with a list of parameters; update each value
+    # mdtest job specs with a list of parameters; update each value
     api_list = self.params.get("api", mdtest_params + "*")
     write_bytes_list = self.params.get("write_bytes", mdtest_params + "*")
     read_bytes_list = self.params.get("read_bytes", mdtest_params + "*")
     depth_list = self.params.get("depth", mdtest_params + "*")
     flag = self.params.get("flags", mdtest_params + "*")
-    oclass_list = self.params.get("dfs_oclass", mdtest_params + "*")
+    oclass = self.params.get("dfs_oclass", mdtest_params + "*")
+    oclass_dir = self.params.get("dfs_dir_oclass", mdtest_params + "*")
     num_of_files_dirs = self.params.get(
         "num_of_files_dirs", mdtest_params + "*")
-    # update IOR cmdline for each additional IOR obj
-    # pylint: disable=too-many-nested-blocks
+    # update mdtest cmdline for each additional mdtest obj
     for api in api_list:
         if api in ["POSIX"] and ppn > 16:
             continue
         for write_bytes in write_bytes_list:
             for read_bytes in read_bytes_list:
                 for depth in depth_list:
-                    for oclass in oclass_list:
-                        # Get the parameters for Mdtest
-                        mdtest_cmd = MdtestCommand()
-                        mdtest_cmd.namespace = mdtest_params
-                        mdtest_cmd.get_params(self)
-                        mdtest_cmd.api.update(api)
-                        mdtest_cmd.write_bytes.update(write_bytes)
-                        mdtest_cmd.read_bytes.update(read_bytes)
-                        mdtest_cmd.depth.update(depth)
-                        mdtest_cmd.flags.update(flag)
-                        mdtest_cmd.num_of_files_dirs.update(
-                            num_of_files_dirs)
-                        add_containers(self, pool, oclass)
-                        mdtest_cmd.set_daos_params(
-                            self.server_group, pool,
-                            self.container[-1].uuid)
-                        mdtest_cmd.dfs_oclass.update(oclass)
-                        mdtest_cmd.dfs_dir_oclass.update(oclass)
-                        env = mdtest_cmd.get_default_env("srun")
-                        sbatch_cmds = [
-                            "module load -q {}".format(mpi_module)]
-                        # include dfuse cmdlines
-                        log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
-                            job_spec, api, write_bytes, read_bytes, depth,
-                            oclass, nodesperjob * ppn, nodesperjob,
-                            ppn)
-                        if api in ["POSIX"]:
-                            dfuse, dfuse_start_cmdlist = start_dfuse(
-                                self, pool, self.container[-1], nodesperjob,
-                                "SLURM", name=log_name)
-                            sbatch_cmds.extend(dfuse_start_cmdlist)
-                            mdtest_cmd.test_dir.update(
-                                dfuse.mount_dir.value)
-                        srun_cmd = Srun(mdtest_cmd)
-                        srun_cmd.assign_processes(nodesperjob * ppn)
-                        srun_cmd.assign_environment(env, True)
-                        srun_cmd.ntasks_per_node.update(ppn)
-                        srun_cmd.nodes.update(nodesperjob)
-                        sbatch_cmds.append(str(srun_cmd))
-                        sbatch_cmds.append("status=$?")
-                        if api in ["POSIX"]:
-                            sbatch_cmds.extend(
-                                stop_dfuse(dfuse, nodesperjob, "SLURM"))
-                        commands.append([sbatch_cmds, log_name])
-                        self.log.info(
-                            "<<MDTEST {} cmdlines>>:".format(api))
-                        for cmd in sbatch_cmds:
-                            self.log.info("%s", cmd)
-    # pylint: enable=too-many-nested-blocks
+                    # Get the parameters for Mdtest
+                    mdtest_cmd = MdtestCommand()
+                    mdtest_cmd.namespace = mdtest_params
+                    mdtest_cmd.get_params(self)
+                    mdtest_cmd.api.update(api)
+                    mdtest_cmd.write_bytes.update(write_bytes)
+                    mdtest_cmd.read_bytes.update(read_bytes)
+                    mdtest_cmd.depth.update(depth)
+                    mdtest_cmd.flags.update(flag)
+                    mdtest_cmd.num_of_files_dirs.update(
+                        num_of_files_dirs)
+                    add_containers(self, pool, oclass)
+                    mdtest_cmd.set_daos_params(
+                        self.server_group, pool,
+                        self.container[-1].uuid)
+                    mdtest_cmd.dfs_oclass.update(oclass)
+                    mdtest_cmd.dfs_dir_oclass.update(oclass_dir)
+                    env = mdtest_cmd.get_default_env("srun")
+                    sbatch_cmds = [
+                        "module load -q {}".format(mpi_module)]
+                    # include dfuse cmdlines
+                    log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
+                        job_spec, api, write_bytes, read_bytes, depth,
+                        oclass, nodesperjob * ppn, nodesperjob,
+                        ppn)
+                    if api in ["POSIX"]:
+                        dfuse, dfuse_start_cmdlist = start_dfuse(
+                            self, pool, self.container[-1], nodesperjob,
+                            "SLURM", name=log_name)
+                        sbatch_cmds.extend(dfuse_start_cmdlist)
+                        mdtest_cmd.test_dir.update(
+                            dfuse.mount_dir.value)
+                    srun_cmd = Srun(mdtest_cmd)
+                    srun_cmd.assign_processes(nodesperjob * ppn)
+                    srun_cmd.assign_environment(env, True)
+                    srun_cmd.ntasks_per_node.update(ppn)
+                    srun_cmd.nodes.update(nodesperjob)
+                    sbatch_cmds.append(str(srun_cmd))
+                    sbatch_cmds.append("status=$?")
+                    if api in ["POSIX"]:
+                        sbatch_cmds.extend(
+                            stop_dfuse(dfuse, nodesperjob, "SLURM"))
+                    commands.append([sbatch_cmds, log_name])
+                    self.log.info(
+                        "<<MDTEST {} cmdlines>>:".format(api))
+                    for cmd in sbatch_cmds:
+                        self.log.info("%s", cmd)
     return commands
 
 
