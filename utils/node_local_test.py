@@ -2522,7 +2522,7 @@ class AllocFailTestRun():
             # no src line to log them against, so simply assert.
             assert self.returncode == 0
 
-            if self.check_post_stdout:
+            if self.aft.check_post_stdout:
                 assert self.stderr == b''
                 if self.aft.expected_stdout is not None:
                     assert self.stdout == self.aft.expected_stdout
