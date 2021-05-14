@@ -66,6 +66,13 @@ class installed_comps():
         self.not_installed.append(name)
         return False
 
+def exclude(reqs, name, use_value, exclude_value):
+    """Return True if in exclude list"""
+    if set([name, 'all']).intersection(set(reqs.exclude)):
+        print("Excluding %s from build" % name)
+        return exclude_value
+    return use_value
+
 def inst(reqs, name):
     """Return True if name is in list of installed packages"""
     installed = installed_comps(reqs)
@@ -101,6 +108,20 @@ def define_mercury(reqs):
     else:
         atomic = 'openpa'
 
+    reqs.define('psm2',
+                retriever=GitRepoRetriever(
+                    'https://github.com/intel/opa-psm2.git'),
+                # psm2 hard-codes installing into /usr/...
+                commands=['sed -i -e "s/\\(.{DESTDIR}\\/\\)usr\\//\\1/" ' +
+                          '       -e "s/\\(INSTALL_LIB_TARG=' +
+                          '\\/usr\\/lib\\)64/\\1/" ' +
+                          '       -e "s/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/" ' +
+                          'Makefile compat/Makefile',
+                          'make $JOBS_OPT LIBDIR="/lib64"',
+                          'make DESTDIR=$PSM2_PREFIX LIBDIR="/lib64" install'],
+                headers=['psm2.h'],
+                libs=['psm2'])
+
     if reqs.target_type == 'debug':
         OFI_DEBUG = '--enable-debug '
     else:
@@ -111,12 +132,20 @@ def define_mercury(reqs):
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
                           '--disable-efa ' +
-                          '--disable-psm3 ' +
                           '--without-gdrcopy ' +
-                          OFI_DEBUG,
+                          OFI_DEBUG +
+                          exclude(reqs, 'psm2',
+                                  '--enable-psm2' +
+                                  check(reqs, 'psm2',
+                                        "=$PSM2_PREFIX "
+                                        'LDFLAGS="-Wl,--enable-new-dtags ' +
+                                        '-Wl,-rpath=$PSM2_PREFIX/lib64" ',
+                                        ''),
+                                  ''),
                           'make $JOBS_OPT',
                           'make install'],
                 libs=['fabric'],
+                requires=exclude(reqs, 'psm2', ['psm2'], []),
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
