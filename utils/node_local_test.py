@@ -441,9 +441,6 @@ class DaosServer():
                                    failure=failure,
                                    test_class=self._test_class)
 
-        if os.path.exists(self.server_log.name):
-            log_test(self.conf, self.server_log.name)
-
     # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
         elapsed = time.time() - start
@@ -458,7 +455,6 @@ class DaosServer():
             desired_states = [desired_states]
 
         rc = self.run_dmg(['system', 'query', '--json'])
-        print(rc)
         if rc.returncode == 0:
             data = json.loads(rc.stdout.decode('utf-8'))
             members = data['response']['members']
@@ -532,7 +528,7 @@ class DaosServer():
         if self.conf.args.no_root:
             cmd.append('--recreate-superblocks')
 
-        self._sp = subprocess.Popen(cmd, env=server_env)
+        self._sp = subprocess.Popen(cmd)
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
@@ -634,7 +630,6 @@ class DaosServer():
             self._check_timing("start", start, max_start_time)
         self._add_test_case('start')
         print('Server started in {:.2f} seconds'.format(time.time() - start))
-        self.running = True
 
     def _stop_agent(self):
         self._agent.send_signal(signal.SIGINT)
