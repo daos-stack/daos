@@ -218,7 +218,7 @@ bulk_grp_get(struct bio_dma_buffer *bdb, unsigned int pgs)
 
 	D_ASSERT(bbc->bbc_grp_cnt > 0);
 	/* Quick check on the last used bulk group */
-	bbg = d_list_entry(&bbc->bbc_grp_lru.prev, struct bio_bulk_group,
+	bbg = d_list_entry(bbc->bbc_grp_lru.prev, struct bio_bulk_group,
 			   bbg_lru_link);
 	if (bbg->bbg_bulk_pgs == pgs)
 		return bbg;
