@@ -226,6 +226,8 @@ struct d_tm_nodeList_t {
 struct d_tm_context;
 
 key_t d_tm_get_srv_key(int srv_idx);
+struct d_tm_node_t *d_tm_follow_link(struct d_tm_context *ctx,
+				     struct d_tm_node_t *link);
 int d_tm_list_add_node(struct d_tm_node_t *src,
 		       struct d_tm_nodeList_t **nodelist);
 void d_tm_list_free(struct d_tm_nodeList_t *nodeList);

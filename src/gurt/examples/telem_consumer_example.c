@@ -60,7 +60,7 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 	while (nodelist) {
 		node = nodelist->dtnl_node;
 
-		name = d_tm_conv_ptr(ctx, node, node->dtn_name);
+		name = d_tm_get_name(ctx, node);
 		if (name == NULL)
 			return;
 

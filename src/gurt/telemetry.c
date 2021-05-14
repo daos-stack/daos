@@ -105,6 +105,63 @@ d_tm_get_root(struct d_tm_context *ctx)
 	return NULL;
 }
 
+/**
+ * Get the first child of this node, with the pointer converted for the caller's
+ * context.
+ *
+ * \param ctx		Telemetry context
+ * \param node		Telemetry node
+ *
+ * \return 		Pointer to first child
+ *			NULL if not found
+ */
+struct d_tm_node_t *
+d_tm_get_child(struct d_tm_context *ctx, struct d_tm_node_t *node)
+{
+	if (node == NULL)
+		return NULL;
+
+	return d_tm_conv_ptr(ctx, node, node->dtn_child);
+}
+
+/**
+ * Get the sibling of this node, with the pointer converted for the caller's
+ * context.
+ *
+ * \param ctx		Telemetry context
+ * \param node		Telemetry node
+ *
+ * \return 		Pointer to sibling
+ *			NULL if not found
+ */
+struct d_tm_node_t *
+d_tm_get_sibling(struct d_tm_context *ctx, struct d_tm_node_t *node)
+{
+	if (node == NULL)
+		return NULL;
+
+	return d_tm_conv_ptr(ctx, node, node->dtn_sibling);
+}
+
+/**
+ * Get the name of this node, with the pointer converted for the caller's
+ * context.
+ *
+ * \param ctx		Telemetry context
+ * \param node		Telemetry node
+ *
+ * \return 		Name string
+ *			NULL if not found
+ */
+char *
+d_tm_get_name(struct d_tm_context *ctx, struct d_tm_node_t *node)
+{
+	if (node == NULL)
+		return NULL;
+
+	return d_tm_conv_ptr(ctx, node, node->dtn_name);
+}
+
 static int
 d_tm_lock_shmem(void)
 {
@@ -331,12 +388,29 @@ is_cleared_link(struct d_tm_context *ctx, struct d_tm_node_t *node)
 	return (metric == NULL || metric->dtm_data.value == 0);
 }
 
-static struct d_tm_node_t *
-follow_link_node(struct d_tm_context *ctx, struct d_tm_node_t *link)
+/**
+ * If the node is a link use the context to fetch the linked node.
+ *
+ * \param[in]	ctx	Telemetry context
+ * \param[in]	link	Link node
+ *
+ * \return	Node that the link points to
+ * 		Original node (if not a link)
+ * 		NULL if not found/invalid
+ */
+struct d_tm_node_t *
+d_tm_follow_link(struct d_tm_context *ctx, struct d_tm_node_t *link)
 {
 	key_t			 link_key;
 	struct d_tm_metric_t	*metric;
 	struct d_tm_shmem_hdr	*shmem;
+
+	if (ctx == NULL || link == NULL)
+		return NULL;
+
+	/* If it's not a link, return the original node */
+	if (link->dtn_type != D_TM_LINK)
+		return link;
 
 	if (is_cleared_link(ctx, link))
 		return NULL;
@@ -389,7 +463,7 @@ find_child(struct d_tm_context *ctx, struct d_tm_node_t *parent,
 		return NULL;
 
 	if (parent->dtn_type == D_TM_LINK) {
-		parent = follow_link_node(ctx, parent);
+		parent = d_tm_follow_link(ctx, parent);
 		if (parent == NULL)
 			return NULL;
 	}
@@ -517,7 +591,7 @@ add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 		D_GOTO(failure, rc = -DER_INVAL);
 
 	if (parent->dtn_type == D_TM_LINK) {
-		parent = follow_link_node(tm_shmem.ctx, parent);
+		parent = d_tm_follow_link(tm_shmem.ctx, parent);
 		if (parent == NULL)
 			D_GOTO(failure, rc = -DER_INVAL);
 	}
@@ -1086,7 +1160,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 
 	switch (node->dtn_type) {
 	case D_TM_LINK:
-		node = follow_link_node(ctx, node);
+		node = d_tm_follow_link(ctx, node);
 		d_tm_print_node(ctx, node, level, path, format, opt_fields,
 				stream);
 		break;
@@ -1244,7 +1318,7 @@ d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
 		return;
 
 	if (node->dtn_type == D_TM_LINK) {
-		node = follow_link_node(ctx, node);
+		node = d_tm_follow_link(ctx, node);
 		if (node == NULL)
 			return;
 	}
@@ -1328,7 +1402,7 @@ d_tm_count_metrics(struct d_tm_context *ctx, struct d_tm_node_t *node,
 		return 0;
 
 	if (node->dtn_type == D_TM_LINK) {
-		node = follow_link_node(ctx, node);
+		node = d_tm_follow_link(ctx, node);
 		if (node == NULL)
 			return 0;
 	}
@@ -1761,7 +1835,7 @@ d_tm_find_metric(struct d_tm_context *ctx, char *path)
 		return NULL;
 
 	if (node->dtn_type == D_TM_LINK)
-		node = follow_link_node(ctx, node);
+		node = d_tm_follow_link(ctx, node);
 
 	return node;
 }
@@ -2267,7 +2341,7 @@ rm_ephemeral_dir(struct d_tm_context *ctx, struct d_tm_node_t *link)
 		D_GOTO(out, rc = -DER_SHMEM_PERMS);
 	}
 
-	node = follow_link_node(ctx, link);
+	node = d_tm_follow_link(ctx, link);
 	if (node == NULL)
 		D_GOTO(out_link, rc = 0);
 	key = node->dtn_shmem_key;
@@ -3014,7 +3088,7 @@ d_tm_list(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 	}
 
 	if (node->dtn_type == D_TM_LINK) {
-		node = follow_link_node(ctx, node);
+		node = d_tm_follow_link(ctx, node);
 		if (node == NULL)
 			D_GOTO(out, rc = 0);
 	}
@@ -3291,7 +3365,7 @@ d_tm_conv_ptr(struct d_tm_context *ctx, struct d_tm_node_t *node, void *ptr)
 {
 	struct d_tm_shmem_hdr *shmem = NULL;
 
-	if (ctx == NULL || ctx->shmem_root == NULL)
+	if (ctx == NULL || ctx->shmem_root == NULL || node == NULL)
 		return NULL;
 
 	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);

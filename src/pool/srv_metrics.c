@@ -12,7 +12,7 @@
 /*
  * Parent directory in metrics tree for all the per-pool metric directories
  */
-#define POOL_METRICS_DIR	"pool/active"
+#define POOL_METRICS_DIR	"pool/current"
 
 /*
  * Size in bytes of each per-pool metric directory.
@@ -109,8 +109,8 @@ ds_pool_metrics_start(uuid_t pool_uuid)
 
 	/* Init all of the per-pool metrics */
 	rc = d_tm_add_metric(&metrics->started_timestamp, D_TM_TIMESTAMP,
-			     "last time the pool started", NULL,
-			     "%s/started_timestamp", path);
+			     "Last time the pool started", NULL,
+			     "%s/started_at", path);
 	if (rc != 0)
 		D_ERROR(DF_UUID ": failed to add started_timestamp metric, "
 			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));

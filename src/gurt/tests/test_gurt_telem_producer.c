@@ -694,7 +694,7 @@ test_ephemeral_simple(void **state)
 	 */
 	assert_int_not_equal(tmp_node->dtn_shmem_key,
 			     d_tm_get_srv_key(TEST_IDX));
-	assert_string_equal(tmp_node->dtn_name, "set1");
+	assert_string_equal(d_tm_get_name(cli_ctx, tmp_node), "set1");
 	shmem_key = tmp_node->dtn_shmem_key; /* for later comparisons */
 	tmp_node = NULL;
 
@@ -722,7 +722,7 @@ test_ephemeral_simple(void **state)
 	tmp_node = d_tm_find_metric(cli_ctx, "gurt/tests/tmp/set2");
 	assert_non_null(tmp_node);
 	assert_int_equal(tmp_node->dtn_type, D_TM_DIRECTORY);
-	assert_string_equal(tmp_node->dtn_name, "set2");
+	assert_string_equal(d_tm_get_name(cli_ctx, tmp_node), "set2");
 	tmp_node = NULL;
 
 	rc = d_tm_add_metric(&tmp_node, D_TM_TIMESTAMP, "time", NULL,
@@ -770,7 +770,7 @@ test_ephemeral_simple(void **state)
 	assert_non_null(tmp_node);
 	assert_int_equal(tmp_node->dtn_type, D_TM_DIRECTORY);
 	assert_int_equal(tmp_node->dtn_shmem_key, shmem_key);
-	assert_string_equal(tmp_node->dtn_name, "set1");
+	assert_string_equal(d_tm_get_name(cli_ctx, tmp_node), "set1");
 
 	/* Make sure the metric in the old region is no longer there */
 	tmp_node = d_tm_find_metric(cli_ctx, eph_metric);
@@ -940,6 +940,51 @@ test_list_ephemeral(void **state)
 }
 
 static void
+test_follow_link(void **state)
+{
+	struct d_tm_node_t	*node;
+	struct d_tm_node_t	*link_node;
+	struct d_tm_node_t	*result;
+	struct d_tm_metric_t	*link_metric;
+	key_t			 link_key;
+
+	/* directory above some link nodes */
+	node = d_tm_find_metric(cli_ctx, "gurt/tests/tmp");
+	assert_non_null(node);
+
+	/*
+	 * link nodes are hidden by the API and can only be discovered
+	 * traversing the tree manually.
+	 */
+	link_node = d_tm_get_child(cli_ctx, node);
+	while (link_node != NULL && link_node->dtn_type != D_TM_LINK)
+		link_node = d_tm_get_sibling(cli_ctx, link_node);
+	assert_non_null(link_node);
+
+	assert_null(d_tm_follow_link(NULL, link_node));
+	assert_null(d_tm_follow_link(cli_ctx, NULL));
+
+	/* not a link */
+	assert_ptr_equal(d_tm_follow_link(cli_ctx, node), node);
+
+	/* valid link - result is in another shmem region, but has same name */
+	result = d_tm_follow_link(cli_ctx, link_node);
+	assert_non_null(result);
+	assert_int_not_equal(result->dtn_shmem_key, link_node->dtn_shmem_key);
+	assert_int_equal(result->dtn_type, D_TM_DIRECTORY);
+	assert_string_equal(d_tm_get_name(cli_ctx, result),
+			    d_tm_get_name(cli_ctx, link_node));
+
+	/* cleared link - simulate by clearing value */
+	link_metric = d_tm_conv_ptr(cli_ctx, link_node, link_node->dtn_metric);
+	assert_non_null(link_metric);
+	link_key = (key_t)link_metric->dtm_data.value;
+	link_metric->dtm_data.value = 0;
+	assert_null(d_tm_follow_link(cli_ctx, link_node));
+	link_metric->dtm_data.value = link_key;
+}
+
+static void
 test_find_metric(void **state)
 {
 	struct d_tm_node_t	*node;
@@ -1097,6 +1142,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_ephemeral_nested),
 		/* Run after the tests that populate the metrics */
 		cmocka_unit_test(test_list_ephemeral),
+		cmocka_unit_test(test_follow_link),
 		cmocka_unit_test(test_find_metric),
 		cmocka_unit_test(test_verify_object_count),
 		cmocka_unit_test(test_print_metrics),
