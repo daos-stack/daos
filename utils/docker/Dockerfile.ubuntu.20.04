@@ -15,19 +15,56 @@ ARG CB0
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install basic tools
-RUN apt-get -y update &&						\
-    apt-get -y install apt-utils &&					\
-    apt-get -y upgrade &&						\
-    apt-get -y install							\
-	build-essential scons python3-distro python3-distutils valgrind	\
-	autoconf libtool-bin locales pkg-config pandoc clang cmake	\
-	libcmocka-dev libnuma-dev patchelf libhwloc-dev libboost-dev	\
-	uuid-dev libssl-dev fuse3 libfuse3-dev curl libjson-c-dev 	\
-	liblz4-dev libibverbs-dev librdmacm-dev libaio-dev yasm		\
-	python3-dev golang-go git libyaml-dev python3-tabulate		\
-	python3-pyxattr openjdk-8-jdk maven libipmctl-dev		\
-	libcunit1-dev libopenmpi-dev numactl doxygen libunwind-dev	\
-	python3-junit.xml sudo pciutils &&				\
+RUN apt-get -y update && \
+    apt-get -y install apt-utils && \
+    apt-get -y upgrade && \
+    apt-get -y install \
+        autoconf \
+        build-essential \
+        clang \
+        cmake \
+        curl \
+        doxygen \
+        fuse3 \
+        git \
+        golang-go \
+        kmod \
+        libaio-dev \
+        libboost-dev \
+        libcmocka-dev \
+        libcunit1-dev \
+        libfuse3-dev \
+        libhwloc-dev \
+        libibverbs-dev \
+        libipmctl-dev \
+        libjson-c-dev \
+        liblz4-dev \
+        libnuma-dev \
+        libopenmpi-dev \
+        librdmacm-dev \
+        libssl-dev \
+        libtool-bin \
+        libunwind-dev \
+        libyaml-dev \
+        locales \
+        maven \
+        numactl \
+        openjdk-8-jdk \
+        pandoc \
+        patchelf \
+        pciutils \
+        pkg-config \
+        python3-dev \
+        python3-distro \
+        python3-distutils \
+        python3-junit.xml \
+        python3-pyxattr \
+        python3-tabulate \
+        scons \
+        sudo \
+        uuid-dev \
+        valgrind \
+        yasm && \
     apt-get clean all
 
 # hack the default shell to bash instead of dash
@@ -87,6 +124,10 @@ ARG CACHEBUST
 RUN apt-get update && apt-get -y upgrade && apt-get clean all
 USER daos_server:daos_server
 
+# Set a label.  This is useful for searching for DAOS images, but is also used
+# in github-actions to prune elements of the dockerfile below this point.
+LABEL DAOS=stage1
+
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
 COPY utils utils
@@ -110,6 +151,10 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
+
+USER root:root
+LABEL DAOS=true
+USER daos_server:daos_server
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/daos/src/client/java
