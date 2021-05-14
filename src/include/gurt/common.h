@@ -68,6 +68,10 @@ void  d_free(void *);
 void *d_calloc(size_t, size_t);
 void *d_malloc(size_t);
 void *d_realloc(void *, size_t);
+char *d_strndup(const char *s, size_t n);
+int d_asprintf(char **strp, const char *fmt, ...);
+void *d_aligned_alloc(size_t alignment, size_t size);
+char *d_realpath(const char *path, char *resolved_path);
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 			on_error)					\
@@ -116,7 +120,7 @@ void *d_realloc(void *, size_t);
 
 #define D_STRNDUP(ptr, s, n)						\
 	do {								\
-		(ptr) = strndup(s, n);					\
+		(ptr) = d_strndup(s, n);				\
 		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\
 			      strnlen(s, n + 1) + 1, 0, #ptr, 0);	\
 	} while (0)
@@ -124,7 +128,7 @@ void *d_realloc(void *, size_t);
 #define D_ASPRINTF(ptr, ...)						\
 	do {								\
 		int _rc;						\
-		_rc = asprintf(&(ptr), __VA_ARGS__);			\
+		_rc = d_asprintf(&(ptr), __VA_ARGS__);			\
 		D_CHECK_ALLOC(asprintf, _rc != -1,			\
 			      ptr, #ptr, _rc + 1, 0, #ptr,		\
 			      (ptr) = NULL);				\
@@ -133,11 +137,19 @@ void *d_realloc(void *, size_t);
 #define D_REALPATH(ptr, path)						\
 	do {								\
 		int _size;						\
-		(ptr) = realpath((path), NULL);				\
+		(ptr) = d_realpath((path), NULL);			\
 		_size = (ptr) != NULL ?					\
 			strnlen((ptr), PATH_MAX + 1) + 1 : 0;		\
 		D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,		\
 			      0, #ptr, 0);				\
+	} while (0)
+
+#define D_ALIGNED_ALLOC(ptr, alignment, size)				\
+	do {								\
+		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment,	\
+							 size);		\
+		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr,		\
+			      size, 0, #ptr, 0);			\
 	} while (0)
 
 /* Requires newptr and oldptr to be different variables.  Otherwise
