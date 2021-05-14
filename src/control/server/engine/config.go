@@ -139,6 +139,17 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	return
 }
 
+type LegacyStorage struct {
+	storage.ScmConfig  `yaml:",inline,omitempty"`
+	ScmClass           storage.Class `yaml:"scm_class,omitempty"`
+	storage.BdevConfig `yaml:",inline,omitempty"`
+	BdevClass          storage.Class `yaml:"bdev_class,omitempty"`
+}
+
+func (ls *LegacyStorage) WasDefined() bool {
+	return ls.ScmClass != storage.ClassNone || ls.BdevClass != storage.ClassNone
+}
+
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
 	Rank              *system.Rank    `yaml:"rank,omitempty"`
@@ -150,6 +161,7 @@ type Config struct {
 	SocketDir         string          `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
 	LogMask           string          `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
 	LogFile           string          `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
+	LegacyStorage     LegacyStorage   `yaml:",inline,omitempty"`
 	Storage           storage.Configs `yaml:"storage"`
 	Fabric            FabricConfig    `yaml:",inline"`
 	EnvVars           []string        `yaml:"env_vars,omitempty"`
@@ -168,6 +180,30 @@ func NewConfig() *Config {
 func (c *Config) Validate() error {
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
+	}
+
+	if c.LegacyStorage.WasDefined() {
+		var storageCfgs storage.Configs
+		if c.LegacyStorage.ScmClass != storage.ClassNone {
+			storageCfgs = append(storageCfgs,
+				storage.NewConfig().
+					WithScmClass(c.LegacyStorage.ScmClass.String()).
+					WithScmDeviceList(c.LegacyStorage.ScmConfig.DeviceList...).
+					WithScmMountPoint(c.LegacyStorage.MountPoint).
+					WithScmRamdiskSize(c.LegacyStorage.RamdiskSize),
+			)
+		}
+		if c.LegacyStorage.BdevClass != storage.ClassNone {
+			storageCfgs = append(storageCfgs,
+				storage.NewConfig().
+					WithBdevClass(c.LegacyStorage.BdevClass.String()).
+					WithBdevDeviceCount(c.LegacyStorage.DeviceCount).
+					WithBdevDeviceList(c.LegacyStorage.BdevConfig.DeviceList...).
+					WithBdevFileSize(c.LegacyStorage.FileSize),
+			)
+		}
+		c.WithStorage(storageCfgs...)
+		c.LegacyStorage = LegacyStorage{}
 	}
 
 	if err := c.Storage.Validate(); err != nil {
