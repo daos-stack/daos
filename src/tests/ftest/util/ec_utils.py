@@ -58,7 +58,9 @@ class ErasureCodeIor(ServerFillUp):
 
         # Fail IOR test in case of Warnings
         self.fail_on_warning = True
-        self.server_count = len(self.hostlist_servers) * 2
+        engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
+        self.server_count = len(self.hostlist_servers) * engine_count
         # Create the Pool
         self.create_pool_max_size()
         self.update_ior_cmd_with_pool()
@@ -161,7 +163,9 @@ class ErasureCodeSingle(TestWithServers):
         """Set up each test case."""
         # Start the servers and agents
         super().setUp()
-        self.server_count = len(self.hostlist_servers) * 2
+        engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
+        self.server_count = len(self.hostlist_servers) * engine_count
         self.obj_class = self.params.get("dfs_oclass",
                                          '/run/objectclass/*')
         self.singledata_set = self.params.get("single_data_set",
@@ -287,10 +291,10 @@ class ErasureCodeSingle(TestWithServers):
                                    kwargs={"results": self.out_queue,
                                            "parity": parity})
 
-        # Launch the IOR thread
+        # Launch the single data write/read thread
         job.start()
 
-        # Kill the server rank while IOR in progress
+        # Kill the server rank while IO operation in progress
         if self.set_online_rebuild:
             time.sleep(10)
             # Kill the server rank
@@ -302,7 +306,7 @@ class ErasureCodeSingle(TestWithServers):
         # Wait to finish the thread
         job.join()
 
-        # Verify the queue and make sure no FAIL for any IOR run
+        # Verify the queue and make sure no FAIL for any run
         while not self.out_queue.empty():
             if self.out_queue.get() == "FAIL":
                 self.fail("FAIL")

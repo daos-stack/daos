@@ -38,8 +38,6 @@ class EcOfflineRebuild(ErasureCodeIor):
         self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log,
                                            force=True)
 
-        # Wait for rebuild to start
-        self.pool.wait_for_rebuild(True)
         # Wait for rebuild to complete
         self.pool.wait_for_rebuild(False)
 
@@ -51,8 +49,6 @@ class EcOfflineRebuild(ErasureCodeIor):
         self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
                                            force=True)
 
-        # Wait for rebuild to start
-        self.pool.wait_for_rebuild(True)
         # Wait for rebuild to complete
         self.pool.wait_for_rebuild(False)
 
