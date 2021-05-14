@@ -99,7 +99,7 @@ func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, 
 	return func() {
 		log.Debug("Shutting down Prometheus web exporter")
 
-		// When this cleanup fuction is called, the original context
+		// When this cleanup function is called, the original context
 		// will probably have already been canceled.
 		timedCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
