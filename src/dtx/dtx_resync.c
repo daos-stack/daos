@@ -141,7 +141,7 @@ dtx_is_leader(struct ds_pool *pool, struct dtx_resync_args *dra,
 	 *	data shard for EC object in the future.
 	 */
 	return ds_pool_check_dtx_leader(pool, &dre->dre_oid,
-					pool->sp_map_version);
+					pool->sp_map_version, false);
 }
 
 static bool
@@ -545,7 +545,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	D_DEBUG(DB_TRACE, "resync DTX scan "DF_UUID"/"DF_UUID" start.\n",
 		DP_UUID(po_uuid), DP_UUID(co_uuid));
 
-	rc = ds_cont_iter(po_hdl, co_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX);
+	rc = ds_cont_iter(po_hdl, co_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX, 0);
 
 	/* Handle the DTXs that have been scanned even if some failure happened
 	 * in above ds_cont_iter() step.

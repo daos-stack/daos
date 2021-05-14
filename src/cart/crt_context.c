@@ -779,7 +779,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	if (crt_gdata.cg_use_sensors)
-		(void)d_tm_increment_counter(&crt_ctx->cc_timedout, 1, NULL);
+		d_tm_inc_counter(crt_ctx->cc_timedout, 1);
 
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_URI_LOOKUP:
@@ -795,8 +795,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  ul_req->cr_ep.ep_rank);
 
 		if (crt_gdata.cg_use_sensors)
-			(void)d_tm_increment_counter(&crt_ctx->cc_timedout_uri,
-						     1, NULL);
+			d_tm_inc_counter(crt_ctx->cc_timedout_uri, 1);
 		crt_req_abort(ul_req);
 		/*
 		 * don't crt_rpc_complete rpc_priv here, because crt_req_abort
@@ -813,8 +812,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
 		if (crt_gdata.cg_use_sensors)
-			(void)d_tm_increment_counter(&crt_ctx->cc_failed_addr,
-						     1, NULL);
+			d_tm_inc_counter(crt_ctx->cc_failed_addr, 1);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		break;

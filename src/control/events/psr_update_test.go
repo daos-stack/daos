@@ -14,8 +14,22 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
+const (
+	tLdrTerm = 1
+)
+
+var (
+	tUuid    = common.MockUUID(1)
+	tSvcReps = []uint32{0, 1}
+)
+
+func mockSvcRepsEvt(t *testing.T) *RASEvent {
+	t.Helper()
+	return NewPoolSvcReplicasUpdateEvent(tHost, tRank, tUuid, tSvcReps, tLdrTerm)
+}
+
 func TestEvents_ConvertPoolSvcReplicasUpdate(t *testing.T) {
-	event := NewPoolSvcReplicasUpdateEvent("foo", 1, common.MockUUID(), []uint32{0, 1}, 1)
+	event := mockSvcRepsEvt(t)
 
 	pbEvent, err := event.ToProto()
 	if err != nil {

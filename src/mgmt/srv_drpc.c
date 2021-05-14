@@ -59,10 +59,10 @@ ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to prep shutdown %u\n", req->rank);
 
 #ifndef DRPC_TEST
-	ds_pool_disable_evict();
+	ds_pool_disable_exclude();
 #endif
 
-	/* TODO: disable auto evict and pool rebuild here */
+	/* TODO: disable auto exclude and pool rebuild here */
 	D_INFO("Service rank %d is being prepared for controlled shutdown\n",
 		req->rank);
 
@@ -923,6 +923,10 @@ free_ace_list(char **list, size_t len)
 static void
 free_resp_acl(Mgmt__ACLResp *resp)
 {
+	if (resp->owneruser && resp->owneruser[0] != '\0')
+		D_FREE(resp->owneruser);
+	if (resp->ownergroup && resp->ownergroup[0] != '\0')
+		D_FREE(resp->ownergroup);
 	free_ace_list(resp->acl, resp->n_acl);
 }
 
@@ -964,12 +968,14 @@ prop_to_acl_response(daos_prop_t *prop, Mgmt__ACLResp *resp)
 	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
-	if (entry != NULL && entry->dpe_str != NULL)
+	if (entry != NULL && entry->dpe_str != NULL &&
+	    entry->dpe_str[0] != '\0')
 		D_STRNDUP(resp->owneruser, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
-	if (entry != NULL && entry->dpe_str != NULL)
+	if (entry != NULL && entry->dpe_str != NULL &&
+	    entry->dpe_str[0] != '\0')
 		D_STRNDUP(resp->ownergroup, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 

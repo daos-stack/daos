@@ -2035,6 +2035,14 @@ test_get_admin_cont_capas(void **state)
 			 CONT_CAPAS_ALL);
 }
 
+static int
+teardown_tests(void **state)
+{
+	free_drpc_call_resp_body();
+
+	return 0;
+}
+
 /* Convenience macro for unit tests */
 #define ACL_UTEST(X)	cmocka_unit_test_setup_teardown(X, srv_acl_setup, \
 							srv_acl_teardown)
@@ -2112,8 +2120,8 @@ main(void)
 		cmocka_unit_test(test_get_admin_cont_capas),
 	};
 
-	return cmocka_run_group_tests_name("security_srv_acl",
-					   tests, NULL, NULL);
+	return cmocka_run_group_tests_name("security_srv_acl", tests, NULL,
+					   teardown_tests);
 }
 
 #undef ACL_UTEST

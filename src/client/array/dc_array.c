@@ -1052,10 +1052,11 @@ create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 
 		D_ASSERT(user_sgl->sg_nr > cur_i);
 
-		sgl->sg_nr++;
-		D_REALLOC_ARRAY(new_sg_iovs, sgl->sg_iovs, sgl->sg_nr);
+		D_REALLOC_ARRAY(new_sg_iovs, sgl->sg_iovs, sgl->sg_nr,
+				sgl->sg_nr + 1);
 		if (new_sg_iovs == NULL)
 			return -DER_NOMEM;
+		sgl->sg_nr++;
 		sgl->sg_iovs = new_sg_iovs;
 
 		sgl->sg_iovs[k].iov_buf = user_sgl->sg_iovs[cur_i].iov_buf +
@@ -1589,13 +1590,13 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			daos_off_t	old_array_idx;
 			daos_recx_t	*new_recxs;
 
-			iod->iod_nr++;
-
 			/** add another element to recxs */
-			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs, iod->iod_nr);
+			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs,
+					iod->iod_nr, iod->iod_nr + 1);
 			if (new_recxs == NULL) {
 				D_GOTO(err_stask, rc = -DER_NOMEM);
 			}
+			iod->iod_nr++;
 			iod->iod_recxs = new_recxs;
 
 			/** set the record access for this range */
