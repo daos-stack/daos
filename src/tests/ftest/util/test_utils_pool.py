@@ -485,7 +485,8 @@ class TestPool(TestDaosApiBase):
                 self.set_query_data()
                 self.log.info(
                     "Pool %s query data: %s\n", self.uuid, self.query_data)
-                status = self.query_data["response"]["rebuild"]["state"] == "done"
+                status = self.query_data["response"]["rebuild"]["state"] == \
+                    "done"
             else:
                 self.log.error("Error: Undefined dmg and daos commands")
         else:
@@ -744,7 +745,8 @@ class TestPool(TestDaosApiBase):
                                 "sys_name": None,
                                 "sys": None,
                                 }
-                            self.query_data = self.daos.get_output("pool_query", **kwargs)
+                            self.query_data = self.daos.get_output("pool_query",
+                                                                   **kwargs)
                             break
                         elif self.dmg:
                             self.query_data = self.dmg.pool_query(uuid)

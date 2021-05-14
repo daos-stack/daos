@@ -36,7 +36,8 @@ class DaosCommand(DaosCommandBase):
                       r"(?:SCM:\s+.*|NVMe:\s+.*)Total\s+size:\s+([0-9]+)" +
                       r"\s+.*Free:\s+([0-9]+),\s+min:([0-9]+),\s+" +
                       r"max:([0-9]+),\s+mean:([0-9]+)|" +
-                      r"Rebuild\s*([a-z]+)+,\s*([0-9]+)\s*objs,\s*([0-9]+)\s*recs)",
+                      r"Rebuild\s*([a-z]+)+,\s*([0-9]+)\s*objs," +
+                      r"\s*([0-9]+)\s*recs)",
         # Sample list-attrs output.
         # 04/19-21:16:31.62 wolf-3 Pool attributes:
         # 04/19-21:16:31.62 wolf-3 attr0
