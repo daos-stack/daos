@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package scm
 
 import (
@@ -98,6 +99,8 @@ var (
 		"adjust or relax the filters and try again")
 )
 
+// FaultIpmctlBadVersion represents an error where an incompatible version of
+// ipmctl is installed.
 func FaultIpmctlBadVersion(version string) *fault.Fault {
 	return scmFault(
 		code.BadVersionSoftwareDependency,

@@ -635,7 +635,7 @@ func TestProvider_Format(t *testing.T) {
 			isMountedErr: errors.New("is mounted check failed"),
 		},
 		"ramdisk: mountpoint doesn't exist": {
-			mountPoint: goodMountPoint,
+			mountPoint:   goodMountPoint,
 			isMountedErr: os.ErrNotExist,
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
@@ -719,7 +719,7 @@ func TestProvider_Format(t *testing.T) {
 			mountErr:       errors.New("mount failed"),
 		},
 		"ramdisk: mountpoint doesn't exist; nested mountpoint": {
-			mountPoint: nestedMountPoint,
+			mountPoint:   nestedMountPoint,
 			isMountedErr: os.ErrNotExist,
 			expResponse: &FormatResponse{
 				Mountpoint: nestedMountPoint,
