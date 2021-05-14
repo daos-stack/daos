@@ -249,6 +249,7 @@ iod_release_buffer(struct bio_desc *biod)
 		D_ASSERT(chunk != NULL);
 		D_ASSERT(chunk->bdc_ref > 0);
 		D_ASSERT(chunk->bdc_type == biod->bd_chk_type);
+		D_ASSERT(chunk->bdc_bulk_grp == NULL);
 		chunk->bdc_ref--;
 
 		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u huge:%d "
@@ -570,6 +571,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	end = bio_iov2raw_off(biov) + bio_iov2raw_len(biov);
 	pg_cnt = ((end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
 			(off >> BIO_DMA_PAGE_SHIFT);
+	D_ASSERT(pg_cnt > 0);
 	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
 
 	/*

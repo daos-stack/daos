@@ -32,7 +32,7 @@ struct bio_bulk_args {
 
 /* Cached bulk handle for avoiding expensive MR */
 struct bio_bulk_hdl {
-	/* Link to bbg_free_bulks */
+	/* Link to bbg_idle_bulks */
 	d_list_t		 bbh_link;
 	/* Bulk handle used by upper layer caller */
 	void			*bbh_bulk;
@@ -466,7 +466,7 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 	struct bio_bulk_group	*bbg;
 	int			 i, bulk_grps = 0, bulk_chunks = 0;
 
-	D_ERROR("chunk_size:%u, tot_chunk:%u, active_iods:%u, used:%u,%u,%u\n",
+	D_EMIT("chunk_size:%u, tot_chunk:%u, active_iods:%u, used:%u,%u,%u\n",
 		bio_chk_sz, bdb->bdb_tot_cnt, bdb->bdb_active_iods,
 		bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
 		bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL],
@@ -482,10 +482,10 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 		bulk_grps++;
 		bulk_chunks += bbg->bbg_chk_cnt;
 
-		D_DEBUG(DB_IO, "bulk_grp %d: bulk_size:%u, chunks:%u\n",
+		D_EMIT("bulk_grp %d: bulk_size:%u, chunks:%u\n",
 			i, bbg->bbg_bulk_pgs, bbg->bbg_chk_cnt);
 	}
-	D_ERROR("bulk_grps:%d, bulk_chunks:%d\n", bulk_grps, bulk_chunks);
+	D_EMIT("bulk_grps:%d, bulk_chunks:%d\n", bulk_grps, bulk_chunks);
 }
 
 /* bio_monitor.c */

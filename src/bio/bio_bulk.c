@@ -315,7 +315,7 @@ bulk_create_hdl(struct bio_dma_chunk *chk, struct bio_bulk_args *arg)
 	}
 
 	d_sgl_fini(&sgl, false);
-	return 0;
+	return rc;
 }
 
 static int
@@ -556,6 +556,7 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 	end = bio_iov2raw_off(biov) + bio_iov2raw_len(biov);
 	pg_cnt = ((end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
 			(off >> BIO_DMA_PAGE_SHIFT);
+	D_ASSERT(pg_cnt > 0);
 	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
 
 	if (bypass_bulk_cache(biov, pg_cnt)) {
