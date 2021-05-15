@@ -684,12 +684,26 @@ bulk_cache_create(struct bio_dma_buffer *bdb)
 	return 0;
 }
 
+static inline unsigned int
+bulk_hdl2len(struct bio_bulk_hdl *hdl)
+{
+	struct bio_dma_chunk	*chk = hdl->bbh_chunk;
+	struct bio_bulk_group	*bbg;
+
+	D_ASSERT(chk != NULL);
+	bbg = chk->bdc_bulk_grp;
+	D_ASSERT(bbg != NULL);
+
+	return bbg->bbg_bulk_pgs << BIO_DMA_PAGE_SHIFT;
+}
+
 void *
 bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 	     unsigned int *bulk_off)
 {
 	struct bio_bulk_hdl	*hdl;
 	struct bio_sglist	*bsgl = NULL;
+	struct bio_iov		*biov;
 	int			 i, bulk_idx = 0;
 
 	/* Pass in NULL 'biod' is allowed */
@@ -711,6 +725,8 @@ bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 
 	bsgl = &biod->bd_sgls[sgl_idx];
 	D_ASSERT(iov_idx < bsgl->bs_nr_out);
+	biov = &bsgl->bs_iovs[iov_idx];
+
 	bulk_idx += iov_idx;
 	D_ASSERT(bulk_idx < biod->bd_bulk_cnt);
 
@@ -719,7 +735,9 @@ bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 		return NULL;
 
 	D_ASSERT(bulk_hdl_is_inuse(hdl));
-	*bulk_off = hdl->bbh_bulk_off;
+	/* biov->bi_prefix_len is for csum, not included in bulk transfer */
+	*bulk_off = hdl->bbh_bulk_off + biov->bi_prefix_len;
+	D_ASSERT(*bulk_off < bulk_hdl2len(hdl));
 
 	return hdl->bbh_bulk;
 }
