@@ -8,6 +8,7 @@
  */
 #define D_LOGFAC	DD_FAC(rpc)
 
+#include <execinfo.h>
 #include <semaphore.h>
 
 #include "crt_internal.h"
@@ -1611,6 +1612,7 @@ crt_handle_rpc(void *arg)
 {
 	crt_rpc_t		*rpc_pub = arg;
 	struct crt_rpc_priv	*rpc_priv;
+	int64_t			 hlc;
 
 	D_ASSERT(rpc_pub != NULL);
 
@@ -1626,7 +1628,22 @@ crt_handle_rpc(void *arg)
 	 */
 	if (rpc_priv->crp_coll && !rpc_priv->crp_srv)
 		RPC_ADDREF(rpc_priv);
+
+	hlc = crt_hlc_get();
 	rpc_priv->crp_opc_info->coi_rpc_cb(rpc_pub);
+	hlc = crt_hlc2nsec(crt_hlc_get() - hlc) / NSEC_PER_SEC;
+	if (hlc > 0) {
+		char **strings;
+
+		strings = backtrace_symbols((void *const *)
+				&rpc_priv->crp_opc_info->coi_rpc_cb, 1);
+		RPC_ERROR(rpc_priv,
+			  "opc: %#x %p spend %lu seconds. symbol: %s\n",
+			  rpc_pub->cr_opc, rpc_priv->crp_opc_info->coi_rpc_cb,
+			  hlc, strings != NULL ? strings[0] : NULL);
+
+		free(strings);
+	}
 	/*
 	 * Correspond to crt_rpc_handler_common -> crt_rpc_priv_init's set
 	 * refcount as 1. "rpc_priv->crp_srv" is to differentiate from calling

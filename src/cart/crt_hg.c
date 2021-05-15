@@ -704,6 +704,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	struct crt_opc_info	*opc_info = NULL;
 	hg_return_t		 hg_ret = HG_SUCCESS;
 	bool			 is_coll_req = false;
+	int64_t			 hlc;
 	int			 rc = 0;
 	struct crt_rpc_priv	 rpc_tmp = {0};
 
@@ -827,10 +828,14 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
+	hlc = crt_hlc_get();
 	if (!is_coll_req)
 		rc = crt_rpc_common_hdlr(rpc_priv);
 	else
 		rc = crt_corpc_common_hdlr(rpc_priv);
+	hlc = crt_hlc2nsec(crt_hlc_get() - hlc) / NSEC_PER_SEC;
+	if (hlc > 0)
+		RPC_ERROR(rpc_priv, "opc: %#x spend %lu seconds\n", opc, hlc);
 	if (unlikely(rc != 0)) {
 		RPC_ERROR(rpc_priv,
 			  "failed to invoke RPC handler, rc: %d, opc: %#x\n",
