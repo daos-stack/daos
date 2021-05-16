@@ -497,11 +497,15 @@ dtx_dti_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 		d_iov_t			 kiov;
 		d_iov_t			 riov;
 
-		ABT_rwlock_wrlock(pool->sp_lock);
+		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
 		ABT_rwlock_unlock(pool->sp_lock);
-		D_ASSERT(rc == 1);
+
+		D_ASSERTF(rc == 1,
+			  "Cannot find target %u at %d/%d, flags %x: rc %d\n",
+			  mbs->dm_tgts[i].ddt_id, i, mbs->dm_tgt_cnt,
+			  mbs->dm_flags, rc);
 
 		/* Skip the target that (re-)joined the system after the DTX. */
 		if (target->ta_comp.co_ver > dte->dte_ver)
@@ -747,11 +751,15 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
 		struct pool_target	*target;
 
-		ABT_rwlock_wrlock(pool->sp_lock);
+		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
 		ABT_rwlock_unlock(pool->sp_lock);
-		D_ASSERT(rc == 1);
+
+		D_ASSERTF(rc == 1,
+			  "Cannot check target %u at %d/%d, flags %x: rc %d\n",
+			  mbs->dm_tgts[i].ddt_id, i, mbs->dm_tgt_cnt,
+			  mbs->dm_flags, rc);
 
 		/* Skip the target that (re-)joined the system after the DTX. */
 		if (target->ta_comp.co_ver > dte->dte_ver)
@@ -868,10 +876,12 @@ again:
 			leader_tgt = dsp->dsp_mbs.dm_tgts[0].ddt_id;
 		}
 
-		ABT_rwlock_wrlock(pool->sp_lock);
+		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
 		ABT_rwlock_unlock(pool->sp_lock);
-		D_ASSERT(rc == 1);
+
+		D_ASSERTF(rc == 1, "Cannot find target %u, flags %x: rc = %d\n",
+			  leader_tgt, dsp->dsp_mbs.dm_flags, rc);
 
 		/* If current server is the leader, then two possible cases:
 		 *
@@ -889,7 +899,7 @@ again:
 		}
 
 		/* Usually, we will not elect in-rebuilding server as DTX
-		 * leader. But we may be blocked by the ABT_rwlock_wrlock,
+		 * leader. But we may be blocked by the ABT_rwlock_rdlock,
 		 * then pool map may be refreshed during that. Let's retry
 		 * to find out the new leader.
 		 */
