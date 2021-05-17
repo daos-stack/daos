@@ -13,6 +13,7 @@
   <url>http://daos.io</url>
 
   <properties>
+    <commons-lang3.version>3.7</commons-lang3.version>	  
     <junit.platform.version>1.4.0</junit.platform.version>
     <junit.jupiter.version>5.4.0</junit.jupiter.version>
     <slf4j.version>1.7.25</slf4j.version>
@@ -289,9 +290,9 @@
         <version>${log4j.version}</version>
       </dependency>
       <dependency>
-        <groupId>commons-lang</groupId>
-        <artifactId>commons-lang</artifactId>
-        <version>2.6</version>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-lang3</artifactId>
+	<version>${commons-lang3.version}</version>
       </dependency>
       <dependency>
         <groupId>com.google.code.findbugs</groupId>
