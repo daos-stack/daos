@@ -2243,7 +2243,7 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	if (rc != 0) {
 		D_ERROR("Fail to start DTX for EC aggregation: "DF_RC"\n",
 			DP_RC(rc));
-		goto out;
+		goto out_close;
 	}
 
 	agg_param.ap_dth = &dth;
@@ -2273,7 +2273,7 @@ again:
 
 	if (rc == 0 && is_current)
 		cont->sc_ec_agg_eph = epr->epr_hi;
-
+out_close:
 	dsc_cont_close(ph, agg_param.ap_pool_info.api_cont_hdl);
 out:
 	daos_prop_free(agg_param.ap_prop);

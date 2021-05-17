@@ -7,8 +7,8 @@
 %global __python %{__python3}
 
 Name:          daos
-Version:       1.2
-Release:       2%{?relval}%{?dist}
+Version:       1.2.0
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -256,7 +256,7 @@ install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
-mv %{buildroot}/%{_sysconfdir}/daos/bash_completion.d %{buildroot}/%{_sysconfdir}
+mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_server >/dev/null || groupadd -r daos_server
@@ -283,10 +283,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files
 %defattr(-, root, root, -)
 %{_sysconfdir}/ld.so.conf.d/daos.conf
+%dir %attr(0755,root,root) %{conf_dir}/certs
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
-%{_sysconfdir}/daos/memcheck-cart.supp
-%dir %{_sysconfdir}/daos
+%{conf_dir}/memcheck-cart.supp
+%dir %{conf_dir}
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
@@ -300,12 +301,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %doc
 
 %files server
-%config(noreplace) %{conf_dir}/daos_server.yml
-%dir %{conf_dir}/certs
-%attr(0755,root,root) %{conf_dir}/certs
-%dir %{conf_dir}/certs/clients
-%attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
-%attr(0644,root,root) %{conf_dir}/daos_server.yml
+%config(noreplace) %attr(0644,root,root) %{conf_dir}/daos_server.yml
+%dir %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_server in order to invoke daos_admin
@@ -327,7 +324,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
 %{_libdir}/libdaos_common_pmem.so
-%{_sysconfdir}/daos/vos_size_input.yaml
+%{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
 %{_libdir}/python3/site-packages/storage_estimator/*.py
 %dir %{_libdir}/python3/site-packages/storage_estimator
@@ -393,7 +390,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
-%{_sysconfdir}/daos/fault-inject-cart.yaml
+%{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
@@ -406,6 +403,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Wed May 06 2021 Brian J. Murrell <brian.murrell@intel.com> 1.2.0-3
+- Package /etc/daos/certs in main/common package so that both server
+  and client get it created
+
 * Thu Apr 29 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.2-2
 - Version bump up to 1.2-rc2
 

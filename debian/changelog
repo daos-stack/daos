@@ -1,3 +1,10 @@
+daos (1.2.0-3) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Package /etc/daos/certs in main/common package so that both server
+    and client get it created
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 06 May 2021 13:47:10 -0400
+
 daos (1.2-2) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Version bump up to 1.2-rc2

@@ -401,10 +401,10 @@ dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	if (drr == NULL)
 		return -DER_NOMEM;
 
-	dcrb = (struct dtx_cf_rec_bundle *)val_iov->iov_buf;
+	dcrb = val_iov->iov_buf;
 	D_ALLOC_ARRAY(drr->drr_dti, dcrb->dcrb_count);
 	if (drr->drr_dti == NULL) {
-		D_FREE_PTR(drr);
+		D_FREE(drr);
 		return -DER_NOMEM;
 	}
 
