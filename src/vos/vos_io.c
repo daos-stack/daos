@@ -2390,7 +2390,7 @@ vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	int rc, err;
 
 	D_ASSERT(sgl_nr == ioc->ic_iod_nr);
-	rc = bio_iod_prep(ioc->ic_biod, BIO_CHK_TYPE_IO);
+	rc = bio_iod_prep(ioc->ic_biod, BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		return rc;
 
