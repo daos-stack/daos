@@ -35,7 +35,7 @@ echo ::group::Container copy test
 export LD_LIBRARY_PATH=/opt/daos/prereq/release/spdk/lib/
 
 x=1
-while [ $x -le 5 ]
+while [ $x -le 100 ]
 do
     echo "Iteration $x"
     rm -rf /mmt/daos/* || true

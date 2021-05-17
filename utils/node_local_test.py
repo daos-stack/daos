@@ -680,8 +680,10 @@ class DaosServer():
             entry['message'] = 'daos_engine died during testing'
             self.conf.wf.issues.append(entry)
 
+        start = time.time()
         rc = self.run_dmg(['system', 'stop'])
         print(rc)
+        print('dmg system stop took {:.2f}s'.format(time.time() - start))
         assert rc.returncode == 0
 
         start = time.time()
