@@ -18,6 +18,10 @@ pkgs="openmpi3 hwloc ndctl fio                \
       MACSio-openmpi3                         \
       mpifileutils-mpich-daos-${client_ver}"
 
+if [[ $distro = el8* ]] || [[ $distro = centos8* ]]; then
+    pkgs="openmpi hwloc ndctl fio patchutils"
+fi
+
 if [[ $distro = el7* ]] || [[ $distro = centos7* ]]; then
     pkgs="--exclude openmpi $pkgs"
 fi

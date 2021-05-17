@@ -42,6 +42,7 @@ void crt_req_force_timeout(struct crt_rpc_priv *rpc_priv);
 /** crt_hlct.c */
 uint64_t crt_hlct_get(void);
 void crt_hlct_sync(uint64_t msg);
+void crt_trigger_hlc_error_cb(void);
 
 /** some simple helper functions */
 
