@@ -6,8 +6,7 @@
 """
 from dfuse_test_base import DfuseTestBase
 from fio_utils import FioCommand
-# from daos_utils import DaosCommand
-
+from daos_utils import DaosCommand
 
 class FioBase(DfuseTestBase):
     # pylint: disable=too-many-ancestors
