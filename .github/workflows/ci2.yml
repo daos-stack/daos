@@ -49,9 +49,9 @@ jobs:
       fail-fast: false
       matrix:
         # Only run on Ubuntu for now, centos 8 just isn't very stable.
-        distro: [ubuntu.20.04]
+        distro: [ubuntu.20.04, centos8]
         # ubuntu/gcc is broken right now DAOS-7601
-        compiler: [clang]
+        compiler: [clang, gcc]
     env:
       COMPILER: ${{ matrix.compiler }}
     steps:

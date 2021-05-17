@@ -33,5 +33,14 @@ echo ::endgroup::
 echo ::group::Container copy test
 # DAOS-7440
 export LD_LIBRARY_PATH=/opt/daos/prereq/release/spdk/lib/
-./utils/node_local_test.py --no-root --test cont_copy
+
+x=1
+while [ $x -le 100 ]
+do
+    echo "Iteration $x"
+    rm -rf /mmt/daos/* || true
+    ./utils/node_local_test.py --no-root --test cont_copy
+    x=$(( $x + 1 ))
+done
+
 echo ::endgroup::
