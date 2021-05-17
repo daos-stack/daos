@@ -468,20 +468,22 @@ err:
 	return rc;
 }
 
-#define ATTR_COUNT 5
+#define ATTR_COUNT 6
 
 char const *const
 cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
 			       "dfuse-dentry-time",
 			       "dfuse-dentry-dir-time",
 			       "dfuse-ndentry-time",
-			       "dfuse-data-cache"};
+			       "dfuse-data-cache",
+			       "dfuse-direct-io-disable"};
 
 #define ATTR_TIME_INDEX		0
 #define ATTR_DENTRY_INDEX	1
 #define ATTR_DENTRY_DIR_INDEX	2
 #define ATTR_NDENTRY_INDEX	3
 #define ATTR_DATA_CACHE_INDEX	4
+#define ATTR_DIRECT_IO_DISABLE_INDEX	5
 
 /* Attribute values are of the form "120M", so the buffer does not need to be
  * large.
@@ -533,6 +535,19 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 				dfc->dfc_data_caching = true;
 			} else if (strncmp(buff, "off", size) == 0) {
 				dfc->dfc_data_caching = false;
+			} else {
+				DFUSE_TRA_WARNING(dfc,
+						  "Failed to parse '%s' for '%s'",
+						  buff, cont_attr_names[i]);
+				dfc->dfc_data_caching = false;
+			}
+			continue;
+		}
+		if (i == ATTR_DIRECT_IO_DISABLE_INDEX) {
+			if (strncmp(buff, "on", size) == 0) {
+				dfc->dfc_direct_io_disable = true;
+			} else if (strncmp(buff, "off", size) == 0) {
+				dfc->dfc_direct_io_disable = false;
 			} else {
 				DFUSE_TRA_WARNING(dfc,
 						  "Failed to parse '%s' for '%s'",
@@ -598,6 +613,7 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
 	dfc->dfc_dentry_dir_timeout = 5;
 	dfc->dfc_ndentry_timeout = 1;
 	dfc->dfc_data_caching = true;
+	dfc->dfc_direct_io_disable = false;
 }
 
 /*

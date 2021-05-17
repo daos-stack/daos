@@ -208,12 +208,13 @@ struct dfuse_cont {
 	/** Inode number of the root of this container */
 	ino_t			dfs_ino;
 
-	/** Caching data */
+	/** Caching information */
 	double			dfc_attr_timeout;
 	double			dfc_dentry_timeout;
 	double			dfc_dentry_dir_timeout;
 	double			dfc_ndentry_timeout;
 	bool			dfc_data_caching;
+	bool			dfc_direct_io_disable;
 	pthread_mutex_t		dfs_read_mutex;
 };
 
