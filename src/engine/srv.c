@@ -1214,6 +1214,7 @@ dss_srv_init(void)
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
+	bio_register_bulk_ops(crt_bulk_create, crt_bulk_free);
 
 	/* start xstreams */
 	rc = dss_xstreams_init();
