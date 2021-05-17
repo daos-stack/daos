@@ -419,7 +419,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithSocketDir(socketDir).
 		WithLogFile(logFile).
 		WithLogMask(logMask).
-		WithBdevConfigPath(cfgPath).
+		WithBdevOutputConfigPath(cfgPath).
 		WithSystemName(systemName).
 		WithCrtCtxShareAddr(crtCtxShareAddr).
 		WithCrtTimeout(crtTimeout)

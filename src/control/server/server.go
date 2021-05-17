@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -212,14 +213,10 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 
 	// Indicate whether VMD devices have been detected and can be used.
 	cfg.Storage.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
+	// Specify path to write output bdev config file.
+	cfg.Storage.Bdev.OutputPath = filepath.Join(cfg.Storage.SCM.MountPoint, bdev.OutConfName)
 
-	// TODO: ClassProvider should be encapsulated within bdevProvider
-	bcp, err := bdev.NewClassProvider(srv.log, cfg.Storage.SCM.MountPoint, &cfg.Storage.Bdev)
-	if err != nil {
-		return nil, err
-	}
-
-	engine := NewEngineInstance(srv.log, bcp, srv.scmProvider, joinFn,
+	engine := NewEngineInstance(srv.log, srv.bdevProvider, srv.scmProvider, joinFn,
 		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
 	if idx == 0 {
 		configureFirstEngine(ctx, engine, srv.sysdb, joinFn)
@@ -240,7 +237,8 @@ func (srv *server) addEngines(ctx context.Context) error {
 			return err
 		}
 
-		registerEngineCallbacks(engine, srv.pubSub, &allStarted)
+		registerEngineEventCallbacks(engine, srv.pubSub, &allStarted)
+		registerEngineStorageCallbacks(srv.log, engine, &c.Storage)
 
 		if err := srv.harness.AddInstance(engine); err != nil {
 			return err

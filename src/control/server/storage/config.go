@@ -138,7 +138,7 @@ func (b BdevClass) String() string {
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	ConfigPath  string    `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	OutputPath  string    `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	Class       BdevClass `yaml:"bdev_class,omitempty"`
 	DeviceList  []string  `yaml:"bdev_list,omitempty"`
 	VmdDisabled bool      `yaml:"-"` // set during start-up

@@ -235,7 +235,7 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
-func registerEngineCallbacks(engine *EngineInstance, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
+func registerEngineEventCallbacks(engine *EngineInstance, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
 	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname()))
 
@@ -252,6 +252,14 @@ func registerEngineCallbacks(engine *EngineInstance, pubSub *events.PubSub, allS
 		})
 
 		return nil
+	})
+}
+
+func registerEngineStorageCallbacks(log logging.Logger, engine *EngineInstance, cfg *engine.StorageConfig) {
+	// Register callback to write bdev output config file after format.
+	engine.OnAwaitFormat(func(_ context.Context, _ uint32, _ string) error {
+		return errors.Wrap(engine.bdevProvider.GenConfigFile(&cfg.Bdev),
+			"write output bdev config file after format")
 	})
 }
 

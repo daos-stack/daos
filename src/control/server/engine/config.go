@@ -300,21 +300,24 @@ func (c *Config) WithBdevDeviceList(devices ...string) *Config {
 	return c
 }
 
-// WithBdevDeviceCount sets the number of devices to be created when BdevClass is malloc.
+// WithBdevDeviceCount sets the number of devices to be created when BdevClass
+// is malloc.
 func (c *Config) WithBdevDeviceCount(count int) *Config {
 	c.Storage.Bdev.DeviceCount = count
 	return c
 }
 
-// WithBdevFileSize sets the backing file size (used when BdevClass is malloc or file).
+// WithBdevFileSize sets the backing file size (used when BdevClass is malloc
+// or file).
 func (c *Config) WithBdevFileSize(size int) *Config {
 	c.Storage.Bdev.FileSize = size
 	return c
 }
 
-// WithBdevConfigPath sets the path to the generated NVMe config file used by SPDK.
-func (c *Config) WithBdevConfigPath(cfgPath string) *Config {
-	c.Storage.Bdev.ConfigPath = cfgPath
+// WithBdevOutputConfigPath sets the path to the generated NVMe config file
+// used by SPDK.
+func (c *Config) WithBdevOutputConfigPath(outPath string) *Config {
+	c.Storage.Bdev.OutputPath = outPath
 	return c
 }
 

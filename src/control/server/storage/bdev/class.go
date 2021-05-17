@@ -8,7 +8,6 @@ package bdev
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -23,8 +22,10 @@ import (
 )
 
 const (
-	confOut   = "daos_nvme.conf"
-	nvmeTempl = `[Nvme]
+	// OutConfName is the name of the output configuration file to be
+	// consumed by the bdev provider backend.
+	OutConfName     = "daos_nvme.conf"
+	clsNvmeTemplate = `[Nvme]
 {{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
 {{ end }}    RetryCount 4
     TimeoutUsec 0
@@ -34,70 +35,19 @@ const (
     HotplugPollRate 0
 `
 	// device block size hardcoded to 4096
-	fileTempl = `[AIO]
+	clsFileTemplate = `[AIO]
 {{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    AIO {{$e}} AIO_{{$host}}_{{$i}} 4096
 {{ end }}`
-	kdevTempl = `[AIO]
+	clsKdevTemplate = `[AIO]
 {{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    AIO {{$e}} AIO_{{$host}}_{{$i}}
 {{ end }}`
-	mallocTempl = `[Malloc]
+	clsMallocTemplate = `[Malloc]
     NumberOfLuns {{.DeviceCount}}
     LunSizeInMB {{.FileSize}}000
 `
 	gbyte   = 1000000000
 	blkSize = 4096
-
-	msgBdevNone    = "in config, no nvme.conf generated for server"
-	msgBdevEmpty   = "bdev device list entry empty"
-	msgBdevBadSize = "backfile_size should be greater than 0"
 )
-
-// bdev describes parameters and behaviors for a particular bdev class.
-type bdev struct {
-	templ   string
-	vosEnv  string
-	isEmpty func(*storage.BdevConfig) string                // check no elements
-	isValid func(*storage.BdevConfig) string                // check valid elements
-	init    func(logging.Logger, *storage.BdevConfig) error // prerequisite actions
-}
-
-func nilValidate(_ *storage.BdevConfig) string { return "" }
-
-func nilInit(_ logging.Logger, _ *storage.BdevConfig) error { return nil }
-
-func isEmptyList(c *storage.BdevConfig) string {
-	if len(c.DeviceList) == 0 {
-		return "bdev_list empty " + msgBdevNone
-	}
-
-	return ""
-}
-
-func isEmptyNumber(c *storage.BdevConfig) string {
-	if c.DeviceCount == 0 {
-		return "bdev_number == 0 " + msgBdevNone
-	}
-
-	return ""
-}
-
-func isValidList(c *storage.BdevConfig) string {
-	for i, elem := range c.DeviceList {
-		if elem == "" {
-			return fmt.Sprintf("%s (index %d)", msgBdevEmpty, i)
-		}
-	}
-
-	return ""
-}
-
-func isValidSize(c *storage.BdevConfig) string {
-	if c.FileSize < 1 {
-		return msgBdevBadSize
-	}
-
-	return ""
-}
 
 func createEmptyFile(log logging.Logger, path string, size int64) error {
 	if !filepath.IsAbs(path) {
@@ -132,8 +82,8 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 	return nil
 }
 
-func bdevFileInit(log logging.Logger, c *storage.BdevConfig) error {
-	// truncate or create files for SPDK AIO emulation,
+// clsFileInit truncates or creates files for SPDK AIO emulation.
+func clsFileInit(log logging.Logger, c *storage.BdevConfig) error {
 	// requested size aligned with block size
 	size := (int64(c.FileSize*gbyte) / int64(blkSize)) * int64(blkSize)
 
@@ -147,89 +97,17 @@ func bdevFileInit(log logging.Logger, c *storage.BdevConfig) error {
 	return nil
 }
 
-// genFromNvme takes NVMe device PCI addresses and generates config content
+// renderTemplate takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
-func genFromTempl(cfg *storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
-	t := template.Must(template.New(confOut).Parse(templ))
+func renderTemplate(cfg *storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
+	t := template.Must(template.New(OutConfName).Parse(templ))
 	err = t.Execute(&out, cfg)
 
 	return
 }
 
-// ClassProvider implements functionality for a given bdev class
-type ClassProvider struct {
-	log     logging.Logger
-	cfg     *storage.BdevConfig
-	cfgPath string
-	bdev    bdev
-}
-
-// NewClassProvider returns a new ClassProvider reference for given bdev type.
-func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig) (*ClassProvider, error) {
-	p := &ClassProvider{
-		log: log,
-		cfg: cfg,
-	}
-
-	switch cfg.Class {
-	case storage.BdevClassNone:
-		p.bdev = bdev{nvmeTempl, "", isEmptyList, isValidList, nilInit}
-	case storage.BdevClassNvme:
-		p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, nilInit}
-		if !cfg.VmdDisabled {
-			p.bdev.templ = `[Vmd]
-    Enable True
-
-` + p.bdev.templ
-		}
-	case storage.BdevClassMalloc:
-		p.bdev = bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilInit}
-	case storage.BdevClassKdev:
-		p.bdev = bdev{kdevTempl, "AIO", isEmptyList, isValidList, nilInit}
-	case storage.BdevClassFile:
-		p.bdev = bdev{fileTempl, "AIO", isEmptyList, isValidSize, bdevFileInit}
-	default:
-		return nil, errors.Errorf("unable to map %q to BdevClass", cfg.Class)
-	}
-
-	if msg := p.bdev.isEmpty(p.cfg); msg != "" {
-		log.Debugf("spdk %s: %s", cfg.Class, msg)
-		// No devices; no need to generate a config file
-		return p, nil
-	}
-
-	if msg := p.bdev.isValid(p.cfg); msg != "" {
-		log.Debugf("spdk %s: %s", cfg.Class, msg)
-		// Bad config; don't generate a config file
-		return nil, errors.Errorf("invalid nvme config: %s", msg)
-	}
-
-	// Config file required; set this so it gets generated later
-	p.cfgPath = filepath.Join(cfgDir, confOut)
-	log.Debugf("output bdev conf file set to %s", p.cfgPath)
-
-	// FIXME: Not really happy with having side-effects here, but trying
-	// not to change too much at once.
-	cfg.VosEnv = p.bdev.vosEnv
-	cfg.ConfigPath = p.cfgPath
-
-	return p, nil
-}
-
-// GenConfigFile generates nvme config file for given bdev type to be consumed
-// by spdk.
-func (p *ClassProvider) GenConfigFile() error {
-	if p.cfgPath == "" {
-		p.log.Debug("skip bdev conf file generation as no path set")
-
-		return nil
-	}
-
-	if err := p.bdev.init(p.log, p.cfg); err != nil {
-		return errors.Wrap(err, "bdev device init")
-	}
-
-	confBytes, err := genFromTempl(p.cfg, p.bdev.templ)
+func writeConfig(templ string, cfg *storage.BdevConfig) error {
+	confBytes, err := renderTemplate(cfg, templ)
 	if err != nil {
 		return err
 	}
@@ -238,21 +116,65 @@ func (p *ClassProvider) GenConfigFile() error {
 		return errors.New("spdk: generated nvme config is unexpectedly empty")
 	}
 
-	p.log.Debugf("create %s with %v bdevs", p.cfgPath, p.cfg.DeviceList)
+	f, err := os.Create(cfg.OutputPath)
+	if err != nil {
+		return errors.Wrapf(err, "bdev create output config file")
+	}
 
-	f, err := os.Create(p.cfgPath)
 	defer func() {
 		ce := f.Close()
 		if err == nil {
 			err = ce
 		}
 	}()
-	if err != nil {
-		return errors.Wrapf(err, "spdk: failed to create NVMe config file %s", p.cfgPath)
-	}
+
 	if _, err := confBytes.WriteTo(f); err != nil {
-		return errors.Wrapf(err, "spdk: failed to write NVMe config to file %s", p.cfgPath)
+		return errors.Wrapf(err, "bdev write to %q", cfg.OutputPath)
 	}
 
 	return nil
+}
+
+// GenConfigFile generates nvme config file for given bdev type to be consumed
+// by backend.
+func (p *Provider) GenConfigFile(cfg *storage.BdevConfig) error {
+	if cfg.OutputPath == "" {
+		p.log.Debug("skip bdev conf file generation as no path set")
+
+		return nil
+	}
+
+	// special case init for class aio-file
+	if cfg.Class == storage.BdevClassFile {
+		if err := clsFileInit(p.log, cfg); err != nil {
+			return err
+		}
+	}
+
+	templ := map[storage.BdevClass]string{
+		storage.BdevClassNone:   clsNvmeTemplate,
+		storage.BdevClassNvme:   clsNvmeTemplate,
+		storage.BdevClassMalloc: clsMallocTemplate,
+		storage.BdevClassKdev:   clsKdevTemplate,
+		storage.BdevClassFile:   clsFileTemplate,
+	}[cfg.Class]
+
+	// special case template edit for class nvme
+	if !cfg.VmdDisabled {
+		templ = `[Vmd]
+    Enable True
+
+` + templ
+	}
+
+	cfg.VosEnv = map[storage.BdevClass]string{
+		storage.BdevClassNone:   "",
+		storage.BdevClassNvme:   "NVME",
+		storage.BdevClassMalloc: "MALLOC",
+		storage.BdevClassKdev:   "AIO",
+		storage.BdevClassFile:   "AIO",
+	}[cfg.Class]
+
+	p.log.Debugf("write %q with %v bdevs", cfg.OutputPath, cfg.DeviceList)
+	return writeConfig(templ, cfg)
 }
