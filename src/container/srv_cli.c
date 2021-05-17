@@ -93,7 +93,8 @@ dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t coh_uuid,
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	cont = dc_cont_alloc(cont_uuid);
+	/* TODO: look more carefully at label */
+	cont = dc_cont_alloc(NULL /* label */, cont_uuid);
 	if (cont == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

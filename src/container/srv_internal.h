@@ -82,6 +82,7 @@ struct cont_svc {
 	struct ds_rsvc	       *cs_rsvc;
 	ABT_rwlock		cs_lock;
 	rdb_path_t		cs_root;	/* root KVS */
+	rdb_path_t		cs_uuids;	/* container UUIDs KVS */
 	rdb_path_t		cs_conts;	/* container KVS */
 	rdb_path_t		cs_hdls;	/* container handle KVS */
 	struct ds_pool	       *cs_pool;

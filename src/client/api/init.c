@@ -125,6 +125,9 @@ const struct daos_task_api dc_funcs[] = {
 
 	/** Pool additions */
 	{dc_pool_connect_lbl, sizeof(daos_pool_connect_lbl_t)},
+
+	/** Container additions */
+	{dc_cont_open_lbl, sizeof(daos_cont_open_lbl_t)},
 };
 
 /**

@@ -121,6 +121,9 @@ typedef enum {
 	/** Pool API additions */
 	DAOS_OPC_POOL_CONNECT_LBL,
 
+	/** Container API additions */
+	DAOS_OPC_CONT_OPEN_LBL,
+
 	DAOS_OPC_MAX
 } daos_opc_t;
 
@@ -347,7 +350,7 @@ typedef struct {
 	daos_prop_t		*prop;
 } daos_cont_create_t;
 
-/** Container open args */
+/** Container open by UUID args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
@@ -360,6 +363,20 @@ typedef struct {
 	/** Optional, return container information. */
 	daos_cont_info_t	*info;
 } daos_cont_open_t;
+
+/** Container open by label args */
+typedef struct {
+	/** Pool open handle. */
+	daos_handle_t		poh;
+	/** Label of the container. */
+	const char		*label;
+	/** Open mode, represented by the DAOS_COO_ bits.*/
+	unsigned int		flags;
+	/** Returned container open handle. */
+	daos_handle_t		*coh;
+	/** Optional, return container information. */
+	daos_cont_info_t	*info;
+} daos_cont_open_lbl_t;
 
 /** Container close args */
 typedef struct {

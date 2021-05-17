@@ -65,7 +65,7 @@ def get_version():
 
 API_VERSION_MAJOR = "1"
 API_VERSION_MINOR = "2"
-API_VERSION_FIX = "1"
+API_VERSION_FIX = "2"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
 

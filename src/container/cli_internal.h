@@ -22,6 +22,7 @@ struct dc_cont {
 	pthread_rwlock_t	dc_obj_list_lock;
 	/* uuid for this container */
 	uuid_t			dc_uuid;
+	char		       *dc_label;
 	uuid_t			dc_cont_hdl;
 	uint64_t		dc_capas;
 	/* pool handler of the container */
@@ -56,7 +57,7 @@ dc_cont2hdl(struct dc_cont *dc, daos_handle_t *hdl)
 void dc_cont_hdl_link(struct dc_cont *dc);
 void dc_cont_hdl_unlink(struct dc_cont *dc);
 
-struct dc_cont *dc_cont_alloc(const uuid_t uuid);
+struct dc_cont *dc_cont_alloc(const char *label, const uuid_t uuid);
 void dc_cont_free(struct dc_cont *);
 void dc_cont_put(struct dc_cont *dc);
 

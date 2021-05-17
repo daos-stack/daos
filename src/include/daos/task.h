@@ -45,6 +45,7 @@ struct daos_task_args {
 		/** Container */
 		daos_cont_create_t	cont_create;
 		daos_cont_open_t	cont_open;
+		daos_cont_open_lbl_t	cont_open_lbl;
 		daos_cont_close_t	cont_close;
 		daos_cont_destroy_t	cont_destroy;
 		daos_cont_query_t	cont_query;
