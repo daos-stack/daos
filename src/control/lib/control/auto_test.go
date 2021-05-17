@@ -652,6 +652,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithPinnedNumaNode(&numa0).
 					WithScmDeviceList("/dev/pmem0").
 					WithScmMountPoint("/mnt/daos0").
+					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
+					WithBdevVosEnv("NVME").
 					WithHelperStreamCount(7)),
 		},
 		"access point with valid port": {
@@ -669,6 +671,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithPinnedNumaNode(&numa0).
 					WithScmDeviceList("/dev/pmem0").
 					WithScmMountPoint("/mnt/daos0").
+					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
+					WithBdevVosEnv("NVME").
 					WithHelperStreamCount(7)),
 		},
 		"access point with invalid port": {
@@ -695,6 +699,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithPinnedNumaNode(&numa0).
 					WithScmDeviceList("/dev/pmem0").
 					WithScmMountPoint("/mnt/daos0").
+					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
+					WithBdevVosEnv("NVME").
 					WithHelperStreamCount(7)),
 		},
 		"access point ip with invalid port": {
@@ -722,6 +728,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithScmDeviceList("/dev/pmem0").
 					WithScmMountPoint("/mnt/daos0").
 					WithBdevDeviceList(common.MockPCIAddr(1)).
+					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
+					WithBdevVosEnv("NVME").
 					WithHelperStreamCount(7)),
 		},
 		"dual pmem dual ssd": {
@@ -744,6 +752,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithScmDeviceList("/dev/pmem0").
 					WithScmMountPoint("/mnt/daos0").
 					WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...).
+					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
+					WithBdevVosEnv("NVME").
 					WithHelperStreamCount(7),
 				defaultEngineCfg(1).
 					WithFabricInterface("ib1").
@@ -754,6 +764,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithScmDeviceList("/dev/pmem1").
 					WithScmMountPoint("/mnt/daos1").
 					WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...).
+					WithBdevOutputConfigPath("/mnt/daos1/daos_nvme.conf").
+					WithBdevVosEnv("NVME").
 					WithTargetCount(15).
 					WithHelperStreamCount(6)),
 		},

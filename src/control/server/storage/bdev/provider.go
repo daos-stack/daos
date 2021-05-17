@@ -54,8 +54,10 @@ type (
 	// FormatRequest defines the parameters for a Format operation.
 	FormatRequest struct {
 		pbin.ForwardableRequest
+		OutputPath string
 		Class      storage.BdevClass
 		DeviceList []string
+		FileSize   int // size GB for NVMe device emulation
 		MemSize    int // size MiB memory to be used by SPDK proc
 		DisableVMD bool
 	}

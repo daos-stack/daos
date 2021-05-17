@@ -22,9 +22,6 @@ import (
 )
 
 const (
-	// OutConfName is the name of the output configuration file to be
-	// consumed by the bdev provider backend.
-	OutConfName     = "daos_nvme.conf"
 	clsNvmeTemplate = `[Nvme]
 {{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
 {{ end }}    RetryCount 4
@@ -83,11 +80,11 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 }
 
 // clsFileInit truncates or creates files for SPDK AIO emulation.
-func clsFileInit(log logging.Logger, c *storage.BdevConfig) error {
+func clsFileInit(log logging.Logger, req *FormatRequest) error {
 	// requested size aligned with block size
-	size := (int64(c.FileSize*gbyte) / int64(blkSize)) * int64(blkSize)
+	size := (int64(req.FileSize*gbyte) / int64(blkSize)) * int64(blkSize)
 
-	for _, path := range c.DeviceList {
+	for _, path := range req.DeviceList {
 		err := createEmptyFile(log, path, size)
 		if err != nil {
 			return err
@@ -99,26 +96,26 @@ func clsFileInit(log logging.Logger, c *storage.BdevConfig) error {
 
 // renderTemplate takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
-func renderTemplate(cfg *storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
-	t := template.Must(template.New(OutConfName).Parse(templ))
-	err = t.Execute(&out, cfg)
+func renderTemplate(req *FormatRequest, templ string) (out bytes.Buffer, err error) {
+	t := template.Must(template.New(req.OutputPath).Parse(templ))
+	err = t.Execute(&out, req)
 
 	return
 }
 
-func writeConfig(templ string, cfg *storage.BdevConfig) error {
-	confBytes, err := renderTemplate(cfg, templ)
+func writeConfig(templ string, req *FormatRequest) error {
+	confBytes, err := renderTemplate(req, templ)
 	if err != nil {
 		return err
 	}
 
 	if confBytes.Len() == 0 {
-		return errors.New("spdk: generated nvme config is unexpectedly empty")
+		return errors.New("generated file is unexpectedly empty")
 	}
 
-	f, err := os.Create(cfg.OutputPath)
+	f, err := os.Create(req.OutputPath)
 	if err != nil {
-		return errors.Wrapf(err, "bdev create output config file")
+		return errors.Wrap(err, "create")
 	}
 
 	defer func() {
@@ -129,24 +126,22 @@ func writeConfig(templ string, cfg *storage.BdevConfig) error {
 	}()
 
 	if _, err := confBytes.WriteTo(f); err != nil {
-		return errors.Wrapf(err, "bdev write to %q", cfg.OutputPath)
+		return errors.Wrap(err, "write")
 	}
 
 	return nil
 }
 
-// GenConfigFile generates nvme config file for given bdev type to be consumed
-// by backend.
-func (p *Provider) GenConfigFile(cfg *storage.BdevConfig) error {
-	if cfg.OutputPath == "" {
-		p.log.Debug("skip bdev conf file generation as no path set")
-
-		return nil
+// writeNvmeConf generates nvme config file for given bdev type to be consumed
+// by spdk.
+func (sb *spdkBackend) writeNvmeConf(req *FormatRequest) error {
+	if req.OutputPath == "" {
+		return errors.New("no output config directory set in request")
 	}
 
 	// special case init for class aio-file
-	if cfg.Class == storage.BdevClassFile {
-		if err := clsFileInit(p.log, cfg); err != nil {
+	if req.Class == storage.BdevClassFile {
+		if err := clsFileInit(sb.log, req); err != nil {
 			return err
 		}
 	}
@@ -157,24 +152,16 @@ func (p *Provider) GenConfigFile(cfg *storage.BdevConfig) error {
 		storage.BdevClassMalloc: clsMallocTemplate,
 		storage.BdevClassKdev:   clsKdevTemplate,
 		storage.BdevClassFile:   clsFileTemplate,
-	}[cfg.Class]
+	}[req.Class]
 
 	// special case template edit for class nvme
-	if !cfg.VmdDisabled {
+	if !req.DisableVMD {
 		templ = `[Vmd]
     Enable True
 
 ` + templ
 	}
 
-	cfg.VosEnv = map[storage.BdevClass]string{
-		storage.BdevClassNone:   "",
-		storage.BdevClassNvme:   "NVME",
-		storage.BdevClassMalloc: "MALLOC",
-		storage.BdevClassKdev:   "AIO",
-		storage.BdevClassFile:   "AIO",
-	}[cfg.Class]
-
-	p.log.Debugf("write %q with %v bdevs", cfg.OutputPath, cfg.DeviceList)
-	return writeConfig(templ, cfg)
+	sb.log.Debugf("write %q with %v bdevs", req.OutputPath, req.DeviceList)
+	return writeConfig(templ, req)
 }

@@ -255,14 +255,6 @@ func registerEngineEventCallbacks(engine *EngineInstance, pubSub *events.PubSub,
 	})
 }
 
-func registerEngineStorageCallbacks(log logging.Logger, engine *EngineInstance, cfg *engine.StorageConfig) {
-	// Register callback to write bdev output config file after format.
-	engine.OnAwaitFormat(func(_ context.Context, _ uint32, _ string) error {
-		return errors.Wrap(engine.bdevProvider.GenConfigFile(&cfg.Bdev),
-			"write output bdev config file after format")
-	})
-}
-
 func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *system.Database, joinFn systemJoinFn) {
 	if !sysdb.IsReplica() {
 		return

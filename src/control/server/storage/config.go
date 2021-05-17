@@ -13,20 +13,20 @@ import (
 )
 
 const (
-	// MinNVMeStorage defines the minimum per-target allocation
-	// that may be requested. Requests with smaller amounts will
-	// be rounded up.
+	// MinNVMeStorage defines the minimum per-target allocation that may be
+	// requested. Requests with smaller amounts will be rounded up.
 	MinNVMeStorage = 1 << 30 // 1GiB, from bio_xtream.c
 
-	// MinScmToNVMeRatio defines the minimum-allowable ratio
-	// of SCM to NVMe.
+	// MinScmToNVMeRatio defines the minimum-allowable ratio of SCM to NVMe.
 	MinScmToNVMeRatio = 0.01 // 1%
-	// DefaultScmToNVMeRatio defines the default ratio of
-	// SCM to NVMe.
-	DefaultScmToNVMeRatio = 0.06
-)
 
-const (
+	// DefaultScmToNVMeRatio defines the default ratio of SCM to NVMe.
+	DefaultScmToNVMeRatio = 0.06
+
+	// BdevOutConfName defines the name of the output file to contain details
+	// of bdevs to be used by a DAOS engine.
+	BdevOutConfName = "daos_nvme.conf"
+
 	maxScmDeviceLen = 1
 )
 
@@ -158,7 +158,7 @@ func (bc *BdevConfig) checkNonZeroFileSize() error {
 	return nil
 }
 
-// Validate sanity checks engine bdev config parameters.
+// Validate sanity checks engine bdev config parameters and update VOS env.
 func (bc *BdevConfig) Validate() error {
 	if common.StringSliceHasDuplicates(bc.DeviceList) {
 		return errors.New("bdev_list contains duplicate pci addresses")
@@ -169,6 +169,7 @@ func (bc *BdevConfig) Validate() error {
 		if err := bc.checkNonZeroFileSize(); err != nil {
 			return err
 		}
+		bc.VosEnv = "AIO"
 	case BdevClassMalloc:
 		if err := bc.checkNonZeroFileSize(); err != nil {
 			return err
@@ -177,11 +178,13 @@ func (bc *BdevConfig) Validate() error {
 			return errors.Errorf("bdev_class %s requires non-zero bdev_number",
 				bc.Class)
 		}
+		bc.VosEnv = "MALLOC"
 	case BdevClassKdev:
 		if len(bc.DeviceList) == 0 {
 			return errors.Errorf("bdev_class %s requires non-empty bdev_list",
 				bc.Class)
 		}
+		bc.VosEnv = "AIO"
 	case BdevClassNvme:
 		for _, pci := range bc.DeviceList {
 			_, _, _, _, err := common.ParsePCIAddress(pci)
@@ -189,6 +192,7 @@ func (bc *BdevConfig) Validate() error {
 				return errors.Wrapf(err, "parse pci address %s", pci)
 			}
 		}
+		bc.VosEnv = "NVME"
 	}
 
 	return nil

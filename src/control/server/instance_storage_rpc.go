@@ -81,7 +81,7 @@ func (ei *EngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeContro
 	cfg := ei.bdevConfig()
 	results = make(proto.NvmeControllerResults, 0, len(cfg.DeviceList))
 
-	// A config with SCM and no block devices is valid.
+	// config with SCM and no block devices is valid
 	if len(cfg.DeviceList) == 0 {
 		return
 	}
@@ -90,8 +90,10 @@ func (ei *EngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeContro
 		engineIdx, cfg.Class, cfg.DeviceList)
 
 	res, err := p.Format(bdev.FormatRequest{
+		OutputPath: cfg.OutputPath,
 		Class:      cfg.Class,
 		DeviceList: cfg.DeviceList,
+		FileSize:   cfg.FileSize,
 		MemSize:    cfg.MemSize,
 	})
 	if err != nil {

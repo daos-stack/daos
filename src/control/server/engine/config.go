@@ -7,6 +7,7 @@
 package engine
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -35,6 +36,11 @@ func (sc *StorageConfig) Validate() error {
 	if err := sc.Bdev.Validate(); err != nil {
 		return errors.Wrap(err, "bdev config validation failed")
 	}
+
+	// set persistent location for engine bdev config file to be consumed by
+	// provider beckend
+	sc.Bdev.OutputPath = filepath.Join(sc.SCM.MountPoint, storage.BdevOutConfName)
+
 	return nil
 }
 
@@ -318,6 +324,13 @@ func (c *Config) WithBdevFileSize(size int) *Config {
 // used by SPDK.
 func (c *Config) WithBdevOutputConfigPath(outPath string) *Config {
 	c.Storage.Bdev.OutputPath = outPath
+	return c
+}
+
+// WithBdevVosEnv sets the VOS environment variable value to be passed to the
+// engine process on invocation.
+func (c *Config) WithBdevVosEnv(value string) *Config {
+	c.Storage.Bdev.VosEnv = value
 	return c
 }
 
