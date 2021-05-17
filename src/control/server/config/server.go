@@ -25,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -463,6 +464,33 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		cfg = cfg.WithEngines(cfg.Servers...)
 	}
 	cfg.Servers = nil
+
+	for idx, ec := range cfg.Engines {
+		if ec.LegacyStorage.WasDefined() {
+			log.Infof("engine %d: Legacy storage configuration detected. Please migrate to new-style storage configuration.", idx)
+			var storageCfgs storage.Configs
+			if ec.LegacyStorage.ScmClass != storage.ClassNone {
+				storageCfgs = append(storageCfgs,
+					storage.NewConfig().
+						WithScmClass(ec.LegacyStorage.ScmClass.String()).
+						WithScmDeviceList(ec.LegacyStorage.ScmConfig.DeviceList...).
+						WithScmMountPoint(ec.LegacyStorage.MountPoint).
+						WithScmRamdiskSize(ec.LegacyStorage.RamdiskSize),
+				)
+			}
+			if ec.LegacyStorage.BdevClass != storage.ClassNone {
+				storageCfgs = append(storageCfgs,
+					storage.NewConfig().
+						WithBdevClass(ec.LegacyStorage.BdevClass.String()).
+						WithBdevDeviceCount(ec.LegacyStorage.DeviceCount).
+						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList...).
+						WithBdevFileSize(ec.LegacyStorage.FileSize),
+				)
+			}
+			ec.WithStorage(storageCfgs...)
+			ec.LegacyStorage = engine.LegacyStorage{}
+		}
+	}
 
 	// A config without engines is valid when initially discovering hardware
 	// prior to adding per-engine sections with device allocations.

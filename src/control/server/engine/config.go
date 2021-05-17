@@ -182,30 +182,6 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
 
-	if c.LegacyStorage.WasDefined() {
-		var storageCfgs storage.Configs
-		if c.LegacyStorage.ScmClass != storage.ClassNone {
-			storageCfgs = append(storageCfgs,
-				storage.NewConfig().
-					WithScmClass(c.LegacyStorage.ScmClass.String()).
-					WithScmDeviceList(c.LegacyStorage.ScmConfig.DeviceList...).
-					WithScmMountPoint(c.LegacyStorage.MountPoint).
-					WithScmRamdiskSize(c.LegacyStorage.RamdiskSize),
-			)
-		}
-		if c.LegacyStorage.BdevClass != storage.ClassNone {
-			storageCfgs = append(storageCfgs,
-				storage.NewConfig().
-					WithBdevClass(c.LegacyStorage.BdevClass.String()).
-					WithBdevDeviceCount(c.LegacyStorage.DeviceCount).
-					WithBdevDeviceList(c.LegacyStorage.BdevConfig.DeviceList...).
-					WithBdevFileSize(c.LegacyStorage.FileSize),
-			)
-		}
-		c.WithStorage(storageCfgs...)
-		c.LegacyStorage = LegacyStorage{}
-	}
-
 	if err := c.Storage.Validate(); err != nil {
 		return errors.Wrap(err, "storage config validation failed")
 	}
