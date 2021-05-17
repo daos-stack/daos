@@ -1774,6 +1774,9 @@ agg_process_holes(struct ec_agg_entry *entry)
 		rc = dss_abterr2der(rc);
 		goto ev_out;
 	}
+	if (*status != 0)
+		D_GOTO(ev_out, rc = *status);
+
 	/* Update local vos with replicate */
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
@@ -2232,7 +2235,8 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = ds_pool_check_dtx_leader(agg_param->ap_pool_info.api_pool,
 				      &entry->ie_oid, agg_param->
-				      ap_pool_info.api_pool->sp_map_version);
+				      ap_pool_info.api_pool->sp_map_version,
+				      true);
 
 	if (rc == 1 && entry->ie_oid.id_shard >= oca->u.ec.e_k) {
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
