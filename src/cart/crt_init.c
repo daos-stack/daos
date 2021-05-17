@@ -629,7 +629,7 @@ direct_out:
 	if (rc == 0)
 		d_log_fini(); /* d_log_fini is reference counted */
 	else
-		D_ERROR("crt_finalize failed, rc: %d.\n", rc);
+		D_ERROR("failed, rc: %d.\n", rc);
 
 	return rc;
 }

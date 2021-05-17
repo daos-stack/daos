@@ -139,9 +139,16 @@ class WarningsFactory():
 
     # Error levels supported by the reporting are LOW, NORMAL, HIGH, ERROR.
 
-    def __init__(self, filename, junit=False, class_id=None):
+    def __init__(self,
+                 filename,
+                 junit=False,
+                 class_id=None,
+                 post=False,
+                 check=None):
         self._fd = open(filename, 'w')
         self.filename = filename
+        self.post = post
+        self.check = check
         self.issues = []
         self._class_id = class_id
         self.pending = []
@@ -181,8 +188,7 @@ class WarningsFactory():
             return
 
         entry = {}
-        entry['fileName'] = os.path.basename(self._file)
-        entry['directory'] = os.path.dirname(self._file)
+        entry['fileName'] = self._file
         # pylint: disable=protected-access
         entry['lineStart'] = sys._getframe().f_lineno
         entry['message'] = 'Tests exited without shutting down properly'
@@ -263,8 +269,7 @@ class WarningsFactory():
         Add it to the pending array, for later clarification
         """
         entry = {}
-        entry['directory'] = os.path.dirname(line.filename)
-        entry['fileName'] = os.path.basename(line.filename)
+        entry['fileName'] = line.filename
         if mtype:
             entry['type'] = mtype
         else:
@@ -280,6 +285,12 @@ class WarningsFactory():
             self.reset_pending()
         self.pending.append((line, message))
         self._flush()
+        if self.post:
+            # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
+            print('::warning file={},line={},::{}, {}'.format(line.filename,
+                                                              line.lineno,
+                                                              self.check,
+                                                              message))
 
     def reset_pending(self):
         """Reset the pending list
@@ -304,8 +315,7 @@ class WarningsFactory():
             # When the test is running insert an error in case of abnormal
             # exit, so that crashes in this code can be identified.
             entry = {}
-            entry['fileName'] = os.path.basename(self._file)
-            entry['directory'] = os.path.dirname(self._file)
+            entry['fileName'] = self._file
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
@@ -404,6 +414,8 @@ class DaosServer():
         self.mb = mb
 
     def __del__(self):
+        if self._agent:
+            self._stop_agent()
         if self.running:
             self.stop(None)
         server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
@@ -619,12 +631,16 @@ class DaosServer():
         self._add_test_case('start')
         print('Server started in {:.2f} seconds'.format(time.time() - start))
 
+    def _stop_agent(self):
+        self._agent.send_signal(signal.SIGINT)
+        ret = self._agent.wait(timeout=5)
+        print('rc from agent is {}'.format(ret))
+        self._agent = None
+
     def stop(self, wf):
         """Stop a previously started DAOS server"""
         if self._agent:
-            self._agent.send_signal(signal.SIGINT)
-            ret = self._agent.wait(timeout=5)
-            print('rc from agent is {}'.format(ret))
+            self._stop_agent()
 
         if not self._sp:
             return 0
@@ -657,8 +673,7 @@ class DaosServer():
 
         if len(procs) != 1:
             entry = {}
-            entry['fileName'] = os.path.basename(self._file)
-            entry['directory'] = os.path.dirname(self._file)
+            entry['fileName'] = self._file
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
@@ -1543,6 +1558,44 @@ class posix_tests():
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
+
+    def test_cont_clone(self):
+        """Verify that cloning a container works
+
+        This extends cont_copy, to also clone it afterwards.
+        """
+
+        # Create a temporary directory, with one file into it and copy it into
+        # the container.  Check the returncode only, do not verify the data.
+        # tempfile() will remove the directory on completion.
+        src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
+        ofd = open(os.path.join(src_dir.name, 'file'), 'w')
+        ofd.write('hello')
+        ofd.close()
+
+        cmd = ['filesystem',
+               'copy',
+               '--src',
+               src_dir.name,
+               '--dst',
+               'daos://{}/{}'.format(self.pool, self.container)]
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+
+        # Now create a container uuid and do an object based copy.
+        # The daos command will create the target container on demand.
+        container = str(uuid.uuid4())
+        cmd = ['container',
+               'clone',
+               '--src',
+               'daos://{}/{}'.format(self.pool, self.container),
+               '--dst',
+               'daos://{}/{}'.format(self.pool, container)]
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        destroy_container(self.conf, self.pool, container)
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests
@@ -2723,7 +2776,8 @@ def main():
                          junit=True,
                          class_id=args.class_name)
 
-    wf_server = WarningsFactory('nlt-server-leaks.json')
+    wf_server = WarningsFactory('nlt-server-leaks.json',
+                                post=True, check='Server leak checking')
     wf_client = WarningsFactory('nlt-client-leaks.json')
 
     conf.set_wf(wf)

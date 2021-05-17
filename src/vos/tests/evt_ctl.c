@@ -362,17 +362,21 @@ ts_add_rect(void)
 	rc = evt_insert(ts_toh, &entry, NULL);
 	if (rc == 0)
 		total_added++;
+
+	if (rc != 0 && !bio_addr_is_hole(&bio_addr))
+		utest_free(ts_utx, bio_addr.ba_off);
+
 	if (should_pass) {
-		if (rc != 0)
+		if (rc != 0) {
 			D_FATAL("Add rect failed "DF_RC"\n", DP_RC(rc));
+			fail();
+		}
 	} else {
 		if (rc == 0) {
 			D_FATAL("Add rect should have failed\n");
 			fail();
 		}
-		rc = 0;
 	}
-
 }
 
 static void
