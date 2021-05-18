@@ -193,6 +193,7 @@ class DaosAgentManager(SubprocessManager):
             "D_LOG_FILE_APPEND_PID": "1"
         }
         self.manager.assign_environment_default(EnvironmentVariables(env_vars))
+        self.attachinfo = None
 
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
