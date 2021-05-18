@@ -64,6 +64,15 @@ def get_version():
     with open("VERSION", "r") as version_file:
         return version_file.read().rstrip()
 
+def is_valid_binary(binary_name):
+    """ Check if binary is valid system binary """
+    binpath = distutils.spawn.find_executable(binary_name)
+    if binpath.startswith("/usr"):
+        return true
+    else:
+        return false
+
+
 API_VERSION_MAJOR = "1"
 API_VERSION_MINOR = "2"
 API_VERSION_FIX = "0"
@@ -176,7 +185,8 @@ def set_defaults(env, daos_version):
         patchfile = "/opt/crtdc/daos/master/patches/edv_build_latest.patch"
         if os.path.exists(patchfile):
             print("Endeavor patch exists")
-            call(["git", "apply", patchfile])
+            if is_valid_binary('git'):
+                call(["git", "apply", patchfile])
         else:
             print("Missing patchfile, not in endeavor?.. skip patching")
 
