@@ -1053,42 +1053,57 @@ the `[Service]` section before reloading systemd and restarting the
 
 ## System Validation
 
-To validate that the DAOS system is properly installed, the `daos_test`
-suite can be executed. Ensure the DAOS Agent is configured before running
-`daos_test`.  If the agent is using a non-default path for the socket, then
-configure `DAOS_AGENT_DRPC_DIR` in the client environment to point to this new
-location.
+To validate the DAOS system is properly installed, the daos pool autotest suite can be executed. Ensure the DAOS Server and Agent are configured before running DAOS autotest.
 
-DAOS automatically configures a client with a compatible fabric provider,
-network interface, network domain, CaRT timeout, and CaRT context share address,
-that will allow it to connect to the DAOS system.
+DAOS automatically configures a client with a compatible fabric provider, network interface, network domain, CaRT timeout, and CaRT context share address, that will allow it to connect to the DAOS system.
 
-The client may not override the fabric provider or the CaRT context share
-address.
 
-A client application may override the three remaining settings by configuring
-environment variables in the client's shell prior to launch.
-
-To manually configure the CaRT timeout, set `CRT_TIMEOUT` such as:
-```
-export CRT_TIMEOUT=5
-```
-To manually configure the network interface, set `OFI_INTERFACE` such as:
-```
-export OFI_INTERFACE=lo
-```
-When manually configuring an Infiniband device with a verbs provider, the network
-device domain is required.  To manually configure the domain, set `OFI_DOMAIN` such as:
-```
-export OFI_DOMAIN=hfi1_0
-```
 ### Launch the client application
-```bash
-mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
-```
 
-`daos_test` requires at least 8GB of SCM (or DRAM with tmpfs) storage on
-each storage node.
+A pool must be created to run the autotest:
+    
+    dmg pool create --size=100G --ranks=0
+    
+    Output:
+        Creating DAOS pool with automatic storage allocation: 100 GB NVMe + 6.00% SCM
+        Pool created with 6.00% SCM/NVMe ratio
+        ---------------------------------------
+          UUID          : f831d873-ce3c-472b-9eaa-6116922b240c
+          Service Ranks : 0
+          Storage Ranks : 0
+          Total Size    : 106 GB
+          SCM           : 6.0 GB (6.0 GB / rank)
+          NVMe          : 100 GB (100 GB / rank)
+
+
+Now we are able to run the tests.
+
+    daos pool autotest --pool=f831d873-ce3c-472b-9eaa-6116922b240c
+
+
+    Step Operation               Status Time(sec) Comment
+      0  Initializing DAOS          OK      0.000
+      1  Connecting to pool         OK      0.070
+      2  Creating container         OK      0.000  uuid = ba5c6a78-6ddc-4c7e-a73b-b7574c8d85b8
+      3  Opening container          OK      0.060
+     10  Generating 1M S1 layouts   OK      2.960
+     11  Generating 10K SX layouts  OK      0.130
+     20  Inserting 1M 128B values   OK     27.350
+     21  Reading 128B values back   OK     26.020
+     24  Inserting 1M 4KB values    OK     54.410
+     25  Reading 4KB values back    OK     54.380
+     28  Inserting 100K 1MB values  OK    605.870
+     29  Reading 1MB values back    OK    680.360
+     96  Closing container          OK      0.000
+     97  Destroying container       OK      0.030
+     98  Disconnecting from pool    OK      0.010
+     99  Tearing down DAOS          OK      0.000
+
+    All steps passed.
+
+Note: The command is executed in a development environment, performance differences will vary, based on your system.
+Note 2: Smaller pools may show DER_NOSPACE(-1007): 'No space on storage target'
+
 
 [^1]: https://github.com/intel/ipmctl
 
