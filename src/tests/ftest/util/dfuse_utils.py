@@ -28,7 +28,7 @@ class DfuseCommand(ExecutableCommand):
         self.singlethreaded = FormattedParameter("--singlethreaded", False)
         self.foreground = FormattedParameter("--foreground", False)
         self.disable_caching = FormattedParameter("--disable-caching", False)
-        self.disable_wb_caching = FormattedParameter("--disable-wb-caching",
+        self.disable_wb_caching = FormattedParameter("--disable-wb-cache",
                                                      False)
 
         # Environment variable names to export when running dfuse

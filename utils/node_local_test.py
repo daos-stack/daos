@@ -910,6 +910,8 @@ class DFuse():
         if not self.caching:
             cmd.append('--disable-caching')
 
+        cmd.append('--disable-wb-cache')
+
         if self.pool:
             cmd.extend(['--pool', self.pool])
         if self.container:
@@ -2214,18 +2216,28 @@ def run_in_fg(server, conf):
     while len(pools) < 1:
         pools = make_pool(server)
 
-    dfuse = DFuse(server, conf, pool=pools[0])
+    pool=pools[0]
+        
+    dfuse = DFuse(server, conf, pool=pool)
     dfuse.start()
-    container = str(uuid.uuid4())
+
+    container = create_cont(conf, pool, posix=True)
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  '--pool', pool, '--cont', container,
+                  '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
+                 show_stdout=True)
+
     t_dir = os.path.join(dfuse.dir, container)
-    os.mkdir(t_dir)
+
     print('Running at {}'.format(t_dir))
     print('daos container create --type POSIX ' \
           '--pool {} --path {}/uns-link'.format(
-              pools[0], t_dir))
+              pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers --pool {}'.format(pools[0]))
+    print('daos pool list-containers --pool {}'.format(pool))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
