@@ -280,7 +280,8 @@ obj_ec_recov_tgt_recx_nrs(struct obj_reasb_req *reasb_req,
 		if (tgt_nr == obj_ec_data_tgt_nr(oca))
 			break;
 	}
-	D_ASSERT(tgt_nr == obj_ec_data_tgt_nr(oca));
+	D_ASSERTF(tgt_nr == obj_ec_data_tgt_nr(oca), "%d != %d",
+		  tgt_nr, obj_ec_data_tgt_nr(oca));
 }
 
 /** scan the iod to find the full_stripe recxs and some help info */
