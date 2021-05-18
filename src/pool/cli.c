@@ -191,8 +191,9 @@ choose:
 			D_MUTEX_UNLOCK(cli_lock);
 		rc = dc_mgmt_pool_find(sys, label, puuid, &ranklist);
 		if (rc) {
-			D_ERROR("%s: dc_mgmt_pool_find() failed, "
-				DF_RC"\n", label, DP_RC(rc));
+			D_ERROR(DF_UUID":%s: dc_mgmt_pool_find() failed, "
+				DF_RC"\n", DP_UUID(puuid), label ? label : "",
+				DP_RC(rc));
 			return rc;
 		}
 		if (cli_lock)
@@ -205,9 +206,9 @@ choose:
 		ranklist = NULL;
 		if (rc == 0) {
 			for (i = 0; i < cli->sc_ranks->rl_nr; i++) {
-				D_DEBUG(DF_DSMC, "%s: "DF_UUID": "
-					"sc_ranks[%d]=%u\n", label,
-					DP_UUID(puuid), i,
+				D_DEBUG(DF_DSMC, DF_UUID":%s: "
+					"sc_ranks[%d]=%u\n", DP_UUID(puuid),
+					label ? label : "", i,
 					cli->sc_ranks->rl_ranks[i]);
 			}
 			goto choose;
@@ -466,16 +467,10 @@ init_pool(const char *label, uuid_t uuid, uint64_t capas, const char *grp,
 	if (pool == NULL)
 		return -DER_NOMEM;
 
-	if (label) {
+	if (label)
 		uuid_clear(pool->dp_pool);
-		D_STRNDUP(pool->dp_label, label, DAOS_PROP_LABEL_MAX_LEN);
-		if (pool->dp_label == NULL) {
-			D_ERROR("%s: failed duplicating label string\n", label);
-			D_GOTO(err_pool, rc = -DER_NOMEM);
-		}
-	} else {
+	else
 		uuid_copy(pool->dp_pool, uuid);
-	}
 	uuid_generate(pool->dp_pool_hdl);
 	pool->dp_capas = capas;
 
@@ -505,7 +500,7 @@ err_pool:
 
 static int
 dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
-			 daos_handle_t *poh)
+			 const char *label, daos_handle_t *poh)
 {
 	struct dc_pool		*pool;
 	crt_endpoint_t		 ep;
@@ -518,17 +513,16 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 	pool = dc_task_get_priv(task);
 	/** Choose an endpoint and create an RPC. */
 	ep.ep_grp = pool->dp_sys->sy_group;
-	rc = dc_pool_choose_svc_rank(pool->dp_label, pool->dp_pool,
-				     &pool->dp_client, &pool->dp_client_lock,
-				     pool->dp_sys, &ep);
+	rc = dc_pool_choose_svc_rank(label, pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": %s: cannot find pool service: "DF_RC"\n",
+		D_ERROR(DF_UUID":%s: cannot find pool service: "DF_RC"\n",
 			DP_UUID(pool->dp_pool),
-			pool->dp_label ? pool->dp_label : "", DP_RC(rc));
+			label ? label : "", DP_RC(rc));
 		goto out;
 	}
 
-	/** Pool connect RPC by UUID (provide, or looked up by label above) */
+	/** Pool connect RPC by UUID (provided, or looked up by label above) */
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_CONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -612,7 +606,7 @@ dc_pool_connect(tse_task_t *task)
 			DP_UUID(pool->dp_pool_hdl), args->flags);
 	}
 
-	rc = dc_pool_connect_internal(task, args->info, args->poh);
+	rc = dc_pool_connect_internal(task, args->info, NULL, args->poh);
 	if (rc)
 		goto out_pool;
 
@@ -654,7 +648,7 @@ dc_pool_connect_lbl(tse_task_t *task)
 			args->label,  DP_UUID(pool->dp_pool_hdl), args->flags);
 	}
 
-	rc = dc_pool_connect_internal(task, args->info, args->poh);
+	rc = dc_pool_connect_internal(task, args->info, args->label, args->poh);
 	if (rc)
 		goto out_pool;
 
@@ -772,7 +766,7 @@ dc_pool_disconnect(tse_task_t *task)
 	}
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	rc = dc_pool_choose_svc_rank(pool->dp_label, pool->dp_pool,
+	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
 				     &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
@@ -1403,7 +1397,7 @@ dc_pool_query(tse_task_t *task)
 		args->tgts, args->info);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	rc = dc_pool_choose_svc_rank(pool->dp_label, pool->dp_pool,
+	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
 				     &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
@@ -1530,7 +1524,7 @@ dc_pool_list_cont(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	rc = dc_pool_choose_svc_rank(pool->dp_label, pool->dp_pool,
+	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
 				     &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
@@ -2236,7 +2230,7 @@ dc_pool_stop_svc(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	rc = dc_pool_choose_svc_rank(pool->dp_label, pool->dp_pool,
+	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
 				     &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
