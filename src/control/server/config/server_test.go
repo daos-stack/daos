@@ -84,7 +84,8 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 	}
 }
 
-// supply mock external interface, populates config from given file path
+// mockConfigFromFile returns a populated server config file from the
+// file at the given path.
 func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
 	t.Helper()
 	c := DefaultServer().

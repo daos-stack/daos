@@ -61,7 +61,7 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 	}
 }
 
-func TestBdev_Backend_Scan(t *testing.T) {
+func TestBackend_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 
 	for name, tc := range map[string]struct {
@@ -110,7 +110,7 @@ func TestBdev_Backend_Scan(t *testing.T) {
 	}
 }
 
-func TestBdev_Backend_Format(t *testing.T) {
+func TestBackend_Format(t *testing.T) {
 	pci1 := storage.MockNvmeController(1).PciAddr
 	pci2 := storage.MockNvmeController(2).PciAddr
 	pci3 := storage.MockNvmeController(3).PciAddr
@@ -349,6 +349,9 @@ func TestBdev_Backend_Format(t *testing.T) {
 
 			b := backendWithMockBinding(log, tc.mec, tc.mnc)
 
+			// output path would be set during config validate
+			tc.req.ConfigPath = "fakeScmMountpoint"
+
 			gotResp, gotErr := b.Format(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
@@ -362,7 +365,7 @@ func TestBdev_Backend_Format(t *testing.T) {
 	}
 }
 
-func TestBdev_Backend_Update(t *testing.T) {
+func TestBackend_Update(t *testing.T) {
 	numCtrlrs := 4
 	controllers := make(storage.NvmeControllers, 0, numCtrlrs)
 	for i := 0; i < numCtrlrs; i++ {
@@ -455,7 +458,7 @@ type testWalkInput struct {
 	expErr error
 }
 
-func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
+func TestBackend_cleanHugePagesFn(t *testing.T) {
 	testDir := "/wherever"
 
 	for name, tc := range map[string]struct {

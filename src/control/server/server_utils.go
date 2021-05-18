@@ -38,6 +38,8 @@ type netListenFn func(string, string) (net.Listener, error)
 // resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
 type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
+var hostnameCached string
+
 const (
 	iommuPath        = "/sys/class/iommu"
 	minHugePageCount = 128
@@ -75,10 +77,15 @@ func cfgGetRaftDir(cfg *config.Server) string {
 }
 
 func hostname() string {
+	if hostnameCached != "" {
+		return hostnameCached
+	}
+
 	hn, err := os.Hostname()
 	if err != nil {
 		return fmt.Sprintf("Hostname() failed: %s", err.Error())
 	}
+	hostnameCached = hn
 
 	return hn
 }

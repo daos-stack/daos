@@ -89,13 +89,7 @@ func (ei *EngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeContro
 	ei.log.Infof("Instance %d: starting format of %s block devices %v",
 		engineIdx, cfg.Class, cfg.DeviceList)
 
-	res, err := p.Format(bdev.FormatRequest{
-		OutputPath: cfg.OutputPath,
-		Class:      cfg.Class,
-		DeviceList: cfg.DeviceList,
-		FileSize:   cfg.FileSize,
-		MemSize:    cfg.MemSize,
-	})
+	res, err := p.Format(bdev.FormatRequestFromConfig(&cfg, hostname()))
 	if err != nil {
 		results = append(results, ei.newCret("", err))
 		return

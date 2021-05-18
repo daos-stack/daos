@@ -24,8 +24,8 @@ type (
 	ScanRequest struct {
 		pbin.ForwardableRequest
 		DeviceList []string
-		DisableVMD bool
 		NoCache    bool
+		disableVMD bool // set by provider during request forwarding
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -42,8 +42,8 @@ type (
 		PCIBlocklist          string
 		TargetUser            string
 		ResetOnly             bool
+		DisableVMD            bool // set by caller
 		DisableVFIO           bool
-		DisableVMD            bool
 	}
 
 	// PrepareResponse contains the results of a successful Prepare operation.
@@ -54,12 +54,14 @@ type (
 	// FormatRequest defines the parameters for a Format operation.
 	FormatRequest struct {
 		pbin.ForwardableRequest
-		OutputPath string
-		Class      storage.BdevClass
-		DeviceList []string
-		FileSize   int // size GB for NVMe device emulation
-		MemSize    int // size MiB memory to be used by SPDK proc
-		DisableVMD bool
+		ConfigPath     string
+		Class          storage.BdevClass
+		DeviceList     []string
+		DeviceCount    int // number of NVMe emulation devices
+		DeviceFileSize int // size GB for NVMe device emulation
+		MemSize        int // size MiB memory to be used by SPDK proc
+		Hostname       string
+		disableVMD     bool // set by provider during request forwarding
 	}
 
 	// DeviceFormatRequest designs the parameters for a device-specific format.
@@ -210,7 +212,7 @@ func forwardScan(req ScanRequest, cache *ScanResponse, scan scanFwdFn) (msg stri
 // filtered by request "DeviceList" and empty filter implies allowing all.
 func (p *Provider) Scan(req ScanRequest) (resp *ScanResponse, err error) {
 	if p.shouldForward(req) {
-		req.DisableVMD = p.IsVMDDisabled()
+		req.disableVMD = p.IsVMDDisabled()
 
 		p.Lock()
 		defer p.Unlock()
@@ -225,7 +227,7 @@ func (p *Provider) Scan(req ScanRequest) (resp *ScanResponse, err error) {
 	}
 
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.DisableVMD {
+	if req.IsForwarded() && req.disableVMD {
 		p.disableVMD()
 	}
 
@@ -259,6 +261,19 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	return p.backend.Prepare(req)
 }
 
+// FormatFormatRequestFromConfig returns a format request populated from a bdev
+// storage configuration.
+func FormatRequestFromConfig(cfg *storage.BdevConfig, hn string) FormatRequest {
+	return FormatRequest{
+		ConfigPath:     cfg.OutputPath,
+		Class:          cfg.Class,
+		DeviceList:     cfg.DeviceList,
+		DeviceFileSize: cfg.FileSize,
+		DeviceCount:    cfg.DeviceCount,
+		Hostname:       hn,
+	}
+}
+
 // Format attempts to initialize NVMe devices for use by DAOS.
 // Note that this is a no-op for non-NVMe devices.
 func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
@@ -267,11 +282,11 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 	}
 
 	if p.shouldForward(req) {
-		req.DisableVMD = p.IsVMDDisabled()
+		req.disableVMD = p.IsVMDDisabled()
 		return p.fwd.Format(req)
 	}
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.DisableVMD {
+	if req.IsForwarded() && req.disableVMD {
 		p.disableVMD()
 	}
 

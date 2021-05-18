@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package bdev
 
 import (
@@ -16,7 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func TestBdev_ScanResponse_filter(t *testing.T) {
+func TestProvider_ScanResponse_filter(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 	ctrlr2 := storage.MockNvmeController(2)
 	ctrlr3 := storage.MockNvmeController(3)
@@ -78,7 +79,7 @@ func TestBdev_ScanResponse_filter(t *testing.T) {
 	}
 }
 
-func TestBdev_forwardScan(t *testing.T) {
+func TestProvider_forwardScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scanReq      ScanRequest
 		cache        *ScanResponse
@@ -208,7 +209,7 @@ func TestBdev_forwardScan(t *testing.T) {
 	}
 }
 
-func TestBdevScan(t *testing.T) {
+func TestProvider_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 	ctrlr2 := storage.MockNvmeController(2)
 	ctrlr3 := storage.MockNvmeController(3)
@@ -255,7 +256,7 @@ func TestBdevScan(t *testing.T) {
 			expVMDDisabled: true,
 		},
 		"multiple devices with vmd disabled": {
-			req:       ScanRequest{DisableVMD: true},
+			req:       ScanRequest{disableVMD: true},
 			forwarded: true,
 			mbc: &MockBackendConfig{
 				ScanRes: &ScanResponse{
@@ -301,7 +302,7 @@ func TestBdevScan(t *testing.T) {
 	}
 }
 
-func TestBdevPrepare(t *testing.T) {
+func TestProvider_Prepare(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req           PrepareRequest
 		shouldForward bool
@@ -357,7 +358,7 @@ func TestBdevPrepare(t *testing.T) {
 	}
 }
 
-func TestBdevFormat(t *testing.T) {
+func TestProvider_Format(t *testing.T) {
 	mockSingle := storage.MockNvmeController()
 
 	for name, tc := range map[string]struct {

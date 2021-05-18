@@ -146,10 +146,9 @@ type BdevConfig struct {
 	FileSize    int       `yaml:"bdev_size,omitempty"`
 	MemSize     int       `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
 	VosEnv      string    `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
-	Hostname    string    `yaml:"-"` // used when generating templates
 }
 
-func (bc *BdevConfig) checkNonZeroFileSize() error {
+func (bc *BdevConfig) checkNonZeroDevFileSize() error {
 	if bc.FileSize == 0 {
 		return errors.Errorf("bdev_class %s requires non-zero bdev_size",
 			bc.Class)
@@ -166,12 +165,12 @@ func (bc *BdevConfig) Validate() error {
 
 	switch bc.Class {
 	case BdevClassFile:
-		if err := bc.checkNonZeroFileSize(); err != nil {
+		if err := bc.checkNonZeroDevFileSize(); err != nil {
 			return err
 		}
 		bc.VosEnv = "AIO"
 	case BdevClassMalloc:
-		if err := bc.checkNonZeroFileSize(); err != nil {
+		if err := bc.checkNonZeroDevFileSize(); err != nil {
 			return err
 		}
 		if bc.DeviceCount == 0 {

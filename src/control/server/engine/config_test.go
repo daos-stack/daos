@@ -9,6 +9,7 @@ package engine
 import (
 	"flag"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -18,6 +19,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 var update = flag.Bool("update", false, "update .golden files")
@@ -28,7 +30,7 @@ func cmpOpts() []cmp.Option {
 	}
 }
 
-func TestMergeEnvVars(t *testing.T) {
+func TestConfig_MergeEnvVars(t *testing.T) {
 	for name, tc := range map[string]struct {
 		baseVars  []string
 		mergeVars []string
@@ -79,7 +81,7 @@ func TestMergeEnvVars(t *testing.T) {
 	}
 }
 
-func TestConfigHasEnvVar(t *testing.T) {
+func TestConfig_HasEnvVar(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startVars []string
 		addVar    string
@@ -119,7 +121,7 @@ func TestConfigHasEnvVar(t *testing.T) {
 	}
 }
 
-func TestConstructedConfig(t *testing.T) {
+func TestConfig_Constructed(t *testing.T) {
 	var numaNode uint = 8
 	goldenPath := "testdata/full.golden"
 
@@ -176,7 +178,7 @@ func TestConstructedConfig(t *testing.T) {
 	}
 }
 
-func TestEngine_ScmConfigValidation(t *testing.T) {
+func TestConfig_ScmValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
 		return NewConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
@@ -258,7 +260,7 @@ func TestEngine_ScmConfigValidation(t *testing.T) {
 	}
 }
 
-func TestEngine_BdevConfigValidation(t *testing.T) {
+func TestConfig_BdevValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
 		return NewConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
@@ -318,11 +320,14 @@ func TestEngine_BdevConfigValidation(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+			common.AssertEqual(t,
+				filepath.Join(baseValidConfig().Storage.SCM.MountPoint, storage.BdevOutConfName),
+				tc.cfg.Storage.Bdev.OutputPath, "unexpected output config path")
 		})
 	}
 }
 
-func TestEngine_ConfigValidation(t *testing.T) {
+func TestConfig_Validation(t *testing.T) {
 	bad := NewConfig()
 
 	if err := bad.Validate(); err == nil {
@@ -342,7 +347,7 @@ func TestEngine_ConfigValidation(t *testing.T) {
 	}
 }
 
-func TestEngine_FabricConfigValidation(t *testing.T) {
+func TestConfig_FabricValidation(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg    FabricConfig
 		expErr error
@@ -384,7 +389,7 @@ func TestEngine_FabricConfigValidation(t *testing.T) {
 	}
 }
 
-func TestConfigToCmdVals(t *testing.T) {
+func TestConfig_ToCmdVals(t *testing.T) {
 	var (
 		mountPoint      = "/mnt/test"
 		provider        = "test+foo"

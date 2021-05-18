@@ -33,15 +33,12 @@ func (sc *StorageConfig) Validate() error {
 	if err := sc.SCM.Validate(); err != nil {
 		return errors.Wrap(err, "scm config validation failed")
 	}
-	if err := sc.Bdev.Validate(); err != nil {
-		return errors.Wrap(err, "bdev config validation failed")
-	}
 
 	// set persistent location for engine bdev config file to be consumed by
-	// provider beckend
+	// provider backend
 	sc.Bdev.OutputPath = filepath.Join(sc.SCM.MountPoint, storage.BdevOutConfName)
 
-	return nil
+	return errors.Wrap(sc.Bdev.Validate(), "bdev config validation failed")
 }
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -254,12 +251,6 @@ func (c *Config) WithRank(r uint32) *Config {
 // WithSystemName sets the system name to which the instance belongs.
 func (c *Config) WithSystemName(name string) *Config {
 	c.SystemName = name
-	return c
-}
-
-// WithHostname sets the hostname to be used when generating NVMe configurations.
-func (c *Config) WithHostname(name string) *Config {
-	c.Storage.Bdev.Hostname = name
 	return c
 }
 

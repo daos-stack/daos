@@ -40,7 +40,7 @@ const (
 {{ end }}`
 	clsMallocTemplate = `[Malloc]
     NumberOfLuns {{.DeviceCount}}
-    LunSizeInMB {{.FileSize}}000
+    LunSizeInMB {{.DeviceFileSize}}000
 `
 	gbyte   = 1000000000
 	blkSize = 4096
@@ -82,7 +82,7 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 // clsFileInit truncates or creates files for SPDK AIO emulation.
 func clsFileInit(log logging.Logger, req *FormatRequest) error {
 	// requested size aligned with block size
-	size := (int64(req.FileSize*gbyte) / int64(blkSize)) * int64(blkSize)
+	size := (int64(req.DeviceFileSize*gbyte) / int64(blkSize)) * int64(blkSize)
 
 	for _, path := range req.DeviceList {
 		err := createEmptyFile(log, path, size)
@@ -97,13 +97,13 @@ func clsFileInit(log logging.Logger, req *FormatRequest) error {
 // renderTemplate takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
 func renderTemplate(req *FormatRequest, templ string) (out bytes.Buffer, err error) {
-	t := template.Must(template.New(req.OutputPath).Parse(templ))
+	t := template.Must(template.New(req.ConfigPath).Parse(templ))
 	err = t.Execute(&out, req)
 
 	return
 }
 
-func writeConfig(templ string, req *FormatRequest) error {
+func writeConf(templ string, req *FormatRequest) error {
 	confBytes, err := renderTemplate(req, templ)
 	if err != nil {
 		return err
@@ -113,7 +113,7 @@ func writeConfig(templ string, req *FormatRequest) error {
 		return errors.New("generated file is unexpectedly empty")
 	}
 
-	f, err := os.Create(req.OutputPath)
+	f, err := os.Create(req.ConfigPath)
 	if err != nil {
 		return errors.Wrap(err, "create")
 	}
@@ -134,8 +134,8 @@ func writeConfig(templ string, req *FormatRequest) error {
 
 // writeNvmeConf generates nvme config file for given bdev type to be consumed
 // by spdk.
-func (sb *spdkBackend) writeNvmeConf(req *FormatRequest) error {
-	if req.OutputPath == "" {
+func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
+	if req.ConfigPath == "" {
 		return errors.New("no output config directory set in request")
 	}
 
@@ -155,13 +155,13 @@ func (sb *spdkBackend) writeNvmeConf(req *FormatRequest) error {
 	}[req.Class]
 
 	// special case template edit for class nvme
-	if !req.DisableVMD {
+	if req.Class == storage.BdevClassNvme && !sb.IsVMDDisabled() {
 		templ = `[Vmd]
     Enable True
 
 ` + templ
 	}
 
-	sb.log.Debugf("write %q with %v bdevs", req.OutputPath, req.DeviceList)
-	return writeConfig(templ, req)
+	sb.log.Debugf("write %q with %v bdevs", req.ConfigPath, req.DeviceList)
+	return writeConf(templ, req)
 }
