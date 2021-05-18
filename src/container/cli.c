@@ -429,7 +429,7 @@ dc_cont_free(struct dc_cont *dc)
 }
 
 struct dc_cont *
-dc_cont_alloc(const char *label, const uuid_t uuid)
+dc_cont_alloc(const uuid_t uuid)
 {
 	struct dc_cont *dc;
 
@@ -438,8 +438,6 @@ dc_cont_alloc(const char *label, const uuid_t uuid)
 		return NULL;
 
 	daos_hhash_hlink_init(&dc->dc_hlink, &cont_h_ops);
-	if (label)
-		D_STRNDUP(dc->dc_label, label, DAOS_PROP_LABEL_MAX_LEN);
 	uuid_copy(dc->dc_uuid, uuid);
 	D_INIT_LIST_HEAD(&dc->dc_obj_list);
 	D_INIT_LIST_HEAD(&dc->dc_po_list);
@@ -483,6 +481,7 @@ dc_cont_props_init(struct dc_cont *cont)
 struct cont_open_args {
 	struct dc_pool		*coa_pool;
 	daos_cont_info_t	*coa_info;
+	const char		*coa_label;
 	crt_rpc_t		*rpc;
 	daos_handle_t		 hdl;
 	daos_handle_t		*hdlp;
@@ -640,7 +639,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	}
 
 	/* If open bylabel, copy the returned UUID into dc_cont structure */
-	if (cont->dc_label) {
+	if (arg->coa_label) {
 		struct cont_open_bylabel_out *lbl_out = crt_reply_get(arg->rpc);
 
 		uuid_copy(cont->dc_uuid, lbl_out->colo_uuid);
@@ -711,8 +710,8 @@ out:
 
 static int
 dc_cont_open_internal(tse_task_t *task, daos_cont_info_t *info,
-		      struct dc_pool *pool, daos_handle_t poh,
-		      daos_handle_t *coh)
+		      const char *label, struct dc_pool *pool,
+		      daos_handle_t poh, daos_handle_t *coh)
 {
 	struct cont_open_in	*in;
 	struct dc_cont		*cont;
@@ -723,17 +722,17 @@ dc_cont_open_internal(tse_task_t *task, daos_cont_info_t *info,
 	int			 rc;
 
 	cont = dc_task_get_priv(task);
-	cont_op = cont->dc_label ? CONT_OPEN_BYLABEL : CONT_OPEN;
+	cont_op = label ? CONT_OPEN_BYLABEL : CONT_OPEN;
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
 				     &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
-		if (cont->dc_label)
+		if (label)
 			D_ERROR(DF_UUID":%s: cannot find container service: "
 				DF_RC"\n", DP_UUID(pool->dp_pool),
-				cont->dc_label, DP_RC(rc));
+				label, DP_RC(rc));
 		else
 			D_ERROR(DF_CONT": cannot find container service: "
 				DF_RC"\n", DP_CONT(pool->dp_pool,
@@ -762,14 +761,15 @@ dc_cont_open_internal(tse_task_t *task, daos_cont_info_t *info,
 				  DAOS_CO_QUERY_PROP_REDUN_FAC;
 
 	/* open bylabel RPC input */
-	if (cont->dc_label) {
+	if (label) {
 		struct cont_open_bylabel_in *lbl_in = crt_req_get(rpc);
 
-		lbl_in->coli_label = cont->dc_label;
+		lbl_in->coli_label = label;
 	}
 
 	arg.coa_pool		= pool;
 	arg.coa_info		= info;
+	arg.coa_label		= label;
 	arg.rpc			= rpc;
 	arg.hdl			= poh;
 	arg.hdlp		= coh;
@@ -812,7 +812,7 @@ dc_cont_open(tse_task_t *task)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
 	if (cont == NULL) {
-		cont = dc_cont_alloc(NULL /* label */, args->uuid);
+		cont = dc_cont_alloc(args->uuid);
 		if (cont == NULL)
 			D_GOTO(err_pool, rc = -DER_NOMEM);
 		uuid_generate(cont->dc_cont_hdl);
@@ -824,7 +824,7 @@ dc_cont_open(tse_task_t *task)
 		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(cont->dc_cont_hdl),
 		args->flags);
 
-	rc = dc_cont_open_internal(task, args->info, pool,
+	rc = dc_cont_open_internal(task, args->info, NULL /* label */, pool,
 				   args->poh, args->coh);
 	if (rc)
 		goto err_cont;
@@ -863,10 +863,9 @@ dc_cont_open_lbl(tse_task_t *task)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
 	if (cont == NULL) {
-		cont = dc_cont_alloc(args->label, null_uuid);
+		cont = dc_cont_alloc(null_uuid);
 		if (cont == NULL)
 			D_GOTO(err_pool, rc = -DER_NOMEM);
-		uuid_copy(cont->dc_uuid, null_uuid);
 		uuid_generate(cont->dc_cont_hdl);
 		cont->dc_capas = args->flags;
 		dc_task_set_priv(task, cont);
@@ -876,7 +875,7 @@ dc_cont_open_lbl(tse_task_t *task)
 		DP_UUID(pool->dp_pool), args->label, DP_UUID(cont->dc_cont_hdl),
 		args->flags);
 
-	rc = dc_cont_open_internal(task, args->info, pool,
+	rc = dc_cont_open_internal(task, args->info, args->label, pool,
 				   args->poh, args->coh);
 	if (rc)
 		goto err_cont;
@@ -2026,8 +2025,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 		D_GOTO(out_pool, rc = -DER_INVAL);
 	}
 
-	/* TODO: deal with labels? also see pool g2l */
-	cont = dc_cont_alloc(NULL /* label */, cont_glob->dcg_uuid);
+	cont = dc_cont_alloc(cont_glob->dcg_uuid);
 	if (cont == NULL)
 		D_GOTO(out_pool, rc = -DER_NOMEM);
 
