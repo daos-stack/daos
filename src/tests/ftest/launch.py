@@ -69,7 +69,7 @@ def display(args, message):
         args (argparse.Namespace): command line arguments for this program
         message (str): message to display if verbosity is set
     """
-    if args.verbose:
+    if args.verbose > 0:
         print(message)
 
 
@@ -224,7 +224,7 @@ def set_test_environment(args):
     # Python paths required for functional testing
     set_python_environment()
 
-    if args.verbose:
+    if args.verbose > 0:
         print("ENVIRONMENT VARIABLES")
         for key in sorted(os.environ):
             print("  {}: {}".format(key, os.environ[key]))
@@ -805,7 +805,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
             yaml_buffer.write(yaml_data)
 
         # Optionally display the file
-        if args.verbose:
+        if args.verbose > 0:
             cmd = ["diff", "-y", orig_yaml_file, yaml_file]
             print(get_output(cmd, False))
 
@@ -974,12 +974,24 @@ def run_tests(test_files, tag_filter, args):
                         args, get_build_environment(args)["PREFIX"])),
                 args)
 
-            # Archive remote configuration files
+            # Archive remote server configuration files
             return_code |= archive_files(
-                "remote config files",
+                "remote server config files",
                 os.path.join(avocado_logs_dir, "latest", "daos_configs"),
-                test_hosts,
-                "{}/daos_*.yml".format(os.path.join(os.sep, "etc", "daos")),
+                get_hosts_from_yaml(
+                    test_file["yaml"], args, YAML_KEYS["test_servers"]),
+                "{}/daos_server*.yml".format(
+                    os.path.join(os.sep, "etc", "daos")),
+                args)
+
+            # Archive remote client configuration files
+            return_code |= archive_files(
+                "remote client config files",
+                os.path.join(avocado_logs_dir, "latest", "daos_configs"),
+                get_hosts_from_yaml(
+                    test_file["yaml"], args, YAML_KEYS["test_clients"]),
+                "{0}/daos_agent*.yml {0}/daos_control*.yml".format(
+                    os.path.join(os.sep, "etc", "daos")),
                 args)
 
             # Archive remote daos log files
@@ -1068,7 +1080,7 @@ def find_yaml_hosts(test_yaml):
         [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
 
 
-def get_hosts_from_yaml(test_yaml, args):
+def get_hosts_from_yaml(test_yaml, args, key_match=None):
     """Extract the list of hosts from the test yaml file.
 
     This host will be included in the list if no clients are explicitly called
@@ -1077,23 +1089,34 @@ def get_hosts_from_yaml(test_yaml, args):
     Args:
         test_yaml (str): test yaml file
         args (argparse.Namespace): command line arguments for this program
+        key_match (str, optional): test yaml key used to filter which hosts to
+            find.  Defaults to None which will match all keys.
 
     Returns:
         list: a unique list of hosts specified in the test's yaml file
 
     """
+    display(
+        args,
+        "Extracting hosts from {} - matching key '{}'".format(
+            test_yaml, key_match))
     host_set = set()
-    if args.include_localhost:
+    if args.include_localhost and key_match != YAML_KEYS["test_servers"]:
         host_set.add(socket.gethostname().split(".")[0])
     found_client_key = False
     for key, value in list(find_yaml_hosts(test_yaml).items()):
-        host_set.update(value)
+        display(args, "  Found {}: {}".format(key, value))
+        if key_match is None or key == key_match:
+            display(args, "    Adding {}".format(value))
+            host_set.update(value)
         if key in YAML_KEYS["test_clients"]:
             found_client_key = True
 
     # Include this host as a client if no clients are specified
-    if not found_client_key:
-        host_set.add(socket.gethostname().split(".")[0])
+    if not found_client_key and key_match != YAML_KEYS["test_servers"]:
+        local_host = socket.gethostname().split(".")[0]
+        display(args, "    Adding the localhost: {}".format(local_host))
+        host_set.add(local_host)
 
     return sorted(list(host_set))
 
@@ -1134,7 +1157,7 @@ def compress_log_files(avocado_logs_dir, args):
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
     command = [
         get_remote_file_command(), "-z", "-x", "-f {}".format(logs_dir)]
-    if args.verbose:
+    if args.verbose > 1:
         command.append("-v")
     print(get_output(command, check=False))
 
@@ -1187,7 +1210,7 @@ def archive_files(description, destination, hosts, source_files, args,
         command.append("-c")
     if args.logs_threshold:
         command.append("-t \"{}\"".format(args.logs_threshold))
-    if args.verbose:
+    if args.verbose > 1:
         command.append("-v")
     task = get_remote_output(hosts, " ".join(command), 900)
 
@@ -2034,8 +2057,10 @@ def main():
              "will also be used to replace client placeholders.")
     parser.add_argument(
         "-v", "--verbose",
-        action="store_true",
-        help="verbose output")
+        action="count",
+        default=0,
+        help="verbosity output level. Specify multiple times (e.g. -vv) for "
+             "additional output")
     parser.add_argument(
         "-j", "--jenkinslog",
         action="store_true",
