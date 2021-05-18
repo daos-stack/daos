@@ -510,6 +510,8 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 	bool		have_dentry = false;
 	bool		have_dentry_dir = false;
 	bool		have_attr = false;
+	bool		have_dio = false;
+	bool		have_cache_off = false;
 
 	D_ALLOC(buff, ATTR_VALUE_LEN);
 	if (buff == NULL)
@@ -534,6 +536,7 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 			if (strncmp(buff, "on", size) == 0) {
 				dfc->dfc_data_caching = true;
 			} else if (strncmp(buff, "off", size) == 0) {
+				have_cache_off = true;
 				dfc->dfc_data_caching = false;
 			} else {
 				DFUSE_TRA_WARNING(dfc,
@@ -545,6 +548,7 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 		}
 		if (i == ATTR_DIRECT_IO_DISABLE_INDEX) {
 			if (strncmp(buff, "on", size) == 0) {
+				have_dio = true;
 				dfc->dfc_direct_io_disable = true;
 			} else if (strncmp(buff, "off", size) == 0) {
 				dfc->dfc_direct_io_disable = false;
@@ -582,6 +586,18 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 			dfc->dfc_ndentry_timeout = value;
 		}
 	}
+	/* Check if dfuse-direct-io-disable is set to on but
+	 * dfuse-data-cache is set to off.  This combination
+	 * does not make sense, so warn in this case and set
+	 * caching to on.
+	 */
+	if (have_dio) {
+		if (have_cache_off)
+			DFUSE_TRA_WARNING(dfc, "Caching enabled because of %s",
+					  cont_attr_names[ATTR_DIRECT_IO_DISABLE_INDEX]);
+		dfc->dfc_data_caching = true;
+	}
+
 	if (have_dentry && !have_dentry_dir)
 		dfc->dfc_dentry_dir_timeout = dfc->dfc_dentry_timeout;
 	rc = 0;

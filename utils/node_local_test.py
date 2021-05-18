@@ -1603,6 +1603,33 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
+    def test_dfuse_dio_off(self):
+        """Test for dfuse with no caching options, but
+        direct-io disabled"""
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      '--pool', self.pool, '--cont', self.container,
+                      '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
+                     show_stdout=True)
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      caching=True,
+                      pool=self.pool,
+                      container=self.container)
+
+        dfuse.start(v_hint='dio_off')
+
+        print(os.listdir(dfuse.dir))
+
+        fname = os.path.join(dfuse.dir, 'test_file3')
+        ofd = open(fname, 'w')
+        ofd.write('hello')
+        ofd.close()
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
     def test_cont_copy(self):
         """Verify that copying into a container works"""
 

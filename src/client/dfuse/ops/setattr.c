@@ -47,8 +47,10 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	 * ctime, but rather uses mtime instead.  In practice this is only
 	 * seen when using writeback cache.
 	 *
-	 * TODO: Pass in if this is a open file with caching enabled, and
-	 * selectively enable this based on file specifics.
+	 * This is only seen of entries where caching is enabled, however
+	 * if a file is opened with caching then the operation might then
+	 * happen on the inode, not the file handle so simply check if
+	 * caching might be enabled for the container.
 	 */
 	if (to_set & FUSE_SET_ATTR_CTIME) {
 		if (!ie->ie_dfs->dfc_data_caching) {
