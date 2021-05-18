@@ -541,7 +541,7 @@ array_dkey_punch_enumerate(void **state)
 
 	print_message("Inserting %d dkeys...\n", KEYS);
 	for (i = 0; i < KEYS; i++) {
-		char dkey_str[10];
+		char dkey_str[32] = {0};
 
 		/** init dkey */
 		sprintf(dkey_str, "dkey_%d", i);
@@ -561,7 +561,7 @@ array_dkey_punch_enumerate(void **state)
 	print_message("Punching %d dkeys, and %d dkeys that don't exist.\n",
 		      E_KEYS2PUNCH, NE_KEYS2PUNCH);
 	for (i = KEYS - E_KEYS2PUNCH; i < KEYS + NE_KEYS2PUNCH; i++) {
-		char dkey_str[10];
+		char dkey_str[32] = {0};
 
 		/** init dkey */
 		sprintf(dkey_str, "dkey_%d", i);
@@ -624,7 +624,7 @@ array_akey_punch_enumerate(void **state)
 
 	print_message("Inserting %d akeys...\n", KEYS);
 	for (i = 0; i < KEYS; i++) {
-		char akey_str[10];
+		char akey_str[32] = {0};
 
 		sprintf(akey_str, "akey_%d", i);
 		d_iov_set(&iod.iod_name, akey_str, strlen(akey_str));
@@ -643,7 +643,7 @@ array_akey_punch_enumerate(void **state)
 	print_message("Punching %d akeys, and %d akeys that don't exist.\n",
 		      E_KEYS2PUNCH, NE_KEYS2PUNCH);
 	for (i = KEYS - E_KEYS2PUNCH; i < KEYS + NE_KEYS2PUNCH; i++) {
-		char akey_str[10];
+		char akey_str[32] = {0};
 		daos_key_t akey;
 
 		sprintf(akey_str, "akey_%d", i);
@@ -661,7 +661,7 @@ array_akey_punch_enumerate(void **state)
 
 	print_message("Fetch akeys after punch and verify size...\n");
 	for (i = 0; i < KEYS; i++) {
-		char akey_str[10];
+		char akey_str[32] = {0};
 
 		sprintf(akey_str, "akey_%d", i);
 		d_iov_set(&iod.iod_name, akey_str, strlen(akey_str));

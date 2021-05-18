@@ -125,7 +125,7 @@ void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
 /** pthread names are limited to 16 chars */
-#define DSS_XS_NAME_LEN		16
+#define DSS_XS_NAME_LEN		(32)
 
 struct srv_profile_chunk {
 	d_list_t	spc_chunk_list;
