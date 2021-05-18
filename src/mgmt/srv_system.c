@@ -356,8 +356,15 @@ ds_mgmt_svc_stop(void)
 	 * thread on our way out, otherwise it will block shutdown.
 	 */
 	rc = ds_rsvc_lookup(DS_RSVC_CLASS_MGMT, &mgmt_svc_id, &rsvc);
-	if (rc != 0)
+	if (rc != 0) {
+		/*
+		 * Non-Replica/Non-Leader are expected and can be ignored.
+		 * Any other errors should be returned.
+		 */
+		if (rc == -DER_NOTREPLICA || rc == -DER_NOTLEADER)
+			return 0;
 		return rc;
+	}
 
 	ABT_mutex_lock(rsvc->s_mutex);
 	rsvc->s_state = DS_RSVC_DOWN;
