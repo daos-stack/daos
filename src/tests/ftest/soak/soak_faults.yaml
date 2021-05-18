@@ -54,17 +54,10 @@ container:
     oclass: RP_2G1
     control_method: daos
 container_reserved:
-    oclass: OC_RP_2G1
-    akey_size: 5
-    dkey_size: 5
-    data_size: 4096
-    object_qty: 20
-    record_qty: 1
-    record_size: 100
-    array_size: 1
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: API
+    oclass: RP_2G1
+    control_method: daos
 faults:
     fault_list:
     #    - DAOS_DTX_LOST_RPC_REQUEST

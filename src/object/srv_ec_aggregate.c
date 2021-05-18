@@ -370,21 +370,19 @@ static int
 agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry,
 	      bool align_data)
 {
-	int		 rc = 0;
+	void	*buf = NULL;
+	int	 rc = 0;
 
 	if (align_data) {
-		D_FREE(sgl->sg_iovs[iov_entry].iov_buf);
-		sgl->sg_iovs[iov_entry].iov_buf =
-			aligned_alloc(32, ent_buf_len);
-		if (sgl->sg_iovs[iov_entry].iov_buf == NULL) {
+		D_ALIGNED_ALLOC(buf, 32, ent_buf_len);
+		if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
 		}
+		D_FREE(sgl->sg_iovs[iov_entry].iov_buf);
+		sgl->sg_iovs[iov_entry].iov_buf = buf;
 	} else {
-		unsigned int *buf = NULL;
-
-		D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf,
-			  sgl->sg_iovs[iov_entry].iov_buf_len, ent_buf_len);
+		D_REALLOC_NZ(buf, sgl->sg_iovs[iov_entry].iov_buf, ent_buf_len);
 		 if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
