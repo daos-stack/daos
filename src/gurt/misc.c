@@ -38,6 +38,37 @@ d_realloc(void *ptr, size_t size)
 	return realloc(ptr, size);
 }
 
+char *
+d_strndup(const char *s, size_t n)
+{
+	return strndup(s, n);
+}
+
+int
+d_asprintf(char **strp, const char *fmt, ...)
+{
+	va_list	ap;
+	int	rc;
+
+	va_start(ap, fmt);
+	rc = vasprintf(strp, fmt, ap);
+	va_end(ap);
+
+	return rc;
+}
+
+char *
+d_realpath(const char *path, char *resolved_path)
+{
+	return realpath(path, resolved_path);
+}
+
+void *
+d_aligned_alloc(size_t alignment, size_t size)
+{
+	return aligned_alloc(alignment, size);
+}
+
 int
 d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 {
