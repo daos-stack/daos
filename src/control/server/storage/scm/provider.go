@@ -848,8 +848,7 @@ func (p *Provider) Stat(path string) (os.FileInfo, error) {
 }
 
 // IsMounted checks to see if the target device or directory is mounted and
-// returns flag to specify whether mounted, flag to specify whether the mount
-// exists and a relevant fault.
+// returns flag to specify whether mounted or a relevant fault.
 func (p *Provider) IsMounted(target string) (bool, error) {
 	isMounted, err := p.sys.IsMounted(target)
 

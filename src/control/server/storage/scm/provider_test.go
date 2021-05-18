@@ -481,6 +481,11 @@ func TestProvider_makeMountPath(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
+	dir1 := "/fake"
+	dir2 := "/nested"
+	dir3 := "/mountpoint"
+	nestedMount := dir1 + dir2 + dir3
+
 	for name, tc := range map[string]struct {
 		mntpt     string
 		existPath string
@@ -489,41 +494,41 @@ func TestProvider_makeMountPath(t *testing.T) {
 		expErr    error
 	}{
 		"existing nested": {
-			mntpt: "/mnt/daos/0",
+			mntpt: nestedMount,
 		},
 		"existing nested; bad perms": {
-			mntpt: "/mnt/daos/0",
+			mntpt: nestedMount,
 			statErrs: map[string]error{
-				"/mnt/daos/0": os.ErrPermission,
+				nestedMount: os.ErrPermission,
 			},
 			expErr: os.ErrPermission,
 		},
 		"new nested": {
-			mntpt: "/mnt/daos/0",
+			mntpt: nestedMount,
 			statErrs: map[string]error{
-				"/mnt":        os.ErrNotExist,
-				"/mnt/daos":   os.ErrNotExist,
-				"/mnt/daos/0": os.ErrNotExist,
+				dir1:        os.ErrNotExist,
+				dir1 + dir2: os.ErrNotExist,
+				nestedMount: os.ErrNotExist,
 			},
 			expCreate: true,
 		},
 		"partial existing nested": {
-			mntpt:     "/mnt/projects/daos/0",
-			existPath: "/mnt/projects",
+			mntpt:     nestedMount,
+			existPath: dir1,
 			statErrs: map[string]error{
-				"/mnt/projects/daos":   os.ErrNotExist,
-				"/mnt/projects/daos/0": os.ErrNotExist,
+				dir1 + dir2: os.ErrNotExist,
+				nestedMount: os.ErrNotExist,
 			},
 			expCreate: true,
 		},
 		// similate situation where mount ancestor dir exists with
 		// incompatible permissions
 		"partial existing nested; bad perms": {
-			mntpt:     "/mnt/projects/daos/0",
-			existPath: "/mnt/projects",
+			mntpt:     nestedMount,
+			existPath: dir1 + dir2,
 			statErrs: map[string]error{
-				"/mnt/projects/daos":   os.ErrPermission,
-				"/mnt/projects/daos/0": os.ErrNotExist,
+				dir1 + dir2: os.ErrPermission,
+				nestedMount: os.ErrNotExist,
 			},
 			expErr: os.ErrPermission,
 		},
@@ -539,6 +544,9 @@ func TestProvider_makeMountPath(t *testing.T) {
 			defer os.RemoveAll(testCaseDir)
 
 			if tc.existPath != "" {
+				// when simulating full or partial mountpoint
+				// path, create the existing directory structure
+				// in the test case temporary directory
 				ep := filepath.Join(testCaseDir, tc.existPath)
 				if err := os.MkdirAll(ep, defaultMountPointPerms); err != nil {
 					t.Fatal(err)
@@ -549,6 +557,8 @@ func TestProvider_makeMountPath(t *testing.T) {
 				statErrors: make(map[string]error),
 			}
 			for mp, err := range tc.statErrs {
+				// mocked stat return errors updated for paths
+				// relative to the test case temporary directory
 				k := filepath.Join(testCaseDir, mp)
 				msc.statErrors[k] = err
 			}
@@ -562,6 +572,8 @@ func TestProvider_makeMountPath(t *testing.T) {
 				return
 			}
 
+			// verify that the expected directory structure has been
+			// created within the test case temporary directory
 			if _, err := os.Stat(tMntpt); err != nil {
 				t.Fatalf("Mount point not accessible: %s", err)
 			}
