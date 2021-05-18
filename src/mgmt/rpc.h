@@ -129,6 +129,7 @@ CRT_RPC_DECLARE(mgmt_pool_get_svcranks, DAOS_ISEQ_MGMT_POOL_GET_SVCRANKS,
 
 #define DAOS_ISEQ_MGMT_POOL_FIND /* input fields */		 \
 	((int32_t)		(pfi_bylabel)		CRT_VAR) \
+	((int32_t)		(pfi_pad32)		CRT_VAR) \
 	((d_const_string_t)	(pfi_label)		CRT_VAR) \
 	((uuid_t)		(pfi_puuid)		CRT_VAR)
 

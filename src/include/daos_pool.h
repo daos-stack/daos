@@ -191,7 +191,7 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
 
 /**
- * Connect to the DAOS pool identified by \a label property. Upon a successful
+ * Connect to the DAOS pool identified by \a label. Upon a successful
  * completion, \a poh returns the pool handle, and \a info returns the latest
  * pool information.
  *

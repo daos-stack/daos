@@ -51,8 +51,11 @@ daos_pool_connect_bylabel(const char *label, const char *grp,
 	DAOS_API_ARG_ASSERT(*args, POOL_CONNECT_LBL);
 	if (label)
 		label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN+1);
-	if (!label || (label_len == 0) || (label_len > DAOS_PROP_LABEL_MAX_LEN))
+	if (!label || (label_len == 0) ||
+	    (label_len > DAOS_PROP_LABEL_MAX_LEN)) {
+		D_ERROR("invalid label parameter\n");
 		return -DER_INVAL;
+	}
 
 	rc = dc_task_create(dc_pool_connect_lbl, NULL, ev, &task);
 	if (rc)

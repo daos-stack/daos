@@ -101,7 +101,6 @@ func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
 		resp.Status = int32(drpc.DaosNonexistant)
 		mod.log.Debugf("GetPoolSvcResp: %+v", resp)
 		return proto.Marshal(resp)
-		// return nil, err
 	}
 
 	resp.Svcreps = system.RanksToUint32(ps.Replicas)
@@ -126,7 +125,6 @@ func (mod *srvModule) handlePoolFindByLabel(reqb []byte) ([]byte, error) {
 		resp.Status = int32(drpc.DaosNonexistant)
 		mod.log.Debugf("PoolFindByLabelResp: %+v", resp)
 		return proto.Marshal(resp)
-		// return nil, err
 	}
 
 	resp.Svcreps = system.RanksToUint32(ps.Replicas)
