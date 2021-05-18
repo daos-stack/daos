@@ -1530,7 +1530,11 @@ def resolve_debuginfo_dnf(pkg):
 
 def install_debuginfos():
     """Install debuginfo packages."""
-    install_pkgs = [{'name': 'gdb'}, {'name': 'python3-debuginfo'}]
+    distro_info = detect()
+    if "centos" in distro_info.name.lower():
+        install_pkgs = [{'name': 'gdb'}, {'name': 'python3-debuginfo'}]
+    else:
+        install_pkgs = []
 
     cmds = []
 
@@ -1552,25 +1556,27 @@ def install_debuginfos():
         cmds.append(["sudo", "rm", "-f", path])
 
     if USE_DEBUGINFO_INSTALL:
-        distro_info = detect()
-        yum_args = ["--exclude", "ompi-debuginfo"]
-        if "suse" in distro_info.name.lower():
-            yum_args.extend(["libpmemobj1", "python3", "openmpi3"])
-        elif "centos" in distro_info.name.lower() and \
-             distro_info.version == "7":
-            yum_args.extend(["--exclude", "nvml-debuginfo", "libpmemobj",
-                             "python36", "openmpi3"])
-        elif "centos" in distro_info.name.lower() and \
-             distro_info.version == "8":
-            yum_args.extend(["libpmemobj", "python3", "openmpi"])
-        else:
-            raise RuntimeError(
-                "install_debuginfos(): Unsupported distro: {}".format(
-                    distro_info))
-        cmds.append(["sudo", "dnf", "-y", "install"] + yum_args)
+        dnf_args = ["--exclude", "ompi-debuginfo"]
+        if os.getenv("TEST_RPMS", 'false') == 'true':
+            if "suse" in distro_info.name.lower():
+                dnf_args.extend(["libpmemobj1", "python3", "openmpi3"])
+            elif "centos" in distro_info.name.lower() and \
+                 distro_info.version == "7":
+                dnf_args.extend(["--enablerepo=*-debuginfo", "--exclude",
+                                 "nvml-debuginfo", "libpmemobj",
+                                 "python36", "openmpi3", "gcc"])
+            elif "centos" in distro_info.name.lower() and \
+                 distro_info.version == "8":
+                dnf_args.extend(["--enablerepo=*-debuginfo", "libpmemobj",
+                                 "python3", "openmpi", "gcc"])
+            else:
+                raise RuntimeError(
+                    "install_debuginfos(): Unsupported distro: {}".format(
+                        distro_info))
+            cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
         cmds.append(
-            ["sudo", "dnf", "debuginfo-install", "--enablerepo=*-debuginfo",
-             "-y"] + yum_args + ["daos-server", "gcc"])
+            ["sudo", "dnf", "debuginfo-install",
+             "-y"] + dnf_args + ["daos-server"])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
@@ -1591,7 +1597,10 @@ def install_debuginfos():
     # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
 
     # Now install a few pkgs that debuginfo-install wouldn't
-    cmd = ["sudo", "dnf", "-y", "--enablerepo=*debug*", "install"]
+    cmd = ["sudo", "dnf", "-y"]
+    if "centos" in distro_info.name.lower():
+        cmd.append("--enablerepo=*debug*")
+    cmd.append("install")
     for pkg in install_pkgs:
         try:
             cmd.append(
@@ -1607,13 +1616,15 @@ def install_debuginfos():
             print(run_command(cmd))
         except RuntimeError as error:
             # got an error, so abort this list of commands and re-run
-            # it with a yum clean, makecache first
+            # it with a dnf clean, makecache first
             print(error)
             retry = True
             break
     if retry:
         print("Going to refresh caches and try again")
-        cmd_prefix = ["sudo", "dnf", "--enablerepo=*debug*"]
+        cmd_prefix = ["sudo", "dnf"]
+        if "centos" in distro_info.name.lower():
+            cmd_prefix.append("--enablerepo=*debug*")
         cmds.insert(0, cmd_prefix + ["clean", "all"])
         cmds.insert(1, cmd_prefix + ["makecache"])
         for cmd in cmds:
