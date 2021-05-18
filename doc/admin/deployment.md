@@ -1053,9 +1053,13 @@ the `[Service]` section before reloading systemd and restarting the
 
 ## System Validation
 
-To validate the DAOS system is properly installed, the daos pool autotest suite can be executed. Ensure the DAOS Server and Agent are configured before running DAOS autotest.
+To validate the DAOS system is properly installed, the daos pool autotest
+suite can be executed. Ensure the DAOS Server and Agent are configured
+before running DAOS autotest.
 
-DAOS automatically configures a client with a compatible fabric provider, network interface, network domain, CaRT timeout, and CaRT context share address, that will allow it to connect to the DAOS system.
+DAOS automatically configures a client with a compatible fabric provider,
+network interface, network domain, CaRT timeout, and CaRT context share
+address, that will allow it to connect to the DAOS system.
 
 
 ### Launch the client application
@@ -1076,7 +1080,7 @@ A pool must be created to run the autotest:
           NVMe          : 100 GB (100 GB / rank)
 
 
-Now we are able to run the tests.
+Now we are able to run the tests:
 
     daos pool autotest --pool=f831d873-ce3c-472b-9eaa-6116922b240c
 
@@ -1101,8 +1105,10 @@ Now we are able to run the tests.
 
     All steps passed.
 
-Note: The command is executed in a development environment, performance differences will vary, based on your system.
-Note 2: Smaller pools may show DER_NOSPACE(-1007): 'No space on storage target'
+Note: The command is executed in a development environment,
+performance differences will vary, based on your system.
+Note 2: Smaller pools may show DER_NOSPACE(-1007): 'No space
+on storage target'
 
 
 [^1]: https://github.com/intel/ipmctl
