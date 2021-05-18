@@ -100,7 +100,6 @@ smoke:
         - 1
     joblist:
         - ior_smoke
-        - fio_smoke
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -121,30 +120,6 @@ ior_smoke:
         - '1m'
     segment_count: 1
     dfs_oclass:
-        - 'SX'
-fio_smoke:
-  names:
-      - global
-      - test
-  global:
-    directory: "/tmp/daos_dfuse/"
-    ioengine: 'libaio'
-    thread: 1
-    group_reporting: 1
-    direct: 1
-    verify: 'crc64'
-    iodepth: 16
-  test:
-    numjobs: 1
-  soak:
-    blocksize:
-        - '1M'
-    size:
-        - '1G'
-    rw:
-        - 'rw'
-        - 'randrw'
-    oclass:
         - 'SX'
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
