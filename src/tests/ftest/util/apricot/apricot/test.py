@@ -677,7 +677,8 @@ class TestWithServers(TestWithoutServers):
             self.start_servers()
 
         self.agent_managers[0].dump_attachinfo()
-        self.log.info("233 Agent attachinfo: %s", self.agent_managers[0].attachinfo)
+        self.log.info("Agent attachinfo: %s",
+                      self.agent_managers[0].attachinfo)
 
         # Setup a job manager command for running the test command
         manager_class_name = self.params.get(
