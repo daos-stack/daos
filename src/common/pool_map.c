@@ -311,7 +311,7 @@ comp_sorter_find_domain(struct pool_comp_sorter *sorter, unsigned int id)
 {
 	int	at;
 
-	D_ASSERT(sorter->cs_type < PO_COMP_TP_TARGET);
+	D_ASSERT(sorter->cs_type > PO_COMP_TP_TARGET);
 	at = daos_array_find(sorter->cs_comps, sorter->cs_nr, id,
 			     &comp_sort_ops);
 	return at < 0 ? NULL :
