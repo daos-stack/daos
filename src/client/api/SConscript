@@ -3,9 +3,10 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'API_VERSION', 'prereqs')
+    Import('env', 'il_env', 'API_VERSION', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    il_env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
     prereqs.require(denv, 'protobufc')
     dc_tgts = denv.SharedObject(Glob('*.c'))
