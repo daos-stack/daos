@@ -326,7 +326,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	if (rc != 0)
 		return rc;
 
-	rc = bio_iod_prep(vos_ioh2desc(io), BIO_CHK_TYPE_IO);
+	rc = bio_iod_prep(vos_ioh2desc(io), BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc) {
 		D_ERROR("prep io descriptor error:"DF_RC"\n", DP_RC(rc));
 		goto out;

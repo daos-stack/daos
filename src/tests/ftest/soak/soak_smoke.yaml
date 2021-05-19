@@ -63,17 +63,10 @@ container:
     oclass: SX
     control_method: daos
 container_reserved:
-    oclass: OC_SX
-    akey_size: 5
-    dkey_size: 5
-    data_size: 4096
-    object_qty: 20
-    record_qty: 1
-    record_size: 100
-    array_size: 1
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: API
+    oclass: SX
+    control_method: daos
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -95,6 +88,7 @@ smoke:
         - ior_smoke
         - fio_smoke
         - daos_racer
+        - mdtest_smoke
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -123,6 +117,8 @@ ior_smoke:
         - '1m'
     segment_count: 1
     dfs_oclass:
+        - 'SX'
+    dfs_dir_oclass:
         - 'SX'
 fio_smoke:
     # maximum timeout for a single job in test in minutes
@@ -155,9 +151,32 @@ daos_racer:
         type: POSIX
         control_method: daos
         oclass: 'SX'
+mdtest_smoke:
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 10
+    nodesperjob:
+        - 1
+    taskspernode:
+        - 1
+    test_dir: "/"
+    api:
+        - 'DFS'
+        - 'POSIX'
+    iteration: 1
+    num_of_files_dirs: 100
+    pre_iter: 10
+    flags: '-v'
+    write_bytes:
+        - 4096
+    read_bytes:
+        - 4096
+    depth:
+        - 0
+    dfs_oclass: 'SX'
+    dfs_dir_oclass: 'S1'
+    dfs_destroy: False
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
-    disable_direct_io: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
 events:
