@@ -48,18 +48,20 @@ const (
 
 func createEmptyFile(log logging.Logger, path string, size int64) error {
 	if !filepath.IsAbs(path) {
-		return errors.Errorf("please specify absolute path (%s)", path)
+		return errors.Errorf("expected absolute file path but got relative (%s)", path)
+	}
+	if size == 0 {
+		return errors.New("expected non-zero file size")
 	}
 
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		return err
+	if _, err := os.Stat(path); err != nil && !os.IsNotExist(err) {
+		return errors.Wrapf(err, "stat %q", path)
 	}
 
-	log.Debugf("allocating new file %s of size %s", path,
-		humanize.Bytes(uint64(size)))
+	log.Debugf("allocating blank file %s of size %s", path, humanize.Bytes(uint64(size)))
 	file, err := common.TruncFile(path)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "open %q for truncate", path)
 	}
 	defer file.Close()
 
@@ -68,12 +70,10 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
 			log.Debugf("warning: Fallocate not supported, attempting Truncate: ", e)
 
-			if err := file.Truncate(size); err != nil {
-				return err
-			}
-		} else {
-			return err
+			return errors.Wrapf(file.Truncate(size), "truncate %q", path)
 		}
+
+		return errors.Wrapf(err, "fallocate %q", path)
 	}
 
 	return nil
@@ -85,8 +85,7 @@ func clsFileInit(log logging.Logger, req *FormatRequest) error {
 	size := (int64(req.DeviceFileSize*gbyte) / int64(blkSize)) * int64(blkSize)
 
 	for _, path := range req.DeviceList {
-		err := createEmptyFile(log, path, size)
-		if err != nil {
+		if err := createEmptyFile(log, path, size); err != nil {
 			return err
 		}
 	}
@@ -162,6 +161,6 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 ` + templ
 	}
 
-	sb.log.Debugf("write %q with %v bdevs", req.ConfigPath, req.DeviceList)
+	sb.log.Debugf("write nvme output config: %+v", req)
 	return writeConf(templ, req)
 }

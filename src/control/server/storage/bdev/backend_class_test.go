@@ -18,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 )
 
 // TestBackend_writeNvmeConfig verifies config parameters for bdev get
@@ -26,20 +27,26 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 	fakeHost := "hostfoo"
 
 	tests := map[string]struct {
-		bdevClass       storage.BdevClass
-		bdevList        []string
+		class           storage.BdevClass
+		devList         []string
+		keepRelative    bool
 		bdevVmdDisabled bool
-		bdevSize        int // relevant for MALLOC/FILE
-		bdevNumber      int // relevant for MALLOC
+		fileSize        int // relevant for MALLOC/FILE
+		devNumber       int // relevant for MALLOC
 		vosEnv          string
 		wantBuf         []string
 		expValidateErr  error
 		expWriteErr     error
 	}{
+		"config validation failure": {
+			class:          storage.BdevClassNvme,
+			devList:        []string{"not a pci address"},
+			expValidateErr: errors.New("unexpected pci address"),
+		},
 		"multiple controllers": {
-			bdevClass:       storage.BdevClassNvme,
+			class:           storage.BdevClassNvme,
 			bdevVmdDisabled: true,
-			bdevList:        []string{"0000:81:00.0", "0000:81:00.1"},
+			devList:         []string{"0000:81:00.0", "0000:81:00.1"},
 			wantBuf: []string{
 				`[Nvme]`,
 				`    TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme_hostfoo_0`,
@@ -55,8 +62,8 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			vosEnv: "NVME",
 		},
 		"VMD devices": {
-			bdevClass: storage.BdevClassNvme,
-			bdevList:  []string{"5d0505:01:00.0", "5d0505:03:00.0"},
+			class:   storage.BdevClassNvme,
+			devList: []string{"5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
 				`[Vmd]`,
 				`    Enable True`,
@@ -75,8 +82,8 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			vosEnv: "NVME",
 		},
 		"multiple VMD and NVMe controllers": {
-			bdevClass: storage.BdevClassNvme,
-			bdevList:  []string{"0000:81:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
+			class:   storage.BdevClassNvme,
+			devList: []string{"0000:81:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
 				`[Vmd]`,
 				`    Enable True`,
@@ -96,10 +103,9 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			vosEnv: "NVME",
 		},
 		"AIO file": {
-			bdevClass:       storage.BdevClassFile,
-			bdevVmdDisabled: true,
-			bdevList:        []string{"myfile", "myotherfile"},
-			bdevSize:        1, // GB/file
+			class:    storage.BdevClassFile,
+			devList:  []string{"myfile", "myotherfile"},
+			fileSize: 1, // GB/file
 			wantBuf: []string{
 				`[AIO]`,
 				`    AIO myfile AIO_hostfoo_0 4096`,
@@ -108,10 +114,16 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			},
 			vosEnv: "AIO",
 		},
+		"AIO file fail": {
+			class:        storage.BdevClassFile,
+			devList:      []string{"myfile", "myotherfile"},
+			keepRelative: true,
+			fileSize:     1, // GB/file
+			expWriteErr:  errors.New("expected absolute file path"),
+		},
 		"AIO kdev": {
-			bdevClass:       storage.BdevClassKdev,
-			bdevVmdDisabled: true,
-			bdevList:        []string{"sdb", "sdc"},
+			class:   storage.BdevClassKdev,
+			devList: []string{"sdb", "sdc"},
 			wantBuf: []string{
 				`[AIO]`,
 				`    AIO sdb AIO_hostfoo_0`,
@@ -121,10 +133,9 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			vosEnv: "AIO",
 		},
 		"MALLOC": {
-			bdevClass:       storage.BdevClassMalloc,
-			bdevVmdDisabled: true,
-			bdevSize:        5, // GB/file
-			bdevNumber:      2, // number of LUNs
+			class:     storage.BdevClassMalloc,
+			fileSize:  5, // GB/file
+			devNumber: 2, // number of LUNs
 			wantBuf: []string{
 				`[Malloc]`,
 				`    NumberOfLuns 2`,
@@ -147,15 +158,18 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			defer os.RemoveAll(testDir)
 
 			cfg := storage.BdevConfig{}
-			if tc.bdevClass != "" {
-				cfg.Class = tc.bdevClass
+			if tc.class != "" {
+				cfg.Class = tc.class
 			}
 
-			if len(tc.bdevList) != 0 {
-				t.Logf("bdev_list: %v", tc.bdevList)
-				switch tc.bdevClass {
+			if len(tc.devList) != 0 {
+				switch tc.class {
 				case storage.BdevClassFile, storage.BdevClassKdev:
-					for _, devFile := range tc.bdevList {
+					if tc.keepRelative {
+						cfg.DeviceList = tc.devList
+						break
+					}
+					for _, devFile := range tc.devList {
 						absPath := filepath.Join(testDir, devFile)
 						cfg.DeviceList = append(cfg.DeviceList, absPath)
 						// clunky...
@@ -167,15 +181,16 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 						}
 					}
 				default:
-					cfg.DeviceList = tc.bdevList
+					cfg.DeviceList = tc.devList
 				}
+				t.Logf("bdev_list: %v", tc.devList)
 			}
 
-			if tc.bdevSize != 0 {
-				cfg.FileSize = tc.bdevSize
+			if tc.fileSize != 0 {
+				cfg.FileSize = tc.fileSize
 			}
-			if tc.bdevNumber != 0 {
-				cfg.DeviceCount = tc.bdevNumber
+			if tc.devNumber != 0 {
+				cfg.DeviceCount = tc.devNumber
 			}
 
 			engineConfig := engine.NewConfig().
@@ -230,7 +245,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			}
 
 			// The remainder only applies to loopback file devices.
-			if tc.bdevClass != storage.BdevClassFile {
+			if tc.class != storage.BdevClassFile {
 				return
 			}
 			for _, testFile := range cfg.DeviceList {
@@ -238,7 +253,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				expectedSize := (int64(tc.bdevSize*gbyte) / int64(blkSize)) * int64(blkSize)
+				expectedSize := (int64(tc.fileSize*gbyte) / int64(blkSize)) * int64(blkSize)
 				gotSize := st.Size()
 				if gotSize != expectedSize {
 					t.Fatalf("expected %s size to be %d, but got %d", testFile, expectedSize,

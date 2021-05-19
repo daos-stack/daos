@@ -7,8 +7,10 @@ package bdev
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -115,6 +117,12 @@ func TestBackend_Format(t *testing.T) {
 	pci2 := storage.MockNvmeController(2).PciAddr
 	pci3 := storage.MockNvmeController(3).PciAddr
 
+	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(testDir)
+
 	for name, tc := range map[string]struct {
 		req     FormatRequest
 		mec     spdk.MockEnvCfg
@@ -157,12 +165,13 @@ func TestBackend_Format(t *testing.T) {
 				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
 			},
 			req: FormatRequest{
-				Class:      storage.BdevClassFile,
-				DeviceList: []string{"/tmp/daos-bdev"},
+				Class:          storage.BdevClassFile,
+				DeviceList:     []string{filepath.Join(testDir, "daos-bdev")},
+				DeviceFileSize: 1,
 			},
 			expResp: &FormatResponse{
 				DeviceResponses: map[string]*DeviceFormatResponse{
-					"/tmp/daos-bdev": new(DeviceFormatResponse),
+					filepath.Join(testDir, "daos-bdev"): new(DeviceFormatResponse),
 				},
 			},
 		},
@@ -350,7 +359,7 @@ func TestBackend_Format(t *testing.T) {
 			b := backendWithMockBinding(log, tc.mec, tc.mnc)
 
 			// output path would be set during config validate
-			tc.req.ConfigPath = "fakeScmMountpoint"
+			tc.req.ConfigPath = filepath.Join(testDir, storage.BdevOutConfName)
 
 			gotResp, gotErr := b.Format(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)

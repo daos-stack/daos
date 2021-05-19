@@ -25,7 +25,7 @@ type (
 		pbin.ForwardableRequest
 		DeviceList []string
 		NoCache    bool
-		disableVMD bool // set by provider during request forwarding
+		DisableVMD bool // set by provider during request forwarding
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -61,7 +61,7 @@ type (
 		DeviceFileSize int // size GB for NVMe device emulation
 		MemSize        int // size MiB memory to be used by SPDK proc
 		Hostname       string
-		disableVMD     bool // set by provider during request forwarding
+		DisableVMD     bool // set by provider during request forwarding
 	}
 
 	// DeviceFormatRequest designs the parameters for a device-specific format.
@@ -212,7 +212,7 @@ func forwardScan(req ScanRequest, cache *ScanResponse, scan scanFwdFn) (msg stri
 // filtered by request "DeviceList" and empty filter implies allowing all.
 func (p *Provider) Scan(req ScanRequest) (resp *ScanResponse, err error) {
 	if p.shouldForward(req) {
-		req.disableVMD = p.IsVMDDisabled()
+		req.DisableVMD = p.IsVMDDisabled()
 
 		p.Lock()
 		defer p.Unlock()
@@ -227,7 +227,7 @@ func (p *Provider) Scan(req ScanRequest) (resp *ScanResponse, err error) {
 	}
 
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.disableVMD {
+	if req.IsForwarded() && req.DisableVMD {
 		p.disableVMD()
 	}
 
@@ -282,11 +282,11 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 	}
 
 	if p.shouldForward(req) {
-		req.disableVMD = p.IsVMDDisabled()
+		req.DisableVMD = p.IsVMDDisabled()
 		return p.fwd.Format(req)
 	}
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.disableVMD {
+	if req.IsForwarded() && req.DisableVMD {
 		p.disableVMD()
 	}
 

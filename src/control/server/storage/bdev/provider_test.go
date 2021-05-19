@@ -256,7 +256,7 @@ func TestProvider_Scan(t *testing.T) {
 			expVMDDisabled: true,
 		},
 		"multiple devices with vmd disabled": {
-			req:       ScanRequest{disableVMD: true},
+			req:       ScanRequest{DisableVMD: true},
 			forwarded: true,
 			mbc: &MockBackendConfig{
 				ScanRes: &ScanResponse{
