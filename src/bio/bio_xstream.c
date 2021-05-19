@@ -299,7 +299,12 @@ bio_spdk_env_init(void)
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos";
-	opts.mem_size = nvme_glb.bd_mem_size;
+	/*
+	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
+	 * Currently we can't guarantee clean shutdown (no hugepages leaked).
+	 * Setting mem_size could cause EAL: Not enough memory available error,
+	 * and DPDK will fail to initialize.
+	 */
 
 	rc = populate_whitelist(&opts);
 	if (rc != 0)
