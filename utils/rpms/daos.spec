@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.102
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -246,6 +246,15 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %description firmware
 This is the package needed to manage server storage firmware on DAOS servers.
 
+%package daos_serialize
+Summary: DAOS serialization library that uses HDF5
+BuildRequires: hdf5-devel
+Requires: hdf5
+
+%description daos_serialize
+This is the package needed to use the DAOS serialization and deserialization
+tools, as well as the preserve option for the filesystem copy tool.
+
 %if (0%{?suse_version} > 0)
 %global __debug_package 1
 %global _debuginfo_subpackages 0
@@ -461,7 +470,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
+%files daos_serialize
+%{_libdir}/libdaos_serialize.so
+
 %changelog
+* Tue Jun 15 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.102-3
+- Add DAOS serialization library that requires hdf5
+
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
 - Update to pmdk 1.11.0-rc1
 - Remove dependence on libpmem since we use libpmemobj directly
