@@ -16,6 +16,7 @@
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/container.h>
+#include <gurt/list.h>
 #include <gurt/telemetry_common.h>
 
 #include "srv_layout.h"
@@ -36,6 +37,16 @@ struct cont_metrics {
 };
 
 extern struct cont_metrics ds_cont_metrics;
+
+/* Metrics for each individual active container */
+struct active_cont_metrics {
+	uuid_t			pool_uuid;
+	uuid_t			cont_uuid;
+	d_list_t		link;
+
+	struct d_tm_node_t	*start_timestamp;
+	/* TODO: add more per-container metrics */
+};
 
 /* ds_cont thread local storage structure */
 struct dsm_tls {
@@ -288,5 +299,11 @@ int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 /* srv_metrics.c */
 int ds_cont_metrics_init(void);
 int ds_cont_metrics_fini(void);
+int ds_cont_metrics_get_path(const uuid_t pool_uuid, const uuid_t cont_uuid,
+			     char *path, size_t path_len);
+void ds_cont_metrics_start(const uuid_t pool_uuid, const uuid_t cont_uuid);
+void ds_cont_metrics_stop(const uuid_t pool_uuid, const uuid_t cont_uuid);
+struct active_cont_metrics *ds_cont_metrics_get(const uuid_t pool_uuid,
+						const uuid_t cont_uuid);
 
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

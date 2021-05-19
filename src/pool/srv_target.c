@@ -600,6 +600,7 @@ ds_pool_start(uuid_t uuid)
 	int				rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
 	/*
 	 * Look up the pool without create_args (see pool_alloc_ref) to see if
 	 * the pool is started already.
@@ -622,13 +623,16 @@ ds_pool_start(uuid_t uuid)
 		return rc;
 	}
 
+	/* Metrics must be started before any of pool's containers start */
+	ds_pool_metrics_start(uuid);
+
 	/* Start it by creating the ds_pool object and hold the reference. */
 	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t), &arg,
 			       &llink);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to start pool: %d\n", DP_UUID(uuid),
 			rc);
-		return rc;
+		D_GOTO(failure_metrics, rc);
 	}
 
 	pool = pool_obj(llink);
@@ -637,8 +641,7 @@ ds_pool_start(uuid_t uuid)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create fetch ult: %d\n",
 			DP_UUID(uuid), rc);
-		ds_pool_put(pool);
-		return rc;
+		D_GOTO(failure_pool, rc);
 	}
 
 	pool->sp_fetch_hdls = 1;
@@ -646,17 +649,22 @@ ds_pool_start(uuid_t uuid)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to start ec eph query ult: %d\n",
 			DP_UUID(uuid), rc);
-		pool_fetch_hdls_ult_abort(pool);
-		ds_pool_put(pool);
-		return rc;
+		D_GOTO(failure_ult, rc);
 	}
 
 	ds_iv_ns_start(pool->sp_iv_ns);
 
-	ds_pool_metrics_start(uuid);
 	metrics = ds_pool_metrics_get(uuid);
 	if (metrics != NULL)
 		d_tm_record_timestamp(metrics->started_timestamp);
+	return rc;
+
+failure_ult:
+	pool_fetch_hdls_ult_abort(pool);
+failure_pool:
+	ds_pool_put(pool);
+failure_metrics:
+	ds_pool_metrics_stop(uuid);
 	return rc;
 }
 

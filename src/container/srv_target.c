@@ -33,6 +33,7 @@
 #include "srv_internal.h"
 #include <daos/cont_props.h>
 #include <daos/dedup.h>
+#include <gurt/telemetry_producer.h>
 
 /* Per VOS container aggregation ULT ***************************************/
 
@@ -786,6 +787,9 @@ cont_child_stop(struct ds_cont_child *cont_child)
 		cont_child->sc_stopping = 1;
 		d_list_del_init(&cont_child->sc_link);
 
+		ds_cont_metrics_stop(cont_child->sc_pool_uuid,
+				     cont_child->sc_uuid);
+
 		/* cont_stop_agg_ult() may yield */
 		cont_stop_agg_ult(cont_child);
 		ds_cont_child_put(cont_child);
@@ -812,6 +816,19 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 					  struct ds_cont_child, sc_link);
 		cont_child_stop(cont_child);
 	}
+}
+
+static void
+cont_metrics_start(const uuid_t pool_uuid, const uuid_t cont_uuid)
+{
+	struct active_cont_metrics *metrics;
+
+	ds_cont_metrics_start(pool_uuid, cont_uuid);
+
+	/* Set startup timestamp */
+	metrics = ds_cont_metrics_get(pool_uuid, cont_uuid);
+	if (metrics != NULL)
+		d_tm_record_timestamp(metrics->start_timestamp);
 }
 
 static int
@@ -852,6 +869,8 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 			d_list_add_tail(&cont_child->sc_link,
 					&pool_child->spc_cont_list);
 			ds_cont_child_get(cont_child);
+
+			cont_metrics_start(pool_child->spc_uuid, co_uuid);
 		}
 	}
 

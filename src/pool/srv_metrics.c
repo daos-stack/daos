@@ -12,7 +12,7 @@
 /*
  * Parent directory in metrics tree for all the per-pool metric directories
  */
-#define POOL_METRICS_DIR	"pool/current"
+#define POOL_METRICS_DIR_FMT	"pool/current/%s"
 
 /*
  * Size in bytes of each per-pool metric directory.
@@ -67,29 +67,53 @@ ds_pool_metrics_fini(void)
 }
 
 /**
+ * Fetch metrics path for a specific pool.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[out]	path		Path to the pool metrics
+ * \param[in]	path_len	Length of path array
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid inputs
+ */
+int
+ds_pool_metrics_get_path(const uuid_t pool_uuid, char *path, size_t path_len)
+{
+	char uuid_str[DAOS_UUID_STR_SIZE];
+
+	if (!daos_uuid_valid(pool_uuid)) {
+		D_ERROR(DF_UUID ": invalid uuid\n", DP_UUID(pool_uuid));
+		return -DER_INVAL;
+	}
+	uuid_unparse(pool_uuid, uuid_str);
+
+	snprintf(path, path_len, POOL_METRICS_DIR_FMT, uuid_str);
+	path[path_len - 1] = '\0';
+	return 0;
+}
+
+/**
  * Add metrics for a specific pool UUID.
  *
  * \param[in]	pool_uuid	Pool UUID
  */
 void
-ds_pool_metrics_start(uuid_t pool_uuid)
+ds_pool_metrics_start(const uuid_t pool_uuid)
 {
 	struct active_pool_metrics	*metrics;
-	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	char				 path[D_TM_MAX_NAME_LEN] = {0};
 	int				 rc;
-
-	if (!daos_uuid_valid(pool_uuid)) {
-		D_ERROR(DF_UUID ": invalid uuid\n", DP_UUID(pool_uuid));
-		return;
-	}
 
 	metrics = ds_pool_metrics_get(pool_uuid);
 	if (metrics != NULL) /* already exists - nothing to do */
 		return;
 
-	uuid_unparse(pool_uuid, uuid_str);
-	snprintf(path, sizeof(path) - 1, POOL_METRICS_DIR "/%s", uuid_str);
+	rc = ds_pool_metrics_get_path(pool_uuid, path, sizeof(path));
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": unable to get pool metrics path, "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		return;
+	}
 
 	rc = d_tm_add_ephemeral_dir(NULL, POOL_METRICS_DIR_BYTES, path);
 	if (rc != 0) {
@@ -127,10 +151,10 @@ ds_pool_metrics_start(uuid_t pool_uuid)
  * \param[in]	pool_uuid	Pool UUID
  */
 void
-ds_pool_metrics_stop(uuid_t pool_uuid)
+ds_pool_metrics_stop(const uuid_t pool_uuid)
 {
 	struct active_pool_metrics	*metrics;
-	char				 uuid_str[DAOS_UUID_STR_SIZE];
+	char				 path[D_TM_MAX_NAME_LEN] = {0};
 	int				 rc;
 
 	if (!daos_uuid_valid(pool_uuid)) {
@@ -144,8 +168,14 @@ ds_pool_metrics_stop(uuid_t pool_uuid)
 		D_FREE(metrics);
 	}
 
-	uuid_unparse(pool_uuid, uuid_str);
-	rc = d_tm_del_ephemeral_dir(POOL_METRICS_DIR "/%s", uuid_str);
+	rc = ds_pool_metrics_get_path(pool_uuid, path, sizeof(path));
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": unable to get pool metrics path, "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		return;
+	}
+
+	rc = d_tm_del_ephemeral_dir(path);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": unable to remove metrics dir for pool, "
 			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
@@ -163,7 +193,7 @@ ds_pool_metrics_stop(uuid_t pool_uuid)
  * \return	Pool's metrics structure, or NULL if not found
  */
 struct active_pool_metrics *
-ds_pool_metrics_get(uuid_t pool_uuid)
+ds_pool_metrics_get(const uuid_t pool_uuid)
 {
 	struct active_pool_metrics *cur = NULL;
 

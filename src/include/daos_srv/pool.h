@@ -246,6 +246,9 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
 
+int ds_pool_metrics_get_path(const uuid_t pool_uuid, char *path,
+			     size_t path_len);
+
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking
  * pool map device status.

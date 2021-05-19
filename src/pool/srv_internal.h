@@ -197,8 +197,8 @@ void ds_stop_scrubbing_ult(struct ds_pool_child *child);
  */
 int ds_pool_metrics_init(void);
 int ds_pool_metrics_fini(void);
-void ds_pool_metrics_start(uuid_t pool_uuid);
-void ds_pool_metrics_stop(uuid_t pool_uuid);
-struct active_pool_metrics *ds_pool_metrics_get(uuid_t pool_uuid);
+void ds_pool_metrics_start(const uuid_t pool_uuid);
+void ds_pool_metrics_stop(const uuid_t pool_uuid);
+struct active_pool_metrics *ds_pool_metrics_get(const uuid_t pool_uuid);
 
 #endif /* __POOL_SRV_INTERNAL_H__ */
