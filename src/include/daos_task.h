@@ -186,21 +186,9 @@ typedef struct {
 	daos_handle_t		*poh;
 	/** Optional, returned pool information. */
 	daos_pool_info_t	*info;
-} daos_pool_connect_t;
-
-/** pool connect by label args */
-typedef struct {
 	/** Label of the pool. */
 	const char		*label;
-	/** Process set name of the DAOS servers managing the pool. */
-	const char		*grp;
-	/** Connect mode represented by the DAOS_PC_ bits. */
-	unsigned int		 flags;
-	/** Returned open handle. */
-	daos_handle_t		*poh;
-	/** Optional, returned pool information. */
-	daos_pool_info_t	*info;
-} daos_pool_connect_lbl_t;
+} daos_pool_connect_t;
 
 /** pool disconnect args */
 typedef struct {
