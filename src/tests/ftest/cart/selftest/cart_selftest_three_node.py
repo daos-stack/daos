@@ -18,7 +18,7 @@ class CartSelfThreeNodeTest(CartTest):
         """Test CaRT Self Test.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cart,selftest,three_node,memcheck
+        :avocado: tags=cart,selftest,three_node
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 
