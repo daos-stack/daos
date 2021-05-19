@@ -977,7 +977,7 @@ class SubprocessManager():
             path (str): path in which to create the hostfile
             slots (int): number of slots per host to specify in the hostfile
         """
-        self._hosts = hosts
+        self._hosts = list(hosts)
         self.manager.assign_hosts(self._hosts, path, slots)
         self.manager.assign_processes(len(self._hosts))
 

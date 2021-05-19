@@ -292,7 +292,10 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		epoch_min = cinfo.ci_hae;
 	}
 
-	interval = crt_sec2hlc(DAOS_AGG_THRESHOLD);
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG)))
+		interval = 0;
+	else
+		interval = crt_sec2hlc(DAOS_AGG_THRESHOLD);
 	D_ASSERT(hlc > (interval * 2));
 	/*
 	 * Assume 'current hlc - interval' as the highest stable view (all
@@ -314,6 +317,8 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		return 0;
 	}
 
+	D_DEBUG(DB_EPC, "hlc "DF_U64" epoch_max "DF_U64" agg max "DF_U64"\n",
+		hlc, epoch_max, cont->sc_aggregation_max);
 	/* Cap the aggregation upper bound to the snapshot in creating */
 	if (epoch_max >= cont->sc_aggregation_max)
 		epoch_max = cont->sc_aggregation_max - 1;

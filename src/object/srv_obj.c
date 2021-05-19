@@ -199,13 +199,11 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 	struct obj_bulk_args	*arg;
 	struct crt_bulk_desc	*bulk_desc;
 	crt_rpc_t		*rpc;
-	crt_bulk_t		 local_bulk_hdl;
 
 	if (cb_info->bci_rc != 0)
 		D_ERROR("bulk transfer failed: %d\n", cb_info->bci_rc);
 
 	bulk_desc = cb_info->bci_bulk_desc;
-	local_bulk_hdl = bulk_desc->bd_local_hdl;
 	rpc = bulk_desc->bd_rpc;
 	arg = (struct obj_bulk_args *)cb_info->bci_arg;
 	/**
@@ -221,9 +219,27 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 		ABT_eventual_set(arg->eventual, &arg->result,
 				 sizeof(arg->result));
 
-	crt_bulk_free(local_bulk_hdl);
 	crt_req_decref(rpc);
 	return cb_info->bci_rc;
+}
+
+static inline int
+bulk_cp(const struct crt_bulk_cb_info *cb_info)
+{
+	struct crt_bulk_desc	*bulk_desc;
+
+	bulk_desc = cb_info->bci_bulk_desc;
+	D_ASSERT(bulk_desc->bd_local_hdl != CRT_BULK_NULL);
+	crt_bulk_free(bulk_desc->bd_local_hdl);
+	bulk_desc->bd_local_hdl = CRT_BULK_NULL;
+
+	return obj_bulk_comp_cb(cb_info);
+}
+
+static inline int
+cached_bulk_cp(const struct crt_bulk_cb_info *cb_info)
+{
+	return obj_bulk_comp_cb(cb_info);
 }
 
 /**
@@ -266,6 +282,151 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 }
 
 static int
+bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
+		  off_t remote_off, crt_bulk_op_t bulk_op, bool bulk_bind,
+		  d_sg_list_t *sgl, int sgl_idx, struct obj_bulk_args *p_arg)
+{
+	struct bio_desc		*biod;
+	struct crt_bulk_desc	bulk_desc;
+	crt_bulk_perm_t		bulk_perm;
+	crt_bulk_opid_t		bulk_opid;
+	crt_bulk_t		local_bulk;
+	unsigned int		local_off;
+	unsigned int		iov_idx = 0;
+	size_t			remote_size;
+	int			rc;
+
+	if (remote_bulk == NULL) {
+		D_ERROR("Remote bulk is NULL\n");
+		return -DER_INVAL;
+	}
+
+	rc = crt_bulk_get_len(remote_bulk, &remote_size);
+	if (rc) {
+		D_ERROR("Failed to get remote bulk size "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	if (remote_off >= remote_size) {
+		D_ERROR("remote_bulk_off %zu >= remote_bulk_size %zu\n",
+			remote_off, remote_size);
+		return -DER_INVAL;
+	}
+
+	if (daos_io_bypass & IOBP_SRV_BULK) {
+		obj_bulk_bypass(sgl, bulk_op);
+		return 0;
+	}
+
+	biod = daos_handle_is_valid(ioh) ? vos_ioh2desc(ioh) : NULL;
+	bulk_perm = bulk_op == CRT_BULK_PUT ? CRT_BULK_RO : CRT_BULK_RW;
+
+	while (iov_idx < sgl->sg_nr_out) {
+		d_sg_list_t	sgl_sent;
+		size_t		length = 0;
+		unsigned int	start;
+		bool		cached_bulk = false;
+
+		/*
+		 * Skip bulk transfer over IOVs with NULL buffer address,
+		 * these NULL IOVs are 'holes' or deduped records.
+		 */
+		while (iov_idx < sgl->sg_nr_out &&
+		       sgl->sg_iovs[iov_idx].iov_buf == NULL) {
+			remote_off += sgl->sg_iovs[iov_idx].iov_len;
+			iov_idx++;
+		}
+
+		if (iov_idx == sgl->sg_nr_out)
+			break;
+
+		if (remote_off >= remote_size) {
+			D_ERROR("Remote bulk is used up. off:%zu, size:%zu\n",
+				remote_off, remote_size);
+			rc = -DER_OVERFLOW;
+			break;
+		}
+
+		local_bulk = bio_iod_bulk(biod, sgl_idx, iov_idx, &local_off);
+		if (local_bulk != NULL) {
+			length = sgl->sg_iovs[iov_idx].iov_len;
+			iov_idx++;
+			cached_bulk = true;
+		} else {
+			start = iov_idx;
+			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
+
+			/*
+			 * For the IOVs not using cached bulk, creates bulk
+			 * handle on-the-fly.
+			 */
+			while (iov_idx < sgl->sg_nr_out &&
+			       sgl->sg_iovs[iov_idx].iov_buf != NULL &&
+			       bio_iod_bulk(biod, sgl_idx, iov_idx,
+						&local_off) == NULL) {
+				length += sgl->sg_iovs[iov_idx].iov_len;
+				iov_idx++;
+
+			};
+			D_ASSERT(iov_idx > start);
+
+			local_off = 0;
+			sgl_sent.sg_nr = sgl_sent.sg_nr_out = iov_idx - start;
+
+			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, bulk_perm,
+					     &local_bulk);
+			if (rc != 0) {
+				D_ERROR("crt_bulk_create %d error "DF_RC".\n",
+					sgl_idx, DP_RC(rc));
+				break;
+			}
+			D_ASSERT(local_bulk != NULL);
+		}
+
+		D_ASSERT(remote_size > remote_off);
+		if (length > (remote_size - remote_off)) {
+			D_ERROR("Remote bulk isn't large enough. "
+				"local_sz:%zu, remote_sz:%zu, remote_off:%zu\n",
+				length, remote_size, remote_off);
+			rc = -DER_OVERFLOW;
+			break;
+		}
+
+		crt_req_addref(rpc);
+
+		bulk_desc.bd_rpc	= rpc;
+		bulk_desc.bd_bulk_op	= bulk_op;
+		bulk_desc.bd_remote_hdl	= remote_bulk;
+		bulk_desc.bd_local_hdl	= local_bulk;
+		bulk_desc.bd_len	= length;
+		bulk_desc.bd_remote_off	= remote_off;
+		bulk_desc.bd_local_off	= local_off;
+
+		p_arg->bulks_inflight++;
+		if (bulk_bind)
+			rc = crt_bulk_bind_transfer(&bulk_desc,
+				cached_bulk ? cached_bulk_cp : bulk_cp, p_arg,
+				&bulk_opid);
+		else
+			rc = crt_bulk_transfer(&bulk_desc,
+				cached_bulk ? cached_bulk_cp : bulk_cp, p_arg,
+				&bulk_opid);
+		if (rc < 0) {
+			D_ERROR("crt_bulk_transfer %d error "DF_RC".\n",
+				sgl_idx, DP_RC(rc));
+			p_arg->bulks_inflight--;
+			if (!cached_bulk)
+				crt_bulk_free(local_bulk);
+			crt_req_decref(rpc);
+			break;
+		}
+		remote_off += length;
+	}
+
+	return rc;
+}
+
+static int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  crt_bulk_t *remote_bulks, uint64_t *remote_offs,
 		  daos_handle_t ioh, d_sg_list_t **sgls,
@@ -273,8 +434,6 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  struct obj_bulk_args *p_arg)
 {
 	struct obj_bulk_args	arg = { 0 };
-	crt_bulk_opid_t		bulk_opid;
-	crt_bulk_perm_t		bulk_perm;
 	int			i, rc, *status, ret;
 	bool			async = true;
 
@@ -288,7 +447,6 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		async = false;
 	}
 
-	bulk_perm = bulk_op == CRT_BULK_PUT ? CRT_BULK_RO : CRT_BULK_RW;
 	rc = ABT_eventual_create(sizeof(*status), &p_arg->eventual);
 	if (rc != 0)
 		return dss_abterr2der(rc);
@@ -298,16 +456,11 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 
 	p_arg->bulks_inflight++;
 	for (i = 0; i < sgl_nr; i++) {
-		d_sg_list_t		*sgl, tmp_sgl;
-		struct crt_bulk_desc	 bulk_desc;
-		crt_bulk_t		 local_bulk_hdl;
-		daos_size_t		 offset;
-		unsigned int		 idx = 0;
+		d_sg_list_t	*sgl, tmp_sgl;
 
 		if (remote_bulks[i] == NULL)
 			continue;
 
-		offset = remote_offs != NULL ? remote_offs[i] : 0;
 		if (sgls != NULL) {
 			D_ASSERT(bsgls_dup == NULL);
 			sgl = sgls[i];
@@ -333,100 +486,9 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 				break;
 		}
 
-		if (daos_io_bypass & IOBP_SRV_BULK) {
-			/* this mode will bypass network bulk transfer and
-			 * only copy data from/to dummy buffer. This is for
-			 * performance evaluation on low bandwidth network.
-			 */
-			obj_bulk_bypass(sgl, bulk_op);
-			goto next;
-		}
-
-		/**
-		 * Let's walk through the sgl to check if the iov is empty,
-		 * which is usually gotten from punched/empty records (see
-		 * akey_fetch()), and skip these empty iov during bulk
-		 * transfer to avoid touching the input buffer.
-		 */
-		while (idx < sgl->sg_nr_out) {
-			d_sg_list_t	sgl_sent;
-			daos_size_t	length = 0;
-			size_t		remote_bulk_size;
-			unsigned int	start;
-
-			/**
-			 * Skip the punched/empty record, let's also skip the
-			 * record in the input buffer instead of memset to 0.
-			 */
-			while (idx < sgl->sg_nr_out &&
-				sgl->sg_iovs[idx].iov_buf == NULL) {
-				offset += sgl->sg_iovs[idx].iov_len;
-				idx++;
-			}
-
-			if (idx == sgl->sg_nr_out)
-				break;
-
-			start = idx;
-			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
-			/* Find the end of the non-empty record */
-			while (sgl->sg_iovs[idx].iov_buf != NULL &&
-			       idx < sgl->sg_nr_out) {
-				length += sgl->sg_iovs[idx].iov_len;
-				idx++;
-			}
-
-			rc = crt_bulk_get_len(remote_bulks[i],
-					      &remote_bulk_size);
-			if (rc)
-				break;
-
-			if ((offset + length) > remote_bulk_size) {
-				D_DEBUG(DLOG_DBG, DF_U64 " > %zu : %d\n",
-					length,	remote_bulk_size,
-					-DER_OVERFLOW);
-				rc = -DER_OVERFLOW;
-				break;
-			}
-			sgl_sent.sg_nr = idx - start;
-			sgl_sent.sg_nr_out = idx - start;
-
-			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent,
-					     bulk_perm, &local_bulk_hdl);
-			if (rc != 0) {
-				D_ERROR("crt_bulk_create %d error (%d).\n",
-					i, rc);
-				break;
-			}
-
-			crt_req_addref(rpc);
-
-			bulk_desc.bd_rpc	= rpc;
-			bulk_desc.bd_bulk_op	= bulk_op;
-			bulk_desc.bd_remote_hdl	= remote_bulks[i];
-			bulk_desc.bd_local_hdl	= local_bulk_hdl;
-			bulk_desc.bd_len	= length;
-			bulk_desc.bd_remote_off	= offset;
-			bulk_desc.bd_local_off	= 0;
-
-			p_arg->bulks_inflight++;
-			if (bulk_bind)
-				rc = crt_bulk_bind_transfer(&bulk_desc,
-					obj_bulk_comp_cb, p_arg, &bulk_opid);
-			else
-				rc = crt_bulk_transfer(&bulk_desc,
-					obj_bulk_comp_cb, p_arg, &bulk_opid);
-			if (rc < 0) {
-				D_ERROR("crt_bulk_transfer %d error (%d).\n",
-					i, rc);
-				p_arg->bulks_inflight--;
-				crt_bulk_free(local_bulk_hdl);
-				crt_req_decref(rpc);
-				break;
-			}
-			offset += length;
-		}
-	next:
+		rc = bulk_transfer_sgl(ioh, rpc, remote_bulks[i],
+				       remote_offs ? remote_offs[i] : 0,
+				       bulk_op, bulk_bind, sgl, i, p_arg);
 		if (sgls == NULL)
 			d_sgl_fini(sgl, false);
 		if (rc)
@@ -716,7 +778,8 @@ get_iod_csum(struct dcs_iod_csums *iod_csums, int i)
 static int
 csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 	      struct daos_csummer *csummer,
-	      struct dcs_iod_csums *iod_csums)
+	      struct dcs_iod_csums *iod_csums, daos_unit_oid_t oid,
+	      daos_key_t *dkey)
 {
 	int	 rc = 0;
 	uint32_t biov_csums_idx = 0;
@@ -730,7 +793,10 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 	for (i = 0; i < iods_nr; i++) {
 		if (biov_csums_idx >= csum_info_nr)
 			break; /** no more csums to add */
-
+		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"Adding fetched to IOD: "
+				 DF_C_IOD", csum: "DF_CI"\n",
+			DP_C_UOID_DKEY(oid, dkey),
+			DP_C_IOD(&iods[i]), DP_CI(csum_infos[biov_csums_idx]));
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,
 			bio_iod_sgl(biod, i),
@@ -749,7 +815,8 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 
 static int
 csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
-		 struct dcs_csum_info *dci, struct obj_iod_array *oia)
+		 struct dcs_csum_info *dkey_csum,
+		 struct obj_iod_array *oia, daos_unit_oid_t *uoid)
 {
 	uint32_t	i;
 	int		rc;
@@ -763,13 +830,13 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 		 * for object verification tests. Don't reject the
 		 * update in this case
 		 */
-		rc = daos_csummer_verify_key(csummer, dkey, dci);
+		rc = daos_csummer_verify_key(csummer, dkey, dkey_csum);
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for dkey: %d",
-				rc);
+			D_ERROR("daos_csummer_verify_key error for dkey: "
+					DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
-
 	}
 
 	for (i = 0; i < oia->oia_iod_nr; i++) {
@@ -778,12 +845,21 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 
 		if (!csum_iod_is_supported(iod))
 			continue;
+
+		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD","
+				 " csum_nr: %d, first data csum: "DF_CI"\n",
+			DP_C_UOID_DKEY(*uoid, dkey), i,
+			DP_C_IOD(iod), csum->ic_nr, DP_CI(*csum->ic_data));
 		rc = daos_csummer_verify_key(csummer,
 					     &iod->iod_name,
 					     &csum->ic_akey);
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for akey: %d",
-				rc);
+			D_ERROR(DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD" verify_key "
+				"failed for akey: "DF_KEY", csum: "DF_CI", "
+				"error: "DF_RC"\n",
+				DP_C_UOID_DKEY(*uoid, dkey), i,
+				DP_C_IOD(iod), DP_KEY(&iod->iod_name),
+				DP_CI(csum->ic_akey), DP_RC(rc));
 			return rc;
 		}
 	}
@@ -984,6 +1060,8 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod, daos_iod_t *iods)
 		for (r = 0; r < iod->iod_nr; r++) {
 			daos_recx_t recx = iod->iod_recxs[r];
 
+			D_DEBUG(DB_CSUM, "processing recx[%d]: "DF_RECX"\n",
+				r, DP_RECX(recx));
 			rec_idx = recx.rx_idx;
 
 			while (rec_idx <= recx.rx_idx + recx.rx_nr - 1) {
@@ -1262,9 +1340,13 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	}
 
 	rc = csum_verify_keys(ioc->ioc_coc->sc_csummer, &orw->orw_dkey,
-			      orw->orw_dkey_csum, &orw->orw_iod_array);
+			      orw->orw_dkey_csum, &orw->orw_iod_array,
+			      &orw->orw_oid);
+
 	if (rc != 0) {
-		D_ERROR("csum_verify_keys error: %d", rc);
+		D_ERROR(DF_C_UOID_DKEY"verify_keys error: "DF_RC"\n",
+			DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
+			DP_RC(rc));
 		if (rc == -DER_CSUM)
 			obj_log_csum_err();
 		return rc;
@@ -1421,7 +1503,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		goto out;
 
 	biod = vos_ioh2desc(ioh);
-	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rma ? rpc->cr_ctx : NULL,
+			  CRT_BULK_RW);
 	if (rc) {
 		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1442,7 +1525,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 					   orw->orw_iod_array.oia_iods,
 					   orw->orw_iod_array.oia_iod_nr,
 					   ioc->ioc_coc->sc_csummer,
-					   orwo->orw_iod_csums.ca_arrays);
+					   orwo->orw_iod_csums.ca_arrays,
+					   orw->orw_oid, &orw->orw_dkey);
 			if (rc) {
 				D_ERROR(DF_UOID" fetch verify failed: %d.\n",
 					DP_UOID(orw->orw_oid), rc);
@@ -1504,7 +1588,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 	}
 	if (obj_rpc_is_fetch(rpc) && create_map)
-		rc = obj_fetch_create_maps(rpc, biod, iods);
+		rc = obj_fetch_create_maps(rpc, biod,
+					   orw->orw_iod_array.oia_iods);
 
 	if (rc == -DER_CSUM)
 		obj_log_csum_err();
@@ -1872,7 +1957,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 		goto out;
 	}
 	biod = vos_ioh2desc(ioh);
-	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc->cr_ctx, CRT_BULK_RW);
 	if (rc) {
 		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
@@ -1955,7 +2040,8 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			goto out;
 		}
 		biod = vos_ioh2desc(ioh);
-		rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO);
+		rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc->cr_ctx,
+				  CRT_BULK_RW);
 		if (rc) {
 			D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
@@ -3724,7 +3810,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 
 		rc = csum_verify_keys(ioc->ioc_coc->sc_csummer,
 				      &dcsr->dcsr_dkey, dcu->dcu_dkey_csum,
-				      &dcu->dcu_iod_array);
+				      &dcu->dcu_iod_array, &dcsr->dcsr_oid);
 		if (rc != 0) {
 			if (rc == -DER_CSUM)
 				obj_log_csum_err();
@@ -3773,7 +3859,9 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			goto out;
 
 		biods[i] = vos_ioh2desc(iohs[i]);
-		rc = bio_iod_prep(biods[i], BIO_CHK_TYPE_IO);
+		rc = bio_iod_prep(biods[i], BIO_CHK_TYPE_IO,
+				  dcu->dcu_flags & ORF_CPD_BULK ?
+					rpc->cr_ctx : NULL, CRT_BULK_RW);
 		if (rc != 0) {
 			D_ERROR("bio_iod_prep failed for obj "DF_UOID
 				", DTX "DF_DTI": "DF_RC"\n",

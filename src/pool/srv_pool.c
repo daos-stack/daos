@@ -932,7 +932,8 @@ ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	int			rc = 0;
 
 	/* Only used for exclude the rank for the moment */
-	if (src != CRT_EVS_GRPMOD || type != CRT_EVT_DEAD ||
+	if ((src != CRT_EVS_GRPMOD && src != CRT_EVS_SWIM) ||
+	    type != CRT_EVT_DEAD ||
 	    pool_disable_exclude) {
 		D_DEBUG(DB_MGMT, "ignore src/type/exclude %u/%u/%d\n",
 			src, type, pool_disable_exclude);
@@ -1142,7 +1143,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	for (i = 0; i < doms_cnt; i++) {
 		struct swim_member_state state;
 
-		/* Only check if UPIN server is excluded for now */
+		/* Only check if UPIN server is excluded or dead for now */
 		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
 			continue;
 
@@ -1154,10 +1155,15 @@ pool_svc_check_node_status(struct pool_svc *svc)
 			break;
 		}
 
+		/* Since there is a big chance the INACTIVE node will become
+		 * ACTIVE soon, let's only evict the DEAD node rank for the
+		 * moment.
+		 */
 		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
 			doms[i].do_comp.co_rank,
 			rc == -DER_NONEXIST ? -1 : state.sms_status);
-		if (rc == -DER_NONEXIST) {
+		if (rc == -DER_NONEXIST ||
+		    state.sms_status == SWIM_MEMBER_DEAD) {
 			rc = pool_exclude_rank(svc, doms[i].do_comp.co_rank);
 			if (rc) {
 				D_ERROR("failed to exclude rank %u: %d\n",
