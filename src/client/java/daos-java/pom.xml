@@ -313,30 +313,6 @@
               <finalName>${artifactId}-${version}-protobuf3-netty4-shaded</finalName>
             </configuration>
           </execution>
-          <execution>
-            <id>shade</id>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <shadedArtifactAttached>true</shadedArtifactAttached>
-              <relocations>
-                <relocation>
-                  <pattern>com.google.protobuf</pattern>
-                  <shadedPattern>com.google.protoshadebuf3</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>io.netty.buffer</pattern>
-                  <shadedPattern>io.netty.buffershade4</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>io.netty.util</pattern>
-                  <shadedPattern>io.netty.utilshade4</shadedPattern>
-                </relocation>
-              </relocations>
-            </configuration>
-          </execution>
         </executions>
       </plugin>
       <plugin>
@@ -356,11 +332,6 @@
                   <file>target/${artifactId}-${version}-protobuf3-netty4-shaded.jar</file>
                   <type>jar</type>
                   <classifier>protobuf3-netty4-shaded</classifier>
-                </artifact>
-                <artifact>
-                  <file>target/${artifactId}-${version}-shaded.jar</file>
-                  <type>jar</type>
-                  <classifier>all-shaded</classifier>
                 </artifact>
               </artifacts>
             </configuration>
@@ -433,4 +404,66 @@
       </plugin>
     </plugins>
   </reporting>
+
+  <profiles>
+    <profile>
+      <id>shade-all</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-shade-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>shade-all</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>shade</goal>
+                </goals>
+                <configuration>
+                  <shadedArtifactAttached>true</shadedArtifactAttached>
+                  <relocations>
+                    <relocation>
+                      <pattern>com.google.protobuf</pattern>
+                      <shadedPattern>com.google.protoshadebuf3</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>io.netty.buffer</pattern>
+                      <shadedPattern>io.netty.buffershade4</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>io.netty.util</pattern>
+                      <shadedPattern>io.netty.utilshade4</shadedPattern>
+                    </relocation>
+                  </relocations>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>3.0.0</version>
+            <executions>
+              <execution>
+                <id>attach-shaded-all</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>attach-artifact</goal>
+                </goals>
+                <configuration>
+                  <artifacts>
+                    <artifact>
+                      <file>target/${artifactId}-${version}-shaded.jar</file>
+                      <type>jar</type>
+                      <classifier>all-shaded</classifier>
+                    </artifact>
+                  </artifacts>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

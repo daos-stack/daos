@@ -35,6 +35,16 @@
     </license>
   </licenses>
 
+  <developers>
+    <developer>
+      <id>jiafuzha</id>
+      <name>Jiafu Zhang</name>
+      <email>jiafu.zhang@intel.com</email>
+      <organization>Intel</organization>
+      <organizationUrl>http://www.intel.com/</organizationUrl>
+    </developer>
+  </developers>
+
   <scm>
     <connection>scm:git:git://github.com/daos-stack/daos.git</connection>
     <developerConnection>scm:git:ssh://github.com:daos-stack/daos.git</developerConnection>
