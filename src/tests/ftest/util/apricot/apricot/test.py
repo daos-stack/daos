@@ -332,6 +332,9 @@ class Test(avocadoTest):
     def report_timeout(self):
         """Report whether or not this test case was timed out."""
         if not self._timeout_reported:
+            # Mark the begining of tearDown
+            self.log.info("=" * 100)
+
             # Update the elapsed time
             self.get_state()
             if self.timeout is None:
