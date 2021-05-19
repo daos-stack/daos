@@ -13,12 +13,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 )
 
 // TestBackend_writeNvmeConfig verifies config parameters for bdev get
