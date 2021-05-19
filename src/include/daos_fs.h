@@ -587,35 +587,38 @@ int
 dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info);
 
 /**
- * Set the object class on a directory for all files or sub-dirs in that dir.
- * This does not change the chunk size for existing files or dirs in that
- * directory, nor it does change the object class of the directory itself. Note
- * that this is only supported on directories and will fail if called on non
- * directory objects.
+ * Set the object class on a directory for new files or sub-dirs that are
+ * created in that dir.  This does not change the chunk size for existing files
+ * or dirs in that directory, nor it does change the object class of the
+ * directory itself. Note that this is only supported on directories and will
+ * fail if called on non-directory objects.
  *
  * \param[in]   dfs     Pointer to the mounted file system.
  * \param[in]   obj	Open object handle to access.
+ * \param[in]	flags	Flags for setting oclass (currently ignored)
  * \param[in]   cid	object class.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, daos_oclass_id_t cid);
+dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid);
 
 /**
- * Set the chunk size on a directory for all files or sub-dirs in that dir.
- * This does not change the chunk size for existing files or dirs in that
- * directory. Note that this is only supported on directories and will fail if
- * called on non directory objects.
+ * Set the chunk size on a directory for new files or sub-dirs that are created
+ * in that dir.  This does not change the chunk size for existing files or dirs
+ * in that directory. Note that this is only supported on directories and will
+ * fail if called on non-directory objects.
  *
  * \param[in]   dfs     Pointer to the mounted file system.
  * \param[in]   obj	Open object handle to access.
+ * \param[in]	flags	Flags for setting chunk size (currently ignored)
  * \param[in]   csize	Chunk size to set object to.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize);
+dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags,
+		       daos_size_t csize);
 
 /**
  * Retrieve the DAOS open handle of a DFS file object. User should not close

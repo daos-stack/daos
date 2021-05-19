@@ -108,7 +108,7 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 		}
 
 		if (ap->fs_op != FS_RESET_CHUNK_SIZE) {
-			rc = dfs_obj_set_oclass(dfs, obj, 0);
+			rc = dfs_obj_set_oclass(dfs, obj, 0, 0);
 			if (rc) {
 				fprintf(stderr, "failed to set object class "
 					"(%s)\n", strerror(rc));
@@ -117,7 +117,7 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 		}
 
 		if (ap->fs_op != FS_RESET_OCLASS) {
-			rc = dfs_obj_set_chunk_size(dfs, obj, 0);
+			rc = dfs_obj_set_chunk_size(dfs, obj, 0, 0);
 			if (rc) {
 				fprintf(stderr, "failed to set chunk size "
 					"(%s)\n", strerror(rc));
@@ -162,7 +162,7 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 
 		/** else set the attrs on the path, should be a dir */
 		if (ap->oclass) {
-			rc = dfs_obj_set_oclass(dfs, obj, ap->oclass);
+			rc = dfs_obj_set_oclass(dfs, obj, 0, ap->oclass);
 			if (rc) {
 				fprintf(stderr, "failed to set object class "
 					"(%s)\n", strerror(rc));
@@ -170,7 +170,8 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 			}
 		}
 		if (ap->chunk_size) {
-			rc = dfs_obj_set_chunk_size(dfs, obj, ap->chunk_size);
+			rc = dfs_obj_set_chunk_size(dfs, obj, 0,
+						    ap->chunk_size);
 			if (rc) {
 				fprintf(stderr, "failed to set chunk size "
 					"(%s) %d\n", strerror(rc), rc);

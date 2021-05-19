@@ -1865,7 +1865,7 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 }
 
 int
-dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, daos_oclass_id_t cid)
+dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid)
 {
 	daos_handle_t		oh;
 	d_sg_list_t		sgl;
@@ -1925,7 +1925,7 @@ out:
 }
 
 int
-dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
+dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize)
 {
 	daos_handle_t		oh;
 	d_sg_list_t		sgl;

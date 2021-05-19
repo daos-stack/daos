@@ -560,6 +560,8 @@ args_free(struct cmd_args_s *ap)
 	D_FREE(ap->attrname_str);
 	D_FREE(ap->value_str);
 	D_FREE(ap->path);
+	D_FREE(ap->dfs_path);
+	D_FREE(ap->dfs_prefix);
 	D_FREE(ap->src);
 	D_FREE(ap->dst);
 	D_FREE(ap->snapname_str);
@@ -1066,7 +1068,6 @@ fs_op_hdlr(struct cmd_args_s *ap)
 out:
 	D_FREE(dir_name);
 	D_FREE(name);
-	D_FREE(ap->dfs_path);
 	return rc;
 }
 
