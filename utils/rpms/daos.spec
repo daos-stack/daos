@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.0
-Release:       16%{?relval}%{?dist}
+Version:       1.3.1
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -460,6 +460,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Wed May 19 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.1-1
+- Version bump up to 1.3.1-tb1
+
 * Fri May 07 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-16
 - Enable debuginfo package building on SUSE platforms
 
