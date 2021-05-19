@@ -25,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -210,9 +211,9 @@ func (cfg *Server) WithEngines(engineList ...*engine.Config) *Server {
 // specifying the SCM mountpoint via daos_server CLI flag. Future
 // versions will require the mountpoint to be set via configuration.
 func (cfg *Server) WithScmMountPoint(mp string) *Server {
-	if len(cfg.Engines) > 0 {
+	/*if len(cfg.Engines) > 0 {
 		cfg.Engines[0].WithScmMountPoint(mp)
-	}
+	}*/
 	return cfg
 }
 
@@ -464,6 +465,33 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	}
 	cfg.Servers = nil
 
+	for idx, ec := range cfg.Engines {
+		if ec.LegacyStorage.WasDefined() {
+			log.Infof("engine %d: Legacy storage configuration detected. Please migrate to new-style storage configuration.", idx)
+			var storageCfgs storage.Configs
+			if ec.LegacyStorage.ScmClass != storage.ClassNone {
+				storageCfgs = append(storageCfgs,
+					storage.NewConfig().
+						WithScmClass(ec.LegacyStorage.ScmClass.String()).
+						WithScmDeviceList(ec.LegacyStorage.ScmConfig.DeviceList...).
+						WithScmMountPoint(ec.LegacyStorage.MountPoint).
+						WithScmRamdiskSize(ec.LegacyStorage.RamdiskSize),
+				)
+			}
+			if ec.LegacyStorage.BdevClass != storage.ClassNone {
+				storageCfgs = append(storageCfgs,
+					storage.NewConfig().
+						WithBdevClass(ec.LegacyStorage.BdevClass.String()).
+						WithBdevDeviceCount(ec.LegacyStorage.DeviceCount).
+						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList...).
+						WithBdevFileSize(ec.LegacyStorage.FileSize),
+				)
+			}
+			ec.WithStorage(storageCfgs...)
+			ec.LegacyStorage = engine.LegacyStorage{}
+		}
+	}
+
 	// A config without engines is valid when initially discovering hardware
 	// prior to adding per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {
@@ -534,8 +562,8 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	}
 
 	seenValues := make(map[string]int)
-	seenScmSet := make(map[string]int)
-	seenBdevSet := make(map[string]int)
+	//seenScmSet := make(map[string]int)
+	//seenBdevSet := make(map[string]int)
 
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
@@ -558,7 +586,7 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 			seenValues[logConfig] = idx
 		}
 
-		scmConf := engine.Storage.SCM
+		/*scmConf := engine.Storage.SCM
 		mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.MountPoint)
 		if seenIn, exists := seenValues[mountConfig]; exists {
 			log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
@@ -572,16 +600,16 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 				return FaultConfigDuplicateScmDeviceList(idx, seenIn)
 			}
 			seenScmSet[dev] = idx
-		}
+		}*/
 
-		bdevConf := engine.Storage.Bdev
+		/*bdevConf := engine.Storage.Bdev
 		for _, dev := range bdevConf.DeviceList {
 			if seenIn, exists := seenBdevSet[dev]; exists {
 				log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
 				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
 			}
 			seenBdevSet[dev] = idx
-		}
+		}*/
 	}
 
 	return nil

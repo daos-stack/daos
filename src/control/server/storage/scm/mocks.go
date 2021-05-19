@@ -188,9 +188,9 @@ func DefaultMockBackend() *MockBackend {
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *MockSysConfig) *Provider {
-	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(msc)).WithForwardingDisabled()
+	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(msc))
 }
 
 func DefaultMockProvider(log logging.Logger) *Provider {
-	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider()).WithForwardingDisabled()
+	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider())
 }

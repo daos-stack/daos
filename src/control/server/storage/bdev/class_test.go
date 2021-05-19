@@ -24,7 +24,7 @@ import (
 // config files that can be consumed by spdk.
 func TestParseBdev(t *testing.T) {
 	tests := map[string]struct {
-		bdevClass       storage.BdevClass
+		bdevClass       storage.Class
 		bdevList        []string
 		bdevVmdDisabled bool
 		bdevSize        int // relevant for MALLOC/FILE
@@ -48,7 +48,7 @@ func TestParseBdev(t *testing.T) {
 			},
 		},
 		"multiple controllers": {
-			bdevClass:       storage.BdevClassNvme,
+			bdevClass:       storage.ClassNvme,
 			bdevVmdDisabled: true,
 			bdevList:        []string{"0000:81:00.0", "0000:81:00.1"},
 			wantBuf: []string{
@@ -66,7 +66,7 @@ func TestParseBdev(t *testing.T) {
 			vosEnv: "NVME",
 		},
 		"VMD devices": {
-			bdevClass: storage.BdevClassNvme,
+			bdevClass: storage.ClassNvme,
 			bdevList:  []string{"5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
 				`[Vmd]`,
@@ -86,7 +86,7 @@ func TestParseBdev(t *testing.T) {
 			vosEnv: "NVME",
 		},
 		"multiple VMD and NVMe controllers": {
-			bdevClass: storage.BdevClassNvme,
+			bdevClass: storage.ClassNvme,
 			bdevList:  []string{"0000:81:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
 				`[Vmd]`,
@@ -107,7 +107,7 @@ func TestParseBdev(t *testing.T) {
 			vosEnv: "NVME",
 		},
 		"AIO file": {
-			bdevClass:       storage.BdevClassFile,
+			bdevClass:       storage.ClassFile,
 			bdevVmdDisabled: true,
 			bdevList:        []string{"myfile", "myotherfile"},
 			bdevSize:        1, // GB/file
@@ -120,7 +120,7 @@ func TestParseBdev(t *testing.T) {
 			vosEnv: "AIO",
 		},
 		"AIO kdev": {
-			bdevClass:       storage.BdevClassKdev,
+			bdevClass:       storage.ClassKdev,
 			bdevVmdDisabled: true,
 			bdevList:        []string{"sdb", "sdc"},
 			wantBuf: []string{
@@ -132,7 +132,7 @@ func TestParseBdev(t *testing.T) {
 			vosEnv: "AIO",
 		},
 		"MALLOC": {
-			bdevClass:       storage.BdevClassMalloc,
+			bdevClass:       storage.ClassMalloc,
 			bdevVmdDisabled: true,
 			bdevSize:        5, // GB/file
 			bdevNumber:      2, // number of LUNs
@@ -155,14 +155,11 @@ func TestParseBdev(t *testing.T) {
 			defer os.RemoveAll(testDir)
 
 			config := storage.BdevConfig{}
-			if tt.bdevClass != "" {
-				config.Class = tt.bdevClass
-			}
 			config.VmdDisabled = tt.bdevVmdDisabled
 
 			if len(tt.bdevList) != 0 {
 				switch tt.bdevClass {
-				case storage.BdevClassFile, storage.BdevClassKdev:
+				case storage.ClassFile, storage.ClassKdev:
 					for _, devFile := range tt.bdevList {
 						absPath := filepath.Join(testDir, devFile)
 						config.DeviceList = append(config.DeviceList, absPath)
@@ -188,7 +185,7 @@ func TestParseBdev(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			provider, err := NewClassProvider(log, testDir, &config)
+			provider, err := NewClassProvider(log, testDir, tt.bdevClass, &config)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -218,7 +215,7 @@ func TestParseBdev(t *testing.T) {
 			}
 
 			// The remainder only applies to loopback file devices.
-			if tt.bdevClass != storage.BdevClassFile {
+			if tt.bdevClass != storage.ClassFile {
 				return
 			}
 			for _, testFile := range config.DeviceList {

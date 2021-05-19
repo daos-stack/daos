@@ -165,16 +165,16 @@ type ClassProvider struct {
 }
 
 // NewClassProvider returns a new ClassProvider reference for given bdev type.
-func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig) (*ClassProvider, error) {
+func NewClassProvider(log logging.Logger, cfgDir string, class storage.Class, cfg *storage.BdevConfig) (*ClassProvider, error) {
 	p := &ClassProvider{
 		log: log,
 		cfg: cfg,
 	}
 
-	switch cfg.Class {
-	case storage.BdevClassNone:
+	switch class {
+	case storage.ClassNone:
 		p.bdev = bdev{nvmeTempl, "", isEmptyList, isValidList, nilInit}
-	case storage.BdevClassNvme:
+	case storage.ClassNvme:
 		p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, nilInit}
 		if !cfg.VmdDisabled {
 			p.bdev.templ = `[Vmd]
@@ -182,24 +182,24 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 
 ` + p.bdev.templ
 		}
-	case storage.BdevClassMalloc:
+	case storage.ClassMalloc:
 		p.bdev = bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilInit}
-	case storage.BdevClassKdev:
+	case storage.ClassKdev:
 		p.bdev = bdev{kdevTempl, "AIO", isEmptyList, isValidList, nilInit}
-	case storage.BdevClassFile:
+	case storage.ClassFile:
 		p.bdev = bdev{fileTempl, "AIO", isEmptyList, isValidSize, bdevFileInit}
 	default:
-		return nil, errors.Errorf("unable to map %q to BdevClass", cfg.Class)
+		return nil, errors.Errorf("unable to map %q to BdevClass", class)
 	}
 
 	if msg := p.bdev.isEmpty(p.cfg); msg != "" {
-		log.Debugf("spdk %s: %s", cfg.Class, msg)
+		log.Debugf("spdk %s: %s", class, msg)
 		// No devices; no need to generate a config file
 		return p, nil
 	}
 
 	if msg := p.bdev.isValid(p.cfg); msg != "" {
-		log.Debugf("spdk %s: %s", cfg.Class, msg)
+		log.Debugf("spdk %s: %s", class, msg)
 		// Bad config; don't generate a config file
 		return nil, errors.Errorf("invalid nvme config: %s", msg)
 	}

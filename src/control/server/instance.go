@@ -21,8 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -42,23 +41,22 @@ type (
 // be used with EngineHarness to manage and monitor multiple instances
 // per node.
 type EngineInstance struct {
-	log               logging.Logger
-	runner            EngineRunner
-	bdevClassProvider *bdev.ClassProvider
-	scmProvider       *scm.Provider
-	waitFormat        atm.Bool
-	storageReady      chan bool
-	waitDrpc          atm.Bool
-	drpcReady         chan *srvpb.NotifyReadyReq
-	ready             atm.Bool
-	startRequested    chan bool
-	fsRoot            string
-	hostFaultDomain   *system.FaultDomain
-	joinSystem        systemJoinFn
-	onAwaitFormat     []onAwaitFormatFn
-	onStorageReady    []onStorageReadyFn
-	onReady           []onReadyFn
-	onInstanceExit    []onInstanceExitFn
+	log             logging.Logger
+	runner          EngineRunner
+	storage         *storage.Provider
+	waitFormat      atm.Bool
+	storageReady    chan bool
+	waitDrpc        atm.Bool
+	drpcReady       chan *srvpb.NotifyReadyReq
+	ready           atm.Bool
+	startRequested  chan bool
+	fsRoot          string
+	hostFaultDomain *system.FaultDomain
+	joinSystem      systemJoinFn
+	onAwaitFormat   []onAwaitFormatFn
+	onStorageReady  []onStorageReadyFn
+	onReady         []onReadyFn
+	onInstanceExit  []onInstanceExitFn
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
@@ -72,18 +70,17 @@ type EngineInstance struct {
 // NewEngineInstance returns an *EngineInstance initialized with
 // its dependencies.
 func NewEngineInstance(log logging.Logger,
-	bcp *bdev.ClassProvider, sp *scm.Provider,
+	provider *storage.Provider,
 	joinFn systemJoinFn, r EngineRunner) *EngineInstance {
 
 	return &EngineInstance{
-		log:               log,
-		runner:            r,
-		bdevClassProvider: bcp,
-		scmProvider:       sp,
-		joinSystem:        joinFn,
-		drpcReady:         make(chan *srvpb.NotifyReadyReq),
-		storageReady:      make(chan bool),
-		startRequested:    make(chan bool),
+		log:            log,
+		runner:         r,
+		storage:        provider,
+		joinSystem:     joinFn,
+		drpcReady:      make(chan *srvpb.NotifyReadyReq),
+		storageReady:   make(chan bool),
+		startRequested: make(chan bool),
 	}
 }
 

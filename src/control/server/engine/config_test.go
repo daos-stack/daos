@@ -18,6 +18,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 var update = flag.Bool("update", false, "update .golden files")
@@ -132,14 +133,18 @@ func TestConstructedConfig(t *testing.T) {
 		WithFabricInterface("qib42").
 		WithFabricInterfacePort(100).
 		WithModules("foo,bar,baz").
-		WithScmClass("ram").
-		WithScmRamdiskSize(42).
-		WithScmMountPoint("/mnt/daostest").
-		WithScmDeviceList("/dev/a", "/dev/b").
-		WithBdevClass("malloc").
-		WithBdevDeviceCount(2).
-		WithBdevFileSize(20).
-		WithBdevDeviceList("/dev/c", "/dev/d").
+		WithStorage(
+			storage.NewConfig().
+				WithScmClass("ram").
+				WithScmRamdiskSize(42).
+				WithScmMountPoint("/mnt/daostest").
+				WithScmDeviceList("/dev/a", "/dev/b"),
+			storage.NewConfig().
+				WithBdevClass("malloc").
+				WithBdevDeviceCount(2).
+				WithBdevFileSize(20).
+				WithBdevDeviceList("/dev/c", "/dev/d"),
+		).
 		WithLogFile("/path/to/log").
 		WithLogMask("DD_DEBUG").
 		WithEnvVars("FOO=BAR", "BAZ=QUX").
@@ -188,67 +193,98 @@ func TestEngine_ScmConfigValidation(t *testing.T) {
 		cfg    *Config
 		expErr error
 	}{
-		"missing scm_mount": {
-			cfg:    baseValidConfig(),
-			expErr: errors.New("scm_mount"),
-		},
-		"missing scm_class": {
+		"missing storage class": {
 			cfg: baseValidConfig().
-				WithScmMountPoint("test"),
-			expErr: errors.New("scm_class"),
+				WithStorage(
+					storage.NewConfig().
+						WithScmMountPoint("test"),
+				),
+			expErr: errors.New("no storage class"),
+		},
+		"missing scm_mount": {
+			cfg: baseValidConfig().
+				WithStorage(
+					storage.NewConfig().
+						WithScmClass("ram"),
+				),
+			expErr: errors.New("scm_mount"),
 		},
 		"ramdisk valid": {
 			cfg: baseValidConfig().
-				WithScmClass("ram").
-				WithScmRamdiskSize(1).
-				WithScmMountPoint("test"),
+				WithStorage(
+					storage.NewConfig().
+						WithScmClass("ram").
+						WithScmRamdiskSize(1).
+						WithScmMountPoint("test"),
+				),
 		},
 		"ramdisk missing scm_size": {
 			cfg: baseValidConfig().
-				WithScmClass("ram").
-				WithScmMountPoint("test"),
+				WithStorage(
+					storage.NewConfig().
+						WithScmClass("ram").
+						WithScmMountPoint("test"),
+				),
 			expErr: errors.New("scm_size"),
 		},
 		"ramdisk scm_size: 0": {
 			cfg: baseValidConfig().
-				WithScmClass("ram").
-				WithScmRamdiskSize(0).
-				WithScmMountPoint("test"),
+				WithStorage(
+					storage.NewConfig().
+						WithScmClass("ram").
+						WithScmRamdiskSize(0).
+						WithScmMountPoint("test"),
+				),
 			expErr: errors.New("scm_size"),
 		},
 		"ramdisk with scm_list": {
 			cfg: baseValidConfig().
-				WithScmClass("ram").
-				WithScmRamdiskSize(1).
-				WithScmDeviceList("foo", "bar").
-				WithScmMountPoint("test"),
+				WithStorage(
+					storage.NewConfig().
+						WithScmClass("ram").
+						WithScmRamdiskSize(1).
+						WithScmDeviceList("foo", "bar").
+						WithScmMountPoint("test"),
+				),
 			expErr: errors.New("scm_list"),
 		},
 		"dcpm valid": {
 			cfg: baseValidConfig().
-				WithScmClass("dcpm").
-				WithScmDeviceList("foo").
-				WithScmMountPoint("test"),
+				WithStorage(
+					storage.NewConfig().
+						WithScmClass("dcpm").
+						WithScmDeviceList("foo").
+						WithScmMountPoint("test"),
+				),
 		},
 		"dcpm scm_list too long": {
 			cfg: baseValidConfig().
-				WithScmClass("dcpm").
-				WithScmDeviceList("foo", "bar").
-				WithScmMountPoint("test"),
+				WithStorage(
+					storage.NewConfig().
+						WithScmClass("dcpm").
+						WithScmDeviceList("foo", "bar").
+						WithScmMountPoint("test"),
+				),
 			expErr: errors.New("scm_list"),
 		},
 		"dcpm scm_list empty": {
 			cfg: baseValidConfig().
-				WithScmClass("dcpm").
-				WithScmMountPoint("test"),
+				WithStorage(
+					storage.NewConfig().
+						WithScmClass("dcpm").
+						WithScmMountPoint("test"),
+				),
 			expErr: errors.New("scm_list"),
 		},
 		"dcpm with scm_size": {
 			cfg: baseValidConfig().
-				WithScmClass("dcpm").
-				WithScmDeviceList("foo").
-				WithScmRamdiskSize(1).
-				WithScmMountPoint("test"),
+				WithStorage(
+					storage.NewConfig().
+						WithScmClass("dcpm").
+						WithScmDeviceList("foo").
+						WithScmRamdiskSize(1).
+						WithScmMountPoint("test"),
+				),
 			expErr: errors.New("scm_size"),
 		},
 	} {
@@ -264,9 +300,12 @@ func TestEngine_BdevConfigValidation(t *testing.T) {
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
 			WithFabricInterface("test").
 			WithFabricInterfacePort(42).
-			WithScmClass("dcpm").
-			WithScmDeviceList("foo").
-			WithScmMountPoint("test")
+			WithStorage(
+				storage.NewConfig().
+					WithScmClass("dcpm").
+					WithScmDeviceList("foo").
+					WithScmMountPoint("test"),
+			)
 	}
 
 	for name, tc := range map[string]struct {
@@ -279,40 +318,61 @@ func TestEngine_BdevConfigValidation(t *testing.T) {
 		},
 		"good pci addresses": {
 			cfg: baseValidConfig().
-				WithBdevClass("nvme").
-				WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(2)),
+				WithStorage(
+					storage.NewConfig().
+						WithBdevClass("nvme").
+						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(2)),
+				),
 		},
 		"duplicate pci address": {
 			cfg: baseValidConfig().
-				WithBdevClass("nvme").
-				WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(1)),
+				WithStorage(
+					storage.NewConfig().
+						WithBdevClass("nvme").
+						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(1)),
+				),
 			expErr: errors.New("bdev_list"),
 		},
 		"bad pci address": {
 			cfg: baseValidConfig().
-				WithBdevClass("nvme").
-				WithBdevDeviceList(common.MockPCIAddr(1), "0000:00:00"),
+				WithStorage(
+					storage.NewConfig().
+						WithBdevClass("nvme").
+						WithBdevDeviceList(common.MockPCIAddr(1), "0000:00:00"),
+				),
 			expErr: errors.New("unexpected pci address"),
 		},
 		"kdev class but no devices": {
 			cfg: baseValidConfig().
-				WithBdevClass("kdev"),
+				WithStorage(
+					storage.NewConfig().
+						WithBdevClass("kdev"),
+				),
 			expErr: errors.New("kdev requires non-empty bdev_list"),
 		},
 		"malloc class but no size": {
 			cfg: baseValidConfig().
-				WithBdevClass("malloc"),
+				WithStorage(
+					storage.NewConfig().
+						WithBdevClass("malloc"),
+				),
 			expErr: errors.New("malloc requires non-zero bdev_size"),
 		},
 		"malloc class but no number of devices": {
 			cfg: baseValidConfig().
-				WithBdevClass("malloc").
-				WithBdevFileSize(10),
+				WithStorage(
+					storage.NewConfig().
+						WithBdevClass("malloc").
+						WithBdevFileSize(10),
+				),
 			expErr: errors.New("malloc requires non-zero bdev_number"),
 		},
 		"file class but no size": {
 			cfg: baseValidConfig().
-				WithBdevClass("file"),
+				WithStorage(
+					storage.NewConfig().
+						WithBdevClass("file"),
+				),
 			expErr: errors.New("file requires non-zero bdev_size"),
 		},
 	} {
@@ -333,9 +393,12 @@ func TestEngine_ConfigValidation(t *testing.T) {
 	good := NewConfig().WithFabricProvider("foo").
 		WithFabricInterface("qib0").
 		WithFabricInterfacePort(42).
-		WithScmClass("ram").
-		WithScmRamdiskSize(1).
-		WithScmMountPoint("/foo/bar")
+		WithStorage(
+			storage.NewConfig().
+				WithScmClass("ram").
+				WithScmRamdiskSize(1).
+				WithScmMountPoint("/foo/bar"),
+		)
 
 	if err := good.Validate(); err != nil {
 		t.Fatalf("expected %#v to validate; got %s", good, err)
@@ -395,6 +458,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		logMask         = "LOG_MASK_VALUE"
 		logFile         = "/path/to/log"
 		cfgPath         = "/path/to/nvme.conf"
+		vosEnv          = "foo"
 		interfacePort   = 20
 		targetCount     = 4
 		helperCount     = 1
@@ -406,7 +470,13 @@ func TestConfigToCmdVals(t *testing.T) {
 		crtTimeout      = uint32(30)
 	)
 	cfg := NewConfig().
-		WithScmMountPoint(mountPoint).
+		WithStorage(
+			storage.NewConfig().
+				WithScmMountPoint(mountPoint),
+			storage.NewConfig().
+				WithBdevConfigPath(cfgPath).
+				WithBdevVosEnv(vosEnv),
+		).
 		WithTargetCount(targetCount).
 		WithHelperStreamCount(helperCount).
 		WithServiceThreadCore(serviceCore).
@@ -419,7 +489,6 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithSocketDir(socketDir).
 		WithLogFile(logFile).
 		WithLogMask(logMask).
-		WithBdevConfigPath(cfgPath).
 		WithSystemName(systemName).
 		WithCrtCtxShareAddr(crtCtxShareAddr).
 		WithCrtTimeout(crtTimeout)
@@ -447,6 +516,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
 		"CRT_CTX_SHARE_ADDR=" + strconv.FormatUint(uint64(crtCtxShareAddr), 10),
+		"VOS_BDEV_CLASS=" + vosEnv,
 	}
 
 	gotArgs, err := cfg.CmdLineArgs()

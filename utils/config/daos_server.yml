@@ -254,47 +254,50 @@
 #  env_vars:
 #      - CRT_TIMEOUT=30
 #
-#  # Define a pre-configured mountpoint for storage class memory to be used
-#  # by this engine.
-#  # Path should be unique to engine instance (can use different subdirs).
-#  # Either the specified directory or its parent must be a mount point.
+#  storage:
+#  -
+#    # Define a pre-configured mountpoint for storage class memory to be used
+#    # by this engine.
+#    # Path should be unique to engine instance (can use different subdirs).
+#    # Either the specified directory or its parent must be a mount point.
 #
-#  scm_mount: /mnt/daos/1
+#    scm_mount: /mnt/daos/1
 #
-#  # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
-#  # memory) modules configured in interleaved mode or emulate SCM with a
-#  # tmpfs running in RAM.
-#  # Options are:
-#  # - "dcpm" for real SCM (preferred option), scm_size ignored
-#  # - "ram" to emulate SCM with memory, scm_list ignored
-#  # Immutable after reformat.
+#    # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
+#    # memory) modules configured in interleaved mode or emulate SCM with a
+#    # tmpfs running in RAM.
+#    # Options are:
+#    # - "dcpm" for real SCM (preferred option), scm_size ignored
+#    # - "ram" to emulate SCM with memory, scm_list ignored
+#    # Immutable after reformat.
 #
-#  scm_class: ram
+#    class: ram
 #
-#  # When scm_class is set to ram, tmpfs will be used to emulate SCM.
-#  # The size of ram is specified by scm_size in GB units.
-#  scm_size: 16
+#    # When class is set to ram, tmpfs will be used to emulate SCM.
+#    # The size of ram is specified by scm_size in GB units.
+#    scm_size: 16
 #
-#  # Backend block device type. Force a SPDK driver to be used by this engine
-#  # instance.
-#  # Options are:
-#  # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
-#  # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
-#  # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
-#  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
-#  # Immutable after reformat.
+#  -
+#    # Backend block device type. Force a SPDK driver to be used by this engine
+#    # instance.
+#    # Options are:
+#    # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
+#    # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
+#    # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
+#    # - "kdev" to use a kernel block device, bdev_{size,number} ignored
+#    # Immutable after reformat.
 #
-#  bdev_class: nvme
+#    class: nvme
 #
-#  # Backend block device configuration to be used by this engine instance.
-#  # When bdev_class is set to nvme, bdev_list is the list of unique NVMe IDs
-#  # that should be different across different engine instance.
-#  # Immutable after reformat.
-#  bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
-#  # If VMD-enabled NVMe SSDs are used, the bdev_list should consist of the VMD
-#  # PCIe addresses, and not the BDF format transport IDs of the backing NVMe SSDs
-#  # behind the VMD address. Also, 'disable_vmd' needs to be set to false.
-#  bdev_list: ["0000:5d:05.5"]
+#    # Backend block device configuration to be used by this engine instance.
+#    # When class is set to nvme, bdev_list is the list of unique NVMe IDs
+#    # that should be different across different engine instance.
+#    # Immutable after reformat.
+#    bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
+#    # If VMD-enabled NVMe SSDs are used, the bdev_list should consist of the VMD
+#    # PCIe addresses, and not the BDF format transport IDs of the backing NVMe SSDs
+#    # behind the VMD address. Also, 'disable_vmd' needs to be set to false.
+#    #bdev_list: ["0000:5d:05.5"]
 
 #-
 #  # Rank to be assigned as identifier for this engine.
@@ -356,55 +359,58 @@
 #  env_vars:
 #      - CRT_TIMEOUT=100
 #
-#  # Define a pre-configured mountpoint for storage class memory to be used
-#  # by this engine.
-#  # Path should be unique to engine instance (can use different subdirs).
+#  storage:
+#  -
+#    # Define a pre-configured mountpoint for storage class memory to be used
+#    # by this engine.
+#    # Path should be unique to engine instance (can use different subdirs).
 #
-#  scm_mount: /mnt/daos/2
+#    scm_mount: /mnt/daos/2
 #
-#  # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
-#  # memory) modules configured in interleaved mode or emulate SCM with a
-#  # tmpfs running in RAM.
-#  # Options are:
-#  # - "dcpm" for real SCM (preferred option), scm_size is ignored
-#  # - "ram" to emulate SCM with memory, scm_list is ignored
-#  # Immutable after reformat.
+#    # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
+#    # memory) modules configured in interleaved mode or emulate SCM with a
+#    # tmpfs running in RAM.
+#    # Options are:
+#    # - "dcpm" for real SCM (preferred option), scm_size is ignored
+#    # - "ram" to emulate SCM with memory, scm_list is ignored
+#    # Immutable after reformat.
 #
-#  scm_class: dcpm
+#    class: dcpm
 #
-#  # When scm_class is set to dcpm, scm_list is the list of device paths for
-#  # PMem namespaces (currently only one per engine supported).
-#  scm_list: [/dev/pmem0]
+#    # When class is set to dcpm, scm_list is the list of device paths for
+#    # PMem namespaces (currently only one per engine supported).
+#    scm_list: [/dev/pmem0]
 #
-#  # Backend block device type. Force a SPDK driver to be used by this engine
-#  # instance.
-#  # Options are:
-#  # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
-#  # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
-#  # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
-#  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
-#  # Immutable after reformat.
+#  -
+#    # Backend block device type. Force a SPDK driver to be used by this engine
+#    # instance.
+#    # Options are:
+#    # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
+#    # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
+#    # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
+#    # - "kdev" to use a kernel block device, bdev_{size,number} ignored
+#    # Immutable after reformat.
 #
-#  # When bdev_class is set to malloc, bdev_number is the number of devices
-#  # to allocate and bdev_size is the size in GB of each LUN/device.
-#  bdev_class: malloc
-#  bdev_number: 1
-#  bdev_size: 4
+#    # When class is set to malloc, bdev_number is the number of devices
+#    # to allocate and bdev_size is the size in GB of each LUN/device.
+#    class: malloc
+#    bdev_number: 1
+#    bdev_size: 4
 #
-#  # When bdev_class is set to file, Linux AIO will be used to emulate NVMe.
-#  # The size of file that will be created is specified by bdev_size in GB units.
-#  # The location of the files that will be created is specified in bdev_list.
-#  bdev_class: file
-#  bdev_list: [/tmp/daos-bdev1,/tmp/daos-bdev2]
-#  bdev_size: 16
+#    # When class is set to file, Linux AIO will be used to emulate NVMe.
+#    # The size of file that will be created is specified by bdev_size in GB units.
+#    # The location of the files that will be created is specified in bdev_list.
+#    class: file
+#    bdev_list: [/tmp/daos-bdev1,/tmp/daos-bdev2]
+#    bdev_size: 16
 #
-#  # When bdev_class is set to kdev, bdev_list is the list of unique kernel
-#  # block devices that should be different across different engine instance.
-#  bdev_class: kdev
-#  bdev_list: [/dev/sdc,/dev/sdd]
+#    # When class is set to kdev, bdev_list is the list of unique kernel
+#    # block devices that should be different across different engine instance.
+#    class: kdev
+#    bdev_list: [/dev/sdc,/dev/sdd]
 #
-#  # If Volume Management Devices (VMD) are to be used, then the disable_vmd
-#  # flag needs to be set to false (default). The bdev_class will remain the
-#  # default "nvme" type, and bdev_list will include the VMD addresses.
-#  bdev_class: nvme
-#  bdev_list: ["0000:82:00.0","0000:5d:05.5"]
+#    # If Volume Management Devices (VMD) are to be used, then the disable_vmd
+#    # flag needs to be set to false (default). The class will remain the
+#    # default "nvme" type, and bdev_list will include the VMD addresses.
+#    class: nvme
+#    bdev_list: ["0000:82:00.0","0000:5d:05.5"]

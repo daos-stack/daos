@@ -63,7 +63,9 @@ func (cmd *startCmd) setCLIOverrides() error {
 	}
 
 	for _, srv := range cmd.config.Engines {
-		srv.WithHostname(host)
+		for _, storageCfg := range srv.Storage {
+			storageCfg.Bdev.Hostname = host
+		}
 
 		if cmd.Targets > 0 {
 			srv.WithTargetCount(int(cmd.Targets))
