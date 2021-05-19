@@ -141,7 +141,7 @@ dtx_is_leader(struct ds_pool *pool, struct dtx_resync_args *dra,
 	 *	data shard for EC object in the future.
 	 */
 	return ds_pool_check_dtx_leader(pool, &dre->dre_oid,
-					pool->sp_map_version);
+					pool->sp_map_version, false);
 }
 
 static bool

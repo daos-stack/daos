@@ -119,7 +119,7 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 			return rc;
 		}
 
-		rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO);
+		rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, NULL, 0);
 		if (rc) {
 			print_error("Failed to prepare bio desc\n");
 			return rc;

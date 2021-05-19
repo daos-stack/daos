@@ -103,6 +103,8 @@ enum {
 	IOBP_PM			= (1 << 4),
 	/** no PMDK snapshot (PMDK transaction will be broken) */
 	IOBP_PM_SNAP		= (1 << 5),
+	/** bypass bulk handle cache */
+	IOBP_SRV_BULK_CACHE	= (1 << 6),
 };
 
 /**
@@ -117,6 +119,7 @@ enum {
 #define IOBP_ENV_NVME		"nvme"
 #define IOBP_ENV_PM		"pm"
 #define IOBP_ENV_PM_SNAP	"pm_snap"
+#define IOBP_ENV_SRV_BULK_CACHE	"srv_bulk_cache"
 
 extern unsigned int daos_io_bypass;
 
