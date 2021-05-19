@@ -178,4 +178,4 @@ RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
 WORKDIR /home/daos
 
 # Remove local copy
-#RUN rm -rf /home/daos/*
+RUN rm -rf /home/daos/*

@@ -2861,8 +2861,8 @@ def main():
                         help='class name to use for junit')
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
-    parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--no-root', action='store_true')
+    parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--dfuse-dir', default='/tmp',
                         help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')

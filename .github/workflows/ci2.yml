@@ -73,6 +73,12 @@ jobs:
                           --tag build-image
     - name: Run
       run: ./utils/run_in_ga_wrapper.sh
+    - name: Publish NLT test results
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v1.7
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        files: nlt-junit.xml
 
   Build:
     name: Build DAOS
