@@ -300,7 +300,7 @@ bio_spdk_env_init(void)
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos";
-	opts.mem_size = nvme_glb.bd_mem_size;
+	//opts.mem_size = nvme_glb.bd_mem_size;
 
 	rc = populate_whitelist(&opts);
 	if (rc != 0)
