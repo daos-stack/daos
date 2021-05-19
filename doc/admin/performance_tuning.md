@@ -19,7 +19,7 @@ bulk transfers, multiple targets, and the following test scenarios:
     servers that will issue cross-server RPCs. This model supports a
     many to many communication model.
 
-### Getting DAOS CaRT self_test
+### Building CaRT self_test
 
 The CaRT `self_test` and its tests are delivered as part of the daos_client
 and daos_tests [distribution packages][2]. It can also be built from scratch.
@@ -136,10 +136,10 @@ IOR (<https://github.com/hpc/ior>) with the following backends:
 -   When using the IOR API=MPIIO, the ROMIO ADIO driver for DAOS can be used by
     providing the `daos://` prefix to the filename. This ADIO driver bypasses `dfuse`
     and directly invkes the `libdfs` calls to perform I/O to a DAOS POSIX container.
-    The DAOS-enabled MPIIO driver is available in the upstream MPICH repository 
+    The DAOS-enabled MPIIO driver is available in the upstream MPICH repository
     (MPICH 3.4.1 or higher).
 
--   An HDF5 VOL connector for DAOS is under development. This maps the HDF5 data model 
+-   An HDF5 VOL connector for DAOS is under development. This maps the HDF5 data model
     directly to the DAOS data model, and works in conjunction with DAOS containers of
     `--type=HDF5` (in contrast to DAOS container of `--type=POSIX` that are used for
     the other IOR APIs).
@@ -152,10 +152,37 @@ only designed to support IOR.
 
 ### FIO
 
+A DAOS engine is integrated into FIO and available upstream.
+To build it, just run:
+
+```bash
+$ git clone http://git.kernel.dk/fio.git
+$ cd fio
+$ ./configure
+$ make install
+```
+
+If DAOS is installed via packages, it should be automatically detected.
+If not, please specific the path to the DAOS library and headers to configure
+as follows:
+```
+$ CFLAGS="-I/path/to/daos/install/include" LDFLAGS="-L/path/to/daos/install/lib64" ./configure
+```
+
+Once successfully build, once can run the default example:
+```bash
+$ export POOL= # your pool UUID
+$ export CONT= # your container UUID
+$ fio ./examples/dfs.fio
+```
+
+Please note that DAOS does not transfer data (i.e. zeros) over the network
+when reading a hole in a sparse POSIX file. Very high read bandwidth can
+thus be reported if fio reads unallocated extents in a file. It is thus
+a good practice to start fio with a first write phase.
+
 FIO can also be used to benchmark DAOS performance using dfuse and the
-interception library with all the POSIX based engines like sync and libaio. We
-do, however, provide a native DFS engine for FIO similar to what we do for
-IOR. That engine is available on GitHub: <https://github.com/daos-stack/dfio>
+interception library with all the POSIX based engines like sync and libaio.
 
 ### daos_perf
 

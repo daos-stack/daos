@@ -3,16 +3,16 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'libdaos_tgts')
 
     denv = env.Clone()
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv', 'daos']
+    libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv']
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
-    libraries += ['hwloc', 'pmemobj', 'protobuf-c']
+    libraries += ['hwloc', 'pmemobj', 'protobuf-c', 'isal']
 
-    prereqs.require(denv, 'hwloc', 'argobots', 'protobufc')
+    prereqs.require(denv, 'hwloc', 'argobots', 'protobufc', 'isal')
 
     # the "-rdynamic" is to allow other dll to refer symbol defined in
     # daos_engine such as dss_tls_key etc.
@@ -28,7 +28,8 @@ def scons():
                                  'drpc_progress.c', 'init.c', 'module.c',
                                  'srv_cli.c', 'profile.c', 'rpc.c',
                                  'server_iv.c', 'srv.c', 'srv.pb-c.c', 'tls.c',
-                                 'sched.c', 'ult.c', 'event.pb-c.c'],
+                                 'sched.c', 'ult.c', 'event.pb-c.c',
+                                 'srv_metrics.c'] + libdaos_tgts,
                                 LIBS=libraries)
     denv.Install('$PREFIX/bin', engine)
 

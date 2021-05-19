@@ -221,7 +221,10 @@ localhost DAOS error (-1010): DER_NOSYS
 ```
 The status LED on the VMD device is now set to an "IDENTIFY" state, represented
 by a quick, 4Hz blinking amber light. The device will quickly blink by default for
-about 60 seconds and then return to the default "OFF" state.
+about 60 seconds and then return to the default "OFF" state. The LED event duration
+can be customized by setting the VMD_LED_PERIOD environment variable if a duration
+other than the default value is desired.
+
 
 - Locate an Evicted SSD:
 
