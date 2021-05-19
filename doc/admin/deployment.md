@@ -1105,9 +1105,12 @@ Now we are able to run the tests:
 
     All steps passed.
 
-Note: The command is executed in a development environment,
+>**Note:**
+>The command is executed in a development environment,
 performance differences will vary, based on your system.
-Note 2: Smaller pools may show DER_NOSPACE(-1007): 'No space
+
+>**Note:**
+> Smaller pools may show DER_NOSPACE(-1007): 'No space
 on storage target'
 
 
