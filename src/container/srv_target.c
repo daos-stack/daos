@@ -1244,7 +1244,10 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 
 	rc = cont_child_start(pool_child, cont_uuid, cont_out);
 	if (rc != -DER_NONEXIST) {
-		(*cont_out)->sc_status_pm_ver = pm_ver;
+		if (rc == 0) {
+			D_ASSERT(*cont_out != NULL);
+			(*cont_out)->sc_status_pm_ver = pm_ver;
+		}
 		ds_pool_child_put(pool_child);
 		return rc;
 	}

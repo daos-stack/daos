@@ -1429,8 +1429,7 @@ cont_status_is_healthy(daos_prop_t *prop, uint32_t *pm_ver)
 }
 
 static void
-cont_status_set_unclean(struct rdb_tx *tx, struct ds_pool *pool,
-			struct cont *cont, daos_prop_t *prop)
+cont_status_set_unclean(daos_prop_t *prop)
 {
 	struct daos_prop_entry	*pentry;
 	struct daos_co_status	 stat;
@@ -2171,7 +2170,7 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	rc = ds_pool_rf_verify(pool, last_ver, rf);
 	if (rc == -DER_RF) {
 		rc = 0;
-		cont_status_set_unclean(tx, pool, cont, prop);
+		cont_status_set_unclean(prop);
 	}
 
 	return rc;

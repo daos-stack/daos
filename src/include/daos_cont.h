@@ -36,7 +36,7 @@ extern "C" {
 #define DAOS_COO_NOSLIP		(1U << 2)
 #define DAOS_COO_FORCE		(1U << 3)
 
-#define DAOS_COO_NBITS	(5)
+#define DAOS_COO_NBITS	(4)
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
 
 /** Container information */
