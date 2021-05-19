@@ -8,6 +8,7 @@ import time
 import errno
 import SCons.Warnings
 from SCons.Script import BUILD_TARGETS
+import distutils.spawn
 
 SCons.Warnings.warningAsException()
 
@@ -67,11 +68,7 @@ def get_version():
 def is_valid_binary(binary_name):
     """ Check if binary is valid system binary """
     binpath = distutils.spawn.find_executable(binary_name)
-    if binpath.startswith("/usr"):
-        return true
-    else:
-        return false
-
+    return bool(binpath.startswith("/usr"))
 
 API_VERSION_MAJOR = "1"
 API_VERSION_MINOR = "2"
