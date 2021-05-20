@@ -1016,6 +1016,11 @@ class TestWithServers(TestWithoutServers):
             self.log.info("--- STARTING AGENTS ---")
             self._start_manager_list("agent", self.agent_managers)
 
+        elif self.start_agents_once:
+            self.log.info(
+                "All %s groups(s) of agents currently running",
+                len(self.agent_managers))
+
     @fail_on(CommandFailure)
     def start_server_managers(self, force=False):
         """Start the daos_server processes on each specified list of hosts.
@@ -1055,7 +1060,9 @@ class TestWithServers(TestWithoutServers):
                 "start/restart --")
 
         elif self.start_servers_once:
-            self.log.info()
+            self.log.info(
+                "All %s groups(s) of servers currently running",
+                len(self.server_managers))
 
         return force_agent_start
 
