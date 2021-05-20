@@ -33,7 +33,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	if (rc != 0) {
 		RPC_ERROR(rpc_priv, "d_rank_list_dup failed: "DF_RC"\n",
 			  DP_RC(rc));
-		D_FREE_PTR(co_info);
+		D_FREE(co_info);
 		D_GOTO(out, rc);
 	}
 	if (!grp_ref_taken)
