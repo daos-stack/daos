@@ -24,6 +24,7 @@ import stat
 import argparse
 import tabulate
 import functools
+import traceback
 import subprocess
 import junit_xml
 import tempfile
@@ -917,8 +918,6 @@ class DFuse():
         if not self.caching:
             cmd.append('--disable-caching')
 
-        cmd.append('--disable-wb-cache')
-
         if self.pool:
             cmd.extend(['--pool', self.pool])
         if self.container:
@@ -1742,10 +1741,13 @@ def run_posix_tests(server, conf, test=None):
                 pt.container = None
             except Exception as inst:
 
+                print(inst.__traceback__)
+                trace = traceback.format_tb(inst.__traceback__)
+                print(traceback.format_tb(inst.__traceback__))
                 duration = time.time() - start
                 conf.wf.add_test_case(pt.test_name,
-                                      'Raised exception',
-                                      output = repr(inst),
+                                      repr(inst),
+                                      output = trace,
                                       test_class='test',
                                       duration = duration)
                 raise
