@@ -19,7 +19,9 @@ $SCONS --jobs 10 PREFIX=/opt/daos COMPILER="$COMPILER" TARGET_TYPE=release \
        BUILD_TYPE=debug
 echo ::endgroup::
 
+echo ::group::Config file
 cat daos.conf
+echo ::endgroup::
 
 echo ::group::Install debug
 $SCONS install
@@ -35,3 +37,4 @@ echo ::group::Container copy test
 export LD_LIBRARY_PATH=/opt/daos/prereq/release/spdk/lib/
 ./utils/node_local_test.py --no-root --test cont_copy
 echo ::endgroup::
+ls
