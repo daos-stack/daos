@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       1.2.0
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -204,6 +204,12 @@ Summary: The DAOS development libraries and headers
 
 %description devel
 This is the package needed to build software with the DAOS library.
+
+%if (0%{?suse_version} > 0)
+%global __debug_package 1
+%global _debuginfo_subpackages 0
+%debug_package
+%endif
 
 %prep
 %autosetup
@@ -403,6 +409,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Mon May 17 2021 Brian J. Murrell <brian.murrell@intel.com> 1.2.0-4
+- Enable debuginfo package building on SUSE platforms
+
 * Wed May 06 2021 Brian J. Murrell <brian.murrell@intel.com> 1.2.0-3
 - Package /etc/daos/certs in main/common package so that both server
   and client get it created
