@@ -2703,7 +2703,7 @@ dm_connect(bool is_posix_copy,
 	int			rc = 0;
 	struct duns_attr_t	dattr = {0};
 	daos_prop_t		*props = NULL;
-	dfs_attr_t		attr;
+	dfs_attr_t		attr = {0};
 	int			size = 2;
 	uint32_t		dpe_types[size];
 	uint64_t		dpe_vals[size];
@@ -2740,9 +2740,19 @@ dm_connect(bool is_posix_copy,
 	 * tools
 	 */
 	if (src_file_dfs->type != POSIX) {
+		/* Need to query source max oid for non-POSIX source
+		 * containers, and the cont type to see if the source
+		 * container is POSIX, and if it is then use dfs_cont_create
+		 * to create the destination container
+		 */
 		dpe_types[0] = ca->cont_prop_layout;
 		dpe_types[1] = ca->cont_prop_oid;
 
+		/* This will be extended to get all props
+		 * from the source container and then
+		 * set them in the destination when
+		 * the --preserve option is added
+		 */
 		rc = dm_get_cont_prop(ca->src_coh, sysname, src_cont_info, size,
 				      dpe_types, dpe_vals);
 		if (rc != 0) {
@@ -2754,18 +2764,15 @@ dm_connect(bool is_posix_copy,
 		ca->cont_layout = dpe_vals[0];
 		ca->cont_oid = dpe_vals[1];
 
-		props = daos_prop_alloc(2);
-		if (props == NULL) {
-			fprintf(stderr, "Failed to allocate prop (%d)", rc);
-			D_GOTO(out, rc);
-		}
-		props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
-		props->dpp_entries[0].dpe_val = ca->cont_layout;
-
-		/* only set max oid on created dest containers
-		 * if this is a non-posix copy
-		 */
 		if (!is_posix_copy) {
+			props = daos_prop_alloc(2);
+			if (props == NULL) {
+				fprintf(stderr, "Failed to allocate prop\n");
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
+			props->dpp_entries[0].dpe_val = ca->cont_layout;
+
 			props->dpp_entries[1].dpe_type = ca->cont_prop_oid;
 			props->dpp_entries[1].dpe_val = ca->cont_oid;
 		}
@@ -2823,10 +2830,6 @@ dm_connect(bool is_posix_copy,
 				    dst_cont_info, NULL);
 		if (rc == -DER_NONEXIST) {
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
-				attr.da_props = props;
-				attr.da_id = 0;
-				attr.da_oclass_id = OC_UNKNOWN;
-				attr.da_chunk_size = 0;
 				rc = dfs_cont_create(ca->dst_poh,
 						     ca->dst_c_uuid,
 						     &attr, NULL, NULL);
@@ -2857,6 +2860,8 @@ dm_connect(bool is_posix_copy,
 					"%d\n", rc);
 				D_GOTO(err_dst_root, rc);
 			}
+			fprintf(stdout, "Successfully created container: "
+				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
 			fprintf(stderr, "failed to open container: "
 				"%d\n", rc);
@@ -3070,6 +3075,10 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
+	/* if container UUID has not been provided generate one */
+	if (uuid_is_null(ca.dst_c_uuid)) {
+		uuid_generate(ca.dst_c_uuid);
+	}
 	rc = dm_connect(is_posix_copy, &src_file_dfs, &dst_file_dfs, &ca,
 			ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
@@ -3492,7 +3501,6 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	size_t			src_str_len = 0;
 	size_t			dst_str_len = 0;
 	daos_epoch_range_t	epr;
-	int			uuid_len = 128;
 
 	set_dm_args_default(&ca);
 	file_set_defaults_dfs(&src_cp_type);
@@ -3519,29 +3527,15 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	}
 	rc = dm_parse_path(&dst_cp_type, dst_str, dst_str_len,
 			   &ca.dst_p_uuid, &ca.dst_c_uuid);
-	/* parse pool uuid if this fails, since it is not in form that
-	 * can be parsed by duns_resolve_path (i.e. dst=/$pool)
-	 */
 	if (rc != 0) {
-		uuid_generate(ca.dst_c_uuid);
-		if (strncmp(ap->dst, "/", 1) == 0) {
-			ap->dst += 1;
-			D_STRNDUP(ca.dst, ap->dst, uuid_len);
-			if (ca.dst == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			uuid_parse(ca.dst, ca.dst_p_uuid);
-			ap->dst -= 1;
-			/* not considered an error yet since this could
-			 * be a UNS path, dm_connect will check this
-			 * when it attempts to do a uns_path_create
-			 */
-			rc = 0;
-		} else {
-			fprintf(stderr, "failed to parse destination path: "
-				"%d\n", rc);
-			D_GOTO(out, rc);
-		}
-	} else {
+		fprintf(stderr, "failed to parse destination path: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	if (!uuid_is_null(ca.dst_c_uuid)) {
+		/* make sure destination container does not already exist
+		 * for object level copies
+		 */
 		rc = daos_pool_connect(ca.dst_p_uuid, ap->sysname,
 				       DAOS_PC_RW, &ca.dst_poh, NULL, NULL);
 		if (rc != 0) {
@@ -3578,6 +3572,9 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 			}
 			D_GOTO(out, rc = 1);
 		}
+	} else {
+		/* if container UUID has not been provided generate one */
+		uuid_generate(ca.dst_c_uuid);
 	}
 
 	rc = dm_connect(is_posix_copy, &dst_cp_type, &src_cp_type,
@@ -3675,9 +3672,8 @@ out_disconnect:
 	}
 out:
 	if (rc == 0) {
-		fprintf(stdout, "\n\nSuccessfully copied to destination "
-			"container "DF_UUIDF "\n\n",
-			DP_UUID(ca.dst_c_uuid));
+		fprintf(stdout, "Successfully copied to destination "
+			"container "DF_UUIDF "\n", DP_UUID(ca.dst_c_uuid));
 	}
 	D_FREE(src_str);
 	D_FREE(dst_str);

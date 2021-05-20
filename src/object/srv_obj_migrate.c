@@ -680,15 +680,28 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			D_DEBUG(DB_TRACE, "update start %d cnt %d\n",
 				start, iod_cnt);
 
-			rc = daos_csummer_alloc_iods_csums_with_packed(
-				csummer,
-				&mrone->mo_iods[start],
-				iod_cnt, &tmp_csum_iov,
-				&iod_csums);
-			if (rc != 0) {
-				D_ERROR("setting up iods csums failed: "
-						DF_RC"\n", DP_RC(rc));
-				break;
+			if (DAOS_OC_IS_EC(oca)) {
+				rc = daos_csummer_calc_iods(csummer,
+					&sgls[start],  &mrone->mo_iods[start],
+					NULL, iod_cnt, false, NULL, 0,
+					&iod_csums);
+				if (rc != 0) {
+					D_ERROR("Error calculating checksums: "
+						DF_RC"\n",
+						DP_RC(rc));
+					break;
+				}
+			} else {
+				rc = daos_csummer_alloc_iods_csums_with_packed(
+					csummer,
+					&mrone->mo_iods[start],
+					iod_cnt, &tmp_csum_iov,
+					&iod_csums);
+				if (rc != 0) {
+					D_ERROR("setting up iods csums failed: "
+							DF_RC"\n", DP_RC(rc));
+					break;
+				}
 			}
 
 			rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
@@ -720,6 +733,29 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				DP_RC(rc), fetch ? "FETCHED" : "INLINE");
 			D_GOTO(out, rc);
 		}
+
+		if (DAOS_OC_IS_EC(oca)) {
+			rc = daos_csummer_calc_iods(csummer,
+					&sgls[start],  &mrone->mo_iods[start],
+					NULL, iod_cnt, false, NULL, 0,
+					&iod_csums);
+			if (rc != 0) {
+				D_ERROR("Error calculating checksums: "
+						DF_RC"\n",
+					DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+		} else {
+			rc = daos_csummer_alloc_iods_csums_with_packed(
+				csummer, &mrone->mo_iods[start],
+				iod_cnt, &tmp_csum_iov, &iod_csums);
+			if (rc != 0) {
+				D_ERROR("setting up iods csums failed: "
+						DF_RC"\n", DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+		}
+
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_update_epoch,
 				    mrone->mo_version,
@@ -833,19 +869,13 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 			D_GOTO(out, rc);
 		}
 
-		rc = daos_csummer_alloc_iods_csums_with_packed(
-			csummer,
-			iod,
-			1, csum_iov, &iod_csums);
+		rc = daos_csummer_calc_iods(csummer, &tmp_sgl, iod, NULL, 1,
+					    false, NULL, 0, &iod_csums);
 		if (rc != 0) {
-			D_ERROR("Error allocating iods");
+			D_ERROR("Error calculating checksums: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out, rc);
 		}
-
-		D_ASSERTF(iod_csums == NULL, "DAOS-6811 - EC Rebuild with "
-					     "checksums is currently "
-					     "unsupported.");
-
 
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_epoch,
@@ -1072,6 +1102,8 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		los[i].cs_bytes = obj_ec_singv_cell_bytes(
 					mrone->mo_iods[i].iod_size, oca);
 		los[i].cs_nr = obj_ec_tgt_nr(oca);
+		D_DEBUG(DB_CSUM, "los[%d]: "DF_LAYOUT"\n", i,
+			DP_LAYOUT(los[i]));
 	}
 
 	rc = daos_csummer_csum_init_with_packed(&csummer, &csum_iov_fetch);
@@ -1082,10 +1114,16 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		/** Calc checksum for EC single value, since it may be striped,
 		 * and we need re-calculate the single stripe checksum.
 		 */
+		D_DEBUG(DB_CSUM,
+			DF_C_UOID_DKEY" REBUILD: Calculating csums\n",
+			DP_C_UOID_DKEY(mrone->mo_oid, &mrone->mo_dkey));
 		rc = daos_csummer_calc_iods(csummer, sgls, mrone->mo_iods, NULL,
-					    mrone->mo_iod_num, false, los,
+					    mrone->mo_iod_num, false, NULL,
 					    -1, &iod_csums);
 	} else {
+		D_DEBUG(DB_CSUM,
+			DF_C_UOID_DKEY" REBUILD: Using packed csums\n",
+			DP_C_UOID_DKEY(mrone->mo_oid, &mrone->mo_dkey));
 		tmp_csum_iov = csum_iov_fetch;
 		rc = daos_csummer_alloc_iods_csums_with_packed(csummer,
 							       mrone->mo_iods,
@@ -1194,15 +1232,30 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	if (rc != 0)
 		D_GOTO(post, rc);
 
-	tmp_csum_iov = csum_iov_fetch;
-	rc = daos_csummer_alloc_iods_csums_with_packed(csummer,
-						       mrone->mo_iods,
-						       mrone->mo_iod_num,
-						       &tmp_csum_iov,
-						       &iod_csums);
-	if (rc != 0) {
-		D_ERROR("Failed to alloc iod csums: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(post, rc);
+	if (DAOS_OC_IS_EC(oca)) {
+		D_DEBUG(DB_CSUM,
+			DF_C_UOID_DKEY" REBUILD: Calculating csums. "
+			"IOD count: %d\n",
+			DP_C_UOID_DKEY(mrone->mo_oid, &mrone->mo_dkey),
+			mrone->mo_iod_num);
+		rc = daos_csummer_calc_iods(csummer, sgls, mrone->mo_iods, NULL,
+					    mrone->mo_iod_num, false, NULL, -1,
+					    &iod_csums);
+	} else {
+		D_DEBUG(DB_CSUM,
+			DF_C_UOID_DKEY" REBUILD: Using packed csums\n",
+			DP_C_UOID_DKEY(mrone->mo_oid, &mrone->mo_dkey));
+		tmp_csum_iov = csum_iov_fetch;
+		rc = daos_csummer_alloc_iods_csums_with_packed(csummer,
+							mrone->mo_iods,
+							mrone->mo_iod_num,
+							&tmp_csum_iov,
+							&iod_csums);
+		if (rc != 0) {
+			D_ERROR("Failed to alloc iod csums: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(post, rc);
+		}
 	}
 
 	vos_set_io_csum(ioh, iod_csums);

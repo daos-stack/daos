@@ -15,16 +15,6 @@ group_repo_post() {
 }
 
 distro_custom() {
-    # install the debuginfo repo in case we get segfaults
-    cat <<"EOF" > $REPOS_DIR/CentOS-Debuginfo.repo
-[core-0-debuginfo]
-name=CentOS-8 - Debuginfo
-baseurl=http://debuginfo.centos.org/8/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-8
-enabled=0
-EOF
-
     # force install of avocado 69.x
     dnf -y erase avocado{,-common}                                              \
                  python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \

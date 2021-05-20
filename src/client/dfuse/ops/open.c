@@ -39,14 +39,18 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	oh->doh_dfs = ie->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
 
-	if (fs_handle->dpi_info->di_direct_io) {
-		if (ie->ie_dfs->dfs_attr_timeout == 0) {
+	if (ie->ie_dfs->dfc_data_caching) {
+		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
-		} else {
-			if (fi->flags & O_DIRECT)
-				fi_out.direct_io = 1;
-		}
+	} else {
+		fi_out.direct_io = 1;
 	}
+
+	if (ie->ie_dfs->dfc_direct_io_disable)
+		fi_out.direct_io = 0;
+
+	if (!fi_out.direct_io)
+		oh->doh_caching = true;
 
 	fi_out.fh = (uint64_t)oh;
 
