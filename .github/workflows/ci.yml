@@ -32,33 +32,10 @@ jobs:
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
                           --build-arg DEPS_JOBS=8 --build-arg DAOS_JAVA_BUILD=no
-                          -t build-image
     - name: Build DAOS Java client in Docker image with ${{ matrix.compiler }}
       run: docker build . -f utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg COMPILER=${{ matrix.compiler }}
                           --build-arg DEPS_JOBS=8
-    - name: check server
-      run: docker run build-image ldd /opt/daos/bin/daos_engine
-    - name: Run Unit Tests
-      run: docker run --name build-ut --tmpfs /mnt/daos build-image ./daos/utils/run_test.sh
-    - name: mkdir
-      run: mkdir test_results/
-    - name: Copy results
-      run: docker cp build-ut:/home/daos/daos/test_results/ ./
-    - name: find
-      run: find test_results/
-    - name: grep
-      run: grep . test_results/*
-    - name: Publish Unit Test Results
-      uses: EnricoMi/publish-unit-test-result-action@v1.7
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        files: test_results/*.xml
-    - name: Run NLT Test
-      run: docker run --tmpfs /mnt/daos build-image ./daos/utils/node_local_test.py --no-root kv
-    - name: grep
-      if: always()
-      run: grep . *.json
 
   Spelling:
     runs-on: ubuntu-20.04
