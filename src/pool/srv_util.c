@@ -377,7 +377,18 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	pool = ds_pool_lookup(pool_id);
 	if (pool == NULL) {
 		D_ERROR(DF_UUID": Pool cache not found\n", DP_UUID(pool_id));
-		return -DER_UNINIT;
+		/*
+		 * The SMD pool info could be inconsistent with global pool
+		 * info when pool creation/destroy partially succeed or fail.
+		 * For exmaple: If a pool destroy happened after a blobstore
+		 * is torndown for faulty SSD, the blob and SMD info for the
+		 * affected pool targets will be left behind.
+		 *
+		 * SSD faulty/reint reaction should tolerate such kind of
+		 * inconsistency, otherwise, state transition for the SSD
+		 * won't be able to moving forward.
+		 */
+		return 0;
 	}
 
 	nr_downout = nr_down = nr_upin = nr_up = 0;
