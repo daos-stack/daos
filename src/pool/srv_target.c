@@ -33,6 +33,7 @@
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
+#include <gurt/telemetry_producer.h>
 #include "rpc.h"
 #include "srv_internal.h"
 
@@ -595,6 +596,7 @@ ds_pool_start(uuid_t uuid)
 	struct ds_pool			*pool;
 	struct daos_llink		*llink;
 	struct ds_pool_create_arg	arg = {};
+	struct active_pool_metrics	*metrics = NULL;
 	int				rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
@@ -650,6 +652,11 @@ ds_pool_start(uuid_t uuid)
 	}
 
 	ds_iv_ns_start(pool->sp_iv_ns);
+
+	ds_pool_metrics_start(uuid);
+	metrics = ds_pool_metrics_get(uuid);
+	if (metrics != NULL)
+		d_tm_record_timestamp(metrics->started_timestamp);
 	return rc;
 }
 
@@ -677,6 +684,8 @@ ds_pool_stop(uuid_t uuid)
 	ds_migrate_abort(pool->sp_uuid, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
+
+	ds_pool_metrics_stop(uuid);
 }
 
 /* ds_pool_hdl ****************************************************************/

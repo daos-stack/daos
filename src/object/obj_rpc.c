@@ -180,6 +180,16 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (unlikely(rc))
 		D_GOTO(out, rc);
 
+	if (iod_csum) {
+		rc = crt_proc_struct_dcs_iod_csums_adv(proc, proc_op, iod_csum,
+						       singv, start, nr);
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
+				D_GOTO(out_free, rc);
+			D_GOTO(out, rc);
+		}
+	}
+
 #if 0
 	if (iod->iod_nr == 0 && iod->iod_type != DAOS_IOD_ARRAY) {
 		D_ERROR("invalid I/O descriptor, iod_nr = 0\n");
@@ -224,16 +234,6 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 					D_GOTO(out_free, rc);
 				D_GOTO(out, rc);
 			}
-		}
-	}
-
-	if (iod_csum) {
-		rc = crt_proc_struct_dcs_iod_csums_adv(proc, proc_op, iod_csum,
-						       singv, start, nr);
-		if (unlikely(rc)) {
-			if (DECODING(proc_op))
-				D_GOTO(out_free, rc);
-			D_GOTO(out, rc);
 		}
 	}
 

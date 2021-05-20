@@ -147,6 +147,18 @@ func fixPath(in string) (labels labelMap, name string) {
 		name = net_re.ReplaceAllString(name, replacement)
 	}
 
+	getHexRE := func(numDigits int) string {
+		return strings.Repeat(`[[:xdigit:]]`, numDigits)
+	}
+	uuid_re := fmt.Sprintf("%s_%s_%s_%s_%s", getHexRE(8), getHexRE(4), getHexRE(4),
+		getHexRE(4), getHexRE(12))
+	pool_re := regexp.MustCompile(`pool_current_+(` + uuid_re + `)`)
+	pool_matches := pool_re.FindStringSubmatch(name)
+	if len(pool_matches) > 0 {
+		labels["pool"] = strings.Replace(pool_matches[1], "_", "-", -1)
+		replacement := "pool"
+		name = pool_re.ReplaceAllString(name, replacement)
+	}
 	return
 }
 
@@ -308,8 +320,13 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 			}
 
 			counters.add(baseName, desc, rm.m.FloatValue(), labels)
+		case telemetry.MetricTypeTimestamp:
+			if c.isIgnored(baseName) {
+				break
+			}
+			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
 		default:
-			c.log.Errorf("metric type %d not supported", rm.m.Type())
+			c.log.Errorf("[%s]: metric type %d not supported", name, rm.m.Type())
 		}
 	}
 
