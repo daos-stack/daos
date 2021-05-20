@@ -623,6 +623,9 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 		return -DER_NOSYS;
 
 	anchor = type2anchor(type, anchors);
+	if (daos_anchor_is_eof(anchor))
+		return 0;
+
 	rc = vos_iter_prepare(type, param, &ih, dth);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {

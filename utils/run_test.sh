@@ -98,6 +98,13 @@ if [ -d "/mnt/daos" ]; then
         export DAOS_IO_BYPASS=pm_snap
         run_test "${SL_PREFIX}/bin/vos_tests" -A 50
         unset DAOS_IO_BYPASS
+        COMP="UTEST_common"
+        run_test src/common/tests/btree.sh perf -s 20000
+        run_test src/common/tests/btree.sh perf direct -s 20000
+        run_test src/common/tests/btree.sh perf ukey -s 20000
+        run_test src/common/tests/btree.sh dyn perf -s 20000
+        run_test src/common/tests/btree.sh dyn perf ukey -s 20000
+        BTREE_SIZE=20000
     else
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
@@ -114,6 +121,7 @@ if [ -d "/mnt/daos" ]; then
         else
             VALGRIND_SUPP=""
         fi
+        BTREE_SIZE=200
     fi
 
     # Tests
@@ -125,7 +133,6 @@ if [ -d "/mnt/daos" ]; then
     COMP="UTEST_gurt"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
-    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_consumer"
 
     COMP="UTEST_vos"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
@@ -175,16 +182,11 @@ if [ -d "/mnt/daos" ]; then
     export VALGRIND_SUPP=${VALGRIND_SUPP}
     unset VALGRIND_CMD
     COMP="UTEST_common"
-    run_test src/common/tests/btree.sh ukey -s 20000
-    run_test src/common/tests/btree.sh direct -s 20000
-    run_test src/common/tests/btree.sh -s 20000
-    run_test src/common/tests/btree.sh perf -s 20000
-    run_test src/common/tests/btree.sh perf direct -s 20000
-    run_test src/common/tests/btree.sh perf ukey -s 20000
-    run_test src/common/tests/btree.sh dyn ukey -s 20000
-    run_test src/common/tests/btree.sh dyn -s 20000
-    run_test src/common/tests/btree.sh dyn perf -s 20000
-    run_test src/common/tests/btree.sh dyn perf ukey -s 20000
+    run_test src/common/tests/btree.sh ukey -s ${BTREE_SIZE}
+    run_test src/common/tests/btree.sh direct -s ${BTREE_SIZE}
+    run_test src/common/tests/btree.sh -s ${BTREE_SIZE}
+    run_test src/common/tests/btree.sh dyn ukey -s ${BTREE_SIZE}
+    run_test src/common/tests/btree.sh dyn -s ${BTREE_SIZE}
 
     COMP="UTEST_vos"
     run_test src/vos/tests/evt_ctl.sh

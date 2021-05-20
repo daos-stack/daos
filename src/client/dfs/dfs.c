@@ -15,6 +15,7 @@
 #include <daos/event.h>
 #include <daos/pool.h>
 #include <daos/container.h>
+#include <daos/cont_props.h>
 #include <daos/array.h>
 #include <daos/object.h>
 #include <daos/placement.h>
@@ -47,8 +48,6 @@
 #define DFS_LAYOUT_VERSION	1
 /** Array object stripe size for regular files */
 #define DFS_DEFAULT_CHUNK_SIZE	1048576
-/** default object class for files & dirs */
-#define DFS_DEFAULT_OBJ_CLASS	OC_SX
 /** Magic value for serializing / deserializing a DFS handle */
 #define DFS_GLOB_MAGIC		0xda05df50
 /** Magic value for serializing / deserializing a DFS object handle */
@@ -298,10 +297,6 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 	if (oclass == 0)
 		oclass = dfs->attr.da_oclass_id;
 
-	rc = dfs_oclass_select(dfs->poh, oclass, &oclass);
-	if (rc)
-		return rc;
-
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */
 	if (dfs->oid.hi >= MAX_OID_HI) {
@@ -326,7 +321,11 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 			DAOS_OF_ARRAY_BYTE;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
-	daos_obj_set_oid(oid, feat, oclass, 0);
+	rc = daos_obj_generate_oid(dfs->coh, oid, feat, oclass, 0, 0);
+	if (rc) {
+		D_ERROR("daos_obj_generate_oid() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
 
 	return 0;
 }
@@ -1094,10 +1093,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 		else
 			chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 
-		if (attr->da_oclass_id != OC_UNKNOWN)
-			oclass = attr->da_oclass_id;
-		else
-			oclass = DFS_DEFAULT_OBJ_CLASS;
+		oclass = attr->da_oclass_id;
 
 		rc = daos_obj_update(*oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT,
 				     &dkey, SB_AKEYS, iods, sgls, NULL);
@@ -1145,8 +1141,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 
 	attr->da_chunk_size = (chunk_size) ? chunk_size :
 		DFS_DEFAULT_CHUNK_SIZE;
-	attr->da_oclass_id = (oclass != OC_UNKNOWN) ? oclass :
-		DFS_DEFAULT_OBJ_CLASS;
+	attr->da_oclass_id = oclass;
 
 	return 0;
 err:
@@ -1180,11 +1175,11 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	daos_handle_t		coh, super_oh;
 	struct dfs_entry	entry = {0};
 	daos_prop_t		*prop = NULL;
+	uint64_t		rf_factor;
 	daos_cont_info_t	co_info;
 	dfs_t			*dfs;
 	dfs_attr_t		dattr;
 	struct daos_prop_co_roots roots;
-	daos_oclass_id_t	oclass;
 	int			rc;
 
 	if (_dfs && _coh == NULL) {
@@ -1209,30 +1204,35 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 			D_GOTO(err_prop, rc);
 		}
 	}
-	if (attr && attr->da_oclass_id != OC_UNKNOWN)
+
+	/** set the oclass id from passed in attr, otherwise use default (0) */
+	if (attr)
 		dattr.da_oclass_id = attr->da_oclass_id;
 	else
-		dattr.da_oclass_id = DFS_DEFAULT_OBJ_CLASS;
+		dattr.da_oclass_id = 0;
+
+	/** check if RF factor is set on property */
+	rf_factor = daos_cont_prop2redunfac(prop);
 
 	/* select oclass and generate SB OID */
-	rc = dfs_oclass_select(poh, OC_RP_XSF, &oclass);
-	if (rc) {
-		rc = daos_der2errno(rc);
-		D_GOTO(err_prop, rc);
-	}
 	roots.cr_oids[0].lo = RESERVED_LO;
 	roots.cr_oids[0].hi = SB_HI;
-	daos_obj_set_oid(&roots.cr_oids[0], 0, oclass, 0);
+	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[0],
+					 0, dattr.da_oclass_id, 0, 0);
+	if (rc) {
+		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
 
 	/* select oclass and generate ROOT OID */
-	rc = dfs_oclass_select(poh, dattr.da_oclass_id, &oclass);
-	if (rc) {
-		rc = daos_der2errno(rc);
-		D_GOTO(err_prop, rc);
-	}
 	roots.cr_oids[1].lo = RESERVED_LO;
 	roots.cr_oids[1].hi = ROOT_HI;
-	daos_obj_set_oid(&roots.cr_oids[1], 0, oclass, 0);
+	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[1],
+					 0, dattr.da_oclass_id, 0, 0);
+	if (rc) {
+		D_ERROR("Failed to generate ROOT OID "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
 
 	/* store SB & root OIDs as container property */
 	roots.cr_oids[2] = roots.cr_oids[3] = DAOS_OBJ_NIL;
@@ -3403,6 +3403,9 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	daos_recx_t		recx;
 	daos_key_t		dkey;
 	size_t			len;
+	dfs_obj_t		*sym;
+	mode_t			orig_mode;
+	const char		*entry_name;
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -3429,7 +3432,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		oh = parent->oh;
 	}
 
-	/** sticky bit, set-user-id and set-group-id, not supported yet */
+	/** sticky bit, set-user-id and set-group-id, are not supported */
 	if (mode & S_ISVTX || mode & S_ISGID || mode & S_ISUID) {
 		D_ERROR("setuid, setgid, & sticky bit are not supported.\n");
 		return EINVAL;
@@ -3446,8 +3449,6 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 	/** resolve symlink */
 	if (S_ISLNK(entry.mode)) {
-		dfs_obj_t *sym;
-
 		D_ASSERT(entry.value);
 
 		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym,
@@ -3461,13 +3462,28 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		rc = daos_obj_open(dfs->coh, sym->parent_oid, DAOS_OO_RW,
 				   &oh, NULL);
 		D_FREE(entry.value);
-		dfs_release(sym);
-		if (rc)
+		if (rc) {
+			dfs_release(sym);
 			return daos_der2errno(rc);
+		}
+
+		orig_mode = sym->mode;
+		entry_name = sym->name;
+	} else {
+		orig_mode = entry.mode;
+		entry_name = name;
 	}
 
+	if ((mode & S_IFMT) && (orig_mode & S_IFMT) != (mode & S_IFMT)) {
+		D_ERROR("Cannot change entry type\n");
+		D_GOTO(out, rc = EINVAL);
+	}
+
+	/** set the type mode in case user has not passed it */
+	mode |= orig_mode & S_IFMT;
+
 	/** set dkey as the entry name */
-	d_iov_set(&dkey, (void *)name, len);
+	d_iov_set(&dkey, (void *)entry_name, len);
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iod.iod_nr	= 1;
 	recx.rx_idx	= MODE_IDX;
@@ -3489,10 +3505,11 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
-	if (S_ISLNK(entry.mode))
-		daos_obj_close(oh, NULL);
-
 out:
+	if (S_ISLNK(entry.mode)) {
+		dfs_release(sym);
+		daos_obj_close(oh, NULL);
+	}
 	return rc;
 }
 
@@ -3520,9 +3537,17 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		return EPERM;
 	if ((obj->flags & O_ACCMODE) == O_RDONLY)
 		return EPERM;
-	if (flags & DFS_SET_ATTR_MODE)
+	if (flags & DFS_SET_ATTR_MODE) {
 		if ((stbuf->st_mode & S_IFMT) != (obj->mode & S_IFMT))
 			return EINVAL;
+		/** sticky bit, set-user-id and set-group-id not supported */
+		if (stbuf->st_mode & S_ISVTX || stbuf->st_mode & S_ISGID ||
+		    stbuf->st_mode & S_ISUID) {
+			D_DEBUG(DB_TRACE, "setuid, setgid, & sticky bit are not"
+				" supported.\n");
+			return EINVAL;
+		}
+	}
 
 	/** Open parent object and fetch entry of obj from it */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
