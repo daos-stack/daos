@@ -219,31 +219,6 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 {
 	D_FREE(dae->dae_records);
 
-	if (evict) {
-		daos_unit_oid_t	*oids;
-		int		 count;
-		int		 i;
-
-		if (dth != NULL) {
-			if (dth->dth_oid_array != NULL) {
-				D_ASSERT(dth->dth_oid_cnt > 0);
-
-				count = dth->dth_oid_cnt;
-				oids = dth->dth_oid_array;
-			} else {
-				count = 1;
-				oids = &dth->dth_leader_oid;
-			}
-		} else {
-			count = dae->dae_oid_cnt;
-			oids = dae->dae_oids;
-		}
-
-		for (i = 0; i < count; i++)
-			vos_obj_evict_by_oid(vos_obj_cache_current(), cont,
-					     oids[i]);
-	}
-
 	if (dae->dae_oids != NULL && dae->dae_oids != &dae->dae_oid_inline &&
 	    dae->dae_oids != &DAE_OID(dae)) {
 		D_FREE(dae->dae_oids);
@@ -2469,14 +2444,12 @@ int
 vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 {
 	struct vos_container	*cont;
-	struct daos_lru_cache	*occ;
 	struct vos_object	*obj;
 	daos_epoch_range_t	 epr = {0, epoch};
 	int	rc;
 
 	cont = vos_hdl2cont(coh);
-	occ = vos_obj_cache_current();
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
@@ -2495,7 +2468,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 				       sizeof(obj->obj_df->vo_sync));
 	}
 
-	vos_obj_release(occ, obj, false);
+	vos_obj_release(obj);
 	return 0;
 }
 

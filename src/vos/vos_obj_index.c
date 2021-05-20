@@ -687,12 +687,6 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 			 */
 			D_ERROR("Removing orphaned dkey tree\n");
 		}
-		/* Evict the object from cache */
-		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
-					  oiter->oit_cont, oid);
-		if (rc != 0)
-			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
-				DP_UOID(oid), DP_RC(rc));
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
