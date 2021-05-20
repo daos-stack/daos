@@ -1204,12 +1204,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "name",
+    "label",
     2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolCreateReq, name),
+    offsetof(Mgmt__PoolCreateReq, label),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -1363,7 +1363,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
 static const unsigned mgmt__pool_create_req__field_indices_by_name[] = {
   5,   /* field[5] = acl */
   6,   /* field[6] = faultDomains */
-  1,   /* field[1] = name */
+  1,   /* field[1] = label */
   10,   /* field[10] = numranks */
   7,   /* field[7] = numsvcreps */
   13,   /* field[13] = nvmebytes */

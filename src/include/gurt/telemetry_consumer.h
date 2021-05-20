@@ -8,6 +8,7 @@
 
 
 /* Developer facing client API to read data */
+char *d_tm_get_name(struct d_tm_context *ctx, struct d_tm_node_t *node);
 int d_tm_get_counter(struct d_tm_context *ctx, uint64_t *val,
 		     struct d_tm_node_t *node);
 int d_tm_get_timestamp(struct d_tm_context *ctx, time_t *val,
@@ -30,8 +31,13 @@ int d_tm_get_bucket_range(struct d_tm_context *ctx,
 /* Developer facing client API to discover topology and manage results */
 struct d_tm_context *d_tm_open(int id);
 void d_tm_close(struct d_tm_context **ctx);
-void *d_tm_conv_ptr(struct d_tm_context *ctx, void *ptr);
+void *d_tm_conv_ptr(struct d_tm_context *ctx, struct d_tm_node_t *node,
+		    void *ptr);
 struct d_tm_node_t *d_tm_get_root(struct d_tm_context *ctx);
+struct d_tm_node_t *d_tm_get_child(struct d_tm_context *ctx,
+				   struct d_tm_node_t *node);
+struct d_tm_node_t *d_tm_get_sibling(struct d_tm_context *ctx,
+				     struct d_tm_node_t *node);
 struct d_tm_node_t *d_tm_find_metric(struct d_tm_context *ctx,
 				     char *path);
 uint64_t d_tm_count_metrics(struct d_tm_context *ctx, struct d_tm_node_t *node,

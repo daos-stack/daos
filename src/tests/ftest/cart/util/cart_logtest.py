@@ -239,9 +239,10 @@ class LogTest():
         self.log_fac = Counter()
         self.log_levels = Counter()
         self.log_count = 0
+        self._common_shown = False
 
     def __del__(self):
-        if not self.quiet:
+        if not self.quiet and not self._common_shown:
             self.show_common_logs()
 
     def save_log_line(self, line):
@@ -285,6 +286,7 @@ class LogTest():
             print('{}: {} ({:.1f}%)'.format(cart_logparse.LOG_NAMES[level],
                                             count,
                                             100*count/self.log_count))
+        self._common_shown = True
 
     def check_log_file(self,
                        abort_on_warning,
@@ -307,6 +309,7 @@ class LogTest():
             except LogCheckError as error:
                 if to_raise is None:
                     to_raise = error
+        self.show_common_logs()
         if to_raise:
             raise to_raise
 
@@ -499,7 +502,7 @@ class LogTest():
                 # there are more than two fields to work with.
                 non_trace_lines += 1
                 if line.is_calloc():
-                    pointer = line.get_field(-1).rstrip('.')
+                    pointer = line.calloc_pointer()
                     if pointer in regions:
                         show_line(regions[pointer], 'NORMAL',
                                   'new allocation seen for same pointer')
@@ -507,7 +510,7 @@ class LogTest():
                     regions[pointer] = line
                     memsize.add(line.calloc_size())
                 elif line.is_free():
-                    pointer = line.get_field(-1).rstrip('.')
+                    pointer = line.free_pointer()
                     # If a pointer is freed then automatically remove the
                     # descriptor
                     if pointer in active_desc:
@@ -528,20 +531,25 @@ class LogTest():
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
                 elif line.is_realloc():
-                    new_pointer = line.get_field(-6)
-                    old_pointer = line.get_field(-1)[0:-2]
-                    old_sz = int(line.get_field(-3))
-                    new_sz = line.calloc_size()
+                    (new_pointer, old_pointer) = line.realloc_pointers()
+                    (new_size, old_size) = line.realloc_sizes()
                     if new_pointer != '(nil)' and old_pointer != '(nil)':
-                        exp_sz = regions[old_pointer].calloc_size()
-                        if old_sz not in [0, exp_sz, new_sz]:
-                            show_line(line, 'HIGH',
-                                      'realloc used invalid old size')
-                        memsize.subtract(exp_sz)
+                        if old_pointer not in regions:
+                            show_line(line, 'HIGH', 'realloc of unknown memory')
+                        else:
+                            # Use calloc_size() here as the memory might not
+                            # come from a realloc() call.
+                            exp_sz = regions[old_pointer].calloc_size()
+                            if old_size not in (0, exp_sz, new_size):
+                                show_line(line, 'HIGH',
+                                          'realloc used invalid old size')
+                            memsize.subtract(exp_sz)
                     regions[new_pointer] = line
-                    memsize.add(line.calloc_size())
+                    memsize.add(new_size)
                     if old_pointer not in (new_pointer, '(nil)'):
                         if old_pointer in regions:
+                            old_regions[old_pointer] = [regions[old_pointer],
+                                                        line]
                             del regions[old_pointer]
                         else:
                             show_line(line, 'NORMAL',
