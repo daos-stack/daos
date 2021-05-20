@@ -9,6 +9,10 @@
 #ifndef __TESTS_COMMON_H__
 #define __TESTS_COMMON_H__
 #include <semaphore.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <cart/api.h>
 
 #include "crt_internal.h"
@@ -103,6 +107,35 @@ tc_progress_stop(void)
 {
 	opts.shutdown = 1;
 }
+
+/* Write a completion file to signal graceful server shutdown */
+void
+write_completion_file(void)
+{
+
+	FILE 	*fptr;
+	char 	*dir;
+	char 	*completion_file;
+	char 	*tmp_str;
+	char 	pid[6];
+	pid_t 	_pid;
+
+	_pid = getpid();
+	sprintf(pid, "%d", _pid);
+
+	dir = getenv("DAOS_TEST_SHARED_DIR");
+	tmp_str = strcat(dir, "/test-servers-completed.txt.");
+	completion_file = strcat(tmp_str, pid);
+
+	fptr = fopen(completion_file, "w");
+	fclose(fptr);
+	if (fptr == NULL) {
+		printf("Error opening completion file for writing.\n");
+		return;
+	}
+	DBG_PRINT("Wrote completion file: %s.\n", completion_file);
+}
+
 
 void *
 tc_progress_fn(void *data)

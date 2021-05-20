@@ -106,7 +106,7 @@ test_run(void)
 
 			/* free up rank list from tc_cli_start_basic */
 			if (rank_list != NULL) {
-				/* avoid checkpatch warnoing */
+				/* avoid checkpatch warning */
 				d_rank_list_free(rank_list);
 			}
 			rank_list = uint32_array_to_rank_list(_cg_ranks,
