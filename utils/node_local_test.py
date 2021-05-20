@@ -1736,8 +1736,12 @@ def run_posix_tests(server, conf, test=None):
             start = time.time()
             print('Calling {}'.format(fn))
             try:
+                pt.container = create_cont(conf, pool, posix=True)
                 rc = obj()
+                destroy_container(conf, pool, pt.container)
+                pt.container = None
             except Exception as inst:
+
                 duration = time.time() - start
                 conf.wf.add_test_case(pt.test_name,
                                       'Raised exception',
@@ -1764,10 +1768,8 @@ def run_posix_tests(server, conf, test=None):
     if test:
         fn = 'test_{}'.format(test)
         obj = getattr(pt, fn)
-        container = create_cont(conf, pool, posix=True)
-        pt.container = container
+
         _run_test()
-        destroy_container(conf, pool, container)
     else:
 
         for fn in sorted(dir(pt)):
@@ -1776,10 +1778,7 @@ def run_posix_tests(server, conf, test=None):
             obj = getattr(pt, fn)
             if not callable(obj):
                 continue
-            container = create_cont(conf, pool, posix=True)
-            pt.container = container
             _run_test()
-            destroy_container(conf, pool, container)
 
     return pt.fatal_errors
 
