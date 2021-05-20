@@ -260,6 +260,7 @@ sched_req_attr_init(struct sched_req_attr *attr, unsigned int type,
 		    uuid_t *pool_id)
 {
 	attr->sra_type = type;
+	attr->sra_flags = 0;
 	uuid_copy(attr->sra_pool_id, *pool_id);
 }
 
