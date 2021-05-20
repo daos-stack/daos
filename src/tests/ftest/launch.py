@@ -1182,46 +1182,48 @@ def archive_files(description, destination, hosts, source_files, args,
             Defaults to None.
 
     Returns:
-        Task: a Task object containing the result of the running the command on
-            the specified hosts
+        int: status of archiving the files
 
     """
-    this_host = socket.gethostname().split(".")[0]
-
-    print("-" * 80)
-    print("Archiving {} from {} in {}".format(description, hosts, destination))
-
-    # Create the destination directory
-    if not os.path.exists(destination):
-        get_output(["mkdir", destination])
-
-    # Display available disk space prior to copy.  Allow commands to fail w/o
-    # exiting this program.  Any disk space issues preventing the creation of a
-    # directory will be caught in the archiving of the source files.
-    display_disk_space(destination)
-
-    command = [
-        get_remote_file_command(),
-        "-z",
-        "-a \"{}:{}\"".format(this_host, destination),
-        "-f \"{}\"".format(source_files),
-    ]
-    if test_name is not None:
-        command.append("-c")
-    if args.logs_threshold:
-        command.append("-t \"{}\"".format(args.logs_threshold))
-    if args.verbose > 1:
-        command.append("-v")
-    task = get_remote_output(hosts, " ".join(command), 900)
-
-    # Determine if the command completed successfully across all the hosts
     status = 0
-    cmd_description = "archive_files command for {}".format(description)
-    if not check_remote_output(task, cmd_description):
-        status |= 16
-    if test_name is not None and args.logs_threshold:
-        if not check_big_files(avocado_logs_dir, task, test_name, args):
-            status |= 32
+    if hosts:
+        print("-" * 80)
+        print(
+            "Archiving {} from {} in {}".format(
+                description, hosts, destination))
+
+        # Create the destination directory
+        if not os.path.exists(destination):
+            get_output(["mkdir", destination])
+
+        # Display available disk space prior to copy.  Allow commands to fail
+        # w/o exiting this program.  Any disk space issues preventing the
+        # creation of a directory will be caught in the archiving of the source
+        # files.
+        display_disk_space(destination)
+
+        this_host = socket.gethostname().split(".")[0]
+        command = [
+            get_remote_file_command(),
+            "-z",
+            "-a \"{}:{}\"".format(this_host, destination),
+            "-f \"{}\"".format(source_files),
+        ]
+        if test_name is not None:
+            command.append("-c")
+        if args.logs_threshold:
+            command.append("-t \"{}\"".format(args.logs_threshold))
+        if args.verbose > 1:
+            command.append("-v")
+        task = get_remote_output(hosts, " ".join(command), 900)
+
+        # Determine if the command completed successfully across all the hosts
+        cmd_description = "archive_files command for {}".format(description)
+        if not check_remote_output(task, cmd_description):
+            status |= 16
+        if test_name is not None and args.logs_threshold:
+            if not check_big_files(avocado_logs_dir, task, test_name, args):
+                status |= 32
 
     return status
 
@@ -1232,6 +1234,10 @@ def rename_logs(avocado_logs_dir, test_file, args):
     Args:
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
+
+    Returns:
+        int: status of renaming the avocado job-results directory name
+
     """
     status = 0
     test_name = get_test_category(test_file)
