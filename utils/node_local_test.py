@@ -1740,7 +1740,7 @@ def run_posix_tests(server, conf, test=None):
                 destroy_container(conf, pool, pt.container)
                 pt.container = None
             except Exception as inst:
-                trace = '\n'.join(traceback.format_tb(inst.__traceback__))
+                trace = ''.join(traceback.format_tb(inst.__traceback__))
                 duration = time.time() - start
                 conf.wf.add_test_case(pt.test_name,
                                       repr(inst),
