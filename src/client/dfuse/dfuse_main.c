@@ -376,9 +376,6 @@ main(int argc, char **argv)
 				exit(1);
 			}
 		}
-	} else if (dfuse_info->di_cont) {
-		printf("Pool uuid required with container uuid\n");
-		exit(1);
 	}
 
 	if (dfuse_info->di_multi_user && !dfuse_info->di_cont) {
@@ -446,10 +443,8 @@ main(int argc, char **argv)
 		D_GOTO(out_dfs, ret = daos_errno2der(rc));
 	}
 
-	if (dfuse_info->di_multi_user) {
-		dfs->dfs_attr_timeout = 1;
+	if (dfuse_info->di_multi_user)
 		dfs->dfs_multi_user = true;
-	}
 
 	/* The container created by dfuse_cont_open() will have taken a ref
 	 * on the pool, so drop the initial one.

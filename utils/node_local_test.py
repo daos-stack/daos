@@ -836,7 +836,6 @@ class DFuse():
                  pool=None,
                  container=None,
                  path=None,
-                 multi_user=False,
                  caching=True):
         if path:
             self.dir = path
@@ -846,8 +845,6 @@ class DFuse():
         self.valgrind_file = None
         self.container = container
         self.conf = conf
-
-        self.multi_user = multi_user
         # Detect the number of cores and do something sensible, if there are
         # more than 32 on the node then use 12, otherwise use the whole node.
         num_cores = len(os.sched_getaffinity(0))
@@ -906,9 +903,6 @@ class DFuse():
         cmd.extend(self.valgrind.get_cmd_prefix())
 
         cmd.extend([dfuse_bin, '-m', self.dir, '-f'])
-
-        if self.multi_user:
-            cmd.append('--multi-user')
 
         if single_threaded:
             cmd.append('-S')
@@ -1432,14 +1426,14 @@ class posix_tests():
         try:
             xattr.set(fd, 'user.dfuse.ids', b'other_value')
             assert False
-        except PermissionError:
-            pass
+        except OSError as e:
+            assert e.errno == errno.EPERM
 
         try:
             xattr.set(fd, 'user.dfuse', b'other_value')
             assert False
-        except PermissionError:
-            pass
+        except OSError as e:
+            assert e.errno == errno.EPERM
 
         xattr.set(fd, 'user.Xfuse.ids', b'other_value')
         for (key, value) in xattr.get_all(fd):

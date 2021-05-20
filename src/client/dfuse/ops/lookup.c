@@ -236,7 +236,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_lookupx(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			 O_RDWR | O_NOFOLLOW, &ie->ie_obj, NULL, &ie->ie_stat,
-			 attr_count, dfuse_xattr_names, (void **)&outp, &attr_len[0]);
+			 attr_count, dfuse_xattr_names,
+			 (void **)&outp, &attr_len[0]);
 	if (rc) {
 		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
 				strerror(rc));
