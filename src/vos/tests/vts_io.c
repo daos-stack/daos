@@ -769,28 +769,6 @@ exit:
 	return rc;
 }
 
-static inline int
-hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
-	     daos_handle_t *coh, daos_unit_oid_t *oid, int start, int end,
-	     bool no_create, int exp_rc)
-{
-	int			i = 0, rc = 0;
-	daos_epoch_range_t	epr = {0, 1};
-	uint64_t		hold_flags;
-
-	hold_flags = no_create ? 0 : VOS_OBJ_CREATE;
-	hold_flags |= VOS_OBJ_VISIBLE;
-	for (i = start; i < end; i++) {
-		rc = vos_obj_hold(occ, vos_hdl2cont(*coh), *oid, &epr, 0,
-				  hold_flags, no_create ? DAOS_INTENT_DEFAULT :
-				  DAOS_INTENT_UPDATE, &objs[i], 0);
-		if (rc != exp_rc)
-			return 1;
-	}
-
-	return 0;
-}
-
 static void
 io_oi_test(void **state)
 {
@@ -816,108 +794,6 @@ io_oi_test(void **state)
 
 	rc = umem_tx_end(vos_cont2umm(cont), 0);
 	assert_rc_equal(rc, 0);
-}
-
-static void
-io_obj_cache_test(void **state)
-{
-	struct io_test_args	*arg = *state;
-	struct vos_test_ctx	*ctx = &arg->ctx;
-	struct daos_lru_cache	*occ = NULL;
-	struct vos_object	*objs[20];
-	struct umem_instance	*ummg;
-	struct umem_instance	*umml;
-	daos_epoch_range_t	 epr = {0, 1};
-	daos_unit_oid_t		 oids[2];
-	char			*po_name;
-	uuid_t			 pool_uuid;
-	daos_handle_t		 l_poh, l_coh;
-	int			 i, rc;
-
-	rc = vos_obj_cache_create(10, &occ);
-	assert_rc_equal(rc, 0);
-
-	rc = vts_alloc_gen_fname(&po_name);
-	assert_int_equal(rc, 0);
-
-	uuid_generate_time_safe(pool_uuid);
-	rc = vos_pool_create(po_name, pool_uuid, VPOOL_16M, 0, 0, &l_poh);
-	assert_rc_equal(rc, 0);
-
-	rc = vos_cont_create(l_poh, ctx->tc_co_uuid);
-	assert_rc_equal(rc, 0);
-
-	rc = vos_cont_open(l_poh, ctx->tc_co_uuid, &l_coh);
-	assert_rc_equal(rc, 0);
-
-	oids[0] = gen_oid(arg->ofeat);
-	oids[1] = gen_oid(arg->ofeat);
-
-	ummg = vos_cont2umm(vos_hdl2cont(ctx->tc_co_hdl));
-	umml = vos_cont2umm(vos_hdl2cont(l_coh));
-	rc = umem_tx_begin(ummg, NULL);
-	assert_rc_equal(rc, 0);
-
-	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,
-			  VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
-			  &objs[0], 0);
-	assert_rc_equal(rc, 0);
-
-	rc = umem_tx_end(ummg, 0);
-	assert_rc_equal(rc, 0);
-
-	vos_obj_release(occ, objs[0], false);
-
-	rc = umem_tx_begin(umml, NULL);
-	assert_rc_equal(rc, 0);
-
-	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, 0,
-			  VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
-			  &objs[0], 0);
-	assert_rc_equal(rc, 0);
-	vos_obj_release(occ, objs[0], false);
-
-	rc = umem_tx_end(umml, 0);
-	assert_rc_equal(rc, 0);
-
-	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[0], 0, 10, true, 0);
-	assert_int_equal(rc, 0);
-
-	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 10, 15, true,
-			  -DER_NONEXIST);
-	assert_int_equal(rc, 0);
-
-	rc = hold_objects(objs, occ, &l_coh, &oids[1], 10, 15, true, 0);
-	assert_int_equal(rc, 0);
-	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, 0,
-			  VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT, &objs[16], 0);
-	assert_rc_equal(rc, 0);
-
-	vos_obj_release(occ, objs[16], false);
-
-	for (i = 0; i < 5; i++)
-		vos_obj_release(occ, objs[i], false);
-	for (i = 10; i < 15; i++)
-		vos_obj_release(occ, objs[i], false);
-
-	rc = hold_objects(objs, occ, &l_coh, &oids[1], 15, 20, true, 0);
-	assert_int_equal(rc, 0);
-
-	for (i = 5; i < 10; i++)
-		vos_obj_release(occ, objs[i], false);
-	for (i = 15; i < 20; i++)
-		vos_obj_release(occ, objs[i], false);
-
-	rc = vos_cont_close(l_coh);
-	assert_rc_equal(rc, 0);
-	rc = vos_cont_destroy(l_poh, ctx->tc_co_uuid);
-	assert_rc_equal(rc, 0);
-	rc = vos_pool_close(l_poh);
-	assert_rc_equal(rc, 0);
-	rc = vos_pool_destroy(po_name, pool_uuid);
-	assert_rc_equal(rc, 0);
-	vos_obj_cache_destroy(occ);
-	free(po_name);
 }
 
 static void
@@ -2450,8 +2326,6 @@ io_query_key_negative(void **state)
 static const struct CMUnitTest io_tests[] = {
 	{ "VOS201: VOS object IO index",
 		io_oi_test, NULL, NULL},
-	{ "VOS202: VOS object cache test",
-		io_obj_cache_test, NULL, NULL},
 	{ "VOS203: Simple update/fetch/verify test",
 		io_simple_one_key, NULL, NULL},
 	{ "VOS204: Simple Punch test",

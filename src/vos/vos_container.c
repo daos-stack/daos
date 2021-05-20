@@ -478,8 +478,6 @@ vos_cont_close(daos_handle_t coh)
 		  DP_UUID(cont->vc_id), cont->vc_open_count);
 
 	cont->vc_open_count--;
-	if (cont->vc_open_count == 0)
-		vos_obj_cache_evict(vos_obj_cache_current(), cont);
 
 	D_DEBUG(DB_TRACE, "Close cont "DF_UUID", open count: %d\n",
 		DP_UUID(cont->vc_id), cont->vc_open_count);

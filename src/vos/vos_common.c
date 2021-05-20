@@ -312,12 +312,6 @@ cancel:
  * reference per thread in heap for each pool/container.
  * Calls to pool/container open/close track references
  * through internal refcounting.
- *
- * Object-cache:
- * ------------
- * In-memory object cache for object index in PMEM
- * Created once for standalone mode and once for every
- * TLS instance.
  */
 
 static void
@@ -339,9 +333,6 @@ vos_tls_fini(void *data)
 				    struct vos_pool, vp_gc_link);
 		gc_del_pool(pool);
 	}
-
-	if (tls->vtl_ocache)
-		vos_obj_cache_destroy(tls->vtl_ocache);
 
 	if (tls->vtl_pool_hhash)
 		d_uhash_destroy(tls->vtl_pool_hhash);
@@ -366,12 +357,6 @@ vos_tls_init(int xs_id, int tgt_id)
 		return NULL;
 
 	D_INIT_LIST_HEAD(&tls->vtl_gc_pools);
-	rc = vos_obj_cache_create(LRU_CACHE_BITS, &tls->vtl_ocache);
-	if (rc) {
-		D_ERROR("Error in creating object cache\n");
-		goto failed;
-	}
-
 	rc = d_uhash_create(D_HASH_FT_NOLOCK, VOS_POOL_HHASH_BITS,
 			    &tls->vtl_pool_hhash);
 	if (rc) {

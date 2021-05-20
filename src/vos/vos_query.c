@@ -398,9 +398,9 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	vos_ts_set_add(query.qt_ts_set, cont->vc_ts_idx, NULL, 0);
 
 	query.qt_bound = MAX(obj_epr.epr_hi, bound);
-	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
-			  &obj_epr, query.qt_bound, VOS_OBJ_VISIBLE,
-			  DAOS_INTENT_DEFAULT, &obj, query.qt_ts_set);
+	rc = vos_obj_hold(vos_hdl2cont(coh), oid, &obj_epr, query.qt_bound,
+			  VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT, &obj,
+			  query.qt_ts_set);
 	if (rc != 0) {
 		LOG_RC(rc, "Could not hold object: %s\n", d_errstr(rc));
 		goto out;
@@ -512,7 +512,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		dbtree_close(query.qt_dkey_toh);
 out:
 	if (obj != NULL)
-		vos_obj_release(vos_obj_cache_current(), obj, false);
+		vos_obj_release(obj);
 
 	vos_dth_set(NULL);
 	if (rc == 0 || rc == -DER_NONEXIST) {

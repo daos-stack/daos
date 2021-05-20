@@ -51,8 +51,6 @@ struct vos_tls {
 	struct vos_ts_table		*vtl_ts_table;
 	/** profile for standalone vos test */
 	struct daos_profile		*vtl_dp;
-	/** In-memory object cache for the PMEM object table */
-	struct daos_lru_cache		*vtl_ocache;
 	/** pool open handle hash table */
 	struct d_hash_table		*vtl_pool_hhash;
 	/** container open handle hash table */
@@ -77,12 +75,6 @@ static inline struct d_hash_table *
 vos_cont_hhash_get(void)
 {
 	return vos_tls_get()->vtl_cont_hhash;
-}
-
-static inline struct daos_lru_cache *
-vos_obj_cache_get(void)
-{
-	return vos_tls_get()->vtl_ocache;
 }
 
 static inline struct umem_tx_stage_data *

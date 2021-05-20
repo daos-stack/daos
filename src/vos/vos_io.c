@@ -428,7 +428,7 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	D_FREE(ioc->ic_biov_csums);
 
 	if (ioc->ic_obj)
-		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj, evict);
+		vos_obj_release(ioc->ic_obj);
 
 	vos_ioc_reserve_fini(ioc);
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
@@ -1304,9 +1304,9 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	rc = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(rc == 0);
 
-	rc = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, oid,
-			  &ioc->ic_epr, ioc->ic_bound, VOS_OBJ_VISIBLE,
-			  DAOS_INTENT_DEFAULT, &ioc->ic_obj, ioc->ic_ts_set);
+	rc = vos_obj_hold(ioc->ic_cont, oid, &ioc->ic_epr, ioc->ic_bound,
+			  VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT, &ioc->ic_obj,
+			  ioc->ic_ts_set);
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
 		       &rc, false)) {
 		if (rc == 0) {
@@ -2064,10 +2064,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			D_FREE(daes);
 	}
 
-	err = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, ioc->ic_oid,
-			   &ioc->ic_epr, ioc->ic_bound,
-			   VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_UPDATE,
-			   &ioc->ic_obj, ioc->ic_ts_set);
+	err = vos_obj_hold(ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr,
+			   ioc->ic_bound, VOS_OBJ_CREATE | VOS_OBJ_VISIBLE,
+			   DAOS_INTENT_UPDATE, &ioc->ic_obj, ioc->ic_ts_set);
 	if (err != 0)
 		goto abort;
 

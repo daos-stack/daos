@@ -26,90 +26,11 @@
 #include <vos_internal.h>
 #include <daos_errno.h>
 
-/**
- * Local type for VOS LRU key
- * VOS LRU key must consist of
- * Object ID and container UUID
- */
-struct obj_lru_key {
-	/* container the object belongs to */
-	struct vos_container	*olk_cont;
-	/* Object ID */
-	daos_unit_oid_t		 olk_oid;
-};
-
-static int
-obj_lop_alloc(void *key, unsigned int ksize, void *args,
-	      struct daos_llink **llink_p)
+void
+vos_obj_release(struct vos_object *obj)
 {
-	struct vos_object	*obj;
-	struct obj_lru_key	*lkey;
-	struct vos_container	*cont;
-	int			 rc;
+	D_DEBUG(DB_TRACE, "Release "DF_UOID"\n", DP_UOID(obj->obj_id));
 
-	cont = (struct vos_container *)args;
-	D_ASSERT(cont != NULL);
-
-	lkey = (struct obj_lru_key *)key;
-	D_ASSERT(lkey != NULL);
-
-	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
-		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_oid));
-
-	D_ALLOC_PTR(obj);
-	if (!obj)
-		D_GOTO(failed, rc = -DER_NOMEM);
-	/**
-	 * Saving a copy of oid to avoid looking up in vos_obj_df, which
-	 * is a direct pointer to pmem data structure
-	 */
-	obj->obj_id	= lkey->olk_oid;
-	obj->obj_cont	= cont;
-	vos_cont_addref(cont);
-	vos_ilog_fetch_init(&obj->obj_ilog_info);
-
-	*llink_p = &obj->obj_llink;
-	rc = 0;
-failed:
-	return rc;
-}
-
-static bool
-obj_lop_cmp_key(const void *key, unsigned int ksize, struct daos_llink *llink)
-{
-	struct vos_object	*obj;
-	struct obj_lru_key	*lkey = (struct obj_lru_key *)key;
-
-	D_ASSERT(ksize == sizeof(struct obj_lru_key));
-
-	obj = container_of(llink, struct vos_object, obj_llink);
-	return lkey->olk_cont == obj->obj_cont &&
-	       !memcmp(&lkey->olk_oid, &obj->obj_id, sizeof(obj->obj_id));
-}
-
-static uint32_t
-obj_lop_rec_hash(struct daos_llink *llink)
-{
-	struct obj_lru_key	 lkey;
-	struct vos_object	*obj;
-
-	obj = container_of(llink, struct vos_object, obj_llink);
-
-	/* Create the key for obj cache */
-	lkey.olk_cont = obj->obj_cont;
-	lkey.olk_oid  = obj->obj_id;
-
-	return d_hash_string_u32((const char *)&lkey, sizeof(lkey));
-}
-
-static void
-obj_lop_free(struct daos_llink *llink)
-{
-	struct vos_object	*obj;
-
-	D_DEBUG(DB_TRACE, "lru free callback for vos_obj_cache\n");
-
-	obj = container_of(llink, struct vos_object, obj_llink);
 	vos_ilog_fetch_finish(&obj->obj_ilog_info);
 	if (obj->obj_cont != NULL)
 		vos_cont_decref(obj->obj_cont);
@@ -118,96 +39,14 @@ obj_lop_free(struct daos_llink *llink)
 	D_FREE(obj);
 }
 
-static void
-obj_lop_print_key(void *key, unsigned int ksize)
-{
-	struct obj_lru_key	*lkey = (struct obj_lru_key *)key;
-	struct vos_container	*cont = lkey->olk_cont;
-
-	D_DEBUG(DB_TRACE, "pool="DF_UUID" cont="DF_UUID", obj="DF_UOID"\n",
-		DP_UUID(cont->vc_pool->vp_id),
-		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_oid));
-}
-
-static struct daos_llink_ops obj_lru_ops = {
-	.lop_free_ref	= obj_lop_free,
-	.lop_alloc_ref	= obj_lop_alloc,
-	.lop_cmp_keys	= obj_lop_cmp_key,
-	.lop_rec_hash	= obj_lop_rec_hash,
-	.lop_print_key	= obj_lop_print_key,
-};
-
 int
-vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
-{
-	int	rc;
-
-	D_DEBUG(DB_TRACE, "Creating an object cache %d\n", (1 << cache_size));
-	rc = daos_lru_cache_create(cache_size, D_HASH_FT_NOLOCK,
-				   &obj_lru_ops, occ);
-	if (rc)
-		D_ERROR("Error in creating lru cache: "DF_RC"\n", DP_RC(rc));
-	return rc;
-}
-
-void
-vos_obj_cache_destroy(struct daos_lru_cache *occ)
-{
-	D_ASSERT(occ != NULL);
-	daos_lru_cache_destroy(occ);
-}
-
-static bool
-obj_cache_evict_cond(struct daos_llink *llink, void *args)
-{
-	struct vos_container	*cont = (struct vos_container *)args;
-	struct vos_object	*obj;
-
-	if (cont == NULL)
-		return true;
-
-	obj = container_of(llink, struct vos_object, obj_llink);
-	return obj->obj_cont == cont;
-}
-
-void
-vos_obj_cache_evict(struct daos_lru_cache *cache, struct vos_container *cont)
-{
-	daos_lru_cache_evict(cache, obj_cache_evict_cond, cont);
-}
-
-/**
- * Return object cache for the current thread.
- */
-struct daos_lru_cache *
-vos_obj_cache_current(void)
-{
-	return vos_obj_cache_get();
-}
-
-void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
-{
-
-	D_ASSERT((occ != NULL) && (obj != NULL));
-
-	if (evict)
-		daos_lru_ref_evict(occ, &obj->obj_llink);
-
-	daos_lru_ref_release(occ, &obj->obj_llink);
-}
-
-int
-vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
-	     daos_unit_oid_t oid, daos_epoch_range_t *epr, daos_epoch_t bound,
-	     uint64_t flags, uint32_t intent, struct vos_object **obj_p,
+vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid,
+	     daos_epoch_range_t *epr, daos_epoch_t bound, uint64_t flags,
+	     uint32_t intent, struct vos_object **obj_p,
 	     struct vos_ts_set *ts_set)
 {
 	struct vos_object	*obj;
-	struct daos_llink	*lret;
-	struct obj_lru_key	 lkey;
 	int			 rc = 0;
-	int			 tmprc;
 	uint32_t		 cond_mask = 0;
 	bool			 create;
 	bool			 visible_only;
@@ -228,45 +67,15 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		DP_UUID(cont->vc_id), DP_UOID(oid),
 		create ? "true" : "false", epr->epr_lo, epr->epr_hi);
 
-	/* Create the key for obj cache */
-	lkey.olk_cont = cont;
-	lkey.olk_oid = oid;
 
-	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), cont, &lret);
-	if (rc)
-		D_GOTO(failed_2, rc);
+	D_ALLOC_PTR(obj);
+	if (obj == NULL)
+		return -DER_NOMEM;
 
-	obj = container_of(lret, struct vos_object, obj_llink);
-
-	if (obj->obj_zombie)
-		D_GOTO(failed, rc = -DER_AGAIN);
-
-	if (intent == DAOS_INTENT_KILL) {
-		if (vos_obj_refcount(obj) > 2)
-			D_GOTO(failed, rc = -DER_BUSY);
-
-		/* no one else can hold it */
-		obj->obj_zombie = true;
-		vos_obj_evict(occ, obj);
-		if (obj->obj_df)
-			goto out; /* Ok to delete */
-	}
-
-	if (obj->obj_df) {
-		D_DEBUG(DB_TRACE, "looking up object ilog");
-		if (create || intent == DAOS_INTENT_PUNCH)
-			vos_ilog_ts_ignore(vos_obj2umm(obj),
-					   &obj->obj_df->vo_ilog);
-		tmprc = vos_ilog_ts_add(ts_set, &obj->obj_df->vo_ilog,
-					&oid, sizeof(oid));
-		D_ASSERT(tmprc == 0); /* Non-zero only valid for akey */
-		goto check_object;
-	}
-
-	 /* newly cached object */
-	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_X64"-"DF_X64"\n",
-		create ? "find/create" : "find", DP_UOID(oid), epr->epr_lo,
-		epr->epr_hi);
+	obj->obj_id	= oid;
+	obj->obj_cont	= cont;
+	vos_cont_addref(cont);
+	vos_ilog_fetch_init(&obj->obj_ilog_info);
 
 	obj->obj_sync_epoch = 0;
 	if (!create) {
@@ -292,7 +101,6 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 
-check_object:
 	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
@@ -372,34 +180,7 @@ out:
 
 	return 0;
 failed:
-	vos_obj_release(occ, obj, true);
-failed_2:
+	vos_obj_release(obj);
 	VOS_TX_LOG_FAIL(rc, "failed to hold object, rc="DF_RC"\n", DP_RC(rc));
 	return	rc;
-}
-
-void
-vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj)
-{
-	daos_lru_ref_evict(occ, &obj->obj_llink);
-}
-
-int
-vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
-		     daos_unit_oid_t oid)
-{
-	struct obj_lru_key	 lkey;
-	struct daos_llink	*lret;
-	int			 rc;
-
-	lkey.olk_cont = cont;
-	lkey.olk_oid = oid;
-
-	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), NULL, &lret);
-	if (rc == 0) {
-		daos_lru_ref_evict(occ, lret);
-		daos_lru_ref_release(occ, lret);
-	}
-
-	return rc == -DER_NONEXIST ? 0 : rc;
 }

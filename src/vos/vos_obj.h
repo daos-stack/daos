@@ -6,7 +6,6 @@
 /**
  * Object related API and structures
  * Includes:
- * -- VOS object cache API and structures for use by VOS object
  * -- VOS object index structures for internal use by object cache
  * vos/vos_obj.h
  *
@@ -31,8 +30,6 @@ struct vos_container;
  * A cached object (DRAM data structure).
  */
 struct vos_object {
-	/** llink for daos lru cache */
-	struct daos_llink		obj_llink;
 	/** Cache of incarnation log */
 	struct vos_ilog_info		obj_ilog_info;
 	/** Key for searching, object ID within a container */
@@ -63,11 +60,9 @@ enum {
 };
 
 /**
- * Find an object in the cache \a occ and take its reference. If the object is
- * not in cache, this function will load it from PMEM pool or create it, then
- * add it to the cache.
+ * Load an object from PMEM pool or create it, load some information about the
+ * object
  *
- * \param occ		[IN]		Object cache, can be per cpu
  * \param cont		[IN]		Open container.
  * \param oid		[IN]		VOS object ID.
  * \param epr		[IN,OUT]	Epoch range.   High epoch should be set
@@ -88,78 +83,23 @@ enum {
  *		other			Another error occurred
  */
 int
-vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
-	     daos_unit_oid_t oid, daos_epoch_range_t *epr, daos_epoch_t bound,
-	     uint64_t flags, uint32_t intent, struct vos_object **obj_p,
+vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid,
+	     daos_epoch_range_t *epr, daos_epoch_t bound, uint64_t flags,
+	     uint32_t intent, struct vos_object **obj_p,
 	     struct vos_ts_set *ts_set);
 
 /**
- * Release the object cache reference.
+ * Release the object handle
  *
  * \param obj	[IN]	Reference to be released.
  */
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict);
-
-static inline int
-vos_obj_refcount(struct vos_object *obj)
-{
-	return obj->obj_llink.ll_ref;
-}
-
-/** Evict an object reference from the cache */
-void vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj);
-
-int vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
-			 daos_unit_oid_t oid);
-
-/**
- * Create an object cache.
- *
- * \param cache_size	[IN]	Cache size
- * \param occ_p		[OUT]	Newly created cache.
- */
-int
-vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ_p);
-
-/**
- * Destroy an object cache, and release all cached object references.
- *
- * \param occ	[IN]	Cache to be destroyed.
- */
-void
-vos_obj_cache_destroy(struct daos_lru_cache *occ);
-
-/** evict cached objects for the specified container */
-void vos_obj_cache_evict(struct daos_lru_cache *occ,
-			 struct vos_container *cont);
-
-/**
- * Return object cache for the current thread.
- */
-struct daos_lru_cache *vos_obj_cache_current(void);
+vos_obj_release(struct vos_object *obj);
 
 /**
  * Object Index API and handles
  * For internal use by object cache
  */
-
-
-/**
- * VOS object index update metadata
- * Add a new object ID entry in the object index table
- * Creates an empty tree for the object
- *
- * \param coh	[IN]	Container handle
- * \param oid	[IN]	DAOS object ID
- *			TODO: Additional arguments
- *			to support metadata storage for SR
- *
- * \return		0 on success and negative on
- *			failure
- */
-int
-vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
 
 /**
  * Lookup an object by @oid within the OI table.

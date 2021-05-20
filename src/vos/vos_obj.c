@@ -243,7 +243,6 @@ static int
 obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 	  daos_epoch_t bound, uint64_t flags, struct vos_ts_set *ts_set)
 {
-	struct daos_lru_cache	*occ  = vos_obj_cache_current();
 	struct vos_container	*cont;
 	struct vos_ilog_info	 info;
 	int			 rc;
@@ -254,11 +253,6 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 			  &info, ts_set);
 	if (rc)
 		D_GOTO(failed, rc);
-
-	/* evict it from cache, because future fetch should only see empty
-	 * object (without obj_df)
-	 */
-	vos_obj_evict(occ, obj);
 failed:
 	vos_ilog_fetch_finish(&info);
 	return rc;
@@ -366,8 +360,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	hold_flags = (flags & VOS_OF_COND_PUNCH) ? 0 : VOS_OBJ_CREATE;
 	hold_flags |= VOS_OBJ_VISIBLE;
 	/* NB: punch always generate a new incarnation of the object */
-	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid, &epr,
-			  bound, hold_flags, DAOS_INTENT_PUNCH, &obj, ts_set);
+	rc = vos_obj_hold(vos_hdl2cont(coh), oid, &epr, bound, hold_flags,
+			  DAOS_INTENT_PUNCH, &obj, ts_set);
 	if (rc == 0) {
 		if (dkey) { /* key punch */
 			rc = key_punch(obj, epr.epr_hi, bound, pm_ver, dkey,
@@ -382,7 +376,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			rc = obj_punch(coh, obj, epr.epr_hi, bound, flags,
 				       ts_set);
 		if (obj != NULL)
-			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
+			vos_obj_release(obj);
 	}
 
 reset:
@@ -431,15 +425,14 @@ reset:
 int
 vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 {
-	struct daos_lru_cache	*occ  = vos_obj_cache_current();
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct umem_instance	*umm = vos_cont2umm(cont);
 	struct vos_object	*obj;
 	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
 	int			 rc;
 
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
-			  DAOS_INTENT_KILL, &obj, NULL);
+	rc = vos_obj_hold(cont, oid, &epr, 0, VOS_OBJ_VISIBLE, DAOS_INTENT_KILL,
+			  &obj, NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
 
@@ -460,7 +453,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	if (rc)
 		goto out;
 out:
-	vos_obj_release(occ, obj, true);
+	vos_obj_release(obj);
 	return rc;
 }
 
@@ -472,7 +465,6 @@ int
 vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 		daos_key_t *akey)
 {
-	struct daos_lru_cache	*occ  = vos_obj_cache_current();
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct umem_instance	*umm  = vos_cont2umm(cont);
 	struct vos_object	*obj;
@@ -481,8 +473,8 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 	daos_handle_t		 toh;
 	int			 rc;
 
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
-			  DAOS_INTENT_KILL, &obj, NULL);
+	rc = vos_obj_hold(cont, oid, &epr, 0, VOS_OBJ_VISIBLE, DAOS_INTENT_KILL,
+			  &obj, NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
 
@@ -528,7 +520,7 @@ out:
 	if (akey)
 		key_tree_release(toh, false);
 
-	vos_obj_release(occ, obj, true);
+	vos_obj_release(obj);
 	return rc;
 }
 
@@ -1411,8 +1403,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(), cont,
-			  param->ip_oid, &oiter->it_epr,
+	rc = vos_obj_hold(cont, param->ip_oid, &oiter->it_epr,
 			  oiter->it_iter.it_bound,
 			  (oiter->it_flags & VOS_IT_PUNCHED) ? 0 :
 			  VOS_OBJ_VISIBLE, vos_iter_intent(&oiter->it_iter),
@@ -1517,7 +1508,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(info->ii_hdl),
+	rc = vos_obj_hold(vos_hdl2cont(info->ii_hdl),
 			  info->ii_oid, &info->ii_epr, oiter->it_iter.it_bound,
 			  (oiter->it_flags & VOS_IT_PUNCHED) ? 0 :
 			  VOS_OBJ_VISIBLE, vos_iter_intent(&oiter->it_iter),
@@ -1548,7 +1539,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 
 	return 0;
 failed:
-	vos_obj_release(vos_obj_cache_current(), oiter->it_obj, false);
+	vos_obj_release(oiter->it_obj);
 
 	return rc;
 }
@@ -1680,7 +1671,7 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	 */
 	if (oiter->it_flags != VOS_IT_KEY_TREE && oiter->it_obj != NULL &&
 	    (iter->it_type == VOS_ITER_DKEY || !iter->it_from_parent))
-		vos_obj_release(vos_obj_cache_current(), oiter->it_obj, false);
+		vos_obj_release(oiter->it_obj);
 
 	vos_ilog_fetch_finish(&oiter->it_ilog_info);
 	D_FREE(oiter);
