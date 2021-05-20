@@ -1,5 +1,4 @@
 """Build DAOS"""
-import sys
 import os
 import platform
 import subprocess
@@ -15,7 +14,7 @@ try:
 except NameError:
     pass
 
-sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
+from prereq_tools import PreReqComponent
 import daos_build
 from prereq_tools import PreReqComponent
 

@@ -33,7 +33,7 @@ Installing the components into separate directories allow upgrading the
 components individually by replacing `--build-deps=yes` with
 `--update-prereq={component\_name}`. This requires a change to the environment
 configuration from before. For automated environment setup, source
-`utils/sl/utils/setup_local.sh`.
+`utils/sl/setup_local.sh`.
 
 The install path should be relocatable with the exception that `daos_admin`
 will not be able to find the new location of daos and dependencies. All other
