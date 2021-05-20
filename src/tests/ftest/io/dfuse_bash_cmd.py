@@ -46,7 +46,7 @@ class BashCmd(DfuseTestBase):
               Verify renamed file exist using list.
               Remove a directory
 
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,bashcmd
+        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,bashcmd,dfuse
         """
         dir_name = self.params.get("dirname", '/run/bashcmd/*')
         file_name1 = self.params.get("filename1", '/run/bashcmd/*')

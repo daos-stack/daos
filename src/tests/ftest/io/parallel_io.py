@@ -133,7 +133,7 @@ class ParallelIo(FioBase, IorTestBase):
             Otherwise, try accessing the deleted container.
             This should fail.
             Check dfuse again.
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,parallelio
+        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,parallelio,dfuse
         """
         # get test params for cont and pool count
         self.cont_count = self.params.get("cont_count", '/run/container/*')
@@ -223,7 +223,7 @@ class ParallelIo(FioBase, IorTestBase):
             fail the test.
 
         :avocado: tags=all,hw,daosio,medium,ib2,full_regression
-        :avocado: tags=multipoolparallelio
+        :avocado: tags=multipoolparallelio,dfuse
         """
         # test params
         threads = []
