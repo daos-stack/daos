@@ -562,7 +562,8 @@ def get_srun_cmd(cmd, nodesperjob=1, ppn=1, srun_params=None, env=None):
 
 
 def start_dfuse(
-        self, pool, container, nodesperjob, resource_mgr=None, name=None):
+        self, pool, container, nodesperjob,
+        resource_mgr=None, name=None, job_spec=None):
     """Create dfuse start command line for slurm.
 
     Args:
@@ -572,11 +573,9 @@ def start_dfuse(
     Returns dfuse(obj):         Dfuse obj
             cmd(list):          list of dfuse commands to add to jobscript
     """
-    daos_cmd = DaosCommand(self.bin)
-    daos_cmd.container_set_attr(
-        pool.uuid, container.uuid, 'dfuse-direct-io-disable', 'on')
     # Get Dfuse params
     dfuse = Dfuse(self.hostlist_clients, self.tmp)
+    dfuse.namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
     dfuse.get_params(self)
     # update dfuse params; mountpoint for each container
     unique = get_random_string(5, self.used)
@@ -594,7 +593,7 @@ def start_dfuse(
         "mkdir -p {}".format(dfuse.mount_dir.value),
         "clush -w $SLURM_JOB_NODELIST \"cd {};{};{}\"".format(
             dfuse.mount_dir.value, dfuse_env, dfuse.__str__()),
-        "sleep 10",
+        "sleep 20",
         "df -h {}".format(dfuse.mount_dir.value),
     ]
     if resource_mgr == "SLURM":
@@ -667,15 +666,15 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
 
     """
     commands = []
-    ior_params = "/run/" + job_spec + "/*"
-    ior_timeout = self.params.get("job_timeout", ior_params + "*", 10)
+    ior_params = os.path.join(os.sep, "run", job_spec, "*")
+    ior_timeout = self.params.get("job_timeout", ior_params, 10)
     mpi_module = self.params.get(
         "mpi_module", "/run/*", default="mpi/mpich-x86_64")
     # IOR job specs with a list of parameters; update each value
-    api_list = self.params.get("api", ior_params + "*")
-    tsize_list = self.params.get("transfer_size", ior_params + "*")
-    bsize_list = self.params.get("block_size", ior_params + "*")
-    oclass_list = self.params.get("dfs_oclass", ior_params + "*")
+    api_list = self.params.get("api", ior_params)
+    tsize_list = self.params.get("transfer_size", ior_params)
+    bsize_list = self.params.get("block_size", ior_params)
+    oclass_list = self.params.get("dfs_oclass", ior_params)
     plugin_path = self.params.get("plugin_path", "/run/hdf5_vol/")
     # update IOR cmdline for each additional IOR obj
     for api in api_list:
@@ -725,8 +724,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         nodesperjob * ppn, nodesperjob, ppn)
                     if api in ["HDF5-VOL", "POSIX"]:
                         dfuse, dfuse_start_cmdlist = start_dfuse(
-                            self, pool, self.container[-1],
-                            nodesperjob, "SLURM", name=log_name)
+                            self, pool, self.container[-1], nodesperjob,
+                            "SLURM", name=log_name, job_spec=job_spec)
                         sbatch_cmds.extend(dfuse_start_cmdlist)
                         ior_cmd.test_file.update(
                             os.path.join(dfuse.mount_dir.value, "testfile"))
@@ -769,19 +768,19 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
 
     """
     commands = []
-    mdtest_params = "/run/" + job_spec + "/"
+    mdtest_params = os.path.join(os.sep, "run", job_spec, "*")
     mpi_module = self.params.get(
         "mpi_module", "/run/*", default="mpi/mpich-x86_64")
     # mdtest job specs with a list of parameters; update each value
-    api_list = self.params.get("api", mdtest_params + "*")
-    write_bytes_list = self.params.get("write_bytes", mdtest_params + "*")
-    read_bytes_list = self.params.get("read_bytes", mdtest_params + "*")
-    depth_list = self.params.get("depth", mdtest_params + "*")
-    flag = self.params.get("flags", mdtest_params + "*")
-    oclass = self.params.get("dfs_oclass", mdtest_params + "*")
-    oclass_dir = self.params.get("dfs_dir_oclass", mdtest_params + "*")
+    api_list = self.params.get("api", mdtest_params)
+    write_bytes_list = self.params.get("write_bytes", mdtest_params)
+    read_bytes_list = self.params.get("read_bytes", mdtest_params)
+    depth_list = self.params.get("depth", mdtest_params)
+    flag = self.params.get("flags", mdtest_params)
+    oclass = self.params.get("dfs_oclass", mdtest_params)
+    oclass_dir = self.params.get("dfs_dir_oclass", mdtest_params)
     num_of_files_dirs = self.params.get(
-        "num_of_files_dirs", mdtest_params + "*")
+        "num_of_files_dirs", mdtest_params)
     # update mdtest cmdline for each additional mdtest obj
     for api in api_list:
         if api in ["POSIX"] and ppn > 16:
@@ -817,7 +816,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     if api in ["POSIX"]:
                         dfuse, dfuse_start_cmdlist = start_dfuse(
                             self, pool, self.container[-1], nodesperjob,
-                            "SLURM", name=log_name)
+                            "SLURM", name=log_name, job_spec=job_spec)
                         sbatch_cmds.extend(dfuse_start_cmdlist)
                         mdtest_cmd.test_dir.update(
                             dfuse.mount_dir.value)
@@ -851,7 +850,7 @@ def create_racer_cmdline(self, job_spec, pool):
 
     """
     commands = []
-    racer_namespace = "/run/{}/*".format(job_spec)
+    racer_namespace = os.path.join(os.sep, "run", job_spec, "*")
     daos_racer = DaosRacerCommand(
         self.bin, self.hostlist_clients[0], self.dmg_command)
     daos_racer.namespace = racer_namespace
@@ -892,16 +891,18 @@ def create_fio_cmdline(self, job_spec, pool):
 
     """
     commands = []
-    fio_namespace = "/run/{}".format(job_spec)
+    fio_namespace = os.path.join(os.sep, "run", job_spec, "*")
+    fio_soak_namespace = os.path.join(os.sep, "run", job_spec, "soak", "*")
     # test params
-    bs_list = self.params.get("blocksize", fio_namespace + "/soak/*")
-    size_list = self.params.get("size", fio_namespace + "/soak/*")
-    rw_list = self.params.get("rw", fio_namespace + "/soak/*")
-    oclass_list = self.params.get("oclass", fio_namespace + "/soak/*")
+    bs_list = self.params.get("blocksize", fio_soak_namespace)
+    size_list = self.params.get("size", fio_soak_namespace)
+    rw_list = self.params.get("rw", fio_soak_namespace)
+    oclass_list = self.params.get("oclass", fio_soak_namespace)
     # Get the parameters for Fio
     fio_cmd = FioCommand()
-    fio_cmd.namespace = "{}/*".format(fio_namespace)
+    fio_cmd.namespace = fio_namespace
     fio_cmd.get_params(self)
+    fio_cmd.aux_path.update(self.test_dir, "aux_path")
     for blocksize in bs_list:
         for size in size_list:
             for rw in rw_list:
@@ -922,11 +923,16 @@ def create_fio_cmdline(self, job_spec, pool):
                         # Connect to the pool, create container
                         # and then start dfuse
                         add_containers(self, pool, o_type)
+                        daos_cmd = DaosCommand(self.bin)
+                        daos_cmd.container_set_attr(pool.uuid,
+                                                    self.container[-1].uuid,
+                                                    'dfuse-direct-io-disable',
+                                                    'on')
                         log_name = "{}_{}_{}_{}_{}".format(
                             job_spec, blocksize, size, rw, o_type)
                         dfuse, srun_cmds = start_dfuse(
                             self, pool, self.container[-1], nodesperjob=1,
-                            name=log_name)
+                            name=log_name, job_spec=job_spec)
                     # Update the FIO cmdline
                     fio_cmd.update(
                         "global", "directory",
