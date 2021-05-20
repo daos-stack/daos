@@ -234,6 +234,21 @@ func (sm *statsMetric) SampleSize() uint64 {
 	return uint64(sm.stats.sample_size)
 }
 
+func startGarbageCollection(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(60 * time.Second):
+			hdl, err := getHandle(ctx)
+			if err != nil {
+				return // can't do anything with this
+			}
+			C.d_tm_gc_ctx(hdl.ctx)
+		}
+	}
+}
+
 // Init initializes the telemetry bindings
 func Init(parent context.Context, idx uint32) (context.Context, error) {
 	tmCtx := C.d_tm_open(C.int(idx))
@@ -252,7 +267,10 @@ func Init(parent context.Context, idx uint32) (context.Context, error) {
 		root: root,
 	}
 
-	return context.WithValue(parent, handleKey, handle), nil
+	newCtx := context.WithValue(parent, handleKey, handle)
+	go startGarbageCollection(newCtx)
+
+	return newCtx, nil
 }
 
 // Detach detaches from the telemetry handle
