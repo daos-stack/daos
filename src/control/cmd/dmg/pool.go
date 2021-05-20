@@ -50,7 +50,7 @@ type PoolCreateCmd struct {
 	jsonOutputCmd
 	GroupName  string  `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
 	UserName   string  `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
-	PoolName   string  `short:"p" long:"name" description:"Unique name for pool (set as label)"`
+	PoolLabel  string  `short:"p" long:"label" description:"Unique label for pool"`
 	ACLFile    string  `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
 	Size       string  `short:"z" long:"size" description:"Total size of DAOS pool (auto)"`
 	ScmRatio   float64 `short:"t" long:"scm-ratio" default:"6" description:"Percentage of SCM:NVMe for pool storage (auto)"`
@@ -74,7 +74,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	req := &control.PoolCreateReq{
 		User:       cmd.UserName,
 		UserGroup:  cmd.GroupName,
-		Name:       cmd.PoolName,
+		Label:      cmd.PoolLabel,
 		NumSvcReps: cmd.NumSvcReps,
 	}
 

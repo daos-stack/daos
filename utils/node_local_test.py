@@ -139,9 +139,16 @@ class WarningsFactory():
 
     # Error levels supported by the reporting are LOW, NORMAL, HIGH, ERROR.
 
-    def __init__(self, filename, junit=False, class_id=None):
+    def __init__(self,
+                 filename,
+                 junit=False,
+                 class_id=None,
+                 post=False,
+                 check=None):
         self._fd = open(filename, 'w')
         self.filename = filename
+        self.post = post
+        self.check = check
         self.issues = []
         self._class_id = class_id
         self.pending = []
@@ -278,6 +285,12 @@ class WarningsFactory():
             self.reset_pending()
         self.pending.append((line, message))
         self._flush()
+        if self.post:
+            # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
+            print('::warning file={},line={},::{}, {}'.format(line.filename,
+                                                              line.lineno,
+                                                              self.check,
+                                                              message))
 
     def reset_pending(self):
         """Reset the pending list
@@ -401,6 +414,8 @@ class DaosServer():
         self.mb = mb
 
     def __del__(self):
+        if self._agent:
+            self._stop_agent()
         if self.running:
             self.stop(None)
         server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
@@ -616,12 +631,16 @@ class DaosServer():
         self._add_test_case('start')
         print('Server started in {:.2f} seconds'.format(time.time() - start))
 
+    def _stop_agent(self):
+        self._agent.send_signal(signal.SIGINT)
+        ret = self._agent.wait(timeout=5)
+        print('rc from agent is {}'.format(ret))
+        self._agent = None
+
     def stop(self, wf):
         """Stop a previously started DAOS server"""
         if self._agent:
-            self._agent.send_signal(signal.SIGINT)
-            ret = self._agent.wait(timeout=5)
-            print('rc from agent is {}'.format(ret))
+            self._stop_agent()
 
         if not self._sp:
             return 0
@@ -817,7 +836,7 @@ class DFuse():
                  pool=None,
                  container=None,
                  path=None,
-                 caching=False):
+                 caching=True):
         if path:
             self.dir = path
         else:
@@ -888,8 +907,10 @@ class DFuse():
         if single_threaded:
             cmd.append('-S')
 
-        if self.caching:
-            cmd.append('--enable-caching')
+        if not self.caching:
+            cmd.append('--disable-caching')
+
+        cmd.append('--disable-wb-cache')
 
         if self.pool:
             cmd.extend(['--pool', self.pool])
@@ -1028,6 +1049,7 @@ def import_daos(server, conf):
 
 def run_daos_cmd(conf,
                  cmd,
+                 show_stdout=False,
                  valgrind=True):
     """Run a DAOS command
 
@@ -1070,6 +1092,9 @@ def run_daos_cmd(conf,
     if rc.stderr != b'':
         print('Stderr from command')
         print(rc.stderr.decode('utf-8').strip())
+
+    if show_stdout and rc.stdout != b'':
+        print(rc.stdout.decode('utf-8').strip())
 
     show_memleaks = True
 
@@ -1132,6 +1157,7 @@ def needs_dfuse(method):
     def _helper(self):
         self.dfuse = DFuse(self.server,
                            self.conf,
+                           caching=True,
                            pool=self.pool,
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__)
@@ -1148,6 +1174,7 @@ def needs_dfuse_single(method):
     def _helper(self):
         self.dfuse = DFuse(self.server,
                            self.conf,
+                           caching=True,
                            pool=self.pool,
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__, single_threaded=True)
@@ -1163,8 +1190,8 @@ def needs_dfuse_with_cache(method):
     def _helper(self):
         self.dfuse = DFuse(self.server,
                            self.conf,
-                           pool=self.pool,
                            caching=True,
+                           pool=self.pool,
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__)
         rc = method(self)
@@ -1188,6 +1215,57 @@ class posix_tests():
     def fail(self):
         """Mark a test method as failed"""
         raise NLTestFail
+
+    def test_cache(self):
+        """Test with caching enabled"""
+
+        container = create_cont(self.conf, self.pool, posix=True)
+        run_daos_cmd(self.conf,
+                     ['container', 'query',
+                      '--pool', self.pool, '--cont', container],
+                     show_stdout=True)
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      '--pool', self.pool, '--cont', container,
+                      '--attr', 'dfuse-attr-time', '--value', '2'],
+                     show_stdout=True)
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      '--pool', self.pool, '--cont', container,
+                      '--attr', 'dfuse-dentry-time', '--value', '100s'],
+                     show_stdout=True)
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      '--pool', self.pool, '--cont', container,
+                      '--attr', 'dfuse-dentry-time-dir', '--value', '100s'],
+                     show_stdout=True)
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      '--pool', self.pool, '--cont', container,
+                      '--attr', 'dfuse-ndentry-time', '--value', '100s'],
+                     show_stdout=True)
+
+        run_daos_cmd(self.conf,
+                     ['container', 'list-attrs',
+                      '--pool', self.pool, '--cont', container],
+                     show_stdout=True)
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool,
+                      container=container)
+        dfuse.start()
+
+        print(os.listdir(dfuse.dir))
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        destroy_container(self.conf, self.pool, container)
 
     @needs_dfuse
     def test_readdir_25(self):
@@ -1288,7 +1366,15 @@ class posix_tests():
             self.fail()
         except FileNotFoundError:
             print('Failed to fstat() unlinked file')
-        ofd.close()
+        # With caching enabled the kernel will do a setattr to set the times on
+        # close, so with caching enabled catch that and ignore it.
+        if self.dfuse.caching:
+            try:
+                ofd.close()
+            except FileNotFoundError:
+                pass
+        else:
+            ofd.close()
 
     @needs_dfuse
     def test_symlink_broken(self):
@@ -1516,6 +1602,33 @@ class posix_tests():
         print(direct_stat)
         print(uns_stat)
         assert uns_stat.st_ino == direct_stat.st_ino
+        if dfuse.stop():
+            self.fatal_errors = True
+
+    def test_dfuse_dio_off(self):
+        """Test for dfuse with no caching options, but
+        direct-io disabled"""
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      '--pool', self.pool, '--cont', self.container,
+                      '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
+                     show_stdout=True)
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      caching=True,
+                      pool=self.pool,
+                      container=self.container)
+
+        dfuse.start(v_hint='dio_off')
+
+        print(os.listdir(dfuse.dir))
+
+        fname = os.path.join(dfuse.dir, 'test_file3')
+        ofd = open(fname, 'w')
+        ofd.write('hello')
+        ofd.close()
+
         if dfuse.stop():
             self.fatal_errors = True
 
@@ -2103,18 +2216,28 @@ def run_in_fg(server, conf):
     while len(pools) < 1:
         pools = make_pool(server)
 
-    dfuse = DFuse(server, conf, pool=pools[0])
+    pool=pools[0]
+        
+    dfuse = DFuse(server, conf, pool=pool)
     dfuse.start()
-    container = str(uuid.uuid4())
+
+    container = create_cont(conf, pool, posix=True)
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  '--pool', pool, '--cont', container,
+                  '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
+                 show_stdout=True)
+
     t_dir = os.path.join(dfuse.dir, container)
-    os.mkdir(t_dir)
+
     print('Running at {}'.format(t_dir))
     print('daos container create --type POSIX ' \
           '--pool {} --path {}/uns-link'.format(
-              pools[0], t_dir))
+              pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers --pool {}'.format(pools[0]))
+    print('daos pool list-containers --pool {}'.format(pool))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
@@ -2757,7 +2880,8 @@ def main():
                          junit=True,
                          class_id=args.class_name)
 
-    wf_server = WarningsFactory('nlt-server-leaks.json')
+    wf_server = WarningsFactory('nlt-server-leaks.json',
+                                post=True, check='Server leak checking')
     wf_client = WarningsFactory('nlt-client-leaks.json')
 
     conf.set_wf(wf)
