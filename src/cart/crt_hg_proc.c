@@ -14,7 +14,7 @@
 #define CRT_PROC_NULL (NULL)
 #define CRT_PROC_TYPE_FUNC(type)				\
 	int crt_proc_##type(crt_proc_t proc,			\
-			     crt_proc_op_t proc_op, type *data)	\
+			     crt_proc_op_t proc_op, type * data)	\
 	{							\
 		type *buf;					\
 		if (FREEING(proc_op))				\
@@ -188,7 +188,7 @@ out:
 int
 crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
 {
-	int rc;
+	int rc = 0;
 
 	if (unlikely(div == NULL))
 		D_GOTO(out, rc = -DER_INVAL);
