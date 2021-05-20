@@ -19,6 +19,7 @@ from job_manager_utils import Srun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes
 import slurm_utils
+from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
@@ -571,6 +572,9 @@ def start_dfuse(
     Returns dfuse(obj):         Dfuse obj
             cmd(list):          list of dfuse commands to add to jobscript
     """
+    daos_cmd = DaosCommand(self.bin)
+    daos_cmd.container_set_attr(
+        pool.uuid, container.uuid, 'dfuse-direct-io-disable', 'on')
     # Get Dfuse params
     dfuse = Dfuse(self.hostlist_clients, self.tmp)
     dfuse.get_params(self)
