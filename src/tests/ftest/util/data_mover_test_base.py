@@ -78,6 +78,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dfuse_hosts = None
         self.num_run_datamover = 0  # Number of times run_datamover was called
 
+        # Temp directory for serialize/deserialize
+        self.serial_tmp_dir = self.tmp
+
         # List of test paths to create and remove
         self.posix_test_paths = []
 
@@ -910,7 +913,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.ddeserialize_cmd = Ddeserialize(self.hostlist_clients)
 
         # Get an intermediate path for HDF5 file(s)
-        tmp_path = self.new_posix_test_path(create=False)
+        tmp_path = self.new_posix_test_path(create=False,
+                                            parent=self.serial_tmp_dir)
 
         # Set the source params for dserialize
         if src_pool or src_cont:

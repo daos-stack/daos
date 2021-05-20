@@ -947,7 +947,6 @@ rebuild_task_destroy(struct rebuild_task *task)
 static void
 rebuild_debug_print_queue()
 {
-	struct rebuild_task *task_tmp;
 	struct rebuild_task *task;
 	/* Uninitialized stack buffer to write target list into
 	 * This only accumulates the targets in a single task, so it doesn't
@@ -960,8 +959,7 @@ rebuild_debug_print_queue()
 
 	D_DEBUG(DB_REBUILD, "Current rebuild queue:\n");
 
-	d_list_for_each_entry_safe(task, task_tmp,
-				   &rebuild_gst.rg_queue_list, dst_list) {
+	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
 		tgts_pos = 0;
 		for (i = 0; i < task->dst_tgts.pti_number; i++) {
 			if (tgts_pos > sizeof(tgts_buf) - 10) {
@@ -1024,18 +1022,16 @@ rebuild_try_merge_tgts(const uuid_t pool_uuid, uint32_t map_ver,
 		if (uuid_compare(task->dst_pool_uuid, pool_uuid) != 0)
 			/* This task isn't for this pool - don't consider it */
 			continue;
-		else if (task->dst_rebuild_op != rebuild_op)
+
+		if (task->dst_rebuild_op != rebuild_op)
 			/* Found a different operation. If we had found a task
 			 * to merge to before this, clear it, as that is no
 			 * longer safe since this later operation exists
 			 */
 			merge_task = NULL;
 		else
-			/* Found a task to merge to. Don't break here - continue
-			 * looping to discover if other tasks would make merging
-			 * to this task unsafe
-			 */
 			merge_task = task;
+		break;
 	}
 
 	if (merge_task == NULL)
@@ -1163,13 +1159,22 @@ rebuild_task_ult(void *arg)
 	struct ds_pool				*pool;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	struct rebuild_iv                       iv = { 0 };
+	uint64_t				cur_ts = 0;
 	int					rc;
+
+	rc = daos_gettime_coarse(&cur_ts);
+	D_ASSERT(rc == 0);
+	if (cur_ts < task->dst_schedule_time) {
+		D_DEBUG(DB_REBUILD, "rebuild task sleep "DF_U64" second\n",
+			task->dst_schedule_time - cur_ts);
+		dss_sleep((task->dst_schedule_time - cur_ts) * 1000);
+	}
 
 	pool = ds_pool_lookup(task->dst_pool_uuid);
 	if (pool == NULL) {
 		D_ERROR(DF_UUID": failed to look up pool\n",
 			DP_UUID(task->dst_pool_uuid));
-		return;
+		D_GOTO(out_task, rc);
 	}
 
 	rc = rebuild_notify_ras_start(&task->dst_pool_uuid, task->dst_map_ver,
@@ -1306,7 +1311,9 @@ iv_stop:
 
 try_reschedule:
 	if (rgt == NULL || !is_rebuild_global_done(rgt) ||
-	    rgt->rgt_status.rs_errno != 0) {
+	    rgt->rgt_status.rs_errno != 0 ||
+	    task->dst_rebuild_op == RB_OP_REINT) {
+		daos_rebuild_opc_t opc = task->dst_rebuild_op;
 		int ret;
 
 		/* NB: we can not skip the rebuild of the target,
@@ -1316,14 +1323,20 @@ try_reschedule:
 		 */
 		if (rgt)
 			rgt->rgt_status.rs_done = 0;
+
+		/* If reintegrate succeeds, schedule reclaim */
+		if (rgt && is_rebuild_global_done(rgt) &&
+		    rgt->rgt_status.rs_errno == 0 &&
+		    opc == RB_OP_REINT)
+			opc = RB_OP_RECLAIM;
+
 		ret = ds_rebuild_schedule(pool, task->dst_map_ver,
-					  &task->dst_tgts,
-					  task->dst_rebuild_op, 5);
+					  &task->dst_tgts, opc, 5);
 		if (ret != 0)
-			D_ERROR("reschedule "DF_RC"\n", DP_RC(ret));
+			D_ERROR("reschedule "DF_RC" opc %u\n", DP_RC(ret), opc);
 		else
-			D_DEBUG(DB_REBUILD, DF_UUID" reschedule rebuild\n",
-				DP_UUID(pool->sp_uuid));
+			D_DEBUG(DB_REBUILD, DF_UUID" reschedule opc %u\n",
+				DP_UUID(pool->sp_uuid), opc);
 	} else {
 		int ret;
 
@@ -1352,6 +1365,7 @@ out_pool:
 		rgt_put(rgt);
 	}
 
+out_task:
 	rebuild_task_destroy(task);
 	rebuild_gst.rg_inflight--;
 
@@ -1390,7 +1404,9 @@ rebuild_ults(void *arg)
 
 		if (d_list_empty(&rebuild_gst.rg_queue_list) ||
 		    rebuild_gst.rg_inflight >= REBUILD_MAX_INFLIGHT) {
-			ABT_thread_yield();
+			D_DEBUG(DB_REBUILD, "inflight rebuild %u\n",
+				rebuild_gst.rg_inflight);
+			dss_sleep(5000);
 			continue;
 		}
 
@@ -1400,13 +1416,7 @@ rebuild_ults(void *arg)
 			 * wait to start the next operation until the current
 			 * one completes
 			 */
-			uint64_t cur_ts = 0;
-
-			rc = daos_gettime_coarse(&cur_ts);
-			D_ASSERT(rc == 0);
-
-			if (cur_ts < task->dst_schedule_time ||
-			    pool_is_rebuilding(task->dst_pool_uuid))
+			if (pool_is_rebuilding(task->dst_pool_uuid))
 				continue;
 
 			rc = dss_ult_create(rebuild_task_ult, task,
@@ -1574,10 +1584,13 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 		    struct pool_target_id_list *tgts,
 		    daos_rebuild_opc_t rebuild_op, uint64_t delay_sec)
 {
+	struct rebuild_task	*new_task;
 	struct rebuild_task	*task;
+	d_list_t		*inserted_pos;
 	int			rc;
 	uint64_t		cur_ts = 0;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	if (pool->sp_stopping) {
 		D_DEBUG(DB_REBUILD, DF_UUID" is stopping,"
 			"do not need schedule here\n",
@@ -1591,26 +1604,42 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 		return rc == 1 ? 0 : rc;
 
 	/* No existing task was found - allocate a new one and use it */
-	D_ALLOC_PTR(task);
-	if (task == NULL)
+	D_ALLOC_PTR(new_task);
+	if (new_task == NULL)
 		return -DER_NOMEM;
 
 	rc = daos_gettime_coarse(&cur_ts);
 	D_ASSERT(rc == 0);
 
-	task->dst_schedule_time = cur_ts + delay_sec;
-	task->dst_map_ver = map_ver;
-	task->dst_rebuild_op = rebuild_op;
-	uuid_copy(task->dst_pool_uuid, pool->sp_uuid);
-	D_INIT_LIST_HEAD(&task->dst_list);
+	new_task->dst_schedule_time = cur_ts + delay_sec;
+	new_task->dst_map_ver = map_ver;
+	new_task->dst_rebuild_op = rebuild_op;
+	uuid_copy(new_task->dst_pool_uuid, pool->sp_uuid);
+	D_INIT_LIST_HEAD(&new_task->dst_list);
 
 	/* TODO: Merge everything for reclaim */
-	rc = pool_target_id_list_merge(&task->dst_tgts, tgts);
+	rc = pool_target_id_list_merge(&new_task->dst_tgts, tgts);
 	if (rc)
 		D_GOTO(free, rc);
 
 	rebuild_print_list_update(pool->sp_uuid, map_ver, rebuild_op, tgts);
-	d_list_add_tail(&task->dst_list, &rebuild_gst.rg_queue_list);
+
+	/* Insert the task into the queue by order to make sure the rebuild
+	 * task with smaller version are being executed first.
+	 */
+	inserted_pos = &rebuild_gst.rg_queue_list;
+	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
+		if (uuid_compare(task->dst_pool_uuid,
+				 new_task->dst_pool_uuid) != 0)
+			continue;
+
+		if (new_task->dst_map_ver > task->dst_map_ver)
+			continue;
+
+		inserted_pos = &task->dst_list;
+		break;
+	}
+	d_list_add_tail(&new_task->dst_list, inserted_pos);
 
 	/* Print out the current queue to the debug log */
 	rebuild_debug_print_queue();
@@ -1636,7 +1665,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 	}
 free:
 	if (rc)
-		rebuild_task_destroy(task);
+		rebuild_task_destroy(new_task);
 	return rc;
 }
 

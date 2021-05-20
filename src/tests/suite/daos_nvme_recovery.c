@@ -69,6 +69,8 @@ nvme_fault_reaction(void **state, int mode)
 	int			 faulty_disk_idx = 0;
 	uuid_t			 offline_pool_uuid;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!is_nvme_enabled(arg)) {
 		print_message("NVMe isn't enabled.\n");
 		skip();
@@ -563,6 +565,8 @@ nvme_test_simulate_IO_error(void **state)
 	int		rx_nr; /* number of record extents */
 	int		rank_pos = 0, rank = 1;
 	int		ndisks, rc, i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!is_nvme_enabled(arg)) {
 		print_message("NVMe isn't enabled.\n");

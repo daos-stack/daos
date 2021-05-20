@@ -68,14 +68,16 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 {
 	daos_obj_id_t inflight_oid;
 
+#if 0
+	/* Disable it due to DAOS-7420 */
 	if (oid != NULL) {
 		inflight_oid = *oid;
 	} else {
-		inflight_oid = daos_test_oid_gen(arg->coh,
-						 DAOS_OC_R3S_SPEC_RANK, 0,
-						 0, arg->myrank);
-		inflight_oid = dts_oid_set_rank(inflight_oid, rank);
-	}
+#endif
+	inflight_oid = daos_test_oid_gen(arg->coh,
+					 DAOS_OC_R3S_SPEC_RANK, 0,
+					 0, arg->myrank);
+	inflight_oid = dts_oid_set_rank(inflight_oid, rank);
 
 	arg->rebuild_cb = reintegrate_inflight_io;
 	arg->rebuild_cb_arg = &inflight_oid;
@@ -1067,6 +1069,52 @@ rebuild_multiple_group(void **state)
 		assert_rc_equal(rc, -DER_NOSYS);
 }
 
+/** i/o to variable idx offset */
+static void
+rebuild_with_large_offset(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	daos_off_t	offset;
+	d_rank_t	kill_rank = 0;
+	int		kill_rank_nr;
+	daos_recx_t	recxs[IOREQ_IOD_NR] = { 0 };
+	char		data[128];
+	int		i;
+	int		rc;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	memset(data, 'a', 128);
+	for (offset = (UINT64_MAX >> 1), i = 0;
+	     offset > 0 && i < IOREQ_IOD_NR;
+	     offset >>= 16, i++) {
+		recxs[i].rx_idx = offset;
+		recxs[i].rx_nr = 5;
+	}
+
+	insert_recxs("large_idx_dkey", "large_idx_akey", 1, DAOS_TX_NONE,
+		     recxs, i, data, i * 5, &req);
+
+	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
+	ioreq_fini(&req);
+
+	rebuild_single_pool_target(arg, kill_rank, -1, false);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+
+	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -1105,6 +1153,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_punch_recs, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD18: rebuild with multiple group",
 	 rebuild_multiple_group, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD19: rebuild with large offset",
+	 rebuild_with_large_offset, rebuild_small_sub_setup, test_teardown},
 };
 
 int

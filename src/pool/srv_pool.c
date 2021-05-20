@@ -932,7 +932,8 @@ ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	int			rc = 0;
 
 	/* Only used for exclude the rank for the moment */
-	if (src != CRT_EVS_GRPMOD || type != CRT_EVT_DEAD ||
+	if ((src != CRT_EVS_GRPMOD && src != CRT_EVS_SWIM) ||
+	    type != CRT_EVT_DEAD ||
 	    pool_disable_exclude) {
 		D_DEBUG(DB_MGMT, "ignore src/type/exclude %u/%u/%d\n",
 			src, type, pool_disable_exclude);
@@ -1142,7 +1143,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	for (i = 0; i < doms_cnt; i++) {
 		struct swim_member_state state;
 
-		/* Only check if UPIN server is excluded for now */
+		/* Only check if UPIN server is excluded or dead for now */
 		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
 			continue;
 
@@ -1154,10 +1155,15 @@ pool_svc_check_node_status(struct pool_svc *svc)
 			break;
 		}
 
+		/* Since there is a big chance the INACTIVE node will become
+		 * ACTIVE soon, let's only evict the DEAD node rank for the
+		 * moment.
+		 */
 		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
 			doms[i].do_comp.co_rank,
 			rc == -DER_NONEXIST ? -1 : state.sms_status);
-		if (rc == -DER_NONEXIST) {
+		if (rc == -DER_NONEXIST ||
+		    state.sms_status == SWIM_MEMBER_DEAD) {
 			rc = pool_exclude_rank(svc, doms[i].do_comp.co_rank);
 			if (rc) {
 				D_ERROR("failed to exclude rank %u: %d\n",
@@ -4057,21 +4063,6 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 
 	replace_failed_replicas(svc, map);
 
-	if (opc == POOL_ADD_IN) {
-		/*
-		 * If we are setting ranks from UP -> UPIN, schedule a reclaim
-		 * operation to garbage collect any unreachable data moved
-		 * during reintegration/addition
-		 */
-		rc = ds_rebuild_schedule(svc->ps_pool, map_version, tgts,
-					 RB_OP_RECLAIM, 0);
-		if (rc != 0) {
-			D_ERROR("failed to schedule reclaim rc: "DF_RC"\n",
-				DP_RC(rc));
-			goto out_map_buf;
-		}
-	}
-
 out_map_buf:
 	pool_buf_free(map_buf);
 out_map:
@@ -5544,7 +5535,7 @@ out:
 
 int
 ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version)
+			 uint32_t version, int *tgt_id)
 {
 	struct pl_map		*map;
 	struct pl_obj_layout	*layout;
@@ -5565,7 +5556,7 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 		goto out;
 
 	rc = pl_select_leader(oid->id_pub, oid->id_shard / layout->ol_grp_size,
-			      layout->ol_grp_size, true,
+			      layout->ol_grp_size, tgt_id,
 			      pl_obj_get_shard, layout);
 	pl_obj_layout_free(layout);
 	if (rc < 0)
@@ -5587,24 +5578,27 @@ out:
  * \param [IN]	version		The pool map version
  *
  * \return			+1 if leader is on current server.
- * \return			Zero if the leader resides on another server.
+ * \return			Zero if the leader resides on another server,
+ *				or the oid->id_shard is not the leader shard.
  * \return			Negative value if error.
  */
 int
 ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version)
+			 uint32_t version, bool check_shard)
 {
 	struct pool_target	*target;
 	d_rank_t		 myrank;
-	int			 leader;
+	int			 leader_tgt;
+	int			 leader_shard;
 	int			 rc;
 
-	leader = ds_pool_elect_dtx_leader(pool, oid, version);
-	if (leader < 0)
-		return leader;
+	rc = ds_pool_elect_dtx_leader(pool, oid, version, &leader_tgt);
+	if (rc < 0)
+		return rc;
+	leader_shard = rc;
 
-	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader);
-	rc = pool_map_find_target(pool->sp_map, leader, &target);
+	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader_tgt);
+	rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
 	if (rc < 0)
 		return rc;
 
@@ -5615,10 +5609,13 @@ ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc < 0)
 		return rc;
 
-	if (myrank != target->ta_comp.co_rank)
+	if (myrank != target->ta_comp.co_rank) {
 		rc = 0;
-	else
+	} else {
 		rc = 1;
+		if (check_shard && oid->id_shard != leader_shard)
+			rc = 0;
+	}
 
 	return rc;
 }
