@@ -303,6 +303,7 @@ func CollectMetrics(ctx context.Context, dirname string, out chan<- Metric) erro
 	if err != nil {
 		return err
 	}
+	C.d_tm_gc_ctx(hdl.ctx)
 
 	node := hdl.root
 

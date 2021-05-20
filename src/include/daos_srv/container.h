@@ -241,4 +241,18 @@ int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
 
 
 void ds_cont_tgt_ec_eph_query_ult(void *data);
+
+/** Metrics for each individual active container */
+struct ds_active_cont_metrics {
+	uuid_t			pool_uuid;
+	uuid_t			cont_uuid;
+	d_list_t		link;
+
+	struct d_tm_node_t	*start_timestamp;
+	/* TODO: add more per-container metrics */
+};
+
+struct ds_active_cont_metrics *ds_cont_metrics_get(const uuid_t pool_uuid,
+						   const uuid_t cont_uuid);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

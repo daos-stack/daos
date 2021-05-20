@@ -56,8 +56,8 @@ ds_pool_metrics_init(void)
 int
 ds_pool_metrics_fini(void)
 {
-	struct active_pool_metrics *cur = NULL;
-	struct active_pool_metrics *next = NULL;
+	struct ds_active_pool_metrics *cur = NULL;
+	struct ds_active_pool_metrics *next = NULL;
 
 	d_list_for_each_entry_safe(cur, next, &per_pool_metrics, link) {
 		d_list_del(&cur->link);
@@ -100,7 +100,7 @@ ds_pool_metrics_get_path(const uuid_t pool_uuid, char *path, size_t path_len)
 void
 ds_pool_metrics_start(const uuid_t pool_uuid)
 {
-	struct active_pool_metrics	*metrics;
+	struct ds_active_pool_metrics	*metrics;
 	char				 path[D_TM_MAX_NAME_LEN] = {0};
 	int				 rc;
 
@@ -153,7 +153,7 @@ ds_pool_metrics_start(const uuid_t pool_uuid)
 void
 ds_pool_metrics_stop(const uuid_t pool_uuid)
 {
-	struct active_pool_metrics	*metrics;
+	struct ds_active_pool_metrics	*metrics;
 	char				 path[D_TM_MAX_NAME_LEN] = {0};
 	int				 rc;
 
@@ -192,10 +192,10 @@ ds_pool_metrics_stop(const uuid_t pool_uuid)
  *
  * \return	Pool's metrics structure, or NULL if not found
  */
-struct active_pool_metrics *
+struct ds_active_pool_metrics *
 ds_pool_metrics_get(const uuid_t pool_uuid)
 {
-	struct active_pool_metrics *cur = NULL;
+	struct ds_active_pool_metrics *cur = NULL;
 
 	d_list_for_each_entry(cur, &per_pool_metrics, link) {
 		if (uuid_compare(pool_uuid, cur->pool_uuid) == 0)

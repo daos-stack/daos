@@ -596,7 +596,7 @@ ds_pool_start(uuid_t uuid)
 	struct ds_pool			*pool;
 	struct daos_llink		*llink;
 	struct ds_pool_create_arg	arg = {};
-	struct active_pool_metrics	*metrics = NULL;
+	struct ds_active_pool_metrics	*metrics = NULL;
 	int				rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);

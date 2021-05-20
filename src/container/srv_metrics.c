@@ -132,7 +132,7 @@ ds_cont_metrics_get_path(const uuid_t pool_uuid, const uuid_t cont_uuid,
 void
 ds_cont_metrics_start(const uuid_t pool_uuid, const uuid_t cont_uuid)
 {
-	struct active_cont_metrics	*metrics;
+	struct ds_active_cont_metrics	*metrics;
 	char				 path[D_TM_MAX_NAME_LEN] = {0};
 	int				 rc;
 
@@ -188,7 +188,7 @@ ds_cont_metrics_start(const uuid_t pool_uuid, const uuid_t cont_uuid)
 void
 ds_cont_metrics_stop(const uuid_t pool_uuid, const uuid_t cont_uuid)
 {
-	struct active_cont_metrics	*metrics;
+	struct ds_active_cont_metrics	*metrics;
 	char				 path[D_TM_MAX_NAME_LEN] = {0};
 	int				 rc;
 
@@ -224,10 +224,10 @@ ds_cont_metrics_stop(const uuid_t pool_uuid, const uuid_t cont_uuid)
  *
  * \return	Container's metrics structure, or NULL if not found
  */
-struct active_cont_metrics *
+struct ds_active_cont_metrics *
 ds_cont_metrics_get(const uuid_t pool_uuid, const uuid_t cont_uuid)
 {
-	struct active_cont_metrics *cur = NULL;
+	struct ds_active_cont_metrics *cur = NULL;
 
 	d_list_for_each_entry(cur, &per_cont_metrics, link) {
 		if (uuid_compare(pool_uuid, cur->pool_uuid) == 0 &&

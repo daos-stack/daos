@@ -3282,6 +3282,28 @@ d_tm_close(struct d_tm_context **ctx)
 }
 
 /**
+ * Releases deleted resources cached by the context.
+ *
+ * Recommended as a periodic task for telemetry clients.
+ *
+ * \param[in]	ctx	Context to be garbage collected
+ */
+void
+d_tm_gc_ctx(struct d_tm_context *ctx)
+{
+	struct local_shmem_list *cur = NULL;
+	struct local_shmem_list *next = NULL;
+
+	if (ctx == NULL)
+		return;
+
+	d_list_for_each_entry_safe(cur, next, &ctx->open_shmem, link) {
+		if (cur->region == NULL || cur->region->sh_deleted)
+			close_local_shmem_entry(cur, false);
+	}
+}
+
+/**
  * Allocates memory from within the shared memory pool with 64-bit alignment
  * Clears the allocated buffer.
  *

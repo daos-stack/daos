@@ -246,6 +246,16 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
 
+/** Metrics for each individual active pool */
+struct ds_active_pool_metrics {
+	uuid_t			pool_uuid;
+	d_list_t		link;
+
+	struct d_tm_node_t	*started_timestamp;
+	/* TODO: add more per-pool metrics */
+};
+
+struct ds_active_pool_metrics *ds_pool_metrics_get(const uuid_t pool_uuid);
 int ds_pool_metrics_get_path(const uuid_t pool_uuid, char *path,
 			     size_t path_len);
 

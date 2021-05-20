@@ -821,7 +821,7 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 static void
 cont_metrics_start(const uuid_t pool_uuid, const uuid_t cont_uuid)
 {
-	struct active_cont_metrics *metrics;
+	struct ds_active_cont_metrics *metrics;
 
 	ds_cont_metrics_start(pool_uuid, cont_uuid);
 
