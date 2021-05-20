@@ -1645,17 +1645,13 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
+    @needs_dfuse
     def test_daos_fs_tool(self):
         """Create a UNS entry point"""
 
+        dfuse = self.dfuse
         pool = self.pool
-        container = self.container
-        server = self.server
         conf = self.conf
-
-        # Start dfuse on the container.
-        dfuse = DFuse(server, conf, pool=pool, container=container)
-        dfuse.start('uns-0')
 
         # Create a new container within it using UNS
         uns_path = os.path.join(dfuse.dir, 'ep1')
@@ -1742,9 +1738,6 @@ class posix_tests():
         print('rc is {}'.format(rc))
         output = rc.stdout.decode('utf-8')
         assert check_dfs_tool_output(output, 'S1', '16')
-
-        if dfuse.stop():
-            self.fatal_errors = True
 
     def test_cont_copy(self):
         """Verify that copying into a container works"""

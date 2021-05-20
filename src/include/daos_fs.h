@@ -671,7 +671,8 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
  *
  * \param[in]	obj	Open object handle to update.
  * \param[in]	src_obj
- *			Open object handle of object with new parent.
+ *			Open object handle of the object whose parent will be
+ *			used as the new parent of \a obj.
  * \param[in]	name	Optional new name of entry in parent. Pass NULL to leave
  *			the entry name unchanged.
  *
