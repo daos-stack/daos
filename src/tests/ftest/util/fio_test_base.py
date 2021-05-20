@@ -6,8 +6,7 @@
 """
 from dfuse_test_base import DfuseTestBase
 from fio_utils import FioCommand
-# from daos_utils import DaosCommand
-
+from daos_utils import DaosCommand
 
 class FioBase(DfuseTestBase):
     # pylint: disable=too-many-ancestors
@@ -57,6 +56,15 @@ class FioBase(DfuseTestBase):
                     "fio --name=global --directory")
             else:
                 self.add_container(self.pool)
+
+                daos_cmd = DaosCommand(self.bin)
+
+                # Instruct dfuse to disable direct-io for this container
+                daos_cmd.container_set_attr(pool=self.pool.uuid,
+                                            cont=self.container.uuid,
+                                            attr='dfuse-direct-io-disable',
+                                            val='on')
+
                 self.start_dfuse(
                     self.hostlist_clients, self.pool, self.container)
                 self.fio_cmd.update(

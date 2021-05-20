@@ -370,21 +370,19 @@ static int
 agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry,
 	      bool align_data)
 {
-	int		 rc = 0;
+	void	*buf = NULL;
+	int	 rc = 0;
 
 	if (align_data) {
-		D_FREE(sgl->sg_iovs[iov_entry].iov_buf);
-		sgl->sg_iovs[iov_entry].iov_buf =
-			aligned_alloc(32, ent_buf_len);
-		if (sgl->sg_iovs[iov_entry].iov_buf == NULL) {
+		D_ALIGNED_ALLOC(buf, 32, ent_buf_len);
+		if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
 		}
+		D_FREE(sgl->sg_iovs[iov_entry].iov_buf);
+		sgl->sg_iovs[iov_entry].iov_buf = buf;
 	} else {
-		unsigned int *buf = NULL;
-
-		D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf,
-			  sgl->sg_iovs[iov_entry].iov_buf_len, ent_buf_len);
+		D_REALLOC_NZ(buf, sgl->sg_iovs[iov_entry].iov_buf, ent_buf_len);
 		 if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -1774,6 +1772,9 @@ agg_process_holes(struct ec_agg_entry *entry)
 		rc = dss_abterr2der(rc);
 		goto ev_out;
 	}
+	if (*status != 0)
+		D_GOTO(ev_out, rc = *status);
+
 	/* Update local vos with replicate */
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
@@ -2232,7 +2233,8 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = ds_pool_check_dtx_leader(agg_param->ap_pool_info.api_pool,
 				      &entry->ie_oid, agg_param->
-				      ap_pool_info.api_pool->sp_map_version);
+				      ap_pool_info.api_pool->sp_map_version,
+				      true);
 
 	if (rc == 1 && entry->ie_oid.id_shard >= oca->u.ec.e_k) {
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
