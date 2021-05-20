@@ -21,7 +21,6 @@ import uuid
 import json
 import signal
 import stat
-import errno
 import argparse
 import tabulate
 import functools
@@ -200,7 +199,9 @@ class WarningsFactory():
         self.ts = None
         self.close()
 
-    def add_test_case(self, name, failure=None, test_class='core'):
+    def add_test_case(self, name, failure=None, test_class='core',
+                      output=None,
+                      duration=None):
         """Add a test case to the results
 
         class and other metadata will be set automatically,
@@ -210,9 +211,11 @@ class WarningsFactory():
         if not self.ts:
             return
 
-        tc = junit_xml.TestCase(name, classname=self._class_name(test_class))
+        tc = junit_xml.TestCase(name,
+                                classname=self._class_name(test_class),
+                                elapsed_sec=duration)
         if failure:
-            tc.add_failure_info(failure)
+            tc.add_failure_info(failure, output=output)
         self.ts.test_cases.append(tc)
 
         self._write_test_file()
@@ -429,7 +432,7 @@ class DaosServer():
             print(os.listdir(self.agent_dir))
             raise error
 
-    def _add_test_case(self, op, failure=None):
+    def _add_test_case(self, op, failure=None, duration=None):
         """Add a test case to the server instance
 
         Simply wrapper to automatically add the class
@@ -439,6 +442,7 @@ class DaosServer():
 
         self.conf.wf.add_test_case(op,
                                    failure=failure,
+                                   duration=duration,
                                    test_class=self._test_class)
 
     # pylint: disable=no-self-use
@@ -447,7 +451,7 @@ class DaosServer():
         if elapsed > max_time:
             res = '{} failed after {:.2f}s (max {:.2f}s)'.format(op, elapsed,
                                                                  max_time)
-            self._add_test_case(op, failure=res)
+            self._add_test_case(op, duration=elapsed, failure=res)
             raise NLTestTimeout(res)
 
     def _check_system_state(self, desired_states):
@@ -618,8 +622,9 @@ class DaosServer():
                     break
 
             self._check_timing('format', start, max_start_time)
-        self._add_test_case('format')
-        print('Format completion in {:.2f} seconds'.format(time.time() - start))
+        duration = time.time() - start
+        self._add_test_case('format', duration=duration)
+        print('Format completion in {:.2f} seconds'.format(duration))
         self.running = True
 
         # Now wait until the system is up, basically the format to happen.
@@ -628,8 +633,9 @@ class DaosServer():
             if self._check_system_state(['ready', 'joined']):
                 break
             self._check_timing("start", start, max_start_time)
-        self._add_test_case('start')
-        print('Server started in {:.2f} seconds'.format(time.time() - start))
+        duration = time.time() - start
+        self._add_test_case('start', duration=duration)
+        print('Server started in {:.2f} seconds'.format(duration))
 
     def _stop_agent(self):
         self._agent.send_signal(signal.SIGINT)
@@ -692,8 +698,9 @@ class DaosServer():
                 break
             self._check_timing("stop", start, max_stop_time)
 
-        self._add_test_case('stop')
-        print('Server stopped in {:.2f} seconds'.format(time.time() - start))
+        duration = time.time() - start
+        self._add_test_case('stop', duration=duration)
+        print('Server stopped in {:.2f} seconds'.format(duration))
 
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
@@ -1152,19 +1159,31 @@ def make_pool(daos):
     return get_pool_list()
 
 def needs_dfuse(method):
-    """Decorator function for starting dfuse under posix_tests class"""
+    """Decorator function for starting dfuse under posix_tests class
+
+    Runs every test twice, once with caching enabled, and once with
+    caching disabled.
+    """
     @functools.wraps(method)
     def _helper(self):
+        if self.call_index == 0:
+            caching=True
+            self.needs_more = True
+            self.test_name = '{}_with_caching'.format(method.__name__)
+        else:
+            caching=False
+
         self.dfuse = DFuse(self.server,
                            self.conf,
-                           caching=True,
+                           caching=caching,
                            pool=self.pool,
                            container=self.container)
-        self.dfuse.start(v_hint=method.__name__)
+        self.dfuse.start(v_hint=self.test_name)
         rc = method(self)
         if self.dfuse.stop():
             self.fatal_errors = True
         return rc
+
     return _helper
 
 def needs_dfuse_single(method):
@@ -1210,6 +1229,16 @@ class posix_tests():
         self.container = container
         self.dfuse = None
         self.fatal_errors = False
+
+        # Ability to invoke each method multiple times, call_index is set to
+        # 0 for each test method, if the method requires invoking a second time
+        # (for example to re-run with caching) then it should set needs_more
+        # to true, and it will be invoked with a greater value for call_index
+        # self.test_name will be set automatically, but can be modified by
+        # constructors, see @needs_dfuse for where this is used.
+        self.call_index = 0
+        self.needs_more = False
+        self.test_name = ''
 
     # pylint: disable=no-self-use
     def fail(self):
@@ -1369,10 +1398,10 @@ class posix_tests():
         # With caching enabled the kernel will do a setattr to set the times on
         # close, so with caching enabled catch that and ignore it.
         if self.dfuse.caching:
-            try:
+#            try:
                 ofd.close()
-            except FileNotFoundError:
-                pass
+#            except FileNotFoundError:
+#                pass
         else:
             ofd.close()
 
@@ -1426,14 +1455,14 @@ class posix_tests():
         try:
             xattr.set(fd, 'user.dfuse.ids', b'other_value')
             assert False
-        except OSError as e:
-            assert e.errno == errno.EPERM
+        except PermissionError:
+            pass
 
         try:
             xattr.set(fd, 'user.dfuse', b'other_value')
             assert False
-        except OSError as e:
-            assert e.errno == errno.EPERM
+        except PermissionError:
+            pass
 
         xattr.set(fd, 'user.Xfuse.ids', b'other_value')
         for (key, value) in xattr.get_all(fd):
@@ -1520,7 +1549,8 @@ class posix_tests():
         conf = self.conf
 
         # Start dfuse on the container.
-        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse = DFuse(server, conf, pool=pool, container=container,
+                      caching=False)
         dfuse.start('uns-0')
 
         # Create a new container within it using UNS
@@ -1547,7 +1577,7 @@ class posix_tests():
             self.fatal_errors = True
 
         print('Trying UNS')
-        dfuse = DFuse(server, conf)
+        dfuse = DFuse(server, conf, caching=False)
         dfuse.start('uns-1')
 
         # List the root container.
@@ -1590,7 +1620,7 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
         print('Trying UNS with previous cont')
-        dfuse = DFuse(server, conf)
+        dfuse = DFuse(server, conf, caching=False)
         dfuse.start('uns-3')
 
         files = os.listdir(second_path)
@@ -1699,12 +1729,31 @@ def run_posix_tests(server, conf, test=None):
     """
 
     def _run_test():
-        start = time.time()
-        print('Calling {}'.format(fn))
-        rc = obj()
-        duration = time.time() - start
-        print('rc from {} is {}'.format(fn, rc))
-        print('Took {:.1f} seconds'.format(duration))
+        pt.call_index = 0
+        while True:
+            pt.needs_more = False
+            pt.test_name = fn
+            start = time.time()
+            print('Calling {}'.format(fn))
+            try:
+                rc = obj()
+            except Exception as inst:
+                duration = time.time() - start
+                conf.wf.add_test_case(pt.test_name,
+                                      'Raised exception',
+                                      output = repr(inst),
+                                      test_class='test',
+                                      duration = duration)
+                raise
+            duration = time.time() - start
+            print('rc from {} is {}'.format(fn, rc))
+            print('Took {:.1f} seconds'.format(duration))
+            conf.wf.add_test_case(pt.test_name,
+                                  test_class='test',
+                                  duration = duration)
+            if not pt.needs_more:
+                break
+            pt.call_index = pt.call_index + 1
 
     pools = get_pool_list()
     while len(pools) < 1:
@@ -1781,8 +1830,8 @@ def run_tests(dfuse):
         fd = os.open(fname, os.O_CREAT | os.O_EXCL)
         os.close(fd)
         assert False
-    except OSError as e:
-        assert e.errno == errno.EEXIST
+    except FileExistsError:
+        pass
     os.unlink(fname)
 
     # DAOS-6238
@@ -2056,7 +2105,7 @@ def run_duns_overlay_test(server, conf):
     print('rc is {}'.format(rc))
     assert rc.returncode == 0
 
-    dfuse = DFuse(server, conf, path=uns_dir)
+    dfuse = DFuse(server, conf, path=uns_dir, caching=False)
 
     dfuse.start(v_hint='uns-overlay')
     # To show the contents.
@@ -2076,7 +2125,7 @@ def run_dfuse(server, conf):
     while len(pools) < 1:
         pools = make_pool(server)
 
-    dfuse = DFuse(server, conf)
+    dfuse = DFuse(server, conf, caching=False)
     try:
         pre_stat = os.stat(dfuse.dir)
     except OSError:
@@ -2100,7 +2149,7 @@ def run_dfuse(server, conf):
     fatal_errors.add_result(dfuse.stop())
 
     container2 = str(uuid.uuid4())
-    dfuse = DFuse(server, conf, pool=pools[0])
+    dfuse = DFuse(server, conf, pool=pools[0], caching=False)
     pre_stat = os.stat(dfuse.dir)
     dfuse.start(v_hint='pool_only')
     print('Running dfuse with pool only')
@@ -2113,7 +2162,8 @@ def run_dfuse(server, conf):
 
     fatal_errors.add_result(dfuse.stop())
 
-    dfuse = DFuse(server, conf, pool=pools[0], container=container)
+    dfuse = DFuse(server, conf, pool=pools[0], container=container,
+                  caching=False)
     dfuse.cores = 2
     pre_stat = os.stat(dfuse.dir)
     dfuse.start(v_hint='pool_and_cont')
@@ -2146,7 +2196,7 @@ def run_il_test(server, conf):
 
     print('pools are ', ','.join(pools))
 
-    dfuse = DFuse(server, conf)
+    dfuse = DFuse(server, conf, caching=False)
     dfuse.start()
 
     dirs = []
@@ -2217,7 +2267,7 @@ def run_in_fg(server, conf):
         pools = make_pool(server)
 
     pool=pools[0]
-        
+
     dfuse = DFuse(server, conf, pool=pool)
     dfuse.start()
 
@@ -2342,7 +2392,8 @@ def check_readdir_perf(server, conf):
 
         row = [count]
         row.extend(create_times)
-        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse = DFuse(server, conf, pool=pool, container=container,
+                      caching=False)
         dir_dir = os.path.join(dfuse.dir,
                                'dirs.{}'.format(count))
         file_dir = os.path.join(dfuse.dir,
@@ -2355,7 +2406,8 @@ def check_readdir_perf(server, conf):
                                                            elapsed))
         row.append(elapsed)
         dfuse.stop()
-        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse = DFuse(server, conf, pool=pool, container=container,
+                      caching=False)
         dfuse.start()
         start = time.time()
         subprocess.run(['/bin/ls', file_dir], stdout=subprocess.PIPE,
@@ -2366,7 +2418,8 @@ def check_readdir_perf(server, conf):
         row.append(elapsed)
         dfuse.stop()
 
-        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse = DFuse(server, conf, pool=pool, container=container,
+                      caching=False)
         dfuse.start()
         start = time.time()
         subprocess.run(['/bin/ls', '-t', dir_dir], stdout=subprocess.PIPE,
@@ -2376,7 +2429,8 @@ def check_readdir_perf(server, conf):
                                                            elapsed))
         row.append(elapsed)
         dfuse.stop()
-        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse = DFuse(server, conf, pool=pool, container=container,
+                      caching=False)
         dfuse.start()
         start = time.time()
         # Use sort by time here so ls calls stat, if you run ls -l then it will
