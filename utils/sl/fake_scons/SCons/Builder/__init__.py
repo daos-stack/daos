@@ -1,4 +1,4 @@
-# Copyright (c) 2020 Intel Corporation
+# Copyright (c) 2021 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,14 +19,11 @@
 # SOFTWARE.
 """Fake scons environment shutting up pylint on SCons files"""
 
-class Warning:
-    """Fake warning"""
+class Builder:
+    """Fake Builder"""
     pass
 
-def warningAsException(flag=1):
-    """Fake warningAsException"""
-    return flag
+ARGUMENTS = {}
 
-def enableWarningClass(_name):
-    """Fake enableWarningClass"""
-    pass
+__all__ = ['Builder',
+           'ARGUMENTS']

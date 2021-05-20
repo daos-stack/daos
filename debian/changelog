@@ -1,3 +1,9 @@
+daos (1.3.101-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump to 1.3.101 for 2.0 test build 1
+
+ -- Johann Lombardi <johann.lombardi@intel.com> Wed, 19 May 2021 20:52:00 -0000
+
 daos (1.3.0-16) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Enable debuginfo package building on SUSE platforms
