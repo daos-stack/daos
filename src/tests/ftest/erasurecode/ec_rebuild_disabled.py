@@ -8,7 +8,6 @@ import time
 from ec_utils import ErasureCodeIor
 from apricot import skipForTicket
 
-
 class EcDisabledRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """
@@ -17,7 +16,7 @@ class EcDisabledRebuild(ErasureCodeIor):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-6660")
+    @skipForTicket("DAOS-7592")
     def test_ec_degrade(self):
         """Jira ID: DAOS-5893.
 
@@ -26,8 +25,11 @@ class EcDisabledRebuild(ErasureCodeIor):
                   EC object type class for small and large transfer sizes.
                   kill single server, verify all IOR read data and verified.
 
-        :avocado: tags=all,hw,large,ib2,full_regression
-        :avocado: tags=ec,ec_disabled_rebuild
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large,ib2
+        :avocado: tags=ec,ec_array,ec_disabled_rebuild
+        :avocado: tags=ec_disabled_rebuild_array
+
         """
         # Disabled pool Rebuild
         self.pool.set_property("self_heal", "exclude")

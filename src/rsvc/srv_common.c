@@ -239,9 +239,10 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		rc = rdb_tx_lookup(tx, path, &key, &iovs[j]);
 
 		if (rc != 0) {
-			D_ERROR("%s: failed to lookup attribute '"DF_KEY
-				"': %d\n",
-				svc->s_name, DP_KEY(&key), rc);
+			D_CDEBUG(rc == -DER_NONEXIST, DB_ANY, DLOG_ERR,
+				 "%s: failed to lookup attribute '"DF_KEY"': "
+				 DF_RC"\n",
+				 svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_iovs;
 		}
 		iovs[j].iov_buf_len = sizes[i];
