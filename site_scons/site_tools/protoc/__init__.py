@@ -20,9 +20,7 @@
 # SOFTWARE.
 # -*- coding: utf-8 -*-
 
-import SCons.Action
 import SCons.Builder
-import SCons.Util
 from SCons.Script import Dir
 import os
 
@@ -81,17 +79,16 @@ def _detect(env):
     else:
         if not protoc_found:
             raise SCons.Errors.StopError(ProtocCompilerNotFound,
-                "Could not detect protoc compiler")
+                                         "Could not detect protoc compiler")
         if not protoc_gen_go_found:
             raise SCons.Errors.StopError(GoProtocCompilerNotFound,
-                "Could not detect protoc-gen-go")
+                                         "Could not detect protoc-gen-go")
         if not grpc_tools_found:
             raise SCons.Errors.StopError(PythonGRPCCompilerNotFound,
-                "grpc_tools.protoc python module is not installed")
+                                         "grpc_tools.protoc python module is not installed")
         return None
-    pass
 
-def run_python(source,target,env,for_signature):
+def run_python(_source, _target, env, _for_signature):
     actions = []
     mkdir_str = "mkdir -p " + env.subst('$GTARGET_DIR')
     actions.append(mkdir_str)
@@ -100,13 +97,12 @@ def run_python(source,target,env,for_signature):
 
 _grpc_python_builder = SCons.Builder.Builder(
     generator=run_python,
-    suffix = '$PYTHON_SUFFIX',
-    src_suffix = '$PROTO_SUFFIX',
-    single_source = 1
+    suffix='$PYTHON_SUFFIX',
+    src_suffix='$PROTO_SUFFIX',
+    single_source=1
 )
 
-
-def run_go(source,target,env,for_signature):
+def run_go(_source, _target, env, _for_signature):
     actions = []
     mkdir_str = "mkdir -p " + env.subst('$GTARGET_DIR')
     actions.append(mkdir_str)
@@ -115,9 +111,9 @@ def run_go(source,target,env,for_signature):
 
 _grpc_go_builder = SCons.Builder.Builder(
     generator=run_go,
-    suffix = '$GO_SUFFIX',
-    src_suffix = '$PROTO_SUFFIX',
-    single_source = 1
+    suffix='$GO_SUFFIX',
+    src_suffix='$PROTO_SUFFIX',
+    single_source=1
 )
 
 def generate(env, **kwargs):
@@ -125,14 +121,14 @@ def generate(env, **kwargs):
     _detect(env)
 
     env.SetDefault(
-        PYTHON_SUFFIX = '_pb2_grpc.py',
-        GO_SUFFIX = '.pb.go',
-        PROTO_SUFFIX = '.proto',
+        PYTHON_SUFFIX='_pb2_grpc.py',
+        GO_SUFFIX='.pb.go',
+        PROTO_SUFFIX='.proto',
 
-        PYTHON_COM = 'python -m grpc_tools.protoc -I$PROTO_INCLUDES --python_out=$GTARGET_DIR --grpc_python_out=$GTARGET_DIR $SOURCE',
-        PYTHON_COMSTR = '',
-        GO_COM = '$PROTOC -I$PROTO_INCLUDES $SOURCE --go_out=plugins=grpc:$GTARGET_DIR',
-        GO_COMSTR = ''
+        PYTHON_COM='python -m grpc_tools.protoc -I$PROTO_INCLUDES --python_out=$GTARGET_DIR --grpc_python_out=$GTARGET_DIR $SOURCE',
+        PYTHON_COMSTR='',
+        GO_COM='$PROTOC -I$PROTO_INCLUDES $SOURCE --go_out=plugins=grpc:$GTARGET_DIR',
+        GO_COMSTR=''
     )
     env['BUILDERS']['GRPCPython'] = _grpc_python_builder
     env['BUILDERS']['GRPCGo'] = _grpc_go_builder

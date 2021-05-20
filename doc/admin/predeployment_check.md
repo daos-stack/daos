@@ -3,7 +3,7 @@
 This section covers the preliminary setup required on the compute and
 storage nodes before deploying DAOS.
 
-## Enable IOMMU (Optional)
+## Enable IOMMU
 
 In order to run the DAOS server as a non-root user with NVMe devices, the hardware
 must support virtualized device access, and it must be enabled in the system BIOS.
@@ -28,13 +28,10 @@ $ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
 $ sudo reboot
 ```
 
-!!! warning
-    VFIO support is a new feature for DAOS 1.2 and has been tested on CentOS 7.7
-
-To force SPDK to use UIO rather than VFIO at daos_server runtime, set
-'disable_vfio' in the
-[server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
-but note that this will require running daos_server as root.
+!!! note
+    To force SPDK to use UIO rather than VFIO at daos_server runtime, set
+    'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
+    but note that this will require running daos_server as root.
 
 ## Time Synchronization
 

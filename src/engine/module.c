@@ -327,7 +327,7 @@ dss_module_cleanup_all(void)
 		if (rc != 0) {
 			D_ERROR("failed to clean up module %s: "DF_RC"\n",
 				m->sm_name, DP_RC(rc));
-			break;
+			/** continue clean-ups regardless ... */
 		}
 		D_INFO("Module %s: cleaned up\n", m->sm_name);
 	}
