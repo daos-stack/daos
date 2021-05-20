@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package bdev
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -86,13 +87,8 @@ func renderTemplate(req *FormatRequest, templ string) (out bytes.Buffer, err err
 	return
 }
 
-func writeConf(log logging.Logger, templ string, req *FormatRequest) error {
-	confBytes, err := renderTemplate(req, templ)
-	if err != nil {
-		return err
-	}
-
-	if confBytes.Len() == 0 {
+func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *FormatRequest) error {
+	if buf.Len() == 0 {
 		return errors.New("generated file is unexpectedly empty")
 	}
 
@@ -107,7 +103,7 @@ func writeConf(log logging.Logger, templ string, req *FormatRequest) error {
 		}
 	}()
 
-	if _, err := confBytes.WriteTo(f); err != nil {
+	if _, err := buf.WriteTo(f); err != nil {
 		return errors.Wrap(err, "write")
 	}
 
@@ -116,13 +112,7 @@ func writeConf(log logging.Logger, templ string, req *FormatRequest) error {
 		req.OwnerUID, req.OwnerGID)
 }
 
-// writeNvmeConf generates nvme config file for given bdev type to be consumed
-// by spdk.
-func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
-	if req.ConfigPath == "" {
-		return errors.New("no output config directory set in request")
-	}
-
+func writeIniConfig(log logging.Logger, enableVmd bool, req FormatRequest) error {
 	templ := map[storage.BdevClass]string{
 		storage.BdevClassNvme: clsNvmeTemplate,
 		storage.BdevClassKdev: clsKdevTemplate,
@@ -130,22 +120,74 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 	}[req.Class]
 
 	// special handling for class nvme
-	if req.Class == storage.BdevClassNvme {
-		if len(req.DeviceList) == 0 {
-			sb.log.Debug("skip write nvme conf for empty device list")
-			return nil
-		}
-		if !sb.IsVMDDisabled() {
-			templ = `[Vmd]
+	if req.Class == storage.BdevClassNvme && enableVmd {
+		templ = `[Vmd]
     Enable True
 
 ` + templ
-		}
 	}
 
 	// spdk ini file expects device size in MBs
 	req.DeviceFileSize = req.DeviceFileSize / humanize.MiByte
 
-	sb.log.Debugf("write nvme output config: %+v", req)
-	return writeConf(sb.log, templ, req)
+	buf, err := renderTemplate(&req, templ)
+	if err != nil {
+		return err
+	}
+	if err := writeConfFile(log, &buf, &req); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func writeJsonConfig(log logging.Logger, enableVmd bool, req FormatRequest) error {
+	nsc := newNvmeSpdkConfig(req.DeviceList, req.Hostname)
+
+	buf, err := json.MarshalIndent(nsc, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := writeConfFile(log, bytes.NewBuffer(buf), &req); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// writeNvmeConf generates nvme config file for given bdev type to be consumed
+// by spdk.
+func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
+	if req.ConfigPath == "" {
+		return errors.New("no output config directory set in request")
+	}
+	if req.Class == storage.BdevClassNvme && len(req.DeviceList) == 0 {
+		sb.log.Debug("skip write nvme conf for empty device list")
+		return nil
+	}
+
+	enableVmd := !sb.IsVMDDisabled()
+
+	sb.log.Debugf("write nvme output ini config: %+v", req)
+	// pass request by value to restrict the scope of side effects
+	if err := writeIniConfig(sb.log, enableVmd, *req); err != nil {
+		return err
+	}
+
+	if req.Class != storage.BdevClassNvme {
+		// aio json spdk config not supported yet
+		sb.log.Info("Skipping JSON SPDK config creation for non-NVMe bdev class")
+		return nil
+	}
+	if enableVmd {
+		// vmd support in json spdk config not supported yet
+		sb.log.Info("Skipping JSON SPDK config creation for VMD enabled hosts")
+		return nil
+	}
+
+	req.ConfigPath = req.ConfigPath + ".json"
+	sb.log.Debugf("write nvme output json config: %+v", req)
+
+	return writeJsonConfig(sb.log, enableVmd, *req)
 }

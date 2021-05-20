@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,14 +27,14 @@ import (
 // converted into nvme config files that can be consumed by spdk.
 func TestBackend_writeNvmeConfig(t *testing.T) {
 	tests := map[string]struct {
-		class           storage.BdevClass
-		devList         []string
-		bdevVmdDisabled bool
-		fileSize        int // relevant for FILE
-		vosEnv          string
-		wantBuf         []string
-		expValidateErr  error
-		expWriteErr     error
+		class          storage.BdevClass
+		devList        []string
+		enableVmd      bool
+		fileSize       int // relevant for FILE
+		vosEnv         string
+		wantBuf        []string
+		expValidateErr error
+		expWriteErr    error
 	}{
 		"config validation failure": {
 			class:          storage.BdevClassNvme,
@@ -42,9 +42,8 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			expValidateErr: errors.New("unexpected pci address"),
 		},
 		"multiple controllers": {
-			class:           storage.BdevClassNvme,
-			bdevVmdDisabled: true,
-			devList:         []string{"0000:81:00.0", "0000:81:00.1"},
+			class:   storage.BdevClassNvme,
+			devList: []string{"0000:81:00.0", "0000:81:00.1"},
 			wantBuf: []string{
 				`[Nvme]`,
 				`    TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme_hostfoo_0`,
@@ -60,8 +59,9 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			vosEnv: "NVME",
 		},
 		"VMD devices": {
-			class:   storage.BdevClassNvme,
-			devList: []string{"5d0505:01:00.0", "5d0505:03:00.0"},
+			class:     storage.BdevClassNvme,
+			enableVmd: true,
+			devList:   []string{"5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
 				`[Vmd]`,
 				`    Enable True`,
@@ -80,8 +80,9 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			vosEnv: "NVME",
 		},
 		"multiple VMD and NVMe controllers": {
-			class:   storage.BdevClassNvme,
-			devList: []string{"0000:81:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
+			class:     storage.BdevClassNvme,
+			enableVmd: true,
+			devList:   []string{"0000:81:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
 				`[Vmd]`,
 				`    Enable True`,
@@ -179,14 +180,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 
 			req := FormatRequestFromConfig(log, &cfg)
 
-			sb := defaultBackend(log)
-			// VMD state will be set on the backend during
-			// provider format request forwarding
-			if tc.bdevVmdDisabled {
-				sb.DisableVMD()
-			}
-
-			gotWriteErr := sb.writeNvmeConfig(&req)
+			gotWriteErr := writeIniConfig(log, tc.enableVmd, req)
 			common.CmpErr(t, tc.expWriteErr, gotWriteErr)
 			if tc.expWriteErr != nil {
 				return
@@ -277,6 +271,149 @@ func TestBackend_createEmptyFile(t *testing.T) {
 			if gotSize != int64(expSize) {
 				t.Fatalf("expected %s size to be %d, but got %d",
 					tc.path, expSize, gotSize)
+			}
+		})
+	}
+}
+
+func TestBackend_createJsonFile(t *testing.T) {
+	tests := map[string]struct {
+		confIn    storage.BdevConfig
+		enableVmd bool
+		expErr    error
+		expOut    string
+	}{
+		"nvme; single ssds": {
+			confIn: storage.BdevConfig{
+				Class:      storage.BdevClassNvme,
+				DeviceList: common.MockPCIAddrs(1),
+			},
+			expOut: `
+{
+  "subsystems": [
+    {
+      "subsystem": "bdev",
+      "config": [
+        {
+          "params": {
+            "bdev_io_pool_size": 65536,
+            "bdev_io_cache_size": 256
+          },
+          "method": "bdev_set_options"
+        },
+        {
+          "params": {
+            "retry_count": 4,
+            "nvme_adminq_poll_period_us": 100000,
+            "action_on_timeout": "none"
+          },
+          "method": "bdev_nvme_set_options"
+        },
+        {
+          "params": {
+            "period_us": 10000000
+          },
+          "method": "bdev_nvme_set_hotplug"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_0",
+            "traddr": "0000:01:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        }
+      ]
+    }
+  ]
+}
+`,
+		},
+		"nvme; multiple ssds": {
+			confIn: storage.BdevConfig{
+				Class:      storage.BdevClassNvme,
+				DeviceList: common.MockPCIAddrs(1, 2),
+			},
+			expOut: `
+{
+  "subsystems": [
+    {
+      "subsystem": "bdev",
+      "config": [
+        {
+          "params": {
+            "bdev_io_pool_size": 65536,
+            "bdev_io_cache_size": 256
+          },
+          "method": "bdev_set_options"
+        },
+        {
+          "params": {
+            "retry_count": 4,
+            "nvme_adminq_poll_period_us": 100000,
+            "action_on_timeout": "none"
+          },
+          "method": "bdev_nvme_set_options"
+        },
+        {
+          "params": {
+            "period_us": 10000000
+          },
+          "method": "bdev_nvme_set_hotplug"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_0",
+            "traddr": "0000:01:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_1",
+            "traddr": "0000:02:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        }
+      ]
+    }
+  ]
+}
+`,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			testDir, clean := common.CreateTestDir(t)
+			defer clean()
+
+			req := FormatRequestFromConfig(log, &tc.confIn)
+			req.ConfigPath = filepath.Join(testDir, "outfile")
+
+			gotErr := writeJsonConfig(log, tc.enableVmd, req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			gotOut, err := ioutil.ReadFile(req.ConfigPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// replace hostname in wantOut
+			hn, _ := os.Hostname()
+			tc.expOut = strings.ReplaceAll(tc.expOut, "hostfoo", hn)
+			tc.expOut = strings.TrimSpace(tc.expOut)
+
+			if diff := cmp.Diff(tc.expOut, string(gotOut)); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
 			}
 		})
 	}
