@@ -400,8 +400,8 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 	if (!iov.iov_buf)
 		return ENOMEM;
 
-	/* TODO: Make the conditional on handle size */
-	if (1) {
+	/* Max size of ioctl is 16k */
+	if (hs_reply->fsr_pool_size >= (16 * 1024)) {
 		char fname[NAME_LEN];
 
 		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
