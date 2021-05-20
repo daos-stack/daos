@@ -1740,10 +1740,7 @@ def run_posix_tests(server, conf, test=None):
                 destroy_container(conf, pool, pt.container)
                 pt.container = None
             except Exception as inst:
-
-                print(inst.__traceback__)
-                trace = traceback.format_tb(inst.__traceback__)
-                print(traceback.format_tb(inst.__traceback__))
+                trace = '\n'.join(traceback.format_tb(inst.__traceback__))
                 duration = time.time() - start
                 conf.wf.add_test_case(pt.test_name,
                                       repr(inst),
@@ -2966,10 +2963,10 @@ def main():
         fi_test = True
     elif args.mode == 'all':
         fi_test = True
+        fatal_errors.add_result(run_posix_tests(server, conf))
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
-        fatal_errors.add_result(run_posix_tests(server, conf))
         test_pydaos_kv(server, conf)
         fatal_errors.add_result(set_server_fi(server))
     elif args.test == 'all':
@@ -2977,9 +2974,9 @@ def main():
     elif args.test:
         fatal_errors.add_result(run_posix_tests(server, conf, args.test))
     else:
+        fatal_errors.add_result(run_posix_tests(server, conf))
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
-        fatal_errors.add_result(run_posix_tests(server, conf))
         fatal_errors.add_result(set_server_fi(server))
 
     if server.stop(wf_server) != 0:
