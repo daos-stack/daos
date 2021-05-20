@@ -1282,7 +1282,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	 */
 	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", 1, &entry);
 	if (rc && rc != EEXIST) {
-		D_ERROR("Failed to insert root entry, %d"\n", rc);
+		D_ERROR("Failed to insert root entry, %d\n", rc);
 		D_GOTO(err_super, rc);
 	}
 
