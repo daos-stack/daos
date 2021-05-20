@@ -12,7 +12,7 @@ SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
 def scons():
     """Scons function"""
 
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'CART_VERSION')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -23,8 +23,10 @@ def scons():
     prereqs.require(denv, 'uuid')
 
     gurt_targets = denv.SharedObject(SRC)
-    gurt_lib = daos_build.library(denv, 'libgurt', gurt_targets)
-    denv.Install('$PREFIX/lib64/', gurt_lib)
+    gurt_lib = daos_build.library(denv, 'libgurt', gurt_targets,
+                                  SHLIBVERSION=CART_VERSION)
+    denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib,
+                             SHLIBVERSION=CART_VERSION)
 
     Default(gurt_lib)
     Export('gurt_lib', 'gurt_targets')
