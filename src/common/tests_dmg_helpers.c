@@ -486,7 +486,7 @@ dmg_pool_create(const char *dmg_config_file,
 
 		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_LABEL);
 		if (entry != NULL) {
-			args = cmd_push_arg(args, &argcount, "--name=%s ",
+			args = cmd_push_arg(args, &argcount, "--label=%s ",
 					    entry->dpe_str);
 		}
 	}
