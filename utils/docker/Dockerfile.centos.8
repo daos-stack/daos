@@ -116,11 +116,10 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
 # seconds.
 WORKDIR /home/daos/pre
 COPY SConstruct .
-COPY utils/sl utils/sl
+COPY site_scons site_scons
 COPY utils/build.config utils/
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -155,12 +154,12 @@ LABEL DAOS=stage1
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
+COPY site_scons site_scons
 COPY utils utils
 COPY src src
 USER root:root
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
 
 # select compiler to use
 ARG COMPILER=gcc

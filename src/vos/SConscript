@@ -24,9 +24,9 @@ def build_vos(env, standalone):
 
     files = FILES
     if GetOption("preprocess"):
-        #For profileing performance, it can sometimes be useful to preprocess
-        #the files first.   This uses a feature in utils/sl to do this so
-        #profiling tools will point at preprocessed file lines.
+        # For profiling performance, it can sometimes be useful to preprocess
+        # the files first.   This uses a feature in site_scons to do this so
+        # profiling tools will point at preprocessed file lines.
         files = denv.Preprocess(FILES)
 
     vos = daos_build.library(denv, libname, files, install_off='../..',

@@ -43,7 +43,7 @@ var (
 	)
 )
 
-func mockEngineDiedEvt(t *testing.T) *events.RASEvent {
+func mockEvtEngineDied(t *testing.T) *events.RASEvent {
 	t.Helper()
 	return events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit, 1234)
 }
@@ -391,7 +391,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 
 				srv.OnInstanceExit(
 					func(_ context.Context, _ uint32, _ system.Rank, _ error, _ uint64) error {
-						svc.events.Publish(mockEngineDiedEvt(t))
+						svc.events.Publish(mockEvtEngineDied(t))
 						return nil
 					})
 			}
