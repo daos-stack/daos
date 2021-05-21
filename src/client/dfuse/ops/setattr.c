@@ -11,9 +11,8 @@ void
 dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		 struct stat *attr, int to_set)
 {
-	int		dfs_flags = 0;
-	struct stat	attr_in = *attr;
-	int		rc;
+	int	dfs_flags = 0;
+	int	rc;
 
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
