@@ -7,7 +7,6 @@ package scm
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -777,11 +776,8 @@ func TestProviderFormat(t *testing.T) {
 				}
 			}
 
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(testDir)
+			testDir, clean := common.CreateTestDir(t)
+			defer clean()
 
 			req := tc.request
 			if req == nil {

@@ -152,11 +152,8 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(testDir)
+			testDir, clean := common.CreateTestDir(t)
+			defer clean()
 
 			cfg := storage.BdevConfig{}
 			if tc.class != "" {

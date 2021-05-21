@@ -7,10 +7,8 @@ package bdev
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -117,11 +115,8 @@ func TestBackend_Format(t *testing.T) {
 	pci2 := storage.MockNvmeController(2).PciAddr
 	pci3 := storage.MockNvmeController(3).PciAddr
 
-	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(testDir)
+	testDir, clean := common.CreateTestDir(t)
+	defer clean()
 
 	for name, tc := range map[string]struct {
 		req     FormatRequest
