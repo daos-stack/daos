@@ -255,4 +255,5 @@ int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
 
 
 void ds_cont_tgt_ec_eph_query_ult(void *data);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

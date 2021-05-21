@@ -11,6 +11,7 @@
 
 #include <math.h>
 #include <float.h>
+#include <pthread.h>
 #include <gurt/common.h>
 #include <gurt/list.h>
 #include <sys/shm.h>
@@ -69,6 +70,7 @@ static struct d_tm_shmem {
 	pthread_mutex_t		 add_lock; /** for synchronized access */
 	bool			 sync_access; /** whether to sync access */
 	bool			 retain; /** retain shmem region on exit */
+	int			 id; /** Instance ID */
 } tm_shmem;
 
 /* Internal helper functions */
@@ -249,6 +251,7 @@ track_open_shmem(struct d_tm_context *ctx, struct d_tm_shmem_hdr *shmem,
 	new->region = shmem;
 	new->shmid = shmid;
 	new->key = key;
+
 	d_list_add(&new->link, &ctx->open_shmem);
 
 	return 0;
@@ -302,7 +305,7 @@ get_shmem_entry_for_key(struct d_tm_context *ctx, key_t key)
 static struct d_tm_shmem_hdr *
 get_shmem_for_key(struct d_tm_context *ctx, key_t key)
 {
-	struct local_shmem_list *entry;
+	struct local_shmem_list	*entry;
 
 	D_ASSERT(ctx != NULL && ctx->shmem_root != NULL);
 
@@ -355,6 +358,7 @@ close_all_shmem(struct d_tm_context *ctx, bool destroy)
 	}
 
 	close_shmem(ctx->shmem_root);
+	ctx->shmem_root = NULL;
 	if (destroy)
 		destroy_shmem(ctx->shmid_root);
 }
@@ -419,7 +423,7 @@ d_tm_follow_link(struct d_tm_context *ctx, struct d_tm_node_t *link)
 	link_key = (key_t)metric->dtm_data.value;
 	shmem = get_shmem_for_key(ctx, link_key);
 	if (shmem == NULL) {
-		D_ERROR("couldn't follow link to shmem key %d\n", link_key);
+		D_ERROR("couldn't follow link to shmem key 0x%x\n", link_key);
 		return NULL;
 	}
 
@@ -430,7 +434,8 @@ d_tm_follow_link(struct d_tm_context *ctx, struct d_tm_node_t *link)
 		close_shmem_for_key(ctx, link_key, false);
 		shmem = get_shmem_for_key(ctx, link_key);
 		if (shmem == NULL) {
-			D_ERROR("couldn't reopen shmem key %d\n", link_key);
+			D_DEBUG(DB_TRACE, "couldn't reopen shmem key 0x%x\n",
+				link_key);
 			return NULL;
 		}
 	}
@@ -742,6 +747,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 		D_INFO("Retaining shared memory for id %d\n", id);
 	}
 
+	tm_shmem.id = id;
 	snprintf(tmp, sizeof(tmp), "ID: %d", id);
 	key = d_tm_get_srv_key(id);
 	rc = create_shmem(tmp, key, mem_size, &shmid, &new_shmem);
@@ -1131,9 +1137,9 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 	if (node == NULL)
 		return;
 
-	name = d_tm_conv_ptr(ctx, node, node->dtn_name);
+	name = d_tm_get_name(ctx, node);
 	if (name == NULL)
-		return;
+		name = "(null)";
 
 	show_meta = opt_fields & D_TM_INCLUDE_METADATA;
 	show_timestamp = opt_fields & D_TM_INCLUDE_TIMESTAMP;
@@ -1151,7 +1157,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 			fprintf(stream, "%s/", path);
 	} else {
 		for (i = 0; i < level; i++)
-			fprintf(stream, "%20s", " ");
+			fprintf(stream, "%4s", " ");
 		if ((show_timestamp) && (node->dtn_type != D_TM_DIRECTORY))
 			fprintf(stream, "%s, ", timestamp);
 	}
@@ -1339,7 +1345,7 @@ d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
 	while (node != NULL) {
 		node_name = conv_ptr(shmem, node->dtn_name);
 		if (node_name == NULL)
-			break;
+			node_name = "(null)";
 
 		if ((path == NULL) ||
 		    (strncmp(path, "/", D_TM_MAX_NAME_LEN) == 0))
@@ -2147,12 +2153,12 @@ parse_path_fmt(char *path, size_t path_size, const char *fmt, va_list args)
 }
 
 static key_t
-get_unique_shmem_key(const char *path)
+get_unique_shmem_key(const char *path, int id)
 {
 	char	salted[D_TM_MAX_NAME_LEN + 64] = {0};
 
 	/* salt to avoid conflicts with other processes */
-	snprintf(salted, sizeof(salted) - 1, "%s%d", path, getpid());
+	snprintf(salted, sizeof(salted) - 1, "%s-id%d", path, id);
 	return (key_t)d_hash_string_u32(salted, sizeof(salted));
 }
 
@@ -2247,7 +2253,7 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 		D_GOTO(fail_unlock, rc = -DER_EXIST);
 	}
 
-	key = get_unique_shmem_key(path);
+	key = get_unique_shmem_key(path, tm_shmem.id);
 	rc = create_shmem(get_last_token(path), key, size_bytes, &new_shmid,
 			  &new_shmem);
 	if (rc != 0)
@@ -3279,6 +3285,28 @@ d_tm_close(struct d_tm_context **ctx)
 
 	close_all_shmem(*ctx, false);
 	D_FREE(*ctx);
+}
+
+/**
+ * Releases deleted resources cached by the context.
+ *
+ * Not thread safe. Recommended as a periodic task for telemetry clients.
+ *
+ * \param[in]	ctx	Context to be garbage collected
+ */
+void
+d_tm_gc_ctx(struct d_tm_context *ctx)
+{
+	struct local_shmem_list	*cur = NULL;
+	struct local_shmem_list	*next = NULL;
+
+	if (ctx == NULL)
+		return;
+
+	d_list_for_each_entry_safe(cur, next, &ctx->open_shmem, link) {
+		if (cur->region == NULL || cur->region->sh_deleted)
+			close_local_shmem_entry(cur, false);
+	}
 }
 
 /**
