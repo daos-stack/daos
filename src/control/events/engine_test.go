@@ -26,18 +26,18 @@ var (
 	tExitErr = common.ExitStatus("test")
 )
 
-func mockDiedEvt(t *testing.T) *RASEvent {
+func mockEvtDied(t *testing.T) *RASEvent {
 	t.Helper()
 	return NewEngineDiedEvent(tHost, tInstanceIdx, tRank, tExitErr, tPid)
 }
 
-func mockFmtReqEvt(t *testing.T) *RASEvent {
+func mockEvtFmtReq(t *testing.T) *RASEvent {
 	t.Helper()
 	return NewEngineFormatRequiredEvent(tHost, tInstanceIdx, tFmtType)
 }
 
 func TestEvents_ConvertEngineDied(t *testing.T) {
-	event := mockDiedEvt(t)
+	event := mockEvtDied(t)
 
 	pbEvent, err := event.ToProto()
 	if err != nil {
@@ -59,7 +59,7 @@ func TestEvents_ConvertEngineDied(t *testing.T) {
 }
 
 func TestEvents_ConvertEngineFormatRequired(t *testing.T) {
-	event := mockFmtReqEvt(t)
+	event := mockEvtFmtReq(t)
 
 	pbEvent, err := event.ToProto()
 	if err != nil {
