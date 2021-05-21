@@ -249,15 +249,15 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			if tc.class != storage.BdevClassFile {
 				return
 			}
+			expSize := (int64(tc.fileSize*gbyte) / int64(clsFileBlkSize)) * int64(clsFileBlkSize)
 			for _, testFile := range cfg.DeviceList {
 				st, err := os.Stat(testFile)
 				if err != nil {
 					t.Fatal(err)
 				}
-				expectedSize := (int64(tc.fileSize*gbyte) / int64(blkSize)) * int64(blkSize)
 				gotSize := st.Size()
-				if gotSize != expectedSize {
-					t.Fatalf("expected %s size to be %d, but got %d", testFile, expectedSize,
+				if gotSize != expSize {
+					t.Fatalf("expected %s size to be %d, but got %d", testFile, expSize,
 						gotSize)
 				}
 			}

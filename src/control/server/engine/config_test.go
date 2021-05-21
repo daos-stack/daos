@@ -314,8 +314,15 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"file class but no size": {
 			cfg: baseValidConfig().
-				WithBdevClass("file"),
+				WithBdevClass("file").
+				WithBdevDeviceList("bdev1"),
 			expErr: errors.New("file requires non-zero bdev_size"),
+		},
+		"file class but no devices": {
+			cfg: baseValidConfig().
+				WithBdevClass("file").
+				WithBdevFileSize(10),
+			expErr: errors.New("file requires non-empty bdev_list"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

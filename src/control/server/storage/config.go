@@ -157,6 +157,15 @@ func (bc *BdevConfig) checkNonZeroDevFileSize() error {
 	return nil
 }
 
+func (bc *BdevConfig) checkNonEmptyDevList() error {
+	if len(bc.DeviceList) == 0 {
+		return errors.Errorf("bdev_class %s requires non-empty bdev_list",
+			bc.Class)
+	}
+
+	return nil
+}
+
 // Validate sanity checks engine bdev config parameters and update VOS env.
 func (bc *BdevConfig) Validate() error {
 	if common.StringSliceHasDuplicates(bc.DeviceList) {
@@ -165,6 +174,9 @@ func (bc *BdevConfig) Validate() error {
 
 	switch bc.Class {
 	case BdevClassFile:
+		if err := bc.checkNonEmptyDevList(); err != nil {
+			return err
+		}
 		if err := bc.checkNonZeroDevFileSize(); err != nil {
 			return err
 		}
@@ -179,9 +191,8 @@ func (bc *BdevConfig) Validate() error {
 		}
 		bc.VosEnv = "MALLOC"
 	case BdevClassKdev:
-		if len(bc.DeviceList) == 0 {
-			return errors.Errorf("bdev_class %s requires non-empty bdev_list",
-				bc.Class)
+		if err := bc.checkNonEmptyDevList(); err != nil {
+			return err
 		}
 		bc.VosEnv = "AIO"
 	case BdevClassNvme:

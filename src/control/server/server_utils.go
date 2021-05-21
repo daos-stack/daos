@@ -38,7 +38,7 @@ type netListenFn func(string, string) (net.Listener, error)
 // resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
 type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
-var hostnameCached string
+var hostname, runningUser string
 
 const (
 	iommuPath        = "/sys/class/iommu"
@@ -76,18 +76,32 @@ func cfgGetRaftDir(cfg *config.Server) string {
 	return filepath.Join(cfg.Engines[0].Storage.SCM.MountPoint, "control_raft")
 }
 
-func hostname() string {
-	if hostnameCached != "" {
-		return hostnameCached
+func getHostname() string {
+	if hostname != "" {
+		return hostname
 	}
 
 	hn, err := os.Hostname()
 	if err != nil {
-		return fmt.Sprintf("Hostname() failed: %s", err.Error())
+		return ""
 	}
-	hostnameCached = hn
+	hostname = hn
 
-	return hn
+	return hostname
+}
+
+func getRunningUser() string {
+	if runningUser != "" {
+		return runningUser
+	}
+
+	cu, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	runningUser = cu.Username
+
+	return runningUser
 }
 
 func iommuDetected() bool {
@@ -172,12 +186,12 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 	return netDevClass, nil
 }
 
-func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter getHugePageInfoFn) error {
+func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn) error {
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := bdev.PrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
-		TargetUser:    usr.Username,
+		TargetUser:    runningUser,
 		PCIAllowlist:  strings.Join(srv.cfg.BdevInclude, " "),
 		PCIBlocklist:  strings.Join(srv.cfg.BdevExclude, " "),
 		DisableVFIO:   srv.cfg.DisableVFIO,
@@ -193,7 +207,7 @@ func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter g
 
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
-		if usr.Uid != "0" {
+		if runningUser != "root" {
 			if srv.cfg.DisableVFIO {
 				return FaultVfioDisabled
 			}
@@ -244,10 +258,10 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 
 func registerEngineEventCallbacks(engine *EngineInstance, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
-	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname()))
+	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, getHostname()))
 
 	// Register callback to publish engine format requested events.
-	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, hostname()))
+	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, getHostname()))
 
 	var onceReady sync.Once
 	engine.OnReady(func(_ context.Context) error {

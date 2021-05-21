@@ -8,6 +8,7 @@ package bdev
 
 import (
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -61,6 +62,8 @@ type (
 		DeviceFileSize int // size GB for NVMe device emulation
 		MemSize        int // size MiB memory to be used by SPDK proc
 		Hostname       string
+		OwnerUID       int
+		OwnerGID       int
 		DisableVMD     bool // set by provider during request forwarding
 	}
 
@@ -271,6 +274,8 @@ func FormatRequestFromConfig(cfg *storage.BdevConfig, hn string) FormatRequest {
 		DeviceFileSize: cfg.FileSize,
 		DeviceCount:    cfg.DeviceCount,
 		Hostname:       hn,
+		OwnerUID:       os.Geteuid(),
+		OwnerGID:       os.Getegid(),
 	}
 }
 

@@ -348,7 +348,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 
 			tly1 := newTally(engine.storageReady)
 
-			engine.OnAwaitFormat(publishFormatRequiredFn(tly1.fakePublish, hostname()))
+			engine.OnAwaitFormat(publishFormatRequiredFn(tly1.fakePublish, getHostname()))
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 			defer cancel()

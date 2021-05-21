@@ -8,7 +8,6 @@ package server
 
 import (
 	"fmt"
-	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -54,9 +53,7 @@ func updateNvmePrepareReq(req *bdev.PrepareRequest, cfg *config.Server) {
 		}
 	}
 	if req.TargetUser == "" {
-		if runningUser, err := user.Current(); err == nil {
-			req.TargetUser = runningUser.Username
-		}
+		req.TargetUser = getRunningUser()
 	}
 	if req.PCIAllowlist == "" {
 		req.PCIAllowlist = strings.Join(cfg.BdevInclude, " ")

@@ -42,8 +42,8 @@ const (
     NumberOfLuns {{.DeviceCount}}
     LunSizeInMB {{.DeviceFileSize}}000
 `
-	gbyte   = 1000000000
-	blkSize = 4096
+	gbyte          = 1000000000
+	clsFileBlkSize = 4096
 )
 
 func createEmptyFile(log logging.Logger, path string, size int64) error {
@@ -74,20 +74,6 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 		}
 
 		return errors.Wrapf(err, "fallocate %q", path)
-	}
-
-	return nil
-}
-
-// clsFileInit truncates or creates files for SPDK AIO emulation.
-func clsFileInit(log logging.Logger, req *FormatRequest) error {
-	// requested size aligned with block size
-	size := (int64(req.DeviceFileSize*gbyte) / int64(blkSize)) * int64(blkSize)
-
-	for _, path := range req.DeviceList {
-		if err := createEmptyFile(log, path, size); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -136,13 +122,6 @@ func writeConf(templ string, req *FormatRequest) error {
 func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 	if req.ConfigPath == "" {
 		return errors.New("no output config directory set in request")
-	}
-
-	// special case init for class aio-file
-	if req.Class == storage.BdevClassFile {
-		if err := clsFileInit(sb.log, req); err != nil {
-			return err
-		}
 	}
 
 	templ := map[storage.BdevClass]string{

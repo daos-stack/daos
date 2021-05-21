@@ -11,7 +11,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"os/user"
 	"sync"
 	"syscall"
 	"time"
@@ -188,12 +187,7 @@ func (srv *server) initNetwork(ctx context.Context) error {
 func (srv *server) initStorage() error {
 	defer srv.logDuration(track("time to init storage"))
 
-	runningUser, err := user.Current()
-	if err != nil {
-		return errors.Wrap(err, "unable to lookup current user")
-	}
-
-	if err := prepBdevStorage(srv, runningUser, iommuDetected(), getHugePageInfo); err != nil {
+	if err := prepBdevStorage(srv, iommuDetected(), getHugePageInfo); err != nil {
 		return err
 	}
 
@@ -288,13 +282,13 @@ func (srv *server) registerEvents() {
 	registerInitialSubscriptions(srv)
 
 	srv.sysdb.OnLeadershipGained(func(ctx context.Context) error {
-		srv.log.Infof("MS leader running on %s", hostname())
+		srv.log.Infof("MS leader running on %s", getHostname())
 		srv.mgmtSvc.startJoinLoop(ctx)
 		registerLeaderSubscriptions(srv)
 		return nil
 	})
 	srv.sysdb.OnLeadershipLost(func() error {
-		srv.log.Infof("MS leader no longer running on %s", hostname())
+		srv.log.Infof("MS leader no longer running on %s", getHostname())
 		registerFollowerSubscriptions(srv)
 		return nil
 	})

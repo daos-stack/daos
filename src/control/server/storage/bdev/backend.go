@@ -197,7 +197,7 @@ func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*For
 	return resp, nil
 }
 
-func (sb *spdkBackend) formatNvme(req FormatRequest) (*FormatResponse, error) {
+func (sb *spdkBackend) formatNvme(req *FormatRequest) (*FormatResponse, error) {
 	spdkOpts := &spdk.EnvOptions{
 		MemSize:        req.MemSize,
 		PciIncludeList: req.DeviceList,
@@ -228,6 +228,44 @@ func (sb *spdkBackend) formatNvme(req FormatRequest) (*FormatResponse, error) {
 	return sb.formatRespFromResults(results)
 }
 
+func (sb *spdkBackend) formatAioFile(req *FormatRequest) (*FormatResponse, error) {
+	resp := &FormatResponse{
+		DeviceResponses: make(DeviceFormatResponses),
+	}
+
+	// requested size aligned with block size
+	size := (int64(req.DeviceFileSize*gbyte) / int64(clsFileBlkSize)) * int64(clsFileBlkSize)
+
+	for _, path := range req.DeviceList {
+		devResp := new(DeviceFormatResponse)
+		resp.DeviceResponses[path] = devResp
+		if err := createEmptyFile(sb.log, path, size); err != nil {
+			devResp.Error = FaultFormatError(path, err)
+			continue
+		}
+		if err := os.Chown(path, req.OwnerUID, req.OwnerGID); err != nil {
+			devResp.Error = FaultFormatError(path, errors.Wrapf(err,
+				"failed to set ownership of %q to %d.%d", path,
+				req.OwnerUID, req.OwnerGID))
+		}
+	}
+
+	return resp, nil
+}
+
+func (sb *spdkBackend) formatSkip(req *FormatRequest) *FormatResponse {
+	resp := &FormatResponse{
+		DeviceResponses: make(DeviceFormatResponses),
+	}
+
+	for _, device := range req.DeviceList {
+		resp.DeviceResponses[device] = new(DeviceFormatResponse)
+		sb.log.Debugf("%s format for non-NVMe bdev skipped on %s", req.Class, device)
+	}
+
+	return resp
+}
+
 // Format initializes the SPDK environment, defers the call to finalize the same
 // environment and calls private format() routine to format all devices in the
 // request device list in a manner specific to the supplied bdev class.
@@ -240,28 +278,25 @@ func (sb *spdkBackend) Format(req FormatRequest) (resp *FormatResponse, err erro
 		}
 		if errConf := sb.writeNvmeConfig(&req); errConf != nil {
 			err = errors.Wrap(errConf, "write spdk nvme config")
+			return
+		}
+		if errChown := os.Chown(req.ConfigPath, req.OwnerUID, req.OwnerGID); err != nil {
+			err = errors.Wrapf(errChown, "failed to set ownership of %q to %d.%d",
+				req.ConfigPath, req.OwnerUID, req.OwnerGID)
 		}
 	}()
 
 	// TODO (DAOS-3844): Kick off device formats parallel?
 	switch req.Class {
-	case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
-		resp = &FormatResponse{
-			DeviceResponses: make(DeviceFormatResponses),
-		}
-
-		for _, device := range req.DeviceList {
-			resp.DeviceResponses[device] = new(DeviceFormatResponse)
-			sb.log.Debugf("%s format for non-NVMe bdev skipped on %s", req.Class, device)
-		}
-
-		return resp, nil
+	case storage.BdevClassFile:
+		return sb.formatAioFile(&req)
+	case storage.BdevClassKdev, storage.BdevClassMalloc:
+		return sb.formatSkip(&req), nil
 	case storage.BdevClassNvme:
 		if len(req.DeviceList) == 0 {
 			return nil, errors.New("empty pci address list in nvme format request")
 		}
-
-		return sb.formatNvme(req)
+		return sb.formatNvme(&req)
 	default:
 		return nil, FaultFormatUnknownClass(req.Class.String())
 	}
