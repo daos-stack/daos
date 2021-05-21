@@ -53,6 +53,10 @@ dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	    dfs_obj_t **obj, mode_t *mode, struct stat *stbuf, int xnr,
 	    char *xnames[], void *xvals[], daos_size_t *xsizes);
 
+/** update chunk size and oclass of obj with the ones from new_obj */
+void
+dfs_obj_copy_attr(dfs_obj_t *dst_obj, dfs_obj_t *src_obj);
+
 #if defined(__cplusplus)
 }
 #endif
