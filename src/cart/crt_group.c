@@ -1532,8 +1532,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		ul_out->ul_uri = tmp_uri;
 		ul_out->ul_tag = ul_in->ul_tag;
 		if (crt_gdata.cg_use_sensors)
-			(void)d_tm_increment_counter(&crt_gdata.cg_uri_self,
-						     1, NULL);
+			d_tm_inc_counter(crt_gdata.cg_uri_self, 1);
 		D_GOTO(out, rc);
 	}
 
@@ -1545,8 +1544,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 
 	if (ul_out->ul_uri != NULL) {
 		if (crt_gdata.cg_use_sensors)
-			(void)d_tm_increment_counter(&crt_gdata.cg_uri_other,
-						     1, NULL);
+			d_tm_inc_counter(crt_gdata.cg_uri_other, 1);
 		D_GOTO(out, rc);
 	}
 

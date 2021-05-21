@@ -116,6 +116,7 @@ func TestRunnerContextExit(t *testing.T) {
 
 func TestRunnerNormalExit(t *testing.T) {
 	var numaNode uint = 1
+	var bypass bool = false
 	createFakeBinary(t)
 
 	// set this to control the behavior in TestMain()
@@ -140,6 +141,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithFabricInterface("qib0").
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
 		WithPinnedNumaNode(&numaNode).
+		WithBypassHealthChk(&bypass).
 		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30)
 	runner := NewRunner(log, cfg)

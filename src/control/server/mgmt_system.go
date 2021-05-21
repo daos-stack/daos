@@ -8,16 +8,17 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -200,19 +201,26 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 				joinResps[i] = svc.join(parent, req)
 			}
 
-			for {
-				err := svc.doGroupUpdate(parent)
-				if err == nil || errors.Cause(err) == errInstanceNotReady {
-					break
-				}
-
-				err = errors.Wrap(err, "failed to perform CaRT group update")
-				for i, jr := range joinResps {
-					if jr.joinErr == nil {
-						joinResps[i] = &batchJoinResponse{joinErr: err}
+			// Reset groupUpdateNeeded here to avoid triggering it
+			// again by timer. Any requests that were made between
+			// the last timer and these join requests will be handled
+			// here.
+			groupUpdateNeeded = false
+			if err := svc.doGroupUpdate(parent); err != nil {
+				// If the call failed, however, make sure that
+				// it gets called again by the timer. We have to
+				// deal with the situation where a local MS service
+				// rank is joining but isn't ready to handle dRPC
+				// requests yet.
+				groupUpdateNeeded = true
+				if errors.Cause(err) != errInstanceNotReady {
+					err = errors.Wrap(err, "failed to perform CaRT group update")
+					for i, jr := range joinResps {
+						if jr.joinErr == nil {
+							joinResps[i] = &batchJoinResponse{joinErr: err}
+						}
 					}
 				}
-				break
 			}
 
 			svc.log.Debugf("sending %d join responses", len(joinReqs))
@@ -580,18 +588,35 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 	return resp, nil
 }
 
-func populateStopResp(fanResp *fanoutResponse, pbResp *mgmtpb.SystemStopResp, action string) error {
-	pbResp.Absentranks = fanResp.AbsentRanks.String()
-	pbResp.Absenthosts = fanResp.AbsentHosts.String()
+func fanout2pbStopResp(act string, fr *fanoutResponse) (*mgmtpb.SystemStopResp, error) {
+	sr := &mgmtpb.SystemStopResp{}
+	sr.Absentranks = fr.AbsentRanks.String()
+	sr.Absenthosts = fr.AbsentHosts.String()
 
-	if err := convert.Types(fanResp.Results, &pbResp.Results); err != nil {
-		return err
+	if err := convert.Types(fr.Results, &sr.Results); err != nil {
+		return nil, err
 	}
-	for _, result := range pbResp.Results {
-		result.Action = action
+	for _, r := range sr.Results {
+		r.Action = act
 	}
 
-	return nil
+	return sr, nil
+}
+
+func newSystemStopFailedEvent(act, errs string) *events.RASEvent {
+	return events.NewGenericEvent(events.RASSystemStopFailed, events.RASSeverityError,
+		fmt.Sprintf("System shutdown failed during %q action, %s", act, errs), "")
+}
+
+// processStopResp will raise failed event if the response results contain
+// errors, no event will be raised if user requested ranks or hosts that are
+// absent in the membership. Fanout response will then be converted to protouf.
+func processStopResp(act string, fr *fanoutResponse, publisher events.Publisher) (*mgmtpb.SystemStopResp, error) {
+	if fr.Results.Errors() != nil {
+		publisher.Publish(newSystemStopFailedEvent(act, fr.Results.Errors().Error()))
+	}
+
+	return fanout2pbStopResp(act, fr)
 }
 
 // SystemStop implements the method defined for the Management Service.
@@ -603,61 +628,72 @@ func populateStopResp(fanResp *fanoutResponse, pbResp *mgmtpb.SystemStopResp, ac
 //
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected ranks.
-func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq) (*mgmtpb.SystemStopResp, error) {
-	if err := svc.checkLeaderRequest(pbReq); err != nil {
-		return nil, err
+func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (resp *mgmtpb.SystemStopResp, err error) {
+	if err = svc.checkLeaderRequest(req); err != nil {
+		return
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
-	if !pbReq.GetPrep() && !pbReq.GetKill() {
-		return nil, errors.New("invalid request, no action specified")
+	defer func() {
+		if err == nil {
+			svc.log.Debugf("Responding to SystemStop RPC: %+v", resp)
+		}
+	}()
+
+	fReq := fanoutRequest{
+		Hosts: req.GetHosts(),
+		Ranks: req.GetRanks(),
+		Force: req.GetForce(),
+	}
+	var fResp *fanoutResponse
+
+	fReq.Method = control.PrepShutdownRanks
+	// if not forced, update membership on rank error
+	fResp, _, err = svc.rpcFanout(ctx, fReq, !req.Force)
+	if err != nil {
+		return
+	}
+	if !fReq.Force && fResp.Results.Errors() != nil {
+		// return early if not forced and prep shutdown fails
+		resp, err = processStopResp("prep shutdown", fResp, svc.events)
+		return
 	}
 
-	// Raise event on systemwide shutdown
-	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" && pbReq.GetKill() {
-		svc.events.Publish(events.New(&events.RASEvent{
-			ID:   events.RASSystemStop,
-			Type: events.RASTypeInfoOnly,
-			Msg:  "System-wide shutdown requested",
-			Rank: uint32(system.NilRank),
-		}))
+	fReq.Method = control.StopRanks
+	fResp, _, err = svc.rpcFanout(ctx, fReq, true)
+	if err != nil {
+		return
 	}
 
-	pbResp := new(mgmtpb.SystemStopResp)
+	resp, err = processStopResp("stop", fResp, svc.events)
+	return
+}
 
-	fanReq := fanoutRequest{
-		Hosts: pbReq.GetHosts(),
-		Ranks: pbReq.GetRanks(),
-		Force: pbReq.GetForce(),
+func newSystemStartFailedEvent(errs string) *events.RASEvent {
+	return events.NewGenericEvent(events.RASSystemStartFailed, events.RASSeverityError,
+		fmt.Sprintf("System startup failed, %s", errs), "")
+}
+
+// processStartResp will raise failed event if the response results contain
+// errors, no event will be raised if user requested ranks or hosts that are
+// absent in the membership. Fanout response will then be converted to protouf.
+func processStartResp(fr *fanoutResponse, publisher events.Publisher) (*mgmtpb.SystemStartResp, error) {
+	if fr.Results.Errors() != nil {
+		publisher.Publish(newSystemStartFailedEvent(fr.Results.Errors().Error()))
 	}
 
-	if pbReq.GetPrep() {
-		fanReq.Method = control.PrepShutdownRanks
-		fanResp, _, err := svc.rpcFanout(ctx, fanReq, false)
-		if err != nil {
-			return nil, err
-		}
-		if err := populateStopResp(fanResp, pbResp, "prep shutdown"); err != nil {
-			return nil, err
-		}
-		if !fanReq.Force && fanResp.Results.Errors() != nil {
-			return pbResp, errors.New("PrepShutdown HasErrors")
-		}
+	sr := &mgmtpb.SystemStartResp{}
+	sr.Absentranks = fr.AbsentRanks.String()
+	sr.Absenthosts = fr.AbsentHosts.String()
+
+	if err := convert.Types(fr.Results, &sr.Results); err != nil {
+		return nil, err
 	}
-	if pbReq.GetKill() {
-		fanReq.Method = control.StopRanks
-		fanResp, _, err := svc.rpcFanout(ctx, fanReq, true)
-		if err != nil {
-			return nil, err
-		}
-		if err := populateStopResp(fanResp, pbResp, "stop"); err != nil {
-			return nil, err
-		}
+	for _, r := range sr.Results {
+		r.Action = "start"
 	}
 
-	svc.log.Debugf("Responding to SystemStop RPC: %+v", pbResp)
-
-	return pbResp, nil
+	return sr, nil
 }
 
 // SystemStart implements the method defined for the Management Service.
@@ -668,45 +704,29 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, pbReq *mgmtpb.SystemStopReq)
 //
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected ranks.
-func (svc *mgmtSvc) SystemStart(ctx context.Context, pbReq *mgmtpb.SystemStartReq) (*mgmtpb.SystemStartResp, error) {
-	if err := svc.checkLeaderRequest(pbReq); err != nil {
-		return nil, err
+func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq) (resp *mgmtpb.SystemStartResp, err error) {
+	if err = svc.checkLeaderRequest(req); err != nil {
+		return
 	}
 	svc.log.Debug("Received SystemStart RPC")
 
-	// Raise event on systemwide start
-	if pbReq.GetHosts() == "" && pbReq.GetRanks() == "" {
-		svc.events.Publish(events.New(&events.RASEvent{
-			ID:   events.RASSystemStart,
-			Type: events.RASTypeInfoOnly,
-			Msg:  "System-wide start requested",
-			Rank: uint32(system.NilRank),
-		}))
-	}
+	defer func() {
+		if err == nil {
+			svc.log.Debugf("Responding to SystemStart RPC: %+v", resp)
+		}
+	}()
 
-	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
+	fResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.StartRanks,
-		Hosts:  pbReq.GetHosts(),
-		Ranks:  pbReq.GetRanks(),
+		Hosts:  req.GetHosts(),
+		Ranks:  req.GetRanks(),
 	}, true)
 	if err != nil {
 		return nil, err
 	}
 
-	pbResp := &mgmtpb.SystemStartResp{
-		Absentranks: fanResp.AbsentRanks.String(),
-		Absenthosts: fanResp.AbsentHosts.String(),
-	}
-	if err := convert.Types(fanResp.Results, &pbResp.Results); err != nil {
-		return nil, err
-	}
-	for _, result := range pbResp.Results {
-		result.Action = "start"
-	}
-
-	svc.log.Debugf("Responding to SystemStart RPC: %+v", pbResp)
-
-	return pbResp, nil
+	resp, err = processStartResp(fResp, svc.events)
+	return
 }
 
 // ClusterEvent management service gRPC handler receives ClusterEvent requests

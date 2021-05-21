@@ -359,7 +359,8 @@ grp_map_extend(uint32_t *grp_map, uint32_t *grp_map_size)
 	int	 i;
 
 	if (*grp_map_size > STACK_TGTS_SIZE)
-		D_REALLOC_ARRAY(new_grp_map, grp_map, new_grp_size);
+		D_REALLOC_ARRAY(new_grp_map, grp_map, *grp_map_size,
+				new_grp_size);
 	else
 		D_ALLOC_ARRAY(new_grp_map, new_grp_size);
 

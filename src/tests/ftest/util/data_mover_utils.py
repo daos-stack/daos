@@ -27,14 +27,6 @@ class DcpCommand(ExecutableCommand):
         self.bufsize = FormattedParameter("--bufsize {}")
         # work size per task in bytes (default 64MB)
         self.chunksize = FormattedParameter("--chunksize {}")
-        # DAOS source pool
-        self.daos_src_pool = FormattedParameter("--daos-src-pool {}")
-        # DAOS destination pool
-        self.daos_dst_pool = FormattedParameter("--daos-dst-pool {}")
-        # DAOS source container
-        self.daos_src_cont = FormattedParameter("--daos-src-cont {}")
-        # DAOS destination container
-        self.daos_dst_cont = FormattedParameter("--daos-dst-cont {}")
         # DAOS prefix for unified namespace path
         self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # DAOS API in {DFS, DAOS} (default uses DFS for POSIX containers)
@@ -74,92 +66,38 @@ class DcpCommand(ExecutableCommand):
 
         return param_names
 
-    def set_dcp_params(self,
-                       src_pool=None, src_cont=None, src_path=None,
-                       dst_pool=None, dst_cont=None, dst_path=None,
+    def set_dcp_params(self, src=None, dst=None,
                        prefix=None, display=True):
         """Set common dcp params.
 
         Args:
-            src_pool (str, optional): source pool uuid
-            src_cont (str, optional): source container uuid
-            src_path (str, optional): source path
-            dst_pool (str, optional): destination pool uuid
-            dst_cont (str, optional): destination container uuid
-            dst_path (str, optional): destination path
+            src (str, optional): The source path formatted as
+                daos://<pool>/<cont>/<path> or <path>
+            dst (str, optional): The destination path formatted as
+                daos://<pool>/<cont>/<path> or <path>
             prefix (str, optional): prefix for uns path
             display (bool, optional): print updated params. Defaults to True.
-
         """
-        if src_pool:
-            self.daos_src_pool.update(src_pool,
-                                      "daos_src_pool" if display else None)
-
-        if src_cont:
-            self.daos_src_cont.update(src_cont,
-                                      "daos_src_cont" if display else None)
-        if src_path:
-            self.src_path.update(src_path,
+        if src:
+            self.src_path.update(src,
                                  "src_path" if display else None)
-        if dst_pool:
-            self.daos_dst_pool.update(dst_pool,
-                                      "daos_dst_pool" if display else None)
-        if dst_cont:
-            self.daos_dst_cont.update(dst_cont,
-                                      "daos_dst_cont" if display else None)
-        if dst_path:
-            self.dst_path.update(dst_path,
+        if dst:
+            self.dst_path.update(dst,
                                  "dst_path" if display else None)
         if prefix:
             self.daos_prefix.update(prefix,
                                     "daos_prefix" if display else None)
 
-
 class Dcp(DcpCommand):
     """Class defining an object of type DcpCommand."""
 
-    def __init__(self, hosts, tmp, timeout=30):
+    def __init__(self, hosts, timeout=30):
         """Create a dcp object."""
         super().__init__("/run/dcp/*", "dcp")
 
         # set params
         self.timeout = timeout
         self.hosts = hosts
-        self.tmp = tmp
-
-        # Compatibility option
-        self.has_src_pool = False
-        self.has_bufsize = True
-
-    def set_compatibility(self, has_src_pool, has_bufsize):
-        """Set compatibility options.
-
-        Args:
-            has_src_pool (bool): Whether dcp has the --daos-src-pool option
-            has_bufsize (bool): Whether dcp has the --bufsize option
-
-        """
-        self.has_src_pool = has_src_pool
-        self.log.info("set_compatibility: has_src_pool=%s\n",
-                      str(self.has_src_pool))
-        self.has_bufsize = has_bufsize
-        self.log.info("set_compatibility: has_bufsize=%s\n",
-                      str(self.has_bufsize))
-
-    def query_compatibility(self):
-        """Query for compatibility options and set class variables."""
-        self.blocksize.update(None)
-        self.bufsize.update(None)
-        self.print_usage.update(True)
-        self.exit_status_exception = False
-        result = self.run(self.tmp, 1)
-        self.exit_status_exception = True
-        self.has_src_pool = ("--daos-src-pool" in result.stdout_text)
-        self.log.info("query_compatibility: has_src_pool=%s\n",
-                      str(self.has_src_pool))
-        self.has_bufsize = ("--bufsize" in result.stdout_text)
-        self.log.info("query_compatibility: has_bufsize=%s\n",
-                      str(self.has_bufsize))
 
     def run(self, tmp, processes):
         # pylint: disable=arguments-differ
@@ -178,48 +116,6 @@ class Dcp(DcpCommand):
 
         """
         self.log.info('Starting dcp')
-
-        # Handle compatibility
-        if not self.has_src_pool:
-            src_pool = self.daos_src_pool.value
-            src_cont = self.daos_src_cont.value
-            src_path = self.src_path.value
-            dst_pool = self.daos_dst_pool.value
-            dst_cont = self.daos_dst_cont.value
-            dst_path = self.dst_path.value
-            if src_pool or src_cont:
-                self.log.info(
-                    "Converting --daos-src-pool to daos://pool/cont/path")
-                new_path = "daos://"
-                if src_pool:
-                    new_path += str(src_pool) + "/"
-                if src_cont:
-                    new_path += str(src_cont) + "/"
-                if src_path:
-                    new_path += str(src_path).lstrip("/")
-                self.src_path.update(new_path)
-                self.daos_src_pool.update(None)
-                self.daos_src_cont.update(None)
-            if dst_pool or dst_cont:
-                self.log.info(
-                    "Converting --daos-dst-pool to daos://pool/cont/path")
-                new_path = "daos://"
-                if dst_pool:
-                    new_path += str(dst_pool) + "/"
-                if dst_cont:
-                    new_path += str(dst_cont) + "/"
-                if dst_path:
-                    new_path += str(dst_path).lstrip("/")
-                self.dst_path.update(new_path)
-                self.daos_dst_pool.update(None)
-                self.daos_dst_cont.update(None)
-        if self.has_bufsize:
-            blocksize = self.blocksize.value
-            if blocksize:
-                self.log.info(
-                    "Converting --blocksize to --bufsize")
-                self.blocksize.update(None)
-                self.bufsize.update(blocksize)
 
         # Get job manager cmd
         mpirun = Mpirun(self, mpitype="mpich")

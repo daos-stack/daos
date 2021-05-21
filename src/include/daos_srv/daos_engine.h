@@ -47,6 +47,9 @@ extern int		 dss_nvme_mem_size;
 /** I/O Engine instance index */
 extern unsigned int	 dss_instance_idx;
 
+/** Bypass for the nvme health check */
+extern bool		 dss_nvme_bypass_health_check;
+
 /**
  * Stackable Module API
  * Provides a modular interface to load and register server-side code on
@@ -257,6 +260,7 @@ sched_req_attr_init(struct sched_req_attr *attr, unsigned int type,
 		    uuid_t *pool_id)
 {
 	attr->sra_type = type;
+	attr->sra_flags = 0;
 	uuid_copy(attr->sra_pool_id, *pool_id);
 }
 
@@ -831,7 +835,6 @@ ds_notify_bio_error(int media_err_type, int tgt_id);
 int
 ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 
-bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
 
 struct sys_db;

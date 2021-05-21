@@ -27,7 +27,7 @@ ior:
 datamover:
     tool: "DCP"
 dcp:
-    blocksize: '8MB'
+    bufsize: '8MB'
     chunksize: '4MB'
     copy_procs:
         processes: [3, 7, 16]

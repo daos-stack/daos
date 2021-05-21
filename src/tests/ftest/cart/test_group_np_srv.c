@@ -157,6 +157,9 @@ int main(int argc, char **argv)
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	tc_test_init(my_rank, 20, true, true);
 
+	if (test_g.t_register_swim_callback)
+		tc_test_swim_enable(true);
+
 	DBG_PRINT("STARTING SERVER\n");
 	test_run(my_rank);
 

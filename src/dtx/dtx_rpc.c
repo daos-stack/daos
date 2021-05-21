@@ -826,14 +826,16 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 	crt_group_rank(NULL, &myrank);
 
 	d_list_for_each_entry_safe(dsp, tmp, check_list, dsp_link) {
-		uint32_t	leader = PO_COMP_ID_ALL;
+		int		leader_tgt = PO_COMP_ID_ALL;
+		int		tgt;
 		bool		drop = false;
 
 		if (!(dsp->dsp_mbs.dm_flags & DMF_CONTAIN_LEADER)) {
 
 again:
 			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid,
-						      pool->sp_map_version);
+						      pool->sp_map_version,
+						      &tgt);
 			if (rc < 0) {
 				D_ERROR("Failed to find DTX leader for "
 					DF_DTI", ver %d: "DF_RC"\n",
@@ -848,7 +850,7 @@ again:
 			}
 
 			/* Still get the same leader. That is abnormal. */
-			if (leader == rc) {
+			if (leader_tgt == tgt) {
 				D_ERROR("Get DTX leader on %d (rebuilding) for "
 					DF_DTI", that is abnormal, ver is %d\n",
 					rc, DP_DTI(&dsp->dsp_xid),
@@ -861,13 +863,13 @@ again:
 				goto next;
 			}
 
-			leader = rc;
+			leader_tgt = tgt;
 		} else {
-			leader = dsp->dsp_mbs.dm_tgts[0].ddt_id;
+			leader_tgt = dsp->dsp_mbs.dm_tgts[0].ddt_id;
 		}
 
 		ABT_rwlock_wrlock(pool->sp_lock);
-		rc = pool_map_find_target(pool->sp_map, leader, &target);
+		rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
 		ABT_rwlock_unlock(pool->sp_lock);
 		D_ASSERT(rc == 1);
 

@@ -14,6 +14,7 @@ pkgs="gotestsum openmpi3                 \
       spdk-devel libfabric-devel         \
       pmix numactl-devel                 \
       libipmctl-devel python36-pyxattr   \
+      python36-junit_xml                 \
       python36-tabulate numactl          \
       libyaml-devel                      \
       valgrind-devel patchelf"

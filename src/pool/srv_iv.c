@@ -416,13 +416,14 @@ pool_iv_conns_ent_fetch(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 }
 
 static int
-pool_iv_conns_resize(d_sg_list_t *sgl, unsigned int new_size)
+pool_iv_conns_resize(d_sg_list_t *sgl, unsigned int old_size,
+		     unsigned int new_size)
 {
 	struct pool_iv_entry *old_ent = sgl->sg_iovs[0].iov_buf;
 	struct pool_iv_entry *new_ent;
 	struct pool_iv_conns *new_conns;
 
-	D_REALLOC(new_ent, old_ent, new_size);
+	D_REALLOC(new_ent, old_ent, old_size, new_size);
 	if (new_ent == NULL)
 		return -DER_NOMEM;
 
@@ -462,10 +463,12 @@ pool_iv_conns_ent_update(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 	dst_conns = &dst_entry->piv_conn_hdls;
 	dst_conns_size = dst_conns->pic_size + src_conns->pic_size;
 	if (dst_conns_size > dst_conns->pic_buf_size) {
+		unsigned int old_size;
 		unsigned int new_size;
 
 		new_size = sizeof(*dst_conns) + dst_conns_size;
-		rc = pool_iv_conns_resize(dst_sgl, new_size);
+		old_size = sizeof(*dst_conns) + dst_conns->pic_buf_size;
+		rc = pool_iv_conns_resize(dst_sgl, old_size, new_size);
 		if (rc)
 			return rc;
 
@@ -580,7 +583,7 @@ pool_iv_map_ent_update(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 		uint32_t new_size;
 
 		new_size = pool_iv_map_ent_size(pb_nr);
-		D_REALLOC(new_buf, dst_sgl->sg_iovs[0].iov_buf, new_size);
+		D_REALLOC_NZ(new_buf, dst_sgl->sg_iovs[0].iov_buf, new_size);
 		if (new_buf == NULL)
 			return -DER_NOMEM;
 
