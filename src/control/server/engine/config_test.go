@@ -473,10 +473,9 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithStorage(
 			storage.NewConfig().
 				WithScmMountPoint(mountPoint),
-			storage.NewConfig().
-				WithBdevConfigPath(cfgPath).
-				WithBdevVosEnv(vosEnv),
 		).
+		WithStorageConfigPath(cfgPath).
+		WithStorageVosEnv(vosEnv).
 		WithTargetCount(targetCount).
 		WithHelperStreamCount(helperCount).
 		WithServiceThreadCore(serviceCore).

@@ -203,18 +203,12 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
 
-	// Indicate whether VMD devices have been detected and can be used.
+	// @todo_llasek: Indicate whether VMD devices have been detected and can be used.
 	/*for _, bc := range cfg.Storage.BdevConfigs() {
 		bc.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
 	}*/
 
-	// TODO: ClassProvider should be encapsulated within bdevProvider
-	/*bcp, err := bdev.NewClassProvider(srv.log, cfg.Storage.SCM.MountPoint, &cfg.Storage.Bdev)
-	if err != nil {
-		return nil, err
-	}*/
-
-	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, cfg.Storage), joinFn,
+	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, &cfg.Storage), joinFn,
 		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
 	if idx == 0 {
 		configureFirstEngine(ctx, engine, srv.sysdb, joinFn)

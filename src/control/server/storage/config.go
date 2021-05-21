@@ -60,7 +60,7 @@ const (
 )
 
 type Config struct {
-	Tier  int        `yaml:"tier"`
+	Tier  int        `yaml:"-"`
 	Class Class      `yaml:"class"`
 	Scm   ScmConfig  `yaml:",inline"`
 	Bdev  BdevConfig `yaml:",inline"`
@@ -153,21 +153,9 @@ func (c *Config) WithBdevFileSize(size int) *Config {
 	return c
 }
 
-// WithBdevConfigPath sets the path to the generated NVMe config file used by SPDK.
-func (c *Config) WithBdevConfigPath(cfgPath string) *Config {
-	c.Bdev.ConfigPath = cfgPath
-	return c
-}
-
 // WithBdevHostname sets the hostname to be used when generating NVMe configurations.
 func (c *Config) WithBdevHostname(name string) *Config {
 	c.Bdev.Hostname = name
-	return c
-}
-
-// WithBdevVosEnv sets the VOS_BDEV_CLASS env variable.
-func (c *Config) WithBdevVosEnv(ve string) *Config {
-	c.Bdev.VosEnv = ve
 	return c
 }
 
@@ -259,13 +247,10 @@ func (sc *ScmConfig) Validate(class Class) error {
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	ConfigPath  string   `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	DeviceList  []string `yaml:"bdev_list,omitempty"`
 	VmdDisabled bool     `yaml:"-"` // set during start-up
 	DeviceCount int      `yaml:"bdev_number,omitempty"`
 	FileSize    int      `yaml:"bdev_size,omitempty"`
-	MemSize     int      `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
-	VosEnv      string   `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 	Hostname    string   `yaml:"-"` // used when generating templates
 }
 
@@ -312,4 +297,12 @@ func (bc *BdevConfig) Validate(class Class) error {
 	}
 
 	return nil
+}
+
+type StorageConfig struct {
+	Tiers      Configs `yaml:"storage"`
+	TiersNum   int     `yaml:"-"` // @todo_llasek: cmdLongFlag:"--nvme_tiers" cmdShortFlag:"-T"`
+	ConfigPath string  `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	MemSize    int     `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
+	VosEnv     string  `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 }
