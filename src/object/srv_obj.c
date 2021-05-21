@@ -1588,8 +1588,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 	}
 	if (obj_rpc_is_fetch(rpc) && create_map)
-		rc = obj_fetch_create_maps(rpc, biod,
-					   orw->orw_iod_array.oia_iods);
+		rc = obj_fetch_create_maps(rpc, biod, iods);
 
 	if (rc == -DER_CSUM)
 		obj_log_csum_err();

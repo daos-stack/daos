@@ -62,14 +62,10 @@ struct ds_cont_child {
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
 	uint32_t		 sc_dtx_resyncing:1,
-				 sc_dtx_aggregating:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
 				 sc_dtx_cos_shutdown:1,
-				 sc_dtx_cleanup_stale:1,
 				 sc_closing:1,
-				 sc_vos_aggregating:1,
-				 sc_abort_vos_aggregating:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1;
 	uint32_t		 sc_dtx_batched_gen;
