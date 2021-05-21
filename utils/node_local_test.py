@@ -1204,7 +1204,7 @@ def needs_dfuse(method):
     def _helper(self):
         self.dfuse = DFuse(self.server,
                            self.conf,
-                           caching=True,
+                           caching=False,
                            pool=self.pool,
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__)
@@ -1498,6 +1498,7 @@ class posix_tests():
                  stat.S_IRUSR]
 
         for mode in modes:
+            print(os.stat(fname))
             os.chmod(fname, mode)
             attr = os.stat(fname)
             assert stat.S_IMODE(attr.st_mode) == mode
