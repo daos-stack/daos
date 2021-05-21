@@ -592,7 +592,7 @@ def start_dfuse(self, pool, container, nodesperjob, resource_mgr=None,
         "mkdir -p {}".format(dfuse.mount_dir.value),
         "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{}\"".format(
             dfuse.mount_dir.value, dfuse_env, dfuse.__str__()),
-        "sleep 20",
+        "sleep 10",
         "df -h {}".format(dfuse.mount_dir.value),
     ]
     if resource_mgr == "SLURM":
