@@ -789,9 +789,8 @@ crt_ep_abort(crt_endpoint_t *ep);
 		CRT_GEN_STRUCT(rpc_name##_in, fields_in), )		\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
 		CRT_GEN_STRUCT(rpc_name##_out, fields_out), )		\
-	/* Generate a packed struct and assert use the offset of the	\
-	 * last field to assert that there are no holes			\
-	 */								\
+	/* Generate a packed struct and assert use the offset of the */	\
+	/* last field to assert that there are no holes */		\
 	_Pragma("pack(push, 1)")					\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
 		CRT_GEN_STRUCT(rpc_name##_in_packed, fields_in), )	\
