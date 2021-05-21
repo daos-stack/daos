@@ -191,7 +191,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn
 	prepReq := bdev.PrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
-		TargetUser:    runningUser,
+		TargetUser:    getRunningUser(),
 		PCIAllowlist:  strings.Join(srv.cfg.BdevInclude, " "),
 		PCIBlocklist:  strings.Join(srv.cfg.BdevExclude, " "),
 		DisableVFIO:   srv.cfg.DisableVFIO,
@@ -207,7 +207,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn
 
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
-		if runningUser != "root" {
+		if getRunningUser() != "root" {
 			if srv.cfg.DisableVFIO {
 				return FaultVfioDisabled
 			}
