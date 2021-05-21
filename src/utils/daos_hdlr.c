@@ -1713,7 +1713,7 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 	return rc;
 }
 
-static int
+int
 parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 {
 	char	*f1 = NULL;
