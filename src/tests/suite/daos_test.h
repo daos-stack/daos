@@ -127,6 +127,7 @@ typedef struct {
 	const char		*group;
 	const char		*dmg_config;
 	struct test_pool	pool;
+	char			*pool_label;
 	uuid_t			co_uuid;
 	unsigned int		uid;
 	unsigned int		gid;
