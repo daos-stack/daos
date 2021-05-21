@@ -171,7 +171,7 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	if err != nil {
 		return err
 	}
-	req := &control.SystemStopReq{Prep: true, Kill: true, Force: cmd.Force}
+	req := &control.SystemStopReq{Force: cmd.Force}
 	req.Hosts.ReplaceSet(hostSet)
 	req.Ranks.ReplaceSet(rankSet)
 
