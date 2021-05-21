@@ -48,6 +48,7 @@ enum dtx_operation {
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
 	((int32_t)		(do_status)		CRT_VAR)	\
+	((int32_t)		(do_pad)		CRT_VAR)	\
 	((int32_t)		(do_sub_rets)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
