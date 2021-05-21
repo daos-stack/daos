@@ -27,7 +27,7 @@ LIB_SRC = ['crt_utils.c']
 ####################################
 # Create cart utility share objects
 ####################################
-def build_utility_shared_obj(denv, prereqs):
+def build_utility_shared_obj(denv):
     """Build cart utility library"""
     cart_utils_objs  = denv.SharedObject(LIB_SRC)
     Export('cart_utils_objs')
@@ -92,7 +92,7 @@ def scons():
     denv = env.Clone()
 
     # Generate cart utility shared objects
-    build_utility_shared_obj(denv, prereqs)
+    build_utility_shared_obj(denv)
 
     denv.AppendUnique(LIBS=['gurt'])
     prereqs.require(denv, 'mercury')
