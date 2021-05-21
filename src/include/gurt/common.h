@@ -84,23 +84,23 @@ char *d_realpath(const char *path, char *resolved_path);
 			if ((count) <= 1)				\
 				D_DEBUG(DB_MEM,				\
 					"alloc(" #func ") '" name	\
-					"': %i at %p.\n",		\
+					"':%i at %p.\n",		\
 					(int)(size), (ptr));		\
 			else						\
 				D_DEBUG(DB_MEM,				\
 					"alloc(" #func ") '" name	\
-					"': %i * '" cname "':%i at %p.\n", \
+					"':%i * '" cname "':%i at %p.\n", \
 					(int)(size), (int)(count), (ptr)); \
 			break;						\
 		}							\
 		(void)(on_error);					\
 		if ((count) >= 1)					\
 			D_ERROR("out of memory (tried to "		\
-				#func " '" name "': %i)\n",		\
+				#func " '" name "':%i)\n",		\
 				(int)((size) * (count)));		\
 		else							\
 			D_ERROR("out of memory (tried to "		\
-				#func " '" name "': %i)\n",		\
+				#func " '" name "':%i)\n",		\
 				(int)(size));				\
 	} while (0)
 
@@ -183,16 +183,16 @@ char *d_realpath(const char *path, char *resolved_path);
 			if (_cnt <= 1)					\
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
-					"': %zu at %p (old '" #oldptr	\
-					"': %zu at %p).\n",		\
+					"':%zu at %p old '" #oldptr	\
+					"':%zu at %p.\n",		\
 					_esz, (newptr), _oldsz,		\
 					(oldptr));			\
 			else						\
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr		\
-					"': %zu * '" #cnt		\
-					"':%zu at %p (old '" #oldptr	\
-					"': %zu at %p).\n",		\
+					"':%zu * '" #cnt		\
+					"':%zu at %p old '" #oldptr	\
+					"':%zu at %p.\n",		\
 					_esz, _cnt, (newptr), _oldsz,	\
 					(oldptr));			\
 			(oldptr) = NULL;				\
@@ -419,7 +419,7 @@ void d_free_string(struct d_string_buffer_t *buf);
  * struct) @type, return pointer to the embedding instance of @type.
  */
 # define container_of(ptr, type, member)		\
-	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+	((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 #endif
 
 #ifndef offsetof
@@ -607,19 +607,19 @@ d_timeinc(struct timespec *now, uint64_t ns)
 static inline double
 d_time2ms(struct timespec t)
 {
-	return (double) t.tv_sec * 1e3 + (double) t.tv_nsec / 1e6;
+	return (double)t.tv_sec * 1e3 + (double)t.tv_nsec / 1e6;
 }
 
 static inline double
 d_time2us(struct timespec t)
 {
-	return (double) t.tv_sec * 1e6 + (double) t.tv_nsec / 1e3;
+	return (double)t.tv_sec * 1e6 + (double)t.tv_nsec / 1e3;
 }
 
 static inline double
 d_time2s(struct timespec t)
 {
-	return (double) t.tv_sec + (double) t.tv_nsec / 1e9;
+	return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
 }
 
 /**

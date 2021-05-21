@@ -185,7 +185,7 @@ configure dedup, the following container properties are used:
   the I/O for dedup (default is 4K).
 
 !!! warning
-    Dedup is a feature preview in 1.2 and has some known
+    Dedup is a feature preview in 2.0 and has some known
     limitations. Aggregation of deduplicated extents isn't supported and the
     checksum tree isn't persistent yet. This means that aggregation is disabled
     for a container with dedplication enabled and duplicated extents won't be

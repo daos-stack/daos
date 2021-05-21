@@ -13,14 +13,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func mockGenericEvent(t *testing.T) *RASEvent {
+func mockEvtGeneric(t *testing.T) *RASEvent {
 	t.Helper()
 	return NewGenericEvent(RASID(math.MaxInt32-1), RASSeverityError,
 		"DAOS generic test event", `{"people":["bill","steve","bob"]}`)
 }
 
 func TestEvents_ConvertGeneric(t *testing.T) {
-	event := mockGenericEvent(t)
+	event := mockEvtGeneric(t)
 
 	pbEvent, err := event.ToProto()
 	if err != nil {

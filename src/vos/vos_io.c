@@ -249,7 +249,6 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 {
 	struct dedup_entry	*entry;
 
-
 	if (!ci_is_valid(csum) || csum_len == 0 ||
 	    BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 		return;
@@ -369,10 +368,7 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 
 	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
 	D_ASSERT(d_list_empty(&ioc->ic_dedup_entries));
-	if (ioc->ic_umoffs != NULL) {
-		D_FREE(ioc->ic_umoffs);
-		ioc->ic_umoffs = NULL;
-	}
+	D_FREE(ioc->ic_umoffs);
 }
 
 static int
@@ -429,8 +425,7 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	if (ioc->ic_biod != NULL)
 		bio_iod_free(ioc->ic_biod);
 
-	if (ioc->ic_biov_csums != NULL)
-		D_FREE(ioc->ic_biov_csums);
+	D_FREE(ioc->ic_biov_csums);
 
 	if (ioc->ic_obj)
 		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj, evict);
@@ -601,7 +596,7 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	if (iov_at == iov_nr - 1) {
 		struct bio_iov *biovs;
 
-		D_REALLOC_ARRAY(biovs, bsgl->bs_iovs, iov_nr, (iov_nr * 2));
+		D_REALLOC_ARRAY(biovs, bsgl->bs_iovs, iov_nr, iov_nr * 2);
 		if (biovs == NULL)
 			return -DER_NOMEM;
 
@@ -1809,7 +1804,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 
 	D_ASSERT(ioc->ic_umoffs_cnt > 0);
 	umoff = ioc->ic_umoffs[ioc->ic_umoffs_cnt - 1];
-	irec = (struct vos_irec_df *) umem_off2ptr(vos_ioc2umm(ioc), umoff);
+	irec = (struct vos_irec_df *)umem_off2ptr(vos_ioc2umm(ioc), umoff);
 	vos_irec_init_csum(irec, value_csum);
 
 	memset(&biov, 0, sizeof(biov));
@@ -1999,7 +1994,6 @@ vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
 static void
 update_cancel(struct vos_io_context *ioc)
 {
-
 	/* Cancel SCM reservations or free persistent allocations */
 	if (vos_cont2umm(ioc->ic_cont)->umm_ops->mo_reserve != NULL)
 		return;
@@ -2277,6 +2271,7 @@ vos_set_io_csum(daos_handle_t ioh, struct dcs_iod_csums *csums)
 
 	ioc->iod_csums = csums;
 }
+
 /*
  * XXX Dup these two helper functions for this moment, implement
  * non-transactional umem_alloc/free() later.

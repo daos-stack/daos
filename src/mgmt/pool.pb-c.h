@@ -67,9 +67,9 @@ struct  _Mgmt__PoolCreateReq
    */
   char *uuid;
   /*
-   * Unique name for pool (optional)
+   * Unique label for pool (optional)
    */
-  char *name;
+  char *label;
   /*
    * DAOS system identifier
    */
