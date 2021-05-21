@@ -21,14 +21,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [ubuntu.20.04]
+        distro: [ubuntu.20.04, centos.8]
     steps:
     - uses: actions/checkout@v2
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: docker-${{ matrix.distro }}-dd2a7ec14c61749dbaec431330a7899acbb7f3d517ce0a1a9deb94ee99b8d757-{hash}
-        restore-keys: docker-${{ matrix.distro }}-dd2a7ec14c61749dbaec431330a7899acbb7f3d517ce0a1a9deb94ee99b8d757-
+        key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-{hash}
+        restore-keys: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-
     - name: Prepare base image in Docker
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg DAOS_DEPS_BUILD=no --build-arg UID
