@@ -17,7 +17,6 @@ import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
-import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
@@ -80,7 +79,7 @@ public class DaosConfigFile {
         }
       }
       if (targetNode == null) {
-        throw new ConfigurationException("cannot find " + Constants.DAOS_DEFAULT_FS + " node from " + exampleFile);
+        throw new DaosConfigException("cannot find " + Constants.DAOS_DEFAULT_FS + " node from " + exampleFile);
       }
       Element desc = (Element)targetNode.getElementsByTagName("description").item(0);
       daosUriDesc = desc.getTextContent();
