@@ -1227,6 +1227,7 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*Fa
 						if err != nil {
 							continue
 						}
+						log.Debugf("scan result: %v\n", devScanResults)
 						ScanResults = append(ScanResults, devScanResults)
 						devCount++
 					}

@@ -561,9 +561,8 @@ def get_srun_cmd(cmd, nodesperjob=1, ppn=1, srun_params=None, env=None):
     return str(srun_cmd)
 
 
-def start_dfuse(
-        self, pool, container, nodesperjob,
-        resource_mgr=None, name=None, job_spec=None):
+def start_dfuse(self, pool, container, nodesperjob, resource_mgr=None,
+                name=None, job_spec=None):
     """Create dfuse start command line for slurm.
 
     Args:
@@ -591,7 +590,7 @@ def start_dfuse(
     dfuse_env = "export D_LOG_MASK=ERR;export D_LOG_FILE={}".format(dfuse_log)
     dfuse_start_cmds = [
         "mkdir -p {}".format(dfuse.mount_dir.value),
-        "clush -w $SLURM_JOB_NODELIST \"cd {};{};{}\"".format(
+        "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{}\"".format(
             dfuse.mount_dir.value, dfuse_env, dfuse.__str__()),
         "sleep 20",
         "df -h {}".format(dfuse.mount_dir.value),
