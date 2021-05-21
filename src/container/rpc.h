@@ -282,7 +282,8 @@ CRT_RPC_DECLARE(cont_epoch_op, DAOS_ISEQ_CONT_EPOCH_OP, DAOS_OSEQ_CONT_EPOCH_OP)
 
 #define DAOS_OSEQ_CONT_SNAP_LIST /* output fields */		 \
 	((struct cont_op_out)	(slo_op)		CRT_VAR) \
-	((uint32_t)		(slo_count)		CRT_VAR)
+	((uint32_t)		(slo_count)		CRT_VAR) \
+	((uint32_t)		(slo_pad)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_snap_list, DAOS_ISEQ_CONT_SNAP_LIST,
 		DAOS_OSEQ_CONT_SNAP_LIST)

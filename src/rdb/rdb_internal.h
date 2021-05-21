@@ -241,7 +241,6 @@ struct rdb_local {
 #define DAOS_OSEQ_RDB_INSTALLSNAPSHOT /* output fields */	 \
 	((struct rdb_op_out)	(iso_op)		CRT_VAR) \
 	((msg_installsnapshot_response_t) (iso_msg)	CRT_VAR) \
-	((uint32_t)		(iso_padding)		CRT_VAR) \
 	/* chunk saved? */					 \
 	((uint64_t)		(iso_success)		CRT_VAR) \
 	/* last seq number */					 \
