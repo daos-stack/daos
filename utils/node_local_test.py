@@ -707,7 +707,7 @@ class DaosServer():
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'NORMAL'
             message = 'Incorrect number of engines running ({} vs {})'\
-                      .format(len(procs), 1)
+                      .format(len(procs), self.engines)
             entry['message'] = message
             self.conf.wf.issues.append(entry)
         rc = self.run_dmg(['system', 'stop'])
