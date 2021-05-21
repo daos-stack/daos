@@ -5587,3 +5587,35 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 
 	return rc;
 }
+
+daos_oclass_id_t
+daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+		  daos_oclass_hints_t hints, uint32_t args)
+{
+	daos_handle_t		poh;
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr;
+	uint64_t		rf_factor;
+	daos_oclass_id_t	cid;
+	int			rc;
+
+	/** select the oclass */
+	poh = dc_cont_hdl2pool_hdl(coh);
+	if (daos_handle_is_inval(poh))
+		return -DER_NO_HDL;
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+
+	rf_factor = dc_cont_hdl2redunfac(coh);
+	rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
+			   attr.pa_target_nr, ofeats, hints, &cid);
+	if (rc)
+		return 0;
+
+	return cid;
+}

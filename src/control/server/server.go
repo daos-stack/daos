@@ -291,7 +291,7 @@ func (srv *server) setupGrpc() error {
 }
 
 func (srv *server) registerEvents() {
-	registerInitialSubscriptions(srv)
+	registerFollowerSubscriptions(srv)
 
 	srv.sysdb.OnLeadershipGained(func(ctx context.Context) error {
 		srv.log.Infof("MS leader running on %s", hostname())
