@@ -1204,7 +1204,7 @@ def needs_dfuse(method):
     def _helper(self):
         self.dfuse = DFuse(self.server,
                            self.conf,
-                           caching=False,
+                           caching=True,
                            pool=self.pool,
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__)

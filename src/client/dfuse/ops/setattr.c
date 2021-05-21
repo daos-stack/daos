@@ -63,6 +63,15 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		/* Fall through and do the rest of the setattr here */
 	}
 
+	/* TODO: This has possibly just fetched the data above, so we could use
+	 * the values just set.
+	 */
+	if (ie->ie_dfs->dfs_multi_user) {
+		rc = dfuse_get_uid(ie);
+		if (rc)
+			D_GOTO(err, rc);
+	}
+
 	if (to_set & FUSE_SET_ATTR_MODE) {
 		DFUSE_TRA_DEBUG(ie, "mode %#o %#o",
 				attr->st_mode, ie->ie_stat.st_mode);
@@ -131,10 +140,9 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	if (rc)
 		D_GOTO(err, rc);
 
-	attr->st_uid = attr_in.st_uid;
-	attr->st_gid = attr_in.st_uid;
-
 reply:
+	attr->st_uid = ie->ie_stat.st_uid;
+	attr->st_gid = ie->ie_stat.st_gid;
 	attr->st_ino = ie->ie_stat.st_ino;
 	DFUSE_REPLY_ATTR(ie, req, attr);
 	return;
