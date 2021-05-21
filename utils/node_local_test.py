@@ -941,7 +941,7 @@ class DFuse():
         if not self.caching:
             cmd.append('--disable-caching')
 
-        cmd.append('--disable-wb-cache')
+        cmd.append('--multi-user')
 
         if self.pool:
             cmd.extend(['--pool', self.pool])
@@ -2360,9 +2360,6 @@ def run_in_fg(server, conf):
 
     pool=pools[0]
         
-    dfuse = DFuse(server, conf, pool=pool)
-    dfuse.start()
-
     container = create_cont(conf, pool, posix=True)
 
     run_daos_cmd(conf,
@@ -2371,7 +2368,10 @@ def run_in_fg(server, conf):
                   '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
                  show_stdout=True)
 
-    t_dir = os.path.join(dfuse.dir, container)
+    dfuse = DFuse(server, conf, pool=pool, container=container)
+    dfuse.start()
+
+    t_dir = dfuse.dir
 
     print('Running at {}'.format(t_dir))
     print('daos container create --type POSIX ' \
