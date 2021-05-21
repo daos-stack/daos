@@ -112,13 +112,12 @@ tc_progress_stop(void)
 void
 write_completion_file(void)
 {
-
-	FILE 	*fptr;
-	char 	*dir;
-	char 	*completion_file;
-	char 	*tmp_str;
-	char 	pid[6];
-	pid_t 	_pid;
+	FILE	*fptr;
+	char	*dir;
+	char	*completion_file;
+	char	*tmp_str;
+	char	pid[6];
+	pid_t	_pid;
 
 	_pid = getpid();
 	sprintf(pid, "%d", _pid);

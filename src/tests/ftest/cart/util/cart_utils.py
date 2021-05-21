@@ -106,7 +106,6 @@ class CartTest(TestWithoutServers):
             i = i - 1
         return return_code
 
-    @staticmethod
     def check_files(self, glob_pattern, count=1, retries=10):
         """Check for files."""
 
