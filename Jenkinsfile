@@ -740,7 +740,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
-                stage('Functional on CentOS 7 with Valgrind') {
+                stage('Functional on CentOS 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -759,6 +759,25 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 8')
+                stage('Functional on CentOS 7 with Valgrind') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label 'ci_vm9'
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional on CentOS 7 with Valgrind')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
