@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -162,7 +163,7 @@ func TestBackend_Format(t *testing.T) {
 			req: FormatRequest{
 				Class:          storage.BdevClassFile,
 				DeviceList:     []string{filepath.Join(testDir, "daos-bdev")},
-				DeviceFileSize: 1,
+				DeviceFileSize: humanize.MiByte,
 			},
 			expResp: &FormatResponse{
 				DeviceResponses: map[string]*DeviceFormatResponse{
@@ -355,6 +356,8 @@ func TestBackend_Format(t *testing.T) {
 
 			// output path would be set during config validate
 			tc.req.ConfigPath = filepath.Join(testDir, storage.BdevOutConfName)
+			tc.req.OwnerUID = os.Geteuid()
+			tc.req.OwnerGID = os.Getegid()
 
 			gotResp, gotErr := b.Format(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -364,6 +367,17 @@ func TestBackend_Format(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
+			}
+
+			if tc.req.Class != storage.BdevClassFile {
+				return
+			}
+
+			// verify empty files created for AIO class
+			for _, testFile := range tc.req.DeviceList {
+				if _, err := os.Stat(testFile); err != nil {
+					t.Fatal(err)
+				}
 			}
 		})
 	}

@@ -11,6 +11,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -268,10 +269,11 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 // storage configuration.
 func FormatRequestFromConfig(cfg *storage.BdevConfig, hn string) FormatRequest {
 	return FormatRequest{
-		ConfigPath:     cfg.OutputPath,
-		Class:          cfg.Class,
-		DeviceList:     cfg.DeviceList,
-		DeviceFileSize: cfg.FileSize,
+		ConfigPath: cfg.OutputPath,
+		Class:      cfg.Class,
+		DeviceList: cfg.DeviceList,
+		// config size is number of GiBytes
+		DeviceFileSize: humanize.GiByte * cfg.FileSize,
 		DeviceCount:    cfg.DeviceCount,
 		Hostname:       hn,
 		OwnerUID:       os.Geteuid(),

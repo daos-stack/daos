@@ -233,13 +233,10 @@ func (sb *spdkBackend) formatAioFile(req *FormatRequest) (*FormatResponse, error
 		DeviceResponses: make(DeviceFormatResponses),
 	}
 
-	// requested size aligned with block size
-	size := (int64(req.DeviceFileSize*gbyte) / int64(clsFileBlkSize)) * int64(clsFileBlkSize)
-
 	for _, path := range req.DeviceList {
 		devResp := new(DeviceFormatResponse)
 		resp.DeviceResponses[path] = devResp
-		if err := createEmptyFile(sb.log, path, size); err != nil {
+		if err := createEmptyFile(sb.log, path, req.DeviceFileSize); err != nil {
 			devResp.Error = FaultFormatError(path, err)
 			continue
 		}

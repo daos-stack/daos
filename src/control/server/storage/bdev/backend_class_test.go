@@ -7,12 +7,14 @@
 package bdev
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
@@ -30,7 +32,6 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 	tests := map[string]struct {
 		class           storage.BdevClass
 		devList         []string
-		keepRelative    bool
 		bdevVmdDisabled bool
 		fileSize        int // relevant for MALLOC/FILE
 		devNumber       int // relevant for MALLOC
@@ -115,13 +116,6 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			},
 			vosEnv: "AIO",
 		},
-		"AIO file fail": {
-			class:        storage.BdevClassFile,
-			devList:      []string{"myfile", "myotherfile"},
-			keepRelative: true,
-			fileSize:     1, // GB/file
-			expWriteErr:  errors.New("expected absolute file path"),
-		},
 		"AIO kdev": {
 			class:   storage.BdevClassKdev,
 			devList: []string{"sdb", "sdc"},
@@ -140,7 +134,8 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			wantBuf: []string{
 				`[Malloc]`,
 				`    NumberOfLuns 2`,
-				`    LunSizeInMB 5000`,
+				fmt.Sprintf(`    LunSizeInMB %d`,
+					humanize.GiByte*5/humanize.MiByte),
 				``,
 			},
 			vosEnv: "MALLOC",
@@ -163,10 +158,6 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			if len(tc.devList) != 0 {
 				switch tc.class {
 				case storage.BdevClassFile, storage.BdevClassKdev:
-					if tc.keepRelative {
-						cfg.DeviceList = tc.devList
-						break
-					}
 					for _, devFile := range tc.devList {
 						absPath := filepath.Join(testDir, devFile)
 						cfg.DeviceList = append(cfg.DeviceList, absPath)
@@ -241,22 +232,70 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			if cfg.VosEnv != tc.vosEnv {
 				t.Fatalf("expected VosEnv to be %q, but it was %q", tc.vosEnv, cfg.VosEnv)
 			}
+		})
+	}
+}
 
-			// The remainder only applies to loopback file devices.
-			if tc.class != storage.BdevClassFile {
+// TestBackend_createEmptyFile verifies empty files are created as expected.
+func TestBackend_createEmptyFile(t *testing.T) {
+	tests := map[string]struct {
+		path          string
+		pathImmutable bool // avoid adjusting path in test if set
+		size          int
+		expErr        error
+	}{
+		"relative path": {
+			path:          "somewhere/bad",
+			pathImmutable: true,
+			expErr:        errors.New("got relative"),
+		},
+		"zero size": {
+			size:   0,
+			expErr: errors.New("zero"),
+		},
+		"negative size": {
+			size:   -1,
+			expErr: errors.New("negative"),
+		},
+		"non-existent path": {
+			path:   "/timbuk/tu",
+			size:   humanize.MiByte,
+			expErr: errors.New("no such file or directory"),
+		},
+		"successful create": {
+			path: "/outfile",
+			size: humanize.MiByte,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			testDir, clean := common.CreateTestDir(t)
+			defer clean()
+
+			if !tc.pathImmutable {
+				tc.path = filepath.Join(testDir, tc.path)
+			}
+
+			gotErr := createEmptyFile(log, tc.path, tc.size)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
 				return
 			}
-			expSize := (int64(tc.fileSize*gbyte) / int64(clsFileBlkSize)) * int64(clsFileBlkSize)
-			for _, testFile := range cfg.DeviceList {
-				st, err := os.Stat(testFile)
-				if err != nil {
-					t.Fatal(err)
-				}
-				gotSize := st.Size()
-				if gotSize != expSize {
-					t.Fatalf("expected %s size to be %d, but got %d", testFile, expSize,
-						gotSize)
-				}
+
+			expSize := (tc.size / clsFileBlkSize) * clsFileBlkSize
+
+			st, err := os.Stat(tc.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gotSize := st.Size()
+			if gotSize != int64(expSize) {
+				t.Fatalf("expected %s size to be %d, but got %d",
+					tc.path, expSize, gotSize)
 			}
 		})
 	}

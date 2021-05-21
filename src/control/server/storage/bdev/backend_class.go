@@ -40,15 +40,17 @@ const (
 {{ end }}`
 	clsMallocTemplate = `[Malloc]
     NumberOfLuns {{.DeviceCount}}
-    LunSizeInMB {{.DeviceFileSize}}000
+    LunSizeInMB {{.DeviceFileSize}}
 `
-	gbyte          = 1000000000
-	clsFileBlkSize = 4096
+	clsFileBlkSize = humanize.KiByte * 4
 )
 
-func createEmptyFile(log logging.Logger, path string, size int64) error {
+func createEmptyFile(log logging.Logger, path string, size int) error {
 	if !filepath.IsAbs(path) {
 		return errors.Errorf("expected absolute file path but got relative (%s)", path)
+	}
+	if size < 0 {
+		return errors.New("expected non-negative file size")
 	}
 	if size == 0 {
 		return errors.New("expected non-zero file size")
@@ -58,6 +60,9 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 		return errors.Wrapf(err, "stat %q", path)
 	}
 
+	// adjust file size to align with block size
+	size = (size / clsFileBlkSize) * clsFileBlkSize
+
 	log.Debugf("allocating blank file %s of size %s", path, humanize.Bytes(uint64(size)))
 	file, err := common.TruncFile(path)
 	if err != nil {
@@ -65,12 +70,12 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 	}
 	defer file.Close()
 
-	if err := syscall.Fallocate(int(file.Fd()), 0, 0, size); err != nil {
+	if err := syscall.Fallocate(int(file.Fd()), 0, 0, int64(size)); err != nil {
 		e, ok := err.(syscall.Errno)
 		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
 			log.Debugf("warning: Fallocate not supported, attempting Truncate: ", e)
 
-			return errors.Wrapf(file.Truncate(size), "truncate %q", path)
+			return errors.Wrapf(file.Truncate(int64(size)), "truncate %q", path)
 		}
 
 		return errors.Wrapf(err, "fallocate %q", path)
@@ -131,6 +136,9 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 		storage.BdevClassKdev:   clsKdevTemplate,
 		storage.BdevClassFile:   clsFileTemplate,
 	}[req.Class]
+
+	// spdk ini file expects device size in MBs
+	req.DeviceFileSize = req.DeviceFileSize / humanize.MiByte
 
 	// special case template edit for class nvme
 	if req.Class == storage.BdevClassNvme && !sb.IsVMDDisabled() {
