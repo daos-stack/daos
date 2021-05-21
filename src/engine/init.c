@@ -82,6 +82,8 @@ hwloc_obj_t		numa_obj;
 int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
+/** Number of storage tiers: 2 for SCM and NVMe */
+int dss_storage_tiers = 2;
 
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
@@ -814,6 +816,8 @@ Options:\n\
       Boolean set to inhibit collection of NVME health data\n\
   --mem_size=mem_size, -r mem_size\n\
       Allocates mem_size MB for SPDK when using primary process mode\n\
+  --storage_tiers=ntiers, -T ntiers\n\
+      Number of storage tiers\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -839,6 +843,7 @@ parse(int argc, char **argv)
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
 		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
+		{ "storage_tiers", required_argument, NULL, 'T' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -846,7 +851,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:b",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:bT:",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
@@ -905,6 +910,13 @@ parse(int argc, char **argv)
 			break;
 		case 'b':
 			dss_nvme_bypass_health_check = true;
+			break;
+		case 'T':
+			dss_storage_tiers = atoi(optarg);
+			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
+				printf("Requires 1 or 2 tiers\n");
+				rc = -DER_INVAL;
+			}
 			break;
 		default:
 			usage(argv[0], stderr);

@@ -301,7 +301,7 @@ func (bc *BdevConfig) Validate(class Class) error {
 
 type StorageConfig struct {
 	Tiers      Configs `yaml:"storage"`
-	TiersNum   int     `yaml:"-"` // @todo_llasek: cmdLongFlag:"--nvme_tiers" cmdShortFlag:"-T"`
+	TiersNum   int     `yaml:"-" cmdLongFlag:"--storage_tiers" cmdShortFlag:"-T"`
 	ConfigPath string  `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	MemSize    int     `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
 	VosEnv     string  `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
