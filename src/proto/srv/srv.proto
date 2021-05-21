@@ -41,3 +41,13 @@ message GetPoolSvcResp {
 	int32 status = 1; // DAOS error code
 	repeated uint32 svcreps = 2; // Pool service replica ranks
 }
+
+message PoolFindByLabelReq {
+	string label = 1; // Pool label
+}
+
+message PoolFindByLabelResp {
+	int32 status = 1; // DAOS error code
+	string uuid = 2; // Pool UUID
+	repeated uint32 svcreps = 3; // Pool service replica ranks
+}
