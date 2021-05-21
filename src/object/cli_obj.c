@@ -867,9 +867,13 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	shard_tgt->st_ec_tgt = ec_tgt_idx;
 	start_shard = shard - ec_tgt_idx;
 
-	if (obj_auxi->is_ec_obj && obj_auxi->csum_retry) {
-		obj_auxi->csum_retry = 0;
-		csum_err = true;
+	if (obj_auxi->is_ec_obj &&
+	    (obj_auxi->csum_retry ||
+	     DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE))) {
+		if (obj_auxi->csum_retry) {
+			csum_err = true;
+			obj_auxi->csum_retry = 0;
+		}
 		ec_degrade = true;
 		goto ec_deg_get;
 	}
@@ -1575,7 +1579,7 @@ recov_task_abort(tse_task_t *task, void *arg)
 
 static void
 obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
-		struct obj_auxi_args *obj_auxi)
+		struct obj_auxi_args *obj_auxi, d_iov_t *csum_iov)
 {
 	struct obj_reasb_req		*reasb_req = &obj_auxi->reasb_req;
 	struct obj_ec_fail_info		*fail_info = reasb_req->orr_fail;
@@ -1616,12 +1620,13 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 			goto out;
 		}
 		recov_task->ert_th = th;
-
+		D_DEBUG(DB_REBUILD, DF_C_OID_DKEY" Fetching to recover\n",
+			DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey));
 		rc = dc_obj_fetch_task_create(args->oh, th, 0, args->dkey, 1,
 					      DIOF_EC_RECOV,
 					      &recov_task->ert_iod,
 					      &recov_task->ert_sgl, NULL,
-					      fail_info, NULL,
+					      fail_info, csum_iov,
 					      NULL, sched, &sub_task);
 		if (rc) {
 			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create "
@@ -3458,12 +3463,11 @@ obj_list_recxs_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
 	int			  idx = 0;
 
 	obj_args = dc_task_get_args(obj_auxi->obj_task);
+	anchor_check_eof(obj_auxi->obj, obj_args->anchor);
 	if (d_list_empty(&arg->merge_list)) {
 		*obj_args->nr = arg->merge_nr;
 		return 0;
 	}
-
-	anchor_check_eof(obj_auxi->obj, obj_args->anchor);
 
 	D_ASSERT(obj_is_ec(obj_auxi->obj));
 	d_list_for_each_entry_safe(recx, tmp, &arg->merge_list,
@@ -3800,8 +3804,11 @@ obj_comp_cb(tse_task_t *task, void *data)
 						   obj_auxi->iod_nr);
 				memset(obj_auxi, 0, sizeof(*obj_auxi));
 			} else {
+				daos_obj_fetch_t *args = dc_task_get_args(task);
+
 				task->dt_result = 0;
-				obj_ec_recov_cb(task, obj, obj_auxi);
+				obj_ec_recov_cb(task, obj, obj_auxi,
+						args->csum_iov);
 			}
 		} else {
 			if (obj_auxi->is_ec_obj &&
@@ -3982,11 +3989,12 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 rc;
 
-	D_DEBUG(DB_CSUM, "obj: %p, args: %p, obj_auxi: %p, csummer: %p, "
+	D_DEBUG(DB_CSUM, DF_C_OID_DKEY " UPDATE - csummer: %p, "
 			 "csum_type: %d, csum_enabled: %s\n",
-		obj, args, obj_auxi, csummer,
-		cont_props.dcp_csum_type,
-		cont_props.dcp_csum_enabled ? "Yes" : "No");
+		DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey),
+		csummer, cont_props.dcp_csum_type,
+		DP_BOOL(cont_props.dcp_csum_enabled));
+
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return 0;
 
@@ -5578,4 +5586,36 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 	daos_obj_set_oid(oid, ofeats, cid, args);
 
 	return rc;
+}
+
+daos_oclass_id_t
+daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+		  daos_oclass_hints_t hints, uint32_t args)
+{
+	daos_handle_t		poh;
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr;
+	uint64_t		rf_factor;
+	daos_oclass_id_t	cid;
+	int			rc;
+
+	/** select the oclass */
+	poh = dc_cont_hdl2pool_hdl(coh);
+	if (daos_handle_is_inval(poh))
+		return -DER_NO_HDL;
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+
+	rf_factor = dc_cont_hdl2redunfac(coh);
+	rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
+			   attr.pa_target_nr, ofeats, hints, &cid);
+	if (rc)
+		return 0;
+
+	return cid;
 }

@@ -24,13 +24,13 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func mockEngineDiedEvt(t *testing.T) *events.RASEvent {
+func mockEvtEngineDied(t *testing.T) *events.RASEvent {
 	t.Helper()
 	return events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit, 1234)
 }
 
 func TestControl_eventNotify(t *testing.T) {
-	rasEventEngineDied := mockEngineDiedEvt(t)
+	rasEventEngineDied := mockEvtEngineDied(t)
 
 	for name, tc := range map[string]struct {
 		seq    uint64
@@ -85,8 +85,8 @@ func TestControl_eventNotify(t *testing.T) {
 }
 
 func TestControl_EventForwarder_OnEvent(t *testing.T) {
-	rasEventEngineDied := mockEngineDiedEvt(t).WithForwardable(false)
-	rasEventEngineDiedFwdable := mockEngineDiedEvt(t).WithForwardable(true)
+	rasEventEngineDied := mockEvtEngineDied(t).WithForwardable(false)
+	rasEventEngineDiedFwdable := mockEvtEngineDied(t).WithForwardable(true)
 
 	for name, tc := range map[string]struct {
 		aps            []string
@@ -155,8 +155,8 @@ func TestControl_EventLogger_OnEvent(t *testing.T) {
 		return nil, errors.Errorf("failed to create new syslogger (prio %d)", prio)
 	}
 
-	rasEventEngineDied := mockEngineDiedEvt(t).WithForwarded(false)
-	rasEventEngineDiedFwded := mockEngineDiedEvt(t).WithForwarded(true)
+	rasEventEngineDied := mockEvtEngineDied(t).WithForwarded(false)
+	rasEventEngineDiedFwded := mockEvtEngineDied(t).WithForwarded(true)
 
 	for name, tc := range map[string]struct {
 		event              *events.RASEvent

@@ -128,6 +128,12 @@ dc_oclass_list(daos_handle_t coh, struct daos_oclass_list *clist,
 	return -DER_NOSYS;
 }
 
+bool
+daos_oclass_is_valid(daos_oclass_id_t oc_id)
+{
+	return (oclass_ident2cl(oc_id) != NULL) ? true : false;
+}
+
 /**
  * Return the number of redundancy groups for the object class @oc_attr with
  * the provided metadata @md

@@ -590,8 +590,10 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
 	 * Should be 1 biov_csums for each non-hole biov in bsgl
 	 */
 	for (i = 0, j = 0; i < bsgl->bs_nr_out; i++) {
-		if (bio_addr_is_hole(&(bio_sgl_iov(bsgl, i)->bi_addr)))
+		if (bio_addr_is_hole(&(bio_sgl_iov(bsgl, i)->bi_addr))) {
+			D_DEBUG(DB_CSUM, "biov is a hole. skipping\n");
 			continue;
+		}
 		if (!ci_is_valid(&biov_csums[j++])) {
 			D_ERROR("Invalid csum for biov %d.\n", i);
 			return -DER_CSUM;
@@ -609,6 +611,7 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
 		struct dcs_csum_info	*info = &iod_csums->ic_data[i];
 
 		if (ctx.cc_rec_len > 0 && ci_is_valid(info)) {
+			D_DEBUG(DB_CSUM, "Adding csums for recx %d\n", i);
 			rc = cc_add_csums_for_recx(&ctx, recx, info);
 			if (rc != 0)
 				D_ERROR("Failed to add csum for "
@@ -644,6 +647,8 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 		return 0;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
+	D_DEBUG(DB_CSUM, "Adding fetched to IOD: "DF_C_IOD", csum: "DF_CI"\n",
+		DP_C_IOD(iod), DP_CI(biov_csums[0]));
 		ci_insert(&iod_csums->ic_data[0], 0,
 			  biov_csums[0].cs_csum, biov_csums[0].cs_len);
 		if (biov_csums_used != NULL)
