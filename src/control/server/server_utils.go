@@ -45,7 +45,7 @@ const (
 
 func cfgHasBdevs(cfg *config.Server) bool {
 	for _, engineCfg := range cfg.Engines {
-		for _, bc := range engineCfg.Storage.BdevConfigs() {
+		for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
 			if len(bc.Bdev.DeviceList) > 0 {
 				return true
 			}
@@ -72,11 +72,11 @@ func cfgGetRaftDir(cfg *config.Server) string {
 	if len(cfg.Engines) == 0 {
 		return "" // can't save to SCM
 	}
-	if len(cfg.Engines[0].Storage.ScmConfigs()) == 0 {
+	if len(cfg.Engines[0].Storage.Tiers.ScmConfigs()) == 0 {
 		return ""
 	}
 
-	return filepath.Join(cfg.Engines[0].Storage.ScmConfigs()[0].Scm.MountPoint, "control_raft")
+	return filepath.Join(cfg.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, "control_raft")
 }
 
 func hostname() string {

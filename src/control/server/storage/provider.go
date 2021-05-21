@@ -24,13 +24,13 @@ type SystemProvider interface {
 type Provider struct {
 	log           logging.Logger
 	engineIndex   int
-	engineStorage Configs
+	engineStorage *StorageConfig
 	Sys           SystemProvider
 	Scm           ScmProvider
 	Bdev          BdevProvider
 }
 
-func DefaultProvider(log logging.Logger, idx int, engineStorage Configs) *Provider {
+func DefaultProvider(log logging.Logger, idx int, engineStorage *StorageConfig) *Provider {
 	return &Provider{
 		log:           log,
 		engineIndex:   idx,
@@ -46,7 +46,7 @@ func (p *Provider) GetScmConfig() (*Config, error) {
 	// SCM tiers, but for the sake of expediency we'll assume that there is
 	// only one. If that needs to change, hopefully it won't require quite so
 	// many invasive code updates.
-	scmConfigs := p.engineStorage.ScmConfigs()
+	scmConfigs := p.engineStorage.Tiers.ScmConfigs()
 	if len(scmConfigs) != 1 {
 		return nil, errors.New("expected exactly 1 SCM tier in storage configuration")
 	}
@@ -194,7 +194,7 @@ func (p *Provider) FormatScm(force bool) error {
 }
 
 func (p *Provider) HasBlockDevices() bool {
-	for _, cfg := range p.engineStorage.BdevConfigs() {
+	for _, cfg := range p.engineStorage.Tiers.BdevConfigs() {
 		if len(cfg.Bdev.DeviceList) > 0 {
 			return true
 		}
@@ -209,7 +209,7 @@ type BdevTierFormatResult struct {
 }
 
 func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
-	bdevCfgs := p.engineStorage.BdevConfigs()
+	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
 	results = make([]BdevTierFormatResult, len(bdevCfgs))
 
 	// A config with SCM and no block devices is valid.
@@ -225,7 +225,7 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 		results[i].Result, results[i].Error = p.Bdev.Format(BdevFormatRequest{
 			Class:      cfg.Class,
 			DeviceList: cfg.Bdev.DeviceList,
-			MemSize:    cfg.Bdev.MemSize,
+			MemSize:    p.engineStorage.MemSize,
 		})
 
 		if err := results[i].Error; err != nil {
@@ -246,7 +246,7 @@ type BdevTierScanResult struct {
 }
 
 func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err error) {
-	bdevCfgs := p.engineStorage.BdevConfigs()
+	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
 	results = make([]BdevTierScanResult, 0, len(bdevCfgs))
 
 	// A config with SCM and no block devices is valid.
@@ -292,4 +292,19 @@ func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err
 	}
 
 	return
+}
+
+func (p *Provider) GenEngineConfig() error {
+	p.engineStorage.TiersNum = len(p.engineStorage.Tiers)
+	cfgScm, err := p.GetScmConfig()
+	if err != nil {
+		return err
+	}
+
+	bcp, err := NewClassProvider(p.log, cfgScm.Scm.MountPoint, p.engineStorage)
+	if err != nil {
+		return err
+	}
+
+	return bcp.GenConfigFile()
 }

@@ -27,7 +27,7 @@ type StorageControlService struct {
 func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *StorageControlService {
 	instanceStorage := make(map[uint32][]*storage.Config)
 	for i, cfg := range engineCfgs {
-		instanceStorage[uint32(i)] = cfg.Storage
+		instanceStorage[uint32(i)] = cfg.Storage.Tiers
 	}
 
 	return &StorageControlService{
@@ -185,7 +185,9 @@ func (c *StorageControlService) Setup() error {
 }
 
 func (c *StorageControlService) defaultProvider() *storage.Provider {
-	return storage.DefaultProvider(c.log, 0, nil)
+	return storage.DefaultProvider(c.log, 0, &storage.StorageConfig{
+		Tiers: nil,
+	})
 }
 
 // NvmePrepare preps locally attached SSDs and returns error.

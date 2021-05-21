@@ -152,21 +152,21 @@ func (ls *LegacyStorage) WasDefined() bool {
 
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
-	Rank              *system.Rank    `yaml:"rank,omitempty"`
-	Modules           string          `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
-	TargetCount       int             `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
-	HelperStreamCount int             `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
-	ServiceThreadCore int             `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
-	SystemName        string          `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
-	SocketDir         string          `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
-	LogMask           string          `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
-	LogFile           string          `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
-	LegacyStorage     LegacyStorage   `yaml:",inline,omitempty"`
-	Storage           storage.Configs `yaml:"storage"`
-	Fabric            FabricConfig    `yaml:",inline"`
-	EnvVars           []string        `yaml:"env_vars,omitempty"`
-	EnvPassThrough    []string        `yaml:"env_pass_through,omitempty"`
-	Index             uint32          `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
+	Rank              *system.Rank          `yaml:"rank,omitempty"`
+	Modules           string                `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
+	TargetCount       int                   `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
+	HelperStreamCount int                   `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
+	ServiceThreadCore int                   `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
+	SystemName        string                `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
+	SocketDir         string                `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
+	LogMask           string                `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
+	LogFile           string                `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
+	LegacyStorage     LegacyStorage         `yaml:",inline,omitempty"`
+	Storage           storage.StorageConfig `yaml:",inline,omitempty"`
+	Fabric            FabricConfig          `yaml:",inline"`
+	EnvVars           []string              `yaml:"env_vars,omitempty"`
+	EnvPassThrough    []string              `yaml:"env_pass_through,omitempty"`
+	Index             uint32                `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 }
 
 // NewConfig returns an I/O Engine config.
@@ -182,7 +182,7 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
 
-	if err := c.Storage.Validate(); err != nil {
+	if err := c.Storage.Tiers.Validate(); err != nil {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
@@ -196,7 +196,7 @@ func (c *Config) CmdLineArgs() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, sc := range c.Storage {
+	for _, sc := range c.Storage.Tiers {
 		sArgs, err := parseCmdTags(sc, shortFlagTag, joinShortArgs, nil)
 		if err != nil {
 			return nil, err
@@ -214,7 +214,7 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, sc := range c.Storage {
+	for _, sc := range c.Storage.Tiers {
 		sEnv, err := parseCmdTags(sc, envTag, joinEnvVars, nil)
 		if err != nil {
 			return nil, err
@@ -269,7 +269,7 @@ func (c *Config) WithSystemName(name string) *Config {
 // Note that this method replaces any existing configs. To append,
 // use AppendStorage().
 func (c *Config) WithStorage(cfgs ...*storage.Config) *Config {
-	c.Storage = c.Storage[:]
+	c.Storage.Tiers = c.Storage.Tiers[:]
 	c.AppendStorage(cfgs...)
 	return c
 }
@@ -279,10 +279,22 @@ func (c *Config) WithStorage(cfgs ...*storage.Config) *Config {
 func (c *Config) AppendStorage(cfgs ...*storage.Config) *Config {
 	for _, cfg := range cfgs {
 		if cfg.Tier == 0 {
-			cfg.Tier = len(c.Storage)
+			cfg.Tier = len(c.Storage.Tiers)
 		}
-		c.Storage = append(c.Storage, cfg)
+		c.Storage.Tiers = append(c.Storage.Tiers, cfg)
 	}
+	return c
+}
+
+// WithStorageConfigPath sets the path to the generated NVMe config file used by SPDK.
+func (c *Config) WithStorageConfigPath(cfgPath string) *Config {
+	c.Storage.ConfigPath = cfgPath
+	return c
+}
+
+// WithStorageVosEnv sets the VOS_BDEV_CLASS env variable.
+func (c *Config) WithStorageVosEnv(ve string) *Config {
+	c.Storage.VosEnv = ve
 	return c
 }
 
