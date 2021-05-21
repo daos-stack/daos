@@ -23,13 +23,13 @@ var (
 	tSvcReps = []uint32{0, 1}
 )
 
-func mockSvcRepsEvt(t *testing.T) *RASEvent {
+func mockEvtSvcReps(t *testing.T) *RASEvent {
 	t.Helper()
 	return NewPoolSvcReplicasUpdateEvent(tHost, tRank, tUuid, tSvcReps, tLdrTerm)
 }
 
 func TestEvents_ConvertPoolSvcReplicasUpdate(t *testing.T) {
-	event := mockSvcRepsEvt(t)
+	event := mockEvtSvcReps(t)
 
 	pbEvent, err := event.ToProto()
 	if err != nil {
