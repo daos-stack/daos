@@ -24,7 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func mockEngineDiedEvt(t *testing.T, r uint32) *events.RASEvent {
+func mockEvtEngineDied(t *testing.T, r uint32) *events.RASEvent {
 	t.Helper()
 	return events.NewEngineDiedEvent("foo", 0, r, common.NormalExit, 1234)
 }
@@ -863,12 +863,12 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 		},
 		"event on unrecognized rank": {
 			members:    members,
-			event:      mockEngineDiedEvt(t, 4),
+			event:      mockEvtEngineDied(t, 4),
 			expMembers: members,
 		},
 		"state updated on unscheduled exit": {
 			members: members,
-			event:   mockEngineDiedEvt(t, 1),
+			event:   mockEvtEngineDied(t, 1),
 			expMembers: Members{
 				MockMember(t, 0, MemberStateJoined),
 				MockMember(t, 1, MemberStateErrored).WithInfo(

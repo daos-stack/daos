@@ -1163,6 +1163,19 @@ def destroy_container(conf, pool, container):
     assert rc.returncode == 0
     return rc.stdout.decode('utf-8').strip()
 
+def check_dfs_tool_output(output, oclass, csize):
+    """verify daos fs tool output"""
+    line = output.splitlines()
+    dfs_attr = line[0].split()[-1]
+    if oclass is not None:
+        if dfs_attr != oclass:
+            return False
+    dfs_attr = line[1].split()[-1]
+    if csize is not None:
+        if dfs_attr != csize:
+            return False
+    return True
+
 def make_pool(daos):
     """Create a DAOS pool"""
 
@@ -1665,6 +1678,100 @@ class posix_tests():
 
         if dfuse.stop():
             self.fatal_errors = True
+
+    @needs_dfuse
+    def test_daos_fs_tool(self):
+        """Create a UNS entry point"""
+
+        dfuse = self.dfuse
+        pool = self.pool
+        conf = self.conf
+
+        # Create a new container within it using UNS
+        uns_path = os.path.join(dfuse.dir, 'ep1')
+        uns_container = str(uuid.uuid4())
+        cmd = ['container', 'create',
+               '--pool', pool, '--cont', uns_container, '--path', uns_path,
+               '--type', 'POSIX']
+
+        print('Inserting entry point')
+        rc = run_daos_cmd(conf, cmd)
+        print('rc is {}'.format(rc))
+        assert rc.returncode == 0
+        print(os.stat(uns_path))
+        print(os.listdir(dfuse.dir))
+
+        # Verify that it exists.
+        run_container_query(conf, uns_path)
+
+        # Make a directory in the new container itself, and query that.
+        dir1 = os.path.join(uns_path, 'd1')
+        os.mkdir(dir1)
+        run_container_query(conf, dir1)
+
+        # Create a file in dir1
+        file1 = os.path.join(dir1, 'f1')
+        ofd = open(file1, 'w')
+        ofd.close()
+
+        # Run a command to get attr of new dir and file
+        cmd = ['fs', 'get-attr', '--path', dir1]
+        print('get-attr of d1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S1', '1048576')
+
+        cmd = ['fs', 'get-attr', '--path', file1]
+        print('get-attr of d1/f1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        # SX is not deterministic, so don't check it here
+        assert check_dfs_tool_output(output, None, '1048576')
+
+        # Run a command to change attr of dir1
+        cmd = ['fs', 'set-attr', '--path', dir1, '--oclass', 'S2',
+               '--chunk-size', '16']
+        print('set-attr of d1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+
+        # Run a command to change attr of file1, should fail
+        cmd = ['fs', 'set-attr', '--path', file1, '--oclass', 'S2',
+               '--chunk-size', '16']
+        print('set-attr of f1')
+        rc = run_daos_cmd(conf, cmd)
+        print('rc is {}'.format(rc))
+        assert rc.returncode != 0
+
+        # Run a command to create new file with set-attr
+        file2 = os.path.join(dir1, 'f2')
+        cmd = ['fs', 'set-attr', '--path', file2, '--oclass', 'S1']
+        print('set-attr of f2')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+
+        # Run a command to get attr of dir and file2
+        cmd = ['fs', 'get-attr', '--path', dir1]
+        print('get-attr of d1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S2', '16')
+
+        cmd = ['fs', 'get-attr', '--path', file2]
+        print('get-attr of d1/f2')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S1', '16')
 
     def test_cont_copy(self):
         """Verify that copying into a container works"""

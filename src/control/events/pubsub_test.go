@@ -48,7 +48,7 @@ func (tly *tally) getRx() []string {
 }
 
 func TestEvents_PubSub_Basic(t *testing.T) {
-	evt1 := mockDiedEvt(t)
+	evt1 := mockEvtDied(t)
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -79,7 +79,7 @@ func TestEvents_PubSub_Basic(t *testing.T) {
 }
 
 func TestEvents_PubSub_Reset(t *testing.T) {
-	evt1 := mockDiedEvt(t)
+	evt1 := mockEvtDied(t)
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -123,8 +123,8 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 }
 
 func TestEvents_PubSub_DisableEvent(t *testing.T) {
-	evt1 := mockDiedEvt(t)
-	evt2 := mockSvcRepsEvt(t)
+	evt1 := mockEvtDied(t)
+	evt2 := mockEvtSvcReps(t)
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -157,7 +157,7 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 }
 
 func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
-	evt1 := mockDiedEvt(t)
+	evt1 := mockEvtDied(t)
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -175,7 +175,7 @@ func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 
 	ps.Publish(evt1)
 	ps.Publish(evt1)
-	ps.Publish(mockGenericEvent(t)) // of type InfoOnly will only match Any
+	ps.Publish(mockEvtGeneric(t)) // of type InfoOnly will only match Any
 
 	<-tly1.finished
 	<-tly2.finished
