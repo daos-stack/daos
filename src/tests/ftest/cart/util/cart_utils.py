@@ -117,7 +117,8 @@ class CartTest(TestWithoutServers):
             retry += 1
             file_list = glob.glob(glob_pattern)
 
-            self.log.info("Found completion files: [%s]\n", ", ".join(file_list))
+            self.log.info("Found completion files: [%s]\n",
+                          ", ".join(file_list))
 
             if len(file_list) == count:
                 found_files = True
