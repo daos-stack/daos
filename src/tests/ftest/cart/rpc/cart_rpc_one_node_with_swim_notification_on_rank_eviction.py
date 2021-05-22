@@ -46,7 +46,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
         glob_pat = daos_test_shared_dir + "/test-servers-completed.txt.*"
 
         # Verify the server(s) exited gracefully
-        if not self.check_files(glob_pat, count=3, retries=15):
+        if not self.check_files(glob_pat, count=3, retries=3):
             self.fail("Didn't find completion file(s): '" + glob_pat + "'. " +
                       "This indicates not all CaRT binaries exited " +
                       "gracefully.")
