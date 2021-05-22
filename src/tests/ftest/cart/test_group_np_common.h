@@ -150,6 +150,8 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	static const char		*dead_regex = ".?0*1";
 	static const char		*alive_regex = ".?0*";
 	int				rank;
+	int				rc_dead;
+	int				rc_alive;
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
@@ -159,11 +161,11 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 
 	/* compile and run regex's */
 	regcomp(&regex_dead, dead_regex, REG_EXTENDED);
-	int rc_dead = regexec(&regex_dead,
+	rc_dead = regexec(&regex_dead,
 			      swim_seq_by_rank[rank],
 			      0, NULL, 0);
 	regcomp(&regex_alive, alive_regex, REG_EXTENDED);
-	int rc_alive = regexec(&regex_alive,
+	rc_alive = regexec(&regex_alive,
 			       swim_seq_by_rank[rank],
 			       0, NULL, 0);
 
