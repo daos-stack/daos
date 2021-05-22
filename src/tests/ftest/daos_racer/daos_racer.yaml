@@ -9,7 +9,7 @@ hosts:
     - server-G
   test_clients:
     - client-H
-timeout: 10800
+timeout: 1800
 server_config:
     name: daos_server
     servers:
@@ -19,5 +19,5 @@ server_config:
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 daos_racer:
-  runtime: 7200
-  clush_timeout: 10080
+  runtime: 600
+  clush_timeout: 900
