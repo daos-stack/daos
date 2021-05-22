@@ -46,6 +46,12 @@ enum {
 	RP_2G2,
 	RP_3G1,
 	RP_3G2,
+	EC_2P1G1,
+	EC_2P1G2,
+	EC_2P2G1,
+	EC_2P2G2,
+	EC_4P1G1,
+	EC_4P2G1,
 	OBJ_CNT
 };
 
@@ -79,6 +85,18 @@ oclass_get(unsigned int random)
 		return OC_RP_3G1;
 	case RP_3G2:
 		return OC_RP_3G2;
+	case EC_2P1G1:
+		return OC_EC_2P1G1;
+	case EC_2P1G2:
+		return OC_EC_2P1G2;
+	case EC_2P2G1:
+		return OC_EC_2P2G1;
+	case EC_2P2G2:
+		return OC_EC_2P2G2;
+	case EC_4P1G1:
+		return OC_EC_4P1G1;
+	case EC_4P2G1:
+		return OC_EC_4P2G1;
 	default:
 		assert(0);
 	}
