@@ -242,7 +242,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 			/* attribute do not exist */
 			iovs[j].iov_buf_len = sizes[i];
 			iovs[j].iov_len = 0;
-			sizes[i] = -1;
+			sizes[i] = 0;
 			/* fake crt_sgl_valid() */
 			iovs[j].iov_buf = (void *)(-1);
 		} else if (rc != 0) {
@@ -281,7 +281,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		size = min(sgl.sg_iovs[i].iov_len,
 				       sgl.sg_iovs[i].iov_buf_len);
 		/* only xfer if attr exists and there is a dest buffer */
-		if (iovs[i].iov_buf_len > 0 && sizes[i - 1] != -1)
+		if (iovs[i].iov_buf_len > 0 && sizes[i - 1] != 0)
 			rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
 						remote_bulk, local_offset,
 						remote_offset, size);

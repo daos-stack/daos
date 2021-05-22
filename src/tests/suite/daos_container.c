@@ -175,7 +175,7 @@ co_attribute(void **state)
 	assert_memory_equal(out_values[0], in_values[0], in_sizes[0]);
 
 	print_message("Verifying Name-Value (B)..\n");
-	assert_int_equal(out_sizes[1], -1);
+	assert_int_equal(out_sizes[1], 0);
 
 	print_message("Verifying Name-Value (C)..\n");
 	assert_true(in_sizes[1] > BUFSIZE);
@@ -189,7 +189,7 @@ co_attribute(void **state)
 
 	print_message("Verifying with NULL buffer..\n");
 	assert_int_equal(out_sizes[0], in_sizes[0]);
-	assert_int_equal(out_sizes[1], -1);
+	assert_int_equal(out_sizes[1], 0);
 	assert_int_equal(out_sizes[2], in_sizes[1]);
 
 	rc = daos_cont_del_attr(arg->coh, m, names_get,
@@ -1943,6 +1943,13 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 					(void * const*)&value,
 					&val_size,
 					NULL);
+
+		/* 0 size means non-existing attr and this is possible
+		 * only because we do not support empty attrs for now
+		 */
+		if (val_size == 0)
+			rc = -DER_NONEXIST;
+
 		assert_rc_equal(rc, exp_result);
 	}
 

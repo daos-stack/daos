@@ -245,7 +245,7 @@ pool_attribute(void **state)
 				strlen(in_values[1])
 	};
 	int			 n = (int) ARRAY_SIZE(names);
-	int 			 m = (int) ARRAY_SIZE(names_get);
+	int			 m = (int) ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
@@ -310,7 +310,7 @@ pool_attribute(void **state)
 	assert_memory_equal(out_values[0], in_values[0], in_sizes[0]);
 
 	print_message("Verifying Name-Value (B)..\n");
-	assert_int_equal(out_sizes[1], -1);
+	assert_int_equal(out_sizes[1], 0);
 
 	print_message("Verifying Name-Value (C)..\n");
 	assert_true(in_sizes[1] > BUFSIZE);
@@ -324,7 +324,7 @@ pool_attribute(void **state)
 
 	print_message("Verifying with NULL buffer..\n");
 	assert_int_equal(out_sizes[0], in_sizes[0]);
-	assert_int_equal(out_sizes[1], -1);
+	assert_int_equal(out_sizes[1], 0);
 	assert_int_equal(out_sizes[2], in_sizes[1]);
 
 	print_message("Deleting all attributes\n");
