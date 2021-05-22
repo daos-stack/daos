@@ -35,7 +35,6 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 """
 LogIter class definition.
 LogLine class definition.
@@ -337,25 +336,66 @@ class LogLine():
         """Returns True if line is a allocation point"""
         return self.get_field(2).startswith('alloc(')
 
+    def calloc_pointer(self):
+        """Returns the memory address allocated"""
+        return self.get_field(-1).rstrip('.')
+
     def is_realloc(self):
         """Returns True if line is a call to"""
         return self.get_field(2) == 'realloc'
 
+    def realloc_pointers(self):
+        """Returns a tuple of old and new memory addresses"""
+        old_pointer = self.get_field(-1).rstrip('.')
+
+        # Working out the old pointer is tricky, realloc will have two or three
+        # strings representing variables, some of which can have spaces in them
+        # so patch the line back together, split on ' which marks the end of
+        # these and work for there.  The field we want will be after 1 or 2
+        # entries, but always 1 from the end, so use that.
+        msg = ' '.join(self._fields)
+        tick_fields = msg.split("'")
+        short_msg = tick_fields[-3]
+        fields = short_msg.split(' ')
+        new_pointer = fields[2]
+        return (new_pointer, old_pointer)
+
+    def realloc_sizes(self):
+        """Returns a tuple of old and new memory region sizes"""
+
+        # See comment in realloc_pointers() for basic method here.
+        # new_size is made by combining count and elem size,
+        # old_size is simply a size which is the only oddity.
+        elem_size = int(self.get_field(3).split(':')[-1])
+        if self.get_field(4) == '*':
+            msg = ' '.join(self._fields)
+            tick_fields = msg.split("'")
+            short_msg = tick_fields[4]
+            fields = short_msg.split(' ')
+            count = int(fields[0].lstrip(':'))
+            new_size = count * elem_size
+        else:
+            new_size = elem_size
+        old_size = int(self.get_field(-3).split(':')[-1])
+        return (new_size, old_size)
+
     def calloc_size(self):
         """Returns the size of the allocation"""
-        if self.get_field(5) == '*':
-            if self.is_realloc():
-                field = -8
-            else:
-                field = -3
-            count = int(self.get_field(field).split(':')[-1])
-            return count * int(self.get_field(4))
-        return int(self.get_field(4))
+        if self.is_realloc():
+            (new_size, _) = self.realloc_sizes()
+            return new_size
+        if self.get_field(4) == '*':
+            count = int(self.get_field(-3).split(':')[-1])
+            return count * int(self.get_field(3).split(':')[-1])
+        return int(self.get_field(3).split(':')[-1])
 
     def is_free(self):
         """Returns True if line is a call to free"""
         return self.get_field(2) == 'free'
 
+    def free_pointer(self):
+        """Return the memory address freed"""
+        return self.get_field(-1).rstrip('.')
 
 # pylint: disable=too-many-branches
 class StateIter():
@@ -646,7 +686,8 @@ class LogIter():
         while True:
             self._iter_index += 1
 
-            if self._pid is not None and self._iter_index > self._iter_last_index:
+            if self._pid is not None and \
+               self._iter_index > self._iter_last_index:
                 assert self._iter_count == self._iter_pid['line_count']  # nosec
                 raise StopIteration
 
