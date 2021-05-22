@@ -187,6 +187,96 @@ void   srv__get_pool_svc_resp__free_unpacked
   assert(message->base.descriptor == &srv__get_pool_svc_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   srv__pool_find_by_label_req__init
+                     (Srv__PoolFindByLabelReq         *message)
+{
+  static const Srv__PoolFindByLabelReq init_value = SRV__POOL_FIND_BY_LABEL_REQ__INIT;
+  *message = init_value;
+}
+size_t srv__pool_find_by_label_req__get_packed_size
+                     (const Srv__PoolFindByLabelReq *message)
+{
+  assert(message->base.descriptor == &srv__pool_find_by_label_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t srv__pool_find_by_label_req__pack
+                     (const Srv__PoolFindByLabelReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &srv__pool_find_by_label_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t srv__pool_find_by_label_req__pack_to_buffer
+                     (const Srv__PoolFindByLabelReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &srv__pool_find_by_label_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Srv__PoolFindByLabelReq *
+       srv__pool_find_by_label_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Srv__PoolFindByLabelReq *)
+     protobuf_c_message_unpack (&srv__pool_find_by_label_req__descriptor,
+                                allocator, len, data);
+}
+void   srv__pool_find_by_label_req__free_unpacked
+                     (Srv__PoolFindByLabelReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &srv__pool_find_by_label_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   srv__pool_find_by_label_resp__init
+                     (Srv__PoolFindByLabelResp         *message)
+{
+  static const Srv__PoolFindByLabelResp init_value = SRV__POOL_FIND_BY_LABEL_RESP__INIT;
+  *message = init_value;
+}
+size_t srv__pool_find_by_label_resp__get_packed_size
+                     (const Srv__PoolFindByLabelResp *message)
+{
+  assert(message->base.descriptor == &srv__pool_find_by_label_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t srv__pool_find_by_label_resp__pack
+                     (const Srv__PoolFindByLabelResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &srv__pool_find_by_label_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t srv__pool_find_by_label_resp__pack_to_buffer
+                     (const Srv__PoolFindByLabelResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &srv__pool_find_by_label_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Srv__PoolFindByLabelResp *
+       srv__pool_find_by_label_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Srv__PoolFindByLabelResp *)
+     protobuf_c_message_unpack (&srv__pool_find_by_label_resp__descriptor,
+                                allocator, len, data);
+}
+void   srv__pool_find_by_label_resp__free_unpacked
+                     (Srv__PoolFindByLabelResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &srv__pool_find_by_label_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[5] =
 {
   {
@@ -480,5 +570,107 @@ const ProtobufCMessageDescriptor srv__get_pool_svc_resp__descriptor =
   srv__get_pool_svc_resp__field_indices_by_name,
   1,  srv__get_pool_svc_resp__number_ranges,
   (ProtobufCMessageInit) srv__get_pool_svc_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor srv__pool_find_by_label_req__field_descriptors[1] =
+{
+  {
+    "label",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Srv__PoolFindByLabelReq, label),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned srv__pool_find_by_label_req__field_indices_by_name[] = {
+  0,   /* field[0] = label */
+};
+static const ProtobufCIntRange srv__pool_find_by_label_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor srv__pool_find_by_label_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "srv.PoolFindByLabelReq",
+  "PoolFindByLabelReq",
+  "Srv__PoolFindByLabelReq",
+  "srv",
+  sizeof(Srv__PoolFindByLabelReq),
+  1,
+  srv__pool_find_by_label_req__field_descriptors,
+  srv__pool_find_by_label_req__field_indices_by_name,
+  1,  srv__pool_find_by_label_req__number_ranges,
+  (ProtobufCMessageInit) srv__pool_find_by_label_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor srv__pool_find_by_label_resp__field_descriptors[3] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Srv__PoolFindByLabelResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "uuid",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Srv__PoolFindByLabelResp, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "svcreps",
+    3,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Srv__PoolFindByLabelResp, n_svcreps),
+    offsetof(Srv__PoolFindByLabelResp, svcreps),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned srv__pool_find_by_label_resp__field_indices_by_name[] = {
+  0,   /* field[0] = status */
+  2,   /* field[2] = svcreps */
+  1,   /* field[1] = uuid */
+};
+static const ProtobufCIntRange srv__pool_find_by_label_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor srv__pool_find_by_label_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "srv.PoolFindByLabelResp",
+  "PoolFindByLabelResp",
+  "Srv__PoolFindByLabelResp",
+  "srv",
+  sizeof(Srv__PoolFindByLabelResp),
+  3,
+  srv__pool_find_by_label_resp__field_descriptors,
+  srv__pool_find_by_label_resp__field_indices_by_name,
+  1,  srv__pool_find_by_label_resp__number_ranges,
+  (ProtobufCMessageInit) srv__pool_find_by_label_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
