@@ -8,7 +8,12 @@
 #define __DAOS_HDLR_H__
 
 enum fs_op {
-	FS_COPY
+	FS_COPY,
+	FS_SET_ATTR,
+	FS_GET_ATTR,
+	FS_RESET_ATTR,
+	FS_RESET_CHUNK_SIZE,
+	FS_RESET_OCLASS,
 };
 
 enum cont_op {
@@ -95,6 +100,10 @@ struct cmd_args_s {
 	daos_obj_id_t		oid;
 	daos_prop_t		*props;		/* --properties cont create */
 
+	/* DFS related */
+	char			*dfs_prefix;	/* --dfs-prefix name */
+	char			*dfs_path;	/* --dfs-path file/dir */
+
 	FILE			*ostream;	/* help_hdlr() stream */
 	char			*outfile;	/* --outfile path */
 	char			*aclfile;	/* --acl-file path */
@@ -177,6 +186,8 @@ int pool_autotest_hdlr(struct cmd_args_s *ap);
 
 /* filesystem operations */
 int fs_copy_hdlr(struct cmd_args_s *ap);
+int fs_dfs_hdlr(struct cmd_args_s *ap);
+int parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
 
 /* Container operations */
 int cont_create_hdlr(struct cmd_args_s *ap);
