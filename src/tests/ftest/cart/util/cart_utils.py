@@ -127,9 +127,9 @@ class CartTest(TestWithoutServers):
             time.sleep(1)
 
         if not found_files:
-            self.log.info("Expected {} completion files, ".format(str(count)))
-            self.log.info("but only found {}.\n".format(str(len(file_list))))
-            
+            self.log.info("Expected %d completion files, ", count)
+            self.log.info("but only found %d.\n", len(file_list))
+
         # Clean up completion file(s) for next test for next runrun
         for _file in file_list:
             os.unlink(_file)
