@@ -2409,14 +2409,7 @@ def run_in_fg(server, conf):
         pools = make_pool(server)
 
     pool=pools[0]
-<<<<<<< HEAD
-        
-=======
 
-    dfuse = DFuse(server, conf, pool=pool)
-    dfuse.start()
-
->>>>>>> master
     container = create_cont(conf, pool, posix=True)
 
     run_daos_cmd(conf,
