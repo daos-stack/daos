@@ -73,20 +73,22 @@ RUN rm /bin/sh && ln -s bash /bin/sh
 RUN locale-gen en_US.UTF-8
 
 # use Java 8 instead of default Java 11
-RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+RUN update-alternatives --set \
+    java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
 
 ARG UID=1000
 
 # Add DAOS users
-RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home/daos daos_server
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
+            --home /home/daos daos_server
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
-    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&	\
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
 # The COPY command has a --chown option but it's not well supported so copy as
@@ -94,11 +96,10 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
 # seconds.
 WORKDIR /home/daos/pre
 COPY SConstruct .
-COPY utils/sl utils/sl
+COPY site_scons site_scons
 COPY utils/build.config utils/
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -130,12 +131,12 @@ LABEL DAOS=stage1
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
+COPY site_scons site_scons
 COPY utils utils
 COPY src src
 USER root:root
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
 
 # select compiler to use
 ARG COMPILER=gcc

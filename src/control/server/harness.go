@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	rankReqTimeout   = 10 * time.Second
-	rankStartTimeout = 3 * rankReqTimeout
+	rankReqTimeout   = 30 * time.Second
+	rankStartTimeout = 2 * rankReqTimeout
 )
 
 // EngineHarness is responsible for managing Engine instances.

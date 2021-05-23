@@ -13,17 +13,30 @@ LABEL maintainer="daos@daos.groups.io"
 ARG CB0
 
 # Use our own repo cache
+
+# If a DISTRO repo is provided then use it.
 ARG REPO_URL=""
-ARG REPO_GROUP_LEAP15=""
-RUN if [ -n "${REPO_GROUP_LEAP15}" ]; then				\
-    rm -f /etc/zypp/repos.d/*.repo &&					\
-    zypper --non-interactive ar ${REPO_URL}${REPO_GROUP_LEAP15} daos-stack-group-repo && \
-    zypper --non-interactive mr --gpgcheck-allow-unsigned-repo daos-stack-group-repo; \
-  fi
+ARG REPO_DISTRO=""
+RUN if [ -n "${REPO_DISTRO}" ]; then                                           \
+      rm -f /etc/zypp/repos.d/*.repo &&                                        \
+      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
+            ${REPO_URL}${REPO_DISTRO}/ daos-stack-distro-group-repo &&         \
+      zypper --non-interactive modifyrepo --gpgcheck-allow-unsigned-repo       \
+             daos-stack-distro-group-repo &&                                   \
+      zypper clean --all;                                                      \
+    fi
 
-# Make sure repos are up to date
-RUN zypper --non-interactive --no-gpg-checks --gpg-auto-import-keys refresh
-
+ARG REPO_DAOS=""
+RUN if [ -n "${REPO_DAOS}" ]; then                                             \
+      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
+             ${REPO_URL}${REPO_DAOS} daos-stack-daos-group-repo &&             \
+      zypper --non-interactive modifyrepo --no-gpgcheck                        \
+             daos-stack-daos-group-repo &&                                     \
+      zypper addlock --repo daos-stack-daos-group-repo                         \
+             'fuse<3' 'libfuse-devel<3' 'fuse-libs<3'                          \
+             'fuse-debuginfo<3' 'ompi' &&                                      \
+      zypper clean --all;                                                      \
+    fi
 # Allow packages to change vendors
 RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
 
@@ -33,7 +46,8 @@ RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
 # installed packages list below is updated
 # TODO: Do not clean as part of this cache layer as Zypper is used later
 # on.
-RUN zypper --non-interactive update && \
+RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
+    zypper --non-interactive update && \
     zypper --non-interactive install \
     boost-devel \
     clang \
@@ -46,9 +60,12 @@ RUN zypper --non-interactive update && \
     gcc \
     gcc-c++ \
     git \
+    go1.14 \
+    go1.14-race \
     graphviz \
     gzip \
     hwloc-devel \
+    ipmctl-devel \
     java-1_8_0-openjdk-devel \
     libaio-devel \
     libcmocka-devel \
@@ -76,7 +93,6 @@ RUN zypper --non-interactive update && \
     python3-devel \
     python3-distro \
     python3-junit-xml \
-    python3-pip \
     python3-pyxattr  \
     python3-PyYAML \
     python3-tabulate \
@@ -89,37 +105,26 @@ RUN zypper --non-interactive update && \
     zypper clean --all
 
 # Monkey-patch MODULEPATH
-RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
-        sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' /etc/profile.d/lmod.sh; \
+RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
+        sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                  \
+               /etc/profile.d/lmod.sh;                                     \
     fi
 
 RUN update-ca-certificates
-RUN zypper --non-interactive --no-gpg-checks install --allow-unsigned-rpm lua-lmod
-
-RUN if [ -z "${REPO_GROUP_LEAP15}" ]; then                                                                                        \
-        zypper --non-interactive addrepo                                                                                          \
-        https://download.opensuse.org/repositories/devel:languages:go/openSUSE_Leap_15.1/devel:languages:go.repo;                 \
-        zypper --non-interactive --gpg-auto-import-keys refresh;                                                                  \
-    else                                                                                                                          \
-         # Need the GPG key for the GO language repo (part of the group repo above)                                               \
-         rpm --import "${REPO_URL}${REPO_GROUP_LEAP15%/*}/opensuse-15.2-devel-languages-go-x86_64-proxy/repodata/repomd.xml.key"; \
-    fi
-# We actually only need go 1.12 or higher, but SUSE's 1.12 package is actually 1.11
-# https://bugzilla.opensuse.org/show_bug.cgi?id=1178985
-RUN zypper --non-interactive install -y ipmctl-devel go1.14 go1.14-race
 
 ARG UID=1000
 
 # Add DAOS users
-RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home/daos daos_server
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
+            --home /home/daos daos_server
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
-    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&	\
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
 ARG JENKINS_URL=""
@@ -127,45 +132,41 @@ ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS=""
 ARG REPOS=""
 ARG REPO_LOCAL_LEAP15=""
-RUN if $QUICKBUILD; then                                                                                         \
-        for REPO_LEAP15 in $REPO_LOCAL_LEAP15; do                                                                \
-            MY_REPO="${REPO_URL}${REPO_LEAP15}";                                                                 \
-            MY_NAME="${MY_REPO#*//}";                                                                            \
-            MY_NAME="${MY_NAME//\//_}";                                                                          \
-            zypper --non-interactive addrepo --no-gpgcheck                                                       \
-                   ${MY_REPO} ${MY_NAME};                                                                        \
-        done;                                                                                                    \
-        for repo in $REPOS; do                                                                                   \
-            branch="master";                                                                                     \
-            build_number="lastSuccessfulBuild";                                                                  \
-            if [[ $repo = *@* ]]; then                                                                           \
-                branch="${repo#*@}";                                                                             \
-                repo="${repo%@*}";                                                                               \
-                if [[ $branch = *:* ]]; then                                                                     \
-                    build_number="${branch#*:}";                                                                 \
-                    branch="${branch%:*}";                                                                       \
-                fi;                                                                                              \
-            fi;                                                                                                  \
-            zypper --non-interactive addrepo --no-gpgcheck                                                       \
-                   ${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/   \
-                   $repo:$branch:$build_number;                                                                  \
-        done;                                                                                                    \
-        echo "Installing: $QUICKBUILD_DEPS";                                                                     \
-        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' | xargs -0 zypper --non-interactive install;     \
+RUN if $QUICKBUILD; then                                                       \
+        for repo in $REPOS; do                                                 \
+            branch="master";                                                   \
+            build_number="lastSuccessfulBuild";                                \
+            if [[ $repo = *@* ]]; then                                         \
+                branch="${repo#*@}";                                           \
+                repo="${repo%@*}";                                             \
+                if [[ $branch = *:* ]]; then                                   \
+                    build_number="${branch#*:}";                               \
+                    branch="${branch%:*}";                                     \
+                fi;                                                            \
+            fi;                                                                \
+            zypper --non-interactive addrepo --no-gpgcheck                     \
+                   ${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/ \
+                   $repo:$branch:$build_number;                                \
+        done;                                                                  \
+        zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref;   \
+        echo "Installing: $QUICKBUILD_DEPS";                                   \
+        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |              \
+              xargs -0 zypper --non-interactive install;                       \
+        zypper clean --all;                                                    \
     fi
 
-RUN zypper addlock fuse fuse-libs fuse-devel libraft0 raft-devel mercury mercury-devel
+RUN zypper addlock fuse fuse-libs fuse-devel \
+           libraft0 raft-devel mercury mercury-devel
 
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few
 # seconds.
 WORKDIR /home/daos/pre
 COPY SConstruct .
-COPY utils/sl utils/sl
+COPY site_scons site_scons
 COPY utils/build.config utils/
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -177,7 +178,9 @@ ARG DAOS_DEPS_BUILD=yes
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { zypper --non-interactive --no-gpg-checks update && zypper clean --all; }
+    { zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
+      zypper --non-interactive update && \
+      zypper clean --all; }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
@@ -189,17 +192,19 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 # force an upgrade to get any newly built RPMs
 USER root:root
 ARG CACHEBUST
-RUN zypper --non-interactive --no-gpg-checks update && zypper clean --all
+RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
+    zypper --non-interactive update && \
+    zypper clean --all
 USER daos_server:daos_server
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
+COPY site_scons site_scons
 COPY utils utils
 COPY src src
 USER root:root
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
 
 # select compiler to use
 ARG COMPILER=gcc
