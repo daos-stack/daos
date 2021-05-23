@@ -74,6 +74,9 @@ func (sc *ScmConfig) Validate() error {
 	if sc.MountPoint == "" {
 		return errors.New("no scm_mount set")
 	}
+	if sc.RamdiskSize < 0 {
+		return errors.New("negative scm_size")
+	}
 
 	switch sc.Class {
 	case ScmClassDCPM:
@@ -170,6 +173,12 @@ func (bc *BdevConfig) checkNonEmptyDevList() error {
 func (bc *BdevConfig) Validate() error {
 	if common.StringSliceHasDuplicates(bc.DeviceList) {
 		return errors.New("bdev_list contains duplicate pci addresses")
+	}
+	if bc.DeviceCount < 0 {
+		return errors.New("negative bdev_number")
+	}
+	if bc.FileSize < 0 {
+		return errors.New("negative bdev_size")
 	}
 
 	switch bc.Class {

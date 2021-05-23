@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -37,8 +35,6 @@ type netListenFn func(string, string) (net.Listener, error)
 
 // resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
 type resolveTCPFn func(string, string) (*net.TCPAddr, error)
-
-var hostname, runningUser string
 
 const (
 	iommuPath        = "/sys/class/iommu"
@@ -74,34 +70,6 @@ func cfgGetRaftDir(cfg *config.Server) string {
 	}
 
 	return filepath.Join(cfg.Engines[0].Storage.SCM.MountPoint, "control_raft")
-}
-
-func getHostname() string {
-	if hostname != "" {
-		return hostname
-	}
-
-	hn, err := os.Hostname()
-	if err != nil {
-		return ""
-	}
-	hostname = hn
-
-	return hostname
-}
-
-func getRunningUser() string {
-	if runningUser != "" {
-		return runningUser
-	}
-
-	cu, err := user.Current()
-	if err != nil {
-		return ""
-	}
-	runningUser = cu.Username
-
-	return runningUser
 }
 
 func iommuDetected() bool {
@@ -191,7 +159,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn
 	prepReq := bdev.PrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
-		TargetUser:    getRunningUser(),
+		TargetUser:    srv.runningUser,
 		PCIAllowlist:  strings.Join(srv.cfg.BdevInclude, " "),
 		PCIBlocklist:  strings.Join(srv.cfg.BdevExclude, " "),
 		DisableVFIO:   srv.cfg.DisableVFIO,
@@ -207,7 +175,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn
 
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
-		if getRunningUser() != "root" {
+		if srv.runningUser != "root" {
 			if srv.cfg.DisableVFIO {
 				return FaultVfioDisabled
 			}
@@ -256,12 +224,12 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
-func registerEngineEventCallbacks(engine *EngineInstance, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
+func registerEngineEventCallbacks(engine *EngineInstance, hostname string, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
-	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, getHostname()))
+	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname))
 
 	// Register callback to publish engine format requested events.
-	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, getHostname()))
+	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, hostname))
 
 	var onceReady sync.Once
 	engine.OnReady(func(_ context.Context) error {

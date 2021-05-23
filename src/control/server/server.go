@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"os/user"
 	"sync"
 	"syscall"
 	"time"
@@ -58,6 +59,8 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 type server struct {
 	log         *logging.LeveledLogger
 	cfg         *config.Server
+	hostname    string
+	runningUser string
 	faultDomain *system.FaultDomain
 	ctlAddr     *net.TCPAddr
 	netDevClass uint32
@@ -80,6 +83,16 @@ type server struct {
 }
 
 func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, errors.Wrap(err, "get hostname")
+	}
+
+	cu, err := user.Current()
+	if err != nil {
+		return nil, errors.Wrap(err, "get username")
+	}
+
 	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
 	// Create storage subsystem providers.
@@ -89,6 +102,8 @@ func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Serv
 	return &server{
 		log:          log,
 		cfg:          cfg,
+		hostname:     hostname,
+		runningUser:  cu.Username,
 		faultDomain:  faultDomain,
 		harness:      harness,
 		scmProvider:  scmProvider,
@@ -228,7 +243,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 			return err
 		}
 
-		registerEngineEventCallbacks(engine, srv.pubSub, &allStarted)
+		registerEngineEventCallbacks(engine, srv.hostname, srv.pubSub, &allStarted)
 
 		if err := srv.harness.AddInstance(engine); err != nil {
 			return err
@@ -282,13 +297,13 @@ func (srv *server) registerEvents() {
 	registerFollowerSubscriptions(srv)
 
 	srv.sysdb.OnLeadershipGained(func(ctx context.Context) error {
-		srv.log.Infof("MS leader running on %s", getHostname())
+		srv.log.Infof("MS leader running on %s", srv.hostname)
 		srv.mgmtSvc.startJoinLoop(ctx)
 		registerLeaderSubscriptions(srv)
 		return nil
 	})
 	srv.sysdb.OnLeadershipLost(func() error {
-		srv.log.Infof("MS leader no longer running on %s", getHostname())
+		srv.log.Infof("MS leader no longer running on %s", srv.hostname)
 		registerFollowerSubscriptions(srv)
 		return nil
 	})

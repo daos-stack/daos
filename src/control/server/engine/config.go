@@ -272,7 +272,7 @@ func (c *Config) WithScmMountPoint(scmPath string) *Config {
 	return c
 }
 
-// WithScmRamdiskSize sets the size (in GB) of the ramdisk used
+// WithScmRamdiskSize sets the size (in GiB) of the ramdisk used
 // to emulate SCM (no effect if ScmClass is not RAM).
 func (c *Config) WithScmRamdiskSize(size int) *Config {
 	c.Storage.SCM.RamdiskSize = size
@@ -304,8 +304,8 @@ func (c *Config) WithBdevDeviceCount(count int) *Config {
 	return c
 }
 
-// WithBdevFileSize sets the backing file size (used when BdevClass is malloc
-// or file).
+// WithBdevFileSize sets the backing file size in GiB (used when BdevClass is
+// malloc or file).
 func (c *Config) WithBdevFileSize(size int) *Config {
 	c.Storage.Bdev.FileSize = size
 	return c

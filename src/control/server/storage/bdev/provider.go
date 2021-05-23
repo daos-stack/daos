@@ -59,9 +59,9 @@ type (
 		ConfigPath     string
 		Class          storage.BdevClass
 		DeviceList     []string
-		DeviceCount    int // number of NVMe emulation devices
-		DeviceFileSize int // size GB for NVMe device emulation
-		MemSize        int // size MiB memory to be used by SPDK proc
+		DeviceCount    uint32 // number of NVMe emulation devices
+		DeviceFileSize uint64 // size in bytes for NVMe device emulation
+		MemSize        int    // size MiB memory to be used by SPDK proc
 		Hostname       string
 		OwnerUID       int
 		OwnerGID       int
@@ -267,18 +267,26 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 
 // FormatFormatRequestFromConfig returns a format request populated from a bdev
 // storage configuration.
-func FormatRequestFromConfig(cfg *storage.BdevConfig, hn string) FormatRequest {
-	return FormatRequest{
+func FormatRequestFromConfig(log logging.Logger, cfg *storage.BdevConfig) FormatRequest {
+	fr := FormatRequest{
 		ConfigPath: cfg.OutputPath,
 		Class:      cfg.Class,
 		DeviceList: cfg.DeviceList,
-		// config size is number of GiBytes
-		DeviceFileSize: humanize.GiByte * cfg.FileSize,
-		DeviceCount:    cfg.DeviceCount,
-		Hostname:       hn,
+		// cfg size in nr GiBytes
+		DeviceFileSize: uint64(humanize.GiByte * cfg.FileSize),
+		DeviceCount:    uint32(cfg.DeviceCount),
 		OwnerUID:       os.Geteuid(),
 		OwnerGID:       os.Getegid(),
 	}
+
+	hn, err := os.Hostname()
+	if err != nil {
+		log.Errorf("get hostname: %s", err)
+		return fr
+	}
+	fr.Hostname = hn
+
+	return fr
 }
 
 // Format attempts to initialize NVMe devices for use by DAOS.

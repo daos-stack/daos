@@ -45,12 +45,9 @@ const (
 	clsFileBlkSize = humanize.KiByte * 4
 )
 
-func createEmptyFile(log logging.Logger, path string, size int) error {
+func createEmptyFile(log logging.Logger, path string, size uint64) error {
 	if !filepath.IsAbs(path) {
 		return errors.Errorf("expected absolute file path but got relative (%s)", path)
-	}
-	if size < 0 {
-		return errors.New("expected non-negative file size")
 	}
 	if size == 0 {
 		return errors.New("expected non-zero file size")
@@ -63,7 +60,7 @@ func createEmptyFile(log logging.Logger, path string, size int) error {
 	// adjust file size to align with block size
 	size = (size / clsFileBlkSize) * clsFileBlkSize
 
-	log.Debugf("allocating blank file %s of size %s", path, humanize.Bytes(uint64(size)))
+	log.Debugf("allocating blank file %s of size %s", path, humanize.Bytes(size))
 	file, err := common.TruncFile(path)
 	if err != nil {
 		return errors.Wrapf(err, "open %q for truncate", path)
@@ -93,7 +90,7 @@ func renderTemplate(req *FormatRequest, templ string) (out bytes.Buffer, err err
 	return
 }
 
-func writeConf(templ string, req *FormatRequest) error {
+func writeConf(log logging.Logger, templ string, req *FormatRequest) error {
 	confBytes, err := renderTemplate(req, templ)
 	if err != nil {
 		return err
@@ -109,9 +106,8 @@ func writeConf(templ string, req *FormatRequest) error {
 	}
 
 	defer func() {
-		ce := f.Close()
-		if err == nil {
-			err = ce
+		if err := f.Close(); err == nil {
+			log.Errorf("closing %q: %s", req.ConfigPath, err)
 		}
 	}()
 
@@ -149,5 +145,5 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 	}
 
 	sb.log.Debugf("write nvme output config: %+v", req)
-	return writeConf(templ, req)
+	return writeConf(sb.log, templ, req)
 }

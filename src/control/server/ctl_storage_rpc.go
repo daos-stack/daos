@@ -8,6 +8,7 @@ package server
 
 import (
 	"fmt"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
@@ -43,7 +45,7 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 
 // TODO: de-duplicate logic to populate prepare request from server config after
 //       DAOS-7002 is completed
-func updateNvmePrepareReq(req *bdev.PrepareRequest, cfg *config.Server) {
+func updateNvmePrepareReq(log logging.Logger, req *bdev.PrepareRequest, cfg *config.Server) {
 	if req.HugePageCount == 0 {
 		req.HugePageCount = minHugePageCount
 		if cfgHasBdevs(cfg) {
@@ -52,15 +54,20 @@ func updateNvmePrepareReq(req *bdev.PrepareRequest, cfg *config.Server) {
 			req.HugePageCount = cfg.NrHugepages * len(cfg.Engines)
 		}
 	}
-	if req.TargetUser == "" {
-		req.TargetUser = getRunningUser()
-	}
 	if req.PCIAllowlist == "" {
 		req.PCIAllowlist = strings.Join(cfg.BdevInclude, " ")
 	}
 	req.PCIBlocklist = strings.Join(cfg.BdevExclude, " ")
 	req.DisableVFIO = cfg.DisableVFIO
 	req.DisableVMD = cfg.DisableVMD || cfg.DisableVFIO || !iommuDetected()
+	if req.TargetUser == "" {
+		usr, err := user.Current()
+		if err != nil {
+			log.Errorf("look up current user: %s", err)
+			return
+		}
+		req.TargetUser = usr.Username
+	}
 }
 
 // doNvmePrepare issues prepare request and returns response.
@@ -77,7 +84,7 @@ func (c *ControlService) doNvmePrepare(pbReq *ctlpb.PrepareNvmeReq) *ctlpb.Prepa
 	}
 
 	if !req.ResetOnly {
-		updateNvmePrepareReq(&req, c.srvCfg)
+		updateNvmePrepareReq(c.log, &req, c.srvCfg)
 	}
 
 	_, err := c.NvmePrepare(req)

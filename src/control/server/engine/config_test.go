@@ -301,10 +301,21 @@ func TestConfig_BdevValidation(t *testing.T) {
 				WithBdevClass("kdev"),
 			expErr: errors.New("kdev requires non-empty bdev_list"),
 		},
+		"kdev class valid": {
+			cfg: baseValidConfig().
+				WithBdevClass("kdev").
+				WithBdevDeviceList("/dev/sda"),
+		},
 		"malloc class but no size": {
 			cfg: baseValidConfig().
 				WithBdevClass("malloc"),
 			expErr: errors.New("malloc requires non-zero bdev_size"),
+		},
+		"malloc class but negative size": {
+			cfg: baseValidConfig().
+				WithBdevClass("malloc").
+				WithBdevFileSize(-1),
+			expErr: errors.New("negative bdev_size"),
 		},
 		"malloc class but no number of devices": {
 			cfg: baseValidConfig().
@@ -312,17 +323,43 @@ func TestConfig_BdevValidation(t *testing.T) {
 				WithBdevFileSize(10),
 			expErr: errors.New("malloc requires non-zero bdev_number"),
 		},
+		"malloc class but negative number of devices": {
+			cfg: baseValidConfig().
+				WithBdevClass("malloc").
+				WithBdevFileSize(10).
+				WithBdevDeviceCount(-1),
+			expErr: errors.New("negative bdev_number"),
+		},
+		"malloc class valid": {
+			cfg: baseValidConfig().
+				WithBdevClass("malloc").
+				WithBdevFileSize(10).
+				WithBdevDeviceCount(2),
+		},
 		"file class but no size": {
 			cfg: baseValidConfig().
 				WithBdevClass("file").
 				WithBdevDeviceList("bdev1"),
 			expErr: errors.New("file requires non-zero bdev_size"),
 		},
+		"file class but negative size": {
+			cfg: baseValidConfig().
+				WithBdevClass("file").
+				WithBdevDeviceList("bdev1").
+				WithBdevFileSize(-1),
+			expErr: errors.New("negative bdev_size"),
+		},
 		"file class but no devices": {
 			cfg: baseValidConfig().
 				WithBdevClass("file").
 				WithBdevFileSize(10),
 			expErr: errors.New("file requires non-empty bdev_list"),
+		},
+		"file class valid": {
+			cfg: baseValidConfig().
+				WithBdevClass("file").
+				WithBdevFileSize(10).
+				WithBdevDeviceList("bdev1", "bdev2"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

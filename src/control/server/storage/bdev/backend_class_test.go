@@ -27,8 +27,6 @@ import (
 // TestBackend_writeNvmeConfig verifies config parameters for bdev get
 // converted into nvme config files that can be consumed by spdk.
 func TestBackend_writeNvmeConfig(t *testing.T) {
-	fakeHost := "hostfoo"
-
 	tests := map[string]struct {
 		class           storage.BdevClass
 		devList         []string
@@ -172,7 +170,6 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 				default:
 					cfg.DeviceList = tc.devList
 				}
-				t.Logf("bdev_list: %v", tc.devList)
 			}
 
 			if tc.fileSize != 0 {
@@ -198,7 +195,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			}
 			cfg = engineConfig.Storage.Bdev // refer to validated config
 
-			req := FormatRequestFromConfig(&cfg, fakeHost)
+			req := FormatRequestFromConfig(log, &cfg)
 
 			sb := defaultBackend(log)
 			// VMD state will be set on the backend during
@@ -225,6 +222,12 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			// replace hostname in wantBuf
+			hn, _ := os.Hostname()
+			for i := range tc.wantBuf {
+				tc.wantBuf[i] = strings.ReplaceAll(tc.wantBuf[i], "hostfoo", hn)
+			}
+
 			if diff := cmp.Diff(strings.Join(tc.wantBuf, "\n"), string(gotBuf)); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)
 			}
@@ -241,7 +244,7 @@ func TestBackend_createEmptyFile(t *testing.T) {
 	tests := map[string]struct {
 		path          string
 		pathImmutable bool // avoid adjusting path in test if set
-		size          int
+		size          uint64
 		expErr        error
 	}{
 		"relative path": {
@@ -252,10 +255,6 @@ func TestBackend_createEmptyFile(t *testing.T) {
 		"zero size": {
 			size:   0,
 			expErr: errors.New("zero"),
-		},
-		"negative size": {
-			size:   -1,
-			expErr: errors.New("negative"),
 		},
 		"non-existent path": {
 			path:   "/timbuk/tu",
