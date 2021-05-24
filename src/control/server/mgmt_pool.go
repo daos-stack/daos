@@ -171,8 +171,8 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	if _, err := svc.sysdb.FindPoolServiceByLabel(req.GetName()); err == nil {
-		return nil, FaultPoolDuplicateLabel(req.GetName())
+	if _, err := svc.sysdb.FindPoolServiceByLabel(req.GetLabel()); err == nil {
+		return nil, FaultPoolDuplicateLabel(req.GetLabel())
 	}
 
 	allRanks, err := svc.sysdb.MemberRanks(system.AvailableMemberFilter)
@@ -255,7 +255,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	}
 
 	ps = system.NewPoolService(uuid, req.GetScmbytes(), req.GetNvmebytes(), system.RanksFromUint32(req.GetRanks()))
-	ps.PoolLabel = req.GetName()
+	ps.PoolLabel = req.GetLabel()
 	if err := svc.sysdb.AddPoolService(ps); err != nil {
 		return nil, err
 	}

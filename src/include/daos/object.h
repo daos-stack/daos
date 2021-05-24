@@ -247,7 +247,7 @@ daos_unit_obj_id_equal(daos_unit_oid_t oid1, daos_unit_oid_t oid2)
 
 struct pl_obj_layout;
 
-int  obj_class_init(void);
+int obj_class_init(void);
 void obj_class_fini(void);
 struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
@@ -255,6 +255,9 @@ unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
 int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 			daos_oclass_id_t *oc_id_p);
+bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
+daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+				   daos_oclass_hints_t hints, uint32_t args);
 
 /** bits for the specified rank */
 #define DAOS_OC_SR_SHIFT	24

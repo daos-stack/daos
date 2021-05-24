@@ -191,6 +191,35 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
 
 /**
+ * Connect to the DAOS pool identified by \a label. Upon a successful
+ * completion, \a poh returns the pool handle, and \a info returns the latest
+ * pool information.
+ *
+ * \param[in]	label	label string to identify a pool.
+ * \param[in]	grp	Process set name of the DAOS servers managing the pool
+ * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
+ * \param[out]	poh	Returned open handle.
+ * \param[in,out]
+ *		info	Optional, returned pool information,
+ *			see daos_pool_info_bit.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Pool is nonexistent
+ */
+int
+daos_pool_connect_bylabel(const char *label, const char *grp,
+			  unsigned int flags,
+			  daos_handle_t *poh, daos_pool_info_t *info,
+			  daos_event_t *ev);
+
+/**
  * Disconnect from the DAOS pool. It should revoke all the container open
  * handles of this pool.
  *

@@ -229,7 +229,8 @@ show_help(char *name)
 		"	-S --singlethreaded	Single threaded\n"
 		"	-t --thread-count=COUNT Number of fuse threads to use\n"
 		"	-f --foreground		Run in foreground\n"
-		"	   --enable-caching	Enable node-local caching (experimental)\n",
+		"          --disable-caching    Disable all caching\n"
+		"          --disable-wb-cache   Use write-through rather than write-back cache\n",
 		name);
 }
 
@@ -255,8 +256,8 @@ main(int argc, char **argv)
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"thread-count",	required_argument, 0, 't'},
 		{"singlethread",	no_argument,	   0, 'S'},
-		{"enable-caching",	no_argument,	   0, 'A'},
-		{"disable-direct-io",	no_argument,	   0, 'D'},
+		{"disable-caching",	no_argument,	   0, 'A'},
+		{"disable-wb-cache",	no_argument,	   0, 'B'},
 		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
 		{0, 0, 0, 0}
@@ -271,7 +272,8 @@ main(int argc, char **argv)
 		D_GOTO(out_debug, ret = -DER_NOMEM);
 
 	dfuse_info->di_threaded = true;
-	dfuse_info->di_direct_io = true;
+	dfuse_info->di_caching = true;
+	dfuse_info->di_wb_cache = true;
 
 	while (1) {
 		c = getopt_long(argc, argv, "m:Sfh",
@@ -291,7 +293,11 @@ main(int argc, char **argv)
 			dfuse_info->di_group = optarg;
 			break;
 		case 'A':
-			dfuse_info->di_caching = true;
+			dfuse_info->di_caching = false;
+			dfuse_info->di_wb_cache = false;
+			break;
+		case 'B':
+			dfuse_info->di_wb_cache = false;
 			break;
 		case 'm':
 			dfuse_info->di_mountpoint = optarg;
@@ -310,9 +316,6 @@ main(int argc, char **argv)
 		case 'f':
 			dfuse_info->di_foreground = true;
 			break;
-		case 'D':
-			dfuse_info->di_direct_io = false;
-			break;
 		case 'h':
 			show_help(argv[0]);
 			exit(0);
@@ -322,11 +325,6 @@ main(int argc, char **argv)
 			exit(1);
 			break;
 		}
-	}
-
-	if (dfuse_info->di_caching && !dfuse_info->di_threaded) {
-		printf("Caching not compatible with single-threaded mode\n");
-		exit(1);
 	}
 
 	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
@@ -442,9 +440,6 @@ main(int argc, char **argv)
 
 	if (uuid_is_null(pool_uuid) != 0)
 		dfs->dfs_ops = &dfuse_pool_ops;
-
-	if (dfuse_info->di_caching)
-		dfs->dfs_attr_timeout = 5;
 
 	rc = dfuse_start(fs_handle, dfs);
 	if (rc != -DER_SUCCESS)
