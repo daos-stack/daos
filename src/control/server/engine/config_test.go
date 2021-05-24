@@ -138,8 +138,7 @@ func TestConfig_Constructed(t *testing.T) {
 		WithScmRamdiskSize(42).
 		WithScmMountPoint("/mnt/daostest").
 		WithScmDeviceList("/dev/a", "/dev/b").
-		WithBdevClass("malloc").
-		WithBdevDeviceCount(2).
+		WithBdevClass("kdev").
 		WithBdevFileSize(20).
 		WithBdevDeviceList("/dev/c", "/dev/d").
 		WithLogFile("/path/to/log").
@@ -305,36 +304,6 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithBdevClass("kdev").
 				WithBdevDeviceList("/dev/sda"),
-		},
-		"malloc class but no size": {
-			cfg: baseValidConfig().
-				WithBdevClass("malloc"),
-			expErr: errors.New("malloc requires non-zero bdev_size"),
-		},
-		"malloc class but negative size": {
-			cfg: baseValidConfig().
-				WithBdevClass("malloc").
-				WithBdevFileSize(-1),
-			expErr: errors.New("negative bdev_size"),
-		},
-		"malloc class but no number of devices": {
-			cfg: baseValidConfig().
-				WithBdevClass("malloc").
-				WithBdevFileSize(10),
-			expErr: errors.New("malloc requires non-zero bdev_number"),
-		},
-		"malloc class but negative number of devices": {
-			cfg: baseValidConfig().
-				WithBdevClass("malloc").
-				WithBdevFileSize(10).
-				WithBdevDeviceCount(-1),
-			expErr: errors.New("negative bdev_number"),
-		},
-		"malloc class valid": {
-			cfg: baseValidConfig().
-				WithBdevClass("malloc").
-				WithBdevFileSize(10).
-				WithBdevDeviceCount(2),
 		},
 		"file class but no size": {
 			cfg: baseValidConfig().

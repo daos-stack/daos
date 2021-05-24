@@ -299,15 +299,8 @@ func (c *Config) WithBdevDeviceList(devices ...string) *Config {
 	return c
 }
 
-// WithBdevDeviceCount sets the number of devices to be created when BdevClass
-// is malloc.
-func (c *Config) WithBdevDeviceCount(count int) *Config {
-	c.Storage.Bdev.DeviceCount = count
-	return c
-}
-
 // WithBdevFileSize sets the backing file size in GiB (used when BdevClass is
-// malloc or file).
+// set to "file").
 func (c *Config) WithBdevFileSize(size int) *Config {
 	c.Storage.Bdev.FileSize = size
 	return c

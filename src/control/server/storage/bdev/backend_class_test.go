@@ -7,7 +7,6 @@
 package bdev
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -31,8 +30,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 		class           storage.BdevClass
 		devList         []string
 		bdevVmdDisabled bool
-		fileSize        int // relevant for MALLOC/FILE
-		devNumber       int // relevant for MALLOC
+		fileSize        int // relevant for FILE
 		vosEnv          string
 		wantBuf         []string
 		expValidateErr  error
@@ -125,19 +123,6 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			},
 			vosEnv: "AIO",
 		},
-		"MALLOC": {
-			class:     storage.BdevClassMalloc,
-			fileSize:  5, // GB/file
-			devNumber: 2, // number of LUNs
-			wantBuf: []string{
-				`[Malloc]`,
-				`    NumberOfLuns 2`,
-				fmt.Sprintf(`    LunSizeInMB %d`,
-					humanize.GiByte*5/humanize.MiByte),
-				``,
-			},
-			vosEnv: "MALLOC",
-		},
 	}
 
 	for name, tc := range tests {
@@ -174,9 +159,6 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 
 			if tc.fileSize != 0 {
 				cfg.FileSize = tc.fileSize
-			}
-			if tc.devNumber != 0 {
-				cfg.DeviceCount = tc.devNumber
 			}
 
 			engineConfig := engine.NewConfig().

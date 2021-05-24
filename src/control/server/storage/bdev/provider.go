@@ -59,7 +59,6 @@ type (
 		ConfigPath     string
 		Class          storage.BdevClass
 		DeviceList     []string
-		DeviceCount    uint32 // number of NVMe emulation devices
 		DeviceFileSize uint64 // size in bytes for NVMe device emulation
 		MemSize        int    // size MiB memory to be used by SPDK proc
 		Hostname       string
@@ -274,7 +273,6 @@ func FormatRequestFromConfig(log logging.Logger, cfg *storage.BdevConfig) Format
 		DeviceList: cfg.DeviceList,
 		// cfg size in nr GiBytes
 		DeviceFileSize: uint64(humanize.GiByte * cfg.FileSize),
-		DeviceCount:    uint32(cfg.DeviceCount),
 		OwnerUID:       os.Geteuid(),
 		OwnerGID:       os.Getegid(),
 	}

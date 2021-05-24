@@ -256,10 +256,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithScmMountPoint("/mnt/daos/2").
 				WithScmClass("dcpm").
 				WithScmDeviceList("/dev/pmem0").
-				WithBdevClass("malloc").
+				WithBdevClass("file").
 				WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-				WithBdevDeviceCount(1).
-				WithBdevFileSize(4).
+				WithBdevFileSize(16).
 				WithFabricInterface("qib1").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode1).

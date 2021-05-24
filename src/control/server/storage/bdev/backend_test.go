@@ -133,20 +133,6 @@ func TestBackend_Format(t *testing.T) {
 			},
 			expErr: FaultFormatUnknownClass("whoops"),
 		},
-		"aio malloc device class": {
-			mec: spdk.MockEnvCfg{
-				InitErr: errors.New("spdk backend init should not be called for non-nvme class"),
-			},
-			mnc: spdk.MockNvmeCfg{
-				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
-			},
-			req: FormatRequest{
-				Class: storage.BdevClassMalloc,
-			},
-			expResp: &FormatResponse{
-				DeviceResponses: map[string]*DeviceFormatResponse{},
-			},
-		},
 		"aio file device class": {
 			mec: spdk.MockEnvCfg{
 				InitErr: errors.New("spdk backend init should not be called for non-nvme class"),

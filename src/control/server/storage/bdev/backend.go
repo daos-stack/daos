@@ -263,7 +263,8 @@ func (sb *spdkBackend) formatAioFile(req *FormatRequest) (*FormatResponse, error
 	return resp, nil
 }
 
-func (sb *spdkBackend) formatSkip(req *FormatRequest) (*FormatResponse, error) {
+// TODO: implement kdev fs format
+func (sb *spdkBackend) formatKdev(req *FormatRequest) (*FormatResponse, error) {
 	resp := &FormatResponse{
 		DeviceResponses: make(DeviceFormatResponses),
 	}
@@ -287,8 +288,8 @@ func (sb *spdkBackend) Format(req FormatRequest) (resp *FormatResponse, err erro
 	switch req.Class {
 	case storage.BdevClassFile:
 		return sb.formatAioFile(&req)
-	case storage.BdevClassKdev, storage.BdevClassMalloc:
-		return sb.formatSkip(&req)
+	case storage.BdevClassKdev:
+		return sb.formatKdev(&req)
 	case storage.BdevClassNvme:
 		return sb.formatNvme(&req)
 	default:

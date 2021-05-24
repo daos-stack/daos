@@ -38,10 +38,6 @@ const (
 	clsKdevTemplate = `[AIO]
 {{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    AIO {{$e}} AIO_{{$host}}_{{$i}}
 {{ end }}`
-	clsMallocTemplate = `[Malloc]
-    NumberOfLuns {{.DeviceCount}}
-    LunSizeInMB {{.DeviceFileSize}}
-`
 	clsFileBlkSize = humanize.KiByte * 4
 )
 
@@ -128,11 +124,10 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 	}
 
 	templ := map[storage.BdevClass]string{
-		storage.BdevClassNone:   clsNvmeTemplate,
-		storage.BdevClassNvme:   clsNvmeTemplate,
-		storage.BdevClassMalloc: clsMallocTemplate,
-		storage.BdevClassKdev:   clsKdevTemplate,
-		storage.BdevClassFile:   clsFileTemplate,
+		storage.BdevClassNone: clsNvmeTemplate,
+		storage.BdevClassNvme: clsNvmeTemplate,
+		storage.BdevClassKdev: clsKdevTemplate,
+		storage.BdevClassFile: clsFileTemplate,
 	}[req.Class]
 
 	// special handling for class nvme

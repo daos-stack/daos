@@ -105,11 +105,10 @@ func (sc *ScmConfig) Validate() error {
 
 // BdevClass definitions.
 const (
-	BdevClassNone   BdevClass = ""
-	BdevClassNvme   BdevClass = "nvme"
-	BdevClassMalloc BdevClass = "malloc"
-	BdevClassKdev   BdevClass = "kdev"
-	BdevClassFile   BdevClass = "file"
+	BdevClassNone BdevClass = ""
+	BdevClassNvme BdevClass = "nvme"
+	BdevClassKdev BdevClass = "kdev"
+	BdevClassFile BdevClass = "file"
 )
 
 // BdevClass specifies block device type for block device storage
@@ -127,10 +126,10 @@ func (b *BdevClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	// harness have no bdev entries and are expected to work.
 	case BdevClassNone:
 		*b = BdevClassNvme
-	case BdevClassNvme, BdevClassMalloc, BdevClassKdev, BdevClassFile:
+	case BdevClassNvme, BdevClassKdev, BdevClassFile:
 		*b = bdevClass
 	default:
-		return errors.Errorf("bdev_class value %q not supported in config (nvme/malloc/kdev/file)", bdevClass)
+		return errors.Errorf("bdev_class value %q not supported in config (nvme/kdev/file)", bdevClass)
 	}
 	return nil
 }
@@ -145,7 +144,6 @@ type BdevConfig struct {
 	Class       BdevClass `yaml:"bdev_class,omitempty"`
 	DeviceList  []string  `yaml:"bdev_list,omitempty"`
 	VmdDisabled bool      `yaml:"-"` // set during start-up
-	DeviceCount int       `yaml:"bdev_number,omitempty"`
 	FileSize    int       `yaml:"bdev_size,omitempty"`
 	MemSize     int       `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
 	VosEnv      string    `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
@@ -174,9 +172,6 @@ func (bc *BdevConfig) Validate() error {
 	if common.StringSliceHasDuplicates(bc.DeviceList) {
 		return errors.New("bdev_list contains duplicate pci addresses")
 	}
-	if bc.DeviceCount < 0 {
-		return errors.New("negative bdev_number")
-	}
 	if bc.FileSize < 0 {
 		return errors.New("negative bdev_size")
 	}
@@ -190,15 +185,6 @@ func (bc *BdevConfig) Validate() error {
 			return err
 		}
 		bc.VosEnv = "AIO"
-	case BdevClassMalloc:
-		if err := bc.checkNonZeroDevFileSize(); err != nil {
-			return err
-		}
-		if bc.DeviceCount == 0 {
-			return errors.Errorf("bdev_class %s requires non-zero bdev_number",
-				bc.Class)
-		}
-		bc.VosEnv = "MALLOC"
 	case BdevClassKdev:
 		if err := bc.checkNonEmptyDevList(); err != nil {
 			return err
