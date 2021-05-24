@@ -16,9 +16,6 @@
 #include "vts_io.h"
 #include <vos_internal.h>
 
-#define DF_BOOL "%s"
-#define DP_BOOL(punch) ((punch) ? "true" : "false")
-
 #define LOG_FAIL(rc, expected_value, format, ...)			\
 	do {								\
 		if ((rc) == (expected_value))				\

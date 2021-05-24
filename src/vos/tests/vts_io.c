@@ -576,7 +576,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	}
 
 	srv_iov = &sgl->sg_iovs[0];
-	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO);
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		goto end;
 
@@ -643,7 +643,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	}
 
 	dst_iov = &sgl->sg_iovs[0];
-	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO);
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		goto end;
 
