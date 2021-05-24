@@ -652,7 +652,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithPinnedNumaNode(&numa0).
 					WithScmDeviceList("/dev/pmem0").
 					WithScmMountPoint("/mnt/daos0").
-					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
+					// out path blank if bdev_list empty
+					WithBdevOutputConfigPath("").
 					WithBdevVosEnv("NVME").
 					WithHelperStreamCount(7)),
 		},
@@ -671,7 +672,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithPinnedNumaNode(&numa0).
 					WithScmDeviceList("/dev/pmem0").
 					WithScmMountPoint("/mnt/daos0").
-					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
+					WithBdevOutputConfigPath("").
 					WithBdevVosEnv("NVME").
 					WithHelperStreamCount(7)),
 		},
@@ -699,7 +700,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithPinnedNumaNode(&numa0).
 					WithScmDeviceList("/dev/pmem0").
 					WithScmMountPoint("/mnt/daos0").
-					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
+					WithBdevOutputConfigPath("").
 					WithBdevVosEnv("NVME").
 					WithHelperStreamCount(7)),
 		},

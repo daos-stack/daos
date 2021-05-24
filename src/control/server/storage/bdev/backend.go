@@ -199,7 +199,7 @@ func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*For
 
 func (sb *spdkBackend) formatNvme(req *FormatRequest) (*FormatResponse, error) {
 	if len(req.DeviceList) == 0 {
-		sb.log.Debug("skip nvme format as requested device list is empty")
+		sb.log.Debug("skip nvme format as bdev device list is empty")
 		return &FormatResponse{}, nil
 	}
 

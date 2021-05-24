@@ -376,7 +376,8 @@ func TestProvider_Format(t *testing.T) {
 				FormatRes: &FormatResponse{
 					DeviceResponses: DeviceFormatResponses{
 						mockSingle.PciAddr: &DeviceFormatResponse{
-							Error: FaultFormatError("foobared"),
+							Error: FaultFormatError(mockSingle.PciAddr,
+								errors.New("foobared")),
 						},
 					},
 				},
@@ -384,7 +385,8 @@ func TestProvider_Format(t *testing.T) {
 			expRes: &FormatResponse{
 				DeviceResponses: DeviceFormatResponses{
 					mockSingle.PciAddr: &DeviceFormatResponse{
-						Error: FaultFormatError("foobared"),
+						Error: FaultFormatError(mockSingle.PciAddr,
+							errors.New("foobared")),
 					},
 				},
 			},
