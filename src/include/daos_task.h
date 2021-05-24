@@ -118,6 +118,9 @@ typedef enum {
 	DAOS_OPC_KV_REMOVE,
 	DAOS_OPC_KV_LIST,
 
+	/** Pool API additions */
+	DAOS_OPC_POOL_CONNECT_LBL,
+
 	DAOS_OPC_MAX
 } daos_opc_t;
 
@@ -171,19 +174,33 @@ typedef struct {
 	int			force;
 } daos_pool_destroy_t;
 
-/** pool connect args */
+/** pool connect by UUID args */
 typedef struct {
 	/** UUID of the pool. */
-	uuid_t			uuid;
+	uuid_t			 uuid;
 	/** Process set name of the DAOS servers managing the pool. */
 	const char		*grp;
 	/** Connect mode represented by the DAOS_PC_ bits. */
-	unsigned int		flags;
+	unsigned int		 flags;
 	/** Returned open handle. */
 	daos_handle_t		*poh;
 	/** Optional, returned pool information. */
 	daos_pool_info_t	*info;
 } daos_pool_connect_t;
+
+/** pool connect by label args */
+typedef struct {
+	/** Label of the pool. */
+	const char		*label;
+	/** Process set name of the DAOS servers managing the pool. */
+	const char		*grp;
+	/** Connect mode represented by the DAOS_PC_ bits. */
+	unsigned int		 flags;
+	/** Returned open handle. */
+	daos_handle_t		*poh;
+	/** Optional, returned pool information. */
+	daos_pool_info_t	*info;
+} daos_pool_connect_lbl_t;
 
 /** pool disconnect args */
 typedef struct {
