@@ -14,10 +14,8 @@ try:
 except NameError:
     pass
 
-from prereq_tools import PreReqComponent
 import daos_build
 from prereq_tools import PreReqComponent
-
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
