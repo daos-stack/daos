@@ -470,17 +470,11 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 	// TODO: perform bdev format in parallel
 	for _, srv := range instances {
-		if len(srv.bdevConfig().DeviceList) == 0 {
-			continue
-		}
-
 		if instanceErrored[srv.Index()] {
 			// if scm errored, indicate skipping bdev format
-			if len(srv.bdevConfig().DeviceList) > 0 {
-				ret := srv.newCret("", nil)
-				ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, srv.Index())
-				resp.Crets = append(resp.Crets, ret)
-			}
+			ret := srv.newCret("", nil)
+			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, srv.Index())
+			resp.Crets = append(resp.Crets, ret)
 			continue
 		}
 		// SCM formatted correctly on this instance, format NVMe

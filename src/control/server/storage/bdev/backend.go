@@ -198,6 +198,11 @@ func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*For
 }
 
 func (sb *spdkBackend) formatNvme(req *FormatRequest) (*FormatResponse, error) {
+	if len(req.DeviceList) == 0 {
+		sb.log.Debug("skip nvme format as requested device list is empty")
+		return &FormatResponse{}, nil
+	}
+
 	spdkOpts := &spdk.EnvOptions{
 		MemSize:        req.MemSize,
 		PciIncludeList: req.DeviceList,
@@ -290,9 +295,6 @@ func (sb *spdkBackend) Format(req FormatRequest) (resp *FormatResponse, err erro
 	case storage.BdevClassKdev, storage.BdevClassMalloc:
 		return sb.formatSkip(&req), nil
 	case storage.BdevClassNvme:
-		if len(req.DeviceList) == 0 {
-			return nil, errors.New("empty pci address list in nvme format request")
-		}
 		return sb.formatNvme(&req)
 	default:
 		return nil, FaultFormatUnknownClass(req.Class.String())

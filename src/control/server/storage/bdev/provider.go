@@ -265,7 +265,7 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	return p.backend.Prepare(req)
 }
 
-// FormatFormatRequestFromConfig returns a format request populated from a bdev
+// FormatRequestFromConfig returns a format request populated from a bdev
 // storage configuration.
 func FormatRequestFromConfig(log logging.Logger, cfg *storage.BdevConfig) FormatRequest {
 	fr := FormatRequest{
@@ -292,10 +292,6 @@ func FormatRequestFromConfig(log logging.Logger, cfg *storage.BdevConfig) Format
 // Format attempts to initialize NVMe devices for use by DAOS.
 // Note that this is a no-op for non-NVMe devices.
 func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
-	if len(req.DeviceList) == 0 {
-		return nil, errors.New("empty DeviceList in FormatRequest")
-	}
-
 	if p.shouldForward(req) {
 		req.DisableVMD = p.IsVMDDisabled()
 		return p.fwd.Format(req)
