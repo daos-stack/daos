@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	clsNvmeTemplate = `[Nvme]
+	clsEmptyTemplate = ``
+	clsNvmeTemplate  = `[Nvme]
 {{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
 {{ end }}    RetryCount 4
     TimeoutUsec 0
@@ -83,14 +84,14 @@ func createEmptyFile(log logging.Logger, path string, size uint64) error {
 
 // renderTemplate takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
-func renderTemplate(req *FormatRequest, templ string) (out bytes.Buffer, err error) {
+func renderTemplate(req FormatRequest, templ string) (out bytes.Buffer, err error) {
 	t := template.Must(template.New(req.ConfigPath).Parse(templ))
 	err = t.Execute(&out, req)
 
 	return
 }
 
-func writeConf(log logging.Logger, templ string, req *FormatRequest) error {
+func writeConf(log logging.Logger, templ string, req FormatRequest) error {
 	confBytes, err := renderTemplate(req, templ)
 	if err != nil {
 		return err
@@ -120,13 +121,17 @@ func writeConf(log logging.Logger, templ string, req *FormatRequest) error {
 
 // writeNvmeConf generates nvme config file for given bdev type to be consumed
 // by spdk.
-func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
+func (sb *spdkBackend) writeNvmeConfig(req FormatRequest) error {
 	if req.ConfigPath == "" {
 		return errors.New("no output config directory set in request")
 	}
 
+	if req.Class == storage.BdevClassNvme && len(req.DeviceList) == 0 {
+		req.Class = storage.BdevClassNone
+	}
+
 	templ := map[storage.BdevClass]string{
-		storage.BdevClassNone:   clsNvmeTemplate,
+		storage.BdevClassNone:   clsEmptyTemplate,
 		storage.BdevClassNvme:   clsNvmeTemplate,
 		storage.BdevClassMalloc: clsMallocTemplate,
 		storage.BdevClassKdev:   clsKdevTemplate,
