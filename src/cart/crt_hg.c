@@ -89,7 +89,7 @@ crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
 		hg_ret = HG_Create(hg_ctx->chc_hgctx, NULL,
 				   CRT_HG_RPCID, &hdl->chh_hdl);
 		if (hg_ret != HG_SUCCESS) {
-			D_FREE_PTR(hdl);
+			D_FREE(hdl);
 			D_ERROR("HG_Create() failed, hg_ret: %d.\n", hg_ret);
 			rc = -DER_HG;
 			break;
@@ -241,7 +241,7 @@ crt_hg_pool_put(struct crt_rpc_priv *rpc_priv)
 			hg_pool, hg_pool->chp_num);
 		rc = true;
 	} else {
-		D_FREE_PTR(hdl);
+		D_FREE(hdl);
 		D_DEBUG(DB_NET, "hg_pool %p, chp_num %d, max_num %d, "
 			"enabled %d, cannot put.\n", hg_pool, hg_pool->chp_num,
 			hg_pool->chp_max_num, hg_pool->chp_enabled);
@@ -833,8 +833,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		rc = crt_corpc_common_hdlr(rpc_priv);
 	if (unlikely(rc != 0)) {
 		RPC_ERROR(rpc_priv,
-			  "failed to invoke RPC handler, rc: %d, opc: %#x\n",
-			  rc, opc);
+			  "failed to invoke RPC handler, rc: "DF_RC"\n",
+			  DP_RC(rc));
 		crt_hg_reply_error_send(rpc_priv, rc);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
@@ -936,7 +936,6 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 		(rpc_priv->crp_input_got == 0)) {
 		if (!rpc_priv->crp_srv &&
 		    !rpc_priv->crp_opc_info->coi_no_reply) {
-
 			if (crt_hg_pool_put(rpc_priv)) {
 				RPC_TRACE(DB_NET, rpc_priv,
 					  "hg_hdl %p put to pool.\n",
@@ -1187,7 +1186,6 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 {
 	void	*hg_out_struct;
 	int	 hg_ret;
-
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(error_code != 0);
@@ -1473,8 +1471,8 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 		D_ERROR("bulk_cbinfo->bci_cb failed, rc: %d.\n", rc);
 
 out:
-	D_FREE_PTR(bulk_cbinfo);
-	D_FREE_PTR(bulk_desc);
+	D_FREE(bulk_cbinfo);
+	D_FREE(bulk_desc);
 	return hg_ret;
 }
 
@@ -1504,7 +1502,7 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 		D_GOTO(out, rc = -DER_NOMEM);
 	D_ALLOC_PTR(bulk_desc_dup);
 	if (bulk_desc_dup == NULL) {
-		D_FREE_PTR(bulk_cbinfo);
+		D_FREE(bulk_cbinfo);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	crt_bulk_desc_dup(bulk_desc_dup, bulk_desc);
@@ -1541,8 +1539,8 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 				HG_OP_ID_IGNORE);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: %d.\n", hg_ret);
-		D_FREE_PTR(bulk_cbinfo);
-		D_FREE_PTR(bulk_desc_dup);
+		D_FREE(bulk_cbinfo);
+		D_FREE(bulk_desc_dup);
 		rc = crt_hgret_2_der(hg_ret);
 	}
 

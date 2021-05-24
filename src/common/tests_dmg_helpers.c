@@ -483,6 +483,12 @@ dmg_pool_create(const char *dmg_config_file,
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_LABEL);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--label=%s ",
+					    entry->dpe_str);
+		}
 	}
 
 	if (svc != NULL) {
