@@ -669,12 +669,6 @@ class DaosServer():
         print('rc from agent is {}'.format(ret))
         self._agent = None
 
-    def _stop_agent(self):
-        self._agent.send_signal(signal.SIGINT)
-        ret = self._agent.wait(timeout=5)
-        print('rc from agent is {}'.format(ret))
-        self._agent = None
-
     def stop(self, wf):
         """Stop a previously started DAOS server"""
         if self._agent:
