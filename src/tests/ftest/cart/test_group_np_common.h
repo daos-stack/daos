@@ -379,33 +379,6 @@ struct crt_proto_format my_proto_fmt_test_group1 = {
 	.cpf_base	= TEST_GROUP_BASE,
 };
 
-static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group2[] = {
-	{
-		.prf_flags	= 0,
-		.prf_req_fmt	= &CQF_test_ping_check,
-		.prf_hdlr	= test_checkin_handler,
-		.prf_co_ops	= NULL,
-	}, {
-		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
-		.prf_req_fmt	= NULL,
-		.prf_hdlr	= test_shutdown_handler,
-		.prf_co_ops	= NULL,
-	}, {
-		.prf_flags	= 0,
-		.prf_req_fmt	= &CQF_test_swim_status,
-		.prf_hdlr	= test_swim_status_handler,
-		.prf_co_ops	= NULL,
-	}
-};
-
-struct crt_proto_format my_proto_fmt_test_group2 = {
-	.cpf_name	= "my-proto-test-group2",
-	.cpf_ver	= TEST_GROUP_VER,
-	.cpf_count	= ARRAY_SIZE(my_proto_rpc_fmt_test_group2),
-	.cpf_prf	= &my_proto_rpc_fmt_test_group2[0],
-	.cpf_base	= TEST_GROUP_BASE,
-};
-
 void
 check_in(crt_group_t *remote_group, int rank, int tag)
 {

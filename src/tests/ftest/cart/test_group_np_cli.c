@@ -112,7 +112,7 @@ test_run(void)
 		D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
 		/* register RPCs */
-		rc = crt_proto_register(&my_proto_fmt_test_group2);
+		rc = crt_proto_register(&my_proto_fmt_test_group1);
 		D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
 			  rc);
 
