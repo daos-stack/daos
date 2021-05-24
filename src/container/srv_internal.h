@@ -56,6 +56,7 @@ dsm_tls_get()
 	return tls;
 }
 
+extern bool ec_agg_disabled;
 /*
  * Container service
  *

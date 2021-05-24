@@ -162,7 +162,7 @@ void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_RDB_VERSION 2
+#define DAOS_RDB_VERSION 3
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -241,7 +241,6 @@ struct rdb_local {
 #define DAOS_OSEQ_RDB_INSTALLSNAPSHOT /* output fields */	 \
 	((struct rdb_op_out)	(iso_op)		CRT_VAR) \
 	((msg_installsnapshot_response_t) (iso_msg)	CRT_VAR) \
-	((uint32_t)		(iso_padding)		CRT_VAR) \
 	/* chunk saved? */					 \
 	((uint64_t)		(iso_success)		CRT_VAR) \
 	/* last seq number */					 \
