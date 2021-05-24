@@ -97,19 +97,20 @@ func writeConf(log logging.Logger, templ string, req FormatRequest) error {
 		return err
 	}
 
+	if confBytes.Len() == 0 {
+		return errors.New("generated file is unexpectedly empty")
+	}
+
 	f, err := os.Create(req.ConfigPath)
 	if err != nil {
 		return errors.Wrap(err, "create")
 	}
+
 	defer func() {
 		if err := f.Close(); err != nil {
 			log.Errorf("closing %q: %s", req.ConfigPath, err)
 		}
 	}()
-
-	if confBytes.Len() == 0 {
-		return nil
-	}
 
 	if _, err := confBytes.WriteTo(f); err != nil {
 		return errors.Wrap(err, "write")
