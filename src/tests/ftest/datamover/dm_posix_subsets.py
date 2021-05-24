@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from data_mover_test_base import DataMoverTestBase
-from os.path import basename, join
 
 
 class DmPosixSubsetsTest(DataMoverTestBase):
@@ -22,7 +21,7 @@ class DmPosixSubsetsTest(DataMoverTestBase):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(DmPosixSubsetsTest, self).setUp()
+        super().setUp()
 
         # Get the parameters
         self.ior_flags = self.params.get(
@@ -135,8 +134,19 @@ class DmPosixSubsetsTest(DataMoverTestBase):
         Test Description:
             Tests copying POSIX container subsets with dcp.
             DAOS-5512: Verify ability to copy container subsets
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=datamover,dcp
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_dcp
         """
         self.run_dm_posix_subsets("DCP")
+
+    def test_dm_posix_subsets_fs_copy(self):
+        """
+        Test Description:
+        Tests copying POSIX container subsets with fs copy.
+            DAOS-6752: daos fs copy improvements
+        :avocado: tags=all,daily_regression
+        :avocado: tags=datamover,fs_copy
+        :avocado: tags=dm_posix_subsets,dm_posix_subsets_fs_copy
+        """
+        self.run_dm_posix_subsets("FS_COPY")

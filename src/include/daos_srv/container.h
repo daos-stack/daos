@@ -62,31 +62,24 @@ struct ds_cont_child {
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
 	uint32_t		 sc_dtx_resyncing:1,
-				 sc_dtx_aggregating:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
 				 sc_dtx_cos_shutdown:1,
 				 sc_closing:1,
-				 sc_vos_aggregating:1,
-				 sc_abort_vos_aggregating:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
 
+	/* Tracks the schedule request for EC aggregation ULT */
+	struct sched_request	*sc_ec_agg_req;
 	/*
 	 * Snapshot delete HLC (0 means no change), which is used
 	 * to compare with the aggregation HLC, so it knows whether the
 	 * aggregation needs to be restart from 0.
 	 */
 	uint64_t		sc_snapshot_delete_hlc;
-
-	/* HLC when the full scan aggregation start, if it is smaller than
-	 * snapshot_delete_hlc(or rebuild), then aggregation needs to restart
-	 * from 0.
-	 */
-	uint64_t		sc_aggregation_full_scan_hlc;
 
 	/* Upper bound of aggregation epoch, it can be:
 	 *
@@ -95,6 +88,7 @@ struct ds_cont_child {
 	 * snapshot epoch	: When the snapshot creation is in-progress
 	 */
 	uint64_t		 sc_aggregation_max;
+
 	uint64_t		*sc_snapshots;
 	uint32_t		 sc_snapshots_nr;
 	uint32_t		 sc_open;
@@ -119,6 +113,23 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_resync_ver;
 };
 
+typedef uint64_t (*agg_param_get_eph_t)(struct ds_cont_child *cont);
+struct agg_param {
+	void			*ap_data;
+	struct ds_cont_child	*ap_cont;
+	daos_epoch_t		ap_full_scan_hlc;
+	struct sched_request	*ap_req;
+	agg_param_get_eph_t	ap_max_eph_get;
+	agg_param_get_eph_t	ap_start_eph_get;
+};
+
+typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
+				   daos_epoch_range_t *epr, bool full_scan,
+				   struct agg_param *param);
+void
+cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
+			struct agg_param *param);
+bool agg_rate_ctl(void *arg);
 /*
  * Per-thread container handle (memory) object
  *
@@ -155,7 +166,7 @@ int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
  * checksum related properties from IV
  */
 int ds_cont_csummer_init(struct ds_cont_child *cont);
-int ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
+int ds_get_cont_props(struct cont_props *cont_props, uuid_t pool_uuid,
 		      uuid_t cont_uuid);
 
 void ds_cont_child_put(struct ds_cont_child *cont);
@@ -166,14 +177,13 @@ int ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
 
 typedef int (*cont_iter_cb_t)(uuid_t co_uuid, vos_iter_entry_t *ent, void *arg);
 int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
-		 void *arg, uint32_t type);
+		 void *arg, uint32_t type, uint32_t flags);
 
 /**
  * Query container properties.
  *
- * \param[in]	ns	pool IV namespace
- * \param[in]	co_uuid
- *			container uuid
+ * \param[in]	po_uuid	pool uuid
+ * \param[in]	co_uuid	container uuid
  * \param[out]	cont_prop
  *			returned container properties
  *			If it is NULL, return -DER_INVAL;
@@ -191,7 +201,7 @@ int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
  *
  * \return		0 if Success, negative if failed.
  */
-int ds_cont_fetch_prop(struct ds_iv_ns *ns, uuid_t co_uuid,
+int ds_cont_fetch_prop(uuid_t po_uuid, uuid_t co_uuid,
 		       daos_prop_t *cont_prop);
 
 /** get all snapshots of the container from IV */

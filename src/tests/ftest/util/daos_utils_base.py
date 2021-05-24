@@ -56,6 +56,8 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.sub_command_class = self.GetAttrSubCommand()
             elif self.sub_command.value == "set-attr":
                 self.sub_command_class = self.SetAttrSubCommand()
+            elif self.sub_command.value == "autotest":
+                self.sub_command_class = self.AutotestSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -118,6 +120,13 @@ class DaosCommandBase(CommandWithSubCommand):
                 super().__init__("set-attr")
                 self.attr = FormattedParameter("--attr={}")
                 self.value = FormattedParameter("--value={}")
+
+        class AutotestSubCommand(CommonPoolSubCommand):
+            """Defines an object for the daos pool autotest command."""
+
+            def __init__(self):
+                """Create a daos pool autotest command object."""
+                super().__init__("autotest")
 
     class ContainerSubCommand(CommandWithSubCommand):
         """Defines an object for the daos container sub command."""

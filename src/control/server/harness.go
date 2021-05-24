@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	rankReqTimeout   = 10 * time.Second
-	rankStartTimeout = 3 * rankReqTimeout
+	rankReqTimeout   = 30 * time.Second
+	rankStartTimeout = 2 * rankReqTimeout
 )
 
 // EngineHarness is responsible for managing Engine instances.

@@ -500,11 +500,20 @@ ut_teardown(struct vea_ut_args *test_args)
 {
 	struct vea_resrvd_ext *ext, *tmp;
 	d_list_t *r_list;
+	int cur_stream;
 
 	r_list = &test_args->vua_alloc_list;
 	d_list_for_each_entry_safe(ext, tmp, r_list, vre_link) {
 		d_list_del_init(&ext->vre_link);
 		D_FREE(ext);
+	}
+
+	for (cur_stream = 0; cur_stream < IO_STREAM_CNT; cur_stream++) {
+		r_list = &test_args->vua_resrvd_list[cur_stream];
+		d_list_for_each_entry_safe(ext, tmp, r_list, vre_link) {
+			d_list_del_init(&ext->vre_link);
+			D_FREE(ext);
+		}
 	}
 
 	if (test_args->vua_umm.umm_pool != NULL) {
@@ -1021,8 +1030,8 @@ ut_interleaved_ops(void **state)
 	block_count = 2;
 	r_list_a = &args.vua_resrvd_list[0];
 	r_list_b = &args.vua_resrvd_list[1];
+	rc = vea_hint_load(args.vua_hint[0], &args.vua_hint_ctxt[0]);
 	h_ctxt = args.vua_hint_ctxt[0];
-	rc = vea_hint_load(args.vua_hint[0], &h_ctxt);
 	assert_rc_equal(rc, 0);
 
 	/* Case 1 */

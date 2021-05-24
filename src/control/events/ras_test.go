@@ -42,11 +42,11 @@ var defEvtCmpOpts = append(common.DefaultCmpOpts(),
 )
 
 func TestEvents_HandleClusterEvent(t *testing.T) {
-	genericEvent := mockGenericEvent()
+	genericEvent := mockEvtGeneric(t)
 	pbGenericEvent, _ := genericEvent.ToProto()
-	rankDownEvent := NewRankDownEvent("foo", 1, 1, common.ExitStatus("test"))
-	pbRankDownEvent, _ := rankDownEvent.ToProto()
-	psrEvent := NewPoolSvcReplicasUpdateEvent("foo", 1, common.MockUUID(), []uint32{0, 1}, 1)
+	engineDiedEvent := mockEvtDied(t)
+	pbEngineDiedEvent, _ := engineDiedEvent.ToProto()
+	psrEvent := mockEvtSvcReps(t)
 	pbPSREvent, _ := psrEvent.ToProto()
 
 	for name, tc := range map[string]struct {
@@ -81,7 +81,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 		},
 		"rank down event": {
 			req: &sharedpb.ClusterEventReq{
-				Event: pbRankDownEvent,
+				Event: pbEngineDiedEvent,
 			},
 			subType:     RASTypeStateChange,
 			expEvtTypes: []string{RASTypeStateChange.String()},
@@ -89,7 +89,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 		},
 		"filtered rank down event": {
 			req: &sharedpb.ClusterEventReq{
-				Event: pbRankDownEvent,
+				Event: pbEngineDiedEvent,
 			},
 			subType: RASTypeInfoOnly,
 			expResp: &sharedpb.ClusterEventResp{},
