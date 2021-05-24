@@ -1662,8 +1662,8 @@ pool_query_target_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	/** TODO Return pool target space usage and other tgt info */
 	arg->dqa_info->ta_state = out->pqio_state;
+	arg->dqa_info->ta_space = out->pqio_space;
 
 out:
 	crt_req_decref(arg->rpc);
