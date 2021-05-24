@@ -136,7 +136,7 @@ func (mb *metricBase) Name() string {
 	}
 
 	if mb.name == nil {
-		name := C.GoString((*C.char)(C.d_tm_conv_ptr(mb.handle.ctx, unsafe.Pointer(mb.node.dtn_name))))
+		name := C.GoString(C.d_tm_get_name(mb.handle.ctx, mb.node))
 		mb.name = &name
 	}
 
@@ -269,11 +269,11 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 		return
 	}
 	path := strings.Join(pathComps, "/")
-	name := C.GoString((*C.char)(C.d_tm_conv_ptr(hdl.ctx, unsafe.Pointer(node.dtn_name))))
+	name := C.GoString(C.d_tm_get_name(hdl.ctx, node))
 
 	switch node.dtn_type {
 	case C.D_TM_DIRECTORY:
-		next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.ctx, unsafe.Pointer(node.dtn_child)))
+		next = C.d_tm_get_child(hdl.ctx, node)
 		if next != nil {
 			visit(hdl, next, append(pathComps, name), out)
 		}
@@ -281,10 +281,18 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 		out <- newGauge(hdl, path, &name, node)
 	case C.D_TM_COUNTER:
 		out <- newCounter(hdl, path, &name, node)
+	case C.D_TM_TIMESTAMP:
+		out <- newTimestamp(hdl, path, &name, node)
+	case C.D_TM_LINK:
+		next = C.d_tm_follow_link(hdl.ctx, node)
+		if next != nil {
+			// link leads to a directory with the same name
+			visit(hdl, next, pathComps, out)
+		}
 	default:
 	}
 
-	next = (*C.struct_d_tm_node_t)(C.d_tm_conv_ptr(hdl.ctx, unsafe.Pointer(node.dtn_sibling)))
+	next = C.d_tm_get_sibling(hdl.ctx, node)
 	if next != nil && next != node {
 		visit(hdl, next, pathComps, out)
 	}

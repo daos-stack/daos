@@ -355,18 +355,20 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 			result.Addr = member.Addr.String()
 		}
 
-		// don't update members if:
-		// - result reports an error and updateOnFail is false or
+		// don't update members if any of the following is true:
+		// - result reports an error and state != errored
+		// - result reports an error and updateOnFail is false
 		// - if transition from current to result state is illegal
+
 		if result.Errored {
-			if !updateOnFail {
-				continue
-			}
 			if result.State != MemberStateErrored {
-				// this indicates a programming error
+				// result content mismatch (programming error)
 				return errors.Errorf(
 					"errored result for rank %d has conflicting state '%s'",
 					result.Rank, result.State)
+			}
+			if !updateOnFail {
+				continue
 			}
 		}
 

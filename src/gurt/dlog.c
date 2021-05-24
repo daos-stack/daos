@@ -624,23 +624,18 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * ends in a newline.
 	 */
 	tlen = hlen + mlen;
-	/* if overflow or totally full without newline at end ... */
-	if (tlen >= sizeof(b) ||
-	    (tlen == sizeof(b) - 1 && b[sizeof(b) - 2] != '\n')) {
-		tlen = sizeof(b) - 1;	/* truncate, counting final null */
-		/*
-		 * could overwrite the end of b with "[truncated...]" or
-		 * something like that if we wanted to note the problem.
-		 */
-		b[sizeof(b) - 2] = '\n';	/* jam a \n at the end */
+	/* after condition, tlen will point at index of null byte */
+	if (unlikely(tlen >= (sizeof(b) - 1))) {
+		/* Either the string was truncated or the buffer is full. */
+		tlen = sizeof(b) - 1;
 	} else {
-		/* it fit, make sure it ends in newline */
-		if (b[tlen - 1] != '\n') {
-			D_ASSERT(tlen < DLOG_TBSIZ - 1);
-			b[tlen++] = '\n';
-			b[tlen] = 0;
-		}
+		/* it fits with a byte to spare, make sure it ends in newline */
+		if (unlikely(b[tlen - 1] != '\n'))
+			tlen++;
 	}
+	/* Ensure it ends with '\n' and '\0' */
+	b[tlen - 1] = '\n';
+	b[tlen] = '\0';
 	b_nopt1hdr = b + hlen_pt1;
 	if (mst.oflags & DLOG_FLV_STDOUT)
 		flags |= DLOG_STDOUT;

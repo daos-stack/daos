@@ -25,5 +25,8 @@ int d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 			int initial_width, int multiplier);
 int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 		    char *units, const char *fmt, ...);
+int d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
+			   const char *fmt, ...);
+int d_tm_del_ephemeral_dir(const char *fmt, ...);
 void d_tm_fini(void);
 #endif /* __TELEMETRY_PRODUCER_H__ */
