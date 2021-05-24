@@ -1,5 +1,4 @@
 """Build DAOS"""
-import sys
 import os
 import platform
 import subprocess
@@ -17,7 +16,7 @@ try:
 except NameError:
     pass
 
-sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
+from prereq_tools import PreReqComponent
 import daos_build
 from prereq_tools import PreReqComponent
 
@@ -72,7 +71,7 @@ def is_valid_binary(binary_name):
 
 API_VERSION_MAJOR = "1"
 API_VERSION_MINOR = "2"
-API_VERSION_FIX = "0"
+API_VERSION_FIX = "1"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
 
@@ -463,7 +462,7 @@ def scons(): # pylint: disable=too-many-locals
 
     env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
-                ['utils/sl/env_modules.py'])
+                ['site_scons/env_modules.py'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/',
                 ['ftest.sh'])
     api_version = env.Command("%s/API_VERSION" % build_prefix,

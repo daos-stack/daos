@@ -24,7 +24,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_CONT_VERSION 2
+#define DAOS_CONT_VERSION 3
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -366,8 +366,8 @@ CRT_RPC_DECLARE(cont_acl_update, DAOS_ISEQ_CONT_ACL_UPDATE,
 
 #define DAOS_ISEQ_CONT_ACL_DELETE	/* input fields */	 \
 	((struct cont_op_in)	(cadi_op)		CRT_VAR) \
-	((uint8_t)		(cadi_principal_type)	CRT_VAR) \
-	((d_string_t)		(cadi_principal_name)	CRT_VAR)
+	((d_string_t)		(cadi_principal_name)	CRT_VAR) \
+	((uint8_t)		(cadi_principal_type)	CRT_VAR)
 
 #define DAOS_OSEQ_CONT_ACL_DELETE	/* output fields */	 \
 	((struct cont_op_out)	(cado_op)		CRT_VAR)
