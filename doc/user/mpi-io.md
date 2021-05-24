@@ -74,7 +74,7 @@ Note that Intel MPI uses `libfabric` (both 2019.8 and 2019.9 use
 `libfabric-1.10.1-impi`).
 Care must be taken to ensure that the version of libfabric that is used
 is at a level that includes the patches that are critical for DAOS.
-DAOS 1.0.1 includes `libfabric-1.9.0`, and the DAOS 1.2 releases
+DAOS 1.0.1 includes `libfabric-1.9.0`, and the DAOS 1.2 and 2.0 releases
 includes `libfabric-1.12`.
 
 To use DAOS 1.1 with Intel MPI 2019.8 or 2019.9, the `libfabric` that
