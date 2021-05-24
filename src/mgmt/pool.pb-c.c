@@ -1189,7 +1189,7 @@ void   mgmt__pool_set_prop_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__pool_set_prop_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[14] =
+static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[13] =
 {
   {
     "uuid",
@@ -1300,15 +1300,15 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "scmratio",
+    "tierratio",
     10,
-    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_DOUBLE,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolCreateReq, scmratio),
+    offsetof(Mgmt__PoolCreateReq, n_tierratio),
+    offsetof(Mgmt__PoolCreateReq, tierratio),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1336,27 +1336,15 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "scmbytes",
+    "tierbytes",
     13,
-    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolCreateReq, scmbytes),
+    offsetof(Mgmt__PoolCreateReq, n_tierbytes),
+    offsetof(Mgmt__PoolCreateReq, tierbytes),
     NULL,
     NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "nvmebytes",
-    14,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolCreateReq, nvmebytes),
-    NULL,
-    NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1366,11 +1354,10 @@ static const unsigned mgmt__pool_create_req__field_indices_by_name[] = {
   1,   /* field[1] = name */
   10,   /* field[10] = numranks */
   7,   /* field[7] = numsvcreps */
-  13,   /* field[13] = nvmebytes */
   11,   /* field[11] = ranks */
-  12,   /* field[12] = scmbytes */
-  9,   /* field[9] = scmratio */
   2,   /* field[2] = sys */
+  12,   /* field[12] = tierbytes */
+  9,   /* field[9] = tierratio */
   8,   /* field[8] = totalbytes */
   3,   /* field[3] = user */
   4,   /* field[4] = usergroup */
@@ -1379,7 +1366,7 @@ static const unsigned mgmt__pool_create_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_create_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 14 }
+  { 0, 13 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor =
 {
@@ -1389,14 +1376,14 @@ const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor =
   "Mgmt__PoolCreateReq",
   "mgmt",
   sizeof(Mgmt__PoolCreateReq),
-  14,
+  13,
   mgmt__pool_create_req__field_descriptors,
   mgmt__pool_create_req__field_indices_by_name,
   1,  mgmt__pool_create_req__number_ranges,
   (ProtobufCMessageInit) mgmt__pool_create_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[5] =
+static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[4] =
 {
   {
     "status",
@@ -1435,41 +1422,28 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "scm_bytes",
+    "tier_bytes",
     4,
-    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolCreateResp, scm_bytes),
+    offsetof(Mgmt__PoolCreateResp, n_tier_bytes),
+    offsetof(Mgmt__PoolCreateResp, tier_bytes),
     NULL,
     NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "nvme_bytes",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolCreateResp, nvme_bytes),
-    NULL,
-    NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mgmt__pool_create_resp__field_indices_by_name[] = {
-  4,   /* field[4] = nvme_bytes */
-  3,   /* field[3] = scm_bytes */
   0,   /* field[0] = status */
   1,   /* field[1] = svc_reps */
   2,   /* field[2] = tgt_ranks */
+  3,   /* field[3] = tier_bytes */
 };
 static const ProtobufCIntRange mgmt__pool_create_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 5 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor =
 {
@@ -1479,7 +1453,7 @@ const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor =
   "Mgmt__PoolCreateResp",
   "mgmt",
   sizeof(Mgmt__PoolCreateResp),
-  5,
+  4,
   mgmt__pool_create_resp__field_descriptors,
   mgmt__pool_create_resp__field_indices_by_name,
   1,  mgmt__pool_create_resp__number_ranges,

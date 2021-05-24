@@ -297,6 +297,10 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to create pool on %zu ranks\n", req->n_ranks);
 
+	if (req->n_tierbytes != DAOS_MEDIA_MAX) {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
 	if (req->n_ranks > 0) {
 		targets = uint32_array_to_rank_list(req->ranks, req->n_ranks);
 		if (targets == NULL)
@@ -318,7 +322,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
-				 req->scmbytes, req->nvmebytes,
+				 req->tierbytes[DAOS_MEDIA_SCM],
+				 req->tierbytes[DAOS_MEDIA_NVME],
 				 prop, req->numsvcreps, &svc,
 				 req->n_faultdomains, req->faultdomains);
 	if (rc != 0) {

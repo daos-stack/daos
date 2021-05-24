@@ -63,9 +63,18 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 		return errors.New("nil response")
 	}
 
-	ratio := 1.0
-	if pcr.NvmeBytes > 0 {
-		ratio = float64(pcr.ScmBytes) / float64(pcr.NvmeBytes)
+	if len(pcr.TierBytes) == 0 {
+		return errors.New("create response had 0 storage tiers")
+	}
+
+	var totalSize uint64 = 0
+	for _, tierBytes := range pcr.TierBytes {
+		totalSize += tierBytes
+	}
+
+	tierRatio := make([]float64, len(pcr.TierBytes))
+	for tierIdx, tierBytes := range pcr.TierBytes {
+		tierRatio[tierIdx] = float64(tierBytes) / float64(totalSize)
 	}
 
 	if len(pcr.TgtRanks) == 0 {
@@ -73,15 +82,25 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	}
 
 	numRanks := uint64(len(pcr.TgtRanks))
-	title := fmt.Sprintf("Pool created with %0.2f%%%% SCM/NVMe ratio", ratio*100)
-	_, err := fmt.Fprintln(out, txtfmt.FormatEntity(title, []txtfmt.TableRow{
-		{"UUID": pcr.UUID},
-		{"Service Ranks": formatRanks(pcr.SvcReps)},
-		{"Storage Ranks": formatRanks(pcr.TgtRanks)},
-		{"Total Size": humanize.Bytes((pcr.ScmBytes + pcr.NvmeBytes) * numRanks)},
-		{"SCM": fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.ScmBytes*numRanks), humanize.Bytes(pcr.ScmBytes))},
-		{"NVMe": fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.NvmeBytes*numRanks), humanize.Bytes(pcr.NvmeBytes))},
-	}))
+	fmtArgs := make([]txtfmt.TableRow, 0, 6)
+	fmtArgs = append(fmtArgs, txtfmt.TableRow{"UUID": pcr.UUID})
+	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Service Ranks": formatRanks(pcr.SvcReps)})
+	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Storage Ranks": formatRanks(pcr.TgtRanks)})
+	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Total Size": humanize.Bytes(totalSize * numRanks)})
 
+	title := "Pool created with "
+	tierName := "SCM"
+	for tierIdx, tierRatio := range tierRatio {
+		if tierIdx > 0 {
+			title += ","
+			tierName = "NVMe"
+		}
+		title += fmt.Sprintf("%0.2f%%%%", tierRatio*100)
+		fmtName := fmt.Sprintf("Storage tier %d (%s)", tierIdx, tierName)
+		fmtArgs = append(fmtArgs, txtfmt.TableRow{fmtName: fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.TierBytes[tierIdx]*numRanks), humanize.Bytes(pcr.TierBytes[tierIdx]))})
+	}
+	title += " storage tier ratio"
+
+	_, err := fmt.Fprintln(out, txtfmt.FormatEntity(title, fmtArgs))
 	return err
 }

@@ -98,11 +98,8 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		return nil, err
 	}
 
-	if in.TotalBytes > 0 && (in.ScmBytes > 0 || in.NvmeBytes > 0) {
-		return nil, errors.New("can't mix TotalBytes and ScmBytes/NvmeBytes")
-	}
-	if in.TotalBytes == 0 && in.ScmBytes == 0 {
-		return nil, errors.New("can't create pool with 0 SCM")
+	if in.TotalBytes == 0 {
+		return nil, errors.New("can't create pool with size of 0")
 	}
 
 	out = new(mgmtpb.PoolCreateReq)
@@ -128,12 +125,10 @@ type (
 		NumSvcReps uint32
 		// auto-config params
 		TotalBytes uint64
-		ScmRatio   float64
+		TierRatio  []float64
 		NumRanks   uint32
 		// manual params
-		Ranks     []system.Rank
-		ScmBytes  uint64
-		NvmeBytes uint64
+		Ranks []system.Rank
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -141,8 +136,7 @@ type (
 		UUID      string   `json:"uuid"`
 		SvcReps   []uint32 `json:"svc_reps"`
 		TgtRanks  []uint32 `json:"tgt_ranks"`
-		ScmBytes  uint64   `json:"scm_bytes"`
-		NvmeBytes uint64   `json:"nvme_bytes"`
+		TierBytes []uint64 `json:"tier_bytes"`
 	}
 )
 

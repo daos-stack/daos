@@ -28,11 +28,10 @@ message PoolCreateReq {
 	repeated uint32 faultDomains = 7; // Fault domain tree, minimal format
 	uint32 numsvcreps = 8; // desired number of pool service replicas
 	uint64 totalbytes = 9; // Total pool size in bytes (auto config)
-	double scmratio = 10; // Ratio of SCM:NVMe expressed as % (auto config)
+	repeated double tierratio = 10; // Ratio of storage tiers expressed as % of totalbytes (auto config)
 	uint32 numranks = 11; // Number of target ranks to use (auto config)
 	repeated uint32 ranks = 12; // target ranks (manual config)
-	uint64 scmbytes = 13; // SCM size in bytes (manual config)
-	uint64 nvmebytes = 14; // NVMe size in bytes (manual config)
+	repeated uint64 tierbytes = 13; // Size in bytes of storage tiers (manual config)
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
@@ -40,8 +39,7 @@ message PoolCreateResp {
 	int32 status = 1; // DAOS error code
 	repeated uint32 svc_reps = 2; // pool service replica ranks
 	repeated uint32 tgt_ranks = 3; // pool target ranks
-	uint64 scm_bytes = 4; // total SCM allocated to pool
-	uint64 nvme_bytes = 5; // total NVMe allocated to pool
+	repeated uint64 tier_bytes = 4; // storage tiers allocated to pool
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
