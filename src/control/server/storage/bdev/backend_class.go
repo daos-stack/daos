@@ -106,7 +106,7 @@ func writeConf(log logging.Logger, templ string, req *FormatRequest) error {
 	}
 
 	defer func() {
-		if err := f.Close(); err == nil {
+		if err := f.Close(); err != nil {
 			log.Errorf("closing %q: %s", req.ConfigPath, err)
 		}
 	}()
