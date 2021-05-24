@@ -19,6 +19,8 @@ typedef struct _Srv__NotifyReadyReq Srv__NotifyReadyReq;
 typedef struct _Srv__BioErrorReq Srv__BioErrorReq;
 typedef struct _Srv__GetPoolSvcReq Srv__GetPoolSvcReq;
 typedef struct _Srv__GetPoolSvcResp Srv__GetPoolSvcResp;
+typedef struct _Srv__PoolFindByLabelReq Srv__PoolFindByLabelReq;
+typedef struct _Srv__PoolFindByLabelResp Srv__PoolFindByLabelResp;
 
 
 /* --- enums --- */
@@ -123,6 +125,41 @@ struct  _Srv__GetPoolSvcResp
     , 0, 0,NULL }
 
 
+struct  _Srv__PoolFindByLabelReq
+{
+  ProtobufCMessage base;
+  /*
+   * Pool label
+   */
+  char *label;
+};
+#define SRV__POOL_FIND_BY_LABEL_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__pool_find_by_label_req__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Srv__PoolFindByLabelResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * Pool UUID
+   */
+  char *uuid;
+  /*
+   * Pool service replica ranks
+   */
+  size_t n_svcreps;
+  uint32_t *svcreps;
+};
+#define SRV__POOL_FIND_BY_LABEL_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__pool_find_by_label_resp__descriptor) \
+    , 0, (char *)protobuf_c_empty_string, 0,NULL }
+
+
 /* Srv__NotifyReadyReq methods */
 void   srv__notify_ready_req__init
                      (Srv__NotifyReadyReq         *message);
@@ -199,6 +236,44 @@ Srv__GetPoolSvcResp *
 void   srv__get_pool_svc_resp__free_unpacked
                      (Srv__GetPoolSvcResp *message,
                       ProtobufCAllocator *allocator);
+/* Srv__PoolFindByLabelReq methods */
+void   srv__pool_find_by_label_req__init
+                     (Srv__PoolFindByLabelReq         *message);
+size_t srv__pool_find_by_label_req__get_packed_size
+                     (const Srv__PoolFindByLabelReq   *message);
+size_t srv__pool_find_by_label_req__pack
+                     (const Srv__PoolFindByLabelReq   *message,
+                      uint8_t             *out);
+size_t srv__pool_find_by_label_req__pack_to_buffer
+                     (const Srv__PoolFindByLabelReq   *message,
+                      ProtobufCBuffer     *buffer);
+Srv__PoolFindByLabelReq *
+       srv__pool_find_by_label_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   srv__pool_find_by_label_req__free_unpacked
+                     (Srv__PoolFindByLabelReq *message,
+                      ProtobufCAllocator *allocator);
+/* Srv__PoolFindByLabelResp methods */
+void   srv__pool_find_by_label_resp__init
+                     (Srv__PoolFindByLabelResp         *message);
+size_t srv__pool_find_by_label_resp__get_packed_size
+                     (const Srv__PoolFindByLabelResp   *message);
+size_t srv__pool_find_by_label_resp__pack
+                     (const Srv__PoolFindByLabelResp   *message,
+                      uint8_t             *out);
+size_t srv__pool_find_by_label_resp__pack_to_buffer
+                     (const Srv__PoolFindByLabelResp   *message,
+                      ProtobufCBuffer     *buffer);
+Srv__PoolFindByLabelResp *
+       srv__pool_find_by_label_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   srv__pool_find_by_label_resp__free_unpacked
+                     (Srv__PoolFindByLabelResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Srv__NotifyReadyReq_Closure)
@@ -213,6 +288,12 @@ typedef void (*Srv__GetPoolSvcReq_Closure)
 typedef void (*Srv__GetPoolSvcResp_Closure)
                  (const Srv__GetPoolSvcResp *message,
                   void *closure_data);
+typedef void (*Srv__PoolFindByLabelReq_Closure)
+                 (const Srv__PoolFindByLabelReq *message,
+                  void *closure_data);
+typedef void (*Srv__PoolFindByLabelResp_Closure)
+                 (const Srv__PoolFindByLabelResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -223,6 +304,8 @@ extern const ProtobufCMessageDescriptor srv__notify_ready_req__descriptor;
 extern const ProtobufCMessageDescriptor srv__bio_error_req__descriptor;
 extern const ProtobufCMessageDescriptor srv__get_pool_svc_req__descriptor;
 extern const ProtobufCMessageDescriptor srv__get_pool_svc_resp__descriptor;
+extern const ProtobufCMessageDescriptor srv__pool_find_by_label_req__descriptor;
+extern const ProtobufCMessageDescriptor srv__pool_find_by_label_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 
