@@ -336,9 +336,6 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		goto free_filtered;
 	}
 
-	D_DEBUG(DB_MGMT, "Pool "DF_UUID" service destroyed, now destroy tgts\n",
-		DP_UUID(pool_uuid));
-
 	rc = ds_mgmt_tgt_pool_destroy(pool_uuid, ranks);
 	if (rc != 0) {
 		D_ERROR("Destroying pool "DF_UUID" failed, " DF_RC ".\n",
