@@ -126,12 +126,6 @@ func TestBackend_Format(t *testing.T) {
 		expResp *FormatResponse
 		expErr  error
 	}{
-		"empty device list": {
-			req: FormatRequest{
-				Class: storage.BdevClassNvme,
-			},
-			expErr: errors.New("empty pci address list in nvme format request"),
-		},
 		"unknown device class": {
 			req: FormatRequest{
 				Class:      storage.BdevClass("whoops"),

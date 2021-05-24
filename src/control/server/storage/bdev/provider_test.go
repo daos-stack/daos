@@ -367,9 +367,27 @@ func TestProvider_Format(t *testing.T) {
 		expRes *FormatResponse
 		expErr error
 	}{
-		"empty input": {
-			req:    FormatRequest{},
-			expErr: errors.New("empty DeviceList"),
+		"NVMe failure": {
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{mockSingle.PciAddr},
+			},
+			mbc: &MockBackendConfig{
+				FormatRes: &FormatResponse{
+					DeviceResponses: DeviceFormatResponses{
+						mockSingle.PciAddr: &DeviceFormatResponse{
+							Error: FaultFormatError("foobared"),
+						},
+					},
+				},
+			},
+			expRes: &FormatResponse{
+				DeviceResponses: DeviceFormatResponses{
+					mockSingle.PciAddr: &DeviceFormatResponse{
+						Error: FaultFormatError("foobared"),
+					},
+				},
+			},
 		},
 		"NVMe success": {
 			req: FormatRequest{

@@ -115,7 +115,9 @@ func writeConf(log logging.Logger, templ string, req *FormatRequest) error {
 		return errors.Wrap(err, "write")
 	}
 
-	return nil
+	return errors.Wrapf(os.Chown(req.ConfigPath, req.OwnerUID, req.OwnerGID),
+		"failed to set ownership of %q to %d.%d", req.ConfigPath,
+		req.OwnerUID, req.OwnerGID)
 }
 
 // writeNvmeConf generates nvme config file for given bdev type to be consumed
@@ -133,16 +135,22 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 		storage.BdevClassFile:   clsFileTemplate,
 	}[req.Class]
 
-	// spdk ini file expects device size in MBs
-	req.DeviceFileSize = req.DeviceFileSize / humanize.MiByte
-
-	// special case template edit for class nvme
-	if req.Class == storage.BdevClassNvme && !sb.IsVMDDisabled() {
-		templ = `[Vmd]
+	// special handling for class nvme
+	if req.Class == storage.BdevClassNvme {
+		if len(req.DeviceList) == 0 {
+			sb.log.Debug("skip write nvme conf for empty device list")
+			return nil
+		}
+		if !sb.IsVMDDisabled() {
+			templ = `[Vmd]
     Enable True
 
 ` + templ
+		}
 	}
+
+	// spdk ini file expects device size in MBs
+	req.DeviceFileSize = req.DeviceFileSize / humanize.MiByte
 
 	sb.log.Debugf("write nvme output config: %+v", req)
 	return writeConf(sb.log, templ, req)

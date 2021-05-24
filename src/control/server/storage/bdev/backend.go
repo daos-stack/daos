@@ -230,6 +230,10 @@ func (sb *spdkBackend) formatNvme(req *FormatRequest) (*FormatResponse, error) {
 		return nil, errors.New("empty results from spdk binding format request")
 	}
 
+	if err := sb.writeNvmeConfig(req); err != nil {
+		return nil, errors.Wrap(err, "write spdk nvme config")
+	}
+
 	return sb.formatRespFromResults(results)
 }
 
@@ -252,10 +256,14 @@ func (sb *spdkBackend) formatAioFile(req *FormatRequest) (*FormatResponse, error
 		}
 	}
 
+	if err := sb.writeNvmeConfig(req); err != nil {
+		return nil, errors.Wrap(err, "write spdk nvme config")
+	}
+
 	return resp, nil
 }
 
-func (sb *spdkBackend) formatSkip(req *FormatRequest) *FormatResponse {
+func (sb *spdkBackend) formatSkip(req *FormatRequest) (*FormatResponse, error) {
 	resp := &FormatResponse{
 		DeviceResponses: make(DeviceFormatResponses),
 	}
@@ -265,35 +273,22 @@ func (sb *spdkBackend) formatSkip(req *FormatRequest) *FormatResponse {
 		sb.log.Debugf("%s format for non-NVMe bdev skipped on %s", req.Class, device)
 	}
 
-	return resp
+	if err := sb.writeNvmeConfig(req); err != nil {
+		return nil, errors.Wrap(err, "write spdk nvme config")
+	}
+
+	return resp, nil
 }
 
-// Format initializes the SPDK environment, defers the call to finalize the same
-// environment and calls private format() routine to format all devices in the
-// request device list in a manner specific to the supplied bdev class.
-//
-// Remove any stale SPDK lockfiles after format.
+// Format delegates to class specific format function to fulfil the format
+// request.
 func (sb *spdkBackend) Format(req FormatRequest) (resp *FormatResponse, err error) {
-	defer func() {
-		if err != nil {
-			return
-		}
-		if errConf := sb.writeNvmeConfig(&req); errConf != nil {
-			err = errors.Wrap(errConf, "write spdk nvme config")
-			return
-		}
-		if errChown := os.Chown(req.ConfigPath, req.OwnerUID, req.OwnerGID); err != nil {
-			err = errors.Wrapf(errChown, "failed to set ownership of %q to %d.%d",
-				req.ConfigPath, req.OwnerUID, req.OwnerGID)
-		}
-	}()
-
 	// TODO (DAOS-3844): Kick off device formats parallel?
 	switch req.Class {
 	case storage.BdevClassFile:
 		return sb.formatAioFile(&req)
 	case storage.BdevClassKdev, storage.BdevClassMalloc:
-		return sb.formatSkip(&req), nil
+		return sb.formatSkip(&req)
 	case storage.BdevClassNvme:
 		return sb.formatNvme(&req)
 	default:
