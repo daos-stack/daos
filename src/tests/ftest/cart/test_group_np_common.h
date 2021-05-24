@@ -43,6 +43,7 @@ struct test_t {
 	d_rank_t		 cg_ranks[MAX_NUM_RANKS];
 	int			 cg_num_ranks;
 	struct			 t_swim_status t_verify_swim_status;
+	int			 t_disable_swim;
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
 	unsigned int		 t_srv_ctx_num;
@@ -304,6 +305,10 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		tc_progress_stop();
 		sem_post(&test_g.t_token_to_proceed);
 		break;
+	case TEST_OPC_DISABLE_SWIM:
+		DBG_PRINT("Received TEST_OPC_DISABLE_SWIM.\n");
+		sem_post(&test_g.t_token_to_proceed);
+		break;
 	default:
 		DBG_PRINT("Received unregistered opcode.\n");
 		break;
@@ -321,6 +326,20 @@ test_shutdown_handler(crt_rpc_t *rpc_req)
 
 	tc_progress_stop();
 	DBG_PRINT("tier1 test_srver set shutdown flag.\n");
+}
+
+static void
+test_disable_swim_handler(crt_rpc_t *rpc_req)
+{
+	DBG_PRINT("tier1 test_srver received disable_swim request, opc: %#x.\n",
+		  rpc_req->cr_opc);
+
+	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
+	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
+
+	crt_swim_disable_all();
+	crt_swim_fini();
+	DBG_PRINT("tier1 test_srver disabled swim.\n");
 }
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
@@ -343,6 +362,11 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
 		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
 		.prf_req_fmt	= &CQF_crt_test_ping_delay,
 		.prf_hdlr	= test_ping_delay_handler,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= test_disable_swim_handler,
 		.prf_co_ops	= NULL,
 	}
 };
@@ -621,6 +645,7 @@ test_parse_args(int argc, char **argv)
 		{"use_cfg", required_argument, 0, 'u'},
 		{"register_swim_callback", required_argument, 0, 'w'},
 		{"verify_swim_status", required_argument, 0, 'v'},
+		{"disable_swim", no_argument, &test_g.t_disable_swim, 1},
 		{"get_swim_status", no_argument, 0, 'g'},
 		{"shutdown_delay", required_argument, 0, 'd'},
 		{"write_completion_file", no_argument, &test_g.t_write_completion_file, 1},
@@ -641,7 +666,7 @@ test_parse_args(int argc, char **argv)
 	struct t_swim_status vss;
 
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:c:h:u:r:", long_options,
+		rc = getopt_long(argc, argv, "n:a:c:h:u:r:ml", long_options,
 				 &option_index);
 
 		if (rc == -1)

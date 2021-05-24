@@ -35,6 +35,22 @@ send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 }
 
 static void
+send_rpc_disable_swim(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
+{
+	int rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
+				CRT_PROTO_OPC(TEST_GROUP_BASE,
+					      TEST_GROUP_VER, 4),
+					      &rpc_req);
+	D_ASSERTF(rc == 0 && rpc_req != NULL,
+		  "crt_req_create() failed. "
+		  "rc: %d, rpc_req: %p\n", rc, rpc_req);
+	rc = crt_req_send(rpc_req, client_cb_common, NULL);
+	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+
+	tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
+}
+
+static void
 send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 {
 	struct test_swim_status_in	*rpc_req_input;
@@ -165,6 +181,20 @@ test_run(void)
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			server_ep.ep_rank = rank_list->rl_ranks[i];
 			send_rpc_swim_check(server_ep, rpc_req);
+		}
+	}
+
+	/* Disable swim */
+	if (test_g.t_disable_swim) {
+
+		crt_swim_disable_all();
+		crt_swim_fini();
+
+		for (i = 0; i < rank_list->rl_nr; i++) {
+			DBG_PRINT("Disabling swim on rank %d.\n",
+				  rank_list->rl_ranks[i]);
+			server_ep.ep_rank = rank_list->rl_ranks[i];
+			send_rpc_disable_swim(server_ep, rpc_req);
 		}
 	}
 
