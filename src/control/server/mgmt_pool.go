@@ -102,6 +102,8 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	if len(req.GetRanks()) == 0 {
 		return errors.New("zero ranks in calculateCreateStorage()")
 	}
+
+	// the engine will accept only 2 tiers - add missing
 	if len(req.GetTierratio()) == 0 {
 		req.Tierratio = make([]float64, 2)
 		req.Tierratio[0] = DefaultPoolScmRatio
@@ -114,21 +116,28 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 		return total / uint64(len(req.GetRanks()))
 	}
 
-	req.Tierbytes = make([]uint64, 2)
+	req.Tierbytes = make([]uint64, len(req.Tierratio))
 	switch {
 	case !instances[0].storage.HasBlockDevices():
 		svc.log.Info("config has 0 bdevs; excluding NVMe from pool create request")
-		req.Tierbytes[0] = storagePerRank(req.GetTotalbytes())
-		req.Tierbytes[1] = 0
+		for tierIdx, _ := range req.Tierbytes {
+			if tierIdx == 0 {
+				req.Tierbytes[tierIdx] = storagePerRank(req.GetTotalbytes())
+			} else {
+				req.Tierbytes[tierIdx] = 0
+			}
+		}
 	case req.GetTotalbytes() > 0:
-		req.Tierbytes[0] = storagePerRank(uint64(float64(req.GetTotalbytes()) * req.Tierratio[0]))
-		req.Tierbytes[1] = storagePerRank(uint64(float64(req.GetTotalbytes()) * req.Tierratio[1]))
+		for tierIdx, _ := range req.Tierbytes {
+			req.Tierbytes[tierIdx] = storagePerRank(uint64(float64(req.GetTotalbytes()) * req.Tierratio[tierIdx]))
+		}
 	}
 
 	// zero these out as they're not needed anymore
 	req.Totalbytes = 0
-	req.Tierratio[0] = 0
-	req.Tierratio[1] = 0
+	for tierIdx, _ := range req.Tierratio {
+		req.Tierratio[tierIdx] = 0
+	}
 
 	targetCount := instances[0].GetTargetCount()
 	if targetCount == 0 {

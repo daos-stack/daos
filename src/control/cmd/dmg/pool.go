@@ -51,7 +51,7 @@ type PoolCreateCmd struct {
 	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
 	PoolName   string `short:"p" long:"name" description:"Unique name for pool (set as label)"`
 	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
-	TotalSize  string `short:"z" long:"total-size" description:"Total size of DAOS pool (auto)"`
+	Size       string `short:"z" long:"size" description:"Total size of DAOS pool (auto)"`
 	TierRatio  string `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
 	NumRanks   uint32 `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
 	NumSvcReps uint32 `short:"v" long:"nsvc" description:"Number of pool service replicas"`
@@ -60,7 +60,7 @@ type PoolCreateCmd struct {
 
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
-	if cmd.TotalSize == "" {
+	if cmd.Size == "" {
 		return errors.New("--total-size must be supplied")
 	}
 
@@ -85,7 +85,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	}
 
 	// auto-selection of storage values
-	req.TotalBytes, err = humanize.ParseBytes(cmd.TotalSize)
+	req.TotalBytes, err = humanize.ParseBytes(cmd.Size)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse pool size")
 	}

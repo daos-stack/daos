@@ -12,7 +12,7 @@ manage storage pools from the command line.
 
 **To create a pool:**
 ```bash
-$ dmg pool create --total-size=NTB
+$ dmg pool create --size=NTB
 ```
 
 This command creates a pool distributed across the DAOS servers with a
@@ -30,8 +30,8 @@ $ dmg pool create --help
       -u, --user=       DAOS pool to be owned by given user, format name@domain
       -p, --name=       Unique name for pool (set as label)
       -a, --acl-file=   Access Control List file path for DAOS pool
-      -z, --total-size= Total size of DAOS pool (auto)
-      -t, --tier-ratio= Percentage of storage tiers for pool storage (auto) (default: 6,94)
+      -z, --size=       Total size of DAOS pool (auto)
+      -t, --tier-ratio= Distribution of pool storage allocation over storage tiers (auto)
       -k, --nranks=     Number of ranks to use (auto) (default: all)
       -v, --nsvc=       Number of pool service replicas (default: 3)
       -r, --ranks=      Storage server unique identifiers (ranks) for DAOS pool
