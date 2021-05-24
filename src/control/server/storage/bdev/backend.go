@@ -278,7 +278,7 @@ func (sb *spdkBackend) Format(req FormatRequest) (resp *FormatResponse, err erro
 		if err != nil {
 			return
 		}
-		if errConf := sb.writeNvmeConfig(req); errConf != nil {
+		if errConf := sb.writeNvmeConfig(&req); errConf != nil {
 			err = errors.Wrap(errConf, "write spdk nvme config")
 			return
 		}
