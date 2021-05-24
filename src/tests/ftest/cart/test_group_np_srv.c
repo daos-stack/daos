@@ -123,8 +123,8 @@ test_run(d_rank_t my_rank)
 		D_DEBUG(DB_TEST, "joined progress thread.\n");
 	}
 
-	/* CI troubleshooting */
-	/* write_completion_file(); */
+	if (test_g.t_write_completion_file)
+		write_completion_file();
 
 	DBG_PRINT("Exiting server\n");
 	rc = sem_destroy(&test_g.t_token_to_proceed);

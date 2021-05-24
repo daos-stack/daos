@@ -38,15 +38,15 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
             clicmd = self.build_cmd(self.env, "test_clients", index=index)
             self.launch_test(clicmd, srv_rtn)
 
-        # daos_test_shared_dir = os.getenv("DAOS_TEST_SHARED_DIR",
-        #                                  os.getenv("HOME"))
+        daos_test_shared_dir = os.getenv("DAOS_TEST_SHARED_DIR",
+                                         os.getenv("HOME"))
 
-        # # Each of the three servers should leave a completion file (with their
-        # # pid appended)
-        # glob_pat = daos_test_shared_dir + "/test-servers-completed.txt.*"
+        # Each of the three servers should leave a completion file (with their
+        # pid appended)
+        glob_pat = daos_test_shared_dir + "/test-servers-completed.txt.*"
 
-        # # Verify the server(s) exited gracefully
-        # if not self.check_files(glob_pat, count=3, retries=3):
-        #     self.fail("Didn't find completion file(s): '" + glob_pat + "'. " +
-        #               "This indicates not all CaRT binaries exited " +
-        #               "gracefully.")
+        # Verify the server(s) exited gracefully
+        if not self.check_files(glob_pat, count=3, retries=3):
+            self.fail("Didn't find completion file(s): '" + glob_pat + "'. " +
+                      "This indicates not all CaRT binaries exited " +
+                      "gracefully.")

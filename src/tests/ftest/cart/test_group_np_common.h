@@ -46,6 +46,7 @@ struct test_t {
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
 	unsigned int		 t_srv_ctx_num;
+	int			 t_write_completion_file;
 	crt_context_t		 t_crt_ctx[TEST_CTX_MAX_NUM];
 	pthread_t		 t_tid[TEST_CTX_MAX_NUM];
 	sem_t			 t_token_to_proceed;
@@ -622,6 +623,7 @@ test_parse_args(int argc, char **argv)
 		{"verify_swim_status", required_argument, 0, 'v'},
 		{"get_swim_status", no_argument, 0, 'g'},
 		{"shutdown_delay", required_argument, 0, 'd'},
+		{"write_completion_file", no_argument, &test_g.t_write_completion_file, 1},
 		{0, 0, 0, 0}
 	};
 
