@@ -32,7 +32,6 @@ struct daos_task_args {
 
 		/** Pool */
 		daos_pool_connect_t	pool_connect;
-		daos_pool_connect_lbl_t pool_connect_lbl;
 		daos_pool_disconnect_t	pool_disconnect;
 		daos_pool_update_t	pool_update;
 		daos_pool_query_t	pool_query;
@@ -45,7 +44,6 @@ struct daos_task_args {
 		/** Container */
 		daos_cont_create_t	cont_create;
 		daos_cont_open_t	cont_open;
-		daos_cont_open_lbl_t	cont_open_lbl;
 		daos_cont_close_t	cont_close;
 		daos_cont_destroy_t	cont_destroy;
 		daos_cont_query_t	cont_query;

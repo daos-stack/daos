@@ -73,6 +73,7 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	args->coh		= coh;
 	args->info		= info;
 	uuid_copy((unsigned char *)args->uuid, uuid);
+	args->label		= NULL;
 
 	return dc_task_schedule(task, true);
 }
@@ -82,12 +83,12 @@ daos_cont_open_bylabel(daos_handle_t poh, const char *label, unsigned int flags,
 		       daos_handle_t *coh, daos_cont_info_t *info,
 		       daos_event_t *ev)
 {
-	daos_cont_open_lbl_t	*args;
+	daos_cont_open_t	*args;
 	tse_task_t		*task;
 	size_t			 label_len = 0;
 	int			 rc;
 
-	DAOS_API_ARG_ASSERT(*args, CONT_OPEN_LBL);
+	DAOS_API_ARG_ASSERT(*args, CONT_OPEN);
 	if (label)
 		label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN+1);
 	if (!label || (label_len == 0) || (label_len > DAOS_PROP_LABEL_MAX_LEN))
@@ -102,6 +103,7 @@ daos_cont_open_bylabel(daos_handle_t poh, const char *label, unsigned int flags,
 	args->flags		= flags;
 	args->coh		= coh;
 	args->info		= info;
+	uuid_clear(args->uuid);
 	args->label		= label;
 
 	return dc_task_schedule(task, true);

@@ -844,7 +844,7 @@ err:
 int
 dc_cont_open_lbl(tse_task_t *task)
 {
-	daos_cont_open_lbl_t		*args;
+	daos_cont_open_t		*args;
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
 	uuid_t				 null_uuid;
