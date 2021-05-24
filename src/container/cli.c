@@ -711,7 +711,6 @@ out:
 static int
 dc_cont_open_internal(tse_task_t *task, struct dc_pool *pool)
 {
-	daos_cont_open_t	*args;
 	struct cont_open_in	*in;
 	struct dc_cont		*cont;
 	crt_endpoint_t		 ep;
@@ -720,7 +719,6 @@ dc_cont_open_internal(tse_task_t *task, struct dc_pool *pool)
 	enum cont_operation	 cont_op;
 	int			 rc;
 
-	args = dc_task_get_args(task);
 	cont = dc_task_get_priv(task);
 	cont_op = args->label ? CONT_OPEN_BYLABEL : CONT_OPEN;
 
@@ -771,8 +769,8 @@ dc_cont_open_internal(tse_task_t *task, struct dc_pool *pool)
 	arg.coa_info		= args->info;
 	arg.coa_label		= args->label;
 	arg.rpc			= rpc;
-	arg.hdl			= args->poh;
-	arg.hdlp		= args->coh;
+	arg.hdl			= poh;
+	arg.hdlp		= coh;
 
 	crt_req_addref(rpc);
 
