@@ -5,7 +5,7 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 1000
+timeout: 800
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -47,34 +47,65 @@ dmg:
   transport_config:
     allow_insecure: True
 pool:
-    mode: 146
-    name: daos_server
-    scm_size: 6000000000
-    nvme_size: 54000000000
-    svcn: 4
-    control_method: dmg
-    rebuild_timeout: 120
-    pool_query_timeout: 30
+  mode: 146
+  name: daos_server
+  scm_size: 6000000000
+  nvme_size: 54000000000
+  svcn: 4
+  control_method: dmg
+  rebuild_timeout: 120
+  pool_query_timeout: 30
 container:
-    type: POSIX
-    control_method: daos
-    oclass: RP_2G1
-    properties: cksum:crc64,cksum_size:16384,srv_cksum:on
+  type: POSIX
+  control_method: daos
+  oclass: RP_2G1
+  properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rf:1
 ior:
-    clientslots:
-      slots: 48
-    test_file: /testFile
-    repetitions: 1
-    dfs_destroy: False
-    iorflags:
-      write_flags: "-w -F -k -G 1"
-      read_flags: "-F -r -R -k -G 1"
-      ior_api:
-        - DFS
-      obj_class:
-        - RP_2G1
-    ior_test_sequence:
-    #   - [scmsize, nvmesize, transfersize, blocksize]
-    #    The values are set to be in the multiples of 10.
-    #    Values are appx GB.
-      - [6000000000, 54000000000, 500000, 500000000]
+  clientslots:
+    slots: 48
+  test_file: /testFile
+  repetitions: 2
+  dfs_destroy: False
+  iorflags:
+    write_flags: "-w -F -k -G 1"
+    read_flags: "-F -r -R -k -G 1"
+    api: DFS
+    dfs_oclass: RP_2G1
+    dfs_dir_oclass: RP_2G1
+  ior_test_sequence:
+  #   - [scmsize, nvmesize, transfersize, blocksize]
+  #    The values are set to be in the multiples of 10.
+  #    Values are appx GB.
+    - [6000000000, 54000000000, 500000, 500000000]
+mdtest:
+  api: DFS
+  client_processes:
+    np: 2
+  num_of_files_dirs: 100
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: False
+  dfs_oclass: RP_2G1
+  dfs_dir_oclass: RP_2G1
+  manager: "MPICH"
+  flags: "-u"
+  wr_size:
+    32K:
+      write_bytes: 32768
+      read_bytes: 32768
+  verbosity_value: 1
+  depth: 0
+test_obj_class:
+  oclass:
+    - RP_2G8
+    - RP_3G6
+    - RP_4G1
+    - S1
+loop_test:
+  iterations: 3
+aggregation:
+  test_with_aggregation: True
+rebuild:
+  test_with_rebuild: True
+checksum:
+  test_with_checksum: False

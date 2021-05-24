@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 from datetime import datetime
 from distutils.spawn import find_executable
 import os
@@ -16,7 +17,7 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from command_utils_base import CommandFailure
 from env_modules import load_mpi
-from general_utils import pcmd, run_task
+from general_utils import pcmd, stop_processes, run_pcmd
 from write_host_file import write_host_file
 
 
@@ -35,7 +36,7 @@ class JobManager(ExecutableCommand):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        super(JobManager, self).__init__(namespace, command, path, subprocess)
+        super().__init__(namespace, command, path, subprocess)
         self.job = job
         self._hosts = None
 
@@ -51,7 +52,7 @@ class JobManager(ExecutableCommand):
             str: the command with all the defined parameters
 
         """
-        commands = [super(JobManager, self).__str__(), str(self.job)]
+        commands = [super().__str__(), str(self.job)]
         return " ".join(commands)
 
     def check_subprocess_status(self, sub_process):
@@ -78,7 +79,6 @@ class JobManager(ExecutableCommand):
             slots (int, optional): number of slots per host to specify in the
                 optional hostfile. Defaults to None.
         """
-        pass
 
     def assign_processes(self, processes):
         """Assign the number of processes per node.
@@ -88,7 +88,6 @@ class JobManager(ExecutableCommand):
         Args:
             processes (int): number of processes per node
         """
-        pass
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
@@ -99,7 +98,6 @@ class JobManager(ExecutableCommand):
             append (bool): whether to assign (False) or append (True) the
                 specified environment variables
         """
-        pass
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -108,7 +106,6 @@ class JobManager(ExecutableCommand):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        pass
 
     def get_subprocess_state(self, message=None):
         """Display the state of the subprocess.
@@ -127,7 +124,7 @@ class JobManager(ExecutableCommand):
 
         """
         # Get/display the state of the local job manager process
-        state = super(JobManager, self).get_subprocess_state(message)
+        state = super().get_subprocess_state(message)
         if self._process is not None and self._hosts:
             # Determine if the status of the remote job processes on each host
             remote_state = self._get_remote_process_state(message)
@@ -165,6 +162,18 @@ class JobManager(ExecutableCommand):
         # processes running by returning a "R" state.
         return "R" if 1 not in results or len(results) > 1 else None
 
+    def kill(self):
+        """Forcibly terminate any job processes running on hosts."""
+        regex = self.job.command_regex
+        result = stop_processes(self._hosts, regex)
+        if 0 in result and len(result) == 1:
+            self.log.info(
+                "No remote %s processes killed (none found), done.", regex)
+        else:
+            self.log.info(
+                "***At least one remote %s process needed to be killed! Please "
+                "investigate/report.***", regex)
+
 
 class Orterun(JobManager):
     """A class for the orterun job manager command."""
@@ -181,8 +190,7 @@ class Orterun(JobManager):
             raise CommandFailure("Failed to load openmpi")
 
         path = os.path.dirname(find_executable("orterun"))
-        super(Orterun, self).__init__(
-            "/run/orterun/*", "orterun", job, path, subprocess)
+        super().__init__("/run/orterun/*", "orterun", job, path, subprocess)
 
         # Default mca values to avoid queue pair errors
         mca_default = {
@@ -273,7 +281,7 @@ class Orterun(JobManager):
         if not load_mpi("openmpi"):
             raise CommandFailure("Failed to load openmpi")
 
-        return super(Orterun, self).run()
+        return super().run()
 
 
 class Mpirun(JobManager):
@@ -291,8 +299,7 @@ class Mpirun(JobManager):
             raise CommandFailure("Failed to load {}".format(mpitype))
 
         path = os.path.dirname(find_executable("mpirun"))
-        super(Mpirun, self).__init__(
-            "/run/mpirun", "mpirun", job, path, subprocess)
+        super().__init__("/run/mpirun", "mpirun", job, path, subprocess)
 
         mca_default = None
         if mpitype == "openmpi":
@@ -372,7 +379,7 @@ class Mpirun(JobManager):
         if not load_mpi(self.mpitype):
             raise CommandFailure("Failed to load {}".format(self.mpitype))
 
-        return super(Mpirun, self).run()
+        return super().run()
 
 
 class Srun(JobManager):
@@ -388,7 +395,7 @@ class Srun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        super(Srun, self).__init__("/run/srun", "srun", job, path, subprocess)
+        super().__init__("/run/srun", "srun", job, path, subprocess)
 
         self.label = FormattedParameter("--label", True)
         self.mpi = FormattedParameter("--mpi={}", "pmi2")
@@ -463,6 +470,7 @@ class Srun(JobManager):
 
 
 class Systemctl(JobManager):
+    # pylint: disable=too-many-public-methods,too-many-public-methods
     """A class for the systemctl job manager command."""
 
     def __init__(self, job):
@@ -472,7 +480,7 @@ class Systemctl(JobManager):
             job (SubProcessCommand): command object to manage.
         """
         # path = os.path.dirname(find_executable("systemctl"))
-        super(Systemctl, self).__init__("/run/systemctl/*", "", job)
+        super().__init__("/run/systemctl/*", "systemd", job)
         self.job = job
         self._systemctl = SystemctlCommand()
         self._systemctl.service.value = self.job.service_name
@@ -552,6 +560,15 @@ class Systemctl(JobManager):
         """Wait for the sub process to complete."""
         raise NotImplementedError()
 
+    def kill(self):
+        """Forcibly terminate any job processes running on hosts."""
+        try:
+            self.stop()
+        except CommandFailure as error:
+            self.log.info(
+                "Error stopping/disabling %s: %s", self.job.service_name, error)
+        super(Systemctl, self).kill()
+
     def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.
 
@@ -589,7 +606,6 @@ class Systemctl(JobManager):
             append (bool): whether to assign (False) or append (True) the
                 specified environment variables
         """
-        pass
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -598,7 +614,6 @@ class Systemctl(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        pass
 
     def get_subprocess_state(self, message=None):
         """Display the state of the subprocess.
@@ -643,7 +658,7 @@ class Systemctl(JobManager):
                 )
         if 0 not in result or len(result) > 1:
             failed = []
-            for item, value in result.items():
+            for item, value in list(result.items()):
                 if item != 0:
                     failed.extend(value)
             raise CommandFailure("Error occurred running '{}' on {}".format(
@@ -670,7 +685,7 @@ class Systemctl(JobManager):
             self.log.info(error)
             self.display_log_data(
                 self.get_log_data(self._hosts, self.timestamps[command]))
-            raise CommandFailure(error)
+            raise CommandFailure(error) from error
 
     def service_enable(self):
         """Enable the job's service via the systemctl command.
@@ -753,17 +768,18 @@ class Systemctl(JobManager):
         states = {}
         valid_states = ["active", "activating"]
         self._systemctl.unit_command.value = "is-active"
-        task = run_task(self._hosts, self.__str__(), self.timeout)
-        for output, nodelist in task.iter_buffers():
-            output = str(output)
-            nodeset = NodeSet.fromlist(nodelist)
-            status &= output in valid_states
-            if output not in states:
-                states[output] = NodeSet()
-            states[output].add(nodeset)
-        if self.timeout and task.num_timeout() > 0:
-            nodeset = NodeSet.fromlist(task.iter_keys_timeout())
-            states["timeout"] = nodeset
+        results = run_pcmd(
+            self._hosts, self.__str__(), False, self.timeout, None)
+        for result in results:
+            if result["interrupted"]:
+                states["timeout"] = result["hosts"]
+                status = False
+            else:
+                output = result["stdout"][-1]
+                if output not in states:
+                    states[output] = NodeSet()
+                states[output].add(result["hosts"])
+                status &= output in valid_states
         data = ["=".join([key, str(states[key])]) for key in sorted(states)]
         self.log.info(
             "  Detected %s states: %s",
@@ -794,7 +810,9 @@ class Systemctl(JobManager):
                 to 60 seconds.
 
         Returns:
-            dict: log output per host
+            list: a list of dictionaries including:
+                "hosts": <NodeSet() of hosts with this data>
+                "data": <journalctl output>
 
         """
         # Setup the journalctl command to capture all unit activity from the
@@ -812,52 +830,43 @@ class Systemctl(JobManager):
             "Gathering log data on %s: %s", str(hosts), " ".join(command))
 
         # Gather the log information per host
-        task = run_task(hosts, " ".join(command), timeout)
+        results = run_pcmd(hosts, " ".join(command), False, timeout, None)
 
-        # Create a dictionary of hosts for each unique return code
-        results = {code: hosts for code, hosts in task.iter_retcodes()}
-
-        # Determine if the command completed successfully across all the hosts
-        status = len(results) == 1 and 0 in results
-
-        # Determine if any commands timed out
-        timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
-        if timed_out:
-            status = False
-        if not status:
-            self.log.info("  Errors detected running \"%s\":", command)
-
-        # List any hosts that timed out
-        if timed_out:
-            self.log.info(
-                "    %s: timeout detected after %s seconds",
-                str(NodeSet.fromlist(timed_out)), timeout)
+        # Determine if the command completed successfully without a timeout
+        status = True
+        for result in results:
+            if result["interrupted"]:
+                self.log.info("  Errors detected running \"%s\":", command)
+                self.log.info(
+                    "    %s: timeout detected after %s seconds",
+                    str(result["hosts"]), timeout)
+                status = False
+            elif result["exit_status"] != 0:
+                self.log.info("  Errors detected running \"%s\":", command)
+                status = False
+            if not status:
+                break
 
         # Display/return the command output
-        log_data = {}
-        for code in sorted(results):
-            # Get the command output from the hosts with this return code
-            output_data = list(task.iter_buffers(results[code]))
-            if not output_data:
-                output_data = [["<NONE>", results[code]]]
-
-            for output_buffer, output_hosts in output_data:
-                node_set = NodeSet.fromlist(output_hosts)
-                lines = str(output_buffer).splitlines()
-
-                if status:
-                    # Add the successful output from each node to the dictionary
-                    log_data[node_set] = lines
+        log_data = []
+        for result in results:
+            if result["exit_status"] == 0 and not result["interrupted"]:
+                # Add the successful output from each node to the dictionary
+                log_data.append(
+                    {"hosts": result["hosts"], "data": result["stdout"]})
+            else:
+                # Display all of the results in the case of an error
+                if len(result["stdout"]) > 1:
+                    self.log.info(
+                        "    %s: rc=%s, output:",
+                        str(result["hosts"]), result["exit_status"])
+                    for line in result["stdout"]:
+                        self.log.info("      %s", line)
                 else:
-                    # Display all of the results in the case of an error
-                    if len(lines) > 1:
-                        self.log.info("    %s: rc=%s, output:", node_set, code)
-                        for line in lines:
-                            self.log.info("      %s", line)
-                    else:
-                        self.log.info(
-                            "    %s: rc=%s, output: %s",
-                            node_set, code, output_buffer)
+                    self.log.info(
+                        "    %s: rc=%s, output: %s",
+                        str(result["hosts"]), result["exit_status"],
+                        result["stdout"][0])
 
         # Report any errors through an exception
         if not status:
@@ -890,9 +899,9 @@ class Systemctl(JobManager):
 
         """
         data = []
-        for node_set in sorted(log_data):
-            data.append("  {}:".format(node_set))
-            for line in log_data[node_set]:
+        for entry in log_data:
+            data.append("  {}:".format(entry["hosts"]))
+            for line in entry["data"]:
                 data.append("    {}".format(line))
         return "\n".join(data)
 
@@ -931,8 +940,8 @@ class Systemctl(JobManager):
         while not complete and not timed_out and self.service_running():
             detected = 0
             log_data = self.get_log_data(self._hosts, since, until, timeout)
-            for node_set in sorted(log_data):
-                match = re.findall(pattern, "\n".join(log_data[node_set]))
+            for entry in log_data:
+                match = re.findall(pattern, "\n".join(entry["data"]))
                 detected += len(match) if match else 0
 
             complete = detected == quantity

@@ -157,14 +157,14 @@ daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src)
 		return 0;
 
 	total = dst->sg_nr + src->sg_nr;
-	D_REALLOC_ARRAY(new_iovs, dst->sg_iovs, total);
+	D_REALLOC_ARRAY(new_iovs, dst->sg_iovs, dst->sg_nr, total);
 	if (new_iovs == NULL)
 		return -DER_NOMEM;
 
 	for (i = dst->sg_nr; i < total; i++) {
 		int idx = i - dst->sg_nr;
 
-		D_ALLOC(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
+		D_ALLOC_NZ(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
 		if (new_iovs[i].iov_buf == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
 
@@ -237,7 +237,8 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size)
 	if (sgl->sg_iovs[idx].iov_buf_len >= new_size)
 		return 0;
 
-	D_REALLOC(new_buf, sgl->sg_iovs[idx].iov_buf, new_size);
+	D_REALLOC(new_buf, sgl->sg_iovs[idx].iov_buf,
+		  sgl->sg_iovs[idx].iov_buf_len, new_size);
 	if (new_buf == NULL)
 		return -DER_NOMEM;
 
@@ -616,11 +617,14 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	crt_phy_addr_t	addr_env;
 	bool		sep = false;
 
+	/** enable statistics on the server side */
+	daos_crt_init_opt.cio_use_sensors = server;
+
+	/** Scalable EndPoint-related settings */
 	d_getenv_bool("CRT_CTX_SHARE_ADDR", &sep);
 	if (!sep)
-		return NULL;
+		goto out;
 
-	daos_crt_init_opt.cio_crt_timeout = 0;
 	daos_crt_init_opt.cio_sep_override = 1;
 
 	/* for socket provider, force it to use regular EP rather than SEP for:
@@ -632,7 +636,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	    strncmp(addr_env, CRT_SOCKET_PROV, strlen(CRT_SOCKET_PROV)) == 0) {
 		D_INFO("for sockets provider force it to use regular EP.\n");
 		daos_crt_init_opt.cio_use_sep = 0;
-		return &daos_crt_init_opt;
+		goto out;
 	}
 
 	/* for psm2 provider, set a reasonable cio_ctx_max_num for cart */
@@ -647,6 +651,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 		daos_crt_init_opt.cio_ctx_max_num = ctx_nr;
 	}
 
+out:
 	return &daos_crt_init_opt;
 }
 

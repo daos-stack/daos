@@ -6,16 +6,15 @@
 """
 from apricot import TestWithServers
 from command_utils_base import ObjectWithParameters, BasicParameter
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 
 
 class RebuildTestParams(ObjectWithParameters):
+    # pylint: disable=too-few-public-methods
     """Class for gathering test parameters."""
 
     def __init__(self):
         """Initialize a RebuildTestParams object."""
-        super(RebuildTestParams, self).__init__("/run/rebuild/*")
+        super().__init__("/run/rebuild/*")
         self.object_class = BasicParameter(None)
         self.rank = BasicParameter(None)
 
@@ -28,7 +27,7 @@ class RebuildTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildTestBase object."""
-        super(RebuildTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.inputs = RebuildTestParams()
         self.targets = None
         self.server_count = 0
@@ -38,7 +37,7 @@ class RebuildTestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(RebuildTestBase, self).setUp()
+        super().setUp()
 
         # Get the test parameters
         self.inputs.get_params(self)
@@ -50,13 +49,11 @@ class RebuildTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
+        self.add_pool(create=False)
 
     def setup_test_container(self):
         """Define a TestContainer object."""
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
+        self.add_container(self.pool, create=False)
 
     def setup_pool_verify(self):
         """Set up pool verification initial expected values."""
@@ -130,16 +127,17 @@ class RebuildTestBase(TestWithServers):
         """Start the rebuild process."""
         # Exclude the rank from the pool to initiate rebuild
         if isinstance(self.inputs.rank.value, list):
-            self.pool.start_rebuild(self.inputs.rank.value, self.d_log)
+            self.server_managers[0].stop_ranks(
+                self.inputs.rank.value, self.d_log, force=True)
         else:
-            self.pool.start_rebuild([self.inputs.rank.value], self.d_log)
+            self.server_managers[0].stop_ranks(
+                [self.inputs.rank.value], self.d_log, force=True)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True, 1)
 
     def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
-        pass
 
     def verify_container_data(self, txn=None):
         """Verify the container data.
@@ -182,6 +180,10 @@ class RebuildTestBase(TestWithServers):
 
         # Confirm rebuild completes
         self.pool.wait_for_rebuild(False, 1)
+
+        # Refresh local pool and container
+        self.pool.check_pool_info()
+        self.container.check_container_info()
 
         # Verify the excluded rank is no longer used with the objects
         self.verify_rank_has_no_objects()

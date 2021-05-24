@@ -13,8 +13,6 @@ import (
 	"math"
 	"sort"
 	"strings"
-
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 const (
@@ -46,7 +44,23 @@ func (f *FaultDomain) String() string {
 
 // Equals checks if the fault domains are equal.
 func (f *FaultDomain) Equals(other *FaultDomain) bool {
-	return f.String() == other.String()
+	if f.NumLevels() != other.NumLevels() {
+		return false
+	}
+
+	if f == nil || other == nil {
+		if f == nil && other == nil {
+			return true
+		}
+		return false
+	}
+
+	for i, dom := range f.Domains {
+		if other.Domains[i] != dom {
+			return false
+		}
+	}
+	return true
 }
 
 // NumLevels gets the number of levels in the domain.
@@ -116,8 +130,10 @@ func (f *FaultDomain) NewChild(childLevel string) (*FaultDomain, error) {
 	if f == nil {
 		return NewFaultDomain(childLevel)
 	}
-	childDomains := append(f.Domains, childLevel)
-	return NewFaultDomain(childDomains...)
+
+	childDomains := make([]string, len(f.Domains))
+	copy(childDomains, f.Domains)
+	return NewFaultDomain(append(childDomains, childLevel)...)
 }
 
 // MustCreateChild creates a child fault domain. If that is not possible, it
@@ -288,11 +304,10 @@ func (t *FaultDomainTree) mergeTree(toBeMerged *FaultDomainTree, nextID *uint32)
 			}
 		}
 		if !foundBranch {
-			m.updateAllIDs(nextID)
-			t.Children = append(t.Children, m)
-			sort.Slice(t.Children, func(i, j int) bool {
-				return t.Children[i].Domain.BottomLevel() < t.Children[j].Domain.BottomLevel()
-			})
+			if nextID != nil {
+				m.updateAllIDs(nextID)
+			}
+			t.addChild(m)
 		}
 	}
 
@@ -305,6 +320,13 @@ func (t *FaultDomainTree) updateAllIDs(nextID *uint32) {
 	for _, c := range t.Children {
 		c.updateAllIDs(nextID)
 	}
+}
+
+func (t *FaultDomainTree) addChild(child *FaultDomainTree) {
+	t.Children = append(t.Children, child)
+	sort.Slice(t.Children, func(i, j int) bool {
+		return t.Children[i].Domain.BottomLevel() < t.Children[j].Domain.BottomLevel()
+	})
 }
 
 // RemoveDomain removes a given fault domain from the tree.
@@ -359,20 +381,25 @@ func (t *FaultDomainTree) IsBalanced() bool {
 	if t == nil {
 		return true
 	}
-	maxDepth := t.getMaxDepth()
+	maxDepth := t.Depth()
 	minDepth := t.getMinDepth()
 	return maxDepth == minDepth
 }
 
-func (t *FaultDomainTree) getMaxDepth() int {
-	maxDepth := 0
+// Depth determines the overall depth of the tree.
+func (t *FaultDomainTree) Depth() int {
+	if t == nil {
+		return 0
+	}
+
+	depth := 0
 	for _, c := range t.Children {
-		childMax := c.getMaxDepth() + 1
-		if childMax > maxDepth {
-			maxDepth = childMax
+		childMax := c.Depth() + 1
+		if childMax > depth {
+			depth = childMax
 		}
 	}
-	return maxDepth
+	return depth
 }
 
 func (t *FaultDomainTree) getMinDepth() int {
@@ -411,41 +438,6 @@ func (t *FaultDomainTree) nodeToString(w io.Writer, depth int, fullDomain bool) 
 	}
 }
 
-// ToProto converts the FaultDomainTree into a list of protobuf structures,
-// in the order of a breadth-first traversal.
-func (t *FaultDomainTree) ToProto() []*mgmtpb.FaultDomain {
-	if t == nil {
-		return nil
-	}
-
-	result := make([]*mgmtpb.FaultDomain, 0)
-
-	queue := make([]*FaultDomainTree, 0)
-	queue = append(queue, t)
-
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-
-		result = append(result, cur.toProtoSingle())
-		for _, child := range cur.Children {
-			queue = append(queue, child)
-		}
-	}
-	return result
-}
-
-func (t *FaultDomainTree) toProtoSingle() *mgmtpb.FaultDomain {
-	result := &mgmtpb.FaultDomain{
-		Domain: t.Domain.String(),
-		Id:     t.ID,
-	}
-	for _, child := range t.Children {
-		result.Children = append(result.Children, child.ID)
-	}
-	return result
-}
-
 // Copy creates a copy of the full FaultDomainTree in memory.
 func (t *FaultDomainTree) Copy() *FaultDomainTree {
 	if t == nil {
@@ -460,6 +452,71 @@ func (t *FaultDomainTree) Copy() *FaultDomainTree {
 	}
 
 	return tCopy
+}
+
+// Domains returns the list of domains needed to reconstruct the tree.
+func (t *FaultDomainTree) Domains() []*FaultDomain {
+	if t == nil {
+		return nil
+	}
+
+	return t.getLeafDomains()
+}
+
+func (t *FaultDomainTree) getLeafDomains() []*FaultDomain {
+	if t.IsLeaf() && !t.IsRoot() {
+		return []*FaultDomain{t.Domain}
+	}
+
+	domains := make([]*FaultDomain, 0)
+	for _, child := range t.Children {
+		cDomains := child.getLeafDomains()
+		domains = append(domains, cDomains...)
+	}
+	return domains
+}
+
+// Subtree returns the subtree represented by the set of domains.
+func (t *FaultDomainTree) Subtree(domains ...*FaultDomain) (*FaultDomainTree, error) {
+	if t == nil {
+		return nil, errors.New("nil FaultDomainTree")
+	}
+	if len(domains) == 0 {
+		return t, nil
+	}
+
+	subtree := NewFaultDomainTree()
+
+	for _, d := range domains {
+		treeCur := t
+		subCur := subtree
+		for _, lvl := range d.Domains {
+			treeNext := treeCur.findChildWithDomain(lvl)
+			if treeNext == nil {
+				return nil, fmt.Errorf("domain %q not found", d)
+			}
+			subNext := subCur.findChildWithDomain(lvl)
+			if subNext == nil {
+				subNext = NewFaultDomainTree().
+					WithNodeDomain(treeNext.Domain).
+					WithID(treeNext.ID)
+				subCur.addChild(subNext)
+			}
+			treeCur = treeNext
+			subCur = subNext
+		}
+	}
+
+	return subtree, nil
+}
+
+func (t *FaultDomainTree) findChildWithDomain(domain string) *FaultDomainTree {
+	for _, c := range t.Children {
+		if c.Domain.BottomLevel() == domain {
+			return c
+		}
+	}
+	return nil
 }
 
 // NewFaultDomainTree creates a FaultDomainTree including all the

@@ -4,7 +4,7 @@ Import('env')
 
 def scons():
     """Execute build"""
-    libs = ['daos', 'daos_common_pmem', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
+    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
 
     denv = env.Clone()
 
@@ -24,10 +24,12 @@ def scons():
     # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
-    daos_extra_files = denv.Object(['daos_hdlr.c', 'daos_autotest.c'])
+    Import('cmd_parser', 'dc_credit')
+    daos_obj = [cmd_parser, dc_credit]
+    daos_src = ['daos.c', 'daos_obj_ctl.c', 'daos_hdlr.c', 'daos_dfs_hdlr.c',
+                'daos_autotest.c']
 
-    daos = daos_build.program(denv, 'daos',
-                              ['daos.c', daos_extra_files], LIBS=libs)
+    daos = daos_build.program(denv, 'daos', [daos_src, daos_obj], LIBS=libs)
     denv.Install('$PREFIX/bin/', daos)
 
 

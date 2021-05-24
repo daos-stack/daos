@@ -178,17 +178,17 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
  *
  * Should be called from the post_start plugin callback and creates
  * a filesystem.
- * Returns 0 on success, or non-zero on error.
+ * Returns true on success, false on failure.
  */
 bool
-dfuse_launch_fuse(struct dfuse_info *dfuse_info,
+dfuse_launch_fuse(struct dfuse_projection_info *fs_handle,
 		  struct fuse_lowlevel_ops *flo,
-		  struct fuse_args *args,
-		  struct dfuse_projection_info *fs_handle)
+		  struct fuse_args *args)
 {
-	int rc;
+	struct dfuse_info	*dfuse_info;
+	int			rc;
 
-	dfuse_info->di_handle = fs_handle;
+	dfuse_info = fs_handle->dpi_info;
 
 	dfuse_info->di_session = fuse_session_new(args,
 						   flo,
@@ -229,20 +229,21 @@ show_help(char *name)
 		"	-S --singlethreaded	Single threaded\n"
 		"	-t --thread-count=COUNT Number of fuse threads to use\n"
 		"	-f --foreground		Run in foreground\n"
-		"	   --enable-caching	Enable node-local caching (experimental)\n",
+		"          --disable-caching    Disable all caching\n"
+		"          --disable-wb-cache   Use write-through rather than write-back cache\n",
 		name);
 }
 
 int
 main(int argc, char **argv)
 {
+	struct dfuse_projection_info	*fs_handle;
 	struct dfuse_info	*dfuse_info = NULL;
 	struct dfuse_pool	*dfp = NULL;
-	struct dfuse_pool	*dfpn;
-	struct dfuse_dfs	*dfs = NULL;
-	struct dfuse_dfs	*dfsn;
+	struct dfuse_cont	*dfs = NULL;
 	struct duns_attr_t	duns_attr = {};
-	uuid_t			tmp_uuid;
+	uuid_t			cont_uuid = {};
+	uuid_t			pool_uuid = {};
 	char			c;
 	int			ret = -DER_SUCCESS;
 	int			rc;
@@ -255,8 +256,8 @@ main(int argc, char **argv)
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"thread-count",	required_argument, 0, 't'},
 		{"singlethread",	no_argument,	   0, 'S'},
-		{"enable-caching",	no_argument,	   0, 'A'},
-		{"disable-direct-io",	no_argument,	   0, 'D'},
+		{"disable-caching",	no_argument,	   0, 'A'},
+		{"disable-wb-cache",	no_argument,	   0, 'B'},
 		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
 		{0, 0, 0, 0}
@@ -270,13 +271,9 @@ main(int argc, char **argv)
 	if (!dfuse_info)
 		D_GOTO(out_debug, ret = -DER_NOMEM);
 
-	D_INIT_LIST_HEAD(&dfuse_info->di_dfp_list);
-	rc = D_MUTEX_INIT(&dfuse_info->di_lock, NULL);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(out_debug, ret = rc);
-
 	dfuse_info->di_threaded = true;
-	dfuse_info->di_direct_io = true;
+	dfuse_info->di_caching = true;
+	dfuse_info->di_wb_cache = true;
 
 	while (1) {
 		c = getopt_long(argc, argv, "m:Sfh",
@@ -296,13 +293,21 @@ main(int argc, char **argv)
 			dfuse_info->di_group = optarg;
 			break;
 		case 'A':
-			dfuse_info->di_caching = true;
+			dfuse_info->di_caching = false;
+			dfuse_info->di_wb_cache = false;
+			break;
+		case 'B':
+			dfuse_info->di_wb_cache = false;
 			break;
 		case 'm':
 			dfuse_info->di_mountpoint = optarg;
 			break;
 		case 'S':
+			/* Set it to be single threaded, but allow an extra one
+			 * for the event queue processing
+			 */
 			dfuse_info->di_threaded = false;
+			dfuse_info->di_thread_count = 2;
 			break;
 		case 't':
 			dfuse_info->di_thread_count = atoi(optarg);
@@ -310,9 +315,6 @@ main(int argc, char **argv)
 			break;
 		case 'f':
 			dfuse_info->di_foreground = true;
-			break;
-		case 'D':
-			dfuse_info->di_direct_io = false;
 			break;
 		case 'h':
 			show_help(argv[0]);
@@ -323,11 +325,6 @@ main(int argc, char **argv)
 			exit(1);
 			break;
 		}
-	}
-
-	if (dfuse_info->di_caching && !dfuse_info->di_threaded) {
-		printf("Caching not compatible with single-threaded mode\n");
-		exit(1);
 	}
 
 	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
@@ -363,13 +360,13 @@ main(int argc, char **argv)
 	dfuse_info->di_thread_count -= 1;
 
 	if (dfuse_info->di_pool) {
-		if (uuid_parse(dfuse_info->di_pool, tmp_uuid) < 0) {
+		if (uuid_parse(dfuse_info->di_pool, pool_uuid) < 0) {
 			printf("Invalid pool uuid\n");
 			exit(1);
 		}
 
 		if (dfuse_info->di_cont) {
-			if (uuid_parse(dfuse_info->di_cont, tmp_uuid) < 0) {
+			if (uuid_parse(dfuse_info->di_cont, cont_uuid) < 0) {
 				printf("Invalid container uuid\n");
 				exit(1);
 			}
@@ -390,58 +387,29 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	D_ALLOC_PTR(dfp);
-	if (!dfp)
-		D_GOTO(out_debug, ret = -DER_NOMEM);
+	rc = dfuse_fs_init(dfuse_info, &fs_handle);
+	if (rc != 0)
+		D_GOTO(out_debug, ret = rc);
 
-	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
-	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
-
-	d_list_add(&dfp->dfp_list, &dfuse_info->di_dfp_list);
-
-	D_ALLOC_PTR(dfs);
-	if (!dfs)
-		D_GOTO(out_dfs, ret = -DER_NOMEM);
-
-	if (dfuse_info->di_caching)
-		dfs->dfs_attr_timeout = 5;
-
-	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
-
-	dfs->dfs_dfp = dfp;
-
-	DFUSE_TRA_UP(dfs, dfp, "dfs");
-
-	if (dfuse_info->di_pool) {
-		if (uuid_parse(dfuse_info->di_pool, dfp->dfp_pool) < 0) {
-			printf("Invalid pool uuid\n");
-			D_GOTO(out_dfs, ret = -DER_INVAL);
-		}
-		if ((dfuse_info->di_cont) &&
-		    (uuid_parse(dfuse_info->di_cont, dfs->dfs_cont) < 0)) {
-			printf("Invalid container uuid\n");
-			D_GOTO(out_dfs, ret = -DER_INVAL);
-		}
-	}
-
+	duns_attr.da_no_reverse_lookup = true;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
 	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s",
 		       rc, strerror(rc));
 	if (rc == 0) {
 		if (dfuse_info->di_pool &&
-		    (uuid_compare(duns_attr.da_puuid, dfp->dfp_pool))) {
+		    (uuid_compare(duns_attr.da_puuid, pool_uuid))) {
 			printf("Pools uuids do not match\n");
 			D_GOTO(out_dfs, rc = -DER_INVAL);
 		}
 
 		if (dfuse_info->di_cont &&
-		    (uuid_compare(duns_attr.da_cuuid, dfs->dfs_cont))) {
+		    (uuid_compare(duns_attr.da_cuuid, cont_uuid))) {
 			printf("Container uuids do not match\n");
 			D_GOTO(out_dfs, rc = -DER_INVAL);
 		}
 
-		uuid_copy(dfp->dfp_pool, duns_attr.da_puuid);
-		uuid_copy(dfs->dfs_cont, duns_attr.da_cuuid);
+		uuid_copy(pool_uuid, duns_attr.da_puuid);
+		uuid_copy(cont_uuid, duns_attr.da_cuuid);
 	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
 		D_GOTO(out_dfs, ret = daos_errno2der(rc));
@@ -450,94 +418,41 @@ main(int argc, char **argv)
 		D_GOTO(out_dfs, ret = daos_errno2der(rc));
 	}
 
-	if (uuid_is_null(dfp->dfp_pool) == 0) {
-		/** Connect to DAOS pool */
-		rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
-				       DAOS_PC_RW,
-				       &dfp->dfp_poh, &dfp->dfp_pool_info,
-				       NULL);
-		if (rc != -DER_SUCCESS) {
-			printf("Failed to connect to pool (%d)\n", rc);
-			D_GOTO(out_dfs, 0);
-		}
-
-		if (uuid_is_null(dfs->dfs_cont) == 0) {
-			/** Try to open the DAOS container (the mountpoint) */
-			rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont,
-					    DAOS_COO_RW, &dfs->dfs_coh,
-					    NULL, NULL);
-			if (rc) {
-				printf("Failed container open (%d)\n", rc);
-				D_GOTO(out_dfs, ret = rc);
-			}
-
-			rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
-				       &dfs->dfs_ns);
-			if (rc) {
-				daos_cont_close(dfs->dfs_coh, NULL);
-				printf("dfs_mount failed (%d)\n", rc);
-				D_GOTO(out_dfs, ret = rc);
-			}
-			dfs->dfs_ops = &dfuse_dfs_ops;
-		} else {
-			dfs->dfs_ops = &dfuse_cont_ops;
-		}
-	} else {
-		dfs->dfs_ops = &dfuse_pool_ops;
+	/* Connect to DAOS pool, uuid may be null here but we still allocate a
+	 * dfp
+	 */
+	rc = dfuse_pool_open(fs_handle, &pool_uuid, &dfp);
+	if (rc != -DER_SUCCESS) {
+		printf("Failed to connect to pool (%d)\n", rc);
+		D_GOTO(out_dfs, 0);
 	}
 
-	dfuse_dfs_init(dfs, NULL);
+	rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
+	if (rc != -DER_SUCCESS) {
+		printf("Failed to connect to container (%d)\n", rc);
+		D_GOTO(out_dfs, ret = daos_errno2der(rc));
+	}
 
-	rc = dfuse_start(dfuse_info, dfs);
+	/* The container created by dfuse_cont_open() will have taken a ref
+	 * on the pool, so drop the initial one.
+	 */
+	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+
+	if (uuid_is_null(pool_uuid) != 0)
+		dfs->dfs_ops = &dfuse_pool_ops;
+
+	rc = dfuse_start(fs_handle, dfs);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_dfs, ret = rc);
 
 	/* Remove all inodes from the hash tables */
-	ret = dfuse_destroy_fuse(dfuse_info->di_handle);
+	ret = dfuse_fs_fini(fs_handle);
 
 	fuse_session_destroy(dfuse_info->di_session);
 
 out_dfs:
 
-	d_list_for_each_entry_safe(dfp, dfpn, &dfuse_info->di_dfp_list,
-				   dfp_list) {
-		DFUSE_TRA_ERROR(dfp, "DFP left at the end");
-		d_list_for_each_entry_safe(dfs, dfsn, &dfp->dfp_dfs_list,
-					   dfs_list) {
-			DFUSE_TRA_ERROR(dfs, "DFS left at the end");
-			if (daos_handle_is_valid(dfs->dfs_coh)) {
-				rc = dfs_umount(dfs->dfs_ns);
-				if (rc != 0)
-					DFUSE_TRA_ERROR(dfs,
-							"dfs_umount() failed (%d)",
-							rc);
-
-				rc = daos_cont_close(dfs->dfs_coh, NULL);
-				if (rc != -DER_SUCCESS) {
-					DFUSE_TRA_ERROR(dfs,
-							"daos_cont_close() failed: (%d)",
-							rc);
-				}
-			}
-			D_MUTEX_DESTROY(&dfs->dfs_read_mutex);
-			DFUSE_TRA_DOWN(dfs);
-			D_FREE(dfs);
-		}
-
-		if (daos_handle_is_valid(dfp->dfp_poh)) {
-			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
-			if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(dfp,
-						"daos_pool_disconnect() failed: (%d)",
-						rc);
-			}
-		}
-		DFUSE_TRA_DOWN(dfp);
-		D_FREE(dfp);
-	}
-
 	DFUSE_TRA_DOWN(dfuse_info);
-	D_MUTEX_DESTROY(&dfuse_info->di_lock);
 	daos_fini();
 out_debug:
 	D_FREE(dfuse_info);

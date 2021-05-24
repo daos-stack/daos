@@ -137,11 +137,12 @@ struct rdb_cbs {
 
 /** Database methods */
 int rdb_create(const char *path, const uuid_t uuid, size_t size,
-	       const d_rank_list_t *replicas);
-int rdb_destroy(const char *path, const uuid_t uuid);
+	       const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
+	       struct rdb **dbp);
 int rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs,
 	      void *arg, struct rdb **dbp);
 void rdb_stop(struct rdb *db);
+int rdb_destroy(const char *path, const uuid_t uuid);
 void rdb_resign(struct rdb *db, uint64_t term);
 int rdb_campaign(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);

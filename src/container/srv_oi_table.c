@@ -105,7 +105,7 @@ cont_iter_obj_cb(daos_handle_t ch, vos_iter_entry_t *ent, vos_iter_type_t type,
 	int			 rc;
 
 	oid = ent->ie_oid.id_pub;
-	if (daos_obj_id2class(oid) == DAOS_OC_OIT)
+	if (daos_oid_is_oit(oid))
 		return 0; /* ignore IOT object */
 
 	D_DEBUG(DB_TRACE, "enumerate OID="DF_OID"\n", DP_OID(oid));
@@ -157,7 +157,7 @@ cont_child_gather_oids(struct ds_cont_child *coc, uuid_t coh_uuid,
 	if (rc)
 		D_GOTO(out, rc);
 
-	oa->oa_oit_id = daos_oit_gen_id(epoch);
+	oa->oa_oit_id = daos_oit_gen_id(epoch, coc->sc_props.dcp_redun_fac);
 	D_DEBUG(DB_IO, "OIT="DF_OID"\n", DP_OID(oa->oa_oit_id));
 
 	uuid_generate(uuid);

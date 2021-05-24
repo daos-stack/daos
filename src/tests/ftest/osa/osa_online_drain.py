@@ -13,13 +13,7 @@ from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from osa_utils import OSAUtils
 from apricot import skipForTicket
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+import queue
 
 
 class OSAOnlineDrain(OSAUtils):
@@ -32,7 +26,7 @@ class OSAOnlineDrain(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOnlineDrain, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
@@ -129,8 +123,10 @@ class OSAOnlineDrain(OSAUtils):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain
 
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa,osa_drain
-        :avocado: tags=online_drain,DAOS_5610
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum,DAOS_5610
+        :avocado: tags=osa_drain,online_drain
         """
         # Perform drain testing with 1 to 2 pools
         for pool_num in range(1, 3):

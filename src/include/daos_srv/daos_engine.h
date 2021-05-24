@@ -47,6 +47,9 @@ extern int		 dss_nvme_mem_size;
 /** I/O Engine instance index */
 extern unsigned int	 dss_instance_idx;
 
+/** Bypass for the nvme health check */
+extern bool		 dss_nvme_bypass_health_check;
+
 /**
  * Stackable Module API
  * Provides a modular interface to load and register server-side code on
@@ -257,6 +260,7 @@ sched_req_attr_init(struct sched_req_attr *attr, unsigned int type,
 		    uuid_t *pool_id)
 {
 	attr->sra_type = type;
+	attr->sra_flags = 0;
 	uuid_copy(attr->sra_pool_id, *pool_id);
 }
 
@@ -678,6 +682,7 @@ struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
 	bool			chk_key2big;
 	bool			need_punch;	/* need to pack punch epoch */
+	bool			obj_punched;    /* object punch is packed   */
 	daos_epoch_range_t     *eprs;
 	struct daos_csummer    *csummer;
 	int			eprs_cap;
@@ -751,6 +756,8 @@ struct dss_enum_unpack_io {
 	int			 ui_iods_cap;
 	int			 ui_iods_top;
 	int			*ui_recxs_caps;
+	/* punched epoch for object */
+	daos_epoch_t		ui_obj_punch_eph;
 	/* punched epochs for dkey */
 	daos_epoch_t		ui_dkey_punch_eph;
 	d_sg_list_t		*ui_sgls;	/**< optional */
@@ -824,11 +831,10 @@ void dss_init_state_set(enum dss_init_state state);
 int
 ds_notify_bio_error(int media_err_type, int tgt_id);
 
-/* Retrieve current pool service replicas for a given pool UUID. */
-int
-ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
+int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
+int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
+			 d_rank_list_t **svc_ranks);
 
-bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
 
 struct sys_db;
@@ -862,5 +868,21 @@ struct sys_db {
 	void	(*sd_lock)(struct sys_db *db);
 	void	(*sd_unlock)(struct sys_db *db);
 };
+
+/** Flags for dss_drpc_call */
+enum dss_drpc_call_flag {
+	/** Do not wait for a response. Implies DSS_DRPC_NO_SCHED. */
+	DSS_DRPC_NO_RESP	= 1,
+	/**
+	 * Do not Argobots-schedule. If the dRPC requires a response, this will
+	 * block the thread until a response is received. That is usually
+	 * faster than waiting for the response by Argobots-scheduling if the
+	 * dRPC can be quickly handled by the local daos_server alone.
+	 */
+	DSS_DRPC_NO_SCHED	= 2
+};
+
+int dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
+		  unsigned int flags, Drpc__Response **resp);
 
 #endif /* __DSS_API_H__ */

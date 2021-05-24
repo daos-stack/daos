@@ -49,7 +49,7 @@ crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
 		D_ERROR("Empty log message\n");
 		rc = -DER_INVAL;
 	} else {
-		D_INFO("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
+		D_EMIT("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
 		       in_args->log_msg);
 	}
 
@@ -149,6 +149,13 @@ static struct crt_corpc_ops crt_iv_sync_co_ops = {
 };
 
 CRT_GEN_PROC_FUNC(crt_grp_cache, CRT_SEQ_GRP_CACHE);
+
+static int
+crt_proc_struct_crt_grp_cache(crt_proc_t proc, crt_proc_op_t proc_op,
+			      struct crt_grp_cache *data)
+{
+	return crt_proc_crt_grp_cache(proc, data);
+}
 
 /* !! All of the following 4 RPC definition should have the same input fields !!
  * All of them are verified in one function:
@@ -768,16 +775,16 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	ul_in = crt_req_get(lookup_rpc);
 	if (cb_info->cci_rc != 0) {
 		RPC_ERROR(chained_rpc_priv,
-			  "URI_LOOKUP rpc completed with rc=%d\n",
-			  cb_info->cci_rc);
+			  "URI_LOOKUP rpc completed with rc="DF_RC"\n",
+			  DP_RC(cb_info->cci_rc));
 		D_GOTO(retry, rc = cb_info->cci_rc);
 	}
 
 	ul_out = crt_reply_get(lookup_rpc);
 
 	if (ul_out->ul_rc != 0) {
-		RPC_ERROR(chained_rpc_priv, "URI_LOOKUP returned rc=%d\n",
-			  ul_out->ul_rc);
+		RPC_ERROR(chained_rpc_priv, "URI_LOOKUP returned rc="DF_RC"\n",
+			  DP_RC(ul_out->ul_rc));
 		D_GOTO(retry, rc = ul_out->ul_rc);
 	}
 
@@ -787,8 +794,9 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 				   ul_out->ul_tag, ul_out->ul_uri);
 	if (rc != 0) {
 		RPC_ERROR(chained_rpc_priv,
-			  "URI insertion '%s' failed for %d:%d; rc=%d\n",
-			  ul_out->ul_uri, ul_in->ul_rank, ul_out->ul_tag, rc);
+			  "URI insertion '%s' failed for %d:%d; rc="DF_RC"\n",
+			  ul_out->ul_uri, ul_in->ul_rank, ul_out->ul_tag,
+			  DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -802,7 +810,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	char *fill_uri = NULL;
 
 	if (ul_in->ul_tag != ul_out->ul_tag) {
-		if (crt_provider_is_contig_ep(ctx->provider) == false) {
+		if (crt_provider_is_contig_ep(ctx->cc_provider) == false) {
 			rc = crt_issue_uri_lookup(lookup_rpc->cr_ctx,
 						  lookup_rpc->cr_ep.ep_grp,
 						  ul_in->ul_rank, 0,
@@ -823,7 +831,8 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	rc = crt_req_fill_tgt_uri(chained_rpc_priv, fill_uri);
 	if (rc != 0) {
 		RPC_ERROR(chained_rpc_priv,
-			  "crt_req_fill_tgt_uri() failed; rc=%d\n", rc);
+			  "crt_req_fill_tgt_uri() failed; rc="DF_RC"\n",
+			  DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -838,7 +847,8 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	if (!found) {
 		rc = grp_add_to_membs_list(grp_priv, ul_in->ul_rank);
 		if (rc != 0) {
-			D_ERROR("Failed to add %d to group\n", ul_in->ul_rank);
+			D_ERROR("Failed to add %d to group rc "DF_RC"\n",
+				ul_in->ul_rank, DP_RC(rc));
 			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 			D_GOTO(out, rc);
 		}
@@ -999,7 +1009,8 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 
 	rc = crt_req_create(ctx, &target_ep, CRT_OPC_URI_LOOKUP, &rpc);
 	if (rc != 0) {
-		D_ERROR("URI_LOOKUP rpc create failed; rc=%d\n", rc);
+		D_ERROR("URI_LOOKUP rpc create failed; rc="DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
 
@@ -1279,8 +1290,9 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			rpc_priv->crp_state = RPC_STATE_URI_LOOKUP;
 			rc = crt_req_uri_lookup(rpc_priv);
 			if (rc != 0)
-				D_ERROR("crt_req_uri_lookup() failed. rc %d, "
-					"opc: %#x.\n", rc, req->cr_opc);
+				RPC_ERROR(rpc_priv,
+					  "crt_req_uri_lookup() failed. rc "
+					  DF_RC"\n", DP_RC(rc));
 		}
 		break;
 	case RPC_STATE_URI_LOOKUP:
@@ -1576,7 +1588,9 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	rpc_priv->crp_hdl_reuse = NULL;
 	rpc_priv->crp_srv = srv_flag;
 	rpc_priv->crp_ul_retry = 0;
-	/* initialize as 1, so user can cal crt_req_decref to destroy new req */
+	/**
+	 * initialized to 1, so user can call crt_req_decref to destroy new req
+	 */
 	rpc_priv->crp_refcount = 1;
 
 	rpc_priv->crp_pub.cr_opc = opc;
@@ -1689,6 +1703,12 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 					crt_ctx->cc_rpc_cb_arg);
 	} else {
 		rpc_priv->crp_opc_info->coi_rpc_cb(&rpc_priv->crp_pub);
+		/*
+		 * Correspond to crt_rpc_handler_common -> crt_rpc_priv_init's
+		 * set refcount as 1.
+		 */
+		if (rpc_priv->crp_srv)
+			RPC_DECREF(rpc_priv);
 	}
 
 out:
@@ -1814,4 +1834,32 @@ crt_req_dst_tag_get(crt_rpc_t *rpc, uint32_t *tag)
 	*tag = rpc_priv->crp_req_hdr.cch_dst_tag;
 out:
 	return rc;
+}
+
+int
+crt_register_hlc_error_cb(crt_hlc_error_cb event_handler, void *arg)
+{
+	int rc = 0;
+
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
+	crt_plugin_gdata.hlc_error_cb = event_handler;
+	crt_plugin_gdata.hlc_error_cb_arg = arg;
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
+
+	return rc;
+}
+
+void
+crt_trigger_hlc_error_cb(void)
+{
+	crt_hlc_error_cb	handler;
+	void			*arg;
+
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
+	handler = crt_plugin_gdata.hlc_error_cb;
+	arg = crt_plugin_gdata.hlc_error_cb_arg;
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
+
+	if (handler)
+		handler(arg);
 }

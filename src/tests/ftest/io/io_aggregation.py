@@ -21,7 +21,7 @@ class IoAggregation(IorTestBase):
 
     def setUp(self):
         """Set up test before executing."""
-        super(IoAggregation, self).setUp()
+        super().setUp()
         self.dmg = self.get_dmg_command()
         self.daos_cmd = DaosCommand(self.bin)
 

@@ -1,10 +1,9 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2019-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import skipForTicket
 from rebuild_test_base import RebuildTestBase
 
 
@@ -15,8 +14,6 @@ class ReadArrayTest(RebuildTestBase):
     :avocado: recursive
     """
 
-    CANCEL_FOR_TICKET = [["DAOS-2799", "targets", 8]]
-
     def execute_during_rebuild(self):
         """Read the objects during rebuild."""
         message = "Reading the array objects during rebuild"
@@ -26,7 +23,6 @@ class ReadArrayTest(RebuildTestBase):
             self.pool.read_data_during_rebuild(self.container),
             "Error reading data during rebuild")
 
-    @skipForTicket("DAOS-6450")
     def test_read_array_during_rebuild(self):
         """Jira ID: DAOS-691.
 
@@ -45,6 +41,7 @@ class ReadArrayTest(RebuildTestBase):
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
 
-        :avocado: tags=all,medium,full_regression,rebuild,rebuildreadarray
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm,large,rebuild,rebuildreadarray
         """
         self.execute_rebuild_test()

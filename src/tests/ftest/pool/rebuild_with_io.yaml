@@ -18,6 +18,7 @@ pool:
   name: daos_server
   scm_size: 1073741824
   control_method: dmg
+  pool_query_timeout: 30
 container:
   akey_size: 5
   dkey_size: 5

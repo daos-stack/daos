@@ -13,27 +13,6 @@
 #include "gurt/telemetry_common.h"
 #include "gurt/telemetry_consumer.h"
 
-void
-print_my_children(uint64_t *shmem_root, struct d_tm_node_t *node, int filter,
-		  int level, FILE *stream)
-{
-	if ((node == NULL) || (stream == NULL))
-		return;
-
-	if (node->dtn_type & filter)
-		d_tm_print_node(shmem_root, node, level, stream);
-
-	node = node->dtn_child;
-	node = d_tm_conv_ptr(shmem_root, node);
-
-	while (node != NULL) {
-		print_my_children(shmem_root, node, filter, level + 1, stream);
-		node = node->dtn_sibling;
-		node = d_tm_conv_ptr(shmem_root, node);
-	}
-}
-
-
 static void
 print_usage(const char *prog_name)
 {
@@ -47,10 +26,16 @@ print_usage(const char *prog_name)
 	       "\tDefault is root directory\n"
 	       "--iterations, -i\n"
 	       "\tSpecifies the number of iterations to show "
-	       "(default continuous)\n"
+	       "(default is 1 iteration.  Set to 0 for continuous output)\n"
 	       "--delay, -D\n"
 	       "\tDelay in seconds between each iteration\n"
 	       "\tDefault is 1 second\n"
+	       "--csv, -C\n"
+	       "\tDisplay data in CSV format\n"
+	       "--meta, -M\n"
+	       "\tDisplay associated metric metadata\n"
+	       "--type, -T\n"
+	       "\tDisplay metric type\n"
 	       "--help, -h\n"
 	       "\tThis help text\n\n"
 	       "Customize the displayed data by specifying one or more "
@@ -74,14 +59,19 @@ main(int argc, char **argv)
 {
 	struct d_tm_node_t	*root = NULL;
 	struct d_tm_node_t	*node = NULL;
-	uint64_t		*shmem_root = NULL;
+	struct d_tm_context	*ctx = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
+	bool			show_meta = false;
+	bool			show_when_read = false;
+	bool			show_type = false;
 	int			srv_idx = 0;
 	int			iteration = 0;
-	int			num_iter = 0;
+	int			num_iter = 1;
 	int			filter = 0;
 	int			delay = 1;
+	int			format = D_TM_STANDARD;
 	int			opt;
+	int			extra_descriptors = 0;
 
 	sprintf(dirname, "/");
 
@@ -90,6 +80,7 @@ main(int argc, char **argv)
 		static struct option long_options[] = {
 			{"srv_idx", required_argument, NULL, 'S'},
 			{"counter", no_argument, NULL, 'c'},
+			{"csv", no_argument, NULL, 'C'},
 			{"duration", no_argument, NULL, 'd'},
 			{"timestamp", no_argument, NULL, 't'},
 			{"snapshot", no_argument, NULL, 's'},
@@ -97,11 +88,13 @@ main(int argc, char **argv)
 			{"iterations", required_argument, NULL, 'i'},
 			{"path", required_argument, NULL, 'p'},
 			{"delay", required_argument, NULL, 'D'},
+			{"meta", no_argument, NULL, 'M'},
+			{"type", no_argument, NULL, 'T'},
 			{"help", no_argument, NULL, 'h'},
 			{NULL, 0, NULL, 0}
 		};
 
-		opt = getopt_long_only(argc, argv, "S:cdtsgi:p:D:h",
+		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MTh",
 				       long_options, NULL);
 		if (opt == -1)
 			break;
@@ -112,6 +105,9 @@ main(int argc, char **argv)
 			break;
 		case 'c':
 			filter |= D_TM_COUNTER;
+			break;
+		case 'C':
+			format = D_TM_CSV;
 			break;
 		case 'd':
 			filter |= D_TM_DURATION;
@@ -131,6 +127,12 @@ main(int argc, char **argv)
 		case 'p':
 			snprintf(dirname, sizeof(dirname), "%s", optarg);
 			break;
+		case 'M':
+			show_meta = true;
+			break;
+		case 'T':
+			show_type = true;
+			break;
 		case 'D':
 			delay = atoi(optarg);
 			break;
@@ -146,33 +148,50 @@ main(int argc, char **argv)
 		filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP |
 			 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE;
 
-	shmem_root = d_tm_get_shared_memory(srv_idx);
-	if (!shmem_root)
+	ctx = d_tm_open(srv_idx);
+	if (!ctx)
 		goto failure;
 
-	root = d_tm_get_root(shmem_root);
+	root = d_tm_get_root(ctx);
 	if (!root)
 		goto failure;
 
 	if (strncmp(dirname, "/", D_TM_MAX_NAME_LEN) != 0) {
-		node = d_tm_find_metric(shmem_root, dirname);
+		node = d_tm_find_metric(ctx, dirname);
 		if (node != NULL) {
 			root = node;
 		} else {
-			printf("No metrics found at: '%s'\n",
-			       dirname);
+			printf("No metrics found at: '%s'\n", dirname);
 			exit(0);
 		}
 	}
 
+	if (format == D_TM_CSV)
+		filter &= ~D_TM_DIRECTORY;
+	else
+		filter |= D_TM_DIRECTORY;
+
+
+	if (show_when_read)
+		extra_descriptors |= D_TM_INCLUDE_TIMESTAMP;
+	if (show_meta)
+		extra_descriptors |= D_TM_INCLUDE_METADATA;
+	if (show_type)
+		extra_descriptors |= D_TM_INCLUDE_TYPE;
+
+	if (format == D_TM_CSV)
+		d_tm_print_field_descriptors(extra_descriptors, stdout);
+
 	while ((num_iter == 0) || (iteration < num_iter)) {
-		print_my_children(shmem_root, root, filter | D_TM_DIRECTORY, 0,
-				  stdout);
+		d_tm_print_my_children(ctx, root, 0, filter, NULL,
+				       format, extra_descriptors, stdout);
 		iteration++;
 		sleep(delay);
-		printf("\n\n");
+		if (format == D_TM_STANDARD)
+			printf("\n\n");
 	}
 
+	d_tm_close(&ctx);
 	return 0;
 
 failure:
@@ -182,5 +201,6 @@ failure:
 	       "Verify user/group settings match those that started the I/O "
 	       "Engine.\n",
 	       srv_idx);
+	d_tm_close(&ctx);
 	return -1;
 }

@@ -617,7 +617,7 @@ crt_ivns_internal_lookup(struct crt_ivns_id *ivns_id)
 	}
 	D_MUTEX_UNLOCK(&ns_list_lock);
 
-	D_ERROR("Failed to lookup IVNS for %s:%d\n",
+	D_DEBUG(DB_ALL, "Failed to lookup IVNS for %s:%d\n",
 		ivns_id->ii_group_name,
 		ivns_id->ii_nsid);
 
@@ -853,12 +853,11 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns,
 			 void *cb_arg)
 {
 	struct crt_ivns_internal	*ivns_internal;
-	int				rc = 0;
 
 	ivns_internal = crt_ivns_internal_get(ivns);
 	if (ivns_internal == NULL) {
-		D_ERROR("Invalid ivns passed\n");
-		D_GOTO(exit, rc = -DER_INVAL);
+		D_DEBUG(DB_ALL, "ivns does not exist\n");
+		return 0;
 	}
 
 	ivns_internal->cii_destroy_cb = destroy_cb;
@@ -866,8 +865,8 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns,
 
 	/* addref done in crt_ivns_internal_get() and at attach/create time  */
 	IVNS_DECREF_N(ivns_internal, 2);
-exit:
-	return rc;
+
+	return 0;
 }
 
 /* Return iv_ops based on class_id passed */
@@ -2684,6 +2683,7 @@ handle_response_internal(void *arg)
 {
 	const struct crt_cb_info *cb_info = arg;
 	crt_rpc_t		 *rpc = cb_info->cci_rpc;
+	void			 *cb_arg = cb_info->cci_arg;
 
 	switch (rpc->cr_opc) {
 	case CRT_OPC_IV_FETCH:
@@ -2700,6 +2700,7 @@ handle_response_internal(void *arg)
 	default:
 		D_ERROR("wrong opc: cb_info %p: rpc %p: opc %#x\n",
 			cb_info, rpc, rpc->cr_opc);
+		D_FREE(cb_arg);
 	}
 }
 
@@ -2864,16 +2865,15 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 			D_GOTO(exit, rc);
 		}
 
-		rc = iv_ops->ivo_on_put(ivns_internal,
-					&cb_info->buc_iv_value,
-					cb_info->buc_user_priv);
-		output->rc = rc;
-		crt_reply_send(info->bci_bulk_desc->bd_rpc);
+		output->rc = iv_ops->ivo_on_put(ivns_internal,
+						&cb_info->buc_iv_value,
+						cb_info->buc_user_priv);
 
+		crt_reply_send(info->bci_bulk_desc->bd_rpc);
 		RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
+
 		IVNS_DECREF(update_cb_info->uci_ivns_internal);
 		D_FREE(update_cb_info);
-
 	} else {
 		D_GOTO(send_error, rc = update_rc);
 	}
@@ -2887,16 +2887,16 @@ send_error:
 			   cb_info->buc_user_priv);
 
 	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+	output->rc = rc;
+
+	crt_reply_send(info->bci_bulk_desc->bd_rpc);
+	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
 
 	if (update_cb_info) {
 		IVNS_DECREF(update_cb_info->uci_ivns_internal);
 		D_FREE(update_cb_info);
 	}
 
-	output->rc = rc;
-
-	crt_reply_send(info->bci_bulk_desc->bd_rpc);
-	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
 	return rc;
 }
 
@@ -3291,6 +3291,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		if (sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
 			rc = update_comp_cb(ivns_internal, class_id, iv_key,
 					    NULL, iv_value, rc, cb_arg);
+			D_ASSERT(sync_type.ivs_comp_cb == NULL);
 		} else {
 			/* issue sync. will call completion callback */
 			rc = crt_ivsync_rpc_issue(ivns_internal, class_id,
@@ -3361,7 +3362,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else {
-		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER,
+			 DLOG_INFO, DLOG_ERR,
 			 "ivo_on_update failed with rc = "DF_RC"\n",
 			 DP_RC(rc));
 

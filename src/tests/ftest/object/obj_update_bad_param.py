@@ -1,10 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import traceback
 import logging
@@ -20,7 +20,7 @@ class ObjUpdateBadParam(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(ObjUpdateBadParam, self).setUp()
+        super().setUp()
         self.plog = logging.getLogger("progress")
         try:
             self.prepare_pool()
@@ -42,23 +42,25 @@ class ObjUpdateBadParam(TestWithServers):
 
         Test Description: Pass a bogus object handle, should return bad handle.
 
-        :avocado: tags=all,object,full_regression,small,objbadhand
+        :avocado: tags=all,full_regression,small
+        :avocado: tags=object,objupdatebadparam
+        :avocado: tags=objbadhand
         """
 
         try:
             # create an object and write some data into it
-            thedata = "a string that I want to stuff into an object"
+            thedata = b"a string that I want to stuff into an object"
             thedatasize = len(thedata) + 1
-            dkey = "this is the dkey"
-            akey = "this is the akey"
-            obj = self.container.write_an_obj(thedata, thedatasize,
-                                         dkey, akey, None, None, 2)
+            dkey = b"this is the dkey"
+            akey = b"this is the akey"
+            obj = self.container.write_an_obj(
+                thedata, thedatasize, dkey, akey, None, None, 2)
 
             saved_oh = obj.obj_handle
             obj.obj_handle = 99999
 
-            obj = self.container.write_an_obj(thedata, thedatasize,
-                                         dkey, akey, obj, None, 2)
+            obj = self.container.write_an_obj(
+                thedata, thedatasize, dkey, akey, obj, None, 2)
 
             self.container.oh = saved_oh
             self.fail("Test was expected to return a -1002 but it has not.\n")
@@ -76,20 +78,22 @@ class ObjUpdateBadParam(TestWithServers):
 
         Test Description: Pass a dkey and an akey that is null.
 
-        :avocado: tags=all,object,full_regression,small,objupdatenull
+        :avocado: tags=all,full_regression,small
+        :avocado: tags=object,objupdatebadparam
+        :avocado: tags=objupdatenull
         """
 
         # data used in the test
-        thedata = "a string that I want to stuff into an object"
+        thedata = b"a string that I want to stuff into an object"
         thedatasize = len(thedata) + 1
 
         try:
             # try using a null dkey
             dkey = None
-            akey = "this is the akey"
+            akey = b"this is the akey"
 
-            self.container.write_an_obj(thedata, thedatasize, dkey, akey, None,
-                                   None, 2)
+            self.container.write_an_obj(
+                thedata, thedatasize, dkey, akey, None, None, 2)
             self.plog.error("Didn't get expected return code.")
             self.fail("Test was expected to return a -1003 but it has not.\n")
 
@@ -102,10 +106,10 @@ class ObjUpdateBadParam(TestWithServers):
 
         try:
             # try using a null akey/io descriptor
-            dkey = "this is the dkey"
+            dkey = b"this is the dkey"
             akey = None
-            self.container.write_an_obj(thedata, thedatasize, dkey, akey, None,
-                                   None, 2)
+            self.container.write_an_obj(
+                thedata, thedatasize, dkey, akey, None, None, 2)
             self.fail("Test was expected to return a -1003 but it has not.\n")
 
         except DaosApiError as excep:
@@ -119,11 +123,11 @@ class ObjUpdateBadParam(TestWithServers):
             # lastly try passing no data
             thedata = None
             thedatasize = 0
-            dkey = "this is the dkey"
-            akey = "this is the akey"
+            dkey = b"this is the dkey"
+            akey = b"this is the akey"
 
-            self.container.write_an_obj(thedata, thedatasize, dkey, akey, None,
-                                   None, 2)
+            self.container.write_an_obj(
+                thedata, thedatasize, dkey, akey, None, None, 2)
             self.plog.info("Update with no data worked")
 
         except DaosApiError as excep:

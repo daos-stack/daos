@@ -4,8 +4,16 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#ifndef __DAOS_HDLR_H__
+#define __DAOS_HDLR_H__
+
 enum fs_op {
-	FS_COPY
+	FS_COPY,
+	FS_SET_ATTR,
+	FS_GET_ATTR,
+	FS_RESET_ATTR,
+	FS_RESET_CHUNK_SIZE,
+	FS_RESET_OCLASS,
 };
 
 enum cont_op {
@@ -51,6 +59,11 @@ enum obj_op {
 	OBJ_DUMP
 };
 
+enum sh_op {
+	SH_DAOS,
+	SH_VOS
+};
+
 /* cmd_args_s: consolidated result of parsing command-line arguments
  * for pool, cont, obj commands, much of which is common.
  */
@@ -60,6 +73,7 @@ struct cmd_args_s {
 	enum cont_op		c_op;		/* cont sub-command */
 	enum obj_op		o_op;		/* obj sub-command */
 	enum fs_op		fs_op;		/* filesystem sub-command */
+	enum sh_op		sh_op;		/* DAOS shell sub-command */
 	char			*sysname;	/* --sys-name or --sys */
 	uuid_t			p_uuid;		/* --pool */
 	daos_handle_t		pool;
@@ -86,6 +100,10 @@ struct cmd_args_s {
 	daos_epoch_t		epcrange_end;
 	daos_obj_id_t		oid;
 	daos_prop_t		*props;		/* --properties cont create */
+
+	/* DFS related */
+	char			*dfs_prefix;	/* --dfs-prefix name */
+	char			*dfs_path;	/* --dfs-path file/dir */
 
 	FILE			*ostream;	/* help_hdlr() stream */
 	char			*outfile;	/* --outfile path */
@@ -169,6 +187,8 @@ int pool_autotest_hdlr(struct cmd_args_s *ap);
 
 /* filesystem operations */
 int fs_copy_hdlr(struct cmd_args_s *ap);
+int fs_dfs_hdlr(struct cmd_args_s *ap);
+int parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
 
 /* Container operations */
 int cont_create_hdlr(struct cmd_args_s *ap);
@@ -204,3 +224,5 @@ int cont_list_objs_hdlr(struct cmd_args_s *ap);
  */
 
 int obj_query_hdlr(struct cmd_args_s *ap);
+
+#endif /* __DAOS_HDLR_H__ */

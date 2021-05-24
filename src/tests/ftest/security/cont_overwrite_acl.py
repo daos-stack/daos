@@ -23,7 +23,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
     """
     def setUp(self):
         """Set up each test case."""
-        super(OverwriteContainerACLTest, self).setUp()
+        super().setUp()
         self.acl_filename = "test_overwrite_acl_file.txt"
         self.daos_cmd = self.get_daos_command()
         self.prepare_pool()

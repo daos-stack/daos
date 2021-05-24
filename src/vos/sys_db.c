@@ -110,13 +110,6 @@ db_open_create(struct sys_db *db, bool try_create)
 			rc = daos_errno2der(errno);
 			goto failed;
 		}
-
-		rc = vos_pool_create(vdb->db_file, vdb->db_pool,
-				     SYS_DB_SIZE, 0);
-		if (rc) {
-			D_CRIT("sys pool create error: "DF_RC"\n", DP_RC(rc));
-			goto failed;
-		}
 	} else if (access(vdb->db_file, F_OK) != 0) {
 		D_DEBUG(DB_IO, "%s doesn't exist, bypassing vos_pool_open\n",
 			vdb->db_file);
@@ -128,12 +121,23 @@ db_open_create(struct sys_db *db, bool try_create)
 		goto failed;
 	}
 	D_DEBUG(DB_IO, "Opening %s, try_create=%d\n", vdb->db_file, try_create);
-	rc = vos_pool_open(vdb->db_file, vdb->db_pool, false, &vdb->db_poh);
-	if (rc) {
-		/** The access checks above should ensure the file exists. */
-		if (try_create)
+	if (try_create) {
+		rc = vos_pool_create(vdb->db_file, vdb->db_pool, SYS_DB_SIZE, 0,
+				     0, &vdb->db_poh);
+		if (rc) {
+			D_CRIT("sys pool create error: "DF_RC"\n", DP_RC(rc));
+			goto failed;
+		}
+	} else {
+		rc = vos_pool_open(vdb->db_file, vdb->db_pool, 0, &vdb->db_poh);
+		if (rc) {
+			/**
+			 * The access checks above should ensure the file
+			 * exists.
+			 */
 			D_CRIT("sys pool open error: "DF_RC"\n", DP_RC(rc));
-		goto failed;
+			goto failed;
+		}
 	}
 
 	if (try_create) {
@@ -248,7 +252,7 @@ db_delete(struct sys_db *db, char *table, d_iov_t *key)
 	if (rc == 0) {
 		int creds = 100;
 		/* vos_obj_del_key() wouldn't free space */
-		vos_gc_pool(vdb->db_poh, &creds);
+		vos_gc_pool_tight(vdb->db_poh, &creds);
 	}
 	return rc;
 }

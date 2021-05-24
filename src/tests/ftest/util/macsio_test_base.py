@@ -17,12 +17,12 @@ class MacsioTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a MacsioTestBase object."""
-        super(MacsioTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.macsio = None
 
     def setUp(self):
         """Set up each test case."""
-        super(MacsioTestBase, self).setUp()
+        super().setUp()
         self.macsio = self.get_macsio_command()
 
     def get_macsio_command(self):

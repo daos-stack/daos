@@ -86,10 +86,9 @@ pool_ref_count_test(void **state)
 	int			num = 10;
 
 	uuid_generate(uuid);
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
 	for (i = 0; i < num; i++) {
-		ret = vos_pool_open(arg->fname[0], uuid, false /*small */,
-				    &arg->poh[i]);
+		ret = vos_pool_open(arg->fname[0], uuid, 0, &arg->poh[i]);
 		assert_rc_equal(ret, 0);
 	}
 	for (i = 0; i < num - 1; i++) {
@@ -117,10 +116,10 @@ pool_interop(void **state)
 	uuid_generate(uuid);
 
 	daos_fail_loc_set(FLC_POOL_DF_VER | DAOS_FAIL_ONCE);
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
 	assert_rc_equal(ret, 0);
 
-	ret = vos_pool_open(arg->fname[0], uuid, false, &poh);
+	ret = vos_pool_open(arg->fname[0], uuid, 0, &poh);
 	assert_rc_equal(ret, -DER_DF_INCOMPT);
 
 	ret = vos_pool_destroy(arg->fname[0], uuid);
@@ -134,10 +133,14 @@ pool_ops_run(void **state)
 	struct vp_test_args	*arg = *state;
 	vos_pool_info_t		pinfo;
 
-
 	for (j = 0; j < arg->nfiles; j++) {
 		for (i = 0; i < arg->seq_cnt[j]; i++) {
+			daos_handle_t *poh = NULL;
+
 			switch (arg->ops_seq[j][i]) {
+			case CREAT_OPEN:
+				poh = &arg->poh[j];
+				/* fall through */
 			case CREAT:
 				uuid_generate(arg->uuid[j]);
 				if (arg->fcreate[j]) {
@@ -146,25 +149,24 @@ pool_ops_run(void **state)
 					assert_int_equal(ret, 0);
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
-							      0, 0);
+							      0, 0, 0, poh);
 				} else {
 					ret =
 					vts_alloc_gen_fname(&arg->fname[j]);
 					assert_int_equal(ret, 0);
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
-							      VPOOL_16M, 0);
+							      VPOOL_16M, 0, 0,
+							      poh);
 				}
 				break;
 			case OPEN:
-				ret = vos_pool_open(arg->fname[j],
-						    arg->uuid[j],
-						    false /* small */,
-						    &arg->poh[j]);
+				ret = vos_pool_open(arg->fname[j], arg->uuid[j],
+						    0, &arg->poh[j]);
 				break;
 			case CLOSE:
 				ret = vos_pool_close(arg->poh[j]);
-			break;
+				break;
 			case DESTROY:
 				ret = vos_pool_destroy(arg->fname[j],
 						       arg->uuid[j]);
@@ -388,6 +390,96 @@ pool_all(void **state)
 	return 0;
 }
 
+static int
+pool_create_open_close(void **state)
+{
+	enum vts_ops_type tmp[] = {CREAT_OPEN, CLOSE};
+	int num_ops = sizeof(tmp) / sizeof(enum vts_ops_type);
+
+	pool_set_sequence(state, false, num_ops, tmp);
+	return 0;
+}
+
+static void
+pool_open_excl_test(void **state)
+{
+	int			ret = 0;
+	uuid_t			uuid;
+	struct vp_test_args	*arg = *state;
+
+	uuid_generate(uuid);
+
+	print_message("open EXCL shall fail upon existing create opener\n");
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0,
+			      &arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_open(arg->fname[0], uuid, VOS_POF_EXCL, &arg->poh[1]);
+	assert_rc_equal(ret, -DER_BUSY);
+	ret = vos_pool_close(arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_destroy(arg->fname[0], uuid);
+	assert_rc_equal(ret, 0);
+
+	print_message("open EXCL shall fail upon existing opener\n");
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_open(arg->fname[0], uuid, 0, &arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_open(arg->fname[0], uuid, VOS_POF_EXCL, &arg->poh[1]);
+	assert_rc_equal(ret, -DER_BUSY);
+	ret = vos_pool_close(arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_destroy(arg->fname[0], uuid);
+	assert_rc_equal(ret, 0);
+
+	print_message("open EXCL shall fail upon existing EXCL opener\n");
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_open(arg->fname[0], uuid, VOS_POF_EXCL, &arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_open(arg->fname[0], uuid, VOS_POF_EXCL, &arg->poh[1]);
+	assert_rc_equal(ret, -DER_BUSY);
+	ret = vos_pool_close(arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_destroy(arg->fname[0], uuid);
+	assert_rc_equal(ret, 0);
+
+	print_message("open EXCL shall fail upon existing EXCL create "
+		      "opener\n");
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, VOS_POF_EXCL,
+			      &arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_open(arg->fname[0], uuid, VOS_POF_EXCL, &arg->poh[1]);
+	assert_rc_equal(ret, -DER_BUSY);
+	ret = vos_pool_close(arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_destroy(arg->fname[0], uuid);
+	assert_rc_equal(ret, 0);
+
+	print_message("open shall fail upon existing EXCL opener\n");
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_open(arg->fname[0], uuid, VOS_POF_EXCL, &arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_open(arg->fname[0], uuid, 0, &arg->poh[1]);
+	assert_rc_equal(ret, -DER_BUSY);
+	ret = vos_pool_close(arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_destroy(arg->fname[0], uuid);
+	assert_rc_equal(ret, 0);
+
+	print_message("open shall fail upon existing EXCL create opener\n");
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, VOS_POF_EXCL,
+			      &arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_open(arg->fname[0], uuid, 0, &arg->poh[1]);
+	assert_rc_equal(ret, -DER_BUSY);
+	ret = vos_pool_close(arg->poh[0]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_destroy(arg->fname[0], uuid);
+	assert_rc_equal(ret, 0);
+}
+
 static const struct CMUnitTest pool_tests[] = {
 	{ "VOS1: Create Pool with existing files (File Count no:of cpus)",
 		pool_ops_run, pool_create_exists, pool_unit_teardown},
@@ -407,6 +499,10 @@ static const struct CMUnitTest pool_tests[] = {
 		pool_all_empty_file, pool_unit_teardown},
 	{ "VOS9: Pool all APIs with existing file", pool_ops_run,
 		pool_all, pool_unit_teardown},
+	{ "VOS10: Pool Close after create and open", pool_ops_run,
+		pool_create_open_close, pool_unit_teardown},
+	{ "VOS11: Pool exclusive open", pool_open_excl_test,
+		pool_file_setup, pool_file_destroy},
 };
 
 

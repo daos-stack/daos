@@ -176,6 +176,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	crt_bulk_t			 local_bulk;
 	daos_size_t			 bulk_size;
 	daos_size_t			 input_size;
+	daos_size_t			 local_offset, remote_offset;
 	d_iov_t			*iovs;
 	d_sg_list_t			 sgl;
 	void				*data;
@@ -238,9 +239,10 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		rc = rdb_tx_lookup(tx, path, &key, &iovs[j]);
 
 		if (rc != 0) {
-			D_ERROR("%s: failed to lookup attribute '"DF_KEY
-				"': %d\n",
-				svc->s_name, DP_KEY(&key), rc);
+			D_CDEBUG(rc == -DER_NONEXIST, DB_ANY, DLOG_ERR,
+				 "%s: failed to lookup attribute '"DF_KEY"': "
+				 DF_RC"\n",
+				 svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_iovs;
 		}
 		iovs[j].iov_buf_len = sizes[i];
@@ -259,7 +261,28 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		goto out_iovs;
 
 	rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk, remote_bulk,
-				0, key_length, bulk_size - key_length);
+				0, key_length, count * sizeof(*sizes));
+	if (rc != 0)
+		goto out_iovs;
+
+	local_offset = count * sizeof(*sizes);
+	remote_offset = key_length + count * sizeof(*sizes);
+
+	for (i = 1; i < sgl.sg_nr; i++) {
+		daos_size_t size;
+
+		size = min(sgl.sg_iovs[i].iov_len,
+				       sgl.sg_iovs[i].iov_buf_len);
+		rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
+					remote_bulk, local_offset,
+					remote_offset, size);
+		if (rc != 0)
+			goto out_iovs;
+
+		local_offset += sgl.sg_iovs[i].iov_buf_len;
+		remote_offset += sgl.sg_iovs[i].iov_buf_len;
+	}
+
 	crt_bulk_free(local_bulk);
 	if (rc != 0)
 		goto out_iovs;
@@ -408,7 +431,7 @@ attr_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 		if (i_args->iov_index == i_args->iov_count) {
 			void *ptr;
 
-			D_REALLOC_ARRAY(ptr, i_args->iovs,
+			D_REALLOC_ARRAY(ptr, i_args->iovs, i_args->iov_count,
 					i_args->iov_count * 2);
 			/*
 			 * TODO: Fail or continue transferring

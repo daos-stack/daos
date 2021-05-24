@@ -39,23 +39,26 @@ typedef struct crt_init_options {
 	 */
 	uint32_t	cio_sep_override:1,
 			/**
-			* overrides the value of the environment variable
-			* CRT_CTX_SHARE_ADDR
-			*/
+			 * overrides the value of the environment variable
+			 * CRT_CTX_SHARE_ADDR
+			 */
 			cio_use_sep:1,
 			/** whether or not to inject faults */
 			cio_fault_inject:1,
-			/** whether or not to override credits. When set
-			* overrides CRT_CTX_EP_CREDITS envariable
-			*/
-			cio_use_credits:1;
 			/**
-			* overrides the value of the environment variable
-			* CRT_CTX_NUM
-			*/
+			 * whether or not to override credits. When set
+			 * overrides CRT_CTX_EP_CREDITS envariable
+			 */
+			cio_use_credits:1,
+			/** whether or not to enable per-context sensors */
+			cio_use_sensors:1;
+	/**
+	 * overrides the value of the environment variable
+	 * CRT_CTX_NUM
+	 */
 	int		cio_ctx_max_num;
 
-			/** Used with cio_use_credits to set credit limit */
+	/** Used with cio_use_credits to set credit limit */
 	int		cio_ep_credits;
 } crt_init_options_t;
 

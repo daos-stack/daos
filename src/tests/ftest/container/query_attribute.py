@@ -31,7 +31,7 @@ class ContainerQueryAttributeTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ContainerQueryAttribute object."""
-        super(ContainerQueryAttributeTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.expected_cont_uuid = None
         self.daos_cmd = None
 

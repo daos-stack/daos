@@ -358,9 +358,9 @@ func TestControl_PoolQuery(t *testing.T) {
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
 						Uuid:            common.MockUUID(),
-						Totaltargets:    42,
-						Activetargets:   16,
-						Disabledtargets: 17,
+						TotalTargets:    42,
+						ActiveTargets:   16,
+						DisabledTargets: 17,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,

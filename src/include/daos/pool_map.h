@@ -28,8 +28,6 @@ typedef enum pool_comp_type {
 	PO_COMP_TP_UNKNOWN	= 0,
 	PO_COMP_TP_ROOT		= 1,
 	PO_COMP_TP_RACK		= 10,
-	PO_COMP_TP_BLADE	= 20,
-	PO_COMP_TP_BOARD	= 30,
 	PO_COMP_TP_NODE		= 40,
 	PO_COMP_TP_TARGET	= 50,
 	/* TODO: more types */
@@ -188,7 +186,7 @@ int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
 int gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		int map_version, int ndomains, int nnodes, int ntargets,
-		const int32_t *domains, uuid_t target_uuids[],
+		const uint32_t *domains, uuid_t target_uuids[],
 		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
 		uint32_t dss_tgt_nr);
 
@@ -313,6 +311,12 @@ static inline bool
 pool_target_unavail(struct pool_target *tgt, bool for_reint)
 {
 	return pool_component_unavail(&tgt->ta_comp, for_reint);
+}
+
+static inline bool
+pool_target_avail(struct pool_target *tgt, uint32_t allow_status)
+{
+	return tgt->ta_comp.co_status & allow_status;
 }
 
 /** Check if the target is in PO_COMP_ST_DOWN status */

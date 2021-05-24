@@ -10,6 +10,8 @@
 
 #include <malloc.h>
 #include <sys/mman.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include "crt_internal.h"
 
 struct crt_gdata crt_gdata;
@@ -37,18 +39,17 @@ dump_envariables(void)
 }
 
 /* Workaround for CART-890 */
-static int
+static void
 mem_pin_workaround(void)
 {
-	int crt_rc = 0;
-	int rc = 0;
+	struct rlimit	rlim;
+	int		rc = 0;
 
+	/* Note: mallopt() returns 1 on success */
 	/* Prevent malloc from releasing memory via sbrk syscall */
 	rc = mallopt(M_TRIM_THRESHOLD, -1);
-	if (rc != 1) {
-		D_ERROR("Failed to disable malloc trim: %d\n", errno);
-		D_GOTO(exit, crt_rc = -DER_MISC);
-	}
+	if (rc != 1)
+		D_WARN("Failed to disable malloc trim: %d\n", errno);
 
 	/* Disable fastbins; this option is not available on all systems */
 	rc = mallopt(M_MXFAST, 0);
@@ -56,9 +57,30 @@ mem_pin_workaround(void)
 		D_WARN("Failed to disable malloc fastbins: %d (%s)\n",
 		       errno, strerror(errno));
 
+	rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
+	if (rc != 0) {
+		D_WARN("getrlimit() failed; errno=%d (%s)\n",
+		       errno, strerror(errno));
+		goto exit;
+	}
+
+	if (rlim.rlim_cur == RLIM_INFINITY &&
+	    rlim.rlim_max == RLIM_INFINITY) {
+		D_INFO("Infinite rlimit detected; performing mlockall()\n");
+
+		/* Lock all pages */
+		rc = mlockall(MCL_CURRENT | MCL_FUTURE);
+		if (rc)
+			D_WARN("Failed to mlockall(); errno=%d (%s)\n",
+			       errno, strerror(errno));
+
+	} else {
+		D_INFO("mlockall() skipped\n");
+	}
+
 	D_DEBUG(DB_ALL, "Memory pinning workaround enabled\n");
 exit:
-	return crt_rc;
+	return;
 }
 
 /* first step init - for initializing crt_gdata */
@@ -109,11 +131,8 @@ static int data_init(int server, crt_init_options_t *opt)
 	/* Apply CART-890 workaround for server side only */
 	if (server) {
 		d_getenv_int("CRT_DISABLE_MEM_PIN", &mem_pin_disable);
-		if (mem_pin_disable == 0) {
-			rc = mem_pin_workaround();
-			if (rc != 0)
-				D_GOTO(exit, rc);
-		}
+		if (mem_pin_disable == 0)
+			mem_pin_workaround();
 	}
 
 	timeout = 0;
@@ -190,6 +209,29 @@ static int data_init(int server, crt_init_options_t *opt)
 	if (crt_gdata.cg_sep_mode == false && crt_gdata.cg_ctx_max_num > 1)
 		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
 		       "is not set or set to 0\n");
+
+	/** Enable statistics only for the server side and if requested */
+	if (opt && opt->cio_use_sensors && server) {
+		int	ret;
+
+		/** enable sensors */
+		crt_gdata.cg_use_sensors = true;
+
+		/** set up the global sensors */
+		ret = d_tm_add_metric(&crt_gdata.cg_uri_self, D_TM_COUNTER,
+				      "total number of URI requests for self",
+				      "", "net/uri/lookup_self");
+		if (ret)
+			D_WARN("Failed to create uri self sensor: "DF_RC"\n",
+			       DP_RC(ret));
+
+		ret = d_tm_add_metric(&crt_gdata.cg_uri_other, D_TM_COUNTER,
+				      "total number of URI requests for other "
+				      "ranks", "", "net/uri/lookup_other");
+		if (ret)
+			D_WARN("Failed to create uri other sensor: "DF_RC"\n",
+			       DP_RC(ret));
+	}
 
 	gdata_init_flag = 1;
 exit:
@@ -587,7 +629,7 @@ direct_out:
 	if (rc == 0)
 		d_log_fini(); /* d_log_fini is reference counted */
 	else
-		D_ERROR("crt_finalize failed, rc: %d.\n", rc);
+		D_ERROR("failed, rc: %d.\n", rc);
 
 	return rc;
 }

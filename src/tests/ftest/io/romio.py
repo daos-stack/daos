@@ -1,10 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2019-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__    import print_function
+
 from mpio_test_base import MpiioTests
 
 # pylint: disable=too-many-ancestors
@@ -19,7 +19,7 @@ class Romio(MpiioTests):
         Test ID: DAOS-1994
         Run Romio test provided in mpich package
         Testing various I/O functions provided in romio test suite
-        :avocado: tags=all,mpiio,pr,daily_regression,small,romio
+        :avocado: tags=all,mpiio,pr,daily_regression,small,mpich,romio
         """
         # setting romio parameters
         test_repo = self.params.get("romio_repo", '/run/romio/')

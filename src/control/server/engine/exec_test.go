@@ -95,7 +95,8 @@ func TestRunnerContextExit(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig()
+	cfg := NewConfig().
+		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH")
 	cfg.Index = 9
 
 	runner := NewRunner(log, cfg)
@@ -115,22 +116,32 @@ func TestRunnerContextExit(t *testing.T) {
 
 func TestRunnerNormalExit(t *testing.T) {
 	var numaNode uint = 1
+	var bypass bool = false
 	createFakeBinary(t)
 
 	// set this to control the behavior in TestMain()
 	os.Setenv(testModeVar, "RunnerNormalExit")
-	// verify that user env gets overridden by config
+	// verify that bad user env is scrubbed
+	os.Setenv("FI_VERBS_PREFER_XRC", "1")
+	// verify that allowed user env gets overridden by config
 	os.Setenv("OFI_INTERFACE", "bob0")
+	// verify that allowed user env without a config override is passed through
+	allowedUserEnv := "MOOD"
+	allowedUserVal := "happy"
+	os.Setenv(allowedUserEnv, allowedUserVal)
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
 	cfg := NewConfig().
+		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH",
+			"OFI_INTERFACE", allowedUserEnv).
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
 		WithPinnedNumaNode(&numaNode).
+		WithBypassHealthChk(&bypass).
 		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30)
 	runner := NewRunner(log, cfg)
@@ -153,6 +164,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		"CRT_TIMEOUT=30",
 		"OFI_INTERFACE=qib0",
 		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR",
+		allowedUserEnv + "=" + allowedUserVal,
 	}
 	sort.Strings(env)
 	wantEnv := strings.Join(env, " ")

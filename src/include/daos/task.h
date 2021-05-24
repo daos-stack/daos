@@ -32,6 +32,7 @@ struct daos_task_args {
 
 		/** Pool */
 		daos_pool_connect_t	pool_connect;
+		daos_pool_connect_lbl_t pool_connect_lbl;
 		daos_pool_disconnect_t	pool_disconnect;
 		daos_pool_update_t	pool_update;
 		daos_pool_query_t	pool_query;

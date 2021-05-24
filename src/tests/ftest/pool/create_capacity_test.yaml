@@ -10,7 +10,7 @@ hosts:
   test_clients:
     - client-H
 timeouts:
-  test_create_pool_quantity: 600
+  test_create_pool_quantity: 660
 server_config:
   name: daos_server
   servers:

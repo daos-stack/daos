@@ -12,11 +12,11 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -224,7 +224,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expOut, tc.in); diff != "" {
+			if diff := cmp.Diff(tc.expOut, tc.in, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected req (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -475,18 +475,22 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 		}
 	}
 
+	fdTree, err := mgmtSvc.membership.CompressedFaultDomainTree(0, 2, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := &mgmtpb.PoolCreateReq{
 		Sys:          build.DefaultSystemName,
 		Uuid:         common.MockUUID(),
 		Scmbytes:     100 * humanize.GiByte,
 		Nvmebytes:    10 * humanize.TByte,
-		FaultDomains: mgmtSvc.sysdb.FaultDomainTree().ToProto(),
+		FaultDomains: fdTree,
 	}
 	wantReq := new(mgmtpb.PoolCreateReq)
 	*wantReq = *req
 	wantReq.Numsvcreps = DefaultPoolServiceReps
 
-	_, err := mgmtSvc.PoolCreate(ctx, req)
+	_, err = mgmtSvc.PoolCreate(ctx, req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -726,7 +730,8 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
@@ -745,7 +750,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				if err := proto.Unmarshal(getLastMockCall(tc.mgmtSvc).Body, gotReq); err != nil {
 					t.Fatal(err)
 				}
-				if diff := cmp.Diff(tc.expDrpcReq, gotReq); diff != "" {
+				if diff := cmp.Diff(tc.expDrpcReq, gotReq, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected dRPC call (-want, +got):\n%s\n", diff)
 				}
 			}
@@ -842,7 +847,8 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -934,7 +940,8 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1001,7 +1008,7 @@ func TestListPools_Success(t *testing.T) {
 
 	cmpOpts := common.DefaultCmpOpts()
 	cmpOpts = append(cmpOpts,
-		cmpopts.SortSlices(func(a, b *mgmtpb.ListPoolsResp_Pool) bool {
+		protocmp.SortRepeated(func(a, b *mgmtpb.ListPoolsResp_Pool) bool {
 			return a.GetUuid() < b.GetUuid()
 		}),
 	)
@@ -1446,7 +1453,8 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1512,7 +1520,8 @@ func TestServer_MgmtSvc_PoolResolveID(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1895,7 +1904,8 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 
@@ -1906,7 +1916,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			}
 			tc.expReq.Uuid = tc.req.Uuid
 			gotReq.SvcRanks = nil
-			if diff := cmp.Diff(tc.expReq, gotReq); diff != "" {
+			if diff := cmp.Diff(tc.expReq, gotReq, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected dRPC call (-want, +got):\n%s\n", diff)
 			}
 		})

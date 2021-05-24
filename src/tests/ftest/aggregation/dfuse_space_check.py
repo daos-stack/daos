@@ -18,7 +18,7 @@ class DfuseSpaceCheck(IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DfuseSpaceCheck object."""
-        super(DfuseSpaceCheck, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.space_before = None
         self.block_size = None
 
@@ -62,7 +62,7 @@ class DfuseSpaceCheck(IorTestBase):
         while self.get_nvme_free_space(False) >= self.block_size:
             file_loc = str(self.dfuse.mount_dir.value +
                            "/largefile_{}.txt".format(file_count))
-            write_dd_cmd = u"dd if=/dev/zero of={} bs={} count=1".format(
+            write_dd_cmd = "dd if=/dev/zero of={} bs={} count=1".format(
                 file_loc, self.block_size)
             if 0 in self.execute_cmd(write_dd_cmd, False, False):
                 file_count += 1
@@ -106,15 +106,15 @@ class DfuseSpaceCheck(IorTestBase):
         # create large file and perform write to it so that if goes out of
         # space.
         large_file = str(self.dfuse.mount_dir.value + "/" + "largefile.txt")
-        cmd = u"touch {}".format(large_file)
+        cmd = "touch {}".format(large_file)
         self.execute_cmd(cmd)
         dd_count = ((self.space_before / self.block_size) + 1)
-        write_dd_cmd = u"dd if=/dev/zero of={} bs={} count={}".format(
+        write_dd_cmd = "dd if=/dev/zero of={} bs={} count={}".format(
             large_file, self.block_size, dd_count)
         self.execute_cmd(write_dd_cmd, False)
 
         # store free space after write and remove the file
-        rm_large_file = u"rm -rf {}".format(large_file)
+        rm_large_file = "rm -rf {}".format(large_file)
         self.execute_cmd(rm_large_file)
 
         # Check if aggregation is complete.
@@ -125,7 +125,7 @@ class DfuseSpaceCheck(IorTestBase):
         file_count1 = self.write_multiple_files()
 
         # remove all the small files created above.
-        self.execute_cmd(u"rm -rf {}/*".format(self.dfuse.mount_dir.value))
+        self.execute_cmd("rm -rf {}/*".format(self.dfuse.mount_dir.value))
 
         # Check for aggregation to complete after file removal.
         self.check_aggregation()

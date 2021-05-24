@@ -15,6 +15,33 @@
 
 #define	CSUM_NO_CHUNK -1
 
+/*
+ * Tag used in debug logs to easily find important checksum info, making it
+ * easier to trace checksums through the log files
+ */
+#define CSTAG "[CSUM]"
+
+#define DF_C_IOD CSTAG"IOD {akey: "DF_KEY", type: %s, nr: %d, size: %lu} CSUM"
+#define DP_C_IOD(i) DP_KEY(&(i)->iod_name), \
+	(i)->iod_type == DAOS_IOD_SINGLE ? "SINGLE" : \
+	(i)->iod_type == DAOS_IOD_ARRAY ? "ARRAY" : "UNKNOWN", \
+	(i)->iod_nr, (i)->iod_size
+
+#define DF_C_UOID_DKEY CSTAG"OBJ ("DF_UOID", "DF_KEY")"
+#define DP_C_UOID_DKEY(oid, dkey) DP_UOID(oid), DP_KEY(dkey)
+
+#define DF_C_OID_DKEY CSTAG"OBJ ("DF_OID", "DF_KEY")"
+#define DP_C_OID_DKEY(oid, dkey) DP_OID(oid), DP_KEY(dkey)
+
+#define DF_LAYOUT "{bytes: %lu, nr: %d, even_dist: %s, cell_align: %s}"
+#define DP_LAYOUT(l) (l).cs_bytes, (l).cs_nr, DP_BOOL((l).cs_even_dist), \
+			DP_BOOL((l).cs_cell_align)
+#define	DF_CI_BUF "%"PRIu64
+#define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
+#define	DF_CI "{nr: %d, len: %d, first_csum: %lu, csum_buf_len: %d}"
+#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci), (ci).cs_buf_len
+#define DF_RANGE "{lo: %lu, hi: %lu, nr: %lu}"
+#define DP_RANGE(r) (r).dcr_lo, (r).dcr_hi, (r).dcr_nr
 /**
  * -----------------------------------------------------------
  * DAOS Checksummer
@@ -357,7 +384,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  *				distributed to multiple targets. When it is NULL
  *				it means replica object, or EC object located
  *				in single target.
- * @param[out]	p_iods_csums	pointer that will reference the
+ * @param[out]	p_cds		pointer that will reference the
  *				the memory allocated
  * @return			number of iod_csums allocated, or
  *				negative if error
@@ -366,7 +393,7 @@ int
 daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			      uint32_t nr, bool akey_only,
 			      struct dcs_layout *singv_los,
-			      struct dcs_iod_csums **p_iods_csums);
+			      struct dcs_iod_csums **p_cds);
 
 /**
  * Using the information from the iods and csums packed into the csum_iov
@@ -462,10 +489,6 @@ ci_buf2uint64(const uint8_t *buf, uint16_t len);
 uint64_t
 ci2csum(struct dcs_csum_info ci);
 
-#define	DF_CI_BUF "%"PRIu64
-#define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
-#define	DF_CI "{nr: %d, len: %d, first_csum: %lu, csum_buf_len: %d}"
-#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci), (ci).cs_buf_len
 
 /**
  * return the number of bytes needed to serialize a dcs_csum_info into a

@@ -7,11 +7,9 @@
 package system
 
 import (
-	"net"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -96,39 +94,6 @@ func TestSystem_Member_MarshalUnmarshalJSON(t *testing.T) {
 	}
 }
 
-func TestSystem_Member_RankFaultDomain(t *testing.T) {
-	for name, tc := range map[string]struct {
-		rank        Rank
-		faultDomain *FaultDomain
-		expResult   *FaultDomain
-	}{
-		"nil fault domain": {
-			expResult: MustCreateFaultDomain("rank0"),
-		},
-		"empty fault domain": {
-			rank:        Rank(2),
-			faultDomain: MustCreateFaultDomain(),
-			expResult:   MustCreateFaultDomain("rank2"),
-		},
-		"existing fault domain": {
-			rank:        Rank(1),
-			faultDomain: MustCreateFaultDomain("one", "two"),
-			expResult:   MustCreateFaultDomain("one", "two", "rank1"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			m := NewMember(tc.rank, uuid.New().String(), "dontcare", &net.TCPAddr{}, MemberStateJoined).
-				WithFaultDomain(tc.faultDomain)
-
-			result := m.RankFaultDomain()
-
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
 func TestSystem_Member_Convert(t *testing.T) {
 	membersIn := Members{MockMember(t, 1, MemberStateJoined)}
 	membersOut := Members{}
@@ -146,8 +111,8 @@ func TestSystem_MemberResult_Convert(t *testing.T) {
 	}
 	mrsOut := MemberResults{}
 
-	AssertTrue(t, mrsIn.HasErrors(), "")
-	AssertFalse(t, mrsOut.HasErrors(), "")
+	CmpErr(t, errors.New("failed ranks 1-2"), mrsIn.Errors())
+	CmpErr(t, nil, mrsOut.Errors())
 
 	if err := convert.Types(mrsIn, &mrsOut); err != nil {
 		t.Fatal(err)

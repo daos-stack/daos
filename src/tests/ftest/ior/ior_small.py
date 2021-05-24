@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
 (C) Copyright 2018-2021 Intel Corporation.
 
@@ -34,7 +34,9 @@ class IorSmall(IorTestBase):
             All above three cases to be run with single client and
                 multiple client processes in two separate nodes.
 
-        :avocado: tags=all,pr,daily_regression,hw,large,daosio,iorsmall
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daosio,checksum,iorsmall,mpich
         :avocado: tags=DAOS_5610
         """
         results = []

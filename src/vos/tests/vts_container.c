@@ -75,7 +75,7 @@ co_ops_run(void **state)
 				fail_msg("Unknown Ops!\n");
 				break;
 			}
-			assert_int_equal(ret, 0);
+			assert_rc_equal(ret, 0);
 		}
 	}
 	D_PRINT("Finished all create and discards\n");
@@ -105,7 +105,7 @@ co_unit_teardown(void **state)
 	for (i = 0; i < VCT_CONTAINERS; i++) {
 		if (!uuid_is_null(arg->uuid[i].uuid)) {
 			ret = vos_cont_destroy(arg->poh, arg->uuid[i].uuid);
-			assert_int_equal(ret, 0);
+			assert_rc_equal(ret, 0);
 			uuid_clear(arg->uuid[i].uuid);
 		}
 	}
@@ -120,12 +120,12 @@ co_ref_count_setup(void **state)
 	int			i, ret = 0;
 
 	ret = vos_cont_create(arg->poh, arg->uuid[0].uuid);
-	assert_int_equal(ret, 0);
+	assert_rc_equal(ret, 0);
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
 		ret = vos_cont_open(arg->poh, arg->uuid[0].uuid,
 				    &arg->coh[i]);
-		assert_int_equal(ret, 0);
+		assert_rc_equal(ret, 0);
 	}
 
 	return 0;
@@ -139,15 +139,15 @@ co_ref_count_test(void **state)
 	int			i, ret;
 
 	ret = vos_cont_destroy(arg->poh, arg->uuid[0].uuid);
-	assert_int_equal(ret, -DER_BUSY);
+	assert_rc_equal(ret, -DER_BUSY);
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
 		ret = vos_cont_close(arg->coh[i]);
-		assert_int_equal(ret, 0);
+		assert_rc_equal(ret, 0);
 	}
 
 	ret = vos_cont_destroy(arg->poh, arg->uuid[0].uuid);
-	assert_int_equal(ret, 0);
+	assert_rc_equal(ret, 0);
 }
 
 static int
@@ -161,11 +161,9 @@ setup(void **state)
 
 	uuid_generate_time_safe(test_arg->pool_uuid);
 	vts_pool_fallocate(&test_arg->fname);
-	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0, 0);
-	assert_int_equal(ret, 0);
-	ret = vos_pool_open(test_arg->fname, test_arg->pool_uuid, false,
-			    &test_arg->poh);
-	assert_int_equal(ret, 0);
+	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0, 0, 0,
+			      &test_arg->poh);
+	assert_rc_equal(ret, 0);
 	*state = test_arg;
 	return 0;
 }
@@ -183,11 +181,11 @@ teardown(void **state)
 	}
 
 	ret = vos_pool_close(test_arg->poh);
-	assert_int_equal(ret, 0);
+	assert_rc_equal(ret, 0);
 
 	D_ASSERT(test_arg->fname != NULL);
 	ret = vos_pool_destroy(test_arg->fname, test_arg->pool_uuid);
-	assert_int_equal(ret, 0);
+	assert_rc_equal(ret, 0);
 
 	if (vts_file_exists(test_arg->fname))
 		remove(test_arg->fname);

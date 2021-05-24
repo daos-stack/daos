@@ -8,7 +8,6 @@
 from avocado import fail_on
 from collections import defaultdict
 from apricot import TestWithServers
-from general_utils import get_host_data
 from command_utils import CommandFailure
 
 
@@ -41,12 +40,12 @@ class ControlTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ControlTestBase object."""
-        super(ControlTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg = None
 
     def setUp(self):
         """Set up each test case."""
-        super(ControlTestBase, self).setUp()
+        super().setUp()
         self.dmg = self.get_dmg_command()
 
     @fail_on(CommandFailure)

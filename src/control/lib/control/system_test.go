@@ -8,7 +8,6 @@ package control
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -19,7 +18,6 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -659,6 +657,39 @@ func TestControl_SystemQuery(t *testing.T) {
 	}
 }
 
+func TestControl_SystemQueryRespErrors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		absentHosts string
+		absentRanks string
+		expErr      error
+	}{
+		"no errors": {},
+		"absent hosts": {
+			absentHosts: "foo-[1-23]",
+			expErr:      errors.New("non-existent hosts foo-[1-23]"),
+		},
+		"absent ranks": {
+			absentRanks: "1-23",
+			expErr:      errors.New("non-existent ranks 1-23"),
+		},
+		"both absent hosts and ranks": {
+			absentHosts: "foo-[1-23]",
+			absentRanks: "1-23",
+			expErr:      errors.New("non-existent hosts foo-[1-23], non-existent ranks 1-23"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := new(SystemQueryResp)
+			ahs := hostlist.MustCreateSet(tc.absentHosts)
+			resp.AbsentHosts.ReplaceSet(ahs)
+			ars := system.MustCreateRankSet(tc.absentRanks)
+			resp.AbsentRanks.ReplaceSet(ars)
+
+			common.CmpErr(t, tc.expErr, resp.Errors())
+		})
+	}
+}
+
 func TestControl_SystemStart(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStartReq)
@@ -768,6 +799,64 @@ func TestControl_SystemStart(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp.AbsentRanks.String(), gotResp.AbsentRanks.String()); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_SystemStartRespErrors(t *testing.T) {
+	successResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, nil, system.MemberStateReady),
+		system.NewMemberResult(0, nil, system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+	failedResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, errors.New("fail"), system.MemberStateReady),
+		system.NewMemberResult(0, errors.New("failed"), system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+
+	for name, tc := range map[string]struct {
+		absentHosts string
+		absentRanks string
+		results     system.MemberResults
+		expErr      error
+	}{
+		"no errors": {
+			results: successResults,
+		},
+		"absent hosts": {
+			absentHosts: "foo-[1-23]",
+			results:     successResults,
+			expErr:      errors.New("non-existent hosts foo-[1-23]"),
+		},
+		"absent ranks": {
+			absentRanks: "1-23",
+			results:     successResults,
+			expErr:      errors.New("non-existent ranks 1-23"),
+		},
+		"failed ranks": {
+			results: failedResults,
+			expErr:  errors.New("check results for failed ranks 0,2"),
+		},
+		"absent hosts and ranks with failed ranks": {
+			absentHosts: "foo-[1-23]",
+			absentRanks: "1-23",
+			results:     failedResults,
+			expErr: errors.New("non-existent hosts foo-[1-23], " +
+				"non-existent ranks 1-23, check results for failed ranks 0,2"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := new(SystemStartResp)
+			ahs := hostlist.MustCreateSet(tc.absentHosts)
+			resp.AbsentHosts.ReplaceSet(ahs)
+			ars := system.MustCreateRankSet(tc.absentRanks)
+			resp.AbsentRanks.ReplaceSet(ars)
+			resp.Results = tc.results
+
+			common.CmpErr(t, tc.expErr, resp.Errors())
 		})
 	}
 }
@@ -885,148 +974,297 @@ func TestControl_SystemStop(t *testing.T) {
 	}
 }
 
-func TestControl_SystemReformat(t *testing.T) {
+func TestControl_SystemStopRespErrors(t *testing.T) {
+	successResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, nil, system.MemberStateReady),
+		system.NewMemberResult(0, nil, system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+	failedResults := system.MemberResults{
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, errors.New("fail"), system.MemberStateReady),
+		system.NewMemberResult(0, errors.New("failed"), system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
+	}
+
 	for name, tc := range map[string]struct {
-		req     *SystemResetFormatReq
+		absentHosts string
+		absentRanks string
+		results     system.MemberResults
+		expErr      error
+	}{
+		"no errors": {
+			results: successResults,
+		},
+		"absent hosts": {
+			absentHosts: "foo-[1-23]",
+			results:     successResults,
+			expErr:      errors.New("non-existent hosts foo-[1-23]"),
+		},
+		"absent ranks": {
+			absentRanks: "1-23",
+			results:     successResults,
+			expErr:      errors.New("non-existent ranks 1-23"),
+		},
+		"failed ranks": {
+			results: failedResults,
+			expErr:  errors.New("check results for failed ranks 0,2"),
+		},
+		"absent hosts and ranks with failed ranks": {
+			absentHosts: "foo-[1-23]",
+			absentRanks: "1-23",
+			results:     failedResults,
+			expErr: errors.New("non-existent hosts foo-[1-23], " +
+				"non-existent ranks 1-23, check results for failed ranks 0,2"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := new(SystemStopResp)
+			ahs := hostlist.MustCreateSet(tc.absentHosts)
+			resp.AbsentHosts.ReplaceSet(ahs)
+			ars := system.MustCreateRankSet(tc.absentRanks)
+			resp.AbsentRanks.ReplaceSet(ars)
+			resp.Results = tc.results
+
+			common.CmpErr(t, tc.expErr, resp.Errors())
+		})
+	}
+}
+
+func TestDmg_System_checkSystemErase(t *testing.T) {
+	for name, tc := range map[string]struct {
+		uErr, expErr error
+		members      []*mgmtpb.SystemMember
+	}{
+		"failed system query": {
+			uErr:   errors.New("system failed"),
+			expErr: errors.New("system failed"),
+		},
+		"not replica": {
+			uErr: &system.ErrNotReplica{},
+		},
+		"raft unavailable": {
+			uErr: system.ErrRaftUnavail,
+		},
+		"empty membership": {},
+		"rank not stopped": {
+			members: []*mgmtpb.SystemMember{
+				{Rank: 0, State: system.MemberStateStopped.String()},
+				{Rank: 1, State: system.MemberStateJoined.String()},
+			},
+			expErr: errors.New("system erase requires the following 1 rank to be stopped: 1"),
+		},
+		"ranks not stopped": {
+			members: []*mgmtpb.SystemMember{
+				{Rank: 0, State: system.MemberStateJoined.String()},
+				{Rank: 1, State: system.MemberStateStopped.String()},
+				{Rank: 5, State: system.MemberStateJoined.String()},
+				{Rank: 2, State: system.MemberStateJoined.String()},
+				{Rank: 4, State: system.MemberStateJoined.String()},
+				{Rank: 3, State: system.MemberStateJoined.String()},
+				{Rank: 6, State: system.MemberStateStopped.String()},
+			},
+			expErr: errors.New("system erase requires the following 5 ranks to be stopped: 0,2-5"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError: tc.uErr,
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.SystemQueryResp{Members: tc.members}),
+			})
+
+			err := checkSystemErase(context.Background(), mi)
+			common.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestControl_SystemErase(t *testing.T) {
+	member1 := system.MockMember(t, 1, system.MemberStateAwaitFormat)
+	member3 := system.MockMember(t, 3, system.MemberStateAwaitFormat)
+	member3.Addr = member1.Addr
+	member2 := system.MockMember(t, 2, system.MemberStateAwaitFormat)
+	member4 := system.MockMember(t, 4, system.MemberStateAwaitFormat)
+	member4.Addr = member2.Addr
+	member5 := system.MockMember(t, 5, system.MemberStateAwaitFormat)
+	member6 := system.MockMember(t, 6, system.MemberStateAwaitFormat)
+	member6.Addr = member5.Addr
+	member7 := system.MockMember(t, 7, system.MemberStateAwaitFormat)
+	member8 := system.MockMember(t, 8, system.MemberStateAwaitFormat)
+	member8.Addr = member7.Addr
+	mockMemberResult := func(m *system.Member, action string, err error, state system.MemberState) *system.MemberResult {
+		mr := system.NewMemberResult(m.Rank, err, state, action)
+		mr.Addr = m.Addr.String()
+		return mr
+	}
+
+	for name, tc := range map[string]struct {
+		req     *SystemEraseReq
 		uErr    error
 		uResp   *UnaryResponse
-		expResp *StorageFormatResp
+		expResp *SystemEraseResp
 		expErr  error
 	}{
 		"nil req": {
 			req:    nil,
-			expErr: errors.New("nil *control.SystemResetFormatReq request"),
+			expErr: errors.New("nil *control.SystemEraseReq request"),
 		},
 		"local failure": {
-			req:    new(SystemResetFormatReq),
+			req:    new(SystemEraseReq),
 			uErr:   errors.New("local failed"),
 			expErr: errors.New("local failed"),
 		},
 		"remote failure": {
-			req:    new(SystemResetFormatReq),
+			req:    new(SystemEraseReq),
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
 			expErr: errors.New("remote failed"),
 		},
-		"no results": {
-			req: new(SystemResetFormatReq),
-			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.SystemResetFormatResp{
-					Results: []*sharedpb.RankResult{},
-				},
-			),
-			// indicates SystemReformat internally proceeded to invoke StorageFormat RPCs
-			// which is expected when no host errors are returned
-			expErr: errors.New("unpack"),
+		"remote unavailable": {
+			req:    new(SystemEraseReq),
+			uResp:  MockMSResponse("host1", system.ErrRaftUnavail, nil),
+			expErr: system.ErrRaftUnavail,
 		},
 		"single host dual rank": {
-			req: new(SystemResetFormatReq),
+			req: new(SystemEraseReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.SystemResetFormatResp{
+				&mgmtpb.SystemEraseResp{
 					Results: []*sharedpb.RankResult{
 						{
-							Rank: 1, Action: "reset format",
+							Rank: member1.Rank.Uint32(), Action: "system erase",
 							State: system.MemberStateAwaitFormat.String(),
-							Addr:  "10.0.0.1:10001",
+							Addr:  member1.Addr.String(),
 						},
 						{
-							Rank: 2, Action: "reset format",
+							Rank: member2.Rank.Uint32(), Action: "system erase",
 							State: system.MemberStateAwaitFormat.String(),
-							Addr:  "10.0.0.1:10001",
+							Addr:  member2.Addr.String(),
 						},
 					},
 				},
 			),
-			// indicates SystemReformat internally proceeded to invoke StorageFormat RPCs
-			// which is expected when no host errors are returned
-			expErr: errors.New("unpack"),
+			expResp: &SystemEraseResp{
+				Results: system.MemberResults{
+					mockMemberResult(member1, "system erase", nil, system.MemberStateAwaitFormat),
+					mockMemberResult(member2, "system erase", nil, system.MemberStateAwaitFormat),
+				},
+			},
 		},
 		"single host dual rank one failed": {
-			req: new(SystemResetFormatReq),
+			req: new(SystemEraseReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.SystemResetFormatResp{
+				&mgmtpb.SystemEraseResp{
 					Results: []*sharedpb.RankResult{
 						{
-							Rank: 1, Action: "reset format",
+							Rank: member1.Rank.Uint32(), Action: "system erase",
 							State:   system.MemberStateStopped.String(),
-							Addr:    "10.0.0.1:10001",
-							Errored: true, Msg: "didn't start",
+							Addr:    member1.Addr.String(),
+							Errored: true, Msg: "erase failed",
 						},
 						{
-							Rank: 2, Action: "reset format",
+							Rank: member2.Rank.Uint32(), Action: "system erase",
 							State: system.MemberStateAwaitFormat.String(),
-							Addr:  "10.0.0.1:10001",
+							Addr:  member2.Addr.String(),
 						},
 					},
 				},
 			),
-			expResp: &StorageFormatResp{
-				HostErrorsResp: HostErrorsResp{
-					HostErrors: mockHostErrorsMap(t, &MockHostError{
-						"10.0.0.1:10001", "1 rank failed: didn't start",
-					}),
+			expResp: &SystemEraseResp{
+				HostErrorsResp: MockHostErrorsResp(t,
+					&MockHostError{
+						Hosts: member1.Addr.String(),
+						Error: "1 rank failed: erase failed",
+					},
+				),
+				Results: system.MemberResults{
+					mockMemberResult(member1, "system erase", errors.New("erase failed"), system.MemberStateStopped),
+					mockMemberResult(member2, "system erase", nil, system.MemberStateAwaitFormat),
 				},
 			},
 		},
 		"multiple hosts dual rank mixed results": {
-			req: new(SystemResetFormatReq),
+			req: new(SystemEraseReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.SystemResetFormatResp{
+				&mgmtpb.SystemEraseResp{
 					Results: []*sharedpb.RankResult{
 						{
-							Rank: 1, Action: "reset format",
+							Rank: member1.Rank.Uint32(), Action: "system erase",
 							State:   system.MemberStateStopped.String(),
-							Addr:    "10.0.0.1:10001",
-							Errored: true, Msg: "didn't start",
+							Addr:    member1.Addr.String(),
+							Errored: true, Msg: "erase failed",
 						},
 						{
-							Rank: 2, Action: "reset format",
+							Rank: member2.Rank.Uint32(), Action: "system erase",
 							State: system.MemberStateAwaitFormat.String(),
-							Addr:  "10.0.0.1:10001",
+							Addr:  member2.Addr.String(),
 						},
 						{
-							Rank: 3, Action: "reset format",
+							Rank: member3.Rank.Uint32(), Action: "system erase",
 							State: system.MemberStateAwaitFormat.String(),
-							Addr:  "10.0.0.2:10001",
+							Addr:  member3.Addr.String(),
 						},
 						{
-							Rank: 4, Action: "reset format",
+							Rank: member4.Rank.Uint32(), Action: "system erase",
 							State: system.MemberStateAwaitFormat.String(),
-							Addr:  "10.0.0.2:10001",
+							Addr:  member4.Addr.String(),
 						},
 						{
-							Rank: 5, Action: "reset format",
+							Rank: member5.Rank.Uint32(), Action: "system erase",
 							State:   system.MemberStateStopped.String(),
-							Addr:    "10.0.0.3:10001",
-							Errored: true, Msg: "didn't start",
+							Addr:    member5.Addr.String(),
+							Errored: true, Msg: "erase failed",
 						},
 						{
-							Rank: 6, Action: "reset format",
+							Rank: member6.Rank.Uint32(), Action: "system erase",
 							State:   system.MemberStateErrored.String(),
-							Addr:    "10.0.0.3:10001",
+							Addr:    member6.Addr.String(),
 							Errored: true, Msg: "something bad",
 						},
 						{
-							Rank: 7, Action: "reset format",
+							Rank: member7.Rank.Uint32(), Action: "system erase",
 							State:   system.MemberStateStopped.String(),
-							Addr:    "10.0.0.4:10001",
-							Errored: true, Msg: "didn't start",
+							Addr:    member7.Addr.String(),
+							Errored: true, Msg: "erase failed",
 						},
 						{
-							Rank: 8, Action: "reset format",
+							Rank: member8.Rank.Uint32(), Action: "system erase",
 							State:   system.MemberStateErrored.String(),
-							Addr:    "10.0.0.4:10001",
-							Errored: true, Msg: "didn't start",
+							Addr:    member8.Addr.String(),
+							Errored: true, Msg: "erase failed",
 						},
 					},
 				},
 			),
-			expResp: &StorageFormatResp{
-				HostErrorsResp: HostErrorsResp{
-					HostErrors: mockHostErrorsMap(t,
-						&MockHostError{"10.0.0.4:10001", "2 ranks failed: didn't start"},
-						&MockHostError{"10.0.0.[1,3]:10001", "1 rank failed: didn't start"},
-						&MockHostError{"10.0.0.3:10001", "1 rank failed: something bad"},
-					),
+			expResp: &SystemEraseResp{
+				HostErrorsResp: MockHostErrorsResp(t,
+					&MockHostError{
+						Hosts: hostlist.MustCreateSet(
+							member1.Addr.String() + "," + member5.Addr.String(),
+						).String(),
+						Error: "1 rank failed: erase failed",
+					},
+					&MockHostError{
+						Hosts: member7.Addr.String(),
+						Error: "2 ranks failed: erase failed",
+					},
+					&MockHostError{
+						Hosts: member5.Addr.String(),
+						Error: "1 rank failed: something bad",
+					},
+				),
+				Results: system.MemberResults{
+					mockMemberResult(member1, "system erase", errors.New("erase failed"), system.MemberStateStopped),
+					mockMemberResult(member2, "system erase", nil, system.MemberStateAwaitFormat),
+					mockMemberResult(member3, "system erase", nil, system.MemberStateAwaitFormat),
+					mockMemberResult(member4, "system erase", nil, system.MemberStateAwaitFormat),
+					mockMemberResult(member5, "system erase", errors.New("erase failed"), system.MemberStateStopped),
+					mockMemberResult(member6, "system erase", errors.New("something bad"), system.MemberStateErrored),
+					mockMemberResult(member7, "system erase", errors.New("erase failed"), system.MemberStateStopped),
+					mockMemberResult(member8, "system erase", errors.New("erase failed"), system.MemberStateErrored),
 				},
 			},
 		},
@@ -1040,7 +1278,7 @@ func TestControl_SystemReformat(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemReformat(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemErase(context.TODO(), mi, tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1049,165 +1287,6 @@ func TestControl_SystemReformat(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
-		})
-	}
-}
-
-func TestControl_SystemNotify(t *testing.T) {
-	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
-
-	for name, tc := range map[string]struct {
-		req     *SystemNotifyReq
-		uErr    error
-		uResp   *UnaryResponse
-		expResp *SystemNotifyResp
-		expErr  error
-	}{
-		"nil req": {
-			req:    nil,
-			expErr: errors.New("nil request"),
-		},
-		"nil event": {
-			req:    &SystemNotifyReq{},
-			expErr: errors.New("nil event in request"),
-		},
-		"zero sequence number": {
-			req:    &SystemNotifyReq{Event: rasEventRankDown},
-			expErr: errors.New("invalid sequence"),
-		},
-		"local failure": {
-			req: &SystemNotifyReq{
-				Event:    rasEventRankDown,
-				Sequence: 1,
-			},
-			uErr:   errors.New("local failed"),
-			expErr: errors.New("local failed"),
-		},
-		"remote failure": {
-			req: &SystemNotifyReq{
-				Event:    rasEventRankDown,
-				Sequence: 1,
-			},
-			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
-			expErr: errors.New("remote failed"),
-		},
-		"empty response": {
-			req: &SystemNotifyReq{
-				Event:    rasEventRankDown,
-				Sequence: 1,
-			},
-			uResp:   MockMSResponse("10.0.0.1:10001", nil, &sharedpb.ClusterEventResp{}),
-			expResp: &SystemNotifyResp{},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			rpcClient := NewMockInvoker(log, &MockInvokerConfig{
-				UnaryError:    tc.uErr,
-				UnaryResponse: tc.uResp,
-			})
-
-			gotResp, gotErr := SystemNotify(context.TODO(), rpcClient, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
-func TestControl_EventForwarder_OnEvent(t *testing.T) {
-	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
-	rasEventRankDownNF := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
-		WithForwardable(false)
-
-	for name, tc := range map[string]struct {
-		aps            []string
-		event          *events.RASEvent
-		nilClient      bool
-		expInvokeCount int
-	}{
-		"nil event": {
-			event: nil,
-		},
-		"missing access points": {
-			event: rasEventRankDown,
-		},
-		"successful forward": {
-			event:          rasEventRankDown,
-			aps:            []string{"192.168.1.1"},
-			expInvokeCount: 2,
-		},
-		"skip non-forwardable event": {
-			event: rasEventRankDownNF,
-			aps:   []string{"192.168.1.1"},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			expNextSeq := uint64(tc.expInvokeCount + 1)
-
-			mi := NewMockInvoker(log, &MockInvokerConfig{})
-			if tc.nilClient {
-				mi = nil
-			}
-
-			callCount := tc.expInvokeCount
-			if callCount == 0 {
-				callCount++ // call at least once
-			}
-
-			ef := NewEventForwarder(mi, tc.aps)
-			for i := 0; i < callCount; i++ {
-				ef.OnEvent(context.TODO(), tc.event)
-			}
-
-			common.AssertEqual(t, tc.expInvokeCount, mi.invokeCount,
-				"unexpected number of rpc calls")
-			common.AssertEqual(t, expNextSeq, <-ef.seq,
-				"unexpected next forwarding sequence")
-		})
-	}
-}
-
-func TestControl_EventLogger_OnEvent(t *testing.T) {
-	rasEventRankDown := events.NewRankDownEvent("foo", 0, 0, common.NormalExit)
-	rasEventRankDownFwded := events.NewRankDownEvent("foo", 0, 0, common.NormalExit).
-		WithForwarded(true)
-
-	for name, tc := range map[string]struct {
-		event        *events.RASEvent
-		expShouldLog bool
-	}{
-		"nil event": {
-			event: nil,
-		},
-		"not forwarded event gets logged": {
-			event:        rasEventRankDown,
-			expShouldLog: true,
-		},
-		"forwarded event is not logged": {
-			event: rasEventRankDownFwded,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			el := NewEventLogger(log)
-			el.OnEvent(context.TODO(), tc.event)
-
-			common.AssertEqual(t, tc.expShouldLog,
-				strings.Contains(buf.String(), "RAS "),
-				"unexpected log output")
 		})
 	}
 }

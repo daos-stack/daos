@@ -45,7 +45,6 @@ dma_alloc_chunk(unsigned int cnt)
 	return chunk;
 }
 
-
 static void
 dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
 {
@@ -64,16 +63,13 @@ dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
 	}
 }
 
-static int
+int
 dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt)
 {
 	struct bio_dma_chunk *chunk;
 	int i, rc = 0;
 
-	if ((buf->bdb_tot_cnt + cnt) > bio_chk_cnt_max) {
-		D_ERROR("Exceeding per-xstream DMA buffer size\n");
-		return -DER_OVERFLOW;
-	}
+	D_ASSERT((buf->bdb_tot_cnt + cnt) <= bio_chk_cnt_max);
 
 	for (i = 0; i < cnt; i++) {
 		chunk = dma_alloc_chunk(bio_chk_sz);
@@ -94,10 +90,11 @@ dma_buffer_destroy(struct bio_dma_buffer *buf)
 {
 	D_ASSERT(d_list_empty(&buf->bdb_used_list));
 	D_ASSERT(buf->bdb_active_iods == 0);
+
+	bulk_cache_destroy(buf);
 	dma_buffer_shrink(buf, buf->bdb_tot_cnt);
 
 	D_ASSERT(buf->bdb_tot_cnt == 0);
-	buf->bdb_cur_chk = NULL;
 	ABT_mutex_free(&buf->bdb_mutex);
 	ABT_cond_free(&buf->bdb_wait_iods);
 
@@ -116,7 +113,6 @@ dma_buffer_create(unsigned int init_cnt)
 
 	D_INIT_LIST_HEAD(&buf->bdb_idle_list);
 	D_INIT_LIST_HEAD(&buf->bdb_used_list);
-	buf->bdb_cur_chk = NULL;
 	buf->bdb_tot_cnt = 0;
 	buf->bdb_active_iods = 0;
 
@@ -129,6 +125,14 @@ dma_buffer_create(unsigned int init_cnt)
 	rc = ABT_cond_create(&buf->bdb_wait_iods);
 	if (rc != ABT_SUCCESS) {
 		ABT_mutex_free(&buf->bdb_mutex);
+		D_FREE(buf);
+		return NULL;
+	}
+
+	rc = bulk_cache_create(buf);
+	if (rc != 0) {
+		ABT_mutex_free(&buf->bdb_mutex);
+		ABT_cond_free(&buf->bdb_wait_iods);
 		D_FREE(buf);
 		return NULL;
 	}
@@ -188,16 +192,11 @@ bio_iod_free(struct bio_desc *biod)
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
+
+	if (biod->bd_bulk_hdls != NULL)
+		D_FREE(biod->bd_bulk_hdls);
+
 	D_FREE(biod);
-}
-
-static inline struct bio_dma_buffer *
-iod_dma_buf(struct bio_desc *biod)
-{
-	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
-	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt->bxc_dma_buf);
-
-	return biod->bd_ctxt->bic_xs_ctxt->bxc_dma_buf;
 }
 
 static inline bool
@@ -217,8 +216,13 @@ iod_release_buffer(struct bio_desc *biod)
 	struct bio_rsrvd_dma *rsrvd_dma = &biod->bd_rsrvd;
 	int i;
 
-	if (rsrvd_dma->brd_chk_max == 0) {
+	/* Release bulk handles */
+	bulk_iod_release(biod);
+
+	/* No reserved DMA regions */
+	if (rsrvd_dma->brd_rg_cnt == 0) {
 		D_ASSERT(rsrvd_dma->brd_rg_max == 0);
+		D_ASSERT(rsrvd_dma->brd_chk_max == 0);
 		biod->bd_buffer_prep = 0;
 		return;
 	}
@@ -228,25 +232,39 @@ iod_release_buffer(struct bio_desc *biod)
 	rsrvd_dma->brd_regions = NULL;
 	rsrvd_dma->brd_rg_max = rsrvd_dma->brd_rg_cnt = 0;
 
-	bdb = iod_dma_buf(biod);
+	/* All DMA chunks are used through cached bulk handle */
+	if (rsrvd_dma->brd_chk_cnt == 0) {
+		D_ASSERT(rsrvd_dma->brd_dma_chks == NULL);
+		D_ASSERT(rsrvd_dma->brd_chk_max == 0);
+		biod->bd_buffer_prep = 0;
+		return;
+	}
+
+	/* Release the DMA chunks not from cached bulk handle */
 	D_ASSERT(rsrvd_dma->brd_dma_chks != NULL);
+	bdb = iod_dma_buf(biod);
 	for (i = 0; i < rsrvd_dma->brd_chk_cnt; i++) {
 		struct bio_dma_chunk *chunk = rsrvd_dma->brd_dma_chks[i];
 
 		D_ASSERT(chunk != NULL);
 		D_ASSERT(chunk->bdc_ref > 0);
+		D_ASSERT(chunk->bdc_type == biod->bd_chk_type);
+		D_ASSERT(chunk->bdc_bulk_grp == NULL);
 		chunk->bdc_ref--;
 
-		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u huge:%d\n",
-			chunk, chunk->bdc_ptr, chunk->bdc_pg_idx,
-			chunk->bdc_ref, dma_chunk_is_huge(chunk));
+		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u huge:%d "
+			"type:%u\n", chunk, chunk->bdc_ptr, chunk->bdc_pg_idx,
+			chunk->bdc_ref, dma_chunk_is_huge(chunk),
+			chunk->bdc_type);
 
 		if (dma_chunk_is_huge(chunk)) {
 			dma_free_chunk(chunk);
 		} else if (chunk->bdc_ref == 0) {
 			chunk->bdc_pg_idx = 0;
-			if (chunk == bdb->bdb_cur_chk)
-				bdb->bdb_cur_chk = NULL;
+			D_ASSERT(bdb->bdb_used_cnt[chunk->bdc_type] > 0);
+			bdb->bdb_used_cnt[chunk->bdc_type] -= 1;
+			if (chunk == bdb->bdb_cur_chk[chunk->bdc_type])
+				bdb->bdb_cur_chk[chunk->bdc_type] = NULL;
 			d_list_move_tail(&chunk->bdc_link, &bdb->bdb_idle_list);
 		}
 		rsrvd_dma->brd_dma_chks[i] = NULL;
@@ -272,17 +290,91 @@ struct bio_copy_args {
 };
 
 static int
+copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
+{
+	struct bio_copy_args	*arg = data;
+	d_sg_list_t		*sgl;
+	void			*addr = bio_iov2req_buf(biov);
+	ssize_t			 size = bio_iov2req_len(biov);
+	uint16_t		 media = bio_iov2media(biov);
+
+	D_ASSERT(arg->ca_sgl_idx < arg->ca_sgl_cnt);
+	sgl = &arg->ca_sgls[arg->ca_sgl_idx];
+
+	while (arg->ca_iov_idx < sgl->sg_nr) {
+		d_iov_t *iov;
+		ssize_t nob, buf_len;
+
+		iov = &sgl->sg_iovs[arg->ca_iov_idx];
+		buf_len = biod->bd_update ? iov->iov_len : iov->iov_buf_len;
+
+		if (buf_len <= arg->ca_iov_off) {
+			D_ERROR("Invalid iov[%d] "DF_U64"/"DF_U64" %d\n",
+				arg->ca_iov_idx, arg->ca_iov_off,
+				buf_len, biod->bd_update);
+			return -DER_INVAL;
+		}
+
+		if (iov->iov_buf == NULL) {
+			D_ERROR("Invalid iov[%d], iov_buf is NULL\n",
+				arg->ca_iov_idx);
+			return -DER_INVAL;
+		}
+
+		nob = min(size, buf_len - arg->ca_iov_off);
+		if (addr != NULL) {
+			D_DEBUG(DB_TRACE, "bio copy %p size %zd\n",
+				addr, nob);
+			bio_memcpy(biod, media, addr, iov->iov_buf +
+					arg->ca_iov_off, nob);
+			addr += nob;
+		} else {
+			/* fetch on hole */
+			D_ASSERT(!biod->bd_update);
+		}
+
+		arg->ca_iov_off += nob;
+		if (!biod->bd_update) {
+			/* the first population for fetch */
+			if (arg->ca_iov_off == nob)
+				sgl->sg_nr_out++;
+
+			iov->iov_len = arg->ca_iov_off;
+			/* consumed an iov, move to the next */
+			if (iov->iov_len == iov->iov_buf_len) {
+				arg->ca_iov_off = 0;
+				arg->ca_iov_idx++;
+			}
+		} else {
+			/* consumed an iov, move to the next */
+			if (arg->ca_iov_off == iov->iov_len) {
+				arg->ca_iov_off = 0;
+				arg->ca_iov_idx++;
+			}
+		}
+
+		size -= nob;
+		if (size == 0)
+			return 0;
+	}
+
+	D_DEBUG(DB_TRACE, "Consumed all iovs, "DF_U64" bytes left\n", size);
+	return -DER_REC2BIG;
+}
+
+static int
 iterate_biov(struct bio_desc *biod,
-	     int (*cb_fn)(struct bio_desc *, struct bio_iov *,
-			  struct bio_copy_args *),
-	     struct bio_copy_args *arg)
+	     int (*cb_fn)(struct bio_desc *, struct bio_iov *, void *data),
+	     void *data)
 {
 	int i, j, rc = 0;
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++) {
 		struct bio_sglist *bsgl = &biod->bd_sgls[i];
 
-		if (arg != NULL) {
+		if (data != NULL && cb_fn == copy_one) {
+			struct bio_copy_args *arg = data;
+
 			D_ASSERT(i < arg->ca_sgl_cnt);
 			arg->ca_sgl_idx = i;
 			arg->ca_iov_idx = 0;
@@ -300,7 +392,7 @@ iterate_biov(struct bio_desc *biod,
 			if (bio_iov2req_len(biov) == 0)
 				continue;
 
-			rc = cb_fn(biod, biov, arg);
+			rc = cb_fn(biod, biov, data);
 			if (rc)
 				break;
 		}
@@ -348,34 +440,33 @@ iod_last_region(struct bio_desc *biod)
 	return (cnt != 0) ? &biod->bd_rsrvd.brd_regions[cnt - 1] : NULL;
 }
 
-static struct bio_dma_chunk *
-chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_desc *biod)
+static int
+chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_dma_chunk **chk_ptr)
 {
 	struct bio_dma_chunk *chk;
 	int rc;
 
 	if (d_list_empty(&bdb->bdb_idle_list)) {
-		if (bdb->bdb_tot_cnt == bio_chk_cnt_max) {
-			D_CRIT("Maximum per-xstream DMA buffer isn't big "
-			       "enough (chk_sz:%u chk_cnt:%u iods:%u) to "
-			       "sustain the workload.\n", bio_chk_sz,
-			       bio_chk_cnt_max, bdb->bdb_active_iods);
-
-			biod->bd_retry = 1;
-			return NULL;
+		/* Try grow buffer first */
+		if (bdb->bdb_tot_cnt < bio_chk_cnt_max) {
+			rc = dma_buffer_grow(bdb, 1);
+			if (rc != 0)
+				return rc;
 		}
 
-		rc = dma_buffer_grow(bdb, 1);
-		if (rc != 0)
-			return NULL;
+		/* Try to reclaim an unused chunk from bulk groups */
+		rc = bulk_reclaim_chunk(bdb, NULL);
+		if (rc)
+			return rc;
 	}
 
 	D_ASSERT(!d_list_empty(&bdb->bdb_idle_list));
 	chk = d_list_entry(bdb->bdb_idle_list.next, struct bio_dma_chunk,
 			   bdc_link);
 	d_list_move_tail(&chk->bdc_link, &bdb->bdb_used_list);
+	*chk_ptr = chk;
 
-	return chk;
+	return 0;
 }
 
 static int
@@ -411,7 +502,7 @@ iod_add_chunk(struct bio_desc *biod, struct bio_dma_chunk *chk)
 	return 0;
 }
 
-static int
+int
 iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 	       unsigned int chk_pg_idx, uint64_t off, uint64_t end)
 {
@@ -448,19 +539,19 @@ iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 }
 
 /* Convert offset of @biov into memory pointer */
-static int
-dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
-	    struct bio_copy_args *arg)
+int
+dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 {
 	struct bio_rsrvd_region *last_rg;
 	struct bio_dma_buffer *bdb;
-	struct bio_dma_chunk *chk = NULL;
+	struct bio_dma_chunk *chk = NULL, *cur_chk;
 	uint64_t off, end;
 	unsigned int pg_cnt, pg_off, chk_pg_idx;
 	int rc;
 
 	D_ASSERT(arg == NULL);
 	D_ASSERT(biov && bio_iov2raw_len(biov) != 0);
+	D_ASSERT(biod && biod->bd_chk_type < BIO_CHK_TYPE_MAX);
 
 	if (bio_addr_is_hole(&biov->bi_addr)) {
 		bio_iov_set_raw_buf(biov, NULL);
@@ -480,6 +571,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 	end = bio_iov2raw_off(biov) + bio_iov2raw_len(biov);
 	pg_cnt = ((end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
 			(off >> BIO_DMA_PAGE_SHIFT);
+	D_ASSERT(pg_cnt > 0);
 	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
 
 	/*
@@ -495,6 +587,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 		if (chk == NULL)
 			return -DER_NOMEM;
 
+		chk->bdc_type = biod->bd_chk_type;
 		rc = iod_add_chunk(biod, chk);
 		if (rc) {
 			dma_free_chunk(chk);
@@ -520,6 +613,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 			last_rg->brr_off, last_rg->brr_end);
 
 		chk = last_rg->brr_chk;
+		D_ASSERT(biod->bd_chk_type == chk->bdc_type);
 		chk_pg_idx = last_rg->brr_pg_idx;
 		D_ASSERT(chk_pg_idx < bio_chk_sz);
 
@@ -544,6 +638,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 
 	/* Try to reserve from the last DMA chunk in io descriptor */
 	if (chk != NULL) {
+		D_ASSERT(biod->bd_chk_type == chk->bdc_type);
 		chk_pg_idx = chk->bdc_pg_idx;
 		bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx,
 							pg_cnt, pg_off));
@@ -559,8 +654,9 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 	 * per-xstream DMA buffer. It could be different with the last chunk
 	 * in io descriptor, because dma_map_one() may yield in the future.
 	 */
-	if (bdb->bdb_cur_chk != NULL && bdb->bdb_cur_chk != chk) {
-		chk = bdb->bdb_cur_chk;
+	cur_chk = bdb->bdb_cur_chk[biod->bd_chk_type];
+	if (cur_chk != NULL && cur_chk != chk) {
+		chk = cur_chk;
 		chk_pg_idx = chk->bdc_pg_idx;
 		bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx,
 							pg_cnt, pg_off));
@@ -575,11 +671,25 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 	 * Switch to another idle chunk, if there isn't any idle chunk
 	 * available, grow buffer.
 	 */
-	chk = chunk_get_idle(bdb, biod);
-	if (chk == NULL)
-		return -DER_OVERFLOW;
+	rc = chunk_get_idle(bdb, &chk);
+	if (rc) {
+		if (rc == -DER_AGAIN) {
+			D_ERROR("DMA buffer isn't sufficient to sustain "
+				"current IO workload\n");
+			biod->bd_retry = 1;
+		} else {
+			D_ERROR("Failed to get idle chunk. "DF_RC"\n",
+				DP_RC(rc));
+		}
 
-	bdb->bdb_cur_chk = chk;
+		dump_dma_info(bdb);
+		return rc;
+	}
+
+	D_ASSERT(chk != NULL);
+	chk->bdc_type = biod->bd_chk_type;
+	bdb->bdb_cur_chk[chk->bdc_type] = chk;
+	bdb->bdb_used_cnt[chk->bdc_type] += 1;
 	chk_pg_idx = chk->bdc_pg_idx;
 
 	D_ASSERT(chk_pg_idx == 0);
@@ -756,8 +866,11 @@ dma_rw(struct bio_desc *biod, bool prep)
 	}
 
 	if (xs_ctxt->bxc_tgt_id == -1) {
+		int	rc;
+
 		D_DEBUG(DB_IO, "Self poll completion, blob:%p\n", blob);
-		xs_poll_completion(xs_ctxt, &biod->bd_inflights);
+		rc = xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
+		D_ASSERT(rc == 0);
 	} else {
 		biod->bd_dma_issued = 1;
 		if (biod->bd_inflights != 0)
@@ -798,79 +911,6 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 	}
 }
 
-static int
-copy_one(struct bio_desc *biod, struct bio_iov *biov,
-	 struct bio_copy_args *arg)
-{
-	d_sg_list_t	*sgl;
-	void		*addr = bio_iov2req_buf(biov);
-	ssize_t		 size = bio_iov2req_len(biov);
-	uint16_t	 media = bio_iov2media(biov);
-
-	D_ASSERT(arg->ca_sgl_idx < arg->ca_sgl_cnt);
-	sgl = &arg->ca_sgls[arg->ca_sgl_idx];
-
-	while (arg->ca_iov_idx < sgl->sg_nr) {
-		d_iov_t *iov;
-		ssize_t nob, buf_len;
-
-		iov = &sgl->sg_iovs[arg->ca_iov_idx];
-		buf_len = biod->bd_update ? iov->iov_len : iov->iov_buf_len;
-
-		if (buf_len <= arg->ca_iov_off) {
-			D_ERROR("Invalid iov[%d] "DF_U64"/"DF_U64" %d\n",
-				arg->ca_iov_idx, arg->ca_iov_off,
-				buf_len, biod->bd_update);
-			return -DER_INVAL;
-		}
-
-		if (iov->iov_buf == NULL) {
-			D_ERROR("Invalid iov[%d], iov_buf is NULL\n",
-				arg->ca_iov_idx);
-			return -DER_INVAL;
-		}
-
-		nob = min(size, buf_len - arg->ca_iov_off);
-		if (addr != NULL) {
-			D_DEBUG(DB_TRACE, "bio copy %p size %zd\n",
-				addr, nob);
-			bio_memcpy(biod, media, addr, iov->iov_buf +
-					arg->ca_iov_off, nob);
-			addr += nob;
-		} else {
-			/* fetch on hole */
-			D_ASSERT(!biod->bd_update);
-		}
-
-		arg->ca_iov_off += nob;
-		if (!biod->bd_update) {
-			/* the first population for fetch */
-			if (arg->ca_iov_off == nob)
-				sgl->sg_nr_out++;
-
-			iov->iov_len = arg->ca_iov_off;
-			/* consumed an iov, move to the next */
-			if (iov->iov_len == iov->iov_buf_len) {
-				arg->ca_iov_off = 0;
-				arg->ca_iov_idx++;
-			}
-		} else {
-			/* consumed an iov, move to the next */
-			if (arg->ca_iov_off == iov->iov_len) {
-				arg->ca_iov_off = 0;
-				arg->ca_iov_idx++;
-			}
-		}
-
-		size -= nob;
-		if (size == 0)
-			return 0;
-	}
-
-	D_DEBUG(DB_TRACE, "Consumed all iovs, "DF_U64" bytes left\n", size);
-	return -DER_REC2BIG;
-}
-
 static void
 dma_drop_iod(struct bio_dma_buffer *bdb)
 {
@@ -883,16 +923,26 @@ dma_drop_iod(struct bio_dma_buffer *bdb)
 }
 
 int
-bio_iod_prep(struct bio_desc *biod)
+bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
+	     unsigned int bulk_perm)
 {
-	struct bio_dma_buffer *bdb;
-	int rc, retry_cnt = 0;
+	struct bio_bulk_args	 bulk_arg;
+	struct bio_dma_buffer	*bdb;
+	void			*arg = NULL;
+	int			 rc, retry_cnt = 0;
 
 	if (biod->bd_buffer_prep)
 		return -DER_INVAL;
 
+	biod->bd_chk_type = type;
+
+	if (bulk_ctxt != NULL && !(daos_io_bypass & IOBP_SRV_BULK_CACHE)) {
+		bulk_arg.ba_bulk_ctxt = bulk_ctxt;
+		bulk_arg.ba_bulk_perm = bulk_perm;
+		arg = &bulk_arg;
+	}
 retry:
-	rc = iterate_biov(biod, dma_map_one, NULL);
+	rc = iterate_biov(biod, arg ? bulk_map_one : dma_map_one, arg);
 	if (rc) {
 		/*
 		 * To avoid deadlock, held buffers need be released
@@ -995,8 +1045,7 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 }
 
 static int
-flush_one(struct bio_desc *biod, struct bio_iov *biov,
-	  struct bio_copy_args *arg)
+flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 {
 	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 
@@ -1055,7 +1104,7 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 	bsgl->bs_nr_out = bsgl->bs_nr;
 
 	/* map the biov to DMA safe buffer, fill DMA buffer if read operation */
-	rc = bio_iod_prep(biod);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc)
 		goto out;
 

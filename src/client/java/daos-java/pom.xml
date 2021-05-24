@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.daos</groupId>
     <artifactId>daos-java-root</artifactId>
-    <version>1.2.0-SNAPSHOT</version>
+    <version>1.2.1-SNAPSHOT</version>
   </parent>
 
   <groupId>io.daos</groupId>
@@ -45,7 +45,7 @@
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-buffer</artifactId>
-      <version>4.1.45.Final</version>
+      <version>4.1.59.Final</version>
     </dependency>
     <dependency>
       <groupId>com.google.code.findbugs</groupId>
@@ -84,6 +84,17 @@
             <arg>${project.basedir}/src/main/native/include</arg>
           </compilerArgs>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>test-jar</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -160,7 +171,7 @@
                   <arg value="-I/usr/local/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
-                  <arg value="-I${daos.install.path}/include/"/>
+                  <arg value="-I${sl-prefix}/include/"/>
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/daos_jni_common.c"/>
                   <arg value="-o${native.build.path}/daos_jni_common.o"/>
@@ -175,7 +186,7 @@
                   <arg value="-I/usr/local/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
-                  <arg value="-I${daos.install.path}/include/"/>
+                  <arg value="-I${sl-prefix}/include/"/>
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/io_daos_DaosClient.c"/>
                   <arg value="-o${native.build.path}/io_daos_DaosClient.o"/>
@@ -269,7 +280,7 @@
         <artifactId>maven-shade-plugin</artifactId>
         <executions>
           <execution>
-            <id>shade-protobuf3</id>
+            <id>shade-protobuf3-netty4</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>
@@ -293,14 +304,13 @@
               <artifactSet>
                 <excludes>
                   <exclude>org.slf4j:slf4j-api</exclude>
-                  <exclude>org.apache.logging.log4j:log4j-slf4j-impl</exclude>
-                  <exclude>org.apache.logging.log4j:log4j-core</exclude>
+                  <exclude>org.apache.logging.log4j:*</exclude>
                   <exclude>commons-lang:commons-lang</exclude>
                   <exclude>com.google.code.findbugs:jsr305</exclude>
                   <exclude>org.javassist:javassist</exclude>
                 </excludes>
               </artifactSet>
-              <finalName>${artifactId}-${version}-proto3-netty4-shaded</finalName>
+              <finalName>${artifactId}-${version}-protobuf3-netty4-shaded</finalName>
             </configuration>
           </execution>
           <execution>
@@ -343,9 +353,9 @@
             <configuration>
               <artifacts>
                 <artifact>
-                  <file>target/${artifactId}-${version}-proto3-netty4-shaded.jar</file>
+                  <file>target/${artifactId}-${version}-protobuf3-netty4-shaded.jar</file>
                   <type>jar</type>
-                  <classifier>proto3-netty4-shaded</classifier>
+                  <classifier>protobuf3-netty4-shaded</classifier>
                 </artifact>
                 <artifact>
                   <file>target/${artifactId}-${version}-shaded.jar</file>

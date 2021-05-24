@@ -16,13 +16,11 @@ server_config:
   servers:
     targets: 8
 pool:
-  createmode:
-    mode: 511
-  createset:
-    name: daos_server
-  createsize:
-    scm_size: 16777216
+  mode: 511
+  name: daos_server
+  scm_size: 16777216
   control_method: dmg
+  pool_query_timeout: 30
 testparams:
   ranks:
     rank_to_kill: 0

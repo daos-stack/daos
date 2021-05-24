@@ -709,6 +709,7 @@ expect_drpc_list_cont_resp_with_containers(Drpc__Response *resp,
 		uuid_unparse(exp_cont[i].pci_uuid, exp_uuid);
 		assert_string_equal(cont_resp->containers[i]->uuid, exp_uuid);
 	}
+	mgmt__list_cont_resp__free_unpacked(cont_resp, NULL);
 }
 
 static void
@@ -1113,9 +1114,9 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	assert_non_null(pq_resp);
 	assert_int_equal(pq_resp->status, 0);
 	assert_string_equal(pq_resp->uuid, TEST_UUID);
-	assert_int_equal(pq_resp->totaltargets, exp_info->pi_ntargets);
-	assert_int_equal(pq_resp->disabledtargets, exp_info->pi_ndisabled);
-	assert_int_equal(pq_resp->activetargets,
+	assert_int_equal(pq_resp->total_targets, exp_info->pi_ntargets);
+	assert_int_equal(pq_resp->disabled_targets, exp_info->pi_ndisabled);
+	assert_int_equal(pq_resp->active_targets,
 			 exp_info->pi_space.ps_ntargets);
 
 	assert_non_null(pq_resp->scm);

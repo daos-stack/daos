@@ -1,5 +1,4 @@
 """Build DAOS"""
-import sys
 import os
 import platform
 import subprocess
@@ -15,8 +14,10 @@ try:
 except NameError:
     pass
 
-sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
+from prereq_tools import PreReqComponent
 import daos_build
+from prereq_tools import PreReqComponent
+
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -37,20 +38,24 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
-def run_checks(env):
+def run_checks(env, p):
     """Run all configure time checks"""
     if GetOption('help') or GetOption('clean'):
         return
     cenv = env.Clone()
     cenv.Append(CFLAGS='-Werror')
+    daos_build.clear_icc_env(cenv)
     if cenv.get("COMPILER") == 'icc':
         cenv.Replace(CC='gcc', CXX='g++')
     config = Configure(cenv)
 
     if config.CheckHeader('stdatomic.h'):
+        config.Finish()
         env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
+    else:
+        config.Finish()
+        p.require(env, 'openpa', headers_only=True)
 
-    config.Finish()
 
 def get_version():
     """ Read version from VERSION file """
@@ -59,7 +64,7 @@ def get_version():
 
 API_VERSION_MAJOR = "1"
 API_VERSION_MINOR = "2"
-API_VERSION_FIX = "0"
+API_VERSION_FIX = "1"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
 
@@ -166,8 +171,6 @@ def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
 
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
-    prereqs.define('readline', libs=['readline', 'history'],
-                   package='readline')
     reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
             'uuid', 'crypto', 'fuse', 'protobufc', 'json-c', 'lz4']
     if not is_platform_arm():
@@ -178,13 +181,15 @@ def scons(): # pylint: disable=too-many-locals
     """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
         try:
+            # pylint: disable=import-outside-toplevel
             import pygit2
             import github
             import yaml
+            # pylint: enable=import-outside-toplevel
         except ImportError:
             print("You need yaml, pygit2 and pygithub python modules to "
                   "create releases")
-            exit(1)
+            Exit(1)
 
         variables = Variables()
 
@@ -205,7 +210,7 @@ def scons(): # pylint: disable=too-many-locals
             tag = env['RELEASE']
         except KeyError:
             print("Usage: scons RELEASE=x.y.z release")
-            exit(1)
+            Exit(1)
 
         dash = tag.find('-')    # pylint: disable=no-member
         if dash > 0:
@@ -218,7 +223,7 @@ def scons(): # pylint: disable=too-many-locals
             while answer not in ["y", "n", ""]:
                 answer = input(question).lower().strip()
             if answer != 'y':
-                exit(1)
+                Exit(1)
 
             version = tag
 
@@ -231,7 +236,7 @@ def scons(): # pylint: disable=too-many-locals
                 print("You need to install hub (from the hub RPM on EL7) to "
                       "and run it at least once to create an authorization "
                       "token in order to create releases")
-                exit(1)
+                Exit(1)
             raise
 
         # create a branch for the PR
@@ -245,7 +250,7 @@ def scons(): # pylint: disable=too-many-locals
             print("Branch {}/{} is not a valid branch\n"
                   "See https://github.com/{}/daos/branches".format(
                       remote_name, base_branch, org_name))
-            exit(1)
+            Exit(1)
 
         # older pygit2 didn't have AlreadyExistsError
         try:
@@ -259,7 +264,7 @@ def scons(): # pylint: disable=too-many-locals
             print("Branch {} exists locally already.\n"
                   "You need to delete it or rename it to try again.".format(
                       branch))
-            exit(1)
+            Exit(1)
 
         # and check it out
         print("Checking out branch for the PR...")
@@ -269,7 +274,7 @@ def scons(): # pylint: disable=too-many-locals
         if not update_rpm_version(version, tag):
             print("Branch has been left in the created state.  You will have "
                   "to clean it up manually.")
-            exit(1)
+            Exit(1)
 
         print("Updating the VERSION and TAG files...")
         with open("VERSION", "w") as version_file:
@@ -330,12 +335,14 @@ def scons(): # pylint: disable=too-many-locals
         # and push it
         print("Pushing the changes to GitHub...")
         remote = repo.remotes[remote_name]
+        # pylint: disable=no-member
         try:
             remote.push(['refs/heads/{}'.format(branch)],
                         callbacks=MyCallbacks())
         except pygit2.GitError as excpt:
             print("Error pushing branch: {}".format(excpt))
-            exit(1)
+            Exit(1)
+        # pylint: enable=no-member
 
         print("Creating the PR...")
         # now create a PR for it
@@ -361,9 +368,7 @@ def scons(): # pylint: disable=too-many-locals
 
         print("Done.")
 
-        exit(0)
-
-    from prereq_tools import PreReqComponent
+        Exit(0)
 
     env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
@@ -379,7 +384,7 @@ def scons(): # pylint: disable=too-many-locals
         daos_build.load_mpi_path(env)
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
-        env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
+        env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
 
     AddOption('--deps-only',
               dest='deps_only',
@@ -387,15 +392,22 @@ def scons(): # pylint: disable=too-many-locals
               default=False,
               help='Download and build dependencies only, do not build daos')
 
-    run_checks(env)
+    if env['CC'] == 'clang':
+        il_env = env.Clone()
+        il_env['CC'] = 'gcc'
+        run_checks(env, prereqs)
+        run_checks(il_env, prereqs)
+    else:
+        run_checks(env, prereqs)
+        il_env = env.Clone()
+
+    prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
+    opts.Save(opts_file, env)
 
     res = GetOption('deps_only')
     if res:
         print('Exiting because deps-only was set')
         Exit(0)
-
-    prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
-    opts.Save(opts_file, env)
 
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
@@ -403,7 +415,7 @@ def scons(): # pylint: disable=too-many-locals
     platform_arm = is_platform_arm()
     daos_version = get_version()
     # Export() is handled specially by pylint so do not merge these two lines.
-    Export('daos_version', 'API_VERSION', 'env', 'prereqs')
+    Export('daos_version', 'API_VERSION', 'env', 'il_env', 'prereqs')
     Export('platform_arm', 'conf_dir')
 
     if env['PLATFORM'] == 'darwin':
@@ -427,7 +439,7 @@ def scons(): # pylint: disable=too-many-locals
 
     env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
-                ['utils/sl/env_modules.py'])
+                ['site_scons/env_modules.py'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/',
                 ['ftest.sh'])
     api_version = env.Command("%s/API_VERSION" % build_prefix,

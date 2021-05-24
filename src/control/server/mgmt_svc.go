@@ -7,10 +7,11 @@
 package server
 
 import (
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -21,6 +22,7 @@ import (
 // mgmtSvc implements (the Go portion of) Management Service, satisfying
 // mgmtpb.MgmtSvcServer.
 type mgmtSvc struct {
+	mgmtpb.UnimplementedMgmtSvcServer
 	log              logging.Logger
 	harness          *EngineHarness
 	membership       *system.Membership // if MS leader, system membership list
@@ -29,6 +31,7 @@ type mgmtSvc struct {
 	events           *events.PubSub
 	clientNetworkCfg *config.ClientNetworkCfg
 	joinReqs         joinReqChan
+	groupUpdateReqs  chan struct{}
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
@@ -41,6 +44,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c co
 		events:           p,
 		clientNetworkCfg: new(config.ClientNetworkCfg),
 		joinReqs:         make(joinReqChan),
+		groupUpdateReqs:  make(chan struct{}),
 	}
 }
 

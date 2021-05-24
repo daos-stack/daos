@@ -181,7 +181,7 @@ ilog_log_add(struct ilog_context *lctx, struct ilog_id *id)
 		return rc;
 	}
 
-	D_DEBUG(DB_TRACE, "Registered ilog="DF_X64" epoch="DF_X64" tx_id=%d\n",
+	D_DEBUG(DB_TRACE, "Registered ilog="DF_X64" epoch="DF_X64" lid=%d\n",
 		lctx->ic_root_off, id->id_epoch, id->id_tx_id);
 
 	return 0;
@@ -206,7 +206,7 @@ ilog_log_del(struct ilog_context *lctx, const struct ilog_id *id,
 	}
 
 	D_DEBUG(DB_TRACE, "%s ilog="DF_X64" epoch="DF_X64
-		" tx_id=%d\n", deregister ? "Deregistered" : "Removed",
+		" lid=%d\n", deregister ? "Deregistered" : "Removed",
 		lctx->ic_root_off, id->id_epoch, id->id_tx_id);
 
 	return 0;
@@ -489,13 +489,15 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root)
 	return rc;
 }
 
-#define ILOG_ASSERT_VALID(root_df)				\
-	do {							\
-		struct ilog_root	*__root;		\
-								\
-		__root = (struct ilog_root *)(root_df);		\
-		D_ASSERT((__root != NULL) &&			\
-			 ILOG_MAGIC_VALID(__root->lr_magic));	\
+#define ILOG_ASSERT_VALID(root_df)					\
+	do {								\
+		struct ilog_root	*_root;				\
+									\
+		_root = (struct ilog_root *)(root_df);			\
+		D_ASSERTF((_root != NULL) &&				\
+			  ILOG_MAGIC_VALID(_root->lr_magic),		\
+			  "Invalid ilog root detected %p magic=%#x\n",	\
+			  _root, _root == NULL ? 0 : _root->lr_magic);	\
 	} while (0)
 
 int
@@ -1465,6 +1467,7 @@ struct agg_arg {
 	const struct ilog_entry		*aa_prior_punch;
 	daos_epoch_t			 aa_punched;
 	bool				 aa_discard;
+	uint16_t			 aa_punched_minor;
 };
 
 enum {
@@ -1475,26 +1478,47 @@ enum {
 	AGG_RC_ABORT,
 };
 
+static bool
+entry_punched(const struct ilog_entry *entry, const struct agg_arg *agg_arg)
+{
+	uint16_t	minor_epc = MAX(entry->ie_id.id_punch_minor_eph,
+					entry->ie_id.id_update_minor_eph);
+
+	if (entry->ie_id.id_epoch > agg_arg->aa_punched)
+		return false;
+
+	if (entry->ie_id.id_epoch < agg_arg->aa_punched)
+		return true;
+
+	return minor_epc <= agg_arg->aa_punched_minor;
+
+}
+
 static int
 check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 {
-	int	rc;
+	int		rc;
+	bool		parent_punched = false;
+	uint16_t	minor_epc = MAX(entry->ie_id.id_punch_minor_eph,
+					entry->ie_id.id_update_minor_eph);
 
-	D_DEBUG(DB_TRACE, "Entry "DF_X64" punch=%s prev="DF_X64
+	D_DEBUG(DB_TRACE, "Entry "DF_X64".%d punch=%s prev="DF_X64
 		" prior_punch="DF_X64"\n", entry->ie_id.id_epoch,
-		ilog_is_punch(entry) ? "yes" : "no",
+		minor_epc, ilog_is_punch(entry) ? "yes" : "no",
 		agg_arg->aa_prev ? agg_arg->aa_prev->ie_id.id_epoch : 0,
 		agg_arg->aa_prior_punch ?
 		agg_arg->aa_prior_punch->ie_id.id_epoch : 0);
+
+	if (entry->ie_id.id_epoch > agg_arg->aa_epr->epr_hi)
+		D_GOTO(done, rc = AGG_RC_DONE);
 
 	/* Abort ilog aggregation on hitting any uncommitted entry */
 	if (entry->ie_status == ILOG_UNCOMMITTED)
 		D_GOTO(done, rc = AGG_RC_ABORT);
 
-	if (entry->ie_id.id_epoch > agg_arg->aa_epr->epr_hi)
-		D_GOTO(done, rc = AGG_RC_DONE);
+	parent_punched = entry_punched(entry, agg_arg);
 	if (entry->ie_id.id_epoch < agg_arg->aa_epr->epr_lo) {
-		if (entry->ie_id.id_epoch <= agg_arg->aa_punched) {
+		if (parent_punched) {
 			/* Skip entries outside of the range and
 			 * punched by the parent
 			 */
@@ -1514,7 +1538,7 @@ check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 	D_ASSERT(entry->ie_status != ILOG_UNCOMMITTED);
 
 	if (agg_arg->aa_discard || entry->ie_status == ILOG_REMOVED ||
-	    agg_arg->aa_punched >= entry->ie_id.id_epoch) {
+	    parent_punched) {
 		/* Remove stale entry or punched entry */
 		D_GOTO(done, rc = AGG_RC_REMOVE);
 	}
@@ -1525,7 +1549,7 @@ check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 
 		if (!punch) {
 			/* punched by outer level */
-			punch = prev->ie_id.id_epoch <= agg_arg->aa_punched;
+			punch = entry_punched(prev, agg_arg);
 		}
 		if (ilog_is_punch(entry) == punch) {
 			/* Remove redundant entry */
@@ -1560,7 +1584,8 @@ done:
 int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
-	       bool discard, daos_epoch_t punched, struct ilog_entries *entries)
+	       bool discard, daos_epoch_t punched_major, uint16_t punched_minor,
+	       struct ilog_entries *entries)
 {
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
 	struct ilog_context	*lctx;
@@ -1576,11 +1601,11 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 
 	D_ASSERT(epr != NULL);
-	D_ASSERT(punched <= epr->epr_hi);
+	D_ASSERT(punched_major <= epr->epr_hi);
 
 	D_DEBUG(DB_TRACE, "%s incarnation log: epr: "DF_X64"-"DF_X64" punched="
-		DF_X64"\n", discard ? "Discard" : "Aggregate", epr->epr_lo,
-		epr->epr_hi, punched);
+		DF_X64".%d\n", discard ? "Discard" : "Aggregate", epr->epr_lo,
+		epr->epr_hi, punched_major, punched_minor);
 
 	/* This can potentially be optimized but using ilog_fetch gets some code
 	 * reuse.
@@ -1603,7 +1628,8 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	agg_arg.aa_epr = epr;
 	agg_arg.aa_prev = NULL;
 	agg_arg.aa_prior_punch = NULL;
-	agg_arg.aa_punched = punched;
+	agg_arg.aa_punched = punched_major;
+	agg_arg.aa_punched_minor = punched_minor;
 	agg_arg.aa_discard = discard;
 
 	if (root->lr_tree.it_embedded) {

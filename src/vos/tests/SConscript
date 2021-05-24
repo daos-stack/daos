@@ -24,8 +24,9 @@ def scons():
     vos_tests = daos_build.program(vtsenv, 'vos_tests', vos_test_src,
                                    LIBS=libraries)
     denv.AppendUnique(CPPPATH=["../../common/tests"])
-    evt_ctl = daos_build.program(denv, 'evt_ctl', ['evt_ctl.c', utest_utils],
-                                 LIBS=libraries)
+    Import('cmd_parser')
+    evt_ctl = daos_build.program(denv, 'evt_ctl', ['evt_ctl.c', utest_utils,
+                                 cmd_parser], LIBS=libraries)
 
     denv.Install('$PREFIX/bin/', [vos_tests, evt_ctl])
     denv.Install(conf_dir, ['vos_size_input.yaml'])

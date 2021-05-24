@@ -8,7 +8,7 @@ COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                 'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
                 'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
                 'compression_qat.c', 'multihash.c', 'multihash_isal.c',
-                'cipher.c', 'cipher_isal.c', 'qat.c']
+                'cipher.c', 'cipher_isal.c', 'qat.c', 'fault_domain.c']
 
 
 def build_daos_common(env, client, prereqs):
@@ -51,14 +51,20 @@ def build_dts_library(env):
 
     denv.AppendUnique(CPPPATH=["../tests/suite"])
 
-    dts_lib = daos_build.library(denv, 'libdts', ['dts.c'], LIBS=libraries)
+    denv.Replace(SHOBJPREFIX='mpi_')
+    mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])
+    Export('mpi_cmd_parser')
+
+    dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'],
+                                 LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dts_lib)
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'il_env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    il_env.AppendUnique(LIBPATH=[Dir('.')])
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path
@@ -82,6 +88,11 @@ def scons():
 
     tlib_env = denv.Clone()
     tlib_env.AppendUnique(LIBS=['json-c'])
+
+    cmd_parser = denv.SharedObject(['cmd_parser.c'])
+    Export('cmd_parser')
+    dc_credit = denv.SharedObject(['credit.c'])
+    Export('dc_credit')
 
     prereqs.require(tlib_env, 'argobots')
 

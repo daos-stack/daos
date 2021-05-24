@@ -15,9 +15,11 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const (
-	maxHelperStreamCount = 2
-)
+const maxHelperStreamCount = 2
+
+// ErrNoPinnedNumaNode error indicates no NUMA node has been pinned in this
+// engine's configuration.
+var ErrNoPinnedNumaNode = errors.New("pinned NUMA node was not configured")
 
 // StorageConfig encapsulates an I/O Engine's storage configuration.
 type StorageConfig struct {
@@ -42,6 +44,7 @@ type FabricConfig struct {
 	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
 	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
 	PinnedNumaNode  *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
+	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 }
@@ -71,23 +74,51 @@ func (fc *FabricConfig) GetNumaNode() (uint, error) {
 	if fc.PinnedNumaNode != nil {
 		return *fc.PinnedNumaNode, nil
 	}
-	return 0, errors.New("pinned NUMA node was not configured")
+	return 0, ErrNoPinnedNumaNode
 }
 
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
-	if fc.Provider == "" {
+	switch {
+	case fc.Provider == "":
 		return errors.New("provider not set")
-	}
-	if fc.Interface == "" {
+	case fc.Interface == "":
 		return errors.New("fabric_iface not set")
-	}
-	if fc.InterfacePort == 0 {
+	case fc.InterfacePort == 0:
 		return errors.New("fabric_iface_port not set")
+	case fc.InterfacePort < 0:
+		return errors.New("fabric_iface_port cannot be negative")
+	default:
+		return nil
 	}
-	return nil
 }
 
+// cleanEnvVars scrubs the supplied slice of environment
+// variables by removing all variables not included in the
+// allow list.
+func cleanEnvVars(in, allowed []string) (out []string) {
+	allowedMap := make(map[string]struct{})
+	for _, key := range allowed {
+		allowedMap[key] = struct{}{}
+	}
+
+	for _, pair := range in {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
+			continue
+		}
+		if _, found := allowedMap[kv[0]]; !found {
+			continue
+		}
+		out = append(out, pair)
+	}
+
+	return
+}
+
+// mergeEnvVars merges and deduplicates two slices of environment
+// variables. Conflicts are resolved by taking the value from the
+// second list.
 func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	mergeMap := make(map[string]string)
 	for _, pair := range curVars {
@@ -139,6 +170,7 @@ type Config struct {
 	Storage           StorageConfig `yaml:",inline"`
 	Fabric            FabricConfig  `yaml:",inline"`
 	EnvVars           []string      `yaml:"env_vars,omitempty"`
+	EnvPassThrough    []string      `yaml:"env_pass_through,omitempty"`
 	Index             uint32        `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 }
 
@@ -199,6 +231,14 @@ func (c *Config) WithEnvVars(newVars ...string) *Config {
 	return c
 }
 
+// WithEnvPassThrough sets a list of environment variable
+// names that will be allowed to pass through into the
+// engine subprocess environment.
+func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
+	c.EnvPassThrough = allowList
+	return c
+}
+
 // WithRank sets the instance rank.
 func (c *Config) WithRank(r uint32) *Config {
 	c.Rank = system.NewRankPtr(r)
@@ -229,7 +269,7 @@ func (c *Config) WithScmClass(scmClass string) *Config {
 	return c
 }
 
-// WithScmMountPath sets the path to the device used for SCM storage.
+// WithScmMountPoint sets the path to the device used for SCM storage.
 func (c *Config) WithScmMountPoint(scmPath string) *Config {
 	c.Storage.SCM.MountPoint = scmPath
 	return c
@@ -305,6 +345,12 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 // WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
 func (c *Config) WithPinnedNumaNode(numa *uint) *Config {
 	c.Fabric.PinnedNumaNode = numa
+	return c
+}
+
+// WithBypassHealthChk sets the NVME health check bypass for this instance
+func (c *Config) WithBypassHealthChk(bypass *bool) *Config {
+	c.Fabric.BypassHealthChk = bypass
 	return c
 }
 

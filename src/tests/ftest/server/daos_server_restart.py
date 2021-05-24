@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from avocado import fail_on
 from apricot import TestWithServers
@@ -22,14 +22,11 @@ class DaosServerTest(TestWithServers):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a DaosServerTest object."""
-        super(DaosServerTest, self).__init__(*args, **kwargs)
-
     @fail_on(ServerFailed)
     @fail_on(CommandFailure)
     def restart_daos_server(self, reformat=True):
-        """method to perform server stop and start.
+        """Perform server stop and start.
+
         Args:
             reformat (bool): always reformat storage, could be destructive.
 
@@ -48,7 +45,8 @@ class DaosServerTest(TestWithServers):
     @fail_on(ServerFailed)
     @fail_on(CommandFailure)
     def restart_engine(self, force=True):
-        """method to perform engine stop and start by dmg.
+        """Perform engine stop and start by dmg.
+
         Args:
             force (bool): Force to stop the daos engine.
             Defaults to True.
@@ -58,13 +56,13 @@ class DaosServerTest(TestWithServers):
         self.server_managers[0].dmg.system_start()
 
     def get_pool_list(self):
-        """method to get the pool list contents"""
+        """Get the pool list contents."""
         pool_list = sorted(self.get_dmg_command().pool_list())
         self.log.info("get_pool-list: %s", pool_list)
         return pool_list
 
     def verify_pool_list(self, expected_pool_list=None):
-        """method to verify the pool list"""
+        """Verify the pool list."""
         if expected_pool_list is None:
             expected_pool_list = []
         pool_list = self.get_pool_list()
@@ -76,7 +74,7 @@ class DaosServerTest(TestWithServers):
             "##Current pool-list mismatch with the expected pool-list.")
 
     def create_pool_and_container(self):
-        """method to create pool and container"""
+        """Create pool and container."""
         scm_size = self.params.get("scm_size", "/run/server/*/", 138000000)
         num_of_pool = self.params.get("num_of_pool", "/run/server/*/", 3)
         container_per_pool = self.params.get(
@@ -106,7 +104,6 @@ class DaosServerTest(TestWithServers):
         :avocado: tags=all,daily_regression,hw,large,server_test
         :avocado: tags=server_reformat,DAOS_5610
         """
-
         self.log.info("(1)Verify daos server pool list after started.")
         self.verify_pool_list()
         self.log.info("(2)Restart server without pool created and verify.")
@@ -120,8 +117,7 @@ class DaosServerTest(TestWithServers):
         self.verify_pool_list()
 
     def test_engine_restart(self):
-        """
-        JIRA ID: DAOS-3593.
+        """JIRA ID: DAOS-3593.
 
         Test Description: Test cmd to perform daos engine restart.
         Steps:
@@ -139,7 +135,6 @@ class DaosServerTest(TestWithServers):
         :avocado: tags=all,daily_regression,hw,large,server_test
         :avocado: tags=server_restart,DAOS_5610
         """
-
         self.log.info(
             "(1)Shutdown and restart the daos engine "
             "from a quiescent state.")
@@ -168,6 +163,6 @@ class DaosServerTest(TestWithServers):
         self.restart_engine()
         self.verify_pool_list(pool_list)
         # Blocked by DAOS-3883 causing intermittent failures on CI
-        #self.restart_engine(force=False)
-        #self.verify_pool_list(pool_list)
+        # self.restart_engine(force=False)
+        # self.verify_pool_list(pool_list)
         self.hostlist_servers = hosts

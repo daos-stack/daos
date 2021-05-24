@@ -7,7 +7,7 @@
 
 import daos_build
 SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
-       'fault_inject.c', 'dtm.c', 'telemetry.c']
+       'fault_inject.c', 'slab.c', 'telemetry.c']
 
 def scons():
     """Scons function"""

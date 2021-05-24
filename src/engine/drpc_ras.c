@@ -20,16 +20,26 @@
 static void
 free_event(Shared__RASEvent *evt)
 {
-	if (evt->obj_id != NULL)
-		D_FREE(evt->obj_id);
-	if (evt->pool_uuid != NULL)
-		D_FREE(evt->pool_uuid);
-	if (evt->cont_uuid != NULL)
-		D_FREE(evt->cont_uuid);
-	if (evt->hostname != NULL)
-		D_FREE(evt->hostname);
-	if (evt->timestamp != NULL)
-		D_FREE(evt->timestamp);
+	D_FREE(evt->obj_id);
+	D_FREE(evt->pool_uuid);
+	D_FREE(evt->cont_uuid);
+	D_FREE(evt->hostname);
+	D_FREE(evt->timestamp);
+}
+
+static d_rank_t
+safe_self_rank(void)
+{
+	d_rank_t	rank;
+	int		rc;
+
+	rc = crt_group_rank(NULL /* grp */, &rank);
+	if (rc != 0) {
+		D_ERROR("failed to get self rank: "DF_RC"\n", DP_RC(rc));
+		rank = CRT_NO_RANK;
+	}
+
+	return rank;
 }
 
 static int
@@ -104,11 +114,9 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	return 0;
 
 out_hn:
-	if (evt->hostname != NULL)
-		D_FREE(evt->hostname);
+	D_FREE(evt->hostname);
 out_ts:
-	if (evt->timestamp != NULL)
-		D_FREE(evt->timestamp);
+	D_FREE(evt->timestamp);
 out:
 	return rc;
 }
@@ -164,24 +172,18 @@ log_event(Shared__RASEvent *evt)
 
 out:
 	fclose(stream);
-	D_DEBUG(DB_MGMT, "&&& RAS EVENT%s", buf);
+	D_INFO("&&& RAS EVENT%s\n", buf);
 	D_FREE(buf);
 }
 
 static int
-send_event(Shared__RASEvent *evt)
+send_event(Shared__RASEvent *evt, bool wait_for_resp)
 {
 	Shared__ClusterEventReq	 req = SHARED__CLUSTER_EVENT_REQ__INIT;
 	uint8_t			*reqb;
 	size_t			 reqb_size;
-	Drpc__Call		*dreq;
 	Drpc__Response		*dresp;
 	int			 rc;
-
-	if (dss_drpc_ctx == NULL) {
-		D_ERROR("dRPC not connected: "DF_RC"\n", DP_RC(-DER_UNINIT));
-		return -DER_UNINIT;
-	}
 
 	if (evt == NULL) {
 		D_ERROR("null RAS event\n");
@@ -193,32 +195,24 @@ send_event(Shared__RASEvent *evt)
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-
 	shared__cluster_event_req__pack(&req, reqb);
-	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
-			      DRPC_METHOD_SRV_CLUSTER_EVENT, &dreq);
-	if (rc != 0) {
-		D_FREE(reqb);
-		goto out;
-	}
 
-	dreq->body.len = reqb_size;
-	dreq->body.data = reqb;
-
-	rc = drpc_call(dss_drpc_ctx, R_SYNC, dreq, &dresp);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_CLUSTER_EVENT, reqb,
+			   reqb_size, wait_for_resp ? 0 : DSS_DRPC_NO_RESP,
+			   wait_for_resp ? &dresp : NULL);
 	if (rc != 0)
-		goto out_dreq;
-	if (dresp->status != DRPC__STATUS__SUCCESS) {
-		D_ERROR("received erroneous dRPC response: %d\n",
-			dresp->status);
-		rc = -DER_IO;
+		goto out_reqb;
+	if (wait_for_resp) {
+		if (dresp->status != DRPC__STATUS__SUCCESS) {
+			D_ERROR("received erroneous dRPC response: %d\n",
+				dresp->status);
+			rc = -DER_IO;
+		}
+		drpc_response_free(dresp);
 	}
 
-	drpc_response_free(dresp);
-
-out_dreq:
-	/* This also frees reqb via dreq->body.data. */
-	drpc_call_free(dreq);
+out_reqb:
+	D_FREE(reqb);
 out:
 	free_event(evt);
 
@@ -228,7 +222,8 @@ out:
 static int
 raise_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hwid,
 	  d_rank_t *rank, char *jobid, uuid_t *pool, uuid_t *cont,
-	  daos_obj_id_t *objid, char *ctlop, Shared__RASEvent *evt)
+	  daos_obj_id_t *objid, char *ctlop, Shared__RASEvent *evt,
+	  bool wait_for_resp)
 {
 	int rc = init_event(id, msg, type, sev, hwid, rank, jobid, pool, cont,
 			    objid, ctlop, evt);
@@ -239,7 +234,7 @@ raise_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hwid,
 	}
 
 	log_event(evt);
-	rc = send_event(evt);
+	rc = send_event(evt, wait_for_resp);
 	if (rc != 0)
 		D_ERROR("failed to send RAS event %s over dRPC: "DF_RC"\n",
 			ras_event2str(id), DP_RC(rc));
@@ -263,12 +258,12 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 
 	/* populate rank param if empty */
 	if (rank == NULL) {
-		this_rank = dss_self_rank();
+		this_rank = safe_self_rank();
 		rank = &this_rank;
 	}
 
 	raise_ras(id, msg, type, sev, hwid, rank, jobid, pool, cont, objid,
-		  ctlop, &evt);
+		  ctlop, &evt, false /* wait_for_resp */);
 }
 
 void
@@ -299,7 +294,7 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
 	Shared__RASEvent__PoolSvcEventInfo	info = \
 		SHARED__RASEVENT__POOL_SVC_EVENT_INFO__INIT;
-	d_rank_t				rank = dss_self_rank();
+	d_rank_t				rank = safe_self_rank();
 	int					rc;
 
 	if ((pool == NULL) || uuid_is_null(*pool)) {
@@ -322,10 +317,10 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 
 	rc = raise_ras(RAS_POOL_REPS_UPDATE,
 		       "List of pool service replica ranks has been updated.",
-		       RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
+		       RAS_TYPE_STATE_CHANGE, RAS_SEV_NOTICE, NULL /* hwid */,
 		       &rank /* rank */, NULL /* jobid */, pool,
 		       NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
-		       &evt);
+		       &evt, true /* wait_for_resp */);
 
 	D_FREE(info.svc_reps);
 
@@ -337,10 +332,9 @@ ds_notify_swim_rank_dead(d_rank_t rank)
 {
 	Shared__RASEvent	evt = SHARED__RASEVENT__INIT;
 
-	return raise_ras(RAS_SWIM_RANK_DEAD,
-			 "SWIM marked rank as dead.",
-			 RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
+	return raise_ras(RAS_SWIM_RANK_DEAD, "SWIM marked rank as dead.",
+			 RAS_TYPE_STATE_CHANGE, RAS_SEV_NOTICE, NULL /* hwid */,
 			 &rank /* rank */, NULL /* jobid */, NULL /* pool */,
 			 NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
-			 &evt);
+			 &evt, false /* wait_for_resp */);
 }

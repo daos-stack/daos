@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -61,14 +61,6 @@ class UnitTestWithoutServers(TestWithoutServers):
         :avocado: tags=all,unittest,tiny,full_regression,vea_ut
         """
         unittest_runner(self, "vea_ut")
-
-    def test_ring_pl_map(self):
-        """
-        Test Description: Test ring_pl_map unittest.
-        Use Case: This tests the ring placement map
-        :avocado: tags=all,unittest,tiny,full_regression,ring_pl_map
-        """
-        unittest_runner(self, "ring_pl_map")
 
     def test_jump_pl_map(self):
         """

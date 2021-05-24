@@ -210,6 +210,7 @@ dfs_test_lookup(void **state)
 	char			*filename_sym2 = "sym2";
 	char			*path_sym2 = "/dir1/sym2";
 	mode_t			create_mode = S_IWUSR | S_IRUSR;
+	struct stat		stbuf;
 	int			create_flags = O_RDWR | O_CREAT | O_EXCL;
 	int			rc;
 
@@ -220,6 +221,11 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
 		      create_flags, 0, 0, NULL, &obj);
 	assert_int_equal(rc, 0);
+
+	/** try chmod to a dir, should fail */
+	rc = dfs_chmod(dfs_mt, NULL, filename_file1, S_IFDIR);
+	assert_int_equal(rc, EINVAL);
+
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
 
@@ -240,6 +246,19 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, NULL, filename_dir1, create_mode | S_IFDIR,
 		      create_flags, 0, 0, NULL, &dir);
 	assert_int_equal(rc, 0);
+
+	/** try chmod to a symlink, should fail (since chmod resolves link) */
+	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, S_IFLNK);
+	assert_int_equal(rc, EINVAL);
+
+	/** chmod + IXUSR to dir1 */
+	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, create_mode | S_IXUSR);
+	assert_int_equal(rc, 0);
+
+	/** verify mode */
+	rc = dfs_stat(dfs_mt, NULL, filename_dir1, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mode, S_IFDIR | create_mode | S_IXUSR);
 
 	dfs_test_lookup_hlpr(path_dir1, S_IFDIR);
 	dfs_test_lookup_rel_hlpr(NULL, filename_dir1, S_IFDIR);
@@ -494,7 +513,7 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 }
 
 static void
-dfs_test_file_del(const char *name)
+dfs_test_rm(const char *name)
 {
 	int	rc;
 
@@ -502,9 +521,10 @@ dfs_test_file_del(const char *name)
 	assert_int_equal(rc, 0);
 }
 
-int dfs_test_thread_nr		= 8;
-#define DFS_TEST_MAX_THREAD_NR	(32)
+int dfs_test_thread_nr		= 32;
+#define DFS_TEST_MAX_THREAD_NR	(64)
 pthread_t dfs_test_tid[DFS_TEST_MAX_THREAD_NR];
+
 struct dfs_test_thread_arg {
 	int			thread_idx;
 	pthread_barrier_t	*barrier;
@@ -606,7 +626,7 @@ dfs_test_read_shared_file(void **state)
 		assert_int_equal(rc, 0);
 	}
 
-	dfs_test_file_del(name);
+	dfs_test_rm(name);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
@@ -703,6 +723,157 @@ dfs_test_lookupx(void **state)
 }
 
 static void
+dfs_test_io_error_code(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_obj_t	*file;
+	daos_event_t	ev, *evp;
+	daos_range_t	iod_rgs;
+	dfs_iod_t	iod;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	char		buf[10];
+	daos_size_t	read_size;
+	int		rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, "io_error", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, 0, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * set an IOD that has writes more data than sgl to trigger error in
+	 * array layer.
+	 */
+	iod.iod_nr = 1;
+	iod_rgs.rg_idx = 0;
+	iod_rgs.rg_len = 10;
+	iod.iod_rgs = &iod_rgs;
+	d_iov_set(&iov, buf, 5);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+
+	/** Write */
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+	}
+	rc = dfs_writex(dfs_mt, file, &iod, &sgl, arg->async ? &ev : NULL);
+	if (arg->async) {
+		/** Wait for completion */
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, EINVAL);
+
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+	} else {
+		assert_int_equal(rc, EINVAL);
+	}
+
+	/** Read */
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+	}
+	rc = dfs_readx(dfs_mt, file, &iod, &sgl, &read_size,
+		       arg->async ? &ev : NULL);
+	if (arg->async) {
+		/** Wait for completion */
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, EINVAL);
+
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+	} else {
+		assert_int_equal(rc, EINVAL);
+	}
+
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "io_error", 0, NULL);
+	assert_int_equal(rc, 0);
+}
+
+int dfs_test_rc[DFS_TEST_MAX_THREAD_NR];
+
+static void *
+dfs_test_mkdir_thread(void *arg)
+{
+	struct dfs_test_thread_arg	*targ = arg;
+	int				rc;
+
+	pthread_barrier_wait(targ->barrier);
+	rc = dfs_mkdir(dfs_mt, NULL, targ->name, S_IFDIR, OC_S1);
+	print_message("dfs_test_read_thread %d, dfs_mkdir rc %d.\n",
+		      targ->thread_idx, rc);
+	dfs_test_rc[targ->thread_idx] = rc;
+	pthread_exit(NULL);
+}
+
+static void
+dfs_test_mt_mkdir(void **state)
+{
+	test_arg_t		*arg = *state;
+	char			name[16];
+	pthread_barrier_t	barrier;
+	int			i, one_success;
+	int			rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	sprintf(name, "MTA_dir_%d\n", arg->myrank);
+
+	/* usr barrier to all threads start at the same time and start
+	 * concurrent test.
+	 */
+	pthread_barrier_init(&barrier, NULL, dfs_test_thread_nr + 1);
+	for (i = 0; i < dfs_test_thread_nr; i++) {
+		dfs_test_targ[i].thread_idx = i;
+		dfs_test_targ[i].name = name;
+		dfs_test_targ[i].barrier = &barrier;
+		rc = pthread_create(&dfs_test_tid[i], NULL,
+				    dfs_test_mkdir_thread, &dfs_test_targ[i]);
+		assert_int_equal(rc, 0);
+	}
+
+	pthread_barrier_wait(&barrier);
+	for (i = 0; i < dfs_test_thread_nr; i++) {
+		rc = pthread_join(dfs_test_tid[i], NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	one_success = 0;
+	for (i = 0; i < dfs_test_thread_nr; i++) {
+		if (dfs_test_rc[i] == 0) {
+			if (one_success == 0) {
+				one_success++;
+				continue;
+			}
+			print_error("mkdir succeeded on more than thread\n");
+			assert_int_not_equal(dfs_test_rc[i], 0);
+		}
+		if (dfs_test_rc[i] != EEXIST)
+			print_error("mkdir returned unexpected error: %d\n",
+				    dfs_test_rc[i]);
+		assert_int_equal(dfs_test_rc[i], EEXIST);
+	}
+
+	if (one_success != 1)
+		print_error("all mkdirs failed, expected 1 to succeed\n");
+	assert_int_equal(one_success, 1);
+
+	dfs_test_rm(name);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
 dfs_test_rename(void **state)
 {
 	test_arg_t		*arg = *state;
@@ -775,7 +946,13 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST7: DFS lookupx",
 	  dfs_test_lookupx, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST8: Simple rename",
+	{ "DFS_UNIT_TEST8: DFS IO sync error code",
+	  dfs_test_io_error_code, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST9: DFS IO async error code",
+	  dfs_test_io_error_code, async_enable, test_case_teardown},
+	{ "DFS_UNIT_TEST10: multi-threads mkdir same dir",
+	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST11: Simple rename",
 	  dfs_test_rename, async_disable, test_case_teardown},
 };
 

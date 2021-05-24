@@ -6,7 +6,9 @@
 """
 import time
 from osa_utils import OSAUtils
+from daos_utils import DaosCommand
 from test_utils_pool import TestPool
+from dmg_utils import check_system_query_status
 from apricot import skipForTicket
 
 
@@ -20,60 +22,85 @@ class OSAOfflineExtend(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOfflineExtend, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
+        self.daos_command = DaosCommand(self.bin)
         # Start an additional server.
+        self.ior_test_sequence = self.params.get("ior_test_sequence",
+                                                 '/run/ior/iorflags/*')
         self.extra_servers = self.params.get("test_servers",
                                              "/run/extra_servers/*")
+        self.rank = self.params.get("rank_list", '/run/test_ranks/*')
+        self.test_oclass = None
+        self.dmg_command.exit_status_exception = True
 
-    def run_offline_extend_test(self, num_pool, data=False):
+    def run_offline_extend_test(self, num_pool, data=False,
+                                oclass=None):
         """Run the offline extend without data.
 
         Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
+            oclass (list) : list of daos object class (eg: "RP_2G8")
         """
         # Create a pool
         pool = {}
-        pool_uuid = []
+        if oclass is None:
+            oclass = []
+            oclass.append(self.ior_cmd.dfs_oclass.value)
 
-        # Extend a ranks 4 and 5
-        rank = [4, 5]
+        self.log.info(oclass[0])
 
         for val in range(0, num_pool):
+            # Perform IOR write using the oclass list
+            if val < len(oclass):
+                index = val
+            else:
+                index = 0
             pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
             pool[val].get_params(self)
-            # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].scm_size.value /
-                                           num_pool)
-            pool[val].nvme_size.value = int(pool[val].nvme_size.value /
-                                            num_pool)
             pool[val].create()
-            pool_uuid.append(pool[val].uuid)
             self.pool = pool[val]
+            test_seq = self.ior_test_sequence[0]
+            self.pool.set_property("reclaim", "disabled")
             if data:
-                self.write_single_object()
+                self.run_ior_thread("Write", oclass[index], test_seq)
+                self.run_mdtest_thread()
+                if self.test_during_aggregation is True:
+                    self.run_ior_thread("Write", oclass[index], test_seq)
         # Start the additional servers and extend the pool
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
         # Give sometime for the additional server to come up.
-        time.sleep(5)
+        for retry in range(0, 10):
+            scan_info = self.get_dmg_command().system_query()
+            if not check_system_query_status(scan_info):
+                if retry == 9:
+                    self.fail("One or more servers not in expected status")
+            else:
+                break
 
-        # Extend the pool_uuid, rank and targets
-        for val in range(0, num_pool):
+        for rank_index, rank_val in enumerate(self.rank):
+            # If total pools less than 3, extend only a single pool.
+            # If total pools >= 3  : Extend only 3 pools.
+            if num_pool >= len(self.rank):
+                val = rank_index
+            else:
+                val = 0
             self.pool = pool[val]
             scm_size = self.pool.scm_size
             nvme_size = self.pool.nvme_size
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
+            # Enable aggregation for multiple pool testing only.
+            if self.test_during_aggregation is True and (num_pool > 1):
+                self.delete_extra_container(self.pool)
             output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                  rank, scm_size,
+                                                  rank_val, scm_size,
                                                   nvme_size)
-            self.log.info(output)
-            self.is_rebuild_done(3)
-            self.assert_on_rebuild_failure()
+            self.print_and_assert_on_rebuild_failure(output)
 
             pver_extend = self.get_pool_version()
             self.log.info("Pool Version after extend %d", pver_extend)
@@ -81,22 +108,95 @@ class OSAOfflineExtend(OSAUtils):
             self.assertTrue(pver_extend > pver_begin,
                             "Pool Version Error:  After extend")
 
-        for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
 
-        if data:
-            self.verify_single_object()
+            if data:
+                # Perform the IOR read using the same
+                # daos object class used for write.
+                if val < len(oclass):
+                    index = val
+                else:
+                    index = 0
+                self.run_ior_thread("Read", oclass[index], test_seq)
+                self.run_mdtest_thread()
+                self.container = self.pool_cont_dict[self.pool][0]
+                kwargs = {"pool": self.pool.uuid,
+                          "cont": self.container.uuid}
+                output = self.daos_command.container_check(**kwargs)
+                self.log.info(output)
 
-    @skipForTicket("DAOS-6644")
     def test_osa_offline_extend(self):
         """
         JIRA ID: DAOS-4751
 
         Test Description: Validate Offline Extend
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=osa,checksum,osa_extend
+        :avocado: tags=offline_extend,offline_extend_with_csum
         """
-        # Perform extend testing with 1 pool
+        self.log.info("Offline Extend Testing : With Checksum")
         self.run_offline_extend_test(1, True)
+
+    def test_osa_offline_extend_without_checksum(self):
+        """Test ID: DAOS-6924
+        Test Description: Validate Offline extend without
+        Checksum.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=osa,osa_extend
+        :avocado: tags=offline_extend,offline_extend_without_csum
+        """
+        self.test_with_checksum = self.params.get("test_with_checksum",
+                                                  '/run/checksum/*')
+        self.log.info("Offline Extend Testing: Without Checksum")
+        self.run_offline_extend_test(1, data=True)
+
+    def test_osa_offline_extend_multiple_pools(self):
+        """Test ID: DAOS-6924
+        Test Description: Validate Offline extend without
+        Checksum.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=osa,osa_extend
+        :avocado: tags=offline_extend,offline_extend_multiple_pools
+        """
+        self.log.info("Offline Extend Testing: Multiple Pools")
+        self.run_offline_extend_test(5, data=True)
+
+    @skipForTicket("DAOS-7493")
+    def test_osa_offline_extend_oclass(self):
+        """Test ID: DAOS-6924
+        Test Description: Validate Offline extend without
+        Checksum.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=osa,osa_extend
+        :avocado: tags=offline_extend,offline_extend_oclass
+        """
+        self.log.info("Offline Extend Testing: oclass")
+        self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
+        self.run_offline_extend_test(4, data=True,
+                                     oclass=self.test_oclass)
+
+    @skipForTicket("DAOS-7195")
+    def test_osa_offline_extend_during_aggregation(self):
+        """Test ID: DAOS-6294
+        Test Description: Extend rank while aggregation
+        is happening in parallel
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=osa,checksum,osa_extend
+        :avocado: tags=offline_extend,offline_extend_during_aggregation
+        """
+        self.test_during_aggregation = self.params.get("test_with_aggregation",
+                                                       '/run/aggregation/*')
+        self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
+        self.log.info("Offline Extend : Aggregation")
+        self.run_offline_extend_test(3, data=True, oclass=self.test_oclass)

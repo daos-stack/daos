@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import avocado
 import re
@@ -25,7 +25,7 @@ class DmgStorageQuery(ControlTestBase):
 
     def setUp(self):
         "Set up for dmg storage query."
-        super(DmgStorageQuery, self).setUp()
+        super().setUp()
         self.bdev_list = self.server_managers[-1].get_config_value("bdev_list")
         self.targets = self.server_managers[-1].get_config_value("targets")
 
@@ -37,7 +37,7 @@ class DmgStorageQuery(ControlTestBase):
             state (str): device state to verify.
         """
         err = []
-        for dev in devs_info.values()[0]:
+        for dev in list(devs_info.values())[0]:
             if dev[4] != state:
                 err.append(dev)
         if err:
@@ -57,11 +57,12 @@ class DmgStorageQuery(ControlTestBase):
 
         # Check if the number of devices match the config
         msg = "Number of devs do not match cfg: {}".format(len(self.bdev_list))
-        self.assertEqual(len(self.bdev_list), len(devs_info.values()[0]), msg)
+        self.assertEqual(
+            len(self.bdev_list), len(list(devs_info.values())[0]), msg)
 
         # Check that number of targets match the config
         targets = 0
-        for devs in devs_info.values()[0]:
+        for devs in list(devs_info.values())[0]:
             targets += len(devs[2].split(" "))
         if self.targets != targets:
             self.fail("Wrong number of targets found: {}".format(targets))
@@ -81,13 +82,13 @@ class DmgStorageQuery(ControlTestBase):
         pools_info = self.get_pool_info(verbose=True)
 
         # Check pool uuid
-        for pool in pools_info.values()[0]:
+        for pool in list(pools_info.values())[0]:
             self.assertEqual(self.pool.pool.get_uuid_str(), pool[0].upper())
 
         # Check that number of pool blobs match the number of targets
         t_err = []
         b_err = []
-        for pool in pools_info.values()[0]:
+        for pool in list(pools_info.values())[0]:
             vos_targets = pool[2].split()
             blobs = pool[3].split()
             if self.targets != len(vos_targets):
@@ -154,7 +155,7 @@ class DmgStorageQuery(ControlTestBase):
         self.check_dev_state(devs_info, "NORMAL")
 
         # Set device to faulty state and check that it's in FAULTY state
-        for dev in devs_info.values()[0]:
+        for dev in list(devs_info.values())[0]:
             self.get_dmg_output("storage_set_faulty", uuid=dev[0])
 
         # Check that devices are in FAULTY state

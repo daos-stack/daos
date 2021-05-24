@@ -35,6 +35,7 @@ void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc);
+void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_system.c */
@@ -65,7 +66,8 @@ int ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in);
 int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 			d_rank_list_t *targets, size_t scm_size,
 			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
-			d_rank_list_t **svcp);
+			d_rank_list_t **svcp, int domains_nr,
+			uint32_t *domains);
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			 const char *group, uint32_t force);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
@@ -79,7 +81,8 @@ int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			     struct pool_target_id_list *reint_list);
 int ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			d_rank_list_t *rank_list, char *tgt_dev,
-			size_t scm_size, size_t nvme_size);
+			size_t scm_size, size_t nvme_size,
+			size_t domains_nr, uint32_t *domains);
 int ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			  daos_prop_t *prop, daos_prop_t **result);
 int ds_mgmt_pool_get_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
@@ -126,6 +129,7 @@ void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv);
+int ds_mgmt_tgt_create_post_reply(crt_rpc_t *rpc, void *priv);
 void ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc);
 int ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg);
 void ds_mgmt_hdlr_tgt_map_update(crt_rpc_t *rpc);

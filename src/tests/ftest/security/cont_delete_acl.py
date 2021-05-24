@@ -20,7 +20,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
     """
     def setUp(self):
         """Set up each test case."""
-        super(DeleteContainerACLTest, self).setUp()
+        super().setUp()
         self.daos_cmd = self.get_daos_command()
         self.prepare_pool()
         self.add_container(self.pool)
@@ -78,10 +78,11 @@ class DeleteContainerACLTest(ContSecurityTestBase):
                 self.pool.uuid,
                 self.container.uuid,
                 principal)
-            if self.principals_table[principal] in self.daos_cmd.result.stdout:
+            if (self.principals_table[principal] in
+                    self.daos_cmd.result.stdout_text):
                 self.fail(
                     "Found acl that was to be deleted in output: {}".format(
-                        self.daos_cmd.result.stdout))
+                        self.daos_cmd.result.stdout_text))
 
     def test_no_user_permissions(self):
         """

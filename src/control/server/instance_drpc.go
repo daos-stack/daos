@@ -9,9 +9,10 @@ package server
 import (
 	"context"
 	"fmt"
+	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
@@ -28,55 +29,59 @@ var (
 	errInstanceNotReady = errors.New("instance not ready yet")
 )
 
-func (srv *EngineInstance) setDrpcClient(c drpc.DomainSocketClient) {
-	srv.Lock()
-	defer srv.Unlock()
-	srv._drpcClient = c
+func (ei *EngineInstance) setDrpcClient(c drpc.DomainSocketClient) {
+	ei.Lock()
+	defer ei.Unlock()
+	ei._drpcClient = c
 }
 
-func (srv *EngineInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
-	srv.RLock()
-	defer srv.RUnlock()
-	if srv._drpcClient == nil {
+func (ei *EngineInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
+	ei.RLock()
+	defer ei.RUnlock()
+	if ei._drpcClient == nil {
 		return nil, errDRPCNotReady
 	}
-	return srv._drpcClient, nil
+	return ei._drpcClient, nil
 }
 
 // NotifyDrpcReady receives a ready message from the running Engine
 // instance.
-func (srv *EngineInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
-	srv.log.Debugf("%s instance %d drpc ready: %v", build.DataPlaneName, srv.Index(), msg)
+func (ei *EngineInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
+	ei.log.Debugf("%s instance %d drpc ready: %v", build.DataPlaneName, ei.Index(), msg)
 
 	// activate the dRPC client connection to this engine
-	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
+	ei.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
 
 	go func() {
-		srv.drpcReady <- msg
+		ei.drpcReady <- msg
 	}()
 }
 
 // awaitDrpcReady returns a channel which receives a ready message
 // when the started Engine instance indicates that it is
 // ready to receive dRPC messages.
-func (srv *EngineInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
-	return srv.drpcReady
+func (ei *EngineInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
+	return ei.drpcReady
 }
 
 // CallDrpc makes the supplied dRPC call via this instance's dRPC client.
-func (srv *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
-	dc, err := srv.getDrpcClient()
+func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
+	dc, err := ei.getDrpcClient()
 	if err != nil {
 		return nil, err
 	}
 
 	rankMsg := ""
-	if sb := srv.getSuperblock(); sb != nil {
+	if sb := ei.getSuperblock(); sb != nil {
 		rankMsg = fmt.Sprintf(" (rank %s)", sb.Rank)
 	}
-	srv.log.Debugf("%dB dRPC to index %d%s: %s", proto.Size(body), srv.Index(), rankMsg, method)
 
-	return makeDrpcCall(ctx, srv.log, dc, method, body)
+	startedAt := time.Now()
+	defer func() {
+		ei.log.Debugf("dRPC to index %d%s: %s/%dB/%s", ei.Index(), rankMsg, method, proto.Size(body), time.Since(startedAt))
+	}()
+
+	return makeDrpcCall(ctx, ei.log, dc, method, body)
 }
 
 // drespToMemberResult converts drpc.Response to system.MemberResult.
@@ -107,19 +112,19 @@ func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tSta
 
 // TryDrpc attempts dRPC request to given rank managed by instance and return
 // success or error from call result or timeout encapsulated in result.
-func (srv *EngineInstance) TryDrpc(ctx context.Context, method drpc.Method) *system.MemberResult {
-	rank, err := srv.GetRank()
+func (ei *EngineInstance) TryDrpc(ctx context.Context, method drpc.Method) *system.MemberResult {
+	rank, err := ei.GetRank()
 	if err != nil {
 		return nil // no rank to return result for
 	}
 
-	localState := srv.LocalState()
+	localState := ei.LocalState()
 	if localState != system.MemberStateReady {
 		// member not ready for dRPC comms, annotate result with last
 		// error as Msg field if found to be stopped
 		result := &system.MemberResult{Rank: rank, State: localState}
-		if localState == system.MemberStateStopped && srv._lastErr != nil {
-			result.Msg = srv._lastErr.Error()
+		if localState == system.MemberStateStopped && ei._lastErr != nil {
+			result.Msg = ei._lastErr.Error()
 		}
 		return result
 	}
@@ -139,7 +144,7 @@ func (srv *EngineInstance) TryDrpc(ctx context.Context, method drpc.Method) *sys
 
 	resChan := make(chan *system.MemberResult)
 	go func() {
-		dresp, err := srv.CallDrpc(ctx, method, nil)
+		dresp, err := ei.CallDrpc(ctx, method, nil)
 		resChan <- drespToMemberResult(rank, dresp, err, targetState)
 	}()
 
@@ -157,8 +162,8 @@ func (srv *EngineInstance) TryDrpc(ctx context.Context, method drpc.Method) *sys
 	}
 }
 
-func (srv *EngineInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
-	dresp, err := srv.CallDrpc(ctx, drpc.MethodBioHealth, req)
+func (ei *EngineInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+	dresp, err := ei.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, err
 	}
@@ -175,8 +180,8 @@ func (srv *EngineInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHealt
 	return resp, nil
 }
 
-func (srv *EngineInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
-	dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdDevs, req)
+func (ei *EngineInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
+	dresp, err := ei.CallDrpc(ctx, drpc.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
 	}
@@ -200,27 +205,27 @@ func (srv *EngineInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDev
 // map input controllers to their concatenated model+serial keys then
 // retrieve metadata and health stats for each SMD device (blobstore) on
 // a given I/O Engine instance. Update input map with new stats/smd info.
-func (srv *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
-	smdDevs, err := srv.listSmdDevices(ctx, new(ctlpb.SmdDevReq))
+func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
+	smdDevs, err := ei.listSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
-		return errors.Wrapf(err, "instance %d listSmdDevices()", srv.Index())
+		return errors.Wrapf(err, "instance %d listSmdDevices()", ei.Index())
 	}
 
 	hasUpdatedHealth := make(map[string]bool)
 	for _, dev := range smdDevs.Devices {
 		msg := fmt.Sprintf("instance %d: smd %s with transport address %s",
-			srv.Index(), dev.GetUuid(), dev.GetTrAddr())
+			ei.Index(), dev.GetUuid(), dev.GetTrAddr())
 
 		ctrlr, exists := ctrlrMap[dev.GetTrAddr()]
 		if !exists {
 			return errors.Errorf("%s: didn't match any known controllers", msg)
 		}
 
-		pbStats, err := srv.getBioHealth(ctx, &ctlpb.BioHealthReq{
+		pbStats, err := ei.getBioHealth(ctx, &ctlpb.BioHealthReq{
 			DevUuid: dev.GetUuid(),
 		})
 		if err != nil {
-			return errors.Wrapf(err, "instance %d getBioHealth()", srv.Index())
+			return errors.Wrapf(err, "instance %d getBioHealth()", ei.Index())
 		}
 
 		health := new(storage.NvmeHealth)
@@ -241,18 +246,18 @@ func (srv *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[st
 		if err := convert.Types(dev, smdDev); err != nil {
 			return errors.Wrapf(err, "convert smd for ctrlr %s", ctrlr.PciAddr)
 		}
-		srvRank, err := srv.GetRank()
+		engineRank, err := ei.GetRank()
 		if err != nil {
 			return errors.Wrapf(err, "get rank")
 		}
-		smdDev.Rank = srvRank
+		smdDev.Rank = engineRank
 		smdDev.TrAddr = dev.GetTrAddr()
 		// space utilization stats for each smd device
 		smdDev.TotalBytes = pbStats.TotalBytes
 		smdDev.AvailBytes = pbStats.AvailBytes
 
 		ctrlr.UpdateSmd(smdDev)
-		srv.log.Debugf("%s: smd usage updated", msg)
+		ei.log.Debugf("%s: smd usage updated", msg)
 	}
 
 	return nil

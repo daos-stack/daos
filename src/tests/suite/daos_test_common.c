@@ -150,13 +150,24 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 	}
 
 	if (arg->myrank == 0) {
-		daos_pool_info_t info = {0};
+		daos_pool_info_t	info = {0};
+		uint64_t		flags = arg->pool.pool_connect_flags;
 
-		print_message("setup: connecting to pool\n");
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       arg->pool.pool_connect_flags,
-				       &arg->pool.poh, &arg->pool.pool_info,
-				       NULL /* ev */);
+		if (arg->pool_label) {
+			print_message("setup: connecting to pool by label %s\n",
+				      arg->pool_label);
+			rc = daos_pool_connect_bylabel(arg->pool_label,
+						       arg->group, flags,
+						       &arg->pool.poh,
+						       &arg->pool.pool_info,
+						       NULL);
+		} else {
+			print_message("setup: connecting to pool "DF_UUID"\n",
+				      DP_UUID(arg->pool.pool_uuid));
+			rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+					       flags, &arg->pool.poh,
+					       &arg->pool.pool_info, NULL);
+		}
 		if (rc)
 			print_message("daos_pool_connect failed, rc: %d\n", rc);
 		else
@@ -588,6 +599,12 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 	int		 i;
 	static bool	 runable = true;
 
+	if (arg == NULL) {
+		print_message("state not set, likely due to group-setup"
+			      " issue\n");
+		return false;
+	}
+
 	if (arg->myrank == 0) {
 		int			tgts_per_node;
 		int			disable_nodes;
@@ -816,6 +833,13 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	rc = system(dmg_cmd);
 	print_message("%s rc %#x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
+}
+
+int
+daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
+		   const char *value)
+{
+	return dmg_pool_set_prop(dmg_config_file, name, value, pool_uuid);
 }
 
 void

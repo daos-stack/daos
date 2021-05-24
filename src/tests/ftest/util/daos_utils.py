@@ -73,6 +73,22 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("pool", "query"), pool=pool, sys_name=sys_name, sys=sys)
 
+    def pool_autotest(self, pool):
+        """Runs autotest for pool
+
+        Args:
+            pool (str): pool UUID
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos pool autotest command fails.
+        """
+        return self._get_result(
+            ("pool", "autotest"), pool=pool)
+
     def container_create(self, pool, sys_name=None, cont=None,
                          path=None, cont_type=None, oclass=None,
                          chunk_size=None, properties=None, acl_file=None):
@@ -108,6 +124,24 @@ class DaosCommand(DaosCommandBase):
             cont=cont, path=path, type=cont_type, oclass=oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file)
 
+    def container_clone(self, src, dst):
+        """Clone a container to a new container.
+
+        Args:
+            src (str): the source, formatted as daos://<pool>/<cont>
+            dst (str): the destination, formatted as daos://<pool>/<cont>
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container clone command fails.
+
+        """
+        return self._get_result(
+            ("container", "clone"), src=src, dst=dst)
+
     def container_destroy(self, pool, cont, force=None, sys_name=None):
         """Destroy a container.
 
@@ -130,6 +164,28 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("container", "destroy"), pool=pool, sys_name=sys_name,
             cont=cont, force=force)
+
+    def container_check(self, pool, cont, sys_name=None, path=None):
+        """Check the integrity of container objects.
+
+        Args:
+            pool (str): UUID of the pool in which to create the container
+            cont (str): container UUID.
+            sys_name (str, optional):  DAOS system name context for servers.
+                Defaults to None.
+            path (str): Container namespace path. Defaults to None
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container check command fails.
+
+        """
+        return self._get_result(
+            ("container", "check"), pool=pool, cont=cont,
+            sys_name=sys_name, path=path)
 
     def container_get_acl(self, pool, cont,
                           verbose=False, outfile=None):
@@ -235,7 +291,8 @@ class DaosCommand(DaosCommandBase):
         # 182347e4-08ce-4069-b5e2-0dd04406dffd
         data = {}
         if self.result.exit_status == 0:
-            data["uuids"] = re.findall(r"([0-9a-f-]{36})", self.result.stdout)
+            data["uuids"] = re.findall(r"([0-9a-f-]{36})",
+            self.result.stdout_text)
         return data
 
     def pool_set_attr(self, pool, attr, value):
@@ -423,7 +480,7 @@ class DaosCommand(DaosCommandBase):
         # Container's `&()\;'"!<> attribute value: attr12
         match = re.findall(
             r"Container's\s+([\S ]+)\s+attribute\s+value:\s+(.+)$",
-            self.result.stdout)
+            self.result.stdout_text)
         data = {}
         if match:
             data["attr"] = match[0][0]
@@ -457,7 +514,7 @@ class DaosCommand(DaosCommandBase):
         # ~@#$%^*-=_+[]{}:/?,.
         # aa bb
         # attr48
-        match = re.findall(r"\n([\S ]+)", self.result.stdout)
+        match = re.findall(r"\n([\S ]+)", self.result.stdout_text)
         return {"attrs": match}
 
     def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
@@ -487,7 +544,7 @@ class DaosCommand(DaosCommandBase):
         # snapshot/epoch 1582610056530034697 has been created
         data = {}
         match = re.findall(
-            r"[A-Za-z\/]+\s([0-9]+)\s[a-z\s]+", self.result.stdout)
+            r"[A-Za-z\/]+\s([0-9]+)\s[a-z\s]+", self.result.stdout_text)
         if match:
             data["epoch"] = match[0]
 
@@ -545,7 +602,7 @@ class DaosCommand(DaosCommandBase):
         # Container's snapshots :
         # 1598478249040609297 1598478258840600594 1598478287952543761
         data = {}
-        match = re.findall(r"(\d+)", self.result.stdout)
+        match = re.findall(r"(\d+)", self.result.stdout_text)
         if match:
             data["epochs"] = match
         return data
@@ -586,7 +643,7 @@ class DaosCommand(DaosCommandBase):
         vals = re.findall(
             r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"\
             r"grp:\s+(\d+)\s+|"\
-            r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout)
+            r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout_text)
 
         try:
             oid_vals = vals[0][0]

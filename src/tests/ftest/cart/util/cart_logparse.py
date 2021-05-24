@@ -40,6 +40,7 @@ LogIter class definition.
 LogLine class definition.
 
 This provides a way of querying CaRT logfiles for processing.
+
 """
 
 from collections import OrderedDict
@@ -47,37 +48,40 @@ import bz2
 import os
 import re
 
+
 class InvalidPid(Exception):
-    """Exception to be raised when invalid pid is requested"""
-    pass
+    """Exception to be raised when invalid pid is requested."""
+
 
 class InvalidLogFile(Exception):
-    """Exception to be raised when log file cannot be parsed"""
-    pass
+    """Exception to be raised when log file cannot be parsed."""
+
 
 LOG_LEVELS = {
-    'EMIT'  :1,
-    'FATAL' :2,
-    'EMRG'  :3,
-    'CRIT'  :4,
-    'ERR'   :5,
-    'WARN'  :6,
-    'NOTE'  :7,
-    'INFO'  :8,
-    'DBUG'  :9}
+    'EMIT': 1,
+    'FATAL': 2,
+    'EMRG': 3,
+    'CRIT': 4,
+    'ERR': 5,
+    'WARN': 6,
+    'NOTE': 7,
+    'INFO': 8,
+    'DBUG': 9}
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
 for name in LOG_LEVELS:
     LOG_NAMES[LOG_LEVELS[name]] = name
 
+
 # pylint: disable=too-few-public-methods
 class LogRaw():
-    """Class for raw (non cart log lines) in cart log files
+    """Class for raw (non cart log lines) in cart log files.
 
     This is used for lines that cannot be identified as cart log lines,
     for example mercury logs being sent to the same file.
     """
+
     def __init__(self, line):
         self.line = line.rstrip('\n')
         self.trace = False
@@ -87,6 +91,7 @@ class LogRaw():
         LogLine
         """
         return self.line
+
 
 # pylint: disable=too-many-instance-attributes
 class LogLine():
@@ -127,8 +132,8 @@ class LogLine():
         self.fac = fields[3]
         try:
             self.level = LOG_LEVELS[fields[4]]
-        except KeyError:
-            raise InvalidLogFile(fields[4])
+        except KeyError as error:
+            raise InvalidLogFile(fields[4]) from error
 
         self.ts = fields[0]
         self._fields = fields[5:]
@@ -331,25 +336,66 @@ class LogLine():
         """Returns True if line is a allocation point"""
         return self.get_field(2).startswith('alloc(')
 
+    def calloc_pointer(self):
+        """Returns the memory address allocated"""
+        return self.get_field(-1).rstrip('.')
+
     def is_realloc(self):
         """Returns True if line is a call to"""
         return self.get_field(2) == 'realloc'
 
+    def realloc_pointers(self):
+        """Returns a tuple of old and new memory addresses"""
+        old_pointer = self.get_field(-1).rstrip('.')
+
+        # Working out the old pointer is tricky, realloc will have two or three
+        # strings representing variables, some of which can have spaces in them
+        # so patch the line back together, split on ' which marks the end of
+        # these and work for there.  The field we want will be after 1 or 2
+        # entries, but always 1 from the end, so use that.
+        msg = ' '.join(self._fields)
+        tick_fields = msg.split("'")
+        short_msg = tick_fields[-3]
+        fields = short_msg.split(' ')
+        new_pointer = fields[2]
+        return (new_pointer, old_pointer)
+
+    def realloc_sizes(self):
+        """Returns a tuple of old and new memory region sizes"""
+
+        # See comment in realloc_pointers() for basic method here.
+        # new_size is made by combining count and elem size,
+        # old_size is simply a size which is the only oddity.
+        elem_size = int(self.get_field(3).split(':')[-1])
+        if self.get_field(4) == '*':
+            msg = ' '.join(self._fields)
+            tick_fields = msg.split("'")
+            short_msg = tick_fields[4]
+            fields = short_msg.split(' ')
+            count = int(fields[0].lstrip(':'))
+            new_size = count * elem_size
+        else:
+            new_size = elem_size
+        old_size = int(self.get_field(-3).split(':')[-1])
+        return (new_size, old_size)
+
     def calloc_size(self):
         """Returns the size of the allocation"""
-        if self.get_field(5) == '*':
-            if self.is_realloc():
-                field = -5
-            else:
-                field = -3
-            count = int(self.get_field(field).split(':')[-1])
-            return count * int(self.get_field(4))
-        return int(self.get_field(4))
+        if self.is_realloc():
+            (new_size, _) = self.realloc_sizes()
+            return new_size
+        if self.get_field(4) == '*':
+            count = int(self.get_field(-3).split(':')[-1])
+            return count * int(self.get_field(3).split(':')[-1])
+        return int(self.get_field(3).split(':')[-1])
 
     def is_free(self):
         """Returns True if line is a call to free"""
         return self.get_field(2) == 'free'
 
+    def free_pointer(self):
+        """Return the memory address freed"""
+        return self.get_field(-1).rstrip('.')
 
 # pylint: disable=too-many-branches
 class StateIter():
@@ -430,6 +476,7 @@ class StateIter():
 # pylint: disable=too-many-branches
 
 # pylint: disable=too-few-public-methods
+
 
 class LogIter():
     """Class for parsing CaRT log files
@@ -576,8 +623,8 @@ class LogIter():
         if pid is not None:
             try:
                 self._iter_pid = self._pids[pid]
-            except KeyError:
-                raise InvalidPid
+            except KeyError as error:
+                raise InvalidPid from error
 
             if self.__from_file:
                 if self.bz2:
@@ -597,7 +644,7 @@ class LogIter():
         self._raw = raw
 
         if stateful:
-            if not pid:
+            if pid is None:
                 raise InvalidPid
             return StateIter(self)
 
@@ -607,7 +654,7 @@ class LogIter():
         self._iter_index = 0
         self._iter_count = 0
         if self.__from_file:
-            if not self._pid or self.bz2:
+            if self._pid is None or self.bz2:
                 self._fd.seek(0)
             else:
                 self._fd.seek(self._iter_pid['file_pos'])
@@ -623,14 +670,14 @@ class LogIter():
             if not line:
                 raise StopIteration
             fields = line.split(' ', 8)
-            if len(fields) < 6 or len(fields[0]) != 17:
+            if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
                 return LogRaw(line)
             return LogLine(line)
 
         try:
             line = self._data[self._offset]
-        except IndexError:
-            raise StopIteration
+        except IndexError as error:
+            raise StopIteration from error
         self._offset += 1
         return line
 
@@ -639,8 +686,9 @@ class LogIter():
         while True:
             self._iter_index += 1
 
-            if self._pid and self._iter_index > self._iter_last_index:
-                assert self._iter_count == self._iter_pid['line_count'] # nosec
+            if self._pid is not None and \
+               self._iter_index > self._iter_last_index:
+                assert self._iter_count == self._iter_pid['line_count']  # nosec
                 raise StopIteration
 
             line = self.__lnext()
@@ -651,7 +699,7 @@ class LogIter():
             if self._trace_only and not line.trace:
                 continue
 
-            if self._pid:
+            if self._pid is not None:
                 if line.pid != self._pid:
                     continue
 
@@ -667,5 +715,5 @@ class LogIter():
 
     def get_pids(self):
         """Return an array of pids appearing in the file"""
-        return self._pids.keys()
+        return list(self._pids.keys())
 # pylint: enable=too-many-instance-attributes

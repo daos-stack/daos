@@ -1052,10 +1052,11 @@ create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 
 		D_ASSERT(user_sgl->sg_nr > cur_i);
 
-		sgl->sg_nr++;
-		D_REALLOC_ARRAY(new_sg_iovs, sgl->sg_iovs, sgl->sg_nr);
+		D_REALLOC_ARRAY(new_sg_iovs, sgl->sg_iovs, sgl->sg_nr,
+				sgl->sg_nr + 1);
 		if (new_sg_iovs == NULL)
 			return -DER_NOMEM;
+		sgl->sg_nr++;
 		sgl->sg_iovs = new_sg_iovs;
 
 		sgl->sg_iovs[k].iov_buf = user_sgl->sg_iovs[cur_i].iov_buf +
@@ -1239,18 +1240,18 @@ next:
 static int
 set_short_read_cb(tse_task_t *task, void *data)
 {
-	struct hole_params	*params;
+	struct hole_params	*params = daos_task_get_priv(task);
 	daos_array_io_t		*args;
 	int			i;
 	int			rc = task->dt_result;
 
+	D_ASSERT(params != NULL);
+
 	if (rc != 0) {
 		D_ERROR("Failed to get array size "DF_RC"\n", DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
-	params = daos_task_get_priv(task);
-	D_ASSERT(params != NULL);
 	args = daos_task_get_args(params->ptask);
 	D_ASSERT(args);
 
@@ -1275,11 +1276,9 @@ set_short_read_cb(tse_task_t *task, void *data)
 
 	/** memset holes to 0 */
 	rc = process_iomap(params, args);
-	if (rc)
-		return rc;
-
+out:
 	D_FREE(params);
-	return 0;
+	return rc;
 }
 
 static int
@@ -1297,7 +1296,7 @@ check_short_read_cb(tse_task_t *task, void *data)
 
 	if (rc != 0) {
 		D_ERROR("Array Read Failed "DF_RC"\n", DP_RC(rc));
-		return rc;
+		D_GOTO(err_params, rc);
 	}
 
 	D_ASSERT(params);
@@ -1382,12 +1381,7 @@ next:
 		/** memset all holes to 0 */
 		params->array_size = UINT64_MAX;
 		rc = process_iomap(params, args);
-		if (rc)
-			return rc;
-
-		tse_task_complete(task, 0);
-		D_FREE(params);
-		return 0;
+		D_GOTO(err_params, rc);
 	}
 
 	/** Schedule the get size to properly check for short reads */
@@ -1596,13 +1590,13 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			daos_off_t	old_array_idx;
 			daos_recx_t	*new_recxs;
 
-			iod->iod_nr++;
-
 			/** add another element to recxs */
-			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs, iod->iod_nr);
+			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs,
+					iod->iod_nr, iod->iod_nr + 1);
 			if (new_recxs == NULL) {
 				D_GOTO(err_stask, rc = -DER_NOMEM);
 			}
+			iod->iod_nr++;
 			iod->iod_recxs = new_recxs;
 
 			/** set the record access for this range */

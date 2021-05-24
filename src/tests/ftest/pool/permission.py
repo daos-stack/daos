@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -9,7 +9,7 @@ from pydaos.raw import DaosContainer, DaosApiError
 from avocado.core.exceptions import TestFail
 from test_utils_pool import TestPool
 
-RESULT_PASS = "PASS"
+RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
 
 
@@ -37,7 +37,7 @@ class Permission(TestWithServers):
         Test Description:
             Test pool connections with specific permissions.
 
-        :avocado: tags=pool,permission,connectpermission
+        :avocado: tags=all,daily_regression,pool,permission,connectpermission
         """
         # parameter used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
@@ -88,7 +88,7 @@ class Permission(TestWithServers):
             Test whether file modification happens as expected under different
             permission levels.
 
-        :avocado: tags=pool,permission,filemodification
+        :avocado: tags=all,daily_regression,pool,permission,filemodification
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
@@ -108,6 +108,7 @@ class Permission(TestWithServers):
         self.test_log.debug("Pool initialization successful")
         self.pool.get_params(self)
         self.pool.mode.value = createmode
+        self.pool.create()
         self.test_log.debug("Pool Creation successful")
 
         try:
@@ -135,10 +136,10 @@ class Permission(TestWithServers):
             self.container.open()
             self.test_log.debug("Container open successful")
 
-            thedata = "a string that I want to stuff into an object"
+            thedata = b"a string that I want to stuff into an object"
             size = 45
-            dkey = "this is the dkey"
-            akey = "this is the akey"
+            dkey = b"this is the dkey"
+            akey = b"this is the akey"
 
             self.container.write_an_obj(thedata, size, dkey, akey)
             self.test_log.debug("Container write successful")

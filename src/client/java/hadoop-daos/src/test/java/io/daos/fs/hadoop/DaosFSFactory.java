@@ -23,10 +23,19 @@ public class DaosFSFactory {
 
   private static FileSystem createFS() throws IOException {
     Configuration conf = new Configuration();
+    config(conf);
+    return DaosHadoopTestUtils.createTestFileSystem(conf);
+  }
+
+  public static void config(Configuration conf) {
+    config(conf, false);
+  }
+
+  public static void config(Configuration conf, boolean async) {
     conf.set(Constants.DAOS_POOL_UUID, pooluuid);
     conf.set(Constants.DAOS_CONTAINER_UUID, contuuid);
     conf.set(Constants.DAOS_POOL_SVC, svc);
-    return DaosHadoopTestUtils.createTestFileSystem(conf);
+    conf.set(Constants.DAOS_IO_ASYNC, String.valueOf(async));
   }
 
   public synchronized static FileSystem getFS() throws IOException {

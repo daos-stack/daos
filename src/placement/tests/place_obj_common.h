@@ -124,8 +124,8 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp);
 int
 extend_test_pool_map(struct pool_map *map, uint32_t nnodes,
 		     uuid_t target_uuids[], d_rank_list_t *rank_list,
-		uint32_t ndomains, int32_t *domains, bool *updated_p,
-		uint32_t *map_version_p, uint32_t dss_tgt_nr);
+		     uint32_t ndomains, uint32_t *domains, bool *updated_p,
+		     uint32_t *map_version_p, uint32_t dss_tgt_nr);
 
 bool
 is_max_class_obj(daos_oclass_id_t cid);

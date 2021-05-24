@@ -18,19 +18,54 @@
 #include <daos/mgmt.h>
 #include <daos/container.h>
 
-static void
-degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
+#define DEGRADE_SMALL_POOL_SIZE	(1ULL << 28)
+#define DEGRADE_POOL_SIZE	(1ULL << 32)
+#define DEGRADE_RANK_SIZE	(6)
+
+int
+degrade_small_sub_setup(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
+	test_arg_t *arg;
+	int rc;
+
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
+			DEGRADE_SMALL_POOL_SIZE, DEGRADE_RANK_SIZE, NULL);
+	if (rc) {
+		print_message("It can not create the pool with 6 ranks"
+			      " probably due to not enough ranks %d\n", rc);
+		return rc;
+	}
+
+	arg = *state;
+	arg->no_rebuild = 1;
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal",
+				"exclude");
+	return rc;
+}
+
+int
+degrade_sub_setup(void **state)
+{
+	test_arg_t *arg;
+	int rc;
+
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
+			DEGRADE_POOL_SIZE, DEGRADE_RANK_SIZE, NULL);
+	if (rc)
+		return rc;
+
+	arg = *state;
+	arg->no_rebuild = 1;
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal",
+				"exclude");
+	return rc;
+}
+
+static void
+degrade_ec_write(test_arg_t *arg, daos_obj_id_t oid, int write_type)
+{
 	struct ioreq	req;
-	d_rank_t	ranks[4] = { -1 };
-	int		idx = 0;
 
-	if (!test_runable(arg, 6))
-		return;
-
-	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	if (write_type == PARTIAL_UPDATE)
@@ -43,14 +78,15 @@ degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
 		write_ec_partial_full(&req, arg->index, 0);
 
 	ioreq_fini(&req);
+}
 
-	while (shards_nr-- > 0) {
-		ranks[idx] = get_rank_by_oid_shard(arg, oid, shards[idx]);
-		idx++;
-	}
-	rebuild_pools_ranks(&arg, 1, ranks, idx, false);
+static void
+degrade_ec_verify(test_arg_t *arg, daos_obj_id_t oid, int write_type)
+{
+	struct ioreq	req;
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
 	if (write_type == PARTIAL_UPDATE)
 		verify_ec_partial(&req, arg->index, 0);
 	else if (write_type == FULL_UPDATE)
@@ -61,9 +97,29 @@ degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
 		verify_ec_full(&req, arg->index, 0);
 
 	ioreq_fini(&req);
+}
 
-	while (idx > 0)
-		rebuild_add_back_tgts(arg, ranks[--idx], NULL, 1);
+static void
+degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	d_rank_t	ranks[4] = { -1 };
+	int		idx = 0;
+
+	if (!test_runable(arg, DEGRADE_RANK_SIZE))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	degrade_ec_write(arg, oid, write_type);
+
+	while (shards_nr-- > 0) {
+		ranks[idx] = get_rank_by_oid_shard(arg, oid, shards[idx]);
+		idx++;
+	}
+	rebuild_pools_ranks(&arg, 1, ranks, idx, false);
+
+	degrade_ec_verify(arg, oid, write_type);
 }
 
 static void
@@ -108,6 +164,12 @@ static void
 degrade_full_partial_fail_2data(void **state)
 {
 	int shards[2];
+
+	/*
+	 * Skipping test because of DAOS-6755, which seems to be related to EC
+	 * aggregation
+	 */
+	skip();
 
 	shards[0] = 0;
 	shards[1] = 3;
@@ -288,15 +350,74 @@ degrade_dfs_fail_data_parity_s3p0(void **state)
 	dfs_ec_rebuild_io(state, shards, 2);
 }
 
-#define DEGRADE_SMALL_POOL_SIZE (1ULL << 28)
-int
-degrade_small_sub_setup(void **state)
+static void
+degrade_multi_conts_agg(void **state)
 {
-	int rc;
+#define CONT_PER_POOL	(8)
+	test_arg_t	*arg = *state;
+	test_arg_t	*args[CONT_PER_POOL] = { 0 };
+	daos_obj_id_t	 oids[CONT_PER_POOL] = { 0 };
+	int		 fail_shards[2];
+	d_rank_t	 fail_ranks[4] = { -1 };
+	int		 shards_nr = 2;
+	int		 i;
+	int		 rc;
 
-	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			DEGRADE_SMALL_POOL_SIZE, 6, NULL);
-	return rc;
+	if (!test_runable(arg, DEGRADE_RANK_SIZE))
+		return;
+
+	fail_shards[0] = 0;
+	fail_shards[1] = 2;
+
+	memset(args, 0, sizeof(args[0]) * CONT_PER_POOL);
+	for (i = 0; i < CONT_PER_POOL; i++) {
+		rc = test_setup((void **)&args[i], SETUP_CONT_CONNECT,
+				arg->multi_rank, DEGRADE_SMALL_POOL_SIZE,
+				DEGRADE_RANK_SIZE, &arg->pool);
+		if (rc) {
+			print_message("test_setup failed: rc %d\n", rc);
+			goto out;
+		}
+
+		args[i]->index = arg->index;
+		assert_int_equal(args[i]->pool.slave, 1);
+		oids[i] = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0,
+					    arg->myrank);
+		args[i]->no_rebuild = 1;
+	}
+
+	for (i = 0; i < CONT_PER_POOL; i++) {
+		if ((i % 3) == 0)
+			degrade_ec_write(args[i], oids[i], FULL_PARTIAL_UPDATE);
+		else if ((i % 3) == 1)
+			degrade_ec_write(args[i], oids[i], PARTIAL_UPDATE);
+		else
+			degrade_ec_write(args[i], oids[i], PARTIAL_FULL_UPDATE);
+	}
+
+	/* sleep a while to make aggregation triggered */
+	print_message("sleep about 25 second to wait aggregation ...\n");
+	sleep(25);
+
+	for (i = 0; i < shards_nr; i++)
+		fail_ranks[i] = get_rank_by_oid_shard(args[0], oids[0],
+						      fail_shards[i]);
+	rebuild_pools_ranks(&args[0], 1, fail_ranks, shards_nr, false);
+
+	for (i = 0; i < CONT_PER_POOL; i++) {
+		if ((i % 3) == 0)
+			degrade_ec_verify(args[i], oids[i],
+					  FULL_PARTIAL_UPDATE);
+		else if ((i % 3) == 1)
+			degrade_ec_verify(args[i], oids[i], PARTIAL_UPDATE);
+		else
+			degrade_ec_verify(args[i], oids[i],
+					  PARTIAL_FULL_UPDATE);
+	}
+
+out:
+	for (i = CONT_PER_POOL - 1; i >= 0; i--)
+		test_teardown((void **)&args[i]);
 }
 
 /** create a new pool/container for each test */
@@ -366,6 +487,8 @@ static const struct CMUnitTest degrade_tests[] = {
 	{"DEGRADE22: degrade io with 1data 1parity(s2, p0)",
 	 degrade_dfs_fail_data_parity_s2p0, degrade_small_sub_setup,
 	 test_teardown},
+	{"DEGRADE23: degrade io with multi-containers and aggregation",
+	 degrade_multi_conts_agg, degrade_sub_setup, test_teardown},
 };
 
 int
@@ -379,7 +502,7 @@ run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 		sub_tests_size = ARRAY_SIZE(degrade_tests);
 		sub_tests = NULL;
 	}
-	run_daos_sub_tests_only("DAOS_Degrade_EC", degrade_tests,
+	rc += run_daos_sub_tests_only("DAOS_Degrade_EC", degrade_tests,
 				ARRAY_SIZE(degrade_tests), sub_tests,
 				sub_tests_size);
 

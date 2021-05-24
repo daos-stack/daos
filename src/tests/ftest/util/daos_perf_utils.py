@@ -21,7 +21,7 @@ class DaosPerfCommand(ExecutableCommand):
         Args:
             path (str): path to the daos_perf command
         """
-        super(DaosPerfCommand, self).__init__(
+        super().__init__(
             "/run/daos_perf/*", "daos_perf", path)
 
         # daos_perf command line options:

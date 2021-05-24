@@ -4,11 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 from socket import gethostname
 
 from command_utils_base import \
-    FormattedParameter, CommandWithParameters, YamlParameters
+    FormattedParameter, CommandWithParameters
 from command_utils import CommandWithSubCommand, YamlCommand
 
 
@@ -24,22 +24,21 @@ class DmgCommandBase(YamlCommand):
                 settings. Defaults to None, in which case settings
                 must be supplied as command-line parameters.
         """
-        super(DmgCommandBase, self).__init__(
-            "/run/dmg/*", "dmg", path, yaml_cfg)
+        super().__init__("/run/dmg/*", "dmg", path, yaml_cfg)
 
         # If running dmg on remote hosts, this list needs to include those hosts
         self.temporary_file_hosts = gethostname().split(".")[0:1]
 
         # If specified use the configuration file from the YamlParameters object
         default_yaml_file = None
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "filename"):
             default_yaml_file = self.yaml.filename
 
         self._hostlist = FormattedParameter("-l {}")
         self.hostfile = FormattedParameter("-f {}")
         self.configpath = FormattedParameter("-o {}", default_yaml_file)
         self.insecure = FormattedParameter("-i", False)
-        self.debug = FormattedParameter("-d", False)
+        self.debug = FormattedParameter("-d", True)
         self.json = FormattedParameter("-j", False)
 
     @property
@@ -91,8 +90,7 @@ class DmgCommandBase(YamlCommand):
 
         def __init__(self):
             """Create a dmg cont subcommand object."""
-            super(DmgCommandBase.ContSubCommand, self).__init__(
-                "/run/dmg/cont/*", "cont")
+            super().__init__("/run/dmg/cont/*", "cont")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
@@ -107,10 +105,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg cont set-owner command object."""
-                super(
-                    DmgCommandBase.ContSubCommand.SetownerSubCommand,
-                    self).__init__(
-                        "/run/dmg/cont/set-owner/*", "set-owner")
+                super().__init__("/run/dmg/cont/set-owner/*", "set-owner")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.cont = FormattedParameter("--cont={}", None)
                 self.user = FormattedParameter("--user={}", None)
@@ -121,8 +116,7 @@ class DmgCommandBase(YamlCommand):
 
         def __init__(self):
             """Create a dmg network subcommand object."""
-            super(DmgCommandBase.NetworkSubCommand, self).__init__(
-                "/run/dmg/network/*", "network")
+            super().__init__("/run/dmg/network/*", "network")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
@@ -137,10 +131,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg network scan command object."""
-                super(
-                    DmgCommandBase.NetworkSubCommand.ScanSubCommand,
-                    self).__init__(
-                        "/run/dmg/network/scan/*", "scan")
+                super().__init__("/run/dmg/network/scan/*", "scan")
                 self.provider = FormattedParameter("-p {}", None)
                 self.all = FormattedParameter("-a", False)
 
@@ -149,8 +140,7 @@ class DmgCommandBase(YamlCommand):
 
         def __init__(self):
             """Create a dmg pool subcommand object."""
-            super(DmgCommandBase.PoolSubCommand, self).__init__(
-                "/run/dmg/pool/*", "pool")
+            super().__init__("/run/dmg/pool/*", "pool")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
@@ -191,10 +181,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool create command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.CreateSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/create/*", "create")
+                super().__init__("/run/dmg/pool/create/*", "create")
                 self.group = FormattedParameter("--group={}", None)
                 self.user = FormattedParameter("--user={}", None)
                 self.acl_file = FormattedParameter("--acl-file={}", None)
@@ -209,10 +196,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool exclude command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.ExcludeSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/exclude/*", "exclude")
+                super().__init__("/run/dmg/pool/exclude/*", "exclude")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
@@ -222,10 +206,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool extend command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.ExtendSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/extend/*", "extend")
+                super().__init__("/run/dmg/pool/extend/*", "extend")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.ranks = FormattedParameter("--ranks={}", None)
                 self.scm_size = FormattedParameter("--scm-size={}", None)
@@ -236,10 +217,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool drain command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.DrainSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/drain/*", "drain")
+                super().__init__("/run/dmg/pool/drain/*", "drain")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
@@ -249,10 +227,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool reintegrate command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.ReintegrateSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/reintegrate/*", "reintegrate")
+                super().__init__("/run/dmg/pool/reintegrate/*", "reintegrate")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
@@ -262,10 +237,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool delete-acl command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.DeleteAclSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/delete-acl/*", "delete-acl")
+                super().__init__("/run/dmg/pool/delete-acl/*", "delete-acl")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.principal = FormattedParameter("-p {}", None)
 
@@ -274,10 +246,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool destroy command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.DestroySubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/destroy/*", "destroy")
+                super().__init__("/run/dmg/pool/destroy/*", "destroy")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.sys_name = FormattedParameter("--sys-name={}", None)
                 self.force = FormattedParameter("--force", False)
@@ -287,10 +256,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool get-acl command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.GetAclSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/get-acl/*", "get-acl")
+                super().__init__("/run/dmg/pool/get-acl/*", "get-acl")
                 self.pool = FormattedParameter("--pool={}", None)
 
         class ListSubCommand(CommandWithParameters):
@@ -298,20 +264,15 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool list command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.ListSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/list/*", "list")
+                super().__init__("/run/dmg/pool/list/*", "list")
 
         class OverwriteAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool overwrite-acl command."""
 
             def __init__(self):
                 """Create a dmg pool overwrite-acl command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.OverwriteAclSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/overwrite-acl/*", "overwrite-acl")
+                super().__init__(
+                    "/run/dmg/pool/overwrite-acl/*", "overwrite-acl")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.acl_file = FormattedParameter("-a {}", None)
 
@@ -320,10 +281,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool query command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.QuerySubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/query/*", "query")
+                super().__init__("/run/dmg/pool/query/*", "query")
                 self.pool = FormattedParameter("--pool={}", None)
 
         class SetPropSubCommand(CommandWithParameters):
@@ -331,10 +289,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool set-prop command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.SetPropSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/set-prop/*", "set-prop")
+                super().__init__("/run/dmg/pool/set-prop/*", "set-prop")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.name = FormattedParameter("--name={}", None)
                 self.value = FormattedParameter("--value={}", None)
@@ -344,10 +299,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool update-acl command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.UpdateAclSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/update-acl/*", "update-acl")
+                super().__init__("/run/dmg/pool/update-acl/*", "update-acl")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.acl_file = FormattedParameter("-a {}", None)
                 self.entry = FormattedParameter("-e {}", None)
@@ -357,10 +309,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool evict command object."""
-                super(
-                    DmgCommandBase.PoolSubCommand.EvictSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/evict/*", "evict")
+                super().__init__("/run/dmg/pool/evict/*", "evict")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.sys = FormattedParameter("--sys={}", None)
 
@@ -369,8 +318,7 @@ class DmgCommandBase(YamlCommand):
 
         def __init__(self):
             """Create a dmg storage subcommand object."""
-            super(DmgCommandBase.StorageSubCommand, self).__init__(
-                "/run/dmg/storage/*", "storage")
+            super().__init__("/run/dmg/storage/*", "storage")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
@@ -393,10 +341,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg storage format command object."""
-                super(
-                    DmgCommandBase.StorageSubCommand.FormatSubCommand,
-                    self).__init__(
-                        "/run/dmg/storage/format/*", "format")
+                super().__init__("/run/dmg/storage/format/*", "format")
                 self.verbose = FormattedParameter("--verbose", False)
                 self.reformat = FormattedParameter("--reformat", False)
 
@@ -405,10 +350,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg storage prepare command object."""
-                super(
-                    DmgCommandBase.StorageSubCommand.PrepareSubCommand,
-                    self).__init__(
-                        "/run/dmg/storage/prepare/*", "prepare")
+                super().__init__("/run/dmg/storage/prepare/*", "prepare")
                 self.pci_whitelist = FormattedParameter("-w {}", None)
                 self.hugepages = FormattedParameter("-p {}", None)
                 self.target_user = FormattedParameter("-u {}", None)
@@ -422,10 +364,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg storage query command object."""
-                super(
-                    DmgCommandBase.StorageSubCommand.QuerySubCommand,
-                    self).__init__(
-                        "/run/dmg/storage/query/*", "query")
+                super().__init__("/run/dmg/storage/query/*", "query")
 
             def get_sub_command_class(self):
                 # pylint: disable=redefined-variable-type
@@ -446,10 +385,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query target-health object."""
-                    super(
-                        DmgCommandBase.StorageSubCommand.QuerySubCommand.
-                        TargetHealthSubCommand,
-                        self).__init__(
+                    super().__init__(
                             "/run/dmg/storage/query/target-health/*",
                             "target-health")
                     self.rank = FormattedParameter("-r {}", None)
@@ -460,10 +396,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query device-health object."""
-                    super(
-                        DmgCommandBase.StorageSubCommand.QuerySubCommand.
-                        DeviceHealthSubCommand,
-                        self).__init__(
+                    super().__init__(
                             "/run/dmg/storage/query/device-health/*",
                             "device-health")
                     self.uuid = FormattedParameter("-u {}", None)
@@ -473,10 +406,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query list-devices object."""
-                    super(
-                        DmgCommandBase.StorageSubCommand.QuerySubCommand.
-                        ListDevicesSubCommand,
-                        self).__init__(
+                    super().__init__(
                             "/run/dmg/storage/query/list-devices/*",
                             "list-devices")
                     self.rank = FormattedParameter("-r {}", None)
@@ -488,10 +418,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage query list-pools object."""
-                    super(
-                        DmgCommandBase.StorageSubCommand.QuerySubCommand.
-                        ListPoolsSubCommand,
-                        self).__init__(
+                    super().__init__(
                             "/run/dmg/storage/query/list-pools/*",
                             "list-pools")
                     self.rank = FormattedParameter("-r {}", None)
@@ -503,10 +430,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg storage scan command object."""
-                super(
-                    DmgCommandBase.StorageSubCommand.ScanSubCommand,
-                    self).__init__(
-                        "/run/dmg/storage/scan/*", "scan")
+                super().__init__("/run/dmg/storage/scan/*", "scan")
                 self.nvme_health = FormattedParameter("--nvme-health", False)
                 self.verbose = FormattedParameter("--verbose", False)
 
@@ -515,10 +439,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg storage set command object."""
-                super(
-                    DmgCommandBase.StorageSubCommand.SetSubCommand,
-                    self).__init__(
-                        "/run/dmg/storage/set/*", "set")
+                super().__init__("/run/dmg/storage/set/*", "set")
 
             def get_sub_command_class(self):
                 # pylint: disable=redefined-variable-type
@@ -533,10 +454,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg storage set nvme-faulty object."""
-                    super(
-                        DmgCommandBase.StorageSubCommand.SetSubCommand.
-                        NvmeFaultySubCommand,
-                        self).__init__(
+                    super().__init__(
                             "/run/dmg/storage/query/device-state/*",
                             "nvme-faulty")
                     self.uuid = FormattedParameter("-u {}", None)
@@ -547,8 +465,7 @@ class DmgCommandBase(YamlCommand):
 
         def __init__(self):
             """Create a dmg system subcommand object."""
-            super(DmgCommandBase.SystemSubCommand, self).__init__(
-                "/run/dmg/system/*", "system")
+            super().__init__("/run/dmg/system/*", "system")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
@@ -571,30 +488,22 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg system leader-query command object."""
-                super(
-                    DmgCommandBase.SystemSubCommand.LeaderQuerySubCommand,
-                    self).__init__(
-                        "/run/dmg/system/leader-query/*", "leader-query")
+                super().__init__(
+                    "/run/dmg/system/leader-query/*", "leader-query")
 
         class ListPoolsSubCommand(CommandWithParameters):
             """Defines an object for the dmg system list-pools command."""
 
             def __init__(self):
                 """Create a dmg system list-pools command object."""
-                super(
-                    DmgCommandBase.SystemSubCommand.ListPoolsSubCommand,
-                    self).__init__(
-                        "/run/dmg/system/list-pools/*", "list-pools")
+                super().__init__("/run/dmg/system/list-pools/*", "list-pools")
 
         class QuerySubCommand(CommandWithParameters):
             """Defines an object for the dmg system query command."""
 
             def __init__(self):
                 """Create a dmg system query command object."""
-                super(
-                    DmgCommandBase.SystemSubCommand.QuerySubCommand,
-                    self).__init__(
-                        "/run/dmg/system/query/*", "query")
+                super().__init__("/run/dmg/system/query/*", "query")
                 self.ranks = FormattedParameter("--ranks={}")
                 self.verbose = FormattedParameter("--verbose", False)
 
@@ -603,10 +512,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg system start command object."""
-                super(
-                    DmgCommandBase.SystemSubCommand.StartSubCommand,
-                    self).__init__(
-                        "/run/dmg/system/start/*", "start")
+                super().__init__("/run/dmg/system/start/*", "start")
                 self.ranks = FormattedParameter("--ranks={}")
                 self.rank_hosts = FormattedParameter("--rank-hosts={}")
 
@@ -615,9 +521,6 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg system stop command object."""
-                super(
-                    DmgCommandBase.SystemSubCommand.StopSubCommand,
-                    self).__init__(
-                        "/run/dmg/system/stop/*", "stop")
+                super().__init__("/run/dmg/system/stop/*", "stop")
                 self.force = FormattedParameter("--force", False)
                 self.ranks = FormattedParameter("--ranks={}")

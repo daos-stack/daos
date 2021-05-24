@@ -102,7 +102,7 @@ DP_RANK(void)
 }
 
 #define DF_DB		DF_UUID"["DF_RANK"]"
-#define DP_DB(db)	DP_UUID(db->d_uuid), DP_RANK()
+#define DP_DB(db)	DP_UUID((db)->d_uuid), DP_RANK()
 
 /* Number of "base" references that the rdb_stop() path expects to remain */
 #define RDB_BASE_REFS 1
@@ -162,7 +162,7 @@ void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_RDB_VERSION 2
+#define DAOS_RDB_VERSION 3
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -241,7 +241,6 @@ struct rdb_local {
 #define DAOS_OSEQ_RDB_INSTALLSNAPSHOT /* output fields */	 \
 	((struct rdb_op_out)	(iso_op)		CRT_VAR) \
 	((msg_installsnapshot_response_t) (iso_msg)	CRT_VAR) \
-	((uint32_t)		(iso_padding)		CRT_VAR) \
 	/* chunk saved? */					 \
 	((uint64_t)		(iso_success)		CRT_VAR) \
 	/* last seq number */					 \
@@ -289,9 +288,6 @@ int rdb_path_iterate(const rdb_path_t *path, rdb_path_iterate_cb_t cb,
 int rdb_path_pop(rdb_path_t *path);
 
 /* rdb_util.c *****************************************************************/
-
-#define DF_IOV		"<%p,"DF_U64">"
-#define DP_IOV(iov)	(iov)->iov_buf, (iov)->iov_len
 
 extern const daos_size_t rdb_iov_max;
 size_t rdb_encode_iov(const d_iov_t *iov, void *buf);

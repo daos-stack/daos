@@ -17,7 +17,7 @@ class DaosCommandBase(CommandWithSubCommand):
         Args:
             path (str): path to the daos command
         """
-        super(DaosCommandBase, self).__init__("/run/daos/*", "daos", path)
+        super().__init__("/run/daos/*", "daos", path)
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -38,7 +38,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
         def __init__(self):
             """Create a daos pool subcommand object."""
-            super(DaosCommandBase.PoolSubCommand, self).__init__(
+            super().__init__(
                 "/run/daos/pool/*", "pool")
 
         def get_sub_command_class(self):
@@ -56,6 +56,8 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.sub_command_class = self.GetAttrSubCommand()
             elif self.sub_command.value == "set-attr":
                 self.sub_command_class = self.SetAttrSubCommand()
+            elif self.sub_command.value == "autotest":
+                self.sub_command_class = self.AutotestSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -68,10 +70,8 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super(
-                    DaosCommandBase.PoolSubCommand.CommonPoolSubCommand,
-                    self).__init__(
-                        "/run/daos/pool/{}/*".format(sub_command), sub_command)
+                super().__init__(
+                    "/run/daos/pool/{}/*".format(sub_command), sub_command)
                 self.pool = FormattedParameter("--pool={}")
                 self.sys_name = FormattedParameter("--sys-name={}")
                 self.sys = FormattedParameter("--sys={}")
@@ -81,45 +81,35 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos pool list-containers command object."""
-                super(
-                    DaosCommandBase.PoolSubCommand.ListContainersSubCommand,
-                    self).__init__("list-containers")
+                super().__init__("list-containers")
 
         class QuerySubCommand(CommonPoolSubCommand):
             """Defines an object for the daos pool query command."""
 
             def __init__(self):
                 """Create a daos pool query command object."""
-                super(
-                    DaosCommandBase.PoolSubCommand.QuerySubCommand,
-                    self).__init__("query")
+                super().__init__("query")
 
         class StatSubCommand(CommonPoolSubCommand):
             """Defines an object for the daos pool stat command."""
 
             def __init__(self):
                 """Create a daos pool stat command object."""
-                super(
-                    DaosCommandBase.PoolSubCommand.StatSubCommand,
-                    self).__init__("stat")
+                super().__init__("stat")
 
         class ListAttrsSubCommand(CommonPoolSubCommand):
             """Defines an object for the daos pool list-attr command."""
 
             def __init__(self):
                 """Create a daos pool list-attr command object."""
-                super(
-                    DaosCommandBase.PoolSubCommand.ListAttrsSubCommand,
-                    self).__init__("list-attrs")
+                super().__init__("list-attrs")
 
         class GetAttrSubCommand(CommonPoolSubCommand):
             """Defines an object for the daos pool get-attr command."""
 
             def __init__(self):
                 """Create a daos pool get-attr command object."""
-                super(
-                    DaosCommandBase.PoolSubCommand.GetAttrSubCommand,
-                    self).__init__("get-attr")
+                super().__init__("get-attr")
                 self.attr = FormattedParameter("--attr={}")
 
         class SetAttrSubCommand(CommonPoolSubCommand):
@@ -127,27 +117,35 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos pool set-attr command object."""
-                super(
-                    DaosCommandBase.PoolSubCommand.SetAttrSubCommand,
-                    self).__init__("set-attr")
+                super().__init__("set-attr")
                 self.attr = FormattedParameter("--attr={}")
                 self.value = FormattedParameter("--value={}")
+
+        class AutotestSubCommand(CommonPoolSubCommand):
+            """Defines an object for the daos pool autotest command."""
+
+            def __init__(self):
+                """Create a daos pool autotest command object."""
+                super().__init__("autotest")
 
     class ContainerSubCommand(CommandWithSubCommand):
         """Defines an object for the daos container sub command."""
 
         def __init__(self):
             """Create a daos container subcommand object."""
-            super(DaosCommandBase.ContainerSubCommand, self).__init__(
-                "/run/daos/container/*", "container")
+            super().__init__("/run/daos/container/*", "container")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
             """Get the dmg network sub command object."""
             if self.sub_command.value == "create":
                 self.sub_command_class = self.CreateSubCommand()
+            elif self.sub_command.value == "clone":
+                self.sub_command_class = self.CloneSubCommand()
             elif self.sub_command.value == "destroy":
                 self.sub_command_class = self.DestroySubCommand()
+            elif self.sub_command.value == "check":
+                self.sub_command_class = self.CheckSubCommand()
             elif self.sub_command.value == "list-objects":
                 self.sub_command_class = self.ListObjectsSubCommand()
             elif self.sub_command.value == "query":
@@ -196,10 +194,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super(
-                    DaosCommandBase.ContainerSubCommand.
-                    CommonContainerSubCommand,
-                    self).__init__(
+                super().__init__(
                         "/run/daos/container/{}/*".format(sub_command),
                         sub_command)
                 self.pool = FormattedParameter("--pool={}")
@@ -212,9 +207,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container create command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.CreateSubCommand,
-                    self).__init__("create")
+                super().__init__("create")
                 # Additional daos container create parameters:
                 #   --type=<type>
                 #           container type (HDF5, POSIX)
@@ -245,14 +238,21 @@ class DaosCommandBase(CommandWithSubCommand):
                 #           input file containing ACL
                 self.acl_file = FormattedParameter("--acl-file={}", None)
 
+        class CloneSubCommand(CommonContainerSubCommand):
+            """Defines an object for the daos container clone command."""
+
+            def __init__(self):
+                """Create a daos container clone command object."""
+                super().__init__("clone")
+                self.src = FormattedParameter("--src={}")
+                self.dst = FormattedParameter("--dst={}")
+
         class DestroySubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container destroy command."""
 
             def __init__(self):
                 """Create a daos container destroy command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.DestroySubCommand,
-                    self).__init__("destroy")
+                super().__init__("destroy")
                 self.force = FormattedParameter("--force", False)
 
         class ListObjectsSubCommand(CommonContainerSubCommand):
@@ -260,27 +260,30 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container list-objects command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.ListObjectsSubCommand,
-                    self).__init__("list-objects")
+                super().__init__("list-objects")
 
         class QuerySubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container query command."""
 
             def __init__(self):
                 """Create a daos container query command object."""
+                super().__init__("query")
+
+        class CheckSubCommand(CommonContainerSubCommand):
+            """Defines an object for the daos container check command."""
+
+            def __init__(self):
+                """Create a daos container check command object."""
                 super(
-                    DaosCommandBase.ContainerSubCommand.QuerySubCommand,
-                    self).__init__("query")
+                    DaosCommandBase.ContainerSubCommand.CheckSubCommand,
+                    self).__init__("check")
 
         class GetAclSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container get-acl command."""
 
             def __init__(self):
                 """Create a daos container get-acl command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.GetAclSubCommand,
-                    self).__init__("get-acl")
+                super().__init__("get-acl")
                 # Additional daos container create parameters:
                 #   --verbose
                 #           verbose mode (get-acl)
@@ -294,9 +297,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container overwrite-acl command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.OverwriteAclSubCommand,
-                    self).__init__("overwrite-acl")
+                super().__init__("overwrite-acl")
                 self.acl_file = FormattedParameter("--acl-file={}")
 
         class UpdateAclSubCommand(CommonContainerSubCommand):
@@ -304,9 +305,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container update-acl command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.UpdateAclSubCommand,
-                    self).__init__("update-acl")
+                super().__init__("update-acl")
                 self.acl_file = FormattedParameter("--acl-file={}")
                 self.entry = FormattedParameter("--entry={}")
 
@@ -315,9 +314,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container delete-acl command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.DeleteAclSubCommand,
-                    self).__init__("delete-acl")
+                super().__init__("delete-acl")
                 self.principal = FormattedParameter("--principal={}")
 
         class StatSubCommand(CommonContainerSubCommand):
@@ -325,27 +322,21 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container stat command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.StatSubCommand,
-                    self).__init__("stat")
+                super().__init__("stat")
 
         class ListAttrsSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container list-attrs command."""
 
             def __init__(self):
                 """Create a daos container list-attrs command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.ListAttrsSubCommand,
-                    self).__init__("list-attrs")
+                super().__init__("list-attrs")
 
         class DelAttrSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container del-attrs command."""
 
             def __init__(self):
                 """Create a daos container del-attrs command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.DelAttrSubCommand,
-                    self).__init__("del-attrs")
+                super().__init__("del-attrs")
                 self.attr = FormattedParameter("--attr={}")
 
         class GetAttrSubCommand(CommonContainerSubCommand):
@@ -353,9 +344,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container get-attr command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.GetAttrSubCommand,
-                    self).__init__("get-attr")
+                super().__init__("get-attr")
                 self.attr = FormattedParameter("--attr={}")
 
         class SetAttrSubCommand(CommonContainerSubCommand):
@@ -363,9 +352,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container set-attr command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.SetAttrSubCommand,
-                    self).__init__("set-attr")
+                super().__init__("set-attr")
                 self.attr = FormattedParameter("--attr={}")
                 self.value = FormattedParameter("--value={}")
 
@@ -374,9 +361,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container get-prop command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.GetPropSubCommand,
-                    self).__init__("get-prop")
+                super().__init__("get-prop")
                 self.prop = FormattedParameter("--prop={}")
 
         class SetPropSubCommand(CommonContainerSubCommand):
@@ -384,9 +369,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container set-prop command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.SetPropSubCommand,
-                    self).__init__("set-prop")
+                super().__init__("set-prop")
                 self.prop = FormattedParameter("--properties={}")
 
         class SetOwnerSubCommand(CommonContainerSubCommand):
@@ -394,9 +377,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container set-owner command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.SetOwnerSubCommand,
-                    self).__init__("set-owner")
+                super().__init__("set-owner")
                 self.user = FormattedParameter("--user={}")
                 self.group = FormattedParameter("--group={}")
 
@@ -405,9 +386,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container create-snap command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.CreateSnapSubCommand,
-                    self).__init__("create-snap")
+                super().__init__("create-snap")
                 self.snap = FormattedParameter("--snap={}")
                 self.epc = FormattedParameter("--epc={}")
                 self.epcrange = FormattedParameter("--epcrange={}")
@@ -417,18 +396,14 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container list-snaps command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.ListSnapsSubCommand,
-                    self).__init__("list-snaps")
+                super().__init__("list-snaps")
 
         class DestroySnapSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container destroy-snap command."""
 
             def __init__(self):
                 """Create a daos container destroy-snap command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.DestroySnapSubCommand,
-                    self).__init__("destroy-snap")
+                super().__init__("destroy-snap")
                 self.snap = FormattedParameter("--snap={}")
                 self.epc = FormattedParameter("--epc={}")
                 self.epcrange = FormattedParameter("--epcrange={}")
@@ -438,9 +413,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container rollback command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.RollbackSubCommand,
-                    self).__init__("rollback")
+                super().__init__("rollback")
                 self.snap = FormattedParameter("--snap={}")
                 self.epc = FormattedParameter("--epc={}")
 
@@ -449,8 +422,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
         def __init__(self):
             """Create a daos object subcommand object."""
-            super(DaosCommandBase.ObjectSubCommand, self).__init__(
-                "/run/daos/object/*", "object")
+            super().__init__("/run/daos/object/*", "object")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
@@ -473,9 +445,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super(
-                    DaosCommandBase.ObjectSubCommand.CommonObjectSubCommand,
-                    self).__init__(
+                super().__init__(
                         "/run/daos/object/{}/*".format(sub_command),
                         sub_command)
                 self.pool = FormattedParameter("--pool={}")
@@ -488,35 +458,28 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos object query command object."""
-                super(
-                    DaosCommandBase.ObjectSubCommand.QuerySubCommand,
-                    self).__init__("query")
+                super().__init__("query")
 
         class ListKeysSubCommand(CommonObjectSubCommand):
             """Defines an object for the daos object list-keys command."""
 
             def __init__(self):
                 """Create a daos object list-keys command object."""
-                super(
-                    DaosCommandBase.ObjectSubCommand.ListKeysSubCommand,
-                    self).__init__("list-keys")
+                super().__init__("list-keys")
 
         class DumpSubCommand(CommonObjectSubCommand):
             """Defines an object for the daos object dump command."""
 
             def __init__(self):
                 """Create a daos object dump command object."""
-                super(
-                    DaosCommandBase.ObjectSubCommand.DumpSubCommand,
-                    self).__init__("dump")
+                super().__init__("dump")
 
     class FilesystemSubCommand(CommandWithSubCommand):
         """Defines an object for the daos filesystem sub command."""
 
         def __init__(self):
             """Create a daos filesystem subcommand object."""
-            super(DaosCommandBase.FilesystemSubCommand, self).__init__(
-                "/run/daos/filesystem/*", "filesystem")
+            super().__init__("/run/daos/filesystem/*", "filesystem")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
@@ -535,20 +498,16 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super(
-                    DaosCommandBase.FilesystemSubCommand.
-                    CommonFilesystemSubCommand, self).__init__(
-                        "/run/daos/filesystem/{}/*".format(sub_command),
-                        sub_command)
+                super().__init__(
+                    "/run/daos/filesystem/{}/*".format(
+                        sub_command), sub_command)
 
         class CopySubCommand(CommonFilesystemSubCommand):
             """Defines an object for the daos filesystem copy command."""
 
             def __init__(self):
                 """Create a daos filesystem copy command object."""
-                super(
-                    DaosCommandBase.FilesystemSubCommand.CopySubCommand,
-                    self).__init__("copy")
+                super().__init__("copy")
                 #   --src=<type>:<pool/cont | path>
                 #   supported types are daos, posix
                 self.src = FormattedParameter("--src={}")

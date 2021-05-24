@@ -24,6 +24,8 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+#include "gurt/telemetry_common.h"
+#include "gurt/telemetry_producer.h"
 
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
@@ -1281,6 +1283,9 @@ cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 	ABT_thread		ec_eph_leader_ult = ABT_THREAD_NULL;
 	int			rc;
 
+	if (unlikely(ec_agg_disabled))
+		return 0;
+
 	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
 
 	rc = dss_ult_create(cont_agg_eph_leader_ult, svc, DSS_XS_SYS,
@@ -1477,6 +1482,11 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	d_iov_set(&value, &chdl, sizeof(chdl));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != -DER_NONEXIST) {
+		D_DEBUG(DF_DSMS, DF_CONT"/"DF_UUID": "
+				 "Container handle already open.\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->coi_op.ci_uuid),
+			DP_UUID(in->coi_op.ci_hdl));
 		if (rc == 0 && chdl.ch_flags != in->coi_flags) {
 			D_ERROR(DF_CONT": found conflicting container handle\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
@@ -1599,15 +1609,18 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		goto out;
 
-	/**
-	 * Put requested properties in output.
-	 * the allocated prop will be freed after rpc replied in
-	 * ds_cont_op_handler.
-	 */
-	rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop);
-	out->coo_prop = prop;
 
 out:
+	if (rc == 0) {
+		/**
+		 * Put requested properties in output.
+		 * the allocated prop will be freed after rpc replied in
+		 * ds_cont_op_handler.
+		 */
+		rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop);
+		out->coo_prop = prop;
+
+	}
 	if (rc != 0 && cont_hdl_opened)
 		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
 					      in->coi_op.ci_hdl,
@@ -1635,6 +1648,16 @@ cont_close_recs(crt_context_t ctx, struct cont_svc *svc,
 		rc = cont_iv_capability_invalidate(
 				svc->cs_pool->sp_iv_ns,
 				recs[i].tcr_hdl, CRT_IV_SYNC_EAGER);
+		if (rc == -DER_SHUTDOWN) {
+			/* If one of rank is being stopped, it may
+			 * return -DER_SHUTDOWN, which can be ignored
+			 * during capability invalidate.
+			 */
+			D_DEBUG(DF_DSMS, DF_CONT"/"DF_UUID" fail %d",
+				DP_CONT(svc->cs_pool_uuid, NULL),
+				DP_UUID(recs[i].tcr_hdl), rc);
+			rc = 0;
+		}
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -2273,7 +2296,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		if (iv_prop == NULL)
 			return -DER_NOMEM;
 
-		rc = cont_iv_prop_fetch(pool_hdl->sph_pool->sp_iv_ns,
+		rc = cont_iv_prop_fetch(pool_hdl->sph_pool->sp_uuid,
 					in->cqi_op.ci_uuid, iv_prop);
 		if (rc) {
 			D_ERROR("cont_iv_prop_fetch failed "DF_RC"\n",
@@ -2870,7 +2893,7 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		size_t	realloc_elems = (ap->conts_len == 0) ? 1 :
 					ap->conts_len * 2;
 
-		D_REALLOC_ARRAY(ptr, ap->conts, realloc_elems);
+		D_REALLOC_ARRAY(ptr, ap->conts, ap->conts_len, realloc_elems);
 		if (ptr == NULL)
 			return -DER_NOMEM;
 		ap->conts = ptr;
@@ -2989,20 +3012,28 @@ static int
 cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		  struct cont *cont, crt_rpc_t *rpc)
 {
-	struct cont_op_in      *in = crt_req_get(rpc);
-	d_iov_t			key;
-	d_iov_t			value;
-	struct container_hdl	hdl;
-	int			rc;
+	struct cont_op_in		*in = crt_req_get(rpc);
+	d_iov_t				 key;
+	d_iov_t				 value;
+	struct container_hdl		 hdl;
+	struct cont_metrics		*metrics;
+	int				 rc;
+
+	metrics = &ds_cont_metrics;
 
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_OPEN:
+		d_tm_inc_counter(metrics->op_open_ctr, 1);
+		d_tm_inc_gauge(metrics->open_cont_gauge, 1);
 		rc = cont_open(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_CLOSE:
+		d_tm_inc_counter(metrics->op_close_ctr, 1);
+		d_tm_dec_gauge(metrics->open_cont_gauge, 1);
 		rc = cont_close(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_DESTROY:
+		d_tm_inc_counter(metrics->op_destroy_ctr, 1);
 		rc = cont_destroy(tx, pool_hdl, cont, rpc);
 		break;
 	default:

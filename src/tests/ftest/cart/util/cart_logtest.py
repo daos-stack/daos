@@ -239,9 +239,10 @@ class LogTest():
         self.log_fac = Counter()
         self.log_levels = Counter()
         self.log_count = 0
+        self._common_shown = False
 
     def __del__(self):
-        if not self.quiet:
+        if not self.quiet and not self._common_shown:
             self.show_common_logs()
 
     def save_log_line(self, line):
@@ -285,13 +286,14 @@ class LogTest():
             print('{}: {} ({:.1f}%)'.format(cart_logparse.LOG_NAMES[level],
                                             count,
                                             100*count/self.log_count))
+        self._common_shown = True
 
     def check_log_file(self,
                        abort_on_warning,
                        show_memleaks=True,
                        leak_wf=None):
         """Check a single log file for consistency"""
-
+        to_raise = None
         for pid in self._li.get_pids():
             if wf:
                 wf.reset_pending()
@@ -299,10 +301,17 @@ class LogTest():
                 self.rpc_reporting(pid)
                 if wf:
                     wf.reset_pending()
-            self._check_pid_from_log_file(pid,
-                                          abort_on_warning,
-                                          leak_wf,
-                                          show_memleaks=show_memleaks)
+            try:
+                self._check_pid_from_log_file(pid,
+                                              abort_on_warning,
+                                              leak_wf,
+                                              show_memleaks=show_memleaks)
+            except LogCheckError as error:
+                if to_raise is None:
+                    to_raise = error
+        self.show_common_logs()
+        if to_raise:
+            raise to_raise
 
     def check_dfuse_io(self):
         """Parse dfuse i/o"""
@@ -350,6 +359,7 @@ class LogTest():
         err_count = 0
         warnings_strict = False
         warnings_mode = False
+        server_shutdown = False
 
         regions = OrderedDict()
         memsize = hwm_counter()
@@ -376,6 +386,9 @@ class LogTest():
             except AttributeError:
                 pass
             if abort_on_warning:
+                if not server_shutdown and \
+                   line.fac != 'external' and line.function == 'server_fini':
+                    server_shutdown = True
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
                     if self.hide_fi_calls:
@@ -414,7 +427,18 @@ class LogTest():
                         # that fail during shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
+                    # Disable checking for a number of conditions, either
+                    # because these errors/lines are badly formatted or because
+                    # they're intermittent and we don't want noise in the test
+                    # results.
                     if line.fac == 'external':
+                        show = False
+                    elif show and server_shutdown and line.get_msg().endswith(
+                            "DER_SHUTDOWN(-2017): 'Service should shut down'"):
+                        show = False
+                    elif show and line.function == 'rdb_stop':
+                        show = False
+                    elif show and line.function == 'sched_watchdog_post':
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
@@ -478,7 +502,7 @@ class LogTest():
                 # there are more than two fields to work with.
                 non_trace_lines += 1
                 if line.is_calloc():
-                    pointer = line.get_field(-1).rstrip('.')
+                    pointer = line.calloc_pointer()
                     if pointer in regions:
                         show_line(regions[pointer], 'NORMAL',
                                   'new allocation seen for same pointer')
@@ -486,7 +510,7 @@ class LogTest():
                     regions[pointer] = line
                     memsize.add(line.calloc_size())
                 elif line.is_free():
-                    pointer = line.get_field(-1).rstrip('.')
+                    pointer = line.free_pointer()
                     # If a pointer is freed then automatically remove the
                     # descriptor
                     if pointer in active_desc:
@@ -507,14 +531,25 @@ class LogTest():
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
                 elif line.is_realloc():
-                    new_pointer = line.get_field(-3)
-                    old_pointer = line.get_field(-1)[:-2].split(':')[-1]
+                    (new_pointer, old_pointer) = line.realloc_pointers()
+                    (new_size, old_size) = line.realloc_sizes()
                     if new_pointer != '(nil)' and old_pointer != '(nil)':
-                        memsize.subtract(regions[old_pointer].calloc_size())
+                        if old_pointer not in regions:
+                            show_line(line, 'HIGH', 'realloc of unknown memory')
+                        else:
+                            # Use calloc_size() here as the memory might not
+                            # come from a realloc() call.
+                            exp_sz = regions[old_pointer].calloc_size()
+                            if old_size not in (0, exp_sz, new_size):
+                                show_line(line, 'HIGH',
+                                          'realloc used invalid old size')
+                            memsize.subtract(exp_sz)
                     regions[new_pointer] = line
-                    memsize.add(line.calloc_size())
+                    memsize.add(new_size)
                     if old_pointer not in (new_pointer, '(nil)'):
                         if old_pointer in regions:
+                            old_regions[old_pointer] = [regions[old_pointer],
+                                                        line]
                             del regions[old_pointer]
                         else:
                             show_line(line, 'NORMAL',
@@ -543,7 +578,7 @@ class LogTest():
         # once this is stable.
         lost_memory = False
         if show_memleaks:
-            for (_, line) in regions.items():
+            for (_, line) in list(regions.items()):
                 pointer = line.get_field(-1).rstrip('.')
                 if pointer in active_desc:
                     show_line(line, 'NORMAL', 'descriptor not freed')
@@ -554,12 +589,12 @@ class LogTest():
                 lost_memory = True
 
         if active_desc:
-            for (_, line) in active_desc.items():
+            for (_, line) in list(active_desc.items()):
                 show_line(line, 'NORMAL', 'desc not deregistered')
             raise ActiveDescriptors()
 
         if active_rpcs:
-            for (_, line) in active_rpcs.items():
+            for (_, line) in list(active_rpcs.items()):
                 show_line(line, 'NORMAL', 'rpc not deregistered')
         if error_files or err_count:
             raise LogError()
@@ -690,6 +725,7 @@ def run():
     parser.add_argument('--dfuse',
                         help='Summarise dfuse I/O',
                         action='store_true')
+    parser.add_argument('--warnings', action='store_true')
     parser.add_argument('file', help='input file')
     args = parser.parse_args()
     try:
@@ -709,7 +745,7 @@ def run():
         test_iter.check_dfuse_io()
     else:
         try:
-            test_iter.check_log_file(False)
+            test_iter.check_log_file(args.warnings)
         except LogError:
             print('Errors in log file, ignoring')
         except NotAllFreed:

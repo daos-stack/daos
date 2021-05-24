@@ -152,7 +152,7 @@ iov_alloc_for_csum_info(d_iov_t *iov, struct dcs_csum_info *csum_info)
 		size_t	 new_size = max(iov->iov_buf_len * 2,
 					      iov->iov_len + size_needed);
 
-		D_REALLOC(p, iov->iov_buf, new_size);
+		D_REALLOC(p, iov->iov_buf, iov->iov_buf_len, new_size);
 		if (p == NULL)
 			return -DER_NOMEM;
 		iov->iov_buf = p;
@@ -244,6 +244,9 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		kds_cap = arg->kds_cap - 1; /* one extra kds for punch eph */
 	else
 		kds_cap = arg->kds_cap;
+	if (type == OBJ_ITER_DKEY && arg->need_punch &&
+	    key_ent->ie_obj_punch != 0 && !arg->obj_punched)
+		kds_cap--;                  /* extra kds for obj punch eph */
 
 	if (is_sgl_full(arg, total_size) || arg->kds_len >= kds_cap) {
 		/* NB: if it is rebuild object iteration, let's
@@ -261,6 +264,22 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	}
 
 	iov = &arg->sgl->sg_iovs[arg->sgl_idx];
+
+	if (type == OBJ_ITER_DKEY && key_ent->ie_obj_punch && arg->need_punch &&
+	    !arg->obj_punched) {
+		int pi_size = sizeof(key_ent->ie_obj_punch);
+
+		arg->kds[arg->kds_len].kd_key_len = pi_size;
+		arg->kds[arg->kds_len].kd_val_type = OBJ_ITER_OBJ_PUNCH_EPOCH;
+		arg->kds_len++;
+
+		D_ASSERT(iov->iov_len + pi_size < iov->iov_buf_len);
+		memcpy(iov->iov_buf + iov->iov_len, &key_ent->ie_obj_punch,
+		       pi_size);
+
+		iov->iov_len += pi_size;
+		arg->obj_punched = true;
+	}
 
 	D_ASSERT(arg->kds_len < arg->kds_cap);
 	arg->kds[arg->kds_len].kd_key_len = key_ent->ie_key.iov_len;
@@ -483,11 +502,11 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct dss_enum_arg *arg,
 		}
 
 		rc = fill_data_csum(new_csum_info, &arg->csum_iov);
+		daos_csummer_free_ci(csummer, &new_csum_info);
 		if (rc != 0) {
 			D_ERROR("Issue filling csum data");
 			return rc;
 		}
-		daos_csummer_free_ci(csummer, &new_csum_info);
 	} else {
 		rc = fill_data_csum(&ent->ie_csum, &arg->csum_iov);
 		if (rc != 0) {
@@ -625,7 +644,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		" rsize "DF_U64" ver %u kd_len "DF_U64" type %d sgl_idx %d/%zd"
 		"kds_len %d inline "DF_U64" epr "DF_U64"/"DF_U64"\n",
 		key_ent->ie_recx.rx_idx, key_ent->ie_recx.rx_nr,
-		key_ent->ie_rsize, rec->rec_version,
+		rec->rec_size, rec->rec_version,
 		arg->kds[arg->kds_len].kd_key_len, type, arg->sgl_idx,
 		iovs[arg->sgl_idx].iov_len, arg->kds_len,
 		rec->rec_flags & RECX_INLINE ? data_size : 0,
@@ -711,11 +730,9 @@ grow_array(void **arrayp, size_t elem_size, int old_len, int new_len)
 	void *p;
 
 	D_ASSERTF(old_len < new_len, "%d < %d\n", old_len, new_len);
-	D_REALLOC(p, *arrayp, elem_size * new_len);
+	D_REALLOC(p, *arrayp, elem_size * old_len, elem_size * new_len);
 	if (p == NULL)
 		return -DER_NOMEM;
-	/* Until D_REALLOC does this, zero the new segment. */
-	memset(p + elem_size * old_len, 0, elem_size * (new_len - old_len));
 	*arrayp = p;
 	return 0;
 }
@@ -1151,6 +1168,11 @@ enum_unpack_punched_ephs(daos_key_desc_t *kds, char *data,
 	if (kds->kd_key_len != sizeof(daos_epoch_t))
 		return -DER_INVAL;
 
+	if (kds->kd_val_type == OBJ_ITER_OBJ_PUNCH_EPOCH) {
+		memcpy(&io->ui_obj_punch_eph, data, kds->kd_key_len);
+		return 0;
+	}
+
 	if (kds->kd_val_type == OBJ_ITER_DKEY_EPOCH) {
 		memcpy(&io->ui_dkey_punch_eph, data, kds->kd_key_len);
 		return 0;
@@ -1299,6 +1321,7 @@ enum_obj_io_unpack_cb(daos_key_desc_t *kds, void *ptr, unsigned int size,
 		rc = enum_unpack_recxs(kds, ptr, io, unpack_arg->csum_iov,
 				       unpack_arg->cb, unpack_arg->cb_arg);
 		break;
+	case OBJ_ITER_OBJ_PUNCH_EPOCH:
 	case OBJ_ITER_DKEY_EPOCH:
 	case OBJ_ITER_AKEY_EPOCH:
 		rc = enum_unpack_punched_ephs(kds, ptr, io);
@@ -1326,22 +1349,25 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		 unsigned int type, obj_enum_process_cb_t cb,
 		 void *cb_arg)
 {
+	struct daos_sgl_idx sgl_idx = {0};
 	char		*ptr;
 	unsigned int	i;
 	int		rc = 0;
 
 	D_ASSERTF(sgl->sg_nr > 0, "%u\n", sgl->sg_nr);
 	D_ASSERT(sgl->sg_iovs != NULL);
-	ptr = sgl->sg_iovs[0].iov_buf;
 	for (i = 0; i < nr; i++) {
 		daos_key_desc_t *kds = &kdss[i];
 
-		D_DEBUG(DB_REBUILD, "process %d type %d ptr %p len "DF_U64
-			" total %zd\n", i, kds->kd_val_type, ptr,
+		ptr = sgl_indexed_byte(sgl, &sgl_idx);
+		D_ASSERTF(ptr != NULL, "kds and sgl don't line up");
+
+		D_DEBUG(DB_REBUILD, "process %d, type %d, ptr %p, len "DF_U64
+			", total %zd\n", i, kds->kd_val_type, ptr,
 			kds->kd_key_len, sgl->sg_iovs[0].iov_len);
 		if (kds->kd_val_type == 0 ||
 		    (kds->kd_val_type != type && type != -1)) {
-			ptr += kds->kd_key_len;
+			sgl_move_forward(sgl, &sgl_idx, kds->kd_key_len);
 			D_DEBUG(DB_REBUILD, "skip type/size %d/%zd\n",
 				kds->kd_val_type, kds->kd_key_len);
 			continue;
@@ -1349,6 +1375,10 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 
 		if (kds->kd_val_type == OBJ_ITER_RECX ||
 		    kds->kd_val_type == OBJ_ITER_SINGLE) {
+			/*
+			 * XXX: Assuming that data for a single kds is entirely
+			 * contained in a single iov
+			 */
 			char *end = ptr + kds->kd_key_len;
 			char *data = ptr;
 
@@ -1370,7 +1400,7 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		} else {
 			rc = cb(kds, ptr, kds->kd_key_len, cb_arg);
 		}
-		ptr += kds->kd_key_len;
+		sgl_move_forward(sgl, &sgl_idx, kds->kd_key_len);
 		if (rc) {
 			D_ERROR("iterate %dth failed: rc"DF_RC"\n", i,
 				DP_RC(rc));

@@ -139,7 +139,7 @@ int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
 int ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 		   const d_rank_list_t *rank_list, int ndomains,
-		   const int *domains, d_rank_list_t *svc_ranks);
+		   const uint32_t *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				uint32_t rank,
 				struct pool_target_id_list *target_list,
@@ -148,7 +148,7 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,
 		       const d_rank_list_t *target_addrs, int ndomains,
-		       const int *domains, daos_prop_t *prop,
+		       const uint32_t *domains, daos_prop_t *prop,
 		       d_rank_list_t *svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 
@@ -200,9 +200,9 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
 int ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			     uint32_t version);
+			     uint32_t version, int *tgt_id);
 int ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			     uint32_t version);
+			     uint32_t version, bool check_shard);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
@@ -233,10 +233,11 @@ int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 			    uuid_t *handles, size_t n_handles,
 			    uint32_t destroy, uint32_t force);
-void
-ds_pool_disable_evict(void);
-void
-ds_pool_enable_evict(void);
+
+void ds_pool_disable_exclude(void);
+void ds_pool_enable_exclude(void);
+
+extern bool ec_agg_disabled;
 
 int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
 			  d_rank_list_t **ranks);

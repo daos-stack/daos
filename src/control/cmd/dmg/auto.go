@@ -10,6 +10,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
@@ -69,8 +70,14 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 	}
 
 	resp, err := control.ConfigGenerate(ctx, req)
+	if resp == nil {
+		if err == nil {
+			return errors.New("nil response from config generate")
+		}
+		return err
+	}
 
-	if resp != nil && resp.Errors() != nil {
+	if resp.Errors() != nil {
 		// host level errors e.g. unresponsive daos_server process
 		var bld strings.Builder
 		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {

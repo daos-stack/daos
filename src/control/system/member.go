@@ -12,6 +12,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
@@ -35,13 +36,18 @@ const (
 	MemberStateStopping MemberState = 0x0010
 	// MemberStateStopped indicates process has been stopped.
 	MemberStateStopped MemberState = 0x0020
-	// MemberStateEvicted indicates rank has been evicted from DAOS system.
+	// MemberStateEvicted indicates rank has been automatically evicted from DAOS system.
 	MemberStateEvicted MemberState = 0x0040
 	// MemberStateErrored indicates the process stopped with errors.
 	MemberStateErrored MemberState = 0x0080
 	// MemberStateUnresponsive indicates the process is not responding.
 	MemberStateUnresponsive MemberState = 0x0100
+	// MemberStateExcluded indicates that the rank has been administratively excluded.
+	MemberStateExcluded MemberState = 0x0200
 
+	// ExcludedMemberFilter defines the state(s) to be used when determining
+	// whether or not a member should be excluded from CaRT group map updates.
+	ExcludedMemberFilter = MemberStateAwaitFormat | MemberStateEvicted | MemberStateExcluded
 	// AvailableMemberFilter defines the state(s) to be used when determining
 	// whether or not a member is available for the purposes of pool creation, etc.
 	AvailableMemberFilter = MemberStateReady | MemberStateJoined
@@ -65,6 +71,8 @@ func (ms MemberState) String() string {
 		return "Stopped"
 	case MemberStateEvicted:
 		return "Evicted"
+	case MemberStateExcluded:
+		return "Excluded"
 	case MemberStateErrored:
 		return "Errored"
 	case MemberStateUnresponsive:
@@ -90,6 +98,8 @@ func memberStateFromString(in string) MemberState {
 		return MemberStateStopped
 	case "evicted":
 		return MemberStateEvicted
+	case "excluded":
+		return MemberStateExcluded
 	case "errored":
 		return MemberStateErrored
 	case "unresponsive":
@@ -110,6 +120,7 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 	if ms == to {
 		return true // identical state
 	}
+
 	return map[MemberState]map[MemberState]bool{
 		MemberStateAwaitFormat: {
 			MemberStateEvicted: true,
@@ -239,12 +250,6 @@ func (sm *Member) WithFaultDomain(fd *FaultDomain) *Member {
 	return sm
 }
 
-// RankFaultDomain generates the fault domain representing this Member rank.
-func (sm *Member) RankFaultDomain() *FaultDomain {
-	rankDomain := fmt.Sprintf("rank%d", uint32(sm.Rank))
-	return sm.FaultDomain.MustCreateChild(rankDomain) // "rankX" string can't fail
-}
-
 // NewMember returns a reference to a new member struct.
 func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
 	// FIXME: Either require a valid uuid.UUID to be supplied
@@ -309,11 +314,14 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 // NewMemberResult returns a reference to a new member result struct.
 //
 // Host address and action fields are not always used so not populated here.
-func NewMemberResult(rank Rank, err error, state MemberState) *MemberResult {
+func NewMemberResult(rank Rank, err error, state MemberState, action ...string) *MemberResult {
 	result := MemberResult{Rank: rank, State: state}
 	if err != nil {
 		result.Errored = true
 		result.Msg = err.Error()
+	}
+	if len(action) > 0 {
+		result.Action = action[0]
 	}
 
 	return &result
@@ -322,13 +330,24 @@ func NewMemberResult(rank Rank, err error, state MemberState) *MemberResult {
 // MemberResults is a type alias for a slice of member result references.
 type MemberResults []*MemberResult
 
-// HasErrors returns true if any of the member results errored.
-func (smr MemberResults) HasErrors() bool {
-	for _, res := range smr {
-		if res.Errored {
-			return true
+// Errors returns an error indicating if and which ranks failed.
+func (mrs MemberResults) Errors() error {
+	rs, err := CreateRankSet("")
+	if err != nil {
+		return err
+	}
+
+	for _, mr := range mrs {
+		if mr.Errored {
+			rs.Add(mr.Rank)
 		}
 	}
 
-	return false
+	if rs.Count() > 0 {
+		return errors.Errorf("failed %s %s",
+			english.PluralWord(rs.Count(), "rank", "ranks"),
+			rs.String())
+	}
+
+	return nil
 }

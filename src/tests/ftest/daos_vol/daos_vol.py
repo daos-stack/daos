@@ -31,10 +31,11 @@ class DaosVol(VolTestBase):
               h5daos_test_map
               h5daos_test_map_parallel
               h5daos_test_oclass
+              h5daos_test_metadata_parallel
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,small
-        :avocado: tags=hdf5,vol,volunit,volmpich
+        :avocado: tags=hdf5,vol,volunit,volmpich,mpich
         :avocado: tags=DAOS_5610
         """
         self.job_manager = get_job_manager_class("Mpirun", None, False, "mpich")
@@ -58,6 +59,7 @@ class DaosVol(VolTestBase):
               h5daos_test_map
               h5daos_test_map_parallel
               h5daos_test_oclass
+              h5daos_test_metadata_parallel
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,small

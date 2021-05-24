@@ -17,6 +17,7 @@
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
 #include <daos/drpc_modules.h>
+#include <daos_srv/daos_engine.h>
 
 /*
  * Mocks of DAOS internals
@@ -47,10 +48,11 @@ crt_self_uri_get(int tag, char **uri)
 }
 
 static uint32_t	mock_self_rank = 1;
-d_rank_t
-dss_self_rank(void)
+int
+crt_group_rank(crt_group_t *grp, d_rank_t *rank)
 {
-	return (d_rank_t)mock_self_rank;
+	*rank = (d_rank_t)mock_self_rank;
+	return 0;
 }
 
 struct dss_module_info	*mock_dmi;
@@ -63,6 +65,24 @@ get_module_info(void)
 	mock_dmi->dmi_xs_id = mock_xs_id;
 
 	return mock_dmi;
+}
+
+static struct sched_request {
+} mock_sched_req;
+struct sched_request *
+sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
+{
+	return &mock_sched_req;
+}
+
+void
+sched_req_sleep(struct sched_request *req, uint32_t msecs)
+{
+}
+
+void
+sched_req_put(struct sched_request *req)
+{
 }
 
 /*
@@ -98,35 +118,56 @@ drpc_client_test_teardown(void **state)
  * Unit tests
  */
 static void
-test_drpc_init_connect_fails(void **state)
+test_drpc_call_connect_fails(void **state)
 {
-	skip(); /* DAOS-6436 */
+	Drpc__Response	*resp;
+	int		 rc;
+
+	/*
+	 * errno is not set for the dss_drpc_thread; connect_return = -1 also
+	 * isn't working.
+	 */
+	skip();
+
+	assert_rc_equal(drpc_init(), 0);
+
 	connect_return = -1;
+	errno = EACCES;
 
-	assert_rc_equal(drpc_init(), -DER_NOMEM);
-}
-
-static void
-test_drpc_init_crt_get_uri_fails(void **state)
-{
-	crt_self_uri_get_return = -DER_BUSY;
-	assert_rc_equal(drpc_init(), crt_self_uri_get_return);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY,
+			   NULL /* req */, 0 /* req_size */, 0 /* flags */,
+			   &resp);
+	assert_rc_equal(rc, -DER_NO_PERM);
 
 	/* make sure socket was closed */
 	assert_int_equal(close_call_count, 1);
+
+	drpc_fini();
 }
 
 static void
-test_drpc_init_sendmsg_fails(void **state)
+test_drpc_call_sendmsg_fails(void **state)
 {
-	skip(); /* DAOS-6436 */
+	Drpc__Response	*resp;
+	int		 rc;
+
+	/* See test_drpc_call_connect_fails. */
+	skip();
+
+	assert_rc_equal(drpc_init(), 0);
+
 	sendmsg_return = -1;
-	errno = EPERM;
+	errno = EACCES;
 
-	assert_rc_equal(drpc_init(), -DER_NO_PERM);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY,
+			   NULL /* req */, 0 /* req_size */, 0 /* flags */,
+			   &resp);
+	assert_rc_equal(rc, -DER_NO_PERM);
 
 	/* make sure socket was closed */
 	assert_int_equal(close_call_count, 1);
+
+	drpc_fini();
 }
 
 static void
@@ -157,16 +198,16 @@ verify_notify_ready_message(void)
 }
 
 static void
-test_drpc_init_fini(void **state)
+test_drpc_verify_notify_ready(void **state)
 {
-	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);
 
-	/* drpc connection created */
-	assert_int_equal(connect_sockfd, socket_return);
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 
-	/* socket was left open */
-	assert_int_equal(close_call_count, 0);
+	assert_rc_equal(drpc_notify_ready(), 0);
+
+	/* socket was closed */
+	assert_int_equal(close_call_count, 1);
 
 	/* Message was sent */
 	assert_non_null(sendmsg_msg_ptr);
@@ -174,19 +215,6 @@ test_drpc_init_fini(void **state)
 
 	/* Now let's shut things down... */
 	drpc_fini();
-
-	/* socket was closed */
-	assert_int_equal(close_call_count, 1);
-}
-
-static void
-test_drpc_init_bad_response(void **state)
-{
-	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__FAILURE);
-	assert_rc_equal(drpc_init(), -DER_IO);
-
-	/* make sure socket was closed */
-	assert_int_equal(close_call_count, 1);
 }
 
 static void
@@ -255,7 +283,7 @@ verify_notify_pool_svc_update(uuid_t *pool_uuid, d_rank_list_t *svc_reps)
 	assert_non_null(req);
 
 	assert_string_equal(req->event->hostname, dss_hostname);
-	/* populated by mock dss_self_rank */
+	/* populated by mock crt_group_rank */
 	assert_int_equal(req->event->rank, mock_self_rank);
 	assert_int_equal(uuid_parse(req->event->pool_uuid, pool), 0);
 	assert_int_equal(uuid_compare(pool, *pool_uuid), 0);
@@ -279,6 +307,9 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 	uint32_t	 svc_reps[4] = {0, 1, 2, 3};
 	d_rank_list_t	*svc_ranks;
 
+	/* Skip for DAOS-7424 */
+	skip();
+
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);
 
@@ -297,26 +328,6 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 }
 
 static void
-verify_cluster_event_not_sent()
-{
-	Drpc__Call		*call;
-	Shared__ClusterEventReq	*req;
-
-	call = drpc__call__unpack(NULL, sendmsg_msg_iov_len,
-				  sendmsg_msg_content);
-	assert_non_null(call);
-	assert_int_equal(call->module, DRPC_MODULE_SRV);
-
-	/* Verify NULL payload content */
-	req = shared__cluster_event_req__unpack(NULL, call->body.len,
-						call->body.data);
-	assert_true(req == NULL);
-
-	/* Cleanup */
-	drpc__call__free_unpacked(call, NULL);
-}
-
-static void
 test_drpc_verify_notify_pool_svc_update_noreps(void **state)
 {
 	uuid_t	pool_uuid;
@@ -329,7 +340,7 @@ test_drpc_verify_notify_pool_svc_update_noreps(void **state)
 
 	assert_rc_equal(ds_notify_pool_svc_update(&pool_uuid, NULL),
 			-DER_INVAL);
-	verify_cluster_event_not_sent();
+	assert_int_equal(sendmsg_call_count, 0);
 
 	drpc_fini();
 }
@@ -348,7 +359,7 @@ test_drpc_verify_notify_pool_svc_update_nopool(void **state)
 
 	assert_rc_equal(ds_notify_pool_svc_update(NULL, svc_ranks),
 			-DER_INVAL);
-	verify_cluster_event_not_sent();
+	assert_int_equal(sendmsg_call_count, 0);
 
 	d_rank_list_free(svc_ranks);
 
@@ -410,12 +421,12 @@ test_drpc_verify_cluster_event(void **state)
 	assert_int_equal(uuid_parse(pool_str, pool), 0);
 	assert_int_equal(uuid_parse(cont_str, cont), 0);
 
-	ds_notify_ras_event(RAS_RANK_NO_RESPONSE, "no response", RAS_TYPE_INFO,
-			    RAS_SEV_WARN, "exhwid", &rank, "exjobid", &pool,
-			    &cont, &objid, "exctlop",
+	ds_notify_ras_event(RAS_SYSTEM_STOP_FAILED, "ranks failed",
+			    RAS_TYPE_INFO, RAS_SEV_ERROR, "exhwid", &rank,
+			    "exjobid", &pool, &cont, &objid, "exctlop",
 			    "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
-	verify_cluster_event((uint32_t)RAS_RANK_NO_RESPONSE, "no response",
-			     (uint32_t)RAS_TYPE_INFO, (uint32_t)RAS_SEV_WARN,
+	verify_cluster_event((uint32_t)RAS_SYSTEM_STOP_FAILED, "ranks failed",
+			     (uint32_t)RAS_TYPE_INFO, (uint32_t)RAS_SEV_ERROR,
 			     "exhwid", 1, "exjobid", pool_str, cont_str, "1.1",
 			     "exctlop",
 			     "{\"people\":[\"bill\",\"steve\",\"bob\"]}");
@@ -429,12 +440,12 @@ test_drpc_verify_cluster_event_min_viable(void **state)
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);
 
-	ds_notify_ras_event(RAS_RANK_DOWN, "rank down", RAS_TYPE_STATE_CHANGE,
-			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
-			    NULL, NULL);
-	verify_cluster_event((uint32_t)RAS_RANK_DOWN, "rank down",
+	ds_notify_ras_event(RAS_ENGINE_DIED, "rank down",
+			    RAS_TYPE_STATE_CHANGE, RAS_SEV_WARNING, NULL, NULL,
+			    NULL, NULL, NULL, NULL, NULL, NULL);
+	verify_cluster_event((uint32_t)RAS_ENGINE_DIED, "rank down",
 			     (uint32_t)RAS_TYPE_STATE_CHANGE,
-			     (uint32_t)RAS_SEV_ERROR, "", mock_self_rank, "",
+			     (uint32_t)RAS_SEV_WARNING, "", mock_self_rank, "",
 			     "", "", "", "", "");
 
 	drpc_fini();
@@ -446,10 +457,10 @@ test_drpc_verify_cluster_event_emptymsg(void **state)
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);
 
-	ds_notify_ras_event(RAS_RANK_DOWN, "", RAS_TYPE_STATE_CHANGE,
+	ds_notify_ras_event(RAS_ENGINE_DIED, "", RAS_TYPE_STATE_CHANGE,
 			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
 			    NULL, NULL);
-	verify_cluster_event_not_sent();
+	assert_int_equal(sendmsg_call_count, 0);
 
 	drpc_fini();
 }
@@ -460,10 +471,10 @@ test_drpc_verify_cluster_event_nomsg(void **state)
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);
 
-	ds_notify_ras_event(RAS_RANK_DOWN, NULL, RAS_TYPE_STATE_CHANGE,
+	ds_notify_ras_event(RAS_ENGINE_DIED, NULL, RAS_TYPE_STATE_CHANGE,
 			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, NULL, NULL,
 			    NULL, NULL);
-	verify_cluster_event_not_sent();
+	assert_int_equal(sendmsg_call_count, 0);
 
 	drpc_fini();
 }
@@ -477,11 +488,9 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		UTEST(test_drpc_init_connect_fails),
-		UTEST(test_drpc_init_crt_get_uri_fails),
-		UTEST(test_drpc_init_sendmsg_fails),
-		UTEST(test_drpc_init_fini),
-		UTEST(test_drpc_init_bad_response),
+		UTEST(test_drpc_call_connect_fails),
+		UTEST(test_drpc_call_sendmsg_fails),
+		UTEST(test_drpc_verify_notify_ready),
 		UTEST(test_drpc_verify_notify_bio_error),
 		UTEST(test_drpc_verify_notify_pool_svc_update),
 		UTEST(test_drpc_verify_notify_pool_svc_update_noreps),

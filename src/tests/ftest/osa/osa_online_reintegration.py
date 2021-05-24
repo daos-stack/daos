@@ -14,13 +14,7 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from apricot import skipForTicket
-
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+import queue
 
 
 class OSAOnlineReintegration(OSAUtils):
@@ -35,7 +29,7 @@ class OSAOnlineReintegration(OSAUtils):
 
     def setUp(self):
         """Set up for test case."""
-        super(OSAOnlineReintegration, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
@@ -179,7 +173,9 @@ class OSAOnlineReintegration(OSAUtils):
 
         Test Description: Validate Online Reintegration
 
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
         :avocado: tags=online_reintegration
         """
         # Perform reintegration testing with 1 pool.
@@ -190,7 +186,9 @@ class OSAOnlineReintegration(OSAUtils):
     def test_osa_online_reintegration_server_stop(self):
         """Test ID: DAOS-5920.
         Test Description: Validate Online Reintegration with server stop
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2,osa
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
         :avocado: tags=online_reintegration_srv_stop
         """
         self.run_online_reintegration_test(1, server_boot=True)

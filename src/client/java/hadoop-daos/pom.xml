@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.daos</groupId>
     <artifactId>daos-java-root</artifactId>
-    <version>1.2.0-SNAPSHOT</version>
+    <version>1.2.1-SNAPSHOT</version>
   </parent>
 
   <groupId>io.daos</groupId>
@@ -15,7 +15,7 @@
   <packaging>jar</packaging>
 
   <properties>
-    <hadoop.version>3.2.2</hadoop.version>
+    <hadoop.version>3.3.0</hadoop.version>
     <native.build.path>${project.basedir}/build</native.build.path>
     <daos.install.path>${project.basedir}/install</daos.install.path>
   </properties>
@@ -100,6 +100,43 @@
         <artifactId>maven-shade-plugin</artifactId>
         <executions>
           <execution>
+            <id>shade-protobuf3-netty4</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                  <resource>META-INF/org.apache.hadoop.fs.FileSystem</resource>
+                </transformer>
+              </transformers>
+              <relocations>
+                <relocation>
+                  <pattern>com.google.protobuf</pattern>
+                  <shadedPattern>com.google.protoshadebuf3</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>io.netty.buffer</pattern>
+                  <shadedPattern>io.netty.buffershade4</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>io.netty.util</pattern>
+                  <shadedPattern>io.netty.utilshade4</shadedPattern>
+                </relocation>
+              </relocations>
+              <artifactSet>
+                <includes>
+                  <include>io.netty:netty-buffer</include>
+                  <include>com.google.protobuf:protobuf-java</include>
+                </includes>
+              </artifactSet>
+              <finalName>${artifactId}-${version}-protobuf3-netty4-shaded</finalName>
+            </configuration>
+          </execution>
+          <execution>
+            <id>shade</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>

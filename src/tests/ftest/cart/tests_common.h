@@ -13,18 +13,18 @@
 
 #include "crt_internal.h"
 
-#define DBG_PRINT(x...)                                                 \
-	do {                                                            \
+#define DBG_PRINT(x...)							\
+	do {								\
 		D_INFO(x);						\
-		if (opts.is_server)                                     \
+		if (opts.is_server)					\
 			fprintf(stderr, "SRV [rank=%d pid=%d]\t",       \
-			opts.self_rank,                                 \
-			opts.mypid);                                    \
-		else                                                    \
+			opts.self_rank,					\
+			opts.mypid);					\
+		else							\
 			fprintf(stderr, "CLI [rank=%d pid=%d]\t",       \
-			opts.self_rank,                                 \
-			opts.mypid);                                    \
-		fprintf(stderr, x);                                     \
+			opts.self_rank,					\
+			opts.mypid);					\
+		fprintf(stderr, x);					\
 	} while (0)
 
 struct test_options {
@@ -36,10 +36,10 @@ struct test_options {
 	bool		assert_on_error;
 	volatile int	shutdown;
 	int		delay_shutdown_sec;
+	bool		is_swim_enabled;
 };
 
 static struct test_options opts = { .is_initialized = false };
-
 
 void
 tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
@@ -52,16 +52,23 @@ tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	opts.num_attach_retries	= num_attach_retries;
 	opts.assert_on_error	= assert_on_error;
 	opts.shutdown		= 0;
+	opts.is_swim_enabled	= false;
 
 	/* Use 2 second delay as a default for all tests for now */
 	opts.delay_shutdown_sec	= 2;
+}
+
+static inline void
+tc_test_swim_enable(bool is_swim_enabled)
+{
+	opts.is_swim_enabled	= is_swim_enabled;
 }
 
 static inline int
 tc_drain_queue(crt_context_t ctx)
 {
 	int	rc;
-	int 	i;
+	int	i;
 
 	/* TODO: Need better mechanism for tests to drain all queues */
 	for (i = 0; i < 1000; i++)
@@ -115,17 +122,18 @@ tc_progress_fn(void *data)
 	while (opts.shutdown == 0)
 		crt_progress(*p_ctx, 1000);
 
-	if (idx == 0)
+	if (opts.is_swim_enabled && idx == 0)
 		crt_swim_fini();
-
-	if (opts.delay_shutdown_sec > 0)
-		sleep(opts.delay_shutdown_sec);
 
 	rc = tc_drain_queue(*p_ctx);
 	D_ASSERTF(rc == 0, "tc_drain_queue() failed with rc=%d\n", rc);
 
+	if (opts.delay_shutdown_sec > 0)
+		sleep(opts.delay_shutdown_sec);
+
 	rc = crt_context_destroy(*p_ctx, 1);
-	D_ASSERTF(rc == 0, "Failed to destroy context rc=%d\n", rc);
+	D_ASSERTF(rc == 0, "Failed to destroy context %p rc=%d\n",
+		  p_ctx, rc);
 
 	pthread_exit(rc ? *p_ctx : NULL);
 
@@ -199,7 +207,6 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 	int				i = 0;
 	int				rc = 0;
 
-
 	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	rc = d_gettime(&t1);
@@ -212,9 +219,7 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 	server_ep.ep_grp = grp;
 
 	for (i = 0; i < rank_list->rl_nr; i++) {
-
 		rank = rank_list->rl_ranks[i];
-
 		server_ep.ep_rank = rank;
 
 		rc = crt_req_create(ctx, &server_ep, CRT_OPC_CTL_LS, &rpc);
@@ -238,11 +243,10 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 			ws.rc = rc;
 
 		while (ws.rc != 0 && time_s < total_timeout) {
-
 			rc = crt_req_create(ctx, &server_ep,
 					    CRT_OPC_CTL_LS, &rpc);
 			D_ASSERTF(rc == 0,
-				   "crt_req_create failed; rc=%d\n", rc);
+				  "crt_req_create failed; rc=%d\n", rc);
 
 			in_args = crt_req_get(rpc);
 			in_args->cel_grp_id = grp->cg_grpid;
@@ -250,7 +254,7 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 
 			rc = crt_req_set_timeout(rpc, ping_timeout);
 			D_ASSERTF(rc == 0,
-				   "crt_req_set_timeout failed; rc=%d\n", rc);
+				  "crt_req_set_timeout failed; rc=%d\n", rc);
 
 			ws.rc = 0;
 			ws.num_ctx = 0;
@@ -427,7 +431,7 @@ tc_cli_start_basic(char *local_group_name, char *srv_group_name,
 
 	if ((*rank_list)->rl_nr != grp_size) {
 		D_ERROR("rank_list differs in size. expected %d got %d\n",
-			 grp_size, (*rank_list)->rl_nr);
+			grp_size, (*rank_list)->rl_nr);
 		assert(0);
 	}
 
@@ -471,7 +475,7 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	rc = crt_rank_self_set(my_rank);
 	D_ASSERTF(rc == 0, "crt_rank_self_set(%d) failed; rc=%d\n",
-		   my_rank, rc);
+		  my_rank, rc);
 
 	rc = crt_context_create(crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);
@@ -491,11 +495,82 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	D_FREE(my_uri);
 
-	rc = crt_swim_init(0);
-	D_ASSERTF(rc == 0, "crt_swim_init() failed; rc=%d\n", rc);
+	if (opts.is_swim_enabled) {
+		rc = crt_swim_init(0);
+		D_ASSERTF(rc == 0, "crt_swim_init() failed; rc=%d\n", rc);
+	}
 
 	rc = crt_group_size(NULL, grp_size);
 	D_ASSERTF(rc == 0, "crt_group_size() failed; rc=%d\n", rc);
+}
+
+struct tc_log_msg_cb_resp {
+	sem_t	sem;
+};
+
+static void
+tc_log_msg_cb(const struct crt_cb_info *info)
+{
+	struct tc_log_msg_cb_resp	*resp;
+
+	if (info->cci_rc != 0) {
+		D_WARN("Add Log message CB failed\n");
+		D_ASSERTF(info->cci_rc == 0,
+			  "Send Log RPC did not respond\n");
+	}
+	resp = (struct tc_log_msg_cb_resp *)info->cci_arg;
+	sem_post(&resp->sem);
+}
+
+int
+tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
+	   char *msg) {
+	int32_t				 rc = 0;
+	struct crt_ctl_log_add_msg_in	*send_args;
+	crt_rpc_t			*rpc_req = NULL;
+	crt_endpoint_t			 ep;
+	crt_opcode_t			 opcode = CRT_OPC_CTL_LOG_ADD_MSG;
+	struct tc_log_msg_cb_resp	 resp;
+
+	/* Initialize response structure */
+	rc = sem_init(&resp.sem, 0, 0);
+	D_ASSERTF(rc == 0, "sem_init() failed\n");
+
+	/* Fill in the endpoint info */
+	ep.ep_grp = grp;
+	ep.ep_rank = rank;
+	ep.ep_tag = 0;
+
+	rc = crt_req_create(ctx, &ep, opcode, &rpc_req);
+	if (rc != 0) {
+		D_ERROR("crt_req_create() failed. rc %d.\n", rc);
+		D_GOTO(exit, rc);
+	}
+
+	crt_req_addref(rpc_req);
+	send_args =  crt_req_get(rpc_req);
+	send_args->log_msg = msg;
+
+	/* send the request */
+	rc = crt_req_send(rpc_req, tc_log_msg_cb, &resp);
+	if (rc < 0) {
+		D_WARN("rpc failed, message: \"%s \"not sent\n", msg);
+		goto cleanup;
+	}
+
+	/* Wait for response */
+	rc = tc_sem_timedwait(&resp.sem, 30, __LINE__);
+	if (rc < 0) {
+		D_WARN("Messaage logged timed out: %s\n", msg);
+		crt_req_abort(rpc_req);
+		goto cleanup;
+	}
+
+	/* Decrement reference */
+cleanup:
+	crt_req_decref(rpc_req);
+exit:
+	return rc;
 }
 
 #endif /* __TESTS_COMMON_H__ */

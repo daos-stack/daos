@@ -53,10 +53,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 		logFn:  r.log.Error,
 		prefix: fmt.Sprintf("%s:%d", engineBin, r.Config.Index),
 	}
-	// FIXME(DAOS-3105): This shouldn't be the default. The command environment
-	// should be constructed from values in the configuration. This probably
-	// can't go away until PMIx support is removed, though.
-	cmd.Env = mergeEnvVars(os.Environ(), env)
+	cmd.Env = env
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		// I/O Engine should get a SIGKILL if this process dies.
@@ -70,7 +67,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	}
 
 	r.log.Debugf("%s:%d args: %s", engineBin, r.Config.Index, args)
-	r.log.Debugf("%s:%d env: %s", engineBin, r.Config.Index, env)
+	r.log.Debugf("%s:%d env: %s", engineBin, r.Config.Index, cmd.Env)
 	r.log.Infof("Starting I/O Engine instance %d: %s", r.Config.Index, binPath)
 
 	if err := cmd.Start(); err != nil {
@@ -82,8 +79,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.running.SetTrue()
 	defer r.running.SetFalse()
 
-	return errors.Wrapf(common.GetExitStatus(cmd.Wait()),
-		"%s (instance %d) exited", binPath, r.Config.Index)
+	return errors.Wrapf(common.GetExitStatus(cmd.Wait()), "%s exited", binPath)
 }
 
 // Start asynchronously starts the Engine instance.
@@ -96,6 +92,7 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	if err != nil {
 		return err
 	}
+	env = mergeEnvVars(cleanEnvVars(os.Environ(), r.Config.EnvPassThrough), env)
 
 	go func() {
 		errOut <- r.run(ctx, args, env)
@@ -118,6 +115,16 @@ func (r *Runner) Signal(signal os.Signal) error {
 	r.log.Debugf("Signalling I/O Engine instance %d (%s)", r.Config.Index, signal)
 
 	return r.cmd.Process.Signal(signal)
+}
+
+// GetLastPid returns the PID after runner has exited, return
+// zero if no cmd or ProcessState exists.
+func (r *Runner) GetLastPid() uint64 {
+	if r.cmd == nil || r.cmd.ProcessState == nil {
+		return 0
+	}
+
+	return uint64(r.cmd.ProcessState.Pid())
 }
 
 // GetConfig returns the runner's configuration

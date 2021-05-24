@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -54,7 +55,7 @@ func TestServer_ConvertFabricInterface(t *testing.T) {
 	}
 	expNative := &ib1Native
 
-	if diff := cmp.Diff(expNative, native); diff != "" {
+	if diff := cmp.Diff(expNative, native, common.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
 }
@@ -71,7 +72,7 @@ func TestServer_ConvertFabricInterfaces(t *testing.T) {
 	if err := convert.Types(natives, &scanResp.Interfaces); err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(pbs, scanResp.Interfaces); diff != "" {
+	if diff := cmp.Diff(pbs, scanResp.Interfaces, common.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
 }

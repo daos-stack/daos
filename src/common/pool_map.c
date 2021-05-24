@@ -11,6 +11,7 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/pool_map.h>
+#include "fault_domain.h"
 
 /** counters for component (sub)tree */
 struct pool_comp_cntr {
@@ -104,6 +105,10 @@ static struct pool_comp_state_dict comp_state_dict[] = {
 		.sd_name	= "NEW",
 	},
 	{
+		.sd_state	= PO_COMP_ST_DRAIN,
+		.sd_name	= "DRAIN",
+	},
+	{
 		.sd_state	= PO_COMP_ST_UNKNOWN,
 		.sd_name	= "UNKNOWN",
 	},
@@ -122,16 +127,6 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_type	= PO_COMP_TP_NODE,
 		.td_abbr	= 'n',
 		.td_name	= "node",
-	},
-	{
-		.td_type	= PO_COMP_TP_BOARD,
-		.td_abbr	= 'b',
-		.td_name	= "board",
-	},
-	{
-		.td_type	= PO_COMP_TP_BLADE,
-		.td_abbr	= 'l',
-		.td_name	= "blade",
 	},
 	{
 		.td_type	= PO_COMP_TP_RACK,
@@ -1373,35 +1368,17 @@ uuid_compare_cb(const void *a, const void *b)
 	return uuid_compare(*ua, *ub);
 }
 
-int
-gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
-		int map_version, int ndomains, int nnodes, int ntargets,
-		const int32_t *domains, uuid_t target_uuids[],
-		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
-		uint32_t dss_tgt_nr)
+static int
+add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
+			int map_version,
+			int ndomains, const uint32_t *domains)
 {
-	struct pool_component	map_comp;
-	struct pool_buf		*map_buf;
-	struct pool_domain      *found_dom;
-	uuid_t		        *uuids = NULL;
+	int			i = 0;
+	int			rc;
 	uint32_t		num_comps;
 	uint8_t			new_status;
-	bool			updated;
-	int i, rc;
-
-	updated = false;
-
-	/* Prepare the pool map attribute buffers. */
-	map_buf = pool_buf_alloc(ndomains + nnodes + ntargets);
-	if (map_buf == NULL)
-		D_GOTO(out_map_buf, rc = -DER_NOMEM);
-
-	/* Make a sorted target UUID array to determine target IDs. */
-	D_ALLOC_ARRAY(uuids, nnodes);
-	if (uuids == NULL)
-		D_GOTO(out_map_buf, rc = -DER_NOMEM);
-	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
-	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
+	struct d_fd_tree	tree = {0};
+	struct d_fd_node	node = {0};
 
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
@@ -1411,28 +1388,112 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		new_status = PO_COMP_ST_UPIN;
 		num_comps = 0;
 	}
-	/* fill racks */
-	for (i = 0; i < ndomains; i++) {
-		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
+
+	rc = d_fd_tree_init(&tree, domains, ndomains);
+	if (rc != 0)
+		return rc;
+
+	/* discard the root - it's being added to the pool buf elsewhere */
+	rc = d_fd_tree_next(&tree, &node);
+	while (rc == 0) {
+		struct pool_component map_comp;
+
+		rc = d_fd_tree_next(&tree, &node);
+		if (rc != 0) {
+			/* got to the end of the tree with no problems */
+			if (rc == -DER_NONEXIST)
+				rc = 0;
+			break;
+		}
+
+		/* ranks are handled elsewhere for now */
+		if (node.fdn_type != D_FD_NODE_TYPE_DOMAIN)
+			break;
+
+		/* TODO DAOS-6353: Use the layer number as type */
+		map_comp.co_type = PO_COMP_TP_RACK;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
-		map_comp.co_id = i + num_comps;
+		map_comp.co_id = node.fdn_val.dom->fd_id;
 		map_comp.co_rank = 0;
 		map_comp.co_ver = map_version;
-		map_comp.co_out_ver = map_version;
 		map_comp.co_fseq = 1;
-		map_comp.co_nr = domains[i];
+		map_comp.co_nr = node.fdn_val.dom->fd_children_nr;
+
+		if (map != NULL) {
+			struct pool_domain	*current;
+			int			already_in_map;
+
+			already_in_map = pool_map_find_domain(map,
+							      PO_COMP_TP_RACK,
+							      map_comp.co_id,
+							      &current);
+			if (already_in_map > 0)
+				map_comp.co_status = current->do_comp.co_status;
+		}
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
-		if (rc != 0)
-			D_GOTO(out_map_buf, rc);
+		i++;
 	}
 
-	if (map != NULL)
+	return rc;
+}
+
+int
+gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
+		int map_version, int ndomains, int nnodes, int ntargets,
+		const uint32_t *domains, uuid_t target_uuids[],
+		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
+		uint32_t dss_tgt_nr)
+{
+	struct pool_component	map_comp;
+	struct pool_buf		*map_buf;
+	struct pool_domain	*found_dom;
+	uuid_t			*uuids = NULL;
+	uint32_t		num_comps;
+	uint8_t			new_status;
+	bool			updated;
+	int			i, rc;
+	uint32_t		num_domain_comps;
+
+	updated = false;
+
+	/*
+	 * Estimate number of domains for allocating the pool buffer
+	 */
+	rc = d_fd_get_exp_num_domains(ndomains, nnodes, &num_domain_comps);
+	if (rc != 0) {
+		D_ERROR("Invalid domain array, len=%u\n", ndomains);
+		return rc;
+	}
+	D_ASSERT(num_domain_comps > 0);
+	num_domain_comps--; /* remove the root domain - allocated separately */
+
+	/* Prepare the pool map attribute buffers. */
+	map_buf = pool_buf_alloc(num_domain_comps + nnodes + ntargets);
+	if (map_buf == NULL)
+		D_GOTO(out_map_buf, rc = -DER_NOMEM);
+
+	/* Make a sorted target UUID array to determine target IDs. */
+	D_ALLOC_ARRAY_NZ(uuids, nnodes);
+	if (uuids == NULL)
+		D_GOTO(out_map_buf, rc = -DER_NOMEM);
+	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
+	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
+
+	rc = add_domains_to_pool_buf(map, map_buf, map_version, ndomains,
+				     domains);
+	if (rc != 0)
+		D_GOTO(out_map_buf, rc);
+
+	if (map != NULL) {
+		new_status = PO_COMP_ST_NEW;
 		num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
 						 PO_COMP_ID_ALL, NULL);
-	else
+	} else {
+		new_status = PO_COMP_ST_UPIN;
 		num_comps = 0;
+	}
 
 	/* fill nodes */
 	for (i = 0; i < nnodes; i++) {
@@ -1454,6 +1515,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		map_comp.co_rank = target_addrs->rl_ranks[i];
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
+		map_comp.co_flags = PO_COMPF_NONE;
 		map_comp.co_nr = dss_tgt_nr;
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
@@ -1481,6 +1543,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 			map_comp.co_rank = target_addrs->rl_ranks[i];
 			map_comp.co_ver = map_version;
 			map_comp.co_fseq = 1;
+			map_comp.co_flags = PO_COMPF_NONE;
 			map_comp.co_nr = 1;
 
 			rc = pool_buf_attach(map_buf, &map_comp, 1);
@@ -2798,7 +2861,8 @@ pool_target_id_list_append(struct pool_target_id_list *id_list,
 	if (pool_target_id_found(id_list, id))
 		return 0;
 
-	D_REALLOC_ARRAY(new_ids, id_list->pti_ids, id_list->pti_number + 1);
+	D_REALLOC_ARRAY(new_ids, id_list->pti_ids, id_list->pti_number,
+			id_list->pti_number + 1);
 	if (new_ids == NULL)
 		return -DER_NOMEM;
 

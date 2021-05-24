@@ -76,10 +76,10 @@ dc_debug_set_params(tse_task_t *task)
 	D_DEBUG(DB_MGMT, "set parameter %d/%u/"DF_U64"\n", args->rank,
 		args->key_id, args->value);
 
-	/** send the request */
 	return daos_rpc_send(rpc, task);
 
 err_rpc:
+	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_grp:
 	dc_mgmt_sys_detach(cp_arg.sys);

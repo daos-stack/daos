@@ -16,6 +16,8 @@
 #include <daos/container.h>
 #include <daos_srv/daos_engine.h>
 
+#define EC_CSUM_OC	(DAOS_OC_EC_K2P2_L32K)
+
 static void
 iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill);
 
@@ -38,7 +40,7 @@ static uint32_t dts_csum_prop_type = DAOS_PROP_CO_CSUM_SHA512;
 static inline int
 csum_ec_enable(void **state)
 {
-	dts_csum_oc = DAOS_OC_EC_K2P2_L32K;
+	dts_csum_oc = EC_CSUM_OC;
 	return 0;
 }
 
@@ -52,7 +54,7 @@ csum_replia_enable(void **state)
 static inline bool
 csum_ec_enabled()
 {
-	return dts_csum_oc == DAOS_OC_EC_K2P2_L32K;
+	return dts_csum_oc == EC_CSUM_OC;
 }
 
 static inline uint32_t
@@ -480,6 +482,7 @@ test_fetch_array(void **state)
 	struct csum_test_ctx	ctx = {0};
 	daos_oclass_id_t	oc = dts_csum_oc;
 	uint32_t		node_nr;
+	daos_iod_t		tmp_iod;
 	int			rc;
 
 	FAULT_INJECTION_REQUIRED();
@@ -514,6 +517,12 @@ test_fetch_array(void **state)
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_rc_equal(rc, 0);
+	tmp_iod = ctx.fetch_iod;
+	tmp_iod.iod_size = DAOS_REC_ANY;
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1, &tmp_iod,
+			    NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(tmp_iod.iod_size, 1);
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_rc_equal(rc, 0);
@@ -1192,6 +1201,7 @@ single_value_test(void **state, bool large_buf)
 {
 	struct csum_test_ctx	ctx = {0};
 	daos_oclass_id_t	oc = dts_csum_oc;
+	daos_iod_t		tmp_iod;
 	int			rc;
 
 	setup_from_test_args(&ctx, *state);
@@ -1204,6 +1214,13 @@ single_value_test(void **state, bool large_buf)
 			     &ctx.update_iod, &ctx.update_sgl,
 			     NULL);
 	assert_rc_equal(0, rc);
+
+	tmp_iod = ctx.fetch_iod;
+	tmp_iod.iod_size = DAOS_REC_ANY;
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1, &tmp_iod,
+			    NULL, NULL, NULL);
+	assert_rc_equal(0, rc);
+	D_ASSERT(tmp_iod.iod_size >= 1);
 
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);

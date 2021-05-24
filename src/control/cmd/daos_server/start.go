@@ -76,7 +76,7 @@ func (cmd *startCmd) setCLIOverrides() error {
 		}
 	}
 
-	return cmd.config.Validate(cmd.log)
+	return nil
 }
 
 func (cmd *startCmd) configureLogging() error {

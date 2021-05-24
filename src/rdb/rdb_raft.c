@@ -1490,7 +1490,7 @@ rdb_compactd(void *arg)
 				": %d\n", DP_DB(db), base, rc);
 			break;
 		}
-		vos_gc_pool_run(db->d_pool, -1, rdb_gc_yield, NULL);
+		vos_gc_pool(db->d_pool, -1, rdb_gc_yield, NULL);
 	}
 	D_DEBUG(DB_MD, DF_DB": compactd stopping\n", DP_DB(db));
 }
@@ -2287,6 +2287,12 @@ lc:
 	/* Load the log entries. */
 	for (i = db->d_lc_record.dlr_base + 1; i < db->d_lc_record.dlr_tail;
 	     i++) {
+		/*
+		 * Yield before loading the first entry (for the rdb_lc_discard
+		 * call above) and every a few entries.
+		 */
+		if ((i - db->d_lc_record.dlr_base - 1) % 64 == 0)
+			ABT_thread_yield();
 		rc = rdb_raft_load_entry(db, i);
 		if (rc != 0)
 			goto err_lc;

@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -110,7 +110,6 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		return nil, err
 	}
 
-	out.Sys = in.getSystem()
 	out.Uuid = uuid.New().String()
 
 	return
@@ -122,7 +121,7 @@ type (
 		msRequest
 		unaryRequest
 		retryableRequest
-		Name       string
+		Label      string
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList
@@ -155,6 +154,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate PoolCreate request")
 	}
+	pbReq.Sys = req.getSystem(rpcClient)
 	// TODO: Set this timeout based on the SCM size, when we have a
 	// better understanding of the relationship.
 	req.SetTimeout(PoolCreateTimeout)
@@ -219,7 +219,7 @@ type (
 func PoolResolveID(ctx context.Context, rpcClient UnaryInvoker, req *PoolResolveIDReq) (*PoolResolveIDResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolResolveID(ctx, &mgmtpb.PoolResolveIDReq{
-			Sys:     req.getSystem(),
+			Sys:     req.getSystem(rpcClient),
 			HumanID: req.HumanID,
 		})
 	})
@@ -254,7 +254,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, &mgmtpb.PoolDestroyReq{
-			Sys:   req.getSystem(),
+			Sys:   req.getSystem(rpcClient),
 			Uuid:  req.UUID,
 			Force: req.Force,
 		})
@@ -280,7 +280,6 @@ type PoolEvictReq struct {
 	msRequest
 	unaryRequest
 	UUID    string
-	Sys     string
 	Handles []string
 }
 
@@ -292,8 +291,8 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, &mgmtpb.PoolEvictReq{
+			Sys:     req.getSystem(rpcClient),
 			Uuid:    req.UUID,
-			Sys:     req.getSystem(),
 			Handles: req.Handles,
 		})
 	})
@@ -323,41 +322,41 @@ type (
 
 	// StorageUsageStats represents DAOS storage usage statistics.
 	StorageUsageStats struct {
-		Total uint64
-		Free  uint64
-		Min   uint64
-		Max   uint64
-		Mean  uint64
+		Total uint64 `json:"total"`
+		Free  uint64 `json:"free"`
+		Min   uint64 `json:"min"`
+		Max   uint64 `json:"max"`
+		Mean  uint64 `json:"mean"`
 	}
 
 	// PoolRebuildState indicates the current state of the pool rebuild process.
-	PoolRebuildState uint
+	PoolRebuildState int32
 
 	// PoolRebuildStatus contains detailed information about the pool rebuild process.
 	PoolRebuildStatus struct {
-		Status  int32
-		State   PoolRebuildState
-		Objects uint64
-		Records uint64
+		Status  int32            `json:"status"`
+		State   PoolRebuildState `json:"state"`
+		Objects uint64           `json:"objects"`
+		Records uint64           `json:"records"`
 	}
 
 	// PoolInfo contains information about the pool.
 	PoolInfo struct {
-		TotalTargets    uint32
-		ActiveTargets   uint32
-		TotalNodes      uint32
-		DisabledTargets uint32
-		Version         uint32
-		Leader          uint32
-		Rebuild         *PoolRebuildStatus
-		Scm             *StorageUsageStats
-		Nvme            *StorageUsageStats
+		TotalTargets    uint32             `json:"total_targets"`
+		ActiveTargets   uint32             `json:"active_targets"`
+		TotalNodes      uint32             `json:"total_nodes"`
+		DisabledTargets uint32             `json:"disabled_targets"`
+		Version         uint32             `json:"version"`
+		Leader          uint32             `json:"leader"`
+		Rebuild         *PoolRebuildStatus `json:"rebuild"`
+		Scm             *StorageUsageStats `json:"scm"`
+		Nvme            *StorageUsageStats `json:"nvme"`
 	}
 
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
-		Status int32
-		UUID   string
+		Status int32  `json:"status"`
+		UUID   string `json:"uuid"`
 		PoolInfo
 	}
 )
@@ -372,7 +371,36 @@ const (
 )
 
 func (prs PoolRebuildState) String() string {
-	return [...]string{"idle", "done", "busy"}[prs]
+	return strings.ToLower(mgmtpb.PoolRebuildStatus_State_name[int32(prs)])
+}
+
+func (prs PoolRebuildState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := mgmtpb.PoolRebuildStatus_State_name[int32(prs)]
+	if !ok {
+		return nil, errors.Errorf("invalid rebuild state %d", prs)
+	}
+	return []byte(`"` + strings.ToLower(stateStr) + `"`), nil
+}
+
+func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
+	stateStr := strings.ToUpper(string(data))
+	state, ok := mgmtpb.PoolRebuildStatus_State_value[stateStr]
+	if !ok {
+		// Try converting the string to an int32, to handle the
+		// conversion from protobuf message using convert.Types().
+		si, err := strconv.ParseInt(stateStr, 0, 32)
+		if err != nil {
+			return errors.Errorf("invalid rebuild state %q", stateStr)
+		}
+
+		if _, ok = mgmtpb.PoolRebuildStatus_State_name[int32(si)]; !ok {
+			return errors.Errorf("invalid rebuild state %q", stateStr)
+		}
+		state = int32(si)
+	}
+	*prs = PoolRebuildState(state)
+
+	return nil
 }
 
 // PoolQuery performs a pool query operation for the specified pool UUID on a
@@ -383,7 +411,7 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{
-			Sys:  req.getSystem(),
+			Sys:  req.getSystem(rpcClient),
 			Uuid: req.UUID,
 		})
 	})
@@ -442,7 +470,7 @@ func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropRe
 	}
 
 	pbReq := &mgmtpb.PoolSetPropReq{
-		Sys:  req.getSystem(),
+		Sys:  req.getSystem(rpcClient),
 		Uuid: req.UUID,
 	}
 	pbReq.SetPropertyName(req.Property)
@@ -513,7 +541,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, &mgmtpb.PoolExcludeReq{
-			Sys:       req.getSystem(),
+			Sys:       req.getSystem(rpcClient),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,
@@ -556,7 +584,7 @@ func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) e
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, &mgmtpb.PoolDrainReq{
-			Sys:       req.getSystem(),
+			Sys:       req.getSystem(rpcClient),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,
@@ -584,7 +612,6 @@ func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err err
 	if err = convert.Types(in, out); err != nil {
 		return nil, err
 	}
-	out.Sys = in.getSystem()
 
 	return
 }
@@ -609,6 +636,7 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 	if err != nil {
 		return errors.Wrap(err, "failed to generate PoolExtend request")
 	}
+	pbReq.Sys = req.getSystem(rpcClient)
 
 	if err := checkUUID(req.UUID); err != nil {
 		return err
@@ -653,7 +681,7 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, &mgmtpb.PoolReintegrateReq{
-			Sys:       req.getSystem(),
+			Sys:       req.getSystem(rpcClient),
 			Uuid:      req.UUID,
 			Rank:      req.Rank.Uint32(),
 			Targetidx: req.Targetidx,

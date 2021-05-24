@@ -20,6 +20,7 @@
 #include <daos/tests_lib.h>
 #include <daos_test.h>
 #include <daos/dts.h>
+#include <daos/credit.h>
 
 enum {
 	UPDATE,
@@ -48,7 +49,7 @@ enum {
 	OBJ_CNT
 };
 
-static struct dts_context	ts_ctx;
+static struct credit_context	ts_ctx;
 unsigned		seed;
 int			dkey_cnt = MAX_KEY_CNT;
 int			akey_cnt = MAX_KEY_CNT;

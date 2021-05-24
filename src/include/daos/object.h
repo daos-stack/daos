@@ -71,7 +71,7 @@ enum {
 	DAOS_OC_R4_RW,		/* class for testing */
 	DAOS_OC_R4_MAX_RW,	/* class for testing */
 	DAOS_OC_REPL_MAX_RW,
-	DAOS_OC_ECHO_TINY_RW,	/* Echo class, tiny */
+	DAOS_OC_ECHO_R1S_RW,	/* Echo class, 1 replica single stripe */
 	DAOS_OC_ECHO_R2S_RW,	/* Echo class, 2 replica single stripe */
 	DAOS_OC_ECHO_R3S_RW,	/* Echo class, 3 replica single stripe */
 	DAOS_OC_ECHO_R4S_RW,	/* Echo class, 4 replica single stripe */
@@ -103,11 +103,15 @@ enum {
 	 *
 	 * NB: it should be smaller than OC_BACK_COMPAT (50)
 	 */
-	DAOS_OC_OIT_V1	= 45,
+	DAOS_OC_OIT_RF0	= 45,
+	DAOS_OC_OIT_RF1	= 46,
+	DAOS_OC_OIT_RF2	= 47,
+	DAOS_OC_OIT_RF3	= 48,
+	DAOS_OC_OIT_RF4	= 49,
 };
 
-/* default version of OIT object class */
-#define DAOS_OC_OIT	DAOS_OC_OIT_V1
+/* Temporarily keep it to minimize change, remove it in the future */
+#define DAOS_OC_ECHO_TINY_RW	DAOS_OC_ECHO_R1S_RW
 
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
@@ -205,6 +209,7 @@ struct daos_obj_layout {
 struct daos_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
 	uint32_t		st_shard;	/* shard index */
+	uint32_t		st_shard_id;	/* shard id */
 	uint32_t		st_tgt_id;	/* target id */
 	uint16_t		st_tgt_idx;	/* target xstream index */
 	/* target idx for EC obj, only used for client */
@@ -242,7 +247,7 @@ daos_unit_obj_id_equal(daos_unit_oid_t oid1, daos_unit_oid_t oid2)
 
 struct pl_obj_layout;
 
-int  obj_class_init(void);
+int obj_class_init(void);
 void obj_class_fini(void);
 struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
@@ -250,6 +255,9 @@ unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
 int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 			daos_oclass_id_t *oc_id_p);
+bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
+daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+				   daos_oclass_hints_t hints, uint32_t args);
 
 /** bits for the specified rank */
 #define DAOS_OC_SR_SHIFT	24
@@ -343,13 +351,50 @@ daos_obj_set_oid(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	oid->hi |= hdr;
 }
 
-/* generate ID for Object ID Table which is just an object */
-static inline daos_obj_id_t
-daos_oit_gen_id(daos_epoch_t epoch)
+/* check if an object ID is OIT (Object ID Table) */
+static inline bool
+daos_oid_is_oit(daos_obj_id_t oid)
 {
-	daos_obj_id_t	oid = {0};
+	daos_oclass_id_t	oc = daos_obj_id2class(oid);
 
-	daos_obj_set_oid(&oid, 0, DAOS_OC_OIT, 0);
+	return (oc == DAOS_OC_OIT_RF0) || (oc == DAOS_OC_OIT_RF1) ||
+	       (oc == DAOS_OC_OIT_RF2) || (oc == DAOS_OC_OIT_RF3) ||
+	       (oc == DAOS_OC_OIT_RF4);
+}
+
+/*
+ * generate ID for Object ID Table which is just an object, caller should
+ * provide valid cont_rf value (DAOS_PROP_CO_REDUN_RF0 ~ DAOS_PROP_CO_REDUN_RF4)
+ * or it possibly assert it internally
+ */
+static inline daos_obj_id_t
+daos_oit_gen_id(daos_epoch_t epoch, uint32_t cont_rf)
+{
+	daos_oclass_id_t	oc;
+	daos_obj_id_t		oid = {0};
+
+	switch (cont_rf) {
+	case DAOS_PROP_CO_REDUN_RF0:
+		oc = DAOS_OC_OIT_RF0;
+		break;
+	case DAOS_PROP_CO_REDUN_RF1:
+		oc = DAOS_OC_OIT_RF1;
+		break;
+	case DAOS_PROP_CO_REDUN_RF2:
+		oc = DAOS_OC_OIT_RF2;
+		break;
+	case DAOS_PROP_CO_REDUN_RF3:
+		oc = DAOS_OC_OIT_RF3;
+		break;
+	case DAOS_PROP_CO_REDUN_RF4:
+		oc = DAOS_OC_OIT_RF4;
+		break;
+	default:
+		D_ASSERTF(0, "bad cont_rf %d\n", cont_rf);
+		break;
+	};
+
+	daos_obj_set_oid(&oid, 0, oc, 0);
 	oid.lo = epoch;
 	return oid;
 }
@@ -386,6 +431,11 @@ int daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
 int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
 void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
+
+int daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
+				daos_obj_id_t *oid, daos_ofeat_t ofeats,
+				daos_oclass_id_t cid, daos_oclass_hints_t hints,
+				uint32_t args);
 
 int dc_obj_init(void);
 void dc_obj_fini(void);
@@ -467,6 +517,7 @@ enum {
 	OBJ_ITER_RECX,
 	OBJ_ITER_DKEY_EPOCH,
 	OBJ_ITER_AKEY_EPOCH,
+	OBJ_ITER_OBJ_PUNCH_EPOCH,
 };
 
 #define RECX_INLINE	(1U << 0)
@@ -540,7 +591,8 @@ daos_recx_ep_add(struct daos_recx_ep_list *list, struct daos_recx_ep *recx)
 		if (list->re_total == 0)
 			D_ALLOC_ARRAY(new_items, nr);
 		else
-			D_REALLOC_ARRAY(new_items, list->re_items, nr);
+			D_REALLOC_ARRAY(new_items, list->re_items,
+					list->re_total, nr);
 		if (new_items == NULL)
 			return -DER_NOMEM;
 		list->re_items = new_items;

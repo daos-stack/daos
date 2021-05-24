@@ -14,7 +14,7 @@ def scons():
     # Common object code
     common_tgts = denv.SharedObject(['obj_class.c', 'obj_rpc.c', 'obj_task.c',
                                      'obj_utils.c', 'rpc_csum.c', 'obj_tx.c',
-                                     'obj_enum.c'])
+                                     'obj_enum.c', 'obj_class_def.c'])
 
     # generate server module
     senv = denv.Clone()

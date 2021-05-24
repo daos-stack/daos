@@ -1,13 +1,14 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2020-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import threading
 import avocado
+import time
 
 from pydaos.raw import DaosApiError
 from test_utils_pool import TestPool
@@ -143,7 +144,7 @@ class NvmeObject(TestWithServers):
 
     def setUp(self):
         """Set Up nodes for each test case."""
-        super(NvmeObject, self).setUp()
+        super().setUp()
 
         # initialize self.pool and self.container as lists
         self.pool = []
@@ -194,6 +195,7 @@ class NvmeObject(TestWithServers):
         threads = []
         index = 0
         for size in self.pool_size[:-1]:
+            time.sleep(1)
             thread = threading.Thread(target=test_runner,
                                       args=(self, size, self.record_size,
                                             index, self.array_size))

@@ -10,6 +10,8 @@
 
 #define D_LOGFAC DD_FAC(server)
 
+#include <daos_srv/daos_engine.h>
+
 #include <daos_types.h>
 #include <daos/drpc.h>
 #include <daos/drpc_modules.h>
@@ -17,17 +19,147 @@
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
-/** dRPC client context */
-struct drpc *dss_drpc_ctx;
+/** dRPC UNIX-domain socket path (full, not directory-only) */
+static char *dss_drpc_path;
+
+struct dss_drpc_thread_arg {
+	int32_t		  cta_module;
+	int32_t		  cta_method;
+	int		  cta_flags;
+	void		 *cta_req;
+	size_t		  cta_req_size;
+	Drpc__Response	**cta_resp;
+};
+
+static void *
+dss_drpc_thread(void *varg)
+{
+	struct dss_drpc_thread_arg	*arg = varg;
+	struct drpc			*ctx;
+	Drpc__Call			*call;
+	Drpc__Response			*resp;
+	int				 flags = R_SYNC;
+	int				 rc;
+
+	/* Establish a private connection to avoid dRPC concurrency problems. */
+	rc = drpc_connect(dss_drpc_path, &ctx);
+	if (rc != 0) {
+		D_ERROR("failed to connect to dRPC server at %s: "DF_RC"\n",
+			dss_drpc_path, DP_RC(rc));
+		goto out;
+	}
+
+	rc = drpc_call_create(ctx, arg->cta_module, arg->cta_method, &call);
+	if (rc != 0) {
+		D_ERROR("failed to create dRPC %d/%d: "DF_RC"\n",
+			arg->cta_module, arg->cta_method, DP_RC(rc));
+		goto out_ctx;
+	}
+	call->body.data = arg->cta_req;
+	call->body.len = arg->cta_req_size;
+
+	if (arg->cta_flags & DSS_DRPC_NO_RESP)
+		flags &= ~R_SYNC;
+
+	rc = drpc_call(ctx, flags, call, &resp);
+	if (rc != 0) {
+		D_ERROR("failed to invoke dRPC %d/%d: "DF_RC"\n",
+			arg->cta_module, arg->cta_method, DP_RC(rc));
+		goto out_call;
+	}
+
+	if (arg->cta_flags & DSS_DRPC_NO_RESP)
+		drpc_response_free(resp);
+	else
+		*arg->cta_resp = resp;
+out_call:
+	/* Let the caller free its own buffer. */
+	call->body.data = NULL;
+	call->body.len = 0;
+	drpc_call_free(call);
+out_ctx:
+	drpc_close(ctx);
+out:
+	return (void *)(intptr_t)rc;
+}
+
+/**
+ * Invoke a dRPC. See dss_drpc_call_flag for the usage of \a flags. If \a flags
+ * includes DSS_DRPC_NO_RESP, \a resp is ignored; otherwise, the caller must
+ * specify \a resp, and is responsible for freeing the response with
+ * drpc_response_free.
+ */
+int
+dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
+	      unsigned int flags, Drpc__Response **resp)
+{
+	struct dss_drpc_thread_arg	 arg;
+	struct sched_req_attr		 attr = {0};
+	uuid_t				 anonym_uuid;
+	struct sched_request		*sched_req;
+	pthread_t			 thread;
+	struct d_backoff_seq		 backoff_seq;
+	void				*thread_rc;
+	int				 rc;
+
+	arg.cta_module = module;
+	arg.cta_method = method;
+	arg.cta_flags = flags;
+	arg.cta_req = req;
+	arg.cta_req_size = req_size;
+	arg.cta_resp = resp;
+
+	if (flags & (DSS_DRPC_NO_RESP | DSS_DRPC_NO_SCHED))
+		return (int)(intptr_t)dss_drpc_thread(&arg);
+
+	/* Initialize sched_req for the backoffs below. */
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	sched_req = sched_req_get(&attr, ABT_THREAD_NULL);
+	if (sched_req == NULL) {
+		D_ERROR("failed to get sched req\n");
+		return -DER_NOMEM;
+	}
+
+	/* Create a thread to avoid blocking the current xstream. */
+	rc = pthread_create(&thread, NULL /* attr */, dss_drpc_thread, &arg);
+	if (rc != 0) {
+		D_ERROR("failed to create thread for dRPC: %d "DF_RC"\n", rc,
+			DP_RC(daos_errno2der(rc)));
+		rc = daos_errno2der(rc);
+		return rc;
+	}
+
+	/* Poll the thread for its completion. */
+	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */,
+				2 /* factor */, 8 /* next (ms) */,
+				1 << 10 /* max (ms) */);
+	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
+	do {
+		sched_req_sleep(sched_req, d_backoff_seq_next(&backoff_seq));
+		rc = pthread_tryjoin_np(thread, &thread_rc);
+	} while (rc == EBUSY);
+	/*
+	 * The pthread_tryjoin_np call is expected to return either EBUSY or 0,
+	 * unless there is a bug somewhere affecting its internal logic. If the
+	 * thread may still be running, then we can't return safely, for arg is
+	 * on the stack. Allocating arg on the heap seems to be a overkill.
+	 * Hence, we simply assert that rc must be 0.
+	 */
+	D_ASSERTF(rc == 0, "failed to join dRPC thread: %d\n", rc);
+	d_backoff_seq_fini(&backoff_seq);
+
+	sched_req_put(sched_req);
+	return (int)(intptr_t)thread_rc;
+}
 
 /* Notify daos_server that we are ready (e.g., to receive dRPC requests). */
-static int
-notify_ready(void)
+int
+drpc_notify_ready(void)
 {
 	Srv__NotifyReadyReq	req = SRV__NOTIFY_READY_REQ__INIT;
 	uint8_t		       *reqb;
 	size_t			reqb_size;
-	Drpc__Call	       *dreq;
 	Drpc__Response	       *dresp;
 	int			rc;
 
@@ -44,21 +176,12 @@ notify_ready(void)
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL)
 		D_GOTO(out_uri, rc = -DER_NOMEM);
-
 	srv__notify_ready_req__pack(&req, reqb);
-	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
-			      DRPC_METHOD_SRV_NOTIFY_READY, &dreq);
-	if (rc != 0) {
-		D_FREE(reqb);
-		goto out_uri;
-	}
 
-	dreq->body.len = reqb_size;
-	dreq->body.data = reqb;
-
-	rc = drpc_call(dss_drpc_ctx, R_SYNC, dreq, &dresp);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY, reqb,
+			   reqb_size, DSS_DRPC_NO_SCHED, &dresp);
 	if (rc != 0)
-		goto out_dreq;
+		goto out_reqb;
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
 		D_ERROR("received erroneous dRPC response: %d\n",
 			dresp->status);
@@ -66,30 +189,26 @@ notify_ready(void)
 	}
 
 	drpc_response_free(dresp);
-out_dreq:
-	/* This also frees reqb via dreq->body.data. */
-	drpc_call_free(dreq);
+out_reqb:
+	D_FREE(reqb);
 out_uri:
 	D_FREE(req.uri);
 out:
 	return rc;
 }
 
-/* Notify daos_server that there has been a I/O error. */
+/*
+ * Notify daos_server that there has been a I/O error. This function doesn't
+ * Argobots-schedule.
+ */
 int
 ds_notify_bio_error(int media_err_type, int tgt_id)
 {
 	Srv__BioErrorReq	 bioerr_req = SRV__BIO_ERROR_REQ__INIT;
-	Drpc__Call		*dreq;
-	Drpc__Response		*dresp;
 	uint8_t			*req;
 	size_t			 req_size;
 	int			 rc;
 
-	if (dss_drpc_ctx == NULL) {
-		D_ERROR("dRPC not connected\n");
-		return -DER_INVAL;
-	}
 	rc = crt_self_uri_get(0 /* tag */, &bioerr_req.uri);
 	if (rc != 0)
 		return rc;
@@ -109,31 +228,19 @@ ds_notify_bio_error(int media_err_type, int tgt_id)
 	D_ALLOC(req, req_size);
 	if (req == NULL)
 		D_GOTO(out_uri, rc = -DER_NOMEM);
-
 	srv__bio_error_req__pack(&bioerr_req, req);
-	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
-			      DRPC_METHOD_SRV_BIO_ERR, &dreq);
-	if (rc != 0) {
-		D_FREE(req);
-		goto out_uri;
-	}
 
-	dreq->body.len = req_size;
-	dreq->body.data = req;
-
-	rc = drpc_call(dss_drpc_ctx, R_SYNC, dreq, &dresp);
+	/*
+	 * Do not wait for the response, so that we don't Argobots-schedule or
+	 * pthread-block.
+	 */
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_BIO_ERR, req,
+			   req_size, DSS_DRPC_NO_RESP, NULL /* resp */);
 	if (rc != 0)
-		goto out_dreq;
-	if (dresp->status != DRPC__STATUS__SUCCESS) {
-		D_ERROR("received erroneous dRPC response: %d\n",
-			dresp->status);
-		rc = -DER_IO;
-	}
+		goto out_req;
 
-	drpc_response_free(dresp);
-
-out_dreq:
-	drpc_call_free(dreq);
+out_req:
+	D_FREE(req);
 out_uri:
 	D_FREE(bioerr_req.uri);
 
@@ -146,17 +253,11 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Srv__GetPoolSvcReq	gps_req = SRV__GET_POOL_SVC_REQ__INIT;
 	Srv__GetPoolSvcResp	*gps_resp = NULL;
-	Drpc__Call		*dreq;
 	Drpc__Response		*dresp;
 	uint8_t			*req;
 	size_t			 req_size;
 	d_rank_list_t		*ranks;
 	int			 rc;
-
-	if (dss_drpc_ctx == NULL) {
-		D_ERROR("dRPC not connected\n");
-		return -DER_UNINIT;
-	}
 
 	D_ALLOC(gps_req.uuid, DAOS_UUID_STR_SIZE);
 	if (gps_req.uuid == NULL) {
@@ -172,21 +273,12 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	D_ALLOC(req, req_size);
 	if (req == NULL)
 		D_GOTO(out_uuid, rc = -DER_NOMEM);
-
 	srv__get_pool_svc_req__pack(&gps_req, req);
-	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
-			      DRPC_METHOD_SRV_GET_POOL_SVC, &dreq);
-	if (rc != 0) {
-		D_FREE(req);
-		goto out_uuid;
-	}
 
-	dreq->body.len = req_size;
-	dreq->body.data = req;
-
-	rc = drpc_call(dss_drpc_ctx, R_SYNC, dreq, &dresp);
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_GET_POOL_SVC, req,
+			   req_size, 0 /* flags */, &dresp);
 	if (rc != 0)
-		goto out_dreq;
+		goto out_req;
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
 		D_ERROR("received erroneous dRPC response: %d\n",
 			dresp->status);
@@ -204,8 +296,14 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	}
 
 	if (gps_resp->status != 0) {
-		D_ERROR("failure fetching svc_ranks for "DF_UUID": "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(gps_resp->status));
+		if (gps_resp->status == -DER_NONEXIST) /* not an error */
+			D_DEBUG(DB_MGMT, "pool svc "DF_UUID" not found: "
+				DF_RC"\n",
+				DP_UUID(pool_uuid), DP_RC(gps_resp->status));
+		else
+			D_ERROR("failure fetching svc_ranks for "DF_UUID": "
+				DF_RC"\n",
+				DP_UUID(pool_uuid), DP_RC(gps_resp->status));
 		D_GOTO(out_resp, rc = gps_resp->status);
 	}
 
@@ -222,9 +320,8 @@ out_resp:
 	srv__get_pool_svc_resp__free_unpacked(gps_resp, &alloc.alloc);
 out_dresp:
 	drpc_response_free(dresp);
-out_dreq:
-	/* also frees req via dreq->body.data */
-	drpc_call_free(dreq);
+out_req:
+	D_FREE(req);
 out_uuid:
 	D_FREE(gps_req.uuid);
 out:
@@ -232,39 +329,97 @@ out:
 }
 
 int
-drpc_init(void)
+ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
+		     d_rank_list_t **svc_ranks)
 {
-	char	*path;
-	int	 rc;
+	struct drpc_alloc		alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Srv__PoolFindByLabelReq		frq = SRV__POOL_FIND_BY_LABEL_REQ__INIT;
+	Srv__PoolFindByLabelResp       *frsp = NULL;
+	Drpc__Response		       *dresp;
+	uint8_t			       *req;
+	size_t				req_size;
+	d_rank_list_t		       *ranks;
+	int				rc;
 
-	D_ASPRINTF(path, "%s/%s", dss_socket_dir, "daos_server.sock");
-	if (path == NULL)
+	D_STRNDUP(frq.label, label, DAOS_PROP_LABEL_MAX_LEN);
+	if (frq.label == NULL) {
+		D_ERROR("failed to duplicate pool label string\n");
 		D_GOTO(out, rc = -DER_NOMEM);
-
-	D_ASSERT(dss_drpc_ctx == NULL);
-	rc = drpc_connect(path, &dss_drpc_ctx);
-	if (dss_drpc_ctx == NULL)
-		D_GOTO(out_path, 0);
-
-	rc = notify_ready();
-	if (rc != 0) {
-		drpc_close(dss_drpc_ctx);
-		dss_drpc_ctx = NULL;
 	}
 
-out_path:
-	D_FREE(path);
+	D_DEBUG(DB_MGMT, "fetching svc_ranks for pool %s\n", label);
+
+	req_size = srv__pool_find_by_label_req__get_packed_size(&frq);
+	D_ALLOC(req, req_size);
+	if (req == NULL)
+		D_GOTO(out_label, rc = -DER_NOMEM);
+	srv__pool_find_by_label_req__pack(&frq, req);
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_POOL_FIND_BYLABEL,
+			   req, req_size, 0 /* flags */, &dresp);
+	if (rc != 0)
+		goto out_req;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n",
+			dresp->status);
+		D_GOTO(out_dresp, rc = -DER_IO);
+	}
+
+	frsp = srv__pool_find_by_label_resp__unpack(&alloc.alloc,
+						    dresp->body.len,
+						    dresp->body.data);
+	if (alloc.oom) {
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+	} else if (frsp == NULL) {
+		D_ERROR("failed to unpack resp (get pool svc)\n");
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+	}
+
+	if (frsp->status != 0) {
+		if (frsp->status == -DER_NONEXIST) /* not an error */
+			D_DEBUG(DB_MGMT, "pool %s not found, "DF_RC"\n",
+				frq.label, DP_RC(frsp->status));
+		else
+			D_ERROR("failure finding pool %s, "DF_RC"\n",
+				frq.label, DP_RC(frsp->status));
+		D_GOTO(out_resp, rc = frsp->status);
+	}
+
+	ranks = uint32_array_to_rank_list(frsp->svcreps,
+					  frsp->n_svcreps);
+	if (ranks == NULL)
+		D_GOTO(out_resp, rc = -DER_NOMEM);
+	*svc_ranks = ranks;
+	uuid_parse(frsp->uuid, pool_uuid);
+	D_DEBUG(DB_MGMT, "pool %s: UUID="DF_UUID", %u svc replicas\n",
+		frq.label, DP_UUID(pool_uuid), ranks->rl_nr);
+
+out_resp:
+	srv__pool_find_by_label_resp__free_unpacked(frsp, &alloc.alloc);
+out_dresp:
+	drpc_response_free(dresp);
+out_req:
+	D_FREE(req);
+out_label:
+	D_FREE(frq.label);
 out:
 	return rc;
+}
+
+
+int
+drpc_init(void)
+{
+	D_ASSERT(dss_drpc_path == NULL);
+	D_ASPRINTF(dss_drpc_path, "%s/%s", dss_socket_dir, "daos_server.sock");
+	if (dss_drpc_path == NULL)
+		return -DER_NOMEM;
+	return 0;
 }
 
 void
 drpc_fini(void)
 {
-	int rc;
-
-	D_ASSERT(dss_drpc_ctx != NULL);
-	rc = drpc_close(dss_drpc_ctx);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	dss_drpc_ctx = NULL;
+	D_ASSERT(dss_drpc_path != NULL);
+	D_FREE(dss_drpc_path);
 }

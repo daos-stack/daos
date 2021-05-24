@@ -185,6 +185,35 @@ d_hash_murmur64(const unsigned char *key, unsigned int key_len,
 	return mur;
 }
 
+/**
+ * Jump Consistent Hash Algorithm that provides a bucket location
+ * for the given key. This algorithm hashes a minimal (1/n) number
+ * of keys to a new bucket when extending the number of buckets.
+ *
+ * \param[in]   key             A unique key representing the object that
+ *                              will be placed in the bucket.
+ * \param[in]   num_buckets     The total number of buckets the hashing
+ *                              algorithm can choose from.
+ *
+ * \return                      Returns an index ranging from 0 to
+ *                              num_buckets representing the bucket
+ *                              the given key hashes to.
+ */
+uint32_t
+d_hash_jump(uint64_t key, uint32_t num_buckets)
+{
+	int64_t z = -1;
+	int64_t y = 0;
+
+	while (y < num_buckets) {
+		z = y;
+		key = key * 2862933555777941757ULL + 1;
+		y = (z + 1) * ((double)(1LL << 31) /
+			       ((double)((key >> 33) + 1)));
+	}
+	return z;
+}
+
 /******************************************************************************
  * Generic Hash Table functions / data structures
  ******************************************************************************/
@@ -446,8 +475,10 @@ d_hash_rec_insert(struct d_hash_table *htable, const void *key,
 
 	if (exclusive) {
 		tmp = ch_rec_find(htable, bucket, key, ksize, D_HASH_LRU_NONE);
-		if (tmp)
+		if (tmp) {
+			D_DEBUG(DB_TRACE, "Dup key detected\n");
 			D_GOTO(out_unlock, rc = -DER_EXIST);
+		}
 	}
 	ch_rec_insert_addref(htable, bucket, link);
 
@@ -1236,6 +1267,10 @@ d_hhash_link_lookup(struct d_hhash *hhash, uint64_t key)
 	if (d_hhash_key_isptr(key)) {
 		struct d_hlink *hlink = (struct d_hlink *)key;
 
+		if (hlink == NULL) {
+			D_ERROR("NULL PTR type key.\n");
+			return NULL;
+		}
 		if (!d_hhash_is_ptrtype(hhash)) {
 			D_ERROR("invalid PTR type key being lookup in a "
 				"non ptr-based htable.\n");

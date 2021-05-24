@@ -15,7 +15,7 @@ class DaosAgentTransportCredentials(TransportCredentials):
 
     def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
-        super(DaosAgentTransportCredentials, self).__init__(
+        super().__init__(
             "/run/agent_config/transport_config/*", "transport_config", log_dir)
 
         # Additional daos_agent transport credential parameters:
@@ -37,8 +37,7 @@ class DaosAgentYamlParameters(YamlParameters):
             filename (str): yaml configuration file name
             common_yaml (YamlParameters): [description]
         """
-        super(DaosAgentYamlParameters, self).__init__(
-            "/run/agent_config/*", filename, None, common_yaml)
+        super().__init__("/run/agent_config/*", filename, None, common_yaml)
 
         # All log files should be placed in the same directory on each host to
         # enable easy log file archiving by launch.py

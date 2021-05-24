@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from command_utils_base import FormattedParameter
 from command_utils_base import BasicParameter
@@ -17,7 +17,7 @@ class DbenchCommand(ExecutableCommand):
 
     def __init__(self, namespace, command):
         """Create a dbench Command object."""
-        super(DbenchCommand, self).__init__(namespace, command)
+        super().__init__(namespace, command)
 
         # dbench options
         self.timelimit = FormattedParameter("--timelimit {}")
@@ -43,7 +43,7 @@ class DbenchCommand(ExecutableCommand):
     def get_param_names(self):
         """Overriding the original get_param_names."""
 
-        param_names = super(DbenchCommand, self).get_param_names()
+        param_names = super().get_param_names()
 
         # move key=num_of_procs to the end
         param_names.sort(key='num_of_procs'.__eq__)
@@ -56,7 +56,7 @@ class Dbench(DbenchCommand):
 
     def __init__(self, hosts, tmp):
         """Create a dbench object."""
-        super(Dbench, self).__init__("/run/dbench/*", "dbench")
+        super().__init__("/run/dbench/*", "dbench")
 
         # set params
         self.hosts = hosts

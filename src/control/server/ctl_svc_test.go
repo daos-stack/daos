@@ -40,6 +40,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 			log: log,
 		},
 		events: events.NewPubSub(context.TODO(), log),
+		srvCfg: cfg,
 	}
 
 	for _, engineCfg := range cfg.Engines {

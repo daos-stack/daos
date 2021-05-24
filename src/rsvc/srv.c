@@ -361,9 +361,17 @@ ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 	return 0;
 }
 
+/** Get a reference to the leader fields of \a svc. */
+void
+ds_rsvc_get_leader(struct ds_rsvc *svc)
+{
+	ds_rsvc_get(svc);
+	get_leader(svc);
+}
+
 /**
- * As a convenience for general replicated service RPC handlers, this function
- * puts svc returned by ds_rsvc_lookup_leader.
+ * Put the reference returned by ds_rsvc_lookup_leader or ds_rsvc_get_leader to
+ * the leader fields of \a svc.
  */
 void
 ds_rsvc_put_leader(struct ds_rsvc *svc)
@@ -454,7 +462,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		rc = 0;
 		goto out_mutex;
 	} else if (rc != 0) {
-		D_ERROR("%s: failed to step up as leader "DF_U64": "DF_RC"\n",
+		D_DEBUG(DB_MD, "%s: failed to step up to "DF_U64": "DF_RC"\n",
 			svc->s_name, term, DP_RC(rc));
 		if (map_distd_initialized)
 			drain_map_distd(svc);
@@ -643,15 +651,32 @@ ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 }
 
 static bool
+nominated(d_rank_list_t *replicas, uuid_t db_uuid)
+{
+	int i;
+
+	/* No initial membership. */
+	if (replicas == NULL || replicas->rl_nr < 1)
+		return false;
+
+	/* Only one replica. */
+	if (replicas->rl_nr == 1)
+		return true;
+
+	/*
+	 * Nominate by hashing the DB UUID. The only requirement is that every
+	 * replica shall end up with the same nomination.
+	 */
+	i = d_hash_murmur64(db_uuid, sizeof(uuid_t), 0x2db) % replicas->rl_nr;
+
+	return (replicas->rl_ranks[i] == dss_self_rank());
+}
+
+static bool
 self_only(d_rank_list_t *replicas)
 {
-	d_rank_t	self;
-	int		rc;
-
-	rc = crt_group_rank(NULL /* grp */, &self);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	return replicas != NULL && replicas->rl_nr == 1 &&
-	       replicas->rl_ranks[0] == self;
+	return (replicas != NULL && replicas->rl_nr == 1 &&
+		replicas->rl_ranks[0] == dss_self_rank());
 }
 
 static int
@@ -666,16 +691,28 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 		goto err;
 	svc->s_ref++;
 
-	if (create) {
-		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas);
-		if (rc != 0)
-			goto err_svc;
-	}
-
-	rc = rdb_start(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs, svc,
-		       &svc->s_db);
+	if (create)
+		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas,
+				&rsvc_rdb_cbs, svc, &svc->s_db);
+	else
+		rc = rdb_start(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs,
+			       svc, &svc->s_db);
 	if (rc != 0)
-		goto err_creation;
+		goto err_svc;
+
+	/*
+	 * If creating a replica with an initial membership, we are
+	 * bootstrapping the DB (via sc_bootstrap or an external mechanism). If
+	 * we are the "nominated" replica, start a campaign without waiting for
+	 * the election timeout.
+	 */
+	if (create && nominated(replicas, db_uuid)) {
+		/* Give others a chance to get ready for voting. */
+		dss_sleep(1 /* ms */);
+		rc = rdb_campaign(svc->s_db);
+		if (rc != 0)
+			goto err_db;
+	}
 
 	if (create && self_only(replicas) &&
 	    rsvc_class(class)->sc_bootstrap != NULL) {
@@ -689,7 +726,6 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 
 err_db:
 	rdb_stop(svc->s_db);
-err_creation:
 	if (create)
 		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
 err_svc:

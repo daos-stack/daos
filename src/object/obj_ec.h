@@ -16,7 +16,7 @@
 /** MAX number of data cells */
 #define OBJ_EC_MAX_K		(64)
 /** MAX number of parity cells */
-#define OBJ_EC_MAX_P		(16)
+#define OBJ_EC_MAX_P		(8)
 #define OBJ_EC_MAX_M		(OBJ_EC_MAX_K + OBJ_EC_MAX_P)
 /** Length of target bitmap */
 #define OBJ_TGT_BITMAP_LEN						\
@@ -219,6 +219,10 @@ struct obj_ec_recov_codec {
 /* EC recovery task */
 struct obj_ec_recov_task {
 	daos_iod_t		ert_iod;
+	/* the original user iod pointer, used for the case that in singv
+	 * degraded fetch, set the iod_size.
+	 */
+	daos_iod_t		*ert_oiod;
 	d_sg_list_t		ert_sgl;
 	daos_epoch_t		ert_epoch;
 	daos_handle_t		ert_th; /* read-only tx handle */
@@ -226,10 +230,6 @@ struct obj_ec_recov_task {
 
 /** EC obj IO failure information */
 struct obj_ec_fail_info {
-	/* the original user iods pointer, used for the case that in singv
-	 * degraded fetch, set the iod_size.
-	 */
-	daos_iod_t			*efi_uiods;
 	/* missed (to be recovered) recx list */
 	struct daos_recx_ep_list	*efi_recx_lists;
 	/* list of error targets */
@@ -657,7 +657,8 @@ int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 struct obj_rw_in;
 int obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			uint32_t iod_nr, uint32_t start_shard,
-			uint32_t max_shard, void *tgt_map, uint32_t map_size,
+			uint32_t max_shard, uint32_t leader_id,
+			void *tgt_map, uint32_t map_size,
 			uint32_t tgt_nr, struct daos_shard_tgt *tgts,
 			struct obj_ec_split_req **split_req);
 void obj_ec_split_req_fini(struct obj_ec_split_req *req);

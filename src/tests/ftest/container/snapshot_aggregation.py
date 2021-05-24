@@ -22,7 +22,7 @@ class SnapshotAggregation(IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a SnapshotAggregation object."""
-        super(SnapshotAggregation, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg = None
         self.free_space = {"scm": [], "nvme": []}
 
@@ -30,7 +30,7 @@ class SnapshotAggregation(IorTestBase):
         """Append the free space list with the current pool capacities."""
         for index, name in enumerate(("scm", "nvme")):
             self.free_space[name].append({
-                "dmg": self.pool.query_data[name]["free"],
+                "dmg": self.pool.query_data["response"][name]["free"],
                 "api": int(self.pool.info.pi_space.ps_space.s_free[index])
             })
 

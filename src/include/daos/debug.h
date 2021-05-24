@@ -84,6 +84,7 @@ DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
 
 /** initialize the debug system */
 int  daos_debug_init(char *logfile);
+void daos_debug_set_id_cb(d_log_id_cb_t id_cb);
 /** finalize the debug system */
 void daos_debug_fini(void);
 
@@ -102,6 +103,8 @@ enum {
 	IOBP_PM			= (1 << 4),
 	/** no PMDK snapshot (PMDK transaction will be broken) */
 	IOBP_PM_SNAP		= (1 << 5),
+	/** bypass bulk handle cache */
+	IOBP_SRV_BULK_CACHE	= (1 << 6),
 };
 
 /**
@@ -116,6 +119,7 @@ enum {
 #define IOBP_ENV_NVME		"nvme"
 #define IOBP_ENV_PM		"pm"
 #define IOBP_ENV_PM_SNAP	"pm_snap"
+#define IOBP_ENV_SRV_BULK_CACHE	"srv_bulk_cache"
 
 extern unsigned int daos_io_bypass;
 

@@ -25,11 +25,6 @@
 extern char *drpc_listener_socket_path;
 
 /**
- * Client context
- */
-extern struct drpc *dss_drpc_ctx;
-
-/**
  * Context for listener's drpc_progress loop. Includes the context for the
  * listener, and a list of contexts for all open sessions.
  */
@@ -122,10 +117,12 @@ int drpc_listener_fini(void);
  */
 const char *drpc_listener_get_socket_path(void);
 
-/** Initialize the dRPC client (dss_drpc_ctx). */
+/** Initialize the dRPC client. */
 int drpc_init(void);
 
-/** Finalize the dRPC client (dss_drpc_ctx). */
+/** Finalize the dRPC client. */
 void drpc_fini(void);
+
+int drpc_notify_ready(void);
 
 #endif /* __DAOS_DRPC_INTERNAL_H__ */

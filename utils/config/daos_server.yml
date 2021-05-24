@@ -209,6 +209,11 @@
 #
 #  pinned_numa_node: 0
 #
+#  # A boolean that instructs the I/O Engine instance to bypass the NVME
+#  # health check.  This eliminates the check and related log output for those
+#  # systems with NVME that do not support the device health data query.
+#  bypass_health_chk: true
+#
 #  # Offset of the first core to be used for I/O service threads.
 #  # Immutable after reformat.
 #  # Optional parameter, set either this option or pinned_numa_node but
@@ -222,7 +227,7 @@
 #
 #  nr_xs_helpers: 6
 #
-#  # Use specific OFI interfaces.
+#  # Use specific network interface.
 #  # Specify the fabric network interface that will be used by this engine.
 #  # Optionally specify the fabric network interface port that will be used
 #  # by this engine but please only if you have a specific need, this will

@@ -119,7 +119,11 @@ dc_task_schedule(tse_task_t *task, bool instant)
 
 out:
 	if (daos_event_is_priv(ev)) {
-		daos_event_priv_wait();
+		int rc2;
+
+		rc2 = daos_event_priv_wait();
+		if (rc2)
+			return rc2;
 		rc = ev->ev_error;
 	}
 	return rc;

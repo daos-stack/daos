@@ -144,16 +144,18 @@ func DedupeStringSlice(in []string) []string {
 }
 
 // StringSliceHasDuplicates checks whether there are duplicate strings in the
-// slice. If so, it returns true.
+// slice. Comparisons are case insensitive. If duplicates found, return true.
 func StringSliceHasDuplicates(slice []string) bool {
-	found := make(map[string]bool)
+	seen := make(map[string]struct{})
 
 	for _, s := range slice {
-		if _, ok := found[s]; ok {
+		sl := strings.ToLower(s)
+		if _, already := seen[sl]; already {
 			return true
 		}
-		found[s] = true
+		seen[sl] = struct{}{}
 	}
+
 	return false
 }
 
@@ -169,4 +171,21 @@ func PercentageString(part, total uint64) string {
 
 	return fmt.Sprintf("%v %%",
 		int((float64(part)/float64(total))*float64(100)))
+}
+
+// TokenizeCommaSeparatedString splits the input string on comma boundaries,
+// and discards any empty strings in the result.
+func TokenizeCommaSeparatedString(str string) []string {
+	tokens := strings.Split(str, ",")
+	for i := len(tokens) - 1; i >= 0; i-- {
+		tokens[i] = strings.TrimSpace(tokens[i])
+		if tokens[i] == "" {
+			if i == len(tokens)-1 {
+				tokens = tokens[:i]
+			} else {
+				tokens = append(tokens[:i], tokens[i+1:]...)
+			}
+		}
+	}
+	return tokens
 }

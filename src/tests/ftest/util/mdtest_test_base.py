@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2020-2021 Intel Corporation.
 
@@ -20,7 +20,7 @@ class MdtestBase(DfuseTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a MdtestBase object."""
-        super(MdtestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.mdtest_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
@@ -30,7 +30,7 @@ class MdtestBase(DfuseTestBase):
         # obtain separate logs
         self.update_log_file_names()
         # Start the servers and agents
-        super(MdtestBase, self).setUp()
+        super().setUp()
 
         # Get the parameters for Mdtest
         self.mdtest_cmd = MdtestCommand()
@@ -61,10 +61,10 @@ class MdtestBase(DfuseTestBase):
         # Run Mdtest
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.processes)
-        # reset self.container if dfs_destroy is True
-        if self.mdtest_cmd.dfs_destroy:
-            self.container = None
 
+        # reset self.container if dfs_destroy is True or None.
+        if self.mdtest_cmd.dfs_destroy is not False:
+            self.container = None
         self.stop_dfuse()
 
     def get_mdtest_job_manager_command(self, manager):

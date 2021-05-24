@@ -19,6 +19,8 @@ server_config:
   servers:
     bdev_class: nvme
     bdev_list: ["0000:81:00.0","0000:da:00.0"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
   transport_config:
     allow_insecure: True
 agent_config:
@@ -33,7 +35,7 @@ pool:
   createset:
     group: daos_server
   createsize:
-    scm_size: 1000000000
+    scm_size: 4000000000
     size:
       - 20000000000
       - 100000000000

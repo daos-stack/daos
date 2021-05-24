@@ -10,10 +10,9 @@ hosts:
   test_clients:
     - client-C
 timeouts:
-  test_metadata_find_svc: 100
   test_metadata_fillup: 300
   test_metadata_addremove: 900
-  test_container_removal_after_der_nospace: 150
+  test_container_removal_after_der_nospace: 180
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -26,9 +25,9 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       scm_mount: /mnt/daos0
+      scm_list: ["/dev/pmem0"]
       # common items below (same in server 0 and server 1)
-      scm_class: ram
-      scm_size: 6
+      scm_class: dcpm
       nr_xs_helpers: 16
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -38,13 +37,13 @@ server_config:
       targets: 8
       first_core: 0
       pinned_numa_node: 1
-      fabric_iface: ib0
+      fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
       scm_mount: /mnt/daos1
+      scm_list: ["/dev/pmem1"]
       # common items below (same in server 0 and server 1)
-      scm_class: ram
-      scm_size: 6
+      scm_class: dcpm
       nr_xs_helpers: 16
       log_mask: DEBUG,MEM=ERR
       env_vars:

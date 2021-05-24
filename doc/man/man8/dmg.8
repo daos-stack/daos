@@ -1,4 +1,4 @@
-.TH dmg 1 "15 February 2021"
+.TH dmg 1 "17 May 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -113,8 +113,8 @@ DAOS pool to be owned by given group, format name@domain
 \fB\fB\-u\fR, \fB\-\-user\fR\fP
 DAOS pool to be owned by given user, format name@domain
 .TP
-\fB\fB\-p\fR, \fB\-\-name\fR\fP
-Unique name for pool (set as label)
+\fB\fB\-p\fR, \fB\-\-label\fR\fP
+Unique label for pool
 .TP
 \fB\fB\-a\fR, \fB\-\-acl-file\fR\fP
 Access Control List file path for DAOS pool
@@ -139,9 +139,6 @@ Per-server NVMe allocation for DAOS pool (manual)
 .TP
 \fB\fB\-r\fR, \fB\-\-ranks\fR\fP
 Storage server unique identifiers (ranks) for DAOS pool
-.TP
-\fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
-DAOS system that pool is to be a part of
 .SS pool delete-acl
 Delete an entry from a DAOS pool's Access Control List
 
@@ -198,9 +195,6 @@ Evict all pool connections to a DAOS pool
 .TP
 \fB\fB\-\-pool\fR (\fIrequired\fR)\fP
 Unique ID of DAOS pool
-.TP
-\fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
-DAOS system that the pools connections be evicted from.
 .SS pool exclude
 Exclude targets from a rank
 
@@ -357,14 +351,17 @@ Format SCM and NVMe storage attached to remote servers.
 Show results of each SCM & NVMe device format operation
 .TP
 \fB\fB\-\-reformat\fR\fP
-Reformat storage overwriting any existing filesystem (CAUTION: destructive operation)
+Alias for --force, will be removed in a future release
+.TP
+\fB\fB\-\-force\fR\fP
+Force storage format on a host, stopping any running engines (CAUTION: destructive operation)
 .SS storage identify
 Blink the status LED on a given VMD device for visual SSD identification.
 
 \fBAliases\fP: i
 
 .SS storage identify vmd
-Quickly blink the status LED on a VMD NVMe SSD for device identification.
+Quickly blink the status LED on a VMD NVMe SSD for device identification. Duration of LED event can be configured by setting the VMD_LED_PERIOD environment variable, otherwise default is 60 seconds.
 
 \fBUsage\fP: identify vmd [vmd-OPTIONS]
 .TP
@@ -535,6 +532,11 @@ Perform distributed tasks related to DAOS system
 
 \fBAliases\fP: sy
 
+.SS system erase
+Erase system metadata prior to reformat
+
+\fBAliases\fP: e
+
 .SS system leader-query
 Query for current Management Service leader
 
@@ -593,5 +595,56 @@ Hostlist representing hosts whose managed ranks are to be operated on
 .TP
 \fB\fB\-\-force\fR\fP
 Force stop DAOS system members
+.SS telemetry
+Perform telemetry operations
+.SS telemetry config
+Configure telemetry
+
+\fBUsage\fP: telemetry config [config-OPTIONS]
+.TP
+.TP
+\fB\fB\-i\fR, \fB\-\-install-dir\fR\fP
+Install directory for telemetry binary
+.TP
+\fB\fB\-s\fR, \fB\-\-system\fR <default: \fI"prometheus"\fR>\fP
+Telemetry system to configure
+.SS telemetry metrics
+Interact with metrics
+.SS telemetry metrics list
+List available metrics on a DAOS storage node
+
+\fBUsage\fP: metrics list [list-OPTIONS]
+.TP
+.TP
+\fB\fB\-s\fR, \fB\-\-host\fR <default: \fI"localhost"\fR>\fP
+DAOS server host to query
+.TP
+\fB\fB\-p\fR, \fB\-\-port\fR <default: \fI"9191"\fR>\fP
+Telemetry port on the host
+.SS telemetry metrics query
+Query metrics on a DAOS storage node
+
+\fBUsage\fP: metrics query [query-OPTIONS]
+.TP
+.TP
+\fB\fB\-s\fR, \fB\-\-host\fR <default: \fI"localhost"\fR>\fP
+DAOS server host to query
+.TP
+\fB\fB\-p\fR, \fB\-\-port\fR <default: \fI"9191"\fR>\fP
+Telemetry port on the host
+.TP
+\fB\fB\-m\fR, \fB\-\-metrics\fR <default: \fI""\fR>\fP
+Comma-separated list of metric names
+.SS telemetry run
+Launch telemetry system
+
+\fBUsage\fP: telemetry run [run-OPTIONS]
+.TP
+.TP
+\fB\fB\-i\fR, \fB\-\-install-dir\fR\fP
+Install directory for telemetry binary
+.TP
+\fB\fB\-s\fR, \fB\-\-system\fR <default: \fI"prometheus"\fR>\fP
+Telemetry system to configure
 .SS version
 Print dmg version

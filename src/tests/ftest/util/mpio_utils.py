@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import os
 from env_modules import load_mpi
@@ -51,7 +51,7 @@ class MpioUtils():
         try:
             result = run_command(cmd)
             self.mpichinstall = \
-                result.stdout.rstrip()[:-len('bin/mpichversion')]
+                result.stdout_text.rstrip()[:-len('bin/mpichversion')]
             return True
 
         except DaosTestError as excep:
@@ -142,6 +142,7 @@ class MpioUtils():
 
             except DaosTestError as excep:
                 raise MpioFailed(
-                    "<Test FAILED> \nException occurred: {}".format(str(excep)))
+                    "<Test FAILED> \nException occurred: {}".format(
+                        str(excep))) from excep
 
         return result

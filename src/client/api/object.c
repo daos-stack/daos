@@ -320,9 +320,17 @@ daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 {
 	tse_task_t	*task;
 	daos_obj_id_t	 oid;
+	int		 cont_rf;
 	int		 rc;
 
-	oid = daos_oit_gen_id(epoch);
+	cont_rf = dc_cont_hdl2redunfac(coh);
+	if (cont_rf < 0) {
+		D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n",
+			DP_RC(cont_rf));
+		return cont_rf;
+	}
+
+	oid = daos_oit_gen_id(epoch, cont_rf);
 	rc = dc_obj_open_task_create(coh, oid, DAOS_OO_RO, oh, ev, NULL, &task);
 	if (rc)
 		return rc;
