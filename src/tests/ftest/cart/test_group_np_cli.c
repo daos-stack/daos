@@ -202,9 +202,10 @@ test_run(void)
 		DBG_PRINT("Skipping shutdown stage. Rank_list %p\n",
 			  rank_list);
 	} else {
-		/* Shutdown all ranks */
-		DBG_PRINT("Shutdown all ranks\n");
+		/* Shutdown all ranks or those specified by --rank option */
 		for (i = 0; i < rank_list->rl_nr; i++) {
+			DBG_PRINT("Shutting down rank %d.\n",
+				  rank_list->rl_ranks[i]);
 			server_ep.ep_rank = rank_list->rl_ranks[i];
 			send_rpc_shutdown(server_ep, rpc_req);
 		}

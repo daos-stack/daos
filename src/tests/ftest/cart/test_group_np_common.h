@@ -218,9 +218,9 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	p_req = crt_req_get(rpc_req);
 	D_ASSERTF(p_req != NULL, "crt_req_get() failed. p_req: %p\n", p_req);
 
-	DBG_PRINT("tier1 test_server recv'd checkin, opc: %#x.\n",
+	DBG_PRINT("tier1 test_server recv'd ping delay, opc: %#x.\n",
 		  rpc_req->cr_opc);
-	DBG_PRINT("tier1 checkin input - age: %d, name: %s, days: %d, "
+	DBG_PRINT("tier1 delayed ping input - age: %d, name: %s, days: %d, "
 			"delay: %u.\n", p_req->age, p_req->name, p_req->days,
 			 p_req->delay);
 
@@ -235,7 +235,7 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, "
+	DBG_PRINT("tier1 test_srver sent delayed ping reply, ret: %d, "
 		   "room_no: %d.\n", p_reply->ret, p_reply->room_no);
 }
 
