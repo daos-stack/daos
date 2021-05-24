@@ -395,7 +395,7 @@ rdb_lc_discard(daos_handle_t lc, uint64_t low, uint64_t high)
 static inline int
 rdb_lc_aggregate(daos_handle_t lc, uint64_t high)
 {
-	D_DEBUG(DB_TRACE, "lc="DF_X64" high="DF_U64"\n", lc.cookie, high);
+	D_DEBUG(DB_MD, "lc="DF_X64" high="DF_U64"\n", lc.cookie, high);
 	return rdb_vos_aggregate(lc, high);
 }
 

@@ -1420,19 +1420,25 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 	d_iov_t		value;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, DF_DB": compacting to "DF_U64"\n", DP_DB(db), index);
+	D_DEBUG(DB_MD, DF_DB": compacting to "DF_U64"\n", DP_DB(db), index);
 
 	rc = rdb_lc_aggregate(db->d_lc, index);
+	D_DEBUG(DB_MD, DF_DB": rdb_lc_aggregate rc: "DF_RC"\n", DP_DB(db),
+		DP_RC(rc));
 	if (rc != 0)
 		return rc;
 
 	/* Update the last aggregated index. */
 	ABT_mutex_lock(db->d_raft_mutex);
+	D_DEBUG(DB_MD, DF_DB": holding d_raft_mutex\n", DP_DB(db));
 	aggregated = db->d_lc_record.dlr_aggregated;
 	db->d_lc_record.dlr_aggregated = index;
 	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
 			   &value);
+	D_DEBUG(DB_MD, DF_DB": rdb_mc_update rc: "DF_RC" for update last "
+		"aggregated index "DF_U64" -> "DF_U64"\n", DP_DB(db), DP_RC(rc),
+		aggregated, db->d_lc_record.dlr_aggregated);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update last aggregated index to "
 			DF_U64": %d\n", DP_DB(db),
@@ -1442,8 +1448,9 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 		return rc;
 	}
 	ABT_mutex_unlock(db->d_raft_mutex);
+	D_DEBUG(DB_MD, DF_DB": released d_raft_mutex\n", DP_DB(db));
 
-	D_DEBUG(DB_TRACE, DF_DB": compacted to "DF_U64"\n", DP_DB(db), index);
+	D_DEBUG(DB_MD, DF_DB": compacted to "DF_U64"\n", DP_DB(db), index);
 	return 0;
 }
 
@@ -1468,22 +1475,35 @@ rdb_compactd(void *arg)
 	D_DEBUG(DB_MD, DF_DB": compactd starting\n", DP_DB(db));
 	for (;;) {
 		uint64_t	base;
-		bool		stop;
+		bool		stop = false;
 		int		rc;
 
 		ABT_mutex_lock(db->d_raft_mutex);
+		D_DEBUG(DB_MD, DF_DB": holding d_raft_mutex\n", DP_DB(db));
 		for (;;) {
 			base = db->d_lc_record.dlr_base;
+			if (!stop && db->d_stop) {
+				D_DEBUG(DB_MD, DF_DB": detected stop signal\n",
+					DP_DB(db));
+			}
 			stop = db->d_stop;
-			if (db->d_lc_record.dlr_aggregated < base)
+			if (db->d_lc_record.dlr_aggregated < base) {
+				D_DEBUG(DB_MD, DF_DB": dlr_agg="DF_U64", base="
+					DF_U64"\n", DP_DB(db),
+					db->d_lc_record.dlr_aggregated, base);
 				break;
+			}
 			if (stop)
 				break;
 			sched_cond_wait(db->d_compact_cv, db->d_raft_mutex);
 		}
 		ABT_mutex_unlock(db->d_raft_mutex);
-		if (stop)
+		D_DEBUG(DB_MD, DF_DB": released d_raft_mutex\n", DP_DB(db));
+
+		if (stop) {
+			D_DEBUG(DB_MD, DF_DB": got stop signal\n", DP_DB(db));
 			break;
+		}
 		rc = rdb_raft_compact(db, base);
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to compact to base "DF_U64
@@ -1491,6 +1511,7 @@ rdb_compactd(void *arg)
 			break;
 		}
 		vos_gc_pool(db->d_pool, -1, rdb_gc_yield, NULL);
+		D_DEBUG(DB_MD, DF_DB": done vos_gc_pool()\n", DP_DB(db));
 	}
 	D_DEBUG(DB_MD, DF_DB": compactd stopping\n", DP_DB(db));
 }
@@ -2517,18 +2538,24 @@ rdb_raft_stop(struct rdb *db)
 
 	/* Wake up all daemons and TXs. */
 	ABT_mutex_lock(db->d_raft_mutex);
+	D_DEBUG(DB_MD, DF_DB": bcast applied_cv\n", DP_DB(db));
 	ABT_cond_broadcast(db->d_applied_cv);
+	D_DEBUG(DB_MD, DF_DB": bcast events_cv\n", DP_DB(db));
 	ABT_cond_broadcast(db->d_events_cv);
+	D_DEBUG(DB_MD, DF_DB": bcast compact_cv\n", DP_DB(db));
 	ABT_cond_broadcast(db->d_compact_cv);
 	ABT_mutex_unlock(db->d_raft_mutex);
 
 	ABT_mutex_lock(db->d_mutex);
+	D_DEBUG(DB_MD, DF_DB": bcast replies_cv\n", DP_DB(db));
 	ABT_cond_broadcast(db->d_replies_cv);
 
 	/* Abort all in-flight RPCs. */
+	D_DEBUG(DB_MD, DF_DB": abort in-flight raft RPCs\n", DP_DB(db));
 	rdb_abort_raft_rpcs(db);
 
 	/* Wait for all extra references to be released. */
+	D_DEBUG(DB_MD, DF_DB": wait for %d rdb refs\n", DP_DB(db), db->d_ref);
 	for (;;) {
 		D_ASSERTF(db->d_ref >= RDB_BASE_REFS, "%d >= %d\n", db->d_ref,
 			  RDB_BASE_REFS);
@@ -2541,26 +2568,37 @@ rdb_raft_stop(struct rdb *db)
 	ABT_mutex_unlock(db->d_mutex);
 
 	/* Join and free all daemons. */
+	D_DEBUG(DB_MD, DF_DB": join/free daemons in order: "
+		"compactd, callbackd, timerd, recvd\n", DP_DB(db));
 	rc = ABT_thread_join(db->d_compactd);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_compactd);
+	D_DEBUG(DB_MD, DF_DB": joined with compactd\n", DP_DB(db));
 	rc = ABT_thread_join(db->d_callbackd);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_callbackd);
+	D_DEBUG(DB_MD, DF_DB": joined with callbackd\n", DP_DB(db));
 	rc = ABT_thread_join(db->d_timerd);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_timerd);
+	D_DEBUG(DB_MD, DF_DB": joined with timerd\n", DP_DB(db));
 	rc = ABT_thread_join(db->d_recvd);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_recvd);
+	D_DEBUG(DB_MD, DF_DB": joined with recvd\n", DP_DB(db));
 
 	rdb_raft_unload_lc(db);
+	D_DEBUG(DB_MD, DF_DB": unloaded lc\n", DP_DB(db));
 	raft_free(db->d_raft);
+	D_DEBUG(DB_MD, DF_DB": freed db->d_raft\n", DP_DB(db));
 	ABT_cond_free(&db->d_compact_cv);
 	ABT_cond_free(&db->d_replies_cv);
 	ABT_cond_free(&db->d_events_cv);
 	ABT_cond_free(&db->d_applied_cv);
+	D_DEBUG(DB_MD, DF_DB": freed compact/replies/events/applied CVs\n",
+		DP_DB(db));
 	d_hash_table_destroy_inplace(&db->d_results, true /* force */);
+	D_DEBUG(DB_MD, DF_DB": destroyed d_results HT - ALL DONE\n", DP_DB(db));
 }
 
 /* Resign the leadership in term. */

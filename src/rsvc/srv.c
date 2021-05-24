@@ -893,11 +893,18 @@ stop(struct ds_rsvc *svc, bool destroy)
 	while (svc->s_state != DS_RSVC_DOWN)
 		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
 
-	if (destroy)
+	D_DEBUG(DB_MD, "%s: state is now DS_RSVC_DOWN\n", svc->s_name);
+	if (destroy) {
+		D_DEBUG(DB_MD, "call remove(%s)\n", svc->s_db_path);
 		rc = remove(svc->s_db_path);
+		D_DEBUG(DB_MD, "remove(%s) rc: "DF_RC"\n", svc->s_db_path,
+			DP_RC(rc));
+	}
 
 	ABT_mutex_unlock(svc->s_mutex);
+	D_DEBUG(DB_MD, "unlocked svc mutex\n");
 	ds_rsvc_put(svc);
+	D_DEBUG(DB_MD, "returning rc: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -919,12 +926,21 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 	int			 rc;
 
 	rc = ds_rsvc_lookup(class, id, &svc);
-	if (rc != 0)
+	if (rc != 0) {
+		D_DEBUG(DB_MD, "ds_rsvc_lookup failed, "DF_RC
+			"return -DER_ALREADY\n", DP_RC(rc));
 		return -DER_ALREADY;
+	}
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
+	D_DEBUG(DB_MD, "deleted entry from rsvc_hash\n");
 	rc = stop(svc, destroy);
-	if (!rc && destroy)
+	D_DEBUG(DB_MD, "stop() returned "DF_RC"\n", DP_RC(rc));
+	if (!rc && destroy) {
+		D_DEBUG(DB_MD, "invoke sc_delete_uuid() upcall\n");
 		rc = rsvc_class(class)->sc_delete_uuid(id);
+		D_DEBUG(DB_MD, "sc_delete_uuid() upcall rc: "DF_RC"\n",
+			DP_RC(rc));
+	}
 	return rc;
 }
 
@@ -1281,12 +1297,22 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 	if (destroy)
 		in->soi_flags |= RDB_OF_DESTROY;
 
+	D_DEBUG(DB_MD, "sending RSVC_STOP stop%s bcast RPC to %u ranks\n",
+		destroy ? "/destroy" : "", ranks->rl_nr);
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		goto out_mem;
 
+	D_DEBUG(DB_MD, "try to get reply from RSVC_STOP stop%s bcast RPC to "
+		"%u ranks\n", destroy ? "/destroy" : "", ranks->rl_nr);
+
 	out = crt_reply_get(rpc);
 	rc = out->soo_rc;
+
+	D_DEBUG(DB_MD, "got reply rc="DF_RC" from RSVC_STOP stop%s bcast RPC "
+		"to %u ranks\n", DP_RC(rc), destroy ? "/destroy" : "",
+		ranks->rl_nr);
+
 	if (rc != 0) {
 		D_ERROR("failed to stop%s replicas: "DF_RC"\n",
 			destroy ? "/destroy" : "", DP_RC(rc));
