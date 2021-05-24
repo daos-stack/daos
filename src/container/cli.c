@@ -481,6 +481,7 @@ dc_cont_props_init(struct dc_cont *cont)
 struct cont_open_args {
 	struct dc_pool		*coa_pool;
 	daos_cont_info_t	*coa_info;
+	const char		*coa_label;
 	crt_rpc_t		*rpc;
 	daos_handle_t		 hdl;
 	daos_handle_t		*hdlp;
@@ -603,6 +604,7 @@ out:
 	return rc;
 }
 
+/* NB: common function for CONT_OPEN and CONT_OPEN_BYLABEL */
 static int
 cont_open_complete(tse_task_t *task, void *data)
 {
@@ -634,6 +636,13 @@ cont_open_complete(tse_task_t *task, void *data)
 		D_DEBUG(DF_DSMC, DF_CONT": failed to open container: "DF_RC"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
+	}
+
+	/* If open bylabel, copy the returned UUID into dc_cont structure */
+	if (arg->coa_label) {
+		struct cont_open_bylabel_out *lbl_out = crt_reply_get(arg->rpc);
+
+		uuid_copy(cont->dc_uuid, lbl_out->colo_uuid);
 	}
 
 	cont->dc_min_ver = out->coo_op.co_map_version;
@@ -699,16 +708,97 @@ out:
 	return rc;
 }
 
-int
-dc_cont_open(tse_task_t *task)
+static int
+dc_cont_open_internal(tse_task_t *task, daos_cont_info_t *info,
+		      const char *label, struct dc_pool *pool,
+		      daos_handle_t poh, daos_handle_t *coh)
 {
-	daos_cont_open_t	*args;
 	struct cont_open_in	*in;
-	struct dc_pool		*pool;
 	struct dc_cont		*cont;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
 	struct cont_open_args	 arg;
+	enum cont_operation	 cont_op;
+	int			 rc;
+
+	cont = dc_task_get_priv(task);
+	cont_op = label ? CONT_OPEN_BYLABEL : CONT_OPEN;
+
+	ep.ep_grp = pool->dp_sys->sy_group;
+	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
+				     &pool->dp_client, &pool->dp_client_lock,
+				     pool->dp_sys, &ep);
+	if (rc != 0) {
+		if (label)
+			D_ERROR(DF_UUID":%s: cannot find container service: "
+				DF_RC"\n", DP_UUID(pool->dp_pool),
+				label, DP_RC(rc));
+		else
+			D_ERROR(DF_CONT": cannot find container service: "
+				DF_RC"\n", DP_CONT(pool->dp_pool,
+						   cont->dc_uuid), DP_RC(rc));
+		goto err;
+	}
+	rc = cont_req_create(daos_task2ctx(task), &ep, cont_op, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
+		goto err;
+	}
+
+	/* Fill in common components of open / open bylabel RPCs */
+	in = crt_req_get(rpc);
+	uuid_copy(in->coi_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->coi_op.ci_uuid, cont->dc_uuid);
+	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
+	in->coi_flags = cont->dc_capas;
+	/** Determine which container properties need to be retrieved while
+	 * opening the container
+	 */
+	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
+				  DAOS_CO_QUERY_PROP_CSUM_CHUNK |
+				  DAOS_CO_QUERY_PROP_DEDUP |
+				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD |
+				  DAOS_CO_QUERY_PROP_REDUN_FAC;
+
+	/* open bylabel RPC input */
+	if (label) {
+		struct cont_open_bylabel_in *lbl_in = crt_req_get(rpc);
+
+		lbl_in->coli_label = label;
+	}
+
+	arg.coa_pool		= pool;
+	arg.coa_info		= info;
+	arg.coa_label		= label;
+	arg.rpc			= rpc;
+	arg.hdl			= poh;
+	arg.hdlp		= coh;
+
+	crt_req_addref(rpc);
+
+	rc = tse_task_register_comp_cb(task, cont_open_complete,
+				       &arg, sizeof(arg));
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	/** send the request */
+	return daos_rpc_send(rpc, task);
+
+err_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+err:
+	D_DEBUG(DF_DSMC, "failed to open container: "DF_RC"\n", DP_RC(rc));
+	return rc;
+
+}
+
+int
+dc_cont_open(tse_task_t *task)
+{
+	daos_cont_open_t	*args;
+	struct dc_pool		*pool;
+	struct dc_cont		*cont;
 	int			 rc;
 
 	args = dc_task_get_args(task);
@@ -734,53 +824,64 @@ dc_cont_open(tse_task_t *task)
 		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(cont->dc_cont_hdl),
 		args->flags);
 
-	ep.ep_grp = pool->dp_sys->sy_group;
-	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
-				     &pool->dp_client, &pool->dp_client_lock,
-				     pool->dp_sys, &ep);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
-			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
+	rc = dc_cont_open_internal(task, args->info, NULL /* label */, pool,
+				   args->poh, args->coh);
+	if (rc)
 		goto err_cont;
+
+	return rc;
+
+err_cont:
+	dc_cont_put(cont);
+err_pool:
+	dc_pool_put(pool);
+err:
+	tse_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "failed to open container: "DF_RC"\n", DP_RC(rc));
+	return rc;
+}
+
+int
+dc_cont_open_lbl(tse_task_t *task)
+{
+	daos_cont_open_t		*args;
+	struct dc_pool			*pool;
+	struct dc_cont			*cont;
+	uuid_t				 null_uuid;
+	int				 rc;
+
+	args = dc_task_get_args(task);
+	cont = dc_task_get_priv(task);
+	/* open bylabel, uuid will be in reply */
+	uuid_clear(null_uuid);
+
+	if ((args->label == NULL) || args->coh == NULL)
+		D_GOTO(err, rc = -DER_INVAL);
+
+	pool = dc_hdl2pool(args->poh);
+	if (pool == NULL)
+		D_GOTO(err, rc = -DER_NO_HDL);
+
+	if (cont == NULL) {
+		cont = dc_cont_alloc(null_uuid);
+		if (cont == NULL)
+			D_GOTO(err_pool, rc = -DER_NOMEM);
+		uuid_generate(cont->dc_cont_hdl);
+		cont->dc_capas = args->flags;
+		dc_task_set_priv(task, cont);
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OPEN, &rpc);
-	if (rc != 0) {
-		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_cont, rc);
-	}
 
-	in = crt_req_get(rpc);
-	uuid_copy(in->coi_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->coi_op.ci_uuid, args->uuid);
-	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
-	in->coi_flags = args->flags;
-	/** Determine which container properties need to be retrieved while
-	 * opening the container
-	 */
-	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
-				  DAOS_CO_QUERY_PROP_CSUM_CHUNK |
-				  DAOS_CO_QUERY_PROP_DEDUP |
-				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD |
-				  DAOS_CO_QUERY_PROP_REDUN_FAC;
-	arg.coa_pool		= pool;
-	arg.coa_info		= args->info;
-	arg.rpc			= rpc;
-	arg.hdl			= args->poh;
-	arg.hdlp		= args->coh;
+	D_DEBUG(DF_DSMC, DF_UUID":%s: opening: hdl="DF_UUIDF" flags=%x\n",
+		DP_UUID(pool->dp_pool), args->label, DP_UUID(cont->dc_cont_hdl),
+		args->flags);
 
-	crt_req_addref(rpc);
+	rc = dc_cont_open_internal(task, args->info, args->label, pool,
+				   args->poh, args->coh);
+	if (rc)
+		goto err_cont;
 
-	rc = tse_task_register_comp_cb(task, cont_open_complete, &arg,
-				       sizeof(arg));
-	if (rc != 0)
-		D_GOTO(err_rpc, rc);
+	return rc;
 
-	/** send the request */
-	return daos_rpc_send(rpc, task);
-
-err_rpc:
-	crt_req_decref(rpc);
-	crt_req_decref(rpc);
 err_cont:
 	dc_cont_put(cont);
 err_pool:

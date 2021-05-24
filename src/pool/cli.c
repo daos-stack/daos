@@ -622,7 +622,7 @@ out_task:
 int
 dc_pool_connect_lbl(tse_task_t *task)
 {
-	daos_pool_connect_lbl_t *args;
+	daos_pool_connect_t	*args;
 	struct dc_pool		*pool = NULL;
 	uuid_t			 null_uuid;
 	int			 rc;

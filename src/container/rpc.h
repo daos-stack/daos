@@ -38,6 +38,9 @@
 	X(CONT_OPEN,							\
 		0, &CQF_cont_open,					\
 		ds_cont_op_handler, NULL),				\
+	X(CONT_OPEN_BYLABEL,						\
+		0, &CQF_cont_open_bylabel,				\
+		ds_cont_op_handler, NULL),				\
 	X(CONT_CLOSE,							\
 		0, &CQF_cont_close,					\
 		ds_cont_op_handler, NULL),				\
@@ -113,6 +116,8 @@ enum cont_operation {
 
 extern struct crt_proto_format cont_proto_fmt;
 
+#define CONT_OP_DUMMY_LABEL "NO LABEL, OPENING BY UUID"
+
 #define DAOS_ISEQ_CONT_OP	/* input fields */		 \
 				/* pool handle UUID */		 \
 	((uuid_t)		(ci_pool_hdl)		CRT_VAR) \
@@ -163,6 +168,28 @@ CRT_RPC_DECLARE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
 	((daos_prop_t)		(coo_prop)		CRT_PTR)
 
 CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
+
+/* Container open bylabel input
+ * adds label ; coi_op.ci_uuid ignored
+ * Use same order and name of fields as DAOS_ISEQ_CONT_OPEN, for
+ *  reuse where struct cont_open__in is used in common code..
+ */
+#define DAOS_ISEQ_CONT_OPEN_BYLABEL	/* input fields */	 \
+	/* container label */					 \
+	((struct cont_op_in)	(coi_op)		CRT_VAR) \
+	((uint64_t)		(coi_flags)		CRT_VAR) \
+	((uint64_t)		(coi_sec_capas)		CRT_VAR) \
+	((uint64_t)		(coi_prop_bits)		CRT_VAR) \
+	((d_const_string_t)	(coli_label)		CRT_VAR)
+
+/* Container open bylabel output: adds container UUID */
+#define DAOS_OSEQ_CONT_OPEN_BYLABEL	/* output fields */	 \
+	((struct cont_op_out)	(coo_op)		CRT_VAR) \
+	((daos_prop_t)		(coo_prop)		CRT_PTR) \
+	((uuid_t)		(colo_uuid)		CRT_VAR)
+
+CRT_RPC_DECLARE(cont_open_bylabel, DAOS_ISEQ_CONT_OPEN_BYLABEL,
+		DAOS_OSEQ_CONT_OPEN_BYLABEL)
 
 #define DAOS_ISEQ_CONT_CLOSE	/* input fields */		 \
 	((struct cont_op_in)	(cci_op)		CRT_VAR)
