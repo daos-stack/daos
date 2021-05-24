@@ -90,6 +90,7 @@ test_run(void)
 	int			 rc = 0;
 	uint32_t		*_cg_ranks;
 	int			 _cg_num_ranks;
+	char  			msg[256];
 
 	if (test_g.t_skip_init) {
 		DBG_PRINT("Skipping init stage.\n");
@@ -149,7 +150,6 @@ test_run(void)
 
 	if (!test_g.t_shut_only && !test_g.t_skip_check_in &&
 	    (rank_list != NULL)) {
-		char  msg[256];
 
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			rank = rank_list->rl_ranks[i];
