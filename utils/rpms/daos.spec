@@ -342,7 +342,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{_libdir}/%{name}
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
-%{_libdir}/libcart.so
+%{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
 %doc
 
@@ -454,6 +454,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_includedir}/*
 %{_libdir}/libdaos.so
 %{_libdir}/libgurt.so
+%{_libdir}/libcart.so
 %{_libdir}/*.a
 %{_libdir}/*.so
 

@@ -13,7 +13,7 @@ HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'types.h', 'atomic.h', 'slab.h']
 
 # Keep versioned libs for now to avoid any conflict with 1.0
-GURT_VERSION = "4.9.0"
+CART_VERSION = "4.9.0"
 
 def generate_daos_version_header(env):
     """Generate daos_version.h from a template file"""
@@ -59,8 +59,9 @@ def scons():
         env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
                     'include/gurt/%s' % header)
 
+    env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
     env.AppendUnique(CPPPATH=[Dir('cart/test/utest').srcnode()])
-    Export('env', 'GURT_VERSION')
+    Export('env', 'CART_VERSION')
 
     SConscript('gurt/SConscript')
     SConscript('cart/SConscript')
