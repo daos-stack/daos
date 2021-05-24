@@ -15,7 +15,6 @@
 
 /** tier placement policy */
 enum tier_policy_t {
-        DAOS_MEDIA_POLICY_DEFAULT,
         DAOS_MEDIA_POLICY_IO_SIZE,
         DAOS_MEDIA_POLICY_WRITE_INTENSIVITY,
         DAOS_MEDIA_POLICY_MAX

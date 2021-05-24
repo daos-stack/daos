@@ -325,7 +325,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
-	pool->sp_policy_desc.policy = DAOS_MEDIA_POLICY_DEFAULT; /* default tiering policy */
+	pool->sp_policy_desc.policy = DAOS_MEDIA_POLICY_IO_SIZE; /* default tiering policy */
 
 	uuid_unparse_lower(key, group_id);
 	rc = crt_group_secondary_create(group_id, NULL /* primary_grp */,
@@ -1298,20 +1298,16 @@ update_vos_prop_on_targets(void *in)
 {
 	struct ds_pool 			*pool = (struct ds_pool *)in;
 	struct ds_pool_child 		*child = NULL;
-	vos_ctl_set_policy_param 	param;
+	//vos_ctl_set_policy_param 	param;
+	struct policy_desc_t		policy_desc = {0};
 	int 				ret = 0;
 
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
 		return -DER_NONEXIST; //no child created yet?
 
-	param.policy_index = pool->sp_policy_desc.policy;
-	param.policy_io_size_high = param.policy_io_size_low = 0;
-
-	// D_FATAL("=== Setting Policy on xsid %d, policy index %d\n",
-	// 	dss_get_module_info()->dmi_xs_id, param.policy_index);
-	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &param);
-
+	policy_desc = pool->sp_policy_desc;
+	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
 	ds_pool_child_put(child);
 
 	return ret;
@@ -1322,8 +1318,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_reclaim = iv_prop->pip_reclaim;
-	pool->sp_policy_desc.policy = iv_prop->pip_policy;
-	//D_FATAL("=== Property update policy index %d\n", iv_prop->pip_policy);
+	pool->sp_policy_desc = *iv_prop->pip_policy_desc;
 
 	int ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
 

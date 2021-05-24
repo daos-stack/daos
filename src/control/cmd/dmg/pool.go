@@ -59,23 +59,7 @@ type PoolCreateCmd struct {
 	ScmSize    string  `short:"s" long:"scm-size" description:"Per-server SCM allocation for DAOS pool (manual)"`
 	NVMeSize   string  `short:"n" long:"nvme-size" description:"Per-server NVMe allocation for DAOS pool (manual)"`
 	RankList   string  `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
-	Policy     string  `short:"P" long:"policy" default:"default" description:"Pool tiering policy"`
-}
-
-func ParsePolicy(stringPolicy string) (policy uint32, err error) {
-
-	var policyMap = map[string]uint32{
-		"default": 0,
-		"io_size": 1,
-	}
-
-	var p, found = policyMap[stringPolicy]
-
-	if !found {
-		return 0, errors.New("Policy " + stringPolicy + " does not exist")
-	}
-
-	return p, nil
+	Policy     string  `short:"P" long:"policy" default:"io_size" description:"Pool tiering policy"`
 }
 
 // Execute is run when PoolCreateCmd subcommand is activated
@@ -89,11 +73,12 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 	var err error
 	req := &control.PoolCreateReq{
-		User:       cmd.UserName,
-		UserGroup:  cmd.GroupName,
-		Name:       cmd.PoolName,
-		NumSvcReps: cmd.NumSvcReps,
-		Policy:     cmd.Policy,
+		User:         cmd.UserName,
+		UserGroup:    cmd.GroupName,
+		Name:         cmd.PoolName,
+		NumSvcReps:   cmd.NumSvcReps,
+		PolicyString: cmd.Policy,
+		PolicyArgs:   args,
 	}
 
 	if cmd.ACLFile != "" {

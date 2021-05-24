@@ -52,8 +52,6 @@ const (
 type PoolPolicy uint32
 
 const (
-	// PoolPolicyDefault sets the pool's policy to default
-	PoolPolicyDefault PoolPolicy = C.DAOS_MEDIA_POLICY_DEFAULT
 	// PoolPolicyDefault sets the pool's policy to io_size
 	PoolPolicyIoSize PoolPolicy = C.DAOS_MEDIA_POLICY_IO_SIZE
 	// PoolPolicyDefault sets the pool's policy to write_intensivity

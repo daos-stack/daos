@@ -102,17 +102,19 @@ pool_decode_props(daos_prop_t *props)
 		fprintf(stderr, "policy property not found\n");
 		rc = -DER_INVAL;
 	} else {
+		struct policy_desc_t *pd;
+		pd = entry->dpe_val_ptr;
 		D_PRINT("policy:\t\t\t");
-		switch(entry->dpe_val) {
-		case DAOS_MEDIA_POLICY_DEFAULT:
-			D_PRINT("default\n");
-			break;
-		case DAOS_MEDIA_POLICY_IO_SIZE:
-			D_PRINT("IO size\n");
-			break;
-		case DAOS_MEDIA_POLICY_WRITE_INTENSIVITY:
-			D_PRINT("write intesivity\n");
-			break;
+		switch(pd->policy) {
+			case DAOS_MEDIA_POLICY_IO_SIZE:
+				D_PRINT("IO size\n");
+				break;
+			case DAOS_MEDIA_POLICY_WRITE_INTENSIVITY:
+				D_PRINT("write intensivity\n");
+				break;
+			default:
+				D_PRINT("<unknown value> (%d)\n", pd->policy);
+				break;
 		}
 	}
 

@@ -13,6 +13,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
@@ -74,6 +75,16 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 
 	numRanks := uint64(len(pcr.TgtRanks))
 	title := fmt.Sprintf("Pool created with %0.2f%%%% SCM/NVMe ratio", ratio*100)
+
+	var policyName string
+
+	for key, val := range control.PolicyMap {
+		if val == drpc.PoolPolicy(pcr.Policy) {
+			policyName = key
+			break
+		}
+	}
+
 	_, err := fmt.Fprintln(out, txtfmt.FormatEntity(title, []txtfmt.TableRow{
 		{"UUID": pcr.UUID},
 		{"Service Ranks": formatRanks(pcr.SvcReps)},
@@ -81,7 +92,7 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 		{"Total Size": humanize.Bytes((pcr.ScmBytes + pcr.NvmeBytes) * numRanks)},
 		{"SCM": fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.ScmBytes*numRanks), humanize.Bytes(pcr.ScmBytes))},
 		{"NVMe": fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.NvmeBytes*numRanks), humanize.Bytes(pcr.NvmeBytes))},
-		{"Policy": fmt.Sprintf("%s (index %d)", "TODO", pcr.Policy)},
+		{"Policy": fmt.Sprintf("%s (index %d)", policyName, pcr.Policy)},
 	}))
 
 	return err

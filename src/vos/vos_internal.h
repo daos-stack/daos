@@ -168,7 +168,7 @@ struct vos_pool {
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
 	/** Tiering policy */
-	enum tier_policy_t		vp_policy;
+	struct policy_desc_t	vp_policy_desc;
 };
 
 /**

@@ -16,29 +16,21 @@
 
 /* policy functions definitions */
 
-/* default policy - former "vos_media_select" function */
-static enum daos_media_type_t
-policy_default(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
-{
-	if (pool->vp_vea_info == NULL)
-		return DAOS_MEDIA_SCM;
-
-	return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
-}
-
 /* policy based on io size */
 static enum daos_media_type_t
 policy_io_size(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 {
         enum daos_media_type_t medium;
+        uint32_t scm_threshold;
 
         if (pool->vp_vea_info == NULL)
                 return DAOS_MEDIA_SCM;
 
-        if (size >= VOS_POLICY_OPTANE_THRESHOLD)
+        scm_threshold = pool->vp_policy_desc.params[0] > 0 ?
+                        pool->vp_policy_desc.params[0] : VOS_POLICY_SCM_THRESHOLD;
+
+        if (size >= scm_threshold)
                 medium = DAOS_MEDIA_NVME;
-        else if (size >= VOS_POLICY_SCM_THRESHOLD)
-                medium = DAOS_MEDIA_NVME_PERF;
         else
                 medium = DAOS_MEDIA_SCM;
 
@@ -58,7 +50,7 @@ policy_write_intensivity(struct vos_pool *pool, daos_iod_type_t type,
 static enum daos_media_type_t (*vos_policies[DAOS_MEDIA_POLICY_MAX])(struct vos_pool*,
                                                         daos_iod_type_t,
                                                         daos_size_t) =
-                   {policy_default, policy_io_size, policy_write_intensivity};
+                   {policy_io_size, policy_write_intensivity};
 
 
 
@@ -67,5 +59,6 @@ enum daos_media_type_t
 vos_policy_media_select(struct vos_pool *pool, daos_iod_type_t type,
                         daos_size_t size, enum vos_io_stream ios)
 {
-        return vos_policies[pool->vp_policy](pool, type, size);
+
+        return vos_policies[pool->vp_policy_desc.policy](pool, type, size);
 }

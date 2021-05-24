@@ -28,6 +28,7 @@
 #include <fcntl.h>
 
 #include <daos_pool.h>
+#include <daos/policy.h>
 
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -917,10 +918,12 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void* param)
 		if (param == NULL) {
 			return -DER_INVAL;
 		} else {
-			vos_ctl_set_policy_param *p = (vos_ctl_set_policy_param*)param;
-			pool->vp_policy = p->policy_index;
-			//D_FATAL(" === Setting policy on xsid %d\n");
-			//add parameters if policy needs them (static func)
+			struct policy_desc_t *p = (struct policy_desc_t*)param;
+			pool->vp_policy_desc.policy = p->policy;
+
+			for (int i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++) {
+				pool->vp_policy_desc.params[i] = p->params[i];
+			}
 		}
 	}
 

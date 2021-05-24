@@ -624,8 +624,6 @@ func resolvePoolPropVal(req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropReq, err
 
 		recType := strings.TrimSpace(req.GetStrval())
 		switch strings.ToLower(recType) {
-		case "default":
-			newReq.SetValueNumber(uint64(drpc.PoolPolicyDefault))
 		case "io_size":
 			newReq.SetValueNumber(uint64(drpc.PoolPolicyIoSize))
 		case "write_intensivity":

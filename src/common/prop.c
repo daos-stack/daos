@@ -57,6 +57,7 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
 	case DAOS_PROP_CO_ROOTS:
+	case DAOS_PROP_PO_POLICY:
 		if (entry->dpe_val_ptr)
 			D_FREE(entry->dpe_val_ptr);
 		break;
@@ -215,10 +216,11 @@ daos_prop_label_valid(d_string_t label)
 bool
 daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 {
-	uint32_t	type;
-	uint64_t	val;
-	struct daos_acl	*acl_ptr;
-	int		i;
+	uint32_t		type;
+	uint64_t		val;
+	struct daos_acl		*acl_ptr;
+	struct policy_desc_t 	*pd;
+	int			i;
 
 	if (prop == NULL) {
 		D_ERROR("NULL properties\n");
@@ -270,13 +272,16 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			break;
 		case DAOS_PROP_PO_POLICY:
-			val = prop->dpp_entries[i].dpe_val;
-			if (val >= DAOS_MEDIA_POLICY_MAX) {
-				D_ERROR("invalid policy index "DF_U64"\n", val);
+			pd = prop->dpp_entries[i].dpe_val_ptr;
+			if (pd == NULL) {
+				D_ERROR("null policy descriptor! \n");
+				return false;
+			}
+			else if (pd->policy >= DAOS_MEDIA_POLICY_MAX) {
+				D_ERROR("invalid policy index "DF_U64"\n", (uint64_t)pd->policy);
 				return false;
 			}
 			break;
-
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
 			acl_ptr = prop->dpp_entries[i].dpe_val_ptr;
@@ -510,6 +515,15 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 			return rc;
 		}
 		break;
+	case DAOS_PROP_PO_POLICY:
+		D_ASSERT(entry->dpe_val_ptr != NULL);
+		D_ALLOC(entry_dup->dpe_val_ptr, sizeof(*entry->dpe_val_ptr));
+		if (entry_dup->dpe_val_ptr == NULL){
+			D_ERROR("failed to dup pool policy\n");
+			return -DER_NOMEM;
+		}
+		memcpy(entry_dup->dpe_val_ptr, entry->dpe_val_ptr, sizeof(*entry->dpe_val_ptr));
+		break;
 	default:
 		entry_dup->dpe_val = entry->dpe_val;
 		break;
@@ -607,8 +621,10 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	bool			 group_alloc = false;
 	bool			 svc_list_alloc = false;
 	bool			 roots_alloc = false;
+	bool			 policy_alloc = false;
 	struct daos_acl		*acl;
 	d_rank_list_t		*dst_list;
+	struct policy_desc_t	*pd;
 	uint32_t		 type;
 	int			 i;
 	int			 rc = 0;
@@ -683,6 +699,14 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 				D_GOTO(out, rc);
 
 			roots_alloc = true;
+		} else if (type == DAOS_PROP_PO_POLICY) {
+			pd = entry_req->dpe_val_ptr;
+			D_ALLOC(pd, sizeof(*entry_reply->dpe_val_ptr));
+			if (pd == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			memcpy(pd, entry_reply->dpe_val_ptr, sizeof(*entry_reply->dpe_val_ptr));
+			policy_alloc = true;
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -713,6 +737,9 @@ out:
 		}
 		if (roots_alloc)
 			free_ptr_prop_entry(prop_req, DAOS_PROP_CO_ROOTS);
+
+		if(policy_alloc)
+			free_ptr_prop_entry(prop_req, DAOS_PROP_PO_POLICY);
 
 		if (entries_alloc)
 			D_FREE(prop_req->dpp_entries);

@@ -11,6 +11,7 @@
 
 #include <daos_srv/rdb.h>
 #include <daos_srv/security.h>
+#include <daos/policy.h>
 #include "srv_layout.h"
 
 /** Root KVS */
@@ -64,7 +65,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_val_ptr	= NULL,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_POLICY,
-		.dpe_val	= DAOS_MEDIA_POLICY_DEFAULT,
+		.dpe_val_ptr	= NULL,
 	}
 };
 
@@ -77,6 +78,7 @@ int
 ds_pool_prop_default_init(void)
 {
 	struct daos_prop_entry	*entry;
+	struct policy_desc_t 	*pd;
 
 	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_ACL);
 	if (entry != NULL) {
@@ -85,6 +87,20 @@ ds_pool_prop_default_init(void)
 		entry->dpe_val_ptr = ds_sec_alloc_default_daos_pool_acl();
 		if (entry->dpe_val_ptr == NULL)
 			return -DER_NOMEM;
+	}
+
+	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_POLICY);
+	if (entry != NULL) {
+		D_DEBUG(DB_MGMT, "Initializing default policy pool prop\n");
+		D_ALLOC(pd, sizeof(struct policy_desc_t));
+		if (pd == NULL)
+			return -DER_NOMEM;
+		pd->policy = DAOS_MEDIA_POLICY_IO_SIZE;
+		for (int i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++){
+			pd->params[i] = 0;
+		}
+
+		entry->dpe_val_ptr = pd;
 	}
 
 	return 0;
@@ -98,6 +114,12 @@ ds_pool_prop_default_fini(void)
 	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_ACL);
 	if (entry != NULL) {
 		D_DEBUG(DB_MGMT, "Freeing default ACL pool prop\n");
+		D_FREE(entry->dpe_val_ptr);
+	}
+
+	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_POLICY);
+	if (entry != NULL) {
+		D_DEBUG(DB_MGMT, "Freeing default policy pool prop\n");
 		D_FREE(entry->dpe_val_ptr);
 	}
 }
