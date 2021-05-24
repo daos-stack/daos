@@ -26,7 +26,7 @@ class NvmeIo(IorTestBase):
         Test Description:
             Test will run IOR with standard and non standard sizes.  IOR will
             be run for all Object type supported. Purpose is to verify pool
-            size (SCM and NVMe) for IOR file.
+            size (SCM and NVMe) for IOR file
 
         Use Cases:
             Running multiple IOR on same server start instance.

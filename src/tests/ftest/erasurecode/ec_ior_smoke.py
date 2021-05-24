@@ -10,6 +10,7 @@ class ErasureCodeIor(IorTestBase):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object type classes.
+
     :avocado: recursive
     """
 
