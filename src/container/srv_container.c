@@ -1283,6 +1283,9 @@ cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 	ABT_thread		ec_eph_leader_ult = ABT_THREAD_NULL;
 	int			rc;
 
+	if (unlikely(ec_agg_disabled))
+		return 0;
+
 	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
 
 	rc = dss_ult_create(cont_agg_eph_leader_ult, svc, DSS_XS_SYS,

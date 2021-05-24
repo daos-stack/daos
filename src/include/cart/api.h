@@ -780,11 +780,35 @@ crt_ep_abort(crt_endpoint_t *ep);
 		return rc;						\
 	}
 
+#define POP_BACK(seq) BOOST_PP_SEQ_HEAD(BOOST_PP_SEQ_REVERSE(seq))
+#define FOFFSET(sname, seq)						\
+	offsetof(struct sname, CRT_GEN_GET_NAME(POP_BACK(seq)))
+
 #define CRT_RPC_DECLARE(rpc_name, fields_in, fields_out)		\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
 		CRT_GEN_STRUCT(rpc_name##_in, fields_in), )		\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
 		CRT_GEN_STRUCT(rpc_name##_out, fields_out), )		\
+	/* Generate a packed struct and assert use the offset of the */	\
+	/* last field to assert that there are no holes */		\
+	_Pragma("pack(push, 1)")					\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
+		CRT_GEN_STRUCT(rpc_name##_in_packed, fields_in), )	\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
+		CRT_GEN_STRUCT(rpc_name##_out_packed, fields_out), )	\
+	_Pragma("pack(pop)")						\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
+		    static_assert(FOFFSET(rpc_name##_out_packed,	\
+					  ((_) (_) _) fields_out) ==	\
+				  FOFFSET(rpc_name##_out, ((_) (_) _)	\
+					  fields_out), #rpc_name	\
+				  " output struct has a hole");, )	\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
+		    static_assert(FOFFSET(rpc_name##_in_packed,		\
+					  ((_) (_) _) fields_in) ==	\
+				  FOFFSET(rpc_name##_in, ((_) (_) _)	\
+					  fields_in), #rpc_name		\
+				  " input struct has a hole");, )	\
 	extern struct crt_req_format CQF_##rpc_name;
 
 /* warning was introduced in version 8 of GCC */

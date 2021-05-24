@@ -18,6 +18,7 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+bool ec_agg_disabled;
 
 static int
 init(void)
@@ -44,6 +45,11 @@ init(void)
 	if (rc)
 		D_WARN("Unable to initialize pool metrics, " DF_RC "\n",
 		       DP_RC(rc));
+
+	ec_agg_disabled = false;
+	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
+	if (unlikely(ec_agg_disabled))
+		D_WARN("EC aggregation is disabled.\n");
 
 	ds_pool_rsvc_class_register();
 

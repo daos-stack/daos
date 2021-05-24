@@ -39,6 +39,39 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 }
 
 int
+daos_pool_connect_bylabel(const char *label, const char *grp,
+			  unsigned int flags, daos_handle_t *poh,
+			  daos_pool_info_t *info, daos_event_t *ev)
+{
+	daos_pool_connect_lbl_t *args;
+	tse_task_t		*task;
+	size_t			 label_len = 0;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_CONNECT_LBL);
+	if (label)
+		label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN+1);
+	if (!label || (label_len == 0) ||
+	    (label_len > DAOS_PROP_LABEL_MAX_LEN)) {
+		D_ERROR("invalid label parameter\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_pool_connect_lbl, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->grp		= grp;
+	args->flags		= flags;
+	args->poh		= poh;
+	args->info		= info;
+	args->label		= label;
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
 	daos_pool_disconnect_t	*args;
