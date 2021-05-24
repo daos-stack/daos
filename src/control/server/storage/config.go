@@ -59,18 +59,18 @@ const (
 	ClassFile   Class = "file"
 )
 
-type Config struct {
+type TierConfig struct {
 	Tier  int        `yaml:"-"`
 	Class Class      `yaml:"class"`
 	Scm   ScmConfig  `yaml:",inline"`
 	Bdev  BdevConfig `yaml:",inline"`
 }
 
-func NewConfig() *Config {
-	return new(Config)
+func NewTierConfig() *TierConfig {
+	return new(TierConfig)
 }
 
-func (c *Config) IsSCM() bool {
+func (c *TierConfig) IsSCM() bool {
 	switch c.Class {
 	case ClassDCPM, ClassRAM:
 		return true
@@ -79,7 +79,7 @@ func (c *Config) IsSCM() bool {
 	}
 }
 
-func (c *Config) IsBdev() bool {
+func (c *TierConfig) IsBdev() bool {
 	switch c.Class {
 	case ClassNvme, ClassFile, ClassKdev, ClassMalloc:
 		return true
@@ -88,7 +88,7 @@ func (c *Config) IsBdev() bool {
 	}
 }
 
-func (c *Config) Validate() error {
+func (c *TierConfig) Validate() error {
 	if c.IsSCM() {
 		return c.Scm.Validate(c.Class)
 	}
@@ -99,69 +99,69 @@ func (c *Config) Validate() error {
 	return errors.New("no storage class set")
 }
 
-func (c *Config) WithTier(tier int) *Config {
+func (c *TierConfig) WithTier(tier int) *TierConfig {
 	c.Tier = tier
 	return c
 }
 
 // WithScmClass defines the type of SCM storage to be configured.
-func (c *Config) WithScmClass(scmClass string) *Config {
+func (c *TierConfig) WithScmClass(scmClass string) *TierConfig {
 	c.Class = Class(scmClass)
 	return c
 }
 
 // WithScmMountPoint sets the path to the device used for SCM storage.
-func (c *Config) WithScmMountPoint(scmPath string) *Config {
+func (c *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
 	c.Scm.MountPoint = scmPath
 	return c
 }
 
 // WithScmRamdiskSize sets the size (in GB) of the ramdisk used
 // to emulate SCM (no effect if ScmClass is not RAM).
-func (c *Config) WithScmRamdiskSize(size uint) *Config {
+func (c *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
 	c.Scm.RamdiskSize = size
 	return c
 }
 
 // WithScmDeviceList sets the list of devices to be used for SCM storage.
-func (c *Config) WithScmDeviceList(devices ...string) *Config {
+func (c *TierConfig) WithScmDeviceList(devices ...string) *TierConfig {
 	c.Scm.DeviceList = devices
 	return c
 }
 
 // WithBdevClass defines the type of block device storage to be used.
-func (c *Config) WithBdevClass(bdevClass string) *Config {
+func (c *TierConfig) WithBdevClass(bdevClass string) *TierConfig {
 	c.Class = Class(bdevClass)
 	return c
 }
 
 // WithBdevDeviceList sets the list of block devices to be used.
-func (c *Config) WithBdevDeviceList(devices ...string) *Config {
+func (c *TierConfig) WithBdevDeviceList(devices ...string) *TierConfig {
 	c.Bdev.DeviceList = devices
 	return c
 }
 
 // WithBdevDeviceCount sets the number of devices to be created when BdevClass is malloc.
-func (c *Config) WithBdevDeviceCount(count int) *Config {
+func (c *TierConfig) WithBdevDeviceCount(count int) *TierConfig {
 	c.Bdev.DeviceCount = count
 	return c
 }
 
 // WithBdevFileSize sets the backing file size (used when BdevClass is malloc or file).
-func (c *Config) WithBdevFileSize(size int) *Config {
+func (c *TierConfig) WithBdevFileSize(size int) *TierConfig {
 	c.Bdev.FileSize = size
 	return c
 }
 
 // WithBdevHostname sets the hostname to be used when generating NVMe configurations.
-func (c *Config) WithBdevHostname(name string) *Config {
+func (c *TierConfig) WithBdevHostname(name string) *TierConfig {
 	c.Bdev.Hostname = name
 	return c
 }
 
-type Configs []*Config
+type TierConfigs []*TierConfig
 
-func (c Configs) Validate() error {
+func (c TierConfigs) Validate() error {
 	for _, cfg := range c {
 		if err := cfg.Validate(); err != nil {
 			return errors.Wrapf(err, "tier %d failed validation", cfg.Tier)
@@ -171,7 +171,7 @@ func (c Configs) Validate() error {
 	return nil
 }
 
-func (c Configs) ScmConfigs() (out []*Config) {
+func (c TierConfigs) ScmConfigs() (out []*TierConfig) {
 	for _, cfg := range c {
 		if cfg.IsSCM() {
 			out = append(out, cfg)
@@ -180,7 +180,7 @@ func (c Configs) ScmConfigs() (out []*Config) {
 	return
 }
 
-func (c Configs) BdevConfigs() (out []*Config) {
+func (c TierConfigs) BdevConfigs() (out []*TierConfig) {
 	for _, cfg := range c {
 		if cfg.IsBdev() {
 			out = append(out, cfg)
@@ -189,8 +189,8 @@ func (c Configs) BdevConfigs() (out []*Config) {
 	return
 }
 
-func (c *Configs) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var tmp []*Config
+func (c *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var tmp []*TierConfig
 	if err := unmarshal(&tmp); err != nil {
 		return err
 	}
@@ -299,10 +299,9 @@ func (bc *BdevConfig) Validate(class Class) error {
 	return nil
 }
 
-type StorageConfig struct {
-	Tiers      Configs `yaml:"storage"`
-	TiersNum   int     `yaml:"-" cmdLongFlag:"--storage_tiers" cmdShortFlag:"-T"`
-	ConfigPath string  `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	MemSize    int     `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
-	VosEnv     string  `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+type Config struct {
+	Tiers      TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
+	ConfigPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	MemSize    int         `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
+	VosEnv     string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 }

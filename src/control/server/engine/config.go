@@ -152,21 +152,21 @@ func (ls *LegacyStorage) WasDefined() bool {
 
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
-	Rank              *system.Rank          `yaml:"rank,omitempty"`
-	Modules           string                `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
-	TargetCount       int                   `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
-	HelperStreamCount int                   `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
-	ServiceThreadCore int                   `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
-	SystemName        string                `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
-	SocketDir         string                `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
-	LogMask           string                `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
-	LogFile           string                `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
-	LegacyStorage     LegacyStorage         `yaml:",inline,omitempty"`
-	Storage           storage.StorageConfig `yaml:",inline,omitempty"`
-	Fabric            FabricConfig          `yaml:",inline"`
-	EnvVars           []string              `yaml:"env_vars,omitempty"`
-	EnvPassThrough    []string              `yaml:"env_pass_through,omitempty"`
-	Index             uint32                `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
+	Rank              *system.Rank   `yaml:"rank,omitempty"`
+	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
+	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
+	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
+	ServiceThreadCore int            `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
+	SystemName        string         `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
+	SocketDir         string         `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
+	LogMask           string         `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
+	LogFile           string         `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
+	LegacyStorage     LegacyStorage  `yaml:",inline,omitempty"`
+	Storage           storage.Config `yaml:",inline,omitempty"`
+	Fabric            FabricConfig   `yaml:",inline"`
+	EnvVars           []string       `yaml:"env_vars,omitempty"`
+	EnvPassThrough    []string       `yaml:"env_pass_through,omitempty"`
+	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 }
 
 // NewConfig returns an I/O Engine config.
@@ -268,7 +268,7 @@ func (c *Config) WithSystemName(name string) *Config {
 // WithStorage creates the set of storage tier configurations.
 // Note that this method replaces any existing configs. To append,
 // use AppendStorage().
-func (c *Config) WithStorage(cfgs ...*storage.Config) *Config {
+func (c *Config) WithStorage(cfgs ...*storage.TierConfig) *Config {
 	c.Storage.Tiers = c.Storage.Tiers[:]
 	c.AppendStorage(cfgs...)
 	return c
@@ -276,7 +276,7 @@ func (c *Config) WithStorage(cfgs ...*storage.Config) *Config {
 
 // AppendStorage appends the given storage tier configurations to
 // the existing set of storage configs.
-func (c *Config) AppendStorage(cfgs ...*storage.Config) *Config {
+func (c *Config) AppendStorage(cfgs ...*storage.TierConfig) *Config {
 	for _, cfg := range cfgs {
 		if cfg.Tier == 0 {
 			cfg.Tier = len(c.Storage.Tiers)

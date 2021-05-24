@@ -248,7 +248,6 @@ func TestControl_PoolCreate(t *testing.T) {
 		"mixture of auto/manual storage params": {
 			req: &PoolCreateReq{
 				TotalBytes: 10,
-				ScmBytes:   20,
 			},
 			expErr: errors.New("can't mix"),
 		},

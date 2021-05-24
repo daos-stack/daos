@@ -24,13 +24,13 @@ type SystemProvider interface {
 type Provider struct {
 	log           logging.Logger
 	engineIndex   int
-	engineStorage *StorageConfig
+	engineStorage *Config
 	Sys           SystemProvider
 	Scm           ScmProvider
 	Bdev          BdevProvider
 }
 
-func DefaultProvider(log logging.Logger, idx int, engineStorage *StorageConfig) *Provider {
+func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provider {
 	return &Provider{
 		log:           log,
 		engineIndex:   idx,
@@ -41,7 +41,7 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *StorageConfig) 
 	}
 }
 
-func (p *Provider) GetScmConfig() (*Config, error) {
+func (p *Provider) GetScmConfig() (*TierConfig, error) {
 	// NB: A bit wary of building in assumptions again about the number of
 	// SCM tiers, but for the sake of expediency we'll assume that there is
 	// only one. If that needs to change, hopefully it won't require quite so
@@ -295,7 +295,6 @@ func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err
 }
 
 func (p *Provider) GenEngineConfig() error {
-	p.engineStorage.TiersNum = len(p.engineStorage.Tiers)
 	cfgScm, err := p.GetScmConfig()
 	if err != nil {
 		return err

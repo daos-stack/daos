@@ -8,16 +8,13 @@ socket_dir: /foo/bar
 log_mask: DD_DEBUG
 log_file: /path/to/log
 storage:
--
-  class: ram
+- class: ram
   scm_mount: /mnt/daostest
-  scm_class: ram
   scm_size: 42
   scm_list:
   - /dev/a
   - /dev/b
--
-  class: malloc
+- class: malloc
   bdev_list:
   - /dev/c
   - /dev/d
