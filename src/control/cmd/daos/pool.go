@@ -40,7 +40,7 @@ type poolBaseCmd struct {
 	cPoolHandle C.daos_handle_t
 
 	SysName  string `long:"sys-name" short:"G" description:"DAOS system name"`
-	PoolFlag PoolID `long:"pool" description:"pool UUID (deprecated; use positional arg)"`
+	PoolFlag PoolID `long:"pool" short:"p" description:"pool UUID (deprecated; use positional arg)"`
 	Args     struct {
 		Pool PoolID `positional-arg-name:"<pool name or UUID>"`
 	} `positional-args:"yes"`
@@ -326,7 +326,7 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 type poolListAttrsCmd struct {
 	poolBaseCmd
 
-	Verbose bool `long:"verbose" short:"v" description:"Include values"`
+	Verbose bool `long:"verbose" short:"V" description:"Include values"`
 }
 
 func (cmd *poolListAttrsCmd) Execute(_ []string) error {

@@ -110,15 +110,15 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 type containerCreateCmd struct {
 	containerBaseCmd
 
-	UUID        string         `long:"cont" description:"container UUID (optional)"`
-	Type        string         `long:"type" description:"container type" choice:"POSIX" choice:"HDF5" default:"POSIX"`
-	Path        string         `long:"path" description:"container namespace path"`
-	ChunkSize   string         `long:"chunk-size" description:"container chunk size"`
-	ObjectClass string         `long:"object-class" description:"default object class"`
+	UUID        string         `long:"cont" short:"c" description:"container UUID (optional)"`
+	Type        string         `long:"type" short:"t" description:"container type" choice:"POSIX" choice:"HDF5" default:"POSIX"`
+	Path        string         `long:"path" short:"d" description:"container namespace path"`
+	ChunkSize   string         `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass string         `long:"oclass" short:"o" description:"default object class"`
 	Properties  PropertiesFlag `long:"properties" description:"container properties"`
-	ACLFile     string         `long:"acl-file" description:"input file containing ACL"`
-	User        string         `long:"user" description:"user who will own the container (username@[domain])"`
-	Group       string         `long:"group" description:"group who will own the container (group@[domain])"`
+	ACLFile     string         `long:"acl-file" short:"A" description:"input file containing ACL"`
+	User        string         `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
+	Group       string         `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
@@ -239,8 +239,8 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 type existingContainerCmd struct {
 	containerBaseCmd
 
-	Path     string      `long:"path" description:"unified namespace path"`
-	ContFlag ContainerID `long:"cont" description:"container UUID (deprecated; use positional arg)"`
+	Path     string      `long:"path" short:"d" description:"unified namespace path"`
+	ContFlag ContainerID `long:"cont" short:"c" description:"container UUID (deprecated; use positional arg)"`
 	Args     struct {
 		Container ContainerID `positional-arg-name:"<container name or UUID>"`
 	} `positional-args:"yes"`
@@ -314,7 +314,7 @@ func (cmd *existingContainerCmd) getAttr(name string) (*attribute, error) {
 type containerDestroyCmd struct {
 	existingContainerCmd
 
-	Force bool `long:"force" description:"force the container destroy"`
+	Force bool `long:"force" short:"f" description:"force the container destroy"`
 }
 
 func (cmd *containerDestroyCmd) Execute(_ []string) error {
@@ -464,8 +464,8 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 type containerCloneCmd struct {
 	daosCmd
 
-	Source      string `long:"src" description:"source container" required:"1"`
-	Destination string `long:"dst" description:"destination container" required:"1"`
+	Source      string `long:"src" short:"S" description:"source container" required:"1"`
+	Destination string `long:"dst" short:"D" description:"destination container" required:"1"`
 }
 
 func (cmd *containerCloneCmd) Execute(_ []string) error {
@@ -501,7 +501,7 @@ func (cmd *containerCloneCmd) Execute(_ []string) error {
 type containerListAttributesCmd struct {
 	existingContainerCmd
 
-	Verbose bool `long:"verbose" short:"v" description:"Include values"`
+	Verbose bool `long:"verbose" short:"V" description:"Include values"`
 }
 
 func (cmd *containerListAttributesCmd) Execute(args []string) error {
