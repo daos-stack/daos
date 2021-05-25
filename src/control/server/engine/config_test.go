@@ -276,69 +276,70 @@ func TestConfig_BdevValidation(t *testing.T) {
 		expCls          storage.BdevClass
 		expEmptyCfgPath bool
 	}{
-		"bad bdev_class": {
+		"unknown class": {
 			cfg: baseValidConfig().
 				WithBdevClass("nvmed"),
 			expErr: errors.New("not supported"),
 		},
-		"missing bdev_class": {
+		"missing class; no devices" {
 			// default is applied so no error
-			cfg: baseValidConfig(),
-		},
-		"empty bdev_list": {
+			cfg: baseValidConfig().
+				WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(2)),
+			},
+		"nvme class; no devices" {
 			// output config path should be empty
 			cfg: baseValidConfig().
 				WithBdevClass("nvme"),
 			expEmptyCfgPath: true,
 		},
-		"good pci addresses": {
+		"nvme class; good pci addresses": {
 			cfg: baseValidConfig().
 				WithBdevClass("nvme").
 				WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(2)),
 		},
-		"duplicate pci address": {
+		"nvme class; duplicate pci address": {
 			cfg: baseValidConfig().
 				WithBdevClass("nvme").
 				WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(1)),
 			expErr: errors.New("bdev_list"),
 		},
-		"bad pci address": {
+		"nvme class; bad pci address": {
 			cfg: baseValidConfig().
 				WithBdevClass("nvme").
 				WithBdevDeviceList(common.MockPCIAddr(1), "0000:00:00"),
 			expErr: errors.New("unexpected pci address"),
 		},
-		"kdev class but no devices": {
+		"kdev class; no devices": {
 			cfg: baseValidConfig().
 				WithBdevClass("kdev"),
 			expErr: errors.New("kdev requires non-empty bdev_list"),
 		},
-		"kdev class valid": {
+		"kdev class; valid": {
 			cfg: baseValidConfig().
 				WithBdevClass("kdev").
 				WithBdevDeviceList("/dev/sda"),
 			expCls: storage.BdevClassKdev,
 		},
-		"file class but no size": {
+		"file class; no size": {
 			cfg: baseValidConfig().
 				WithBdevClass("file").
 				WithBdevDeviceList("bdev1"),
 			expErr: errors.New("file requires non-zero bdev_size"),
 		},
-		"file class but negative size": {
+		"file class; negative size": {
 			cfg: baseValidConfig().
 				WithBdevClass("file").
 				WithBdevDeviceList("bdev1").
 				WithBdevFileSize(-1),
 			expErr: errors.New("negative bdev_size"),
 		},
-		"file class but no devices": {
+		"file class; no devices": {
 			cfg: baseValidConfig().
 				WithBdevClass("file").
 				WithBdevFileSize(10),
 			expErr: errors.New("file requires non-empty bdev_list"),
 		},
-		"file class valid": {
+		"file class; valid": {
 			cfg: baseValidConfig().
 				WithBdevClass("file").
 				WithBdevFileSize(10).
