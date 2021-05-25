@@ -37,14 +37,9 @@ struct crt_na_ofi_config {
 struct crt_prov_gdata {
 	/** NA pluging type */
 	int			cpg_provider;
-	bool			cpg_inited;
 
 	struct crt_na_ofi_config cpg_na_ofi_config;
-	/**
-	 * TODO: Temporary storage for context0 URI, used during group
-	 * attach info file population for self address. Per-provider
-	 * context0 URIs need to be stored for multi-provider support
-	 */
+	/** Context0 URI */
 	char			cpg_addr[CRT_ADDR_STR_MAX_LEN];
 
 	/** CaRT contexts list */
@@ -54,8 +49,10 @@ struct crt_prov_gdata {
 	/** maximum number of contexts user wants to create */
 	uint32_t		cpg_ctx_max_num;
 
+	/** Set of flags */
 	unsigned int		cpg_sep_mode		: 1,
-				cpg_contig_ports	: 1;
+				cpg_contig_ports	: 1,
+				cpg_inited		: 1;
 
 };
 

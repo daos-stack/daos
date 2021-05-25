@@ -181,6 +181,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	bool			sep_mode;
 	int			cur_ctx_num;
 	int			max_ctx_num;
+	d_list_t		*ctx_list;
 
 	if (crt_ctx == NULL) {
 		D_ERROR("invalid parameter of NULL crt_ctx.\n");
@@ -230,7 +231,10 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	}
 
 	ctx->cc_idx = cur_ctx_num;
-	crt_provider_add_ctx_list(provider, &ctx->cc_link);
+
+	ctx_list = crt_provider_get_ctx_list(provider);
+
+	d_list_add_tail(&ctx->cc_link, ctx_list);
 	crt_provider_inc_cur_ctx_num(provider);
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);

@@ -88,7 +88,7 @@ struct crt_hg_context {
 	hg_class_t		*chc_bulkcla; /* bulk class */
 	hg_context_t		*chc_bulkctx; /* bulk context */
 	struct crt_hg_pool	 chc_hg_pool; /* HG handle pool */
-	int			 chc_provider;
+	int			 chc_provider; /* provider */
 };
 
 /* crt_hg.c */
@@ -126,7 +126,6 @@ void crt_provider_inc_cur_ctx_num(int provider);
 void crt_provider_dec_cur_ctx_num(int provider);
 
 int crt_provider_get_max_ctx_num(int provider);
-void crt_provider_add_ctx_list(int provider, d_list_t *cc_link);
 d_list_t *crt_provider_get_ctx_list(int provider);
 
 static inline int

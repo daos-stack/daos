@@ -434,14 +434,6 @@ crt_provider_dec_cur_ctx_num(int provider)
 	prov_data->cpg_ctx_num--;
 }
 
-void
-crt_provider_add_ctx_list(int provider, d_list_t *cc_link)
-{
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
-
-	d_list_add_tail(cc_link, &(prov_data->cpg_ctx_list));
-}
-
 d_list_t
 *crt_provider_get_ctx_list(int provider)
 {
