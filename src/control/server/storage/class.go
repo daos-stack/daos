@@ -147,7 +147,7 @@ func bdevFileInit(log logging.Logger, c *BdevConfig) error {
 
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
-func genFromTempl(cfg *Config, templ string) (out bytes.Buffer, err error) {
+func genFromTempl(cfg *TierConfig, templ string) (out bytes.Buffer, err error) {
 	t := template.Must(template.New(confOut).Parse(templ))
 	err = t.Execute(&out, cfg)
 
@@ -157,27 +157,30 @@ func genFromTempl(cfg *Config, templ string) (out bytes.Buffer, err error) {
 // ClassProvider implements functionality for a given bdev class
 type ClassProvider struct {
 	log     logging.Logger
-	cfg     Configs
+	cfgs    TierConfigs
 	cfgPath string
 	bdev    []bdev
 }
 
 // NewClassProvider returns a new ClassProvider reference for given bdev type.
-func NewClassProvider(log logging.Logger, cfgDir string, engineCfgs *StorageConfig) (*ClassProvider, error) {
-	bdevCfgs := engineCfgs.Tiers.BdevConfigs()
+func NewClassProvider(log logging.Logger, cfgDir string, cfg *Config) (*ClassProvider, error) {
+	bdevCfgs := cfg.Tiers.BdevConfigs()
 	p := &ClassProvider{
-		log: log,
-		cfg: bdevCfgs,
+		log:  log,
+		cfgs: bdevCfgs,
+	}
+	if len(p.cfgs) == 0 {
+		return p, nil
 	}
 	p.bdev = make([]bdev, 0, len(bdevCfgs))
 
 	for tierIdx, bdevCfg := range bdevCfgs {
 		switch bdevCfg.Class {
 		case ClassNone:
-			engineCfgs.VosEnv = ""
+			cfg.VosEnv = ""
 			p.bdev = append(p.bdev, bdev{nvmeTempl, isEmptyList, isValidList, nilInit})
 		case ClassNvme:
-			engineCfgs.VosEnv = "NVME"
+			cfg.VosEnv = "NVME"
 			p.bdev = append(p.bdev, bdev{nvmeTempl, isEmptyList, isValidList, nilInit})
 			if !bdevCfg.Bdev.VmdDisabled {
 				p.bdev[tierIdx].templ = `[Vmd]
@@ -186,25 +189,25 @@ func NewClassProvider(log logging.Logger, cfgDir string, engineCfgs *StorageConf
 	` + p.bdev[tierIdx].templ
 			}
 		case ClassMalloc:
-			engineCfgs.VosEnv = "MALLOC"
+			cfg.VosEnv = "MALLOC"
 			p.bdev = append(p.bdev, bdev{mallocTempl, isEmptyNumber, nilValidate, nilInit})
 		case ClassKdev:
-			engineCfgs.VosEnv = "AIO"
+			cfg.VosEnv = "AIO"
 			p.bdev = append(p.bdev, bdev{kdevTempl, isEmptyList, isValidList, nilInit})
 		case ClassFile:
-			engineCfgs.VosEnv = "AIO"
+			cfg.VosEnv = "AIO"
 			p.bdev = append(p.bdev, bdev{fileTempl, isEmptyList, isValidSize, bdevFileInit})
 		default:
 			return nil, errors.Errorf("unable to map %q to BdevClass", bdevCfgs[tierIdx].Class)
 		}
 
-		if msg := p.bdev[tierIdx].isEmpty(&p.cfg[tierIdx].Bdev); msg != "" {
+		if msg := p.bdev[tierIdx].isEmpty(&p.cfgs[tierIdx].Bdev); msg != "" {
 			log.Debugf("spdk %s: %s", bdevCfgs[tierIdx].Class, msg)
 			// No devices; no need to generate a config file
 			return p, nil
 		}
 
-		if msg := p.bdev[tierIdx].isValid(&p.cfg[tierIdx].Bdev); msg != "" {
+		if msg := p.bdev[tierIdx].isValid(&p.cfgs[tierIdx].Bdev); msg != "" {
 			log.Debugf("spdk %s: %s", bdevCfgs[tierIdx].Class, msg)
 			// Bad config; don't generate a config file
 			return nil, errors.Errorf("invalid nvme config: %s", msg)
@@ -213,7 +216,7 @@ func NewClassProvider(log logging.Logger, cfgDir string, engineCfgs *StorageConf
 
 	// Config file required; set this so it gets generated later
 	p.cfgPath = filepath.Join(cfgDir, confOut)
-	engineCfgs.ConfigPath = p.cfgPath
+	cfg.ConfigPath = p.cfgPath
 	log.Debugf("output bdev conf file set to %s", p.cfgPath)
 
 	return p, nil
@@ -239,11 +242,11 @@ func (p *ClassProvider) GenConfigFile() error {
 		return errors.Wrapf(err, "spdk: failed to create NVMe config file %s", p.cfgPath)
 	}
 	for tierIdx, _ := range p.bdev {
-		if err := p.bdev[tierIdx].init(p.log, &p.cfg[tierIdx].Bdev); err != nil {
+		if err := p.bdev[tierIdx].init(p.log, &p.cfgs[tierIdx].Bdev); err != nil {
 			return errors.Wrap(err, "bdev device init")
 		}
 
-		confBytes, err := genFromTempl(p.cfg[tierIdx], p.bdev[tierIdx].templ)
+		confBytes, err := genFromTempl(p.cfgs[tierIdx], p.bdev[tierIdx].templ)
 		if err != nil {
 			return err
 		}
@@ -252,7 +255,7 @@ func (p *ClassProvider) GenConfigFile() error {
 			return errors.New("spdk: generated nvme config is unexpectedly empty")
 		}
 
-		p.log.Debugf("create %s with %v bdevs", p.cfgPath[tierIdx], p.cfg[tierIdx].Bdev.DeviceList)
+		p.log.Debugf("create %s with %v bdevs", p.cfgPath[tierIdx], p.cfgs[tierIdx].Bdev.DeviceList)
 
 		if _, err := confBytes.WriteTo(f); err != nil {
 			return errors.Wrapf(err, "spdk: failed to write NVMe config to file %s", p.cfgPath)

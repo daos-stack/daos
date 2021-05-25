@@ -20,14 +20,14 @@ import (
 // StorageControlService encapsulates the storage part of the control service
 type StorageControlService struct {
 	log             logging.Logger
-	instanceStorage map[uint32][]*storage.Config
+	instanceStorage map[uint32]*storage.Config
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
 func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *StorageControlService {
-	instanceStorage := make(map[uint32][]*storage.Config)
+	instanceStorage := make(map[uint32]*storage.Config)
 	for i, cfg := range engineCfgs {
-		instanceStorage[uint32(i)] = cfg.Storage.Tiers
+		instanceStorage[uint32(i)] = &cfg.Storage
 	}
 
 	return &StorageControlService{
@@ -122,12 +122,12 @@ func (c *StorageControlService) checkCfgBdevs(scanResp *storage.BdevScanResponse
 		return nil
 	}
 
-	for _, storageCfgs := range c.instanceStorage {
-		for _, storageCfg := range storageCfgs {
-			if !storageCfg.IsBdev() || len(storageCfg.Bdev.DeviceList) == 0 {
+	for _, storageCfg := range c.instanceStorage {
+		for _, tierCfg := range storageCfg.Tiers {
+			if !tierCfg.IsBdev() || len(tierCfg.Bdev.DeviceList) == 0 {
 				continue
 			}
-			cfgBdevs := storageCfg.Bdev.DeviceList
+			cfgBdevs := tierCfg.Bdev.DeviceList
 
 			/*if !c.bdev.IsVMDDisabled() {
 				c.log.Debug("VMD detected, processing PCI addresses")
@@ -163,9 +163,9 @@ func (c *StorageControlService) Setup() error {
 	}
 
 	// don't scan if using emulated NVMe
-	for _, storageCfgs := range c.instanceStorage {
-		for _, storageCfg := range storageCfgs {
-			if storageCfg.Class != storage.ClassNvme {
+	for _, storageCfg := range c.instanceStorage {
+		for _, tierCfg := range storageCfg.Tiers {
+			if tierCfg.Class != storage.ClassNvme {
 				return nil
 			}
 		}
@@ -185,7 +185,7 @@ func (c *StorageControlService) Setup() error {
 }
 
 func (c *StorageControlService) defaultProvider() *storage.Provider {
-	return storage.DefaultProvider(c.log, 0, &storage.StorageConfig{
+	return storage.DefaultProvider(c.log, 0, &storage.Config{
 		Tiers: nil,
 	})
 }

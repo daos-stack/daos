@@ -95,7 +95,7 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	cfg, err := ei.storage.GetScmConfig()
 	if err != nil {
 		scmErr = err
-		cfg = &storage.Config{Scm: storage.ScmConfig{MountPoint: "unknown"}}
+		cfg = &storage.TierConfig{Scm: storage.ScmConfig{MountPoint: "unknown"}}
 		return
 	}
 

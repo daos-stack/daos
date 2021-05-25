@@ -537,9 +537,9 @@ func defaultEngineCfg(idx int) *engine.Config {
 		WithTargetCount(defaultTargetCount).
 		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx)).
 		WithStorage(
-			storage.NewConfig().
+			storage.NewTierConfig().
 				WithScmClass(storage.ClassDCPM.String()),
-			storage.NewConfig().
+			storage.NewTierConfig().
 				WithBdevClass(storage.ClassNvme.String()).
 				WithBdevDeviceList([]string{}...),
 		)
@@ -571,10 +571,10 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 	for nn := 0; nn < nd.engineCount; nn++ {
 		engineCfg := defaultEngineCfg(nn).
 			WithStorage(
-				storage.NewConfig().
+				storage.NewTierConfig().
 					WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
 					WithScmDeviceList(sd.numaPMems[nn][0]),
-				storage.NewConfig().
+				storage.NewTierConfig().
 					WithBdevDeviceList(sd.numaSSDs[nn]...),
 			).
 			WithTargetCount(ccs[nn].nrTgts).

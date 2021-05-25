@@ -468,10 +468,10 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	for idx, ec := range cfg.Engines {
 		if ec.LegacyStorage.WasDefined() {
 			log.Infof("engine %d: Legacy storage configuration detected. Please migrate to new-style storage configuration.", idx)
-			var storageCfgs storage.Configs
+			var tierCfgs storage.TierConfigs
 			if ec.LegacyStorage.ScmClass != storage.ClassNone {
-				storageCfgs = append(storageCfgs,
-					storage.NewConfig().
+				tierCfgs = append(tierCfgs,
+					storage.NewTierConfig().
 						WithScmClass(ec.LegacyStorage.ScmClass.String()).
 						WithScmDeviceList(ec.LegacyStorage.ScmConfig.DeviceList...).
 						WithScmMountPoint(ec.LegacyStorage.MountPoint).
@@ -479,15 +479,15 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 				)
 			}
 			if ec.LegacyStorage.BdevClass != storage.ClassNone {
-				storageCfgs = append(storageCfgs,
-					storage.NewConfig().
+				tierCfgs = append(tierCfgs,
+					storage.NewTierConfig().
 						WithBdevClass(ec.LegacyStorage.BdevClass.String()).
 						WithBdevDeviceCount(ec.LegacyStorage.DeviceCount).
 						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList...).
 						WithBdevFileSize(ec.LegacyStorage.FileSize),
 				)
 			}
-			ec.WithStorage(storageCfgs...)
+			ec.WithStorage(tierCfgs...)
 			ec.LegacyStorage = engine.LegacyStorage{}
 		}
 	}

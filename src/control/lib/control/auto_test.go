@@ -27,11 +27,11 @@ var (
 	engineCfg = func(t *testing.T, numa int) *engine.Config {
 		return engine.NewConfig().
 			WithStorage(
-				storage.NewConfig().
+				storage.NewTierConfig().
 					WithScmClass(storage.ClassDCPM.String()).
 					WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
 					WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)),
-				storage.NewConfig().
+				storage.NewTierConfig().
 					WithBdevClass(storage.ClassNvme.String()),
 			)
 	}
@@ -44,7 +44,7 @@ var (
 		}
 
 		cfg := engineCfg(t, numa)
-		for _, sc := range cfg.Storage {
+		for _, sc := range cfg.Storage.Tiers {
 			if sc.IsBdev() {
 				sc.WithBdevDeviceList(pciAddrs...)
 			}
