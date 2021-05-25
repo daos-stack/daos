@@ -1640,7 +1640,7 @@ again:
 }
 
 static int
-obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
+obj_capa_check(struct ds_cont_hdl *coh, bool is_write)
 {
 	if (!is_write && !ds_sec_cont_can_read_data(coh->sch_sec_capas)) {
 		D_ERROR("cont hdl "DF_UUID" sec_capas "DF_U64", "
@@ -1655,9 +1655,6 @@ obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 			DP_UUID(coh->sch_uuid), coh->sch_sec_capas);
 		return -DER_NO_PERM;
 	}
-
-	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled)
-		return -DER_RF;
 
 	return 0;
 }
@@ -1892,8 +1889,8 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 
 /* Various check before access VOS */
 static int
-obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid, uuid_t coh_uuid,
-	      uuid_t cont_uuid, uint32_t opc, uint32_t flags,
+obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid,
+	      uuid_t coh_uuid, uuid_t cont_uuid, uint32_t opc,
 	      struct obj_io_context *ioc)
 {
 	int		rc;
@@ -1903,10 +1900,7 @@ obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid, uuid_t coh_uuid,
 	if (rc != 0)
 		return rc;
 
-	rc = obj_capa_check(ioc->ioc_coh, obj_is_modification_opc(opc),
-			    obj_is_ec_agg_opc(opc) ||
-			    (flags & ORF_FOR_MIGRATION) ||
-			    (flags & ORF_FOR_EC_AGG));
+	rc = obj_capa_check(ioc->ioc_coh, obj_is_modification_opc(opc));
 	if (rc != 0)
 		obj_ioc_end(ioc, rc);
 
@@ -1944,7 +1938,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	D_ASSERT(daos_oclass_is_ec(oer->er_oid.id_pub, &oca));
 
 	rc = obj_ioc_begin(oer->er_map_ver, oer->er_pool_uuid, oer->er_coh_uuid,
-			   oer->er_cont_uuid, opc_get(rpc->cr_opc), 0, &ioc);
+			   oer->er_cont_uuid, opc_get(rpc->cr_opc), &ioc);
 
 	if (rc)	{
 		D_ERROR("ioc_begin failed: "DF_RC"\n", DP_RC(rc));
@@ -2019,7 +2013,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	D_ASSERT(daos_oclass_is_ec(oea->ea_oid.id_pub, &oca));
 
 	rc = obj_ioc_begin(oea->ea_map_ver, oea->ea_pool_uuid, oea->ea_coh_uuid,
-			   oea->ea_cont_uuid, opc_get(rpc->cr_opc), 0, &ioc);
+			   oea->ea_cont_uuid, opc_get(rpc->cr_opc), &ioc);
 
 	if (rc)	{
 		D_ERROR("ioc_begin failed: "DF_RC"\n", DP_RC(rc));
@@ -2129,7 +2123,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	rc = obj_ioc_begin(orw->orw_map_ver, orw->orw_pool_uuid,
 			   orw->orw_co_hdl, orw->orw_co_uuid,
-			   opc_get(rpc->cr_opc), orw->orw_flags, &ioc);
+			   opc_get(rpc->cr_opc), &ioc);
 	if (rc)
 		goto out;
 
@@ -2373,7 +2367,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	rc = obj_ioc_begin(orw->orw_map_ver, orw->orw_pool_uuid,
 			   orw->orw_co_hdl, orw->orw_co_uuid,
-			   opc_get(rpc->cr_opc), orw->orw_flags, &ioc);
+			   opc_get(rpc->cr_opc), &ioc);
 	if (rc != 0) {
 		D_ASSERTF(rc < 0, "unexpected error# "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -2950,8 +2944,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	/* prepare buffer for enumerate */
 
 	rc = obj_ioc_begin(oei->oei_map_ver, oei->oei_pool_uuid,
-			   oei->oei_co_hdl, oei->oei_co_uuid, opc,
-			   oei->oei_flags, &ioc);
+			   oei->oei_co_hdl, oei->oei_co_uuid, opc, &ioc);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3139,7 +3132,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	D_ASSERT(opi != NULL);
 	rc = obj_ioc_begin(opi->opi_map_ver, opi->opi_pool_uuid,
 			   opi->opi_co_hdl, opi->opi_co_uuid,
-			   opc_get(rpc->cr_opc), opi->opi_flags, &ioc);
+			   opc_get(rpc->cr_opc), &ioc);
 	if (rc)
 		goto out;
 
@@ -3317,7 +3310,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	D_ASSERT(opi != NULL);
 	rc = obj_ioc_begin(opi->opi_map_ver, opi->opi_pool_uuid,
 			   opi->opi_co_hdl, opi->opi_co_uuid,
-			   opc_get(rpc->cr_opc), opi->opi_flags, &ioc);
+			   opc_get(rpc->cr_opc), &ioc);
 	if (rc)
 		goto out;
 
@@ -3512,7 +3505,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 
 	rc = obj_ioc_begin(okqi->okqi_map_ver, okqi->okqi_pool_uuid,
 			   okqi->okqi_co_hdl, okqi->okqi_co_uuid,
-			   opc_get(rpc->cr_opc), okqi->okqi_flags, &ioc);
+			   opc_get(rpc->cr_opc), &ioc);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3618,7 +3611,7 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 
 	rc = obj_ioc_begin(osi->osi_map_ver, osi->osi_pool_uuid,
 			   osi->osi_co_hdl, osi->osi_co_uuid,
-			   opc_get(rpc->cr_opc), 0, &ioc);
+			   opc_get(rpc->cr_opc), &ioc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -4183,7 +4176,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	 * So here, only need to check the write capa.
 	 */
 	if (dcde->dcde_write_cnt != 0) {
-		rc = obj_capa_check(ioc->ioc_coh, true, false);
+		rc = obj_capa_check(ioc->ioc_coh, true);
 		if (rc != 0)
 			goto out;
 	}
@@ -4256,7 +4249,7 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 			 * the CPD RPC. Here, only need to check the write capa.
 			 */
 			if (dcde->dcde_write_cnt != 0) {
-				rc = obj_capa_check(ioc->ioc_coh, true, false);
+				rc = obj_capa_check(ioc->ioc_coh, true);
 				if (rc != 0) {
 					comp_cb(dlh, idx, rc);
 

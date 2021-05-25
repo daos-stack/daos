@@ -156,12 +156,9 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		test_rebuild_wait(args, args_cnt);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	for (i = 0; i < args_cnt; i++) {
-		daos_cont_status_clear(args[i]->coh, NULL);
-
+	for (i = 0; i < args_cnt; i++)
 		if (args[i]->rebuild_post_cb)
 			args[i]->rebuild_post_cb(args[i]);
-	}
 }
 
 
@@ -562,9 +559,6 @@ rebuild_io_verify(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 	int	rc;
 	int	i;
 
-	rc = daos_cont_status_clear(arg->coh, NULL);
-	assert_rc_equal(rc, 0);
-
 	print_message("rebuild io verify obj %d\n", oids_nr);
 	for (i = 0; i < oids_nr; i++) {
 		/* XXX: skip punch object. */
@@ -831,7 +825,6 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 		idx++;
 	}
 	rebuild_pools_ranks(&arg, 1, ranks, idx, false);
-	daos_cont_status_clear(co_hdl, NULL);
 
 	/* Verify full stripe */
 	d_iov_set(&iov, buf, buf_size);

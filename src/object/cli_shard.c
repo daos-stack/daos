@@ -784,7 +784,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * rec2big errors which can be expected.
 		 */
 		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST ||
-		    rc == -DER_EXIST || rc == -DER_RF)
+		    rc == -DER_EXIST)
 			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d"
 				" failed: "DF_RC"\n", rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank,
