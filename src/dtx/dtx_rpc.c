@@ -271,8 +271,8 @@ dtx_req_list_cb(void **args)
 					"on %d/%d.\n", DP_DTI(drr->drr_dti),
 					drr->drr_rank, drr->drr_tag);
 				return;
-			case -DER_EVICTED:
-				/* If non-leader is evicted, handle it
+			case -DER_EXCLUDED:
+				/* If non-leader is excluded, handle it
 				 * as 'prepared'. If other non-leaders
 				 * also 'prepared' then related DTX is
 				 * committable. Fall through.

@@ -354,10 +354,10 @@ class DaosServerManager(SubprocessManager):
         self._states = {
             "all": [
                 "awaitformat", "starting", "ready", "joined", "stopping",
-                "stopped", "evicted", "errored", "unresponsive", "unknown"],
+                "stopped", "excluded", "errored", "unresponsive", "unknown"],
             "running": ["ready", "joined"],
             "stopped": [
-                "stopping", "stopped", "evicted", "errored", "unresponsive",
+                "stopping", "stopped", "excluded", "errored", "unresponsive",
                 "unknown"],
             "errored": ["errored"],
         }
@@ -963,5 +963,5 @@ class DaosServerManager(SubprocessManager):
         # Stop desired ranks using dmg
         self.dmg.system_stop(ranks=convert_list(value=ranks), force=force)
 
-        # Update the expected status of the stopped/evicted ranks
-        self.update_expected_states(ranks, ["stopped", "evicted"])
+        # Update the expected status of the stopped/excluded ranks
+        self.update_expected_states(ranks, ["stopped", "excluded"])

@@ -736,7 +736,7 @@ class DmgCommand(DmgCommandBase):
         #     },
         #     {
         #         "addr": "10.8.1.74:10001",
-        #         "state": "evicted",
+        #         "state": "excluded",
         #         "fault_domain": "/wolf-74.wolf.hpdd.intel.com",
         #         "rank": 1,
         #         "uuid": "db36ab28-fdb0-4822-97e6-89547393ed03",
@@ -860,7 +860,7 @@ def check_system_query_status(data):
         bool: True if no server crashed, False otherwise.
 
     """
-    failed_states = ("unknown", "evicted", "errored", "unresponsive")
+    failed_states = ("unknown", "excluded", "errored", "unresponsive")
     failed_rank_list = {}
 
     # Check the state of each rank.
