@@ -281,12 +281,12 @@ func TestConfig_BdevValidation(t *testing.T) {
 				WithBdevClass("nvmed"),
 			expErr: errors.New("not supported"),
 		},
-		"missing class; no devices" {
+		"missing class; no devices": {
 			// default is applied so no error
 			cfg: baseValidConfig().
 				WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(2)),
-			},
-		"nvme class; no devices" {
+		},
+		"nvme class; no devices": {
 			// output config path should be empty
 			cfg: baseValidConfig().
 				WithBdevClass("nvme"),
