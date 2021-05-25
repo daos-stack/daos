@@ -399,12 +399,12 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		     plugin_idx++) {
 			if (!strncmp(addr_env, crt_na_dict[plugin_idx].nad_str,
 				     strlen(crt_na_dict[plugin_idx].nad_str) + 1)) {
+				bool		set_sep = false;
+				int		max_num_ctx = 256;
+				uint32_t	ctx_num;
+				bool		share_addr;
 
 				prov = crt_na_dict[plugin_idx].nad_type;
-				bool set_sep = false;
-				int max_num_ctx = 256;
-				uint32_t ctx_num;
-				bool share_addr;
 
 				if (opt && opt->cio_sep_override) {
 					if (opt->cio_use_sep)
@@ -412,7 +412,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 					max_num_ctx = opt->cio_ctx_max_num;
 				} else {
-					d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
+					d_getenv_bool("CRT_CTX_SHARE_ADDR",
+						      &share_addr);
 					if (share_addr)
 						set_sep = true;
 

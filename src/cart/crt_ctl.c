@@ -183,9 +183,9 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 	uint32_t			 addr_buf_len;
 	int				 count;
 	struct crt_context		*ctx = NULL;
-	int				 rc = 0;
-	d_list_t 			*ctx_list;
+	d_list_t			*ctx_list;
 	int				 provider;
+	int				 rc = 0;
 
 	D_ASSERTF(crt_is_service(), "Must be called in a service process\n");
 	in_args = crt_req_get(rpc_req);

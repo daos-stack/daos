@@ -574,8 +574,8 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	hg_class_t		*hg_class = NULL;
 	char			addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 	na_size_t		str_size = CRT_ADDR_STR_MAX_LEN;
+	struct crt_prov_gdata	*prov_data;
 	int			rc = DER_SUCCESS;
-	struct crt_prov_gdata 	*prov_data;
 
 	prov_data = crt_get_prov_gdata(provider);
 	rc = crt_get_info_string(provider, &info_string, idx);
