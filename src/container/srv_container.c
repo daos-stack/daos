@@ -161,6 +161,7 @@ cont_svc_fini(struct cont_svc *svc)
 {
 	rdb_path_fini(&svc->cs_hdls);
 	rdb_path_fini(&svc->cs_conts);
+	rdb_path_fini(&svc->cs_uuids);
 	rdb_path_fini(&svc->cs_root);
 	ABT_rwlock_free(&svc->cs_lock);
 }
@@ -1020,11 +1021,13 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	     struct cont *cont, crt_rpc_t *rpc)
 {
 	struct cont_destroy_in *in = crt_req_get(rpc);
-	d_iov_t			key;
-	int			rc;
-	daos_prop_t	       *prop = NULL;
-	struct ownership	owner;
-	struct daos_acl	       *acl;
+	d_iov_t				key;
+	d_iov_t				val;
+	int				rc;
+	daos_prop_t		       *prop = NULL;
+	struct daos_prop_entry	       *lbl_ent;
+	struct ownership		owner;
+	struct daos_acl		       *acl;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: force=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cdi_op.ci_uuid), rpc,
@@ -1034,7 +1037,8 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = cont_prop_read(tx, cont,
 			    DAOS_CO_QUERY_PROP_ACL |
 			    DAOS_CO_QUERY_PROP_OWNER |
-			    DAOS_CO_QUERY_PROP_OWNER_GROUP, &prop);
+			    DAOS_CO_QUERY_PROP_OWNER_GROUP |
+			    DAOS_CO_QUERY_PROP_LABEL, &prop);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	D_ASSERT(prop != NULL);
@@ -1077,6 +1081,29 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_snapshots);
 	if (rc != 0)
 		goto out_prop;
+
+	/* Delete entry in container UUIDs KVS (if added during create) */
+	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
+	if (lbl_ent) {
+		d_iov_set(&key, lbl_ent->dpe_str,
+			  strnlen(lbl_ent->dpe_str, DAOS_PROP_LABEL_MAX_LEN+1));
+		d_iov_set(&val, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
+		if (rc != -DER_NONEXIST) {
+			if (rc == 0) {
+				rc = rdb_tx_delete(tx, &cont->c_svc->cs_uuids,
+						   &key);
+				if (rc != 0)
+					goto out_prop;
+				D_DEBUG(DB_MD, DF_CONT": deleted label: %s\n",
+					DP_CONT(pool_hdl->sph_pool->sp_uuid,
+						in->cdi_op.ci_uuid),
+						lbl_ent->dpe_str);
+			} else {
+				goto out_prop;
+			}
+		}
+	}
 
 	/* Destroy the container attribute KVS. */
 	d_iov_set(&key, in->cdi_op.ci_uuid, sizeof(uuid_t));
