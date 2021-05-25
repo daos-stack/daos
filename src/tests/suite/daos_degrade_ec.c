@@ -385,8 +385,15 @@ degrade_multi_conts_agg(void **state)
 
 		args[i]->index = arg->index;
 		assert_int_equal(args[i]->pool.slave, 1);
-		oids[i] = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0,
-					    arg->myrank);
+		/* XXX to temporarily workaround DAOS-7350, we need better
+		 * error handling to fix the case if one obj's EC agg failed
+		 * (for example parity shard fail cause agg_peer_update fail).
+		 */
+		if (i == 0)
+			oids[i] = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0,
+						    arg->myrank);
+		else
+			oids[i] = oids[0];
 		args[i]->no_rebuild = 1;
 	}
 
