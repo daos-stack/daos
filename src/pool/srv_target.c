@@ -536,6 +536,9 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 	ABT_thread		ec_eph_query_ult = ABT_THREAD_NULL;
 	int			rc;
 
+	if (unlikely(ec_agg_disabled))
+		return 0;
+
 	rc = dss_ult_create(tgt_ec_eph_query_ult, pool, DSS_XS_SYS, 0,
 			    131072, &ec_eph_query_ult);
 	if (rc != 0) {
@@ -1262,6 +1265,8 @@ out:
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (map != NULL)
 		pool_map_decref(map);
+	if (rc == 0)
+		rc = ds_cont_rf_check(pool->sp_uuid);
 	return rc;
 }
 
