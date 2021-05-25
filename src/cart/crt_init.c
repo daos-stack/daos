@@ -126,6 +126,7 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	crt_gdata.cg_refcount = 0;
 	crt_gdata.cg_inited = 0;
+	crt_gdata.cg_init_prov = CRT_NA_OFI_SOCKETS;
 
 	srand(d_timeus_secdiff(0) + getpid());
 	start_rpcid = ((uint64_t)rand()) << 32;
@@ -311,8 +312,12 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	bool		server;
 	bool		provider_found = false;
 	int		plugin_idx;
+	int		prov;
+	bool		set_sep = false;
+	int		max_num_ctx = 256;
+	uint32_t	ctx_num;
+	bool		share_addr;
 	int		rc = 0;
-	int		prov = -1;
 
 	server = flags & CRT_FLAG_BIT_SERVER;
 
@@ -399,34 +404,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		     plugin_idx++) {
 			if (!strncmp(addr_env, crt_na_dict[plugin_idx].nad_str,
 				     strlen(crt_na_dict[plugin_idx].nad_str) + 1)) {
-				bool		set_sep = false;
-				int		max_num_ctx = 256;
-				uint32_t	ctx_num;
-				bool		share_addr;
-
-				prov = crt_na_dict[plugin_idx].nad_type;
-
-				if (opt && opt->cio_sep_override) {
-					if (opt->cio_use_sep)
-						set_sep = true;
-
-					max_num_ctx = opt->cio_ctx_max_num;
-				} else {
-					d_getenv_bool("CRT_CTX_SHARE_ADDR",
-						      &share_addr);
-					if (share_addr)
-						set_sep = true;
-
-					d_getenv_int("CRT_CTX_NUM", &ctx_num);
-					max_num_ctx = ctx_num;
-				}
-
-
-				prov_data_init(&crt_gdata.cg_prov_gdata[prov],
-					       prov, set_sep, max_num_ctx);
-
 				provider_found = true;
-				crt_gdata.cg_init_prov = prov;
+				crt_gdata.cg_init_prov = crt_na_dict[plugin_idx].nad_type;
 				break;
 			}
 		}
@@ -436,6 +415,25 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			D_GOTO(out, rc = -DER_NONEXIST);
 		}
 do_init:
+		prov = crt_gdata.cg_init_prov;
+
+		if (opt && opt->cio_sep_override) {
+			if (opt->cio_use_sep)
+				set_sep = true;
+			max_num_ctx = opt->cio_ctx_max_num;
+		} else {
+			d_getenv_bool("CRT_CTX_SHARE_ADDR",
+				      &share_addr);
+			if (share_addr)
+				set_sep = true;
+
+			d_getenv_int("CRT_CTX_NUM", &ctx_num);
+			max_num_ctx = ctx_num;
+		}
+
+		prov_data_init(&crt_gdata.cg_prov_gdata[prov],
+			       prov, set_sep, max_num_ctx);
+
 		/* Print notice that "ofi+verbs" is legacy */
 		if (prov == CRT_NA_OFI_VERBS) {
 			D_ERROR("\"ofi+verbs\" is no longer supported. "
@@ -444,7 +442,7 @@ do_init:
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
-		/* the verbs provider only works with regular EP */
+		/* rxm and verbs providers only works with regular EP */
 		if ((prov == CRT_NA_OFI_VERBS_RXM ||
 		     prov == CRT_NA_OFI_VERBS ||
 		     prov == CRT_NA_OFI_TCP_RXM) &&
