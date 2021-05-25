@@ -84,10 +84,6 @@ static void
 degrade_ec_verify(test_arg_t *arg, daos_obj_id_t oid, int write_type)
 {
 	struct ioreq	req;
-	int		rc;
-
-	rc = daos_cont_status_clear(arg->coh, NULL);
-	assert_rc_equal(rc, 0);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 

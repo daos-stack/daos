@@ -1835,8 +1835,6 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	/** wait for rebuild */
 	test_rebuild_wait(&arg, 1);
 
-	daos_cont_status_clear(arg->coh, NULL);
-
 	rc = daos_obj_layout_get(ctx.coh, ctx.oid, &layout2);
 	assert_success(rc);
 
@@ -1853,7 +1851,6 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_ALWAYS);
 	daos_fail_num_set(rank_to_fetch);
-	daos_cont_status_clear(ctx.coh, NULL);
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey,
 			    1, &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_success(rc);
