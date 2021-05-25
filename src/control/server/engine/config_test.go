@@ -271,12 +271,25 @@ func TestConfig_BdevValidation(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		cfg    *Config
-		expErr error
+		cfg             *Config
+		expErr          error
+		expCls          storage.BdevClass
+		expEmptyCfgPath bool
 	}{
+		"bad bdev_class": {
+			cfg: baseValidConfig().
+				WithBdevClass("nvmed"),
+			expErr: errors.New("not supported"),
+		},
 		"missing bdev_class": {
 			// default is applied so no error
 			cfg: baseValidConfig(),
+		},
+		"empty bdev_list": {
+			// output config path should be empty
+			cfg: baseValidConfig().
+				WithBdevClass("nvme"),
+			expEmptyCfgPath: true,
 		},
 		"good pci addresses": {
 			cfg: baseValidConfig().
@@ -304,6 +317,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithBdevClass("kdev").
 				WithBdevDeviceList("/dev/sda"),
+			expCls: storage.BdevClassKdev,
 		},
 		"file class but no size": {
 			cfg: baseValidConfig().
@@ -329,13 +343,25 @@ func TestConfig_BdevValidation(t *testing.T) {
 				WithBdevClass("file").
 				WithBdevFileSize(10).
 				WithBdevDeviceList("bdev1", "bdev2"),
+			expCls: storage.BdevClassFile,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
-			common.AssertEqual(t,
-				filepath.Join(baseValidConfig().Storage.SCM.MountPoint, storage.BdevOutConfName),
-				tc.cfg.Storage.Bdev.OutputPath, "unexpected output config path")
+			if tc.expErr != nil {
+				return
+			}
+
+			if tc.expCls == "" {
+				tc.expCls = storage.BdevClassNvme // default if unset
+			}
+			common.AssertEqual(t, tc.expCls, tc.cfg.Storage.Bdev.Class, "unexpected bdev class")
+
+			var ecp string
+			if !tc.expEmptyCfgPath {
+				ecp = filepath.Join(tc.cfg.Storage.SCM.MountPoint, storage.BdevOutConfName)
+			}
+			common.AssertEqual(t, ecp, tc.cfg.Storage.Bdev.OutputPath, "unexpected config path")
 		})
 	}
 }

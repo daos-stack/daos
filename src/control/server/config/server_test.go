@@ -708,9 +708,9 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 		},
 		"overlapping bdev_list": {
 			configA: configA().
-				WithBdevDeviceList("a"),
+				WithBdevDeviceList(MockPCIAddr(1)),
 			configB: configB().
-				WithBdevDeviceList("b", "a"),
+				WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
 		},
 		"duplicates in bdev_list": {
