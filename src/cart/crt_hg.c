@@ -332,16 +332,26 @@ out:
  * Currently we ignore the provider. Per-provider info will
  * be returned during multi-provider support implementation
  */
+static struct crt_prov_gdata *
+crt_get_prov_gdata(int provider)
+{
+	return &crt_gdata.cg_prov_gdata[provider];
+}
+
 static int
 crt_provider_ctx0_port_get(int provider)
 {
-	return crt_na_ofi_conf.noc_port;
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_na_ofi_config.noc_port;
 }
 
 static char*
 crt_provider_domain_get(int provider)
 {
-	return crt_na_ofi_conf.noc_domain;
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_na_ofi_config.noc_domain;
 }
 
 static char*
@@ -353,7 +363,9 @@ crt_provider_name_get(int provider)
 static char*
 crt_provider_ip_str_get(int provider)
 {
-	return crt_na_ofi_conf.noc_ip_str;
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_na_ofi_config.noc_ip_str;
 }
 
 static bool
@@ -374,22 +386,77 @@ crt_provider_is_contig_ep(int provider)
 	return crt_na_dict[provider].nad_port_bind;
 }
 
-static bool
+bool
 crt_provider_is_sep(int provider)
 {
-	return crt_gdata.cg_sep_mode;
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_sep_mode;
+}
+
+void
+crt_provider_set_sep(int provider, bool enable)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	prov_data->cpg_sep_mode = (enable) ? 1 : 0;
+}
+
+int
+crt_provider_get_cur_ctx_num(int provider)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_ctx_num;
+}
+
+int
+crt_provider_get_max_ctx_num(int provider)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_ctx_max_num;
+}
+
+void
+crt_provider_inc_cur_ctx_num(int provider)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	prov_data->cpg_ctx_num++;
+}
+
+void
+crt_provider_dec_cur_ctx_num(int provider)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	prov_data->cpg_ctx_num--;
+}
+
+void
+crt_provider_add_ctx_list(int provider, d_list_t *cc_link)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	d_list_add_tail(cc_link, &(prov_data->cpg_ctx_list));
+}
+
+d_list_t
+*crt_provider_get_ctx_list(int provider)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return &(prov_data->cpg_ctx_list);
 }
 
 static int
-crt_get_info_string(char **string, int ctx_idx)
+crt_get_info_string(int provider, char **string, int ctx_idx)
 {
-	int	 provider;
 	char	*provider_str;
 	int	 start_port;
 	char	*domain_str;
 	char	*ip_str;
-
-	provider = crt_gdata.cg_na_plugin;
 
 	provider_str = crt_provider_name_get(provider);
 	start_port = crt_provider_ctx0_port_get(provider);
@@ -508,8 +575,10 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	char			addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 	na_size_t		str_size = CRT_ADDR_STR_MAX_LEN;
 	int			rc = DER_SUCCESS;
+	struct crt_prov_gdata 	*prov_data;
 
-	rc = crt_get_info_string(&info_string, idx);
+	prov_data = crt_get_prov_gdata(provider);
+	rc = crt_get_info_string(provider, &info_string, idx);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -519,7 +588,8 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 		init_info.na_init_info.progress_mode = NA_NO_BLOCK;
 
 	if (crt_provider_is_sep(provider))
-		init_info.na_init_info.max_contexts = crt_gdata.cg_ctx_max_num;
+		init_info.na_init_info.max_contexts =
+					crt_provider_get_max_ctx_num(provider);
 	else
 		init_info.na_init_info.max_contexts = 1;
 
@@ -542,7 +612,7 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 
 	/* TODO: Need to store per provider addr for multi-provider support */
 	if (idx == 0)
-		strncpy(crt_gdata.cg_addr, addr_str, str_size);
+		strncpy(prov_data->cpg_addr, addr_str, str_size);
 
 	rc = crt_hg_reg_rpcid(hg_class);
 	if (rc != 0) {
@@ -573,9 +643,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx)
 	D_ASSERT(hg_ctx != NULL);
 	crt_ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
 
-	D_DEBUG(DB_NET, "crt_gdata.cg_sep_mode %d, crt_is_service() %d\n",
-		crt_gdata.cg_sep_mode, crt_is_service());
-
+	hg_ctx->chc_provider = provider;
 	sep_mode = crt_provider_is_sep(provider);
 
 	/* In SEP mode all contexts share same hg_class*/
@@ -669,26 +737,6 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	}
 out:
 	return rc;
-}
-
-struct crt_context *
-crt_hg_context_lookup(hg_context_t *hg_ctx)
-{
-	struct crt_context	*crt_ctx;
-	int			found = 0;
-
-	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
-
-	d_list_for_each_entry(crt_ctx, &crt_gdata.cg_ctx_list, cc_link) {
-		if (crt_ctx->cc_hg_ctx.chc_hgctx == hg_ctx) {
-			found = 1;
-			break;
-		}
-	}
-
-	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-
-	return (found == 1) ? crt_ctx : NULL;
 }
 
 int
@@ -890,7 +938,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		}
 	}
 
-	if (crt_gdata.cg_sep_mode == true) {
+	if (crt_provider_is_sep(hg_ctx->chc_provider)) {
 		hg_ret = HG_Set_target_id(rpc_priv->crp_hg_hdl,
 					  rpc_priv->crp_pub.cr_ep.ep_tag);
 		if (hg_ret != HG_SUCCESS) {

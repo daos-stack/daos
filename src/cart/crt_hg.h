@@ -88,6 +88,7 @@ struct crt_hg_context {
 	hg_class_t		*chc_bulkcla; /* bulk class */
 	hg_context_t		*chc_bulkctx; /* bulk context */
 	struct crt_hg_pool	 chc_hg_pool; /* HG handle pool */
+	int			 chc_provider;
 };
 
 /* crt_hg.c */
@@ -118,6 +119,15 @@ int crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data);
 int crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data);
 
 bool crt_provider_is_contig_ep(int provider);
+bool crt_provider_is_sep(int provider);
+void crt_provider_set_sep(int provider, bool enable);
+int crt_provider_get_cur_ctx_num(int provider);
+void crt_provider_inc_cur_ctx_num(int provider);
+void crt_provider_dec_cur_ctx_num(int provider);
+
+int crt_provider_get_max_ctx_num(int provider);
+void crt_provider_add_ctx_list(int provider, d_list_t *cc_link);
+d_list_t *crt_provider_get_ctx_list(int provider);
 
 static inline int
 crt_hgret_2_der(int hg_ret)
