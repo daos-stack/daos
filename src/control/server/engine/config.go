@@ -35,9 +35,10 @@ func (sc *StorageConfig) Validate() error {
 	}
 
 	// set persistent location for engine bdev config file to be consumed by
-	// provider backend, leave empty for nvme class with no devices
-	if sc.Bdev.Class != storage.BdevClassNvme || len(sc.Bdev.DeviceList) != 0 {
-		sc.Bdev.OutputPath = filepath.Join(sc.SCM.MountPoint, storage.BdevOutConfName)
+	// provider backend, set to empty when no devices specified
+	sc.Bdev.OutputPath = filepath.Join(sc.SCM.MountPoint, storage.BdevOutConfName)
+	if len(sc.Bdev.DeviceList) == 0 {
+		sc.Bdev.OutputPath = ""
 	}
 
 	return errors.Wrap(sc.Bdev.Validate(), "bdev config validation failed")
