@@ -124,7 +124,6 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 	}
 
 	templ := map[storage.BdevClass]string{
-		storage.BdevClassNone: clsNvmeTemplate,
 		storage.BdevClassNvme: clsNvmeTemplate,
 		storage.BdevClassKdev: clsKdevTemplate,
 		storage.BdevClassFile: clsFileTemplate,
