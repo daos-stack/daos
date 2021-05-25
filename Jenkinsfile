@@ -730,9 +730,7 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
+                        echo env.STAGE_NAME
                     }
                     post {
                         always {
@@ -749,9 +747,7 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
+                        echo env.STAGE_NAME
                     }
                     post {
                         always {
@@ -768,9 +764,7 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
+                        echo env.STAGE_NAME
                     }
                     post {
                         always {
@@ -787,9 +781,7 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
+                        echo env.STAGE_NAME
                     }
                     post {
                         always {
@@ -852,9 +844,7 @@ pipeline {
                         label 'ci_nvme3'
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
+                        echo env.STAGE_NAME
                     }
                     post {
                         always {
@@ -872,10 +862,7 @@ pipeline {
                         label 'ci_nvme5'
                     }
                     steps {
-                        functionalTest target: hwDistroTarget(),
-                                       inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
+                        echo env.STAGE_NAME
                    }
                     post {
                         always {
@@ -893,10 +880,7 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
-                        functionalTest target: hwDistroTarget(),
-                                       inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
+                        echo env.STAGE_NAME
                     }
                     post {
                         always {
