@@ -2327,10 +2327,12 @@ pmap_comp_failed(struct pool_component *comp)
 }
 
 static bool
-pmap_comp_execlude_out_earlier(struct pool_component *comp, uint32_t ver)
+pmap_comp_failed_earlier(struct pool_component *comp, uint32_t ver)
 {
-	return (comp->co_status == PO_COMP_ST_DOWNOUT &&
-		comp->co_out_ver <= ver);
+	return ((comp->co_status == PO_COMP_ST_DOWNOUT &&
+		 comp->co_out_ver <= ver) ||
+		(comp->co_status == PO_COMP_ST_DOWN &&
+		 comp->co_fseq <= ver));
 }
 
 static int
@@ -2470,7 +2472,7 @@ pmap_node_check(struct pool_domain *node_dom, struct pmap_fail_stat *fstat)
 		tgt = &node_dom->do_targets[i];
 		comp = &tgt->ta_comp;
 		if (!pmap_comp_failed(comp) ||
-		    pmap_comp_execlude_out_earlier(comp, fstat->pf_last_ver))
+		    pmap_comp_failed_earlier(comp, fstat->pf_last_ver))
 			continue;
 		if (fnode == NULL) {
 			fnode = pmap_fail_node_get(fstat);
@@ -2497,9 +2499,9 @@ pmap_node_check(struct pool_domain *node_dom, struct pmap_fail_stat *fstat)
 		fstat->pf_newfail_nr++;
 	if ((fstat->pf_down_nr > fstat->pf_rf) && (fstat->pf_newfail_nr > 0)) {
 		rc = -DER_RF;
-		D_ERROR("RF broken, found %d DOWN node, newly fail %d, rf %d, "
-			DF_RC"\n", fstat->pf_down_nr, fstat->pf_newfail_nr,
-			fstat->pf_rf, DP_RC(rc));
+		D_DEBUG(DB_TRACE, "RF broken, found %d DOWN node, "
+			"newly fail %d, rf %d, "DF_RC"\n", fstat->pf_down_nr,
+			fstat->pf_newfail_nr, fstat->pf_rf, DP_RC(rc));
 	}
 
 	return rc;
@@ -2575,8 +2577,8 @@ pmap_fail_stat_check(struct pmap_fail_stat *fstat)
 
 fail:
 	if (rc == -DER_RF) {
-		D_ERROR("RF broken, found %d fail, DOWN %d, newly fail %d, "
-			"max_overlapped %d, rf %d, "DF_RC"\n",
+		D_DEBUG(DB_TRACE, "RF broken, found %d fail, DOWN %d, newly "
+			"fail %d, max_overlapped %d, rf %d, "DF_RC"\n",
 			fstat->pf_node_nr, fstat->pf_down_nr,
 			fstat->pf_newfail_nr, max_fail_nr,
 			fstat->pf_rf, DP_RC(rc));
