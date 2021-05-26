@@ -107,7 +107,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
-        self.nr_hugepages = BasicParameter(None, 1024)
+        self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")

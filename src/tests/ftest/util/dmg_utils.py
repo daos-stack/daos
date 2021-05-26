@@ -228,7 +228,7 @@ class DmgCommand(DmgCommandBase):
         self.timeout = saved_timeout
         return self.result
 
-    def storage_prepare(self, user=None, nvme=False,
+    def storage_prepare(self, user=None, hugepages="4096", nvme=False,
                         scm=False, reset=False, force=True):
         """Get the result of the dmg storage format command.
 
@@ -244,6 +244,7 @@ class DmgCommand(DmgCommandBase):
             "nvme_only": nvme,
             "scm_only": scm,
             "target_user": getuser() if user is None else user,
+            "hugepages": hugepages,
             "reset": reset,
             "force": force
         }
