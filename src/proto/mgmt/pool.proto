@@ -110,6 +110,8 @@ message PoolExtendReq {
 // PoolExtendResp returns resultant state of Extend operation.
 message PoolExtendResp {
 	int32 status = 1; // DAOS error code
+	uint64 scm_bytes = 2; // SCM allocated on rank(s)
+	uint64 nvme_bytes = 3; // NVMe allocated on rank(s)
 }
 
 // PoolReintegrateReq supplies pool identifier, rank, and target_idxs.

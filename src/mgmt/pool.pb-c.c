@@ -2062,7 +2062,7 @@ const ProtobufCMessageDescriptor mgmt__pool_extend_req__descriptor =
   (ProtobufCMessageInit) mgmt__pool_extend_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_extend_resp__field_descriptors[1] =
+static const ProtobufCFieldDescriptor mgmt__pool_extend_resp__field_descriptors[3] =
 {
   {
     "status",
@@ -2076,14 +2076,40 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_resp__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "scm_bytes",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolExtendResp, scm_bytes),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nvme_bytes",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolExtendResp, nvme_bytes),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_extend_resp__field_indices_by_name[] = {
+  2,   /* field[2] = nvme_bytes */
+  1,   /* field[1] = scm_bytes */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__pool_extend_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor =
 {
@@ -2093,7 +2119,7 @@ const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor =
   "Mgmt__PoolExtendResp",
   "mgmt",
   sizeof(Mgmt__PoolExtendResp),
-  1,
+  3,
   mgmt__pool_extend_resp__field_descriptors,
   mgmt__pool_extend_resp__field_indices_by_name,
   1,  mgmt__pool_extend_resp__number_ranges,
