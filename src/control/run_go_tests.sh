@@ -170,9 +170,6 @@ echo "  CGO_CFLAGS: $CGO_CFLAGS"
 echo "  CPU Perf: $(get_cpu_perf)"
 echo
 
-echo "---- Go Tests Disabled ----"
-exit 0
-
 echo "Running all tests under $controldir..."
 pushd "$controldir" >/dev/null
 set +e
