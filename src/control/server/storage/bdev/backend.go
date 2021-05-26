@@ -263,7 +263,7 @@ func (sb *spdkBackend) formatAioFile(req *FormatRequest) (*FormatResponse, error
 	return resp, nil
 }
 
-// TODO: implement kdev fs format
+// TODO DAOS-6039: implement kdev fs format
 func (sb *spdkBackend) formatKdev(req *FormatRequest) (*FormatResponse, error) {
 	resp := &FormatResponse{
 		DeviceResponses: make(DeviceFormatResponses),
@@ -281,8 +281,7 @@ func (sb *spdkBackend) formatKdev(req *FormatRequest) (*FormatResponse, error) {
 	return resp, nil
 }
 
-// Format delegates to class specific format function to fulfil the format
-// request.
+// Format delegates to class specific format functions.
 func (sb *spdkBackend) Format(req FormatRequest) (resp *FormatResponse, err error) {
 	// TODO (DAOS-3844): Kick off device formats parallel?
 	switch req.Class {
