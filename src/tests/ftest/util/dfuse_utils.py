@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import os
 import time
 
 from command_utils_base import CommandFailure, FormattedParameter
@@ -32,10 +31,8 @@ class DfuseCommand(ExecutableCommand):
         self.disable_wb_caching = FormattedParameter("--disable-wb-cache",
                                                      False)
 
-        os.environ['DD_MASK'] = 'all'
-        os.environ['DD_SUBSYS'] = 'all'
         # Environment variable names to export when running dfuse
-        self.update_env_names(["D_LOG_FILE", 'DD_MASK', 'DD_SUBSYS'])
+        self.update_env_names(["D_LOG_FILE"])
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse params for the DAOS group, pool, and container uuid.
