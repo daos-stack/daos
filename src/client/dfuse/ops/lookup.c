@@ -25,14 +25,15 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
-	/* Do not cache directory attributes as this does not work with uns */
-	if (!S_ISDIR(ie->ie_stat.st_mode))
-		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+	if (S_ISDIR(ie->ie_stat.st_mode))
+		entry.entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
+	else
+		entry.entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
+
+	/* Set the attr caching attributes of this entry */
+	entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 
 	ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
-
-	/* Set the caching attributes of this entry */
-	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
@@ -90,6 +91,9 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		DFUSE_TRA_DEBUG(inode,
 				"Maybe updating parent inode %#lx dfs_ino %#lx",
 				entry.ino, ie->ie_dfs->dfs_ino);
+
+		/** update the chunk size and oclass of inode entry */
+		dfs_obj_copy_attr(inode->ie_obj, ie->ie_obj);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
@@ -197,13 +201,13 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*ie = NULL;
+	struct dfuse_inode_entry	*ie;
 	int				rc;
 	char				out[DUNS_MAX_XATTR_LEN];
 	char				*outp = &out[0];
 	daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
 
-	DFUSE_TRA_DEBUG(fs_handle,
+	DFUSE_TRA_DEBUG(parent,
 			"Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
@@ -252,11 +256,10 @@ out_release:
 out_free:
 	D_FREE(ie);
 out:
-	if (rc == ENOENT && parent->ie_dfs->dfs_attr_timeout > 0) {
+	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
 		struct fuse_entry_param entry = {};
 
-		entry.entry_timeout = parent->ie_dfs->dfs_attr_timeout;
-
+		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);

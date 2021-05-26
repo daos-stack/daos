@@ -2909,7 +2909,7 @@ io_nospace(void **state)
 	struct ioreq	req;
 	int		buf_size = 1 << 20;
 	char		*large_buf;
-	char		key[10];
+	char		key[32];
 	int		i;
 
 	FAULT_INJECTION_REQUIRED();

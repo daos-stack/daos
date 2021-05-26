@@ -118,7 +118,7 @@ type (
 		msRequest
 		unaryRequest
 		retryableRequest
-		Name       string
+		Label      string
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList

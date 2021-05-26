@@ -28,12 +28,14 @@ type (
 		GetfsUsageTotal uint64
 		GetfsUsageAvail uint64
 		GetfsUsageErr   error
+		isMounted       map[string]bool
+		statErrors      map[string]error
+		realStat        bool
 	}
 
 	MockSysProvider struct {
 		sync.RWMutex
-		cfg       MockSysConfig
-		isMounted map[string]bool
+		cfg MockSysConfig
 	}
 )
 
@@ -54,7 +56,7 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 
 	msp.RLock()
 	defer msp.RUnlock()
-	isMounted, exists := msp.isMounted[target]
+	isMounted, exists := msp.cfg.isMounted[target]
 	if !exists {
 		return msp.cfg.IsMountedBool, err
 	}
@@ -65,7 +67,7 @@ func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) erro
 	if msp.cfg.MountErr == nil {
 		msp.Lock()
 		defer msp.Unlock()
-		msp.isMounted[target] = true
+		msp.cfg.isMounted[target] = true
 	}
 	return msp.cfg.MountErr
 }
@@ -74,7 +76,7 @@ func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
 		msp.Lock()
 		defer msp.Unlock()
-		msp.isMounted[target] = false
+		msp.cfg.isMounted[target] = false
 	}
 	return msp.cfg.UnmountErr
 }
@@ -91,13 +93,31 @@ func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
 	return msp.cfg.GetfsUsageTotal, msp.cfg.GetfsUsageAvail, msp.cfg.GetfsUsageErr
 }
 
+func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {
+	msp.RLock()
+	defer msp.RUnlock()
+
+	if msp.cfg.realStat {
+		return os.Stat(path)
+	}
+
+	// default return value for missing key is nil so
+	// add entries to indicate path failure e.g. perms or not-exist
+	return nil, msp.cfg.statErrors[path]
+}
+
 func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {
 	if cfg == nil {
 		cfg = &MockSysConfig{}
 	}
+	if cfg.isMounted == nil {
+		cfg.isMounted = make(map[string]bool)
+	}
+	if cfg.statErrors == nil {
+		cfg.realStat = true
+	}
 	return &MockSysProvider{
-		cfg:       *cfg,
-		isMounted: make(map[string]bool),
+		cfg: *cfg,
 	}
 }
 

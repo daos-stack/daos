@@ -15,7 +15,7 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
 // PoolCreateReq supplies new pool parameters.
 message PoolCreateReq {
 	string uuid = 1; // UUID for new pool, generated on the client
-	string name = 2; // Unique name for pool (optional)
+	string label = 2; // Unique label for pool (optional)
 	string sys = 3; // DAOS system identifier
 	string user = 4; // formatted user e.g. "bob@"
 	string usergroup = 5; // formatted group e.g. "builders@"

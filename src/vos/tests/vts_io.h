@@ -27,9 +27,9 @@
 #include <vos_obj.h>
 #include <vos_internal.h>
 
-#define UPDATE_DKEY_SIZE	32
+#define UPDATE_DKEY_SIZE	64
 #define UPDATE_DKEY		"dkey"
-#define UPDATE_AKEY_SIZE	32
+#define UPDATE_AKEY_SIZE	64
 #define UPDATE_AKEY		"akey"
 #define UPDATE_AKEY_SV		"akey.sv"
 #define UPDATE_AKEY_ARRAY	"akey.array"
