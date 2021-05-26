@@ -17,7 +17,7 @@ import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
-import org.apache.commons.lang3.StringUtils;
+import io.daos.DaosUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -157,15 +157,15 @@ public class DaosConfigFile {
     setUuid(authority, Constants.DAOS_POOL_UUID, hadoopConfig);
     setUuid(authority, Constants.DAOS_CONTAINER_UUID, hadoopConfig);
     //set other configurations after the UUIDs are set
-    return merge(StringUtils.isEmpty(authority) ? "" : (authority + "."), hadoopConfig, null);
+    return merge(DaosUtils.isEmptyStr(authority) ? "" : (authority + "."), hadoopConfig, null);
   }
 
   private void setUuid(String authority, String configName, Configuration hadoopConfig) {
     String hid = hadoopConfig.get(configName);
-    if (StringUtils.isEmpty(authority)) { // default URI
-      if (StringUtils.isEmpty(hid)) { // make sure UUID is set
+    if (DaosUtils.isEmptyStr(authority)) { // default URI
+      if (DaosUtils.isEmptyStr(hid)) { // make sure UUID is set
         String did = defaultConfig.get(configName);
-        if (StringUtils.isEmpty(did)) {
+        if (DaosUtils.isEmptyStr(did)) {
           throw new IllegalArgumentException(configName + " is neither specified nor default value found.");
         }
         hadoopConfig.set(configName, did);
@@ -173,9 +173,9 @@ public class DaosConfigFile {
       return;
     }
     // non-default
-    if (StringUtils.isEmpty(hid)) { // make sure UUID is set
+    if (DaosUtils.isEmptyStr(hid)) { // make sure UUID is set
       String did = defaultConfig.get(authority + "." + configName) ;
-      if (StringUtils.isEmpty(did)) {
+      if (DaosUtils.isEmptyStr(did)) {
         throw new IllegalArgumentException(configName + " is neither specified nor default value found for authority " +
                 authority);
       }
@@ -200,7 +200,7 @@ public class DaosConfigFile {
       String name = it.next();
       if (excludeProps == null || !excludeProps.contains(name)) {
         if (hadoopConfig.get(name) == null) { //not set by user
-          String value = StringUtils.isEmpty(authority) ? defaultConfig.get(name) :
+          String value = DaosUtils.isEmptyStr(authority) ? defaultConfig.get(name) :
               defaultConfig.get(authority + name, defaultConfig.get(name));
           if (value != null) {
             hadoopConfig.set(name, value);
