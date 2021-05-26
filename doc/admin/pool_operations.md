@@ -34,6 +34,8 @@ $ dmg pool create --help
       -t, --tier-ratio= Distribution of pool storage allocation over storage tiers (auto)
       -k, --nranks=     Number of ranks to use (auto) (default: all)
       -v, --nsvc=       Number of pool service replicas (default: 3)
+      -s, --scm-size=   Per-server SCM allocation for DAOS pool (manual)
+      -n, --nvme-size=  Per-server NVMe allocation for DAOS pool (manual)
       -r, --ranks=      Storage server unique identifiers (ranks) for DAOS pool
       -S, --sys=        DAOS system that pool is to be a part of (default: daos_server)
 ```
