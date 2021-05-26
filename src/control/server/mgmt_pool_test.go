@@ -794,10 +794,9 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 		State:    system.PoolServiceStateReady,
 		Replicas: []system.Rank{0},
 		Storage: &system.PoolServiceStorage{
-			CreationRankStr: "0",
-			CurrentRankStr:  "0",
-			ScmPerRank:      scmAllocation,
-			NVMePerRank:     nvmeAllocation,
+			CreationRankStr:    "0",
+			CurrentRankStr:     "0",
+			PerRankTierStorage: []uint64{scmAllocation, nvmeAllocation},
 		},
 	}
 
@@ -846,8 +845,7 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 		"successfully extended": {
 			req: &mgmtpb.PoolExtendReq{Uuid: mockUUID, Ranks: []uint32{1}},
 			expResp: &mgmtpb.PoolExtendResp{
-				ScmBytes:  scmAllocation,
-				NvmeBytes: nvmeAllocation,
+				TierBytes: []uint64{scmAllocation, nvmeAllocation},
 			},
 		},
 	} {

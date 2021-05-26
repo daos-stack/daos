@@ -378,13 +378,10 @@ struct  _Mgmt__PoolExtendReq
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
   /*
-   * SCM size in bytes
+   * Size in bytes of storage tiers
    */
-  uint64_t scmbytes;
-  /*
-   * NVMe size in bytes
-   */
-  uint64_t nvmebytes;
+  size_t n_tierbytes;
+  uint64_t *tierbytes;
   /*
    * fault domain tree, minimal format
    */
@@ -393,7 +390,7 @@ struct  _Mgmt__PoolExtendReq
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL }
 
 
 /*
@@ -407,17 +404,14 @@ struct  _Mgmt__PoolExtendResp
    */
   int32_t status;
   /*
-   * SCM allocated on rank(s)
+   * storage tiers allocated to pool
    */
-  uint64_t scm_bytes;
-  /*
-   * NVMe allocated on rank(s)
-   */
-  uint64_t nvme_bytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
 };
 #define MGMT__POOL_EXTEND_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_resp__descriptor) \
-    , 0, 0, 0 }
+    , 0, 0,NULL }
 
 
 /*

@@ -83,7 +83,7 @@ func (svc *mgmtSvc) getPoolServiceStorage(uuidStr string) ([]uint64, error) {
 		return nil, err
 	}
 
-	return []uint64{ps.Storage.ScmPerRank, ps.Storage.NVMePerRank}, nil
+	return ps.Storage.PerRankTierStorage, nil
 }
 
 // getPoolServiceRanks returns a slice of ranks designated as the
@@ -291,7 +291,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	ps = system.NewPoolService(uuid, req.Tierbytes[0], req.Tierbytes[1], system.RanksFromUint32(req.GetRanks()))
+	ps = system.NewPoolService(uuid, req.Tierbytes, system.RanksFromUint32(req.GetRanks()))
 	ps.PoolLabel = req.GetLabel()
 	if err := svc.sysdb.AddPoolService(ps); err != nil {
 		return nil, err
@@ -553,8 +553,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 	if err != nil {
 		return nil, err
 	}
-	req.Scmbytes = ps.Storage.ScmPerRank
-	req.Nvmebytes = ps.Storage.NVMePerRank
+	req.Tierbytes = ps.Storage.PerRankTierStorage
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 

@@ -245,12 +245,6 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expErr: drpc.DaosIOError,
 		},
-		"mixture of auto/manual storage params": {
-			req: &PoolCreateReq{
-				TotalBytes: 10,
-			},
-			expErr: errors.New("can't mix"),
-		},
 		"missing storage params": {
 			req:    &PoolCreateReq{},
 			expErr: errors.New("size of 0"),
