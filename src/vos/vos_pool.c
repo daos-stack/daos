@@ -715,7 +715,8 @@ failed:
 }
 
 int
-vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *poh)
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
+	      daos_handle_t *poh)
 {
 	struct vos_pool_df	*pool_df;
 	struct vos_pool		*pool = NULL;
