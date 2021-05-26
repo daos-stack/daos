@@ -122,8 +122,9 @@ char *d_realpath(const char *path, char *resolved_path);
 	do {								\
 		(ptr) = d_strndup(s, n);				\
 		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\
-			      strnlen(s, n + 1) + 1, 0, #ptr, 0);	\
+			      strnlen(s, n) + 1, 0, #ptr, 0);		\
 	} while (0)
+
 
 #define D_ASPRINTF(ptr, ...)						\
 	do {								\
