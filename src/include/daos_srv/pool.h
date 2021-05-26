@@ -74,16 +74,16 @@ struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;	/* pool UUID */
 	ABT_rwlock		sp_lock;
-	struct pool_map	       *sp_map;
+	struct pool_map		*sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
-	struct policy_desc_t	sp_policy_desc;	/* pool tiering policy descriptor */
-	crt_group_t	       *sp_group;
+	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
+	crt_group_t		*sp_group;
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
-	struct ds_iv_ns	       *sp_iv_ns;
+	struct ds_iv_ns		*sp_iv_ns;
 
 	/* structure related to EC aggregate epoch query */
 	d_list_t		sp_ec_ephs_list;

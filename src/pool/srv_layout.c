@@ -83,7 +83,8 @@ int
 ds_pool_prop_default_init(void)
 {
 	struct daos_prop_entry	*entry;
-	struct policy_desc_t 	*pd;
+	struct policy_desc_t	*pd;
+	int 			i;
 
 	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_ACL);
 	if (entry != NULL) {
@@ -101,7 +102,7 @@ ds_pool_prop_default_init(void)
 		if (pd == NULL)
 			return -DER_NOMEM;
 		pd->policy = DAOS_MEDIA_POLICY_IO_SIZE;
-		for (int i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++){
+		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++) {
 			pd->params[i] = 0;
 		}
 

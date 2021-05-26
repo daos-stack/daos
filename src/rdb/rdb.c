@@ -14,7 +14,6 @@
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
-#include <daos_srv/pool.h>
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
@@ -360,7 +359,6 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	uuid_t			uuid_persist;
 	uint32_t		version;
 	int			rc;
-
 
 	D_INFO(DF_UUID": starting RDB %s\n", DP_UUID(uuid), path);
 

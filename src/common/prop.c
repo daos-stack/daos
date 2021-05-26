@@ -228,7 +228,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 	uint32_t		type;
 	uint64_t		val;
 	struct daos_acl		*acl_ptr;
-	struct policy_desc_t 	*pd;
+	struct policy_desc_t	*pd;
 	int			i;
 
 	if (prop == NULL) {
@@ -286,11 +286,11 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_POLICY:
 			pd = prop->dpp_entries[i].dpe_val_ptr;
 			if (pd == NULL) {
-				D_ERROR("null policy descriptor! \n");
+				D_ERROR("null policy descriptor!\n");
 				return false;
-			}
-			else if (pd->policy >= DAOS_MEDIA_POLICY_MAX) {
-				D_ERROR("invalid policy index "DF_U64"\n", (uint64_t)pd->policy);
+			} else if (pd->policy >= DAOS_MEDIA_POLICY_MAX) {
+				D_ERROR("invalid policy index "DF_U64"\n",
+					(uint64_t)pd->policy);
 				return false;
 			}
 			break;
@@ -474,6 +474,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	const d_rank_list_t	*svc_list;
 	d_rank_list_t		*dst_list;
 	int			rc;
+	struct policy_desc_t 	*pd;
 
 	D_ASSERT(entry != NULL);
 	D_ASSERT(entry_dup != NULL);
@@ -530,13 +531,13 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 		}
 		break;
 	case DAOS_PROP_PO_POLICY:
-		D_ASSERT(entry->dpe_val_ptr != NULL);
-		D_ALLOC(entry_dup->dpe_val_ptr, sizeof(*entry->dpe_val_ptr));
-		if (entry_dup->dpe_val_ptr == NULL){
+		pd = entry->dpe_val_ptr;
+		D_ALLOC(entry_dup->dpe_val_ptr,	sizeof(*pd));
+		if (entry_dup->dpe_val_ptr == NULL) {
 			D_ERROR("failed to dup pool policy\n");
 			return -DER_NOMEM;
 		}
-		memcpy(entry_dup->dpe_val_ptr, entry->dpe_val_ptr, sizeof(*entry->dpe_val_ptr));
+		memcpy(entry_dup->dpe_val_ptr, pd, sizeof(*pd));
 		break;
 	default:
 		entry_dup->dpe_val = entry->dpe_val;
@@ -639,6 +640,7 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	struct daos_acl		*acl;
 	d_rank_list_t		*dst_list;
 	struct policy_desc_t	*pd;
+	struct policy_desc_t	*pd_reply;
 	uint32_t		 type;
 	int			 i;
 	int			 rc = 0;
@@ -715,11 +717,12 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			roots_alloc = true;
 		} else if (type == DAOS_PROP_PO_POLICY) {
 			pd = entry_req->dpe_val_ptr;
-			D_ALLOC(pd, sizeof(*entry_reply->dpe_val_ptr));
+			pd_reply = entry_reply->dpe_val_ptr;
+			D_ALLOC(pd, sizeof(*pd_reply));
 			if (pd == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
-			memcpy(pd, entry_reply->dpe_val_ptr, sizeof(*entry_reply->dpe_val_ptr));
+			memcpy(pd, pd_reply, sizeof(*pd_reply));
 			policy_alloc = true;
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
@@ -752,7 +755,7 @@ out:
 		if (roots_alloc)
 			free_ptr_prop_entry(prop_req, DAOS_PROP_CO_ROOTS);
 
-		if(policy_alloc)
+		if (policy_alloc)
 			free_ptr_prop_entry(prop_req, DAOS_PROP_PO_POLICY);
 
 		if (entries_alloc)

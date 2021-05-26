@@ -341,11 +341,6 @@ daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
 	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
 }
 
-// struct daos_prop_params {
-// 	uint64_t dpp_num_params;
-// 	uint64_t *dpp_params_arr;
-// };
-
 struct daos_prop_entry {
 	/** property type, see enum daos_pool_props/daos_cont_props */
 	uint32_t		 dpe_type;

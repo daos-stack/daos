@@ -15,9 +15,9 @@
 
 /** tier placement policy */
 enum tier_policy_t {
-        DAOS_MEDIA_POLICY_IO_SIZE,
-        DAOS_MEDIA_POLICY_WRITE_INTENSIVITY,
-        DAOS_MEDIA_POLICY_MAX
+	DAOS_MEDIA_POLICY_IO_SIZE,
+	DAOS_MEDIA_POLICY_WRITE_INTENSIVITY,
+	DAOS_MEDIA_POLICY_MAX
 };
 
 /** max amount of policy parameters */
@@ -25,8 +25,8 @@ enum tier_policy_t {
 
 /** policy descriptor - holds policy index and optional parameters */
 struct policy_desc_t {
-        enum tier_policy_t      policy;
-        uint32_t                params[DAOS_MEDIA_POLICY_PARAMS_MAX];
+	enum tier_policy_t	policy;
+	uint32_t		params[DAOS_MEDIA_POLICY_PARAMS_MAX];
 };
 
 #endif

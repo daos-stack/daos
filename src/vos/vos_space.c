@@ -229,8 +229,8 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 		/* Single value */
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			size = iod->iod_size;
-			media = vos_policy_media_select(pool, iod->iod_type, size,
-							VOS_IOS_GENERIC);
+			media = vos_policy_media_select(pool, iod->iod_type,
+							size, VOS_IOS_GENERIC);
 
 			/* Single value record */
 			if (media == DAOS_MEDIA_SCM) {
@@ -251,8 +251,8 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 			recx_csum = csums ? &csums[j] : NULL;
 
 			size = recx->rx_nr * iod->iod_size;
-			media = vos_policy_media_select(pool, iod->iod_type, size,
-							VOS_IOS_GENERIC);
+			media = vos_policy_media_select(pool, iod->iod_type,
+							size, VOS_IOS_GENERIC);
 
 			/* Extent */
 			if (media == DAOS_MEDIA_SCM)
