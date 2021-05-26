@@ -308,14 +308,16 @@ agg_clear_extents(struct ec_agg_entry *entry)
 			entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 		}
 
-		entry->ae_cur_stripe.as_extent_cnt--;
-		d_list_del(&extent->ae_link);
 		if (extent->ae_orig_recx.rx_idx + extent->ae_orig_recx.rx_nr >
 		    next_stripe_st && !tail) {
+			d_list_del(&extent->ae_link);
+			entry->ae_cur_stripe.as_extent_cnt--;
 			d_list_add_tail(&extent->ae_link,
 					&entry->ae_cur_stripe.as_hoextents);
 			entry->ae_cur_stripe.as_ho_ext_cnt++;
 		} else if (!tail) {
+			d_list_del(&extent->ae_link);
+			entry->ae_cur_stripe.as_extent_cnt--;
 			D_FREE_PTR(extent);
 		}
 	}
