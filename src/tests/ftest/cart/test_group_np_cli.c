@@ -100,7 +100,7 @@ test_run(void)
 	int			 rc = 0;
 	uint32_t		*_cg_ranks;
 	int			 _cg_num_ranks;
-	char  			msg[256];
+	char			msg[256];
 
 	if (test_g.t_skip_init) {
 		DBG_PRINT("Skipping init stage.\n");
