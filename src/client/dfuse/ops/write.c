@@ -56,6 +56,23 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	if (rc != len)
 		D_GOTO(err, rc = EIO);
 
+	/* DAOS-7671 Use an extra bounce buffer if there are any
+	 * flags set on the input buffer.
+	 */
+	if (bufv->buf[0].flags != 0) {
+		void *bbuf;
+
+		D_ALLOC(bbuf, len);
+		if (bbuf == NULL)
+			D_GOTO(err, rc = EIO);
+
+		memcpy(bbuf, ibuf.buf[0].mem, len);
+		D_FREE(ibuf.buf[0].mem);
+		d_iov_set(&ev->de_iov, bbuf, len);
+	} else {
+		d_iov_set(&ev->de_iov, ibuf.buf[0].mem, len);
+	}
+
 	rc = daos_event_init(&ev->de_ev, fs_handle->dpi_eq, NULL);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err, rc = daos_der2errno(rc));
@@ -65,7 +82,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	ev->de_complete_cb = dfuse_cb_write_complete;
 
 	ev->de_sgl.sg_nr = 1;
-	d_iov_set(&ev->de_iov, ibuf.buf[0].mem, len);
+
 	ev->de_sgl.sg_iovs = &ev->de_iov;
 
 	/* Check for potentially using readahead on this file, ie_truncated
