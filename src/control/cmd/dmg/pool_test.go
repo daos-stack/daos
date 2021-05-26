@@ -313,24 +313,22 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Extend a pool with a single rank",
-			fmt.Sprintf("pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1 --scm-size %s", testScmSizeStr),
+			fmt.Sprintf("pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1"),
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
-					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks:    []system.Rank{1},
-					ScmBytes: uint64(testScmSize),
+					UUID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks: []system.Rank{1},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Extend a pool with multiple ranks",
-			fmt.Sprintf("pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1,2,3 --scm-size %s", testScmSizeStr),
+			fmt.Sprintf("pool extend --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1,2,3"),
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
-					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks:    []system.Rank{1, 2, 3},
-					ScmBytes: uint64(testScmSize),
+					UUID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks: []system.Rank{1, 2, 3},
 				}),
 			}, " "),
 			nil,
