@@ -294,3 +294,28 @@ func (f *labelOrUUID) UnmarshalFlag(fv string) error {
 	f.Label = fv
 	return nil
 }
+
+type epochRange struct {
+	set   bool
+	begin uint64
+	end   uint64
+}
+
+func (er *epochRange) String() string {
+	return fmt.Sprintf("%d-%d", er.begin, er.end)
+}
+
+func (er *epochRange) UnmarshalFlag(fv string) error {
+	er.set = true
+	n, err := fmt.Sscanf(fv, "%d-%d", &er.begin, &er.end)
+	if err != nil {
+		return err
+	}
+	if n != 2 {
+		return errors.Errorf("range=%q must be in A-B form", fv)
+	}
+	if er.begin >= er.end {
+		return errors.Errorf("range begin must be < end")
+	}
+	return nil
+}

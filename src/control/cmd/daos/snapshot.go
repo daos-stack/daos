@@ -7,8 +7,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/pkg/errors"
 )
 
@@ -59,8 +57,8 @@ func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
 type containerSnapshotDestroyCmd struct {
 	existingContainerCmd
 
-	Epoch uint64 `long:"epc" short:"e" description:"snapshot epoch to delete"`
-	Range string `long:"range" short:"r" description:"range of snapshot epochs to delete"`
+	Epoch      uint64     `long:"epc" short:"e" description:"snapshot epoch to delete"`
+	EpochRange epochRange `long:"epcrange" short:"r" description:"range of snapshot epochs to delete"`
 }
 
 func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
@@ -79,15 +77,9 @@ func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
 	if cmd.Epoch > 0 {
 		ap.epc = C.uint64_t(cmd.Epoch)
 	}
-	if cmd.Range != "" {
-		var begin uint64
-		var end uint64
-		_, err = fmt.Sscanf(cmd.Range, "%d-%d", &begin, &end)
-		if err != nil {
-			return errors.Wrapf(err,
-				"failed to parse range %q (must be in A-B format)",
-				cmd.Range)
-		}
+	if cmd.EpochRange.set {
+		ap.epcrange_begin = C.uint64_t(cmd.EpochRange.begin)
+		ap.epcrange_end = C.uint64_t(cmd.EpochRange.end)
 	}
 
 	rc := C.cont_destroy_snap_hdlr(ap)

@@ -38,6 +38,7 @@ type containerCmd struct {
 	Query       containerQueryCmd       `command:"query" description:"query a container"`
 	Stat        containerStatCmd        `command:"stat" description:"get container statistics"`
 	Clone       containerCloneCmd       `command:"clone" description:"clone a container"`
+	Check       containerCheckCmd       `command:"check" description:"check objects' consistency in a container"`
 
 	ListAttributes  containerListAttributesCmd  `command:"list-attributes" alias:"list-attrs" description:"list container user-defined attributes"`
 	DeleteAttribute containerDeleteAttributeCmd `command:"delete-attribute" alias:"del-attr" description:"delete container user-defined attribute"`
@@ -493,6 +494,39 @@ func (cmd *containerCloneCmd) Execute(_ []string) error {
 		return errors.Wrapf(err,
 			"failed to clone container %s",
 			cmd.Source)
+	}
+
+	return nil
+}
+
+type containerCheckCmd struct {
+	existingContainerCmd
+
+	Epoch uint64 `long:"epc" short:"e" description:"container epoch"`
+}
+
+func (cmd *containerCheckCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	if cmd.Epoch > 0 {
+		ap.epc = C.uint64_t(cmd.Epoch)
+	}
+
+	rc := C.cont_check_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to check container %s",
+			cmd.ContainerID())
 	}
 
 	return nil
