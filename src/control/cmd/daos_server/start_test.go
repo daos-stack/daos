@@ -45,7 +45,7 @@ func genMinimalConfig() *config.Server {
 		WithEngines(
 			engine.NewConfig().
 				WithStorage(
-					storage.NewConfig().
+					storage.NewTierConfig().
 						WithScmClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("/mnt/daos"),
@@ -63,7 +63,7 @@ func genDefaultExpected() *config.Server {
 		WithEngines(
 			engine.NewConfig().
 				WithStorage(
-					storage.NewConfig().
+					storage.NewTierConfig().
 						WithBdevHostname(hostname).
 						WithScmClass("ram").
 						WithScmRamdiskSize(1).
@@ -143,14 +143,14 @@ func TestStartOptions(t *testing.T) {
 		"Storage Path (short)": {
 			argList: []string{"-s", "/foo/bar"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Engines[0].Storage[0].WithScmMountPoint("/foo/bar")
+				cfg.Engines[0].Storage.Tiers[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},
 		"Storage Path (long)": {
 			argList: []string{"--storage=/foo/bar"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Engines[0].Storage[0].WithScmMountPoint("/foo/bar")
+				cfg.Engines[0].Storage.Tiers[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},

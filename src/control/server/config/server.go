@@ -205,18 +205,6 @@ func (cfg *Server) WithEngines(engineList ...*engine.Config) *Server {
 	return cfg
 }
 
-// WithScmMountPoint sets the SCM mountpoint for the first I/O Engine.
-//
-// Deprecated: This function exists to ease transition away from
-// specifying the SCM mountpoint via daos_server CLI flag. Future
-// versions will require the mountpoint to be set via configuration.
-func (cfg *Server) WithScmMountPoint(mp string) *Server {
-	/*if len(cfg.Engines) > 0 {
-		cfg.Engines[0].WithScmMountPoint(mp)
-	}*/
-	return cfg
-}
-
 // WithAccessPoints sets the access point list.
 func (cfg *Server) WithAccessPoints(aps ...string) *Server {
 	cfg.AccessPoints = aps
