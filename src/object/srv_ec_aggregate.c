@@ -308,14 +308,16 @@ agg_clear_extents(struct ec_agg_entry *entry)
 			entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 		}
 
-		entry->ae_cur_stripe.as_extent_cnt--;
-		d_list_del(&extent->ae_link);
 		if (extent->ae_orig_recx.rx_idx + extent->ae_orig_recx.rx_nr >
 		    next_stripe_st && !tail) {
+			d_list_del(&extent->ae_link);
+			entry->ae_cur_stripe.as_extent_cnt--;
 			d_list_add_tail(&extent->ae_link,
 					&entry->ae_cur_stripe.as_hoextents);
 			entry->ae_cur_stripe.as_ho_ext_cnt++;
 		} else if (!tail) {
+			d_list_del(&extent->ae_link);
+			entry->ae_cur_stripe.as_extent_cnt--;
 			D_FREE_PTR(extent);
 		}
 	}
@@ -603,7 +605,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	epoch = is_recalc ? stripe->as_hi_epoch :
 		entry->ae_par_extent.ape_epoch;
 	rc = dsc_obj_fetch(entry->ae_obj_hdl, epoch, &entry->ae_dkey, 1, &iod,
-			   &sgl, NULL, DIOF_FOR_EC_AGG, NULL, NULL);
+			   &sgl, NULL, 0, NULL, NULL);
 	if (rc)
 		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
@@ -1030,8 +1032,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 		rc = dsc_obj_fetch(entry->ae_obj_hdl,
 				   entry->ae_par_extent.ape_epoch,
 				   &entry->ae_dkey, 1, &iod, &sgl, NULL,
-				   DIOF_TO_SPEC_SHARD | DIOF_FOR_EC_AGG,
-				   &peer_shard, NULL);
+				   DIOF_TO_SPEC_SHARD, &peer_shard, NULL);
 		D_DEBUG(DB_TRACE, DF_UOID" fetch parity from peer shard %d, "
 			DF_RC".\n", DP_UOID(entry->ae_oid), peer_shard,
 			DP_RC(rc));
@@ -1631,7 +1632,7 @@ agg_process_holes_ult(void *arg)
 		rc = dsc_obj_fetch(entry->ae_obj_hdl,
 				   entry->ae_cur_stripe.as_hi_epoch,
 				   &entry->ae_dkey, 1, &iod, &entry->ae_sgl,
-				   NULL, DIOF_FOR_EC_AGG, NULL, NULL);
+				   NULL, 0, NULL, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 			goto out;

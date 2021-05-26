@@ -289,35 +289,26 @@ enum {
 	DAOS_PROP_CO_UNCLEAN,
 };
 
-/** clear the UNCLEAN status */
-#define DAOS_PROP_CO_CLEAR	(0x1)
 struct daos_co_status {
 	/* DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
-	uint16_t	dcs_status;
-	/* flags for DAOS internal usage, DAOS_PROP_CO_CLEAR */
-	uint16_t	dcs_flags;
+	uint32_t	dcs_status;
 	/* pool map version when setting the dcs_status */
 	uint32_t	dcs_pm_ver;
 };
 
-#define DAOS_PROP_CO_STATUS_VAL(status, flag, pm_ver)			\
-	((((uint64_t)(flag)) << 48)		|			\
-	 (((uint64_t)(status) & 0xFFFF) << 32)	|			\
-	 ((uint64_t)(pm_ver)))
-
+#define DAOS_PROP_CO_STATUS_VAL(status, pm_ver)				\
+	((((uint64_t)(status)) << 32) | ((uint64_t)(pm_ver)))
 static inline uint64_t
 daos_prop_co_status_2_val(struct daos_co_status *co_status)
 {
 	return DAOS_PROP_CO_STATUS_VAL(co_status->dcs_status,
-				       co_status->dcs_flags,
 				       co_status->dcs_pm_ver);
 }
 
 static inline void
 daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
 {
-	co_status->dcs_flags = (uint16_t)(val >> 48);
-	co_status->dcs_status = (uint16_t)((val >> 32) & 0xFFFF);
+	co_status->dcs_status = (uint32_t)(val >> 32);
 	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
 }
 
