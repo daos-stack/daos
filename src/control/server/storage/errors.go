@@ -8,4 +8,7 @@ package storage
 
 import "github.com/pkg/errors"
 
-var ErrInvalidDcpmCount = errors.New("expected exactly 1 DCPM device")
+var (
+	ErrInvalidDcpmCount = errors.New("expected exactly 1 DCPM device")
+	ErrNoScmTiers       = errors.New("expected exactly 1 SCM tier in storage configuration")
+)

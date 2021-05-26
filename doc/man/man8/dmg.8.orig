@@ -1,4 +1,8 @@
+<<<<<<< HEAD
+.TH dmg 1 "17 May 2021"
+=======
 .TH dmg 1 "26 May 2021"
+>>>>>>> mjmac/storage_tier_tests
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS

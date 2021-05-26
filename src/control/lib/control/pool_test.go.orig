@@ -245,12 +245,6 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expErr: drpc.DaosIOError,
 		},
-		"mixture of auto/manual storage params": {
-			req: &PoolCreateReq{
-				TotalBytes: 10,
-			},
-			expErr: errors.New("can't mix"),
-		},
 		"missing storage params": {
 			req:    &PoolCreateReq{},
 			expErr: errors.New("size of 0"),
@@ -366,14 +360,22 @@ func TestControl_PoolQuery(t *testing.T) {
 							Records: 2,
 						},
 						TierStats: []*mgmtpb.StorageUsageStats{
+<<<<<<< HEAD
+							&mgmtpb.StorageUsageStats{
+=======
 							{
+>>>>>>> mjmac/storage_tier_tests
 								Total: 123456,
 								Free:  0,
 								Min:   1,
 								Max:   2,
 								Mean:  3,
 							},
+<<<<<<< HEAD
+							&mgmtpb.StorageUsageStats{
+=======
 							{
+>>>>>>> mjmac/storage_tier_tests
 								Total: 123456,
 								Free:  0,
 								Min:   1,
@@ -396,14 +398,22 @@ func TestControl_PoolQuery(t *testing.T) {
 						Records: 2,
 					},
 					TierStats: []*StorageUsageStats{
+<<<<<<< HEAD
+						&StorageUsageStats{
+=======
 						{
+>>>>>>> mjmac/storage_tier_tests
 							Total: 123456,
 							Free:  0,
 							Min:   1,
 							Max:   2,
 							Mean:  3,
 						},
+<<<<<<< HEAD
+						&StorageUsageStats{
+=======
 						{
+>>>>>>> mjmac/storage_tier_tests
 							Total: 123456,
 							Free:  0,
 							Min:   1,

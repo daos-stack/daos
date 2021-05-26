@@ -48,7 +48,7 @@ func (p *Provider) GetScmConfig() (*TierConfig, error) {
 	// many invasive code updates.
 	scmConfigs := p.engineStorage.Tiers.ScmConfigs()
 	if len(scmConfigs) != 1 {
-		return nil, errors.New("expected exactly 1 SCM tier in storage configuration")
+		return nil, ErrNoScmTiers
 	}
 	return scmConfigs[0], nil
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -164,7 +165,11 @@ func newTestEngine(log logging.Logger, isAP bool, engineCfg ...*engine.Config) *
 	rCfg.Running.SetTrue()
 	r := engine.NewTestRunner(rCfg, engineCfg[0])
 
-	srv := NewEngineInstance(log, nil, nil, r)
+	provider := storage.MockProvider(
+		log, 0, &engineCfg[0].Storage, nil, nil, nil,
+	)
+
+	srv := NewEngineInstance(log, provider, nil, r)
 	srv.setSuperblock(&Superblock{
 		Rank: system.NewRankPtr(0),
 	})
