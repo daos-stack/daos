@@ -705,8 +705,18 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			ctx := context.Background()
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1),
-				engine.NewConfig().WithTargetCount(1),
+				engine.NewConfig().
+					WithTargetCount(1).
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass("ram"),
+					),
+				engine.NewConfig().
+					WithTargetCount(1).
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass("ram"),
+					),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
@@ -716,11 +726,11 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 					continue
 				}
 
+				engineCfg := cfg.Engines[i]
+
 				testDir, cleanup := common.CreateTestDir(t)
 				defer cleanup()
-				engineCfg := engine.NewConfig().WithStorage(
-					storage.NewConfig().WithScmMountPoint(testDir),
-				)
+				engineCfg.Storage.Tiers[0].Scm.MountPoint = testDir
 
 				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {

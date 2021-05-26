@@ -43,7 +43,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 	}
 
 	for i, engineCfg := range cfg.Engines {
-		p := storage.DefaultProvider(log, i, engineCfg.Storage)
+		p := storage.DefaultProvider(log, i, &engineCfg.Storage)
 		rCfg := new(engine.TestRunnerConfig)
 		rCfg.Running.SetTrue()
 		runner := engine.NewTestRunner(rCfg, engineCfg)

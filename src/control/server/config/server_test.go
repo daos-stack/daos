@@ -238,11 +238,11 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithHelperStreamCount(6).
 				WithServiceThreadCore(0).
 				WithStorage(
-					storage.NewConfig().
+					storage.NewTierConfig().
 						WithScmMountPoint("/mnt/daos/1").
 						WithScmClass("ram").
 						WithScmRamdiskSize(16),
-					storage.NewConfig().
+					storage.NewTierConfig().
 						WithBdevClass("nvme").
 						WithBdevDeviceList("0000:81:00.0"),
 				).
@@ -259,11 +259,11 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithHelperStreamCount(6).
 				WithServiceThreadCore(22).
 				WithStorage(
-					storage.NewConfig().
+					storage.NewTierConfig().
 						WithScmMountPoint("/mnt/daos/2").
 						WithScmClass("dcpm").
 						WithScmDeviceList("/dev/pmem0"),
-					storage.NewConfig().
+					storage.NewTierConfig().
 						WithBdevClass("malloc").
 						WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
 						WithBdevDeviceCount(1).
@@ -545,11 +545,11 @@ func TestServerConfig_Parsing(t *testing.T) {
 						WithFabricInterface("qib0").
 						WithFabricInterfacePort(20000).
 						WithStorage(
-							storage.NewConfig().
+							storage.NewTierConfig().
 								WithScmClass("ram").
 								WithScmRamdiskSize(1).
 								WithScmMountPoint("/mnt/daos/2"),
-							storage.NewConfig().
+							storage.NewTierConfig().
 								WithBdevClass("nvme").
 								WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
 						))
@@ -670,7 +670,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithFabricInterface("a").
 			WithFabricInterfacePort(42).
 			WithStorage(
-				storage.NewConfig().
+				storage.NewTierConfig().
 					WithScmClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("a"),
@@ -682,7 +682,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithFabricInterface("b").
 			WithFabricInterfacePort(42).
 			WithStorage(
-				storage.NewConfig().
+				storage.NewTierConfig().
 					WithScmClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("b"),
@@ -783,7 +783,7 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 		return engine.NewConfig().
 			WithLogFile("a").
 			WithStorage(
-				storage.NewConfig().
+				storage.NewTierConfig().
 					WithScmClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("a"),
@@ -794,7 +794,7 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 		return engine.NewConfig().
 			WithLogFile("b").
 			WithStorage(
-				storage.NewConfig().
+				storage.NewTierConfig().
 					WithScmClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("b"),

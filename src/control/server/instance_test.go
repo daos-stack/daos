@@ -20,12 +20,19 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func getTestEngineInstance(logger logging.Logger) *EngineInstance {
-	runner := engine.NewRunner(logger, &engine.Config{})
-	return NewEngineInstance(logger, nil, nil, runner)
+func getTestEngineInstance(log logging.Logger) *EngineInstance {
+	cfg := engine.NewConfig().WithStorage(
+		storage.NewTierConfig().
+			WithScmClass("ram").
+			WithScmMountPoint("/foo/bar"),
+	)
+	runner := engine.NewRunner(log, cfg)
+	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil)
+	return NewEngineInstance(log, storage, nil, runner)
 }
 
 func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {
