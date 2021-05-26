@@ -70,23 +70,6 @@ vos_pool_pop2df(PMEMobjpool *pop)
 	return D_RW(pool_df);
 }
 
-static int
-umem_get_type(void)
-{
-	/* NB: BYPASS_PM and BYPASS_PM_SNAP can't coexist */
-	if (daos_io_bypass & IOBP_PM) {
-		D_PRINT("Running in DRAM mode, all data are volatile.\n");
-		return UMEM_CLASS_VMEM;
-
-	} else if (daos_io_bypass & IOBP_PM_SNAP) {
-		D_PRINT("Ignore PMDK snapshot, data can be lost on failure.\n");
-		return UMEM_CLASS_PMEM_NO_SNAP;
-
-	} else {
-		return UMEM_CLASS_PMEM;
-	}
-}
-
 static struct vos_pool *
 pool_hlink2ptr(struct d_ulink *hlink)
 {
@@ -138,7 +121,6 @@ static int
 pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 {
 	struct vos_pool		*pool;
-	struct umem_attr	 uma;
 
 	D_ALLOC_PTR(pool);
 	if (pool == NULL)
@@ -149,8 +131,6 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 	D_INIT_LIST_HEAD(&pool->vp_gc_cont);
 	uuid_copy(pool->vp_id, uuid);
 
-	memset(&uma, 0, sizeof(uma));
-	uma.uma_id = UMEM_CLASS_VMEM;
 	*pool_p = pool;
 	return 0;
 }
@@ -307,7 +287,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		scm_sz = lstat.st_size;
 	}
 
-	uma.uma_id = umem_get_type();
+	uma.uma_id = UMEM_CLASS_PMEM;
 	uma.uma_pool = ph;
 
 	rc = umem_class_init(&uma, &umem);
@@ -635,7 +615,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	}
 
 	uma = &pool->vp_uma;
-	uma->uma_id = umem_get_type();
+	uma->uma_id = UMEM_CLASS_PMEM;
 	uma->uma_pool = ph;
 
 	rc = vos_register_slabs(uma);
