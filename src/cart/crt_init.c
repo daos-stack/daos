@@ -825,7 +825,7 @@ int crt_na_ofi_config_init(int provider)
 	}
 	freeifaddrs(if_addrs);
 	if (ip_str == NULL) {
-		D_ERROR("no IP addr found.\n");
+		D_ERROR("no IP addr found on interface %s\n", interface);
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
