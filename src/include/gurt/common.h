@@ -125,7 +125,6 @@ char *d_realpath(const char *path, char *resolved_path);
 			      strnlen(s, n) + 1, 0, #ptr, 0);		\
 	} while (0)
 
-
 #define D_ASPRINTF(ptr, ...)						\
 	do {								\
 		int _rc;						\
