@@ -116,8 +116,6 @@ enum cont_operation {
 
 extern struct crt_proto_format cont_proto_fmt;
 
-#define CONT_OP_DUMMY_LABEL "NO LABEL, OPENING BY UUID"
-
 #define DAOS_ISEQ_CONT_OP	/* input fields */		 \
 				/* pool handle UUID */		 \
 	((uuid_t)		(ci_pool_hdl)		CRT_VAR) \

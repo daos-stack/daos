@@ -18,9 +18,6 @@ RDB_STRING_KEY(ds_cont_prop_, cuuids);
 RDB_STRING_KEY(ds_cont_prop_, conts);
 RDB_STRING_KEY(ds_cont_prop_, cont_handles);
 
-/* Container UUIDs KVS */
-RDB_STRING_KEY(ds_cont_prop_, cuuid);
-
 /* Container properties KVS */
 RDB_STRING_KEY(ds_cont_prop_, ghce);
 RDB_STRING_KEY(ds_cont_prop_, ghpce);
