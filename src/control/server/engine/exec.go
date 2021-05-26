@@ -79,8 +79,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.running.SetTrue()
 	defer r.running.SetFalse()
 
-	return errors.Wrapf(common.GetExitStatus(cmd.Wait()),
-		"%s (instance %d) exited", binPath, r.Config.Index)
+	return errors.Wrapf(common.GetExitStatus(cmd.Wait()), "%s exited", binPath)
 }
 
 // Start asynchronously starts the Engine instance.
@@ -116,6 +115,16 @@ func (r *Runner) Signal(signal os.Signal) error {
 	r.log.Debugf("Signalling I/O Engine instance %d (%s)", r.Config.Index, signal)
 
 	return r.cmd.Process.Signal(signal)
+}
+
+// GetLastPid returns the PID after runner has exited, return
+// zero if no cmd or ProcessState exists.
+func (r *Runner) GetLastPid() uint64 {
+	if r.cmd == nil || r.cmd.ProcessState == nil {
+		return 0
+	}
+
+	return uint64(r.cmd.ProcessState.Pid())
 }
 
 // GetConfig returns the runner's configuration

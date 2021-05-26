@@ -35,6 +35,9 @@
 	X(MGMT_POOL_GET_SVCRANKS,					\
 		0, &CQF_mgmt_pool_get_svcranks,				\
 		ds_mgmt_pool_get_svcranks_hdlr, NULL),			\
+	X(MGMT_POOL_FIND,						\
+		0, &CQF_mgmt_pool_find,					\
+		ds_mgmt_pool_find_hdlr, NULL),				\
 	X(MGMT_MARK,							\
 		0, &CQF_mgmt_mark,					\
 		ds_mgmt_mark_hdlr, NULL),				\
@@ -123,6 +126,22 @@ CRT_RPC_DECLARE(mgmt_profile, DAOS_ISEQ_MGMT_PROFILE,
 
 CRT_RPC_DECLARE(mgmt_pool_get_svcranks, DAOS_ISEQ_MGMT_POOL_GET_SVCRANKS,
 		DAOS_OSEQ_MGMT_POOL_GET_SVCRANKS)
+
+#define DAOS_ISEQ_MGMT_POOL_FIND /* input fields */		 \
+	((int32_t)		(pfi_bylabel)		CRT_VAR) \
+	((int32_t)		(pfi_pad32)		CRT_VAR) \
+	((d_const_string_t)	(pfi_label)		CRT_VAR) \
+	((uuid_t)		(pfi_puuid)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_POOL_FIND /* output fields */		 \
+	((uuid_t)		(pfo_puuid)		CRT_VAR) \
+	((d_rank_list_t)	(pfo_ranks)		CRT_PTR) \
+	((int32_t)		(pfo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_pool_find, DAOS_ISEQ_MGMT_POOL_FIND,
+		DAOS_OSEQ_MGMT_POOL_FIND)
+
+#define MGMT_POOL_FIND_DUMMY_LABEL "NO LABEL, FINDING BY UUID"
 
 #define DAOS_ISEQ_MGMT_TGT_CREATE /* input fields */		 \
 	((uuid_t)		(tc_pool_uuid)		CRT_VAR) \

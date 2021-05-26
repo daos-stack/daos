@@ -163,7 +163,7 @@ pl_obj_get_shard(void *data, int idx)
 }
 
 int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
-		     bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data);
+		     int *tgt_id, pl_get_shard_t pl_get_shard, void *data);
 
 void obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout);
 

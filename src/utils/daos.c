@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -37,11 +38,24 @@
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
+#define RC_PRINT_HELP	2
+#define RC_NO_HELP	-2
+
 static enum fs_op
 filesystem_op_parse(const char *str)
 {
 	if (strcmp(str, "copy") == 0)
 		return FS_COPY;
+	if (strcmp(str, "set-attr") == 0)
+		return FS_SET_ATTR;
+	if (strcmp(str, "get-attr") == 0)
+		return FS_GET_ATTR;
+	if (strcmp(str, "reset-attr") == 0)
+		return FS_RESET_ATTR;
+	if (strcmp(str, "reset-chunk-size") == 0)
+		return FS_RESET_CHUNK_SIZE;
+	if (strcmp(str, "reset-oclass") == 0)
+		return FS_RESET_OCLASS;
 	return -1;
 }
 
@@ -167,7 +181,7 @@ cmd_args_print(struct cmd_args_s *ap)
 		ap->attrname_str ? ap->attrname_str : "NULL",
 		ap->value_str ? ap->value_str : "NULL");
 
-	D_INFO("\tpath=%s, type=%s, oclass=%s, chunk_size="DF_U64"\n",
+	D_INFO("\tpath=%s, type=%s, oclass=%s, chunk-size="DF_U64"\n",
 		ap->path ? ap->path : "NULL",
 		type, oclass, ap->chunk_size);
 	D_INFO("\tsnapshot: name=%s, epoch="DF_U64", epoch range=%s "
@@ -539,6 +553,31 @@ enum {
  */
 #define SKIP_RES_AND_CMD_ARGS 2
 
+static void
+args_free(struct cmd_args_s *ap)
+{
+	D_FREE(ap->sysname);
+	D_FREE(ap->attrname_str);
+	D_FREE(ap->value_str);
+	D_FREE(ap->path);
+	D_FREE(ap->dfs_path);
+	D_FREE(ap->dfs_prefix);
+	D_FREE(ap->src);
+	D_FREE(ap->dst);
+	D_FREE(ap->snapname_str);
+	D_FREE(ap->epcrange_str);
+
+	daos_prop_free(ap->props);
+	ap->props = NULL;
+
+	D_FREE(ap->outfile);
+	D_FREE(ap->aclfile);
+	D_FREE(ap->entry);
+	D_FREE(ap->user);
+	D_FREE(ap->group);
+	D_FREE(ap->principal);
+}
+
 static int
 common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 {
@@ -556,7 +595,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"dst",		required_argument,	NULL,	'D'},
 		{"type",	required_argument,	NULL,	't'},
 		{"oclass",	required_argument,	NULL,	'o'},
-		{"chunk_size",	required_argument,	NULL,	'z'},
+		{"chunk-size",	required_argument,	NULL,	'z'},
+		{"dfs-prefix",	required_argument,	NULL,	'I'},
+		{"dfs-path",	required_argument,	NULL,	'H'},
 		{"snap",	required_argument,	NULL,	's'},
 		{"epc",		required_argument,	NULL,	'e'},
 		{"epcrange",	required_argument,	NULL,	'r'},
@@ -573,8 +614,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
-	const int		RC_PRINT_HELP = 2;
-	const int		RC_NO_HELP = -2;
 	char			*cmdname = NULL;
 
 	assert(ap != NULL);
@@ -696,6 +735,16 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			if (ap->dst == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
+		case 'I':
+			D_STRNDUP(ap->dfs_prefix, optarg, strlen(optarg));
+			if (ap->dfs_prefix == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'H':
+			D_STRNDUP(ap->dfs_path, optarg, strlen(optarg));
+			if (ap->dfs_path == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
 		case 't':
 			daos_parse_ctype(optarg, &ap->type);
 			if (ap->type == DAOS_PROP_CO_LAYOUT_UNKOWN) {
@@ -716,7 +765,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			ap->chunk_size = tobytes(optarg);
 			if (ap->chunk_size == 0 ||
 			    (ap->chunk_size == ULLONG_MAX && errno != 0)) {
-				fprintf(stderr, "failed to parse chunk_size:"
+				fprintf(stderr, "failed to parse chunk-size:"
 					"%s\n", optarg);
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
@@ -846,35 +895,10 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	return 0;
 
 out_free:
-	if (ap->sysname != NULL)
-		D_FREE(ap->sysname);
-	if (ap->attrname_str != NULL)
-		D_FREE(ap->attrname_str);
-	if (ap->value_str != NULL)
-		D_FREE(ap->value_str);
-	if (ap->path != NULL)
-		D_FREE(ap->path);
-	if (ap->src != NULL)
-		D_FREE(ap->src);
-	if (ap->dst != NULL)
-		D_FREE(ap->dst);
-	if (ap->snapname_str != NULL)
-		D_FREE(ap->snapname_str);
-	if (ap->epcrange_str != NULL)
-		D_FREE(ap->epcrange_str);
-	if (ap->props) {
+	if (ap->props != NULL)
 		/* restore number of entries in array for freeing */
 		ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
-		daos_prop_free(ap->props);
-	}
-	if (ap->outfile != NULL)
-		D_FREE(ap->outfile);
-	if (ap->aclfile != NULL)
-		D_FREE(ap->aclfile);
-	if (ap->entry != NULL)
-		D_FREE(ap->entry);
-	if (ap->principal != NULL)
-		D_FREE(ap->principal);
+	args_free(ap);
 	D_FREE(cmdname);
 	return rc;
 }
@@ -887,7 +911,6 @@ pool_op_hdlr(struct cmd_args_s *ap)
 {
 	int			rc = 0;
 	enum pool_op		op;
-	const int		RC_PRINT_HELP = 2;
 
 	assert(ap != NULL);
 	op = ap->p_op;
@@ -933,7 +956,7 @@ out:
 }
 
 static int
-call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
+call_dfuse_ioctl(const char *path, struct dfuse_il_reply *reply)
 {
 	int fd;
 	int rc;
@@ -961,8 +984,9 @@ call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
 static int
 fs_op_hdlr(struct cmd_args_s *ap)
 {
-	int rc = 0;
-	enum fs_op op;
+	enum fs_op	op;
+	char		*name = NULL, *dir_name = NULL;
+	int		rc = 0;
 
 	assert(ap != NULL);
 	op = ap->fs_op;
@@ -972,13 +996,78 @@ fs_op_hdlr(struct cmd_args_s *ap)
 		if (ap->src == NULL || ap->dst == NULL) {
 			fprintf(stderr, "a source and destination path "
 				"must be provided\n");
+			D_GOTO(out, rc = RC_PRINT_HELP);
 		} else {
 			rc = fs_copy_hdlr(ap);
 		}
 		break;
+	case FS_SET_ATTR:
+	case FS_GET_ATTR:
+	case FS_RESET_ATTR:
+	case FS_RESET_CHUNK_SIZE:
+	case FS_RESET_OCLASS:
+		if (ap->path != NULL) {
+			struct duns_attr_t      dattr = {0};
+
+			if (ap->dfs_path) {
+				fprintf(stderr, "can't specify file or dir in "
+					"path and dfs_path at the same time\n");
+				return EINVAL;
+			}
+
+			rc = duns_resolve_path(ap->path, &dattr);
+			/** we could be creating a new file, so try dirname */
+			if (rc == ENOENT && op == FS_SET_ATTR) {
+				parse_filename_dfs(ap->path, &name,
+						   &dir_name);
+
+				rc = duns_resolve_path(dir_name, &dattr);
+			}
+			if (rc) {
+				fprintf(stderr, "could not resolve pool &"
+					" container by path: %d %s %s\n",
+					rc, strerror(rc), ap->path);
+				D_GOTO(out, rc);
+			}
+
+			ap->type = dattr.da_type;
+			uuid_copy(ap->p_uuid, dattr.da_puuid);
+			uuid_copy(ap->c_uuid, dattr.da_cuuid);
+
+			if (name) {
+				if (dattr.da_rel_path) {
+					D_ASPRINTF(ap->dfs_path, "%s/%s",
+						   dattr.da_rel_path, name);
+					free(dattr.da_rel_path);
+				} else {
+					D_ASPRINTF(ap->dfs_path, "/%s", name);
+				}
+			} else {
+				if (dattr.da_rel_path) {
+					D_STRNDUP(ap->dfs_path,
+						  dattr.da_rel_path, PATH_MAX);
+					free(dattr.da_rel_path);
+				} else {
+					D_STRNDUP(ap->dfs_path, "/", 1);
+				}
+			}
+			if (ap->dfs_path == NULL)
+				D_GOTO(out, rc = ENOMEM);
+		} else {
+			ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
+			ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
+		}
+		rc = fs_dfs_hdlr(ap);
+		if (rc)
+			D_GOTO(out, rc);
+		break;
 	default:
 		break;
 	}
+
+out:
+	D_FREE(dir_name);
+	D_FREE(name);
 	return rc;
 }
 
@@ -989,7 +1078,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	int			rc = 0;
 	int			rc2 = 0;
 	enum cont_op		op;
-	const int		RC_PRINT_HELP = 2;
 
 	assert(ap != NULL);
 	op = ap->c_op;
@@ -1045,6 +1133,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			ap->type = dattr.da_type;
 			uuid_copy(ap->p_uuid, dattr.da_puuid);
 			uuid_copy(ap->c_uuid, dattr.da_cuuid);
+			if (dattr.da_rel_path)
+				free(dattr.da_rel_path);
 		}
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
@@ -1199,7 +1289,6 @@ obj_op_hdlr(struct cmd_args_s *ap)
 	int			rc;
 	int			rc2;
 	enum obj_op		op;
-	const int		RC_PRINT_HELP = 2;
 
 	assert(ap != NULL);
 	op = ap->o_op;
@@ -1445,7 +1534,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */
 			print_oclass_names_list(stream);
 			fprintf(stream, ")\n"
-			"	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
+			"	--chunk-size=BYTES chunk size of files created. Supports suffixes:\n"
 			"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
 			"			   supported prop names are label, cksum,\n"
@@ -1636,8 +1725,8 @@ main(int argc, char *argv[])
 	/* Call resource-specific handler function */
 	rc = hdlr(&dargs);
 
-	D_FREE(dargs.sysname);
-	D_FREE(dargs.path);
+	/* Free all args */
+	args_free(&dargs);
 
 	daos_fini();
 

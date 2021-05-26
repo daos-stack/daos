@@ -278,7 +278,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 	dcpmCfg := &engine.Config{
 		Storage: engine.StorageConfig{
 			SCM: storage.ScmConfig{
-				MountPoint: "/mnt/daos",
+				MountPoint: "/mnt/test",
 				Class:      storage.ScmClassDCPM,
 				DeviceList: []string{"/dev/foo"},
 			},
@@ -290,6 +290,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 		needsScmFormat bool
 		hasSB          bool
 		skipMissingSB  bool
+		engineIndex    uint32
 		expFmtType     string
 		expErr         error
 	}{
@@ -300,7 +301,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 		"needs format but skip missing superblock": {
 			needsScmFormat: true,
 			skipMissingSB:  true,
-			expErr:         FaultScmUnmanaged("/mnt/daos"),
+			expErr:         FaultScmUnmanaged("/mnt/test"),
 		},
 		"no need to format and skip missing superblock": {
 			skipMissingSB: true,
@@ -314,6 +315,10 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 		},
 		"needs metadata format": {
 			expFmtType: "Metadata",
+		},
+		"engine index 1": {
+			engineIndex: 1,
+			expFmtType:  "Metadata",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -333,6 +338,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 			mp := scm.NewMockProvider(log, nil, &scm.MockSysConfig{GetfsStr: fs})
 
 			engine := NewEngineInstance(log, nil, mp, nil, runner)
+			engine.setIndex(tc.engineIndex)
 
 			if tc.hasSB {
 				engine.setSuperblock(&Superblock{
@@ -342,8 +348,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 
 			tly1 := newTally(engine.storageReady)
 
-			engine.OnAwaitFormat(publishFormatRequiredFn(tly1.fakePublish,
-				hostname(), engine.Index()))
+			engine.OnAwaitFormat(publishFormatRequiredFn(tly1.fakePublish, hostname()))
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 			defer cancel()
@@ -360,7 +365,8 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 				t.Fatal("unexpected timeout waiting for format required event")
 			}
 
-			expDescription := fmt.Sprintf("DAOS engine 0 requires a %s format", tc.expFmtType)
+			expDescription := fmt.Sprintf("DAOS engine %d requires a %s format",
+				tc.engineIndex, tc.expFmtType)
 			if diff := cmp.Diff(expDescription, tly1.evtDesc); diff != "" {
 				t.Fatalf("unexpected event description (-want, +got):\n%s\n", diff)
 			}

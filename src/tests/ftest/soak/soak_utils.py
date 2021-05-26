@@ -4,7 +4,6 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
 import time
 import random
@@ -12,7 +11,9 @@ import threading
 import re
 from ior_utils import IorCommand
 from fio_utils import FioCommand
+from mdtest_utils import MdtestCommand
 from daos_racer_utils import DaosRacerCommand
+from data_mover_utils import FsCopy
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
 from general_utils import get_host_data, get_random_string, \
@@ -83,6 +84,38 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
     self.container[-1].create()
 
 
+def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
+    """Move data between a POSIX file and a container.
+
+    Args:
+        text_file (str): posix path/file to write random data to
+        num_bytes (int): num of bytes to write to file
+        pool (TestPool obj): pool to read/write random data file
+        container (TestContainer obj): container to read/write random data file
+        cmd (str): whether the data is a read
+                    (daos->posix) or write(posix -> daos)
+    """
+    os.makedirs(os.path.dirname(file), exist_ok=True)
+    fscopy_cmd = FsCopy(self.get_daos_command(), self.log)
+    # writes random data to file and then copy the file to container
+    if cmd == "write":
+        with open(file, 'w') as src_file:
+            src_file.write(str(os.urandom(num_bytes)))
+            src_file.close()
+        dst_file = "daos://{}/{}".format(pool.uuid, container.uuid)
+        fscopy_cmd.set_fs_copy_params(src=file, dst=dst_file)
+        fscopy_cmd.run()
+    # reads file_name from container and writes to file
+    elif cmd == "read":
+        dst = os.path.split(file)
+        dst_name = dst[-1]
+        dst_path = dst[0]
+        src_file = "daos://{}/{}/{}".format(
+            pool.uuid, container.uuid, dst_name)
+        fscopy_cmd.set_fs_copy_params(src=src_file, dst=dst_path)
+        fscopy_cmd.run()
+
+
 def get_remote_logs(self):
     """Copy files from remote dir to local dir.
 
@@ -142,10 +175,11 @@ def run_event_check(self, since, until):
     # when systemctl is enabled add daos events
     events = self.params.get("events", "/run/*")
     # check events on all nodes
-    hosts = list(set(self.hostlist_clients + self.hostlist_servers))
+    hosts = list(set(self.hostlist_servers))
     if events:
-        command = "sudo /usr/bin/journalctl --system -t kernel -t "
-        "daos_server --since=\"{}\" --until=\"{}\"".format(since, until)
+        command = ("sudo /usr/bin/journalctl --system -t kernel -t "
+                   "daos_server --since=\"{}\" --until=\"{}\"".format(
+                       since, until))
         err = "Error gathering system log events"
         for event in events:
             for output in get_host_data(hosts, command, "journalctl", err):
@@ -176,7 +210,7 @@ def run_monitor_check(self):
             pcmd(hosts, command, timeout=30)
 
 
-def get_harassers(harassers):
+def get_harassers(harasser):
     """Create a valid harasserlist from the yaml job harassers.
 
     Args:
@@ -188,9 +222,13 @@ def get_harassers(harassers):
 
     """
     harasserlist = []
-    for harasser in harassers:
+    offline_harasserlist = []
+    if "-offline" in harasser:
+        offline_harasser = harasser.replace("-offline", "")
+        offline_harasserlist.extend(offline_harasser.split("_"))
+    else:
         harasserlist.extend(harasser.split("_"))
-    return harasserlist
+    return harasserlist, offline_harasserlist
 
 
 def wait_for_pool_rebuild(self, pool, name):
@@ -206,8 +244,10 @@ def wait_for_pool_rebuild(self, pool, name):
     rebuild_status = False
     self.log.info(
         "<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
-
     try:
+        # Wait for rebuild to start
+        pool.wait_for_rebuild(True)
+        # Wait for rebuild to complete
         pool.wait_for_rebuild(False)
         rebuild_status = True
     except DaosTestError as error:
@@ -217,7 +257,6 @@ def wait_for_pool_rebuild(self, pool, name):
     except TestFail as error1:
         self.log.error("<<<FAILED:{} rebuild failed due to test issue".format(
             name), exc_info=error1)
-
     return rebuild_status
 
 
@@ -340,7 +379,6 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
             status = False
         if status:
             status = wait_for_pool_rebuild(self, pool, name)
-
     elif name == "REINTEGRATE":
         if self.harasser_results["EXCLUDE"]:
             rank = self.harasser_args["EXCLUDE"]["rank"]
@@ -412,22 +450,36 @@ def launch_server_stop_start(self, pools, name, results, args):
                             pool.uuid), exc_info=error)
                     status = False
                 drain_status &= status
-            if drain_status:
-                for pool in pools:
+                if drain_status:
                     drain_status &= wait_for_pool_rebuild(self, pool, name)
-                status = drain_status
-            else:
-                status = False
-
+                    status = drain_status
+                else:
+                    status = False
         if status:
             # Shutdown the server
             try:
-                self.dmg_command.system_stop(ranks=rank)
+                self.dmg_command.system_stop(force=True, ranks=rank)
             except TestFail as error:
                 self.log.error(
                     "<<<FAILED:dmg system stop failed", exc_info=error)
                 status = False
-
+    elif name == "SVR_START":
+        if self.harasser_results["SVR_STOP"]:
+            rank = self.harasser_args["SVR_STOP"]["rank"]
+            self.log.info("<<<PASS %s: %s started on rank %s at %s>>>\n",
+                          self.loop, name, rank, time.ctime())
+            try:
+                self.dmg_command.system_start(ranks=rank)
+                status = True
+            except TestFail as error:
+                self.log.error(
+                    "<<<FAILED:dmg system start failed", exc_info=error)
+                status = False
+        else:
+            self.log.error(
+                "<<<PASS %s: %s failed due to SVR_STOP failure >>>",
+                self.loop, name)
+            status = False
     elif name == "SVR_REINTEGRATE":
         if self.harasser_results["SVR_STOP"]:
             rank = self.harasser_args["SVR_STOP"]["rank"]
@@ -440,25 +492,25 @@ def launch_server_stop_start(self, pools, name, results, args):
                 self.log.error(
                     "<<<FAILED:dmg system start failed", exc_info=error)
                 status = False
-            # reintegrate ranks
-            reintegrate_status = True
-            for pool in pools:
-                try:
-                    pool.reintegrate(rank)
-                    status = True
-                except TestFail as error:
-                    self.log.error(
-                        "<<<FAILED:dmg pool {} reintegrate failed".format(
-                            pool.uuid), exc_info=error)
-                    status = False
-                reintegrate_status &= status
-            if reintegrate_status:
+            if status:
+                # reintegrate ranks
+                reintegrate_status = True
                 for pool in pools:
-                    reintegrate_status &= wait_for_pool_rebuild(
-                        self, pool, name)
-                status = reintegrate_status
-            else:
-                status = False
+                    try:
+                        pool.reintegrate(rank)
+                        status = True
+                    except TestFail as error:
+                        self.log.error(
+                            "<<<FAILED:dmg pool {} reintegrate failed".format(
+                                pool.uuid), exc_info=error)
+                        status = False
+                    reintegrate_status &= status
+                    if reintegrate_status:
+                        reintegrate_status &= wait_for_pool_rebuild(
+                            self, pool, name)
+                        status = reintegrate_status
+                    else:
+                        status = False
         else:
             self.log.error("<<<PASS %s: %s failed due to SVR_STOP failure >>>",
                            self.loop, name)
@@ -612,6 +664,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     """
     commands = []
     ior_params = "/run/" + job_spec + "/*"
+    ior_timeout = self.params.get("job_timeout", ior_params + "*", 10)
     mpi_module = self.params.get(
         "mpi_module", "/run/*", default="mpi/mpich-x86_64")
     # IOR job specs with a list of parameters; update each value
@@ -640,13 +693,12 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             "DAOS-6308",
                             "IOR -a {} with -o {}".format(api, o_type))
                         continue
+                    if api in ["HDF5-VOL", "HDF5", "POSIX"] and ppn > 16:
+                        continue
                     ior_cmd = IorCommand()
                     ior_cmd.namespace = ior_params
                     ior_cmd.get_params(self)
-                    if self.job_timeout is not None:
-                        ior_cmd.max_duration.update(self.job_timeout)
-                    else:
-                        ior_cmd.max_duration.update(10)
+                    ior_cmd.max_duration.update(ior_timeout)
                     if api == "HDF5-VOL":
                         ior_cmd.api.update("HDF5")
                     else:
@@ -697,6 +749,92 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     return commands
 
 
+def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
+    """Create an MDTEST cmdline to run in slurm batch.
+
+    Args:
+
+        self (obj): soak obj
+        job_spec (str):   mdtest job in yaml to run
+        pool (obj):       TestPool obj
+        ppn(int):         number of tasks to run on each node
+        nodesperjob(int): number of nodes per job
+
+    Returns:
+        cmd: cmdline string
+
+    """
+    commands = []
+    mdtest_params = "/run/" + job_spec + "/"
+    mpi_module = self.params.get(
+        "mpi_module", "/run/*", default="mpi/mpich-x86_64")
+    # mdtest job specs with a list of parameters; update each value
+    api_list = self.params.get("api", mdtest_params + "*")
+    write_bytes_list = self.params.get("write_bytes", mdtest_params + "*")
+    read_bytes_list = self.params.get("read_bytes", mdtest_params + "*")
+    depth_list = self.params.get("depth", mdtest_params + "*")
+    flag = self.params.get("flags", mdtest_params + "*")
+    oclass = self.params.get("dfs_oclass", mdtest_params + "*")
+    oclass_dir = self.params.get("dfs_dir_oclass", mdtest_params + "*")
+    num_of_files_dirs = self.params.get(
+        "num_of_files_dirs", mdtest_params + "*")
+    # update mdtest cmdline for each additional mdtest obj
+    for api in api_list:
+        if api in ["POSIX"] and ppn > 16:
+            continue
+        for write_bytes in write_bytes_list:
+            for read_bytes in read_bytes_list:
+                for depth in depth_list:
+                    # Get the parameters for Mdtest
+                    mdtest_cmd = MdtestCommand()
+                    mdtest_cmd.namespace = mdtest_params
+                    mdtest_cmd.get_params(self)
+                    mdtest_cmd.api.update(api)
+                    mdtest_cmd.write_bytes.update(write_bytes)
+                    mdtest_cmd.read_bytes.update(read_bytes)
+                    mdtest_cmd.depth.update(depth)
+                    mdtest_cmd.flags.update(flag)
+                    mdtest_cmd.num_of_files_dirs.update(
+                        num_of_files_dirs)
+                    add_containers(self, pool, oclass)
+                    mdtest_cmd.set_daos_params(
+                        self.server_group, pool,
+                        self.container[-1].uuid)
+                    mdtest_cmd.dfs_oclass.update(oclass)
+                    mdtest_cmd.dfs_dir_oclass.update(oclass_dir)
+                    env = mdtest_cmd.get_default_env("srun")
+                    sbatch_cmds = [
+                        "module load -q {}".format(mpi_module)]
+                    # include dfuse cmdlines
+                    log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
+                        job_spec, api, write_bytes, read_bytes, depth,
+                        oclass, nodesperjob * ppn, nodesperjob,
+                        ppn)
+                    if api in ["POSIX"]:
+                        dfuse, dfuse_start_cmdlist = start_dfuse(
+                            self, pool, self.container[-1], nodesperjob,
+                            "SLURM", name=log_name)
+                        sbatch_cmds.extend(dfuse_start_cmdlist)
+                        mdtest_cmd.test_dir.update(
+                            dfuse.mount_dir.value)
+                    srun_cmd = Srun(mdtest_cmd)
+                    srun_cmd.assign_processes(nodesperjob * ppn)
+                    srun_cmd.assign_environment(env, True)
+                    srun_cmd.ntasks_per_node.update(ppn)
+                    srun_cmd.nodes.update(nodesperjob)
+                    sbatch_cmds.append(str(srun_cmd))
+                    sbatch_cmds.append("status=$?")
+                    if api in ["POSIX"]:
+                        sbatch_cmds.extend(
+                            stop_dfuse(dfuse, nodesperjob, "SLURM"))
+                    commands.append([sbatch_cmds, log_name])
+                    self.log.info(
+                        "<<MDTEST {} cmdlines>>:".format(api))
+                    for cmd in sbatch_cmds:
+                        self.log.info("%s", cmd)
+    return commands
+
+
 def create_racer_cmdline(self, job_spec, pool):
     """Create the srun cmdline to run daos_racer.
 
@@ -725,7 +863,6 @@ def create_racer_cmdline(self, job_spec, pool):
     daos_racer.cont_uuid.update(self.container[-1].uuid)
     log_name = job_spec
     srun_cmds = []
-    # add fio cmline
     srun_cmds.append(str(daos_racer.__str__()))
     srun_cmds.append("status=$?")
     # add exit code
@@ -816,6 +953,7 @@ def build_job_script(self, commands, job, nodesperjob):
         script_list: list of slurm batch scripts
 
     """
+    job_timeout = self.params.get("job_timeout", "/run/" + job + "/*", 10)
     self.log.info("<<Build Script>> at %s", time.ctime())
     script_list = []
     # if additional cmds are needed in the batch script
@@ -837,7 +975,7 @@ def build_job_script(self, commands, job, nodesperjob):
             self.test_log_dir, self.test_name + "_" + log_name + "_%N_" + "%j_")
         error = os.path.join(str(output) + "ERROR_")
         sbatch = {
-            "time": str(self.job_timeout) + ":00",
+            "time": str(job_timeout) + ":00",
             "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
             "error": str(error),
             "export": "ALL"

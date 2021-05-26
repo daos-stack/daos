@@ -9,12 +9,17 @@ hosts:
     - client-F
     - client-G
     - client-H
-
 # some run can take long to run, but needs to be verified
 # by running consecutively for accurate time.
 timeout: 2000
 server_config:
     name: daos_server
+    servers:
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+      scm_class: dcpm
+      scm_list: [ "/dev/pmem0" ]
+      scm_mount: /mnt/daos0
 daos_perf:
   pool_scm_size: 10G
   pool_nvme_size: 40G

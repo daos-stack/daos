@@ -25,24 +25,39 @@
 int
 degrade_small_sub_setup(void **state)
 {
+	test_arg_t *arg;
 	int rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			DEGRADE_SMALL_POOL_SIZE, DEGRADE_RANK_SIZE, NULL);
-	if (rc)
+	if (rc) {
 		print_message("It can not create the pool with 6 ranks"
 			      " probably due to not enough ranks %d\n", rc);
+		return rc;
+	}
 
+	arg = *state;
+	arg->no_rebuild = 1;
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal",
+				"exclude");
 	return rc;
 }
 
 int
 degrade_sub_setup(void **state)
 {
+	test_arg_t *arg;
 	int rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			DEGRADE_POOL_SIZE, DEGRADE_RANK_SIZE, NULL);
+	if (rc)
+		return rc;
+
+	arg = *state;
+	arg->no_rebuild = 1;
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal",
+				"exclude");
 	return rc;
 }
 
@@ -105,9 +120,6 @@ degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
 	rebuild_pools_ranks(&arg, 1, ranks, idx, false);
 
 	degrade_ec_verify(arg, oid, write_type);
-
-	while (idx > 0)
-		rebuild_add_back_tgts(arg, ranks[--idx], NULL, 1);
 }
 
 static void
@@ -369,8 +381,16 @@ degrade_multi_conts_agg(void **state)
 
 		args[i]->index = arg->index;
 		assert_int_equal(args[i]->pool.slave, 1);
-		oids[i] = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0,
-					    arg->myrank);
+		/* XXX to temporarily workaround DAOS-7350, we need better
+		 * error handling to fix the case if one obj's EC agg failed
+		 * (for example parity shard fail cause agg_peer_update fail).
+		 */
+		if (i == 0)
+			oids[i] = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0,
+						    arg->myrank);
+		else
+			oids[i] = oids[0];
+		args[i]->no_rebuild = 1;
 	}
 
 	for (i = 0; i < CONT_PER_POOL; i++) {
@@ -401,11 +421,6 @@ degrade_multi_conts_agg(void **state)
 			degrade_ec_verify(args[i], oids[i],
 					  PARTIAL_FULL_UPDATE);
 	}
-
-	/* XXX Rebuild cannot finish at this step. DAOS-7073
-	 * for (i = 0; i < shards_nr; i++)
-	 *	rebuild_add_back_tgts(args[0], fail_ranks[i], NULL, 1);
-	 */
 
 out:
 	for (i = CONT_PER_POOL - 1; i >= 0; i--)
@@ -494,7 +509,7 @@ run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 		sub_tests_size = ARRAY_SIZE(degrade_tests);
 		sub_tests = NULL;
 	}
-	run_daos_sub_tests_only("DAOS_Degrade_EC", degrade_tests,
+	rc += run_daos_sub_tests_only("DAOS_Degrade_EC", degrade_tests,
 				ARRAY_SIZE(degrade_tests), sub_tests,
 				sub_tests_size);
 

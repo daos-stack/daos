@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include "tests_lib.h"
 #include "wrap_cmocka.h"
 #include "gurt/telemetry_common.h"
@@ -20,7 +22,18 @@
 #define STATS_EPSILON	(0.00001)
 #define TEST_IDX	(99)
 
-static uint64_t	*shmem_root;
+/* Context for checking results as a client */
+static struct d_tm_context	*cli_ctx;
+
+/*
+ * For tests, translate the node pointer from the server's address space to the
+ * client's.
+ */
+static struct d_tm_node_t *
+srv_to_cli_node(struct d_tm_node_t *srv_node)
+{
+	return d_tm_conv_ptr(cli_ctx, srv_node, srv_node);
+}
 
 static int
 init_tests(void **state)
@@ -29,11 +42,11 @@ init_tests(void **state)
 	int	rc;
 
 	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE,
-		       D_TM_RETAIN_SHMEM);
+		       D_TM_SERVER_PROCESS);
 	assert_rc_equal(rc, DER_SUCCESS);
 
-	shmem_root = d_tm_get_shared_memory(simulated_srv_idx);
-	assert_non_null(shmem_root);
+	cli_ctx = d_tm_open(simulated_srv_idx);
+	assert_non_null(cli_ctx);
 
 	return d_log_init();
 }
@@ -55,8 +68,7 @@ test_increment_counter(void **state)
 		d_tm_inc_counter(loop, 1);
 	}
 
-	rc = d_tm_get_counter(&val, shmem_root,
-			      d_tm_conv_ptr(shmem_root, loop));
+	rc = d_tm_get_counter(cli_ctx, &val, srv_to_cli_node(loop));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, count);
 }
@@ -76,8 +88,7 @@ test_add_to_counter(void **state)
 	d_tm_inc_counter(loop, count);
 	d_tm_inc_counter(loop, 1);
 
-	rc = d_tm_get_counter(&val, shmem_root,
-			      d_tm_conv_ptr(shmem_root, loop));
+	rc = d_tm_get_counter(cli_ctx, &val, srv_to_cli_node(loop));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, count + 1);
 }
@@ -103,8 +114,7 @@ test_gauge(void **state)
 		d_tm_inc_gauge(gauge, 1);
 	}
 
-	rc = d_tm_get_gauge(&val, NULL, shmem_root,
-			    d_tm_conv_ptr(shmem_root, gauge));
+	rc = d_tm_get_gauge(cli_ctx, &val, NULL, srv_to_cli_node(gauge));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, init_val + inc_count);
 
@@ -112,8 +122,7 @@ test_gauge(void **state)
 		d_tm_dec_gauge(gauge, 1);
 	}
 
-	rc = d_tm_get_gauge(&val, NULL, shmem_root,
-			    d_tm_conv_ptr(shmem_root, gauge));
+	rc = d_tm_get_gauge(cli_ctx, &val, NULL, srv_to_cli_node(gauge));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, init_val + inc_count - dec_count);
 }
@@ -131,8 +140,7 @@ test_record_timestamp(void **state)
 
 	d_tm_record_timestamp(ts);
 
-	rc = d_tm_get_timestamp(&val, shmem_root,
-				d_tm_conv_ptr(shmem_root, ts));
+	rc = d_tm_get_timestamp(cli_ctx, &val, srv_to_cli_node(ts));
 	assert_rc_equal(rc, DER_SUCCESS);
 	/*
 	 * Hard to determine exact timestamp at this point, so just verify
@@ -162,8 +170,8 @@ test_interval_timer(void **state)
 
 	d_tm_mark_duration_end(timer);
 
-	rc = d_tm_get_duration(&result, &stats, shmem_root,
-			       d_tm_conv_ptr(shmem_root, timer));
+	rc = d_tm_get_duration(cli_ctx, &result, &stats,
+			       srv_to_cli_node(timer));
 	assert_int_equal(rc, DER_SUCCESS);
 	/* very rough estimation, based on the sleep timing */
 	assert_true(result.tv_nsec > ts.tv_nsec || result.tv_sec > 0);
@@ -195,12 +203,12 @@ test_timer_snapshot(void **state)
 	d_tm_take_timer_snapshot(snapshot2, D_TM_CLOCK_REALTIME);
 
 	/* check values */
-	rc = d_tm_get_timer_snapshot(&tms1, shmem_root,
-				     d_tm_conv_ptr(shmem_root, snapshot1));
+	rc = d_tm_get_timer_snapshot(cli_ctx, &tms1,
+				     srv_to_cli_node(snapshot1));
 	assert_rc_equal(rc, 0);
 
-	rc = d_tm_get_timer_snapshot(&tms2, shmem_root,
-				     d_tm_conv_ptr(shmem_root, snapshot2));
+	rc = d_tm_get_timer_snapshot(cli_ctx, &tms2,
+				     srv_to_cli_node(snapshot2));
 	assert_rc_equal(rc, 0);
 
 	tms3 = d_timediff(tms1, tms2);
@@ -235,8 +243,7 @@ test_gauge_stats(void **state)
 		d_tm_set_gauge(gauge, test_values[i]);
 	}
 
-	rc = d_tm_get_gauge(&val, &stats, shmem_root,
-			    d_tm_conv_ptr(shmem_root, gauge));
+	rc = d_tm_get_gauge(cli_ctx, &val, &stats, srv_to_cli_node(gauge));
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(val, 20);
@@ -302,8 +309,8 @@ test_duration_stats(void **state)
 	d_tm_compute_stats(timer, microseconds);
 
 	/* Verify the results - figured out empirically */
-	rc = d_tm_get_duration(&tms, &stats, shmem_root,
-			       d_tm_conv_ptr(shmem_root, timer));
+	rc = d_tm_get_duration(cli_ctx, &tms, &stats,
+			       srv_to_cli_node(timer));
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(stats.dtm_min, 1125000);
@@ -323,9 +330,9 @@ check_bucket_counter(char *path, int bucket_id, uint64_t exp_val)
 	snprintf(bucket_path, sizeof(bucket_path), "%s/bucket %d",
 		 path, bucket_id);
 
-	node = d_tm_find_metric(shmem_root, bucket_path);
+	node = d_tm_find_metric(cli_ctx, bucket_path);
 	assert_non_null(node);
-	rc = d_tm_get_counter(&val, shmem_root, node);
+	rc = d_tm_get_counter(cli_ctx, &val, node);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, exp_val);
 }
@@ -356,7 +363,7 @@ check_bucket_metadata(struct d_tm_node_t *node, int bucket_id)
 
 	printf("Checking bucket %d\n", bucket_id);
 
-	rc = d_tm_get_bucket_range(&bucket, bucket_id, shmem_root, node);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, bucket_id, node);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_non_null(bucket.dtb_bucket);
 
@@ -364,7 +371,7 @@ check_bucket_metadata(struct d_tm_node_t *node, int bucket_id)
 		 "histogram bucket %d [%lu .. %lu]",
 		 bucket_id, bucket.dtb_min, bucket.dtb_max);
 
-	rc = d_tm_get_metadata(&desc, &units, shmem_root, bucket.dtb_bucket);
+	rc = d_tm_get_metadata(cli_ctx, &desc, &units, bucket.dtb_bucket);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(desc, exp_desc);
 	free(desc);
@@ -380,10 +387,10 @@ check_histogram_metadata(char *path)
 	int			rc;
 	int			i;
 
-	node = d_tm_find_metric(shmem_root, path);
+	node = d_tm_find_metric(cli_ctx, path);
 	assert_non_null(node);
 
-	rc = d_tm_get_num_buckets(&histogram, shmem_root, node);
+	rc = d_tm_get_num_buckets(cli_ctx, &histogram, node);
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < histogram.dth_num_buckets; i++)
@@ -398,32 +405,32 @@ check_histogram_m1_data(char *path)
 	struct d_tm_bucket_t	bucket;
 	int			rc;
 
-	gauge = d_tm_find_metric(shmem_root, path);
+	gauge = d_tm_find_metric(cli_ctx, path);
 	assert_non_null(gauge);
 
-	rc = d_tm_get_num_buckets(&histogram, shmem_root, gauge);
+	rc = d_tm_get_num_buckets(cli_ctx, &histogram, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(histogram.dth_num_buckets, 10);
 	assert_int_equal(histogram.dth_initial_width, 5);
 	assert_int_equal(histogram.dth_value_multiplier, 1);
 
-	rc = d_tm_get_bucket_range(&bucket, 0, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 0, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 0);
 	assert_int_equal(bucket.dtb_max, 4);
 
-	rc = d_tm_get_bucket_range(&bucket, 1, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 1, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 5);
 	assert_int_equal(bucket.dtb_max, 9);
 
-	rc = d_tm_get_bucket_range(&bucket, 2, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 2, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 10);
 	assert_int_equal(bucket.dtb_max, 14);
 
-	rc = d_tm_get_bucket_range(&bucket, 10, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 10, gauge);
 	assert_rc_equal(rc, -DER_INVAL);
 }
 
@@ -501,42 +508,42 @@ check_histogram_m2_data(char *path)
 	struct d_tm_bucket_t	bucket;
 	int			rc;
 
-	gauge = d_tm_find_metric(shmem_root, path);
+	gauge = d_tm_find_metric(cli_ctx, path);
 	assert_non_null(gauge);
 
-	rc = d_tm_get_num_buckets(&histogram, shmem_root, gauge);
+	rc = d_tm_get_num_buckets(cli_ctx, &histogram, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	assert_int_equal(histogram.dth_num_buckets, 5);
 	assert_int_equal(histogram.dth_initial_width, 2048);
 	assert_int_equal(histogram.dth_value_multiplier, 2);
 
-	rc = d_tm_get_bucket_range(&bucket, 0, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 0, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 0);
 	assert_int_equal(bucket.dtb_max, 2047);
 
-	rc = d_tm_get_bucket_range(&bucket, 1, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 1, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 2048);
 	assert_int_equal(bucket.dtb_max, 6143);
 
-	rc = d_tm_get_bucket_range(&bucket, 2, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 2, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 6144);
 	assert_int_equal(bucket.dtb_max, 14335);
 
-	rc = d_tm_get_bucket_range(&bucket, 3, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 3, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 14336);
 	assert_int_equal(bucket.dtb_max, 30719);
 
-	rc = d_tm_get_bucket_range(&bucket, 4, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 4, gauge);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(bucket.dtb_min, 30720);
 	assert_true(bucket.dtb_max == UINT64_MAX);
 
-	rc = d_tm_get_bucket_range(&bucket, 5, shmem_root, gauge);
+	rc = d_tm_get_bucket_range(cli_ctx, &bucket, 5, gauge);
 	assert_rc_equal(rc, -DER_INVAL);
 }
 
@@ -609,8 +616,8 @@ test_units(void **state)
 			     "gurt/tests/telem/kibibyte-counter");
 	assert_rc_equal(rc, DER_SUCCESS);
 
-	rc = d_tm_get_metadata(NULL, &units, shmem_root,
-			       d_tm_conv_ptr(shmem_root, counter));
+	rc = d_tm_get_metadata(cli_ctx, NULL, &units,
+			       srv_to_cli_node(counter));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(units, D_TM_KIBIBYTE);
 	free(units);
@@ -618,11 +625,363 @@ test_units(void **state)
 	rc = d_tm_add_metric(&gauge, D_TM_GAUGE, NULL, D_TM_GIGIBYTE_PER_SECOND,
 			     "gurt/tests/telem/gigibyte-per-second-gauge");
 	assert_rc_equal(rc, DER_SUCCESS);
-	rc = d_tm_get_metadata(NULL, &units, shmem_root,
-			       d_tm_conv_ptr(shmem_root, gauge));
+	rc = d_tm_get_metadata(cli_ctx, NULL, &units,
+			       srv_to_cli_node(gauge));
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(units, D_TM_GIGIBYTE_PER_SECOND);
 	free(units);
+}
+
+static void
+verify_ephemeral_gone(char *path, key_t key)
+{
+	struct d_tm_node_t	*node;
+	int			 rc;
+
+	D_PRINT("Verifying path [%s] (key=0x%x) is gone\n", path, key);
+
+	node = d_tm_find_metric(cli_ctx, path);
+	assert_null(node);
+	rc = shmget(key, 0, 0);
+	assert_true(rc < 0);
+}
+
+static void
+test_ephemeral_simple(void **state)
+{
+	struct d_tm_node_t	*dir_node = NULL;
+	struct d_tm_node_t	*tmp_node = NULL;
+	char			*dir = "gurt/tests/tmp/set1";
+	char			*eph_metric = "gurt/tests/tmp/set1/gauge";
+	size_t			 test_mem_size = 1024;
+	uint64_t		 value = 0;
+	key_t			 shmem_key;
+	int			 rc;
+
+	/* Invalid inputs */
+	rc = d_tm_add_ephemeral_dir(&dir_node, test_mem_size, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = d_tm_add_ephemeral_dir(&dir_node, test_mem_size, "");
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = d_tm_add_ephemeral_dir(&dir_node, 0, "mypath");
+	assert_rc_equal(rc, -DER_INVAL);
+
+	/* size too small */
+	rc = d_tm_add_ephemeral_dir(&dir_node, 8, "mypath");
+	assert_rc_equal(rc, -DER_INVAL);
+
+	/* size not 64-bit aligned */
+	rc = d_tm_add_ephemeral_dir(&dir_node, 257, "mypath");
+	assert_rc_equal(rc, -DER_INVAL);
+
+	/* Directory exists */
+	rc = d_tm_add_ephemeral_dir(&dir_node, test_mem_size, "gurt");
+	assert_rc_equal(rc, -DER_EXIST);
+
+	/* Success */
+	rc = d_tm_add_ephemeral_dir(&dir_node, test_mem_size, dir);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dir_node);
+	assert_int_equal(dir_node->dtn_type, D_TM_DIRECTORY);
+
+	tmp_node = d_tm_find_metric(cli_ctx, dir);
+	assert_non_null(tmp_node);
+	assert_int_equal(tmp_node->dtn_type, D_TM_DIRECTORY);
+	/* ephemeral directory should be the head of a new shmem region with a
+	 * new key.
+	 */
+	assert_int_not_equal(tmp_node->dtn_shmem_key,
+			     d_tm_get_srv_key(TEST_IDX));
+	assert_string_equal(d_tm_get_name(cli_ctx, tmp_node), "set1");
+	shmem_key = tmp_node->dtn_shmem_key; /* for later comparisons */
+	tmp_node = NULL;
+
+	/* Add a metric to the tmp dir */
+	rc = d_tm_add_metric(&tmp_node, D_TM_GAUGE, "temporary gauge", NULL,
+			     eph_metric);
+	assert_rc_equal(rc, 0);
+	assert_non_null(tmp_node);
+	assert_int_equal(tmp_node->dtn_type, D_TM_GAUGE);
+	assert_int_equal(tmp_node->dtn_shmem_key, shmem_key);
+
+	d_tm_inc_gauge(tmp_node, 1);
+
+	tmp_node = d_tm_find_metric(cli_ctx, eph_metric);
+	assert_non_null(tmp_node);
+	rc = d_tm_get_gauge(cli_ctx, &value, NULL, tmp_node);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(value, 1);
+	tmp_node = NULL;
+
+	/* Create with variadic args and no node pointer */
+	rc = d_tm_add_ephemeral_dir(NULL, test_mem_size, "gurt/tests/tmp/set2");
+	assert_rc_equal(rc, 0);
+
+	tmp_node = d_tm_find_metric(cli_ctx, "gurt/tests/tmp/set2");
+	assert_non_null(tmp_node);
+	assert_int_equal(tmp_node->dtn_type, D_TM_DIRECTORY);
+	assert_string_equal(d_tm_get_name(cli_ctx, tmp_node), "set2");
+	tmp_node = NULL;
+
+	rc = d_tm_add_metric(&tmp_node, D_TM_TIMESTAMP, "time", NULL,
+			     "gurt/tests/tmp/set2/current_time");
+	assert_rc_equal(rc, 0);
+	assert_non_null(tmp_node);
+	d_tm_record_timestamp(tmp_node);
+	tmp_node = NULL;
+
+	/* Invalid inputs for delete */
+	rc = d_tm_del_ephemeral_dir(NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = d_tm_del_ephemeral_dir("");
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = d_tm_del_ephemeral_dir("doesnotexist");
+	assert_rc_equal(rc, 0);
+
+	/* trying to delete a non-ephemeral directory node */
+	rc = d_tm_del_ephemeral_dir("gurt/tests/telem");
+	assert_rc_equal(rc, -DER_INVAL);
+
+	/* trying to delete a metric in ephemeral dir */
+	rc = d_tm_del_ephemeral_dir(eph_metric);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	/* Success */
+	rc = d_tm_del_ephemeral_dir(dir);
+	assert_rc_equal(rc, 0);
+
+	tmp_node = d_tm_find_metric(cli_ctx, eph_metric);
+	assert_null(tmp_node);
+	dir_node = NULL;
+
+	verify_ephemeral_gone(dir, shmem_key);
+
+	/* Create a new dir with same name as deleted */
+	rc = d_tm_add_ephemeral_dir(&dir_node, test_mem_size, dir);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dir_node);
+	assert_int_equal(dir_node->dtn_type, D_TM_DIRECTORY);
+
+	tmp_node = d_tm_find_metric(cli_ctx, dir);
+	assert_non_null(tmp_node);
+	assert_int_equal(tmp_node->dtn_type, D_TM_DIRECTORY);
+	assert_int_equal(tmp_node->dtn_shmem_key, shmem_key);
+	assert_string_equal(d_tm_get_name(cli_ctx, tmp_node), "set1");
+
+	/* Make sure the metric in the old region is no longer there */
+	tmp_node = d_tm_find_metric(cli_ctx, eph_metric);
+	assert_null(tmp_node);
+
+	/* add some more metrics for counting/display tests that happen later */
+	rc = d_tm_add_metric(&tmp_node, D_TM_COUNTER, "my count", NULL,
+			     "gurt/tests/tmp/set1/my_count");
+	assert_rc_equal(rc, 0);
+
+	rc = d_tm_add_metric(&tmp_node, D_TM_COUNTER, "another counter", NULL,
+			     "gurt/tests/tmp/set1/another_count");
+	assert_rc_equal(rc, 0);
+}
+
+static void
+test_ephemeral_nested(void **state)
+{
+	struct d_tm_node_t	*dir_node = NULL;
+	struct d_tm_node_t	*tmp_node = NULL;
+	size_t			 test_mem_size = 1024;
+	key_t			 key1;
+	key_t			 key2;
+	key_t			 key3;
+	key_t			 key4;
+	key_t			 key5;
+	char			*path1 = "gurt/tests/tmp/set3";
+	char			 path2[D_TM_MAX_NAME_LEN/2] = {0};
+	char			 path3[D_TM_MAX_NAME_LEN/2] = {0};
+	char			 path4[D_TM_MAX_NAME_LEN] = {0};
+	char			 path5[D_TM_MAX_NAME_LEN] = {0};
+	int			 rc;
+
+	rc = d_tm_add_ephemeral_dir(&dir_node, test_mem_size, path1);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dir_node);
+	assert_int_equal(dir_node->dtn_type, D_TM_DIRECTORY);
+
+	tmp_node = d_tm_find_metric(cli_ctx, path1);
+	assert_non_null(tmp_node);
+	key1 = tmp_node->dtn_shmem_key;
+	tmp_node = NULL;
+	dir_node = NULL;
+
+	/* add a couple ephemeral nodes under the first one */
+	snprintf(path2, sizeof(path2) - 1, "%s/children/c1", path1);
+	rc = d_tm_add_ephemeral_dir(&dir_node, test_mem_size, path2);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dir_node);
+	assert_int_equal(dir_node->dtn_type, D_TM_DIRECTORY);
+
+	tmp_node = d_tm_find_metric(cli_ctx, path2);
+	assert_non_null(tmp_node);
+	key2 = tmp_node->dtn_shmem_key;
+	assert_int_not_equal(key2, key1);
+	tmp_node = NULL;
+	dir_node = NULL;
+
+	snprintf(path3, sizeof(path3) - 1, "%s/children/c2", path1);
+	rc = d_tm_add_ephemeral_dir(&dir_node, test_mem_size, path3);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dir_node);
+	assert_int_equal(dir_node->dtn_type, D_TM_DIRECTORY);
+
+	tmp_node = d_tm_find_metric(cli_ctx, path3);
+	assert_non_null(tmp_node);
+	key3 = tmp_node->dtn_shmem_key;
+	assert_int_not_equal(key3, key1);
+	assert_int_not_equal(key3, key2);
+	tmp_node = NULL;
+	dir_node = NULL;
+
+	/* third level under the second */
+	snprintf(path4, sizeof(path4) - 1, "%s/g1", path2);
+	rc = d_tm_add_ephemeral_dir(&dir_node, test_mem_size, path4);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dir_node);
+	assert_int_equal(dir_node->dtn_type, D_TM_DIRECTORY);
+
+	tmp_node = d_tm_find_metric(cli_ctx, path4);
+	assert_non_null(tmp_node);
+	key4 = tmp_node->dtn_shmem_key;
+	assert_int_not_equal(key4, key1);
+	assert_int_not_equal(key4, key2);
+	assert_int_not_equal(key4, key3);
+	tmp_node = NULL;
+	dir_node = NULL;
+
+	snprintf(path5, sizeof(path5) - 1, "%s/g1", path3);
+	rc = d_tm_add_ephemeral_dir(&dir_node, test_mem_size, path5);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dir_node);
+	assert_int_equal(dir_node->dtn_type, D_TM_DIRECTORY);
+
+	tmp_node = d_tm_find_metric(cli_ctx, path5);
+	assert_non_null(tmp_node);
+	key5 = tmp_node->dtn_shmem_key;
+	assert_int_not_equal(key5, key1);
+	assert_int_not_equal(key5, key2);
+	assert_int_not_equal(key5, key3);
+	assert_int_not_equal(key5, key4);
+	tmp_node = NULL;
+	dir_node = NULL;
+
+	/*
+	 * delete sub-level with a child - the child region should also be
+	 * removed.
+	 */
+	rc = d_tm_del_ephemeral_dir(path2);
+	assert_rc_equal(rc, 0);
+
+	verify_ephemeral_gone(path2, key2);
+	verify_ephemeral_gone(path4, key4);
+
+	/* delete the top level - ensure all levels of children are removed */
+	rc = d_tm_del_ephemeral_dir(path1);
+	assert_rc_equal(rc, 0);
+
+	verify_ephemeral_gone(path1, key1);
+	verify_ephemeral_gone(path3, key3);
+	verify_ephemeral_gone(path5, key5);
+}
+
+static void
+expect_list_has_num_of_type(struct d_tm_node_t *dir, int type, int expected)
+{
+	struct d_tm_nodeList_t	*list = NULL;
+	struct d_tm_nodeList_t	*cur;
+	int			 num_found = 0;
+	int			 rc;
+
+	rc = d_tm_list(cli_ctx, &list, dir, type);
+	assert_rc_equal(rc, 0);
+	if (expected == 0) {
+		assert_null(list);
+		return;
+	}
+
+	assert_non_null(list);
+
+	cur = list;
+	while (cur != NULL) {
+		num_found++;
+		cur = cur->dtnl_next;
+	}
+
+	assert_int_equal(num_found, expected);
+
+	d_tm_list_free(list);
+}
+
+static void
+test_list_ephemeral(void **state)
+{
+	struct d_tm_node_t *dir_node;
+
+	/* collect a list from the ephemeral metrics' parent directory */
+	dir_node = d_tm_find_metric(cli_ctx, "gurt/tests/tmp");
+	assert_non_null(dir_node);
+	expect_list_has_num_of_type(dir_node, D_TM_DIRECTORY, 3);
+	expect_list_has_num_of_type(dir_node, D_TM_COUNTER, 2);
+	expect_list_has_num_of_type(dir_node, D_TM_TIMESTAMP, 1);
+	expect_list_has_num_of_type(dir_node, D_TM_GAUGE, 0);
+	/* links are invisible - turn into directories under the covers */
+	expect_list_has_num_of_type(dir_node, D_TM_LINK, 0);
+	expect_list_has_num_of_type(dir_node, D_TM_ALL_NODES, 6);
+}
+
+static void
+test_follow_link(void **state)
+{
+	struct d_tm_node_t	*node;
+	struct d_tm_node_t	*link_node;
+	struct d_tm_node_t	*result;
+	struct d_tm_metric_t	*link_metric;
+	key_t			 link_key;
+
+	/* directory above some link nodes */
+	node = d_tm_find_metric(cli_ctx, "gurt/tests/tmp");
+	assert_non_null(node);
+
+	/*
+	 * link nodes are hidden by the API and can only be discovered
+	 * traversing the tree manually.
+	 */
+	link_node = d_tm_get_child(cli_ctx, node);
+	while (link_node != NULL && link_node->dtn_type != D_TM_LINK)
+		link_node = d_tm_get_sibling(cli_ctx, link_node);
+	assert_non_null(link_node);
+
+	assert_null(d_tm_follow_link(NULL, link_node));
+	assert_null(d_tm_follow_link(cli_ctx, NULL));
+
+	/* not a link */
+	assert_ptr_equal(d_tm_follow_link(cli_ctx, node), node);
+
+	/* valid link - result is in another shmem region, but has same name */
+	result = d_tm_follow_link(cli_ctx, link_node);
+	assert_non_null(result);
+	assert_int_not_equal(result->dtn_shmem_key, link_node->dtn_shmem_key);
+	assert_int_equal(result->dtn_type, D_TM_DIRECTORY);
+	assert_string_equal(d_tm_get_name(cli_ctx, result),
+			    d_tm_get_name(cli_ctx, link_node));
+
+	/* cleared link - simulate by clearing value */
+	link_metric = d_tm_conv_ptr(cli_ctx, link_node, link_node->dtn_metric);
+	assert_non_null(link_metric);
+	link_key = (key_t)link_metric->dtm_data.value;
+	link_metric->dtm_data.value = 0;
+	assert_null(d_tm_follow_link(cli_ctx, link_node));
+	link_metric->dtm_data.value = link_key;
 }
 
 static void
@@ -631,26 +990,22 @@ test_find_metric(void **state)
 	struct d_tm_node_t	*node;
 
 	/** should find this one */
-	node = d_tm_find_metric(shmem_root, "gurt");
+	node = d_tm_find_metric(cli_ctx, "gurt");
 	assert_non_null(node);
 
 	/** should find this one */
-	node = d_tm_find_metric(shmem_root, "gurt/tests/telem/gauge");
+	node = d_tm_find_metric(cli_ctx, "gurt/tests/telem/gauge");
 	assert_non_null(node);
 
 	/** should not find this one */
-	node = d_tm_find_metric(shmem_root, "gurts");
+	node = d_tm_find_metric(cli_ctx, "gurts");
 	assert_null(node);
 
-	/** should not find this one */
-	node = d_tm_find_metric(NULL, "gurts");
-	assert_null(node);
-
-	/** should not find this one */
+	/** no context */
 	node = d_tm_find_metric(NULL, "gurt");
 	assert_null(node);
 
-	/** should not find this one */
+	/** all null inputs */
 	node = d_tm_find_metric(NULL, NULL);
 	assert_null(node);
 }
@@ -660,35 +1015,36 @@ test_verify_object_count(void **state)
 {
 	struct d_tm_node_t	*node;
 	int			num;
-	int			exp_num_ctr = 18;
+	int			exp_num_ctr = 20;
 	int			exp_num_gauge = 5;
 	int			exp_num_dur = 2;
-	int			exp_num_timestamp = 1;
+	int			exp_num_timestamp = 2;
 	int			exp_num_snap = 2;
 	int			exp_total;
 
 	exp_total = exp_num_ctr + exp_num_gauge + exp_num_dur +
 		    exp_num_timestamp + exp_num_snap;
 
-	node = d_tm_find_metric(shmem_root, "gurt/tests/telem");
+	/* find all metrics including the ephemeral ones under the tmp dir */
+	node = d_tm_find_metric(cli_ctx, "gurt/tests");
 	assert_non_null(node);
 
-	num = d_tm_count_metrics(shmem_root, node, D_TM_COUNTER);
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_COUNTER);
 	assert_int_equal(num, exp_num_ctr);
 
-	num = d_tm_count_metrics(shmem_root, node, D_TM_GAUGE);
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_GAUGE);
 	assert_int_equal(num, exp_num_gauge);
 
-	num = d_tm_count_metrics(shmem_root, node, D_TM_DURATION);
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_DURATION);
 	assert_int_equal(num, exp_num_dur);
 
-	num = d_tm_count_metrics(shmem_root, node, D_TM_TIMESTAMP);
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_TIMESTAMP);
 	assert_int_equal(num, exp_num_timestamp);
 
-	num = d_tm_count_metrics(shmem_root, node, D_TM_TIMER_SNAPSHOT);
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_TIMER_SNAPSHOT);
 	assert_int_equal(num, exp_num_snap);
 
-	num = d_tm_count_metrics(shmem_root, node,
+	num = d_tm_count_metrics(cli_ctx, node,
 				 D_TM_COUNTER | D_TM_GAUGE | D_TM_DURATION |
 				 D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT);
 	assert_int_equal(num, exp_total);
@@ -700,60 +1056,67 @@ test_print_metrics(void **state)
 	struct d_tm_node_t	*node;
 	int			filter;
 
-	node = d_tm_find_metric(shmem_root, "gurt");
+	node = d_tm_find_metric(cli_ctx, "gurt");
 	assert_non_null(node);
 
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 
-	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_STANDARD,
+	d_tm_print_my_children(cli_ctx, node, 0, filter, NULL, D_TM_STANDARD,
 			       D_TM_INCLUDE_METADATA, stdout);
 
 	d_tm_print_field_descriptors(D_TM_INCLUDE_TIMESTAMP |
 				     D_TM_INCLUDE_METADATA, stdout);
 
 	filter &= ~D_TM_DIRECTORY;
-	d_tm_print_my_children(shmem_root, node, 0, filter, NULL, D_TM_CSV,
+	d_tm_print_my_children(cli_ctx, node, 0, filter, NULL, D_TM_CSV,
 			       D_TM_INCLUDE_METADATA, stdout);
 }
 
 static void
 test_shared_memory_cleanup(void **state)
 {
-	int		simulated_srv_idx = TEST_IDX + 1;
-	int		rc;
-	uint64_t	*shmem;
+	int			simulated_srv_idx = TEST_IDX + 1;
+	int			rc;
+	key_t			key;
+	int			shmid;
+	struct d_tm_context	*ctx;
 
 	/**
-	 * Cleanup from all other tests
+	 * Detach from the server side
 	 */
 	d_tm_fini();
 
-	/**
-	 * Initialize the library as the server process would, which instructs
-	 * the library to remove the shared memory segment upon process detach.
-	 */
+	/* Should be gone */
+	printf("This operation is expected to generate an error:\n");
+	ctx = d_tm_open(TEST_IDX);
+	assert_null(ctx);
 
-	rc = d_tm_init(simulated_srv_idx, D_TM_SHARED_MEMORY_SIZE,
-		       D_TM_SERVER_PROCESS);
+	/**
+	 * Test a region that's retained even after detach
+	 */
+	rc = d_tm_init(simulated_srv_idx, 1024, D_TM_RETAIN_SHMEM);
 	assert_rc_equal(rc, DER_SUCCESS);
 
 	/* Detach */
 	d_tm_fini();
 
-	/* Should be gone */
-	printf("This operation is expected to generate an error:\n");
-	shmem = d_tm_get_shared_memory(simulated_srv_idx);
-	assert_null(shmem);
+	/* can still get retained region*/
+	ctx = d_tm_open(simulated_srv_idx);
+	assert_non_null(ctx);
+	d_tm_close(&ctx);
 
-	/* can still get original region */
-	shmem = d_tm_get_shared_memory(TEST_IDX);
-	assert_non_null(shmem);
+	/* destroy the region to clean up after ourselves */
+	key = d_tm_get_srv_key(simulated_srv_idx);
+	shmid = shmget(key, 0, 0);
+	assert_false(shmid < 0);
+	assert_false(shmctl(shmid, IPC_RMID, NULL) < 0);
 }
 
 static int
 fini_tests(void **state)
 {
+	d_tm_close(&cli_ctx);
 	d_tm_fini();
 	d_log_fini();
 
@@ -775,7 +1138,11 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gauge_with_histogram_multiplier_1),
 		cmocka_unit_test(test_gauge_with_histogram_multiplier_2),
 		cmocka_unit_test(test_units),
+		cmocka_unit_test(test_ephemeral_simple),
+		cmocka_unit_test(test_ephemeral_nested),
 		/* Run after the tests that populate the metrics */
+		cmocka_unit_test(test_list_ephemeral),
+		cmocka_unit_test(test_follow_link),
 		cmocka_unit_test(test_find_metric),
 		cmocka_unit_test(test_verify_object_count),
 		cmocka_unit_test(test_print_metrics),
