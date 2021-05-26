@@ -92,6 +92,19 @@ CRT_RPC_DECLARE(test_swim_status,
 CRT_RPC_DEFINE(test_swim_status,
 	       CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
 
+/* input fields */
+#define CRT_ISEQ_TEST_DISABLE_SWIM				 \
+	((uint32_t)		(rank)			CRT_VAR)
+
+/* output fields */
+#define CRT_OSEQ_TEST_DISABLE_SWIM				 \
+	((uint32_t)		(bool_val)		CRT_VAR)
+
+CRT_RPC_DECLARE(test_disable_swim,
+		CRT_ISEQ_TEST_DISABLE_SWIM, CRT_OSEQ_TEST_DISABLE_SWIM)
+CRT_RPC_DEFINE(test_disable_swim,
+	       CRT_ISEQ_TEST_DISABLE_SWIM, CRT_OSEQ_TEST_DISABLE_SWIM)
+
 static void
 test_checkin_handler(crt_rpc_t *rpc_req)
 {
@@ -249,6 +262,9 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	struct test_swim_status_in	*swim_status_rpc_req_input;
 	struct test_swim_status_out	*swim_status_rpc_req_output;
 
+	struct test_disable_swim_in	*disable_swim_rpc_req_input;
+	struct test_disable_swim_out	*disable_swim_rpc_req_output;
+
 	rpc_req = cb_info->cci_rpc;
 
 	if (cb_info->cci_arg != NULL) {
@@ -306,8 +322,22 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		sem_post(&test_g.t_token_to_proceed);
 		break;
 	case TEST_OPC_DISABLE_SWIM:
-		DBG_PRINT("Received TEST_OPC_DISABLE_SWIM.\n");
+
+		disable_swim_rpc_req_input = crt_req_get(rpc_req);
+		D_ASSERT(disable_swim_rpc_req_input != NULL);
+		disable_swim_rpc_req_output = crt_reply_get(rpc_req);
+		D_ASSERT(disable_swim_rpc_req_output != NULL);
+
+		if (cb_info->cci_rc != 0) {
+			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
+				rpc_req->cr_opc, cb_info->cci_rc);
+			break;
+		}
+		DBG_PRINT("disable_swim result - rank: %d, result: %d.\n",
+			  disable_swim_rpc_req_input->rank,
+			  disable_swim_rpc_req_output->bool_val);
 		sem_post(&test_g.t_token_to_proceed);
+		D_ASSERT(disable_swim_rpc_req_output->bool_val == true);
 		break;
 	default:
 		DBG_PRINT("Received unregistered opcode.\n");
@@ -331,15 +361,36 @@ test_shutdown_handler(crt_rpc_t *rpc_req)
 static void
 test_disable_swim_handler(crt_rpc_t *rpc_req)
 {
-	DBG_PRINT("tier1 test_srver received disable_swim request, opc: %#x.\n",
+	struct test_disable_swim_in	*e_req;
+	struct test_disable_swim_out	*e_reply;
+	int				 rc = 0;
+
+	/* CaRT internally already allocated the input/output buffer */
+	e_req = crt_req_get(rpc_req);
+
+	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
+
+	DBG_PRINT("tier1 test_server recv'd disable_swim, opc: %#x.\n",
 		  rpc_req->cr_opc);
+	DBG_PRINT("tier1 disable_swim input - rank: %d.\n",
+		  e_req->rank);
 
-	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
-	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
-
-	crt_swim_disable_all();
 	crt_swim_fini();
-	DBG_PRINT("tier1 test_srver disabled swim.\n");
+	crt_swim_disable_all();
+
+	e_reply = crt_reply_get(rpc_req);
+
+	/* If we got past the previous assert, then we've succeeded */
+	e_reply->bool_val = true;
+	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
+		  e_reply);
+
+	rc = crt_reply_send(rpc_req);
+	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
+
+	DBG_PRINT("tier1 test_srver sent disable_swim reply,"
+		  "e_reply->bool_val: %d.\n",
+		  e_reply->bool_val);
 }
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
@@ -365,7 +416,7 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
 		.prf_co_ops	= NULL,
 	}, {
 		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
-		.prf_req_fmt	= NULL,
+		.prf_req_fmt	= &CQF_test_disable_swim,
 		.prf_hdlr	= test_disable_swim_handler,
 		.prf_co_ops	= NULL,
 	}

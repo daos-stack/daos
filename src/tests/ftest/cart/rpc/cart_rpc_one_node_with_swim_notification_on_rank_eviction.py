@@ -34,7 +34,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
             procrtn = self.stop_process(srv_rtn)
             self.fail("Server did not launch, return code {}".format(procrtn))
 
-        for index in range(6):
+        for index in range(7):
             clicmd = self.build_cmd(self.env, "test_clients", index=index)
             self.launch_test(clicmd, srv_rtn)
 
@@ -46,7 +46,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
         glob_pat = daos_test_shared_dir + "/test-servers-completed.txt.*"
 
         # Verify the server(s) exited gracefully
-        if not self.check_files(glob_pat, count=3, retries=3):
+        if not self.check_files(glob_pat, count=3, retries=12):
             self.fail("Didn't find completion file(s): '" + glob_pat + "'. " +
                       "This indicates not all CaRT binaries exited " +
                       "gracefully.")
