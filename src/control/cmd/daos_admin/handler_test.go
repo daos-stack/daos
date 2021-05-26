@@ -81,7 +81,7 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 			smsc: &scm.MockSysConfig{
 				MountErr: errors.New("test mount failed"),
 			},
-			expErr: pbin.PrivilegedHelperRequestFailed(fmt.Sprintf("mount /src->%s failed: test mount failed", testTarget)),
+			expErr: pbin.PrivilegedHelperRequestFailed(fmt.Sprintf("mount tmpfs->%s failed: test mount failed", testTarget)),
 		},
 		"ScmUnmount nil payload": {
 			req: &pbin.Request{
@@ -142,6 +142,17 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dcpmFormatReqPayload, err := json.Marshal(storage.ScmFormatRequest{
+		Mountpoint: testTarget,
+		OwnerUID:   os.Getuid(),
+		OwnerGID:   os.Getgid(),
+		Dcpm: &storage.DcpmParams{
+			Device: "/foo/bar",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	nilPayloadErr := pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input")
 
@@ -195,10 +206,10 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 			},
 			expPayload: &storage.ScmFormatResponse{Mountpoint: testTarget},
 		},
-		"ScmCheckFormat failure": {
+		"ScmCheckFormat scan failure": {
 			req: &pbin.Request{
 				Method:  "ScmFormat",
-				Payload: scmFormatReqPayload,
+				Payload: dcpmFormatReqPayload,
 			},
 			smbc: &scm.MockBackendConfig{
 				DiscoverErr: errors.New("scan failed"),
