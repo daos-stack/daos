@@ -461,14 +461,14 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		prefix     string
-		tgtUid     string
+		tgtUID     string
 		testInputs []*testWalkInput
 		removeErr  error
 		expRemoved []string
 	}{
 		"ignore subdirectory": {
 			prefix: "prefix1",
-			tgtUid: "42",
+			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
 					path: filepath.Join(testDir, "prefix1_foo"),
@@ -507,7 +507,7 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 		},
 		"nil file stat": {
 			prefix: "prefix1",
-			tgtUid: "42",
+			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
 					path: filepath.Join(testDir, "prefix1_foo"),
@@ -522,7 +522,7 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 		},
 		"prefix matching": {
 			prefix: "prefix1",
-			tgtUid: "42",
+			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
 					path: filepath.Join(testDir, "prefix2_foo"),
@@ -537,7 +537,7 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 		},
 		"uid matching": {
 			prefix: "prefix1",
-			tgtUid: "42",
+			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
 					path: filepath.Join(testDir, "prefix1_foo"),
@@ -552,7 +552,7 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 		},
 		"remove fails": {
 			prefix: "prefix1",
-			tgtUid: "42",
+			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
 					path:   filepath.Join(testDir, "prefix1_foo"),
@@ -573,7 +573,7 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 				return tc.removeErr
 			}
 
-			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUid, removeFn)
+			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUID, removeFn)
 			for _, ti := range tc.testInputs {
 				gotErr := testFn(ti.path, ti.info, ti.err)
 				common.CmpErr(t, ti.expErr, gotErr)
