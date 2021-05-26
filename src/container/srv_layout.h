@@ -35,7 +35,7 @@
 #define DS_CONT_MD_VERSION 2
 
 /* Lowest compatible layout version */
-#define DS_CONT_MD_VERSION_LOW 2
+#define DS_CONT_MD_VERSION_LOW 1
 
 /*
  * Root KVS (RDB_KVS_GENERIC)
@@ -52,7 +52,7 @@ extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
 /*
  * Container UUIDs KVS (RDB_KVS_GENERIC)
  *
- * This maps container labels to container UUID.
+ * This maps container labels (string, without '\0') to container UUID (uuid_t).
  * Used to get UUID key for lookup in container KVS.
  */
 

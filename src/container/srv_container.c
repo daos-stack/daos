@@ -1503,7 +1503,6 @@ cont_lookup_bylabel(struct rdb_tx *tx, const struct cont_svc *svc,
 		return -DER_INVAL;
 
 	/* Look up container UUID by label */
-	uuid_clear(uuid);
 	d_iov_set(&key, (void *)label, label_len);
 	d_iov_set(&val, (void *)uuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &svc->cs_uuids, &key, &val);

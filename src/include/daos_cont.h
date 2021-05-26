@@ -190,9 +190,9 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
  *			-DER_RF		#failures exceed RF, data possibly lost
  */
 int
-daos_cont_open_bylabel(daos_handle_t poh, const char *label, unsigned int flags,
-		       daos_handle_t *coh, daos_cont_info_t *info,
-		       daos_event_t *ev);
+daos_cont_open_by_label(daos_handle_t poh, const char *label,
+			unsigned int flags, daos_handle_t *coh,
+			daos_cont_info_t *info, daos_event_t *ev);
 
 /**
  * Close a container handle. Upon successful completion, the container handle's

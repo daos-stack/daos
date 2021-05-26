@@ -604,7 +604,7 @@ out:
 	return rc;
 }
 
-/* NB: common function for CONT_OPEN and CONT_OPEN_BYLABEL */
+/* NB: common function for CONT_OPEN and CONT_OPEN_BYLABEL RPCs */
 static int
 cont_open_complete(tse_task_t *task, void *data)
 {
@@ -638,7 +638,7 @@ cont_open_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	/* If open bylabel, copy the returned UUID into dc_cont structure */
+	/* If open by label, copy the returned UUID into dc_cont structure */
 	if (arg->coa_label) {
 		struct cont_open_bylabel_out *lbl_out = crt_reply_get(arg->rpc);
 
@@ -709,10 +709,9 @@ out:
 }
 
 static int
-dc_cont_open_internal(tse_task_t *task, daos_cont_info_t *info,
-		      const char *label, struct dc_pool *pool,
-		      daos_handle_t poh, daos_handle_t *coh)
+dc_cont_open_internal(tse_task_t *task, struct dc_pool *pool)
 {
+	daos_cont_open_t	*args;
 	struct cont_open_in	*in;
 	struct dc_cont		*cont;
 	crt_endpoint_t		 ep;
@@ -721,18 +720,19 @@ dc_cont_open_internal(tse_task_t *task, daos_cont_info_t *info,
 	enum cont_operation	 cont_op;
 	int			 rc;
 
+	args = dc_task_get_args(task);
 	cont = dc_task_get_priv(task);
-	cont_op = label ? CONT_OPEN_BYLABEL : CONT_OPEN;
+	cont_op = args->label ? CONT_OPEN_BYLABEL : CONT_OPEN;
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
 				     &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
-		if (label)
+		if (args->label)
 			D_ERROR(DF_UUID":%s: cannot find container service: "
 				DF_RC"\n", DP_UUID(pool->dp_pool),
-				label, DP_RC(rc));
+				args->label, DP_RC(rc));
 		else
 			D_ERROR(DF_CONT": cannot find container service: "
 				DF_RC"\n", DP_CONT(pool->dp_pool,
@@ -761,18 +761,18 @@ dc_cont_open_internal(tse_task_t *task, daos_cont_info_t *info,
 				  DAOS_CO_QUERY_PROP_REDUN_FAC;
 
 	/* open bylabel RPC input */
-	if (label) {
+	if (args->label) {
 		struct cont_open_bylabel_in *lbl_in = crt_req_get(rpc);
 
-		lbl_in->coli_label = label;
+		lbl_in->coli_label = args->label;
 	}
 
 	arg.coa_pool		= pool;
-	arg.coa_info		= info;
-	arg.coa_label		= label;
+	arg.coa_info		= args->info;
+	arg.coa_label		= args->label;
 	arg.rpc			= rpc;
-	arg.hdl			= poh;
-	arg.hdlp		= coh;
+	arg.hdl			= args->poh;
+	arg.hdlp		= args->coh;
 
 	crt_req_addref(rpc);
 
@@ -824,8 +824,7 @@ dc_cont_open(tse_task_t *task)
 		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(cont->dc_cont_hdl),
 		args->flags);
 
-	rc = dc_cont_open_internal(task, args->info, NULL /* label */, pool,
-				   args->poh, args->coh);
+	rc = dc_cont_open_internal(task, pool);
 	if (rc)
 		goto err_cont;
 
@@ -875,8 +874,7 @@ dc_cont_open_lbl(tse_task_t *task)
 		DP_UUID(pool->dp_pool), args->label, DP_UUID(cont->dc_cont_hdl),
 		args->flags);
 
-	rc = dc_cont_open_internal(task, args->info, args->label, pool,
-				   args->poh, args->coh);
+	rc = dc_cont_open_internal(task, pool);
 	if (rc)
 		goto err_cont;
 

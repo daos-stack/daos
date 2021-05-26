@@ -29,7 +29,7 @@
 #define DS_POOL_MD_VERSION 2
 
 /* Lowest compatible layout version */
-#define DS_POOL_MD_VERSION_LOW 2
+#define DS_POOL_MD_VERSION_LOW 1
 
 /*
  * Root KVS (RDB_KVS_GENERIC): pool properties
