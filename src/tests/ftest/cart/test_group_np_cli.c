@@ -170,7 +170,7 @@ test_run(void)
 
 			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
 				DBG_PRINT("Sending rpc to %d:%d\n", rank, tag);
-				check_in(grp, rank, tag);
+				send_rpc_check_in(grp, rank, tag);
 			}
 		}
 

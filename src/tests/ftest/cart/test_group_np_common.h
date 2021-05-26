@@ -431,7 +431,7 @@ struct crt_proto_format my_proto_fmt_test_group1 = {
 };
 
 void
-check_in(crt_group_t *remote_group, int rank, int tag)
+send_rpc_check_in(crt_group_t *remote_group, int rank, int tag)
 {
 	crt_rpc_t			*rpc_req = NULL;
 	struct test_ping_check_in	*rpc_req_input;
