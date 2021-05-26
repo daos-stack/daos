@@ -672,7 +672,8 @@ test_parse_args(int argc, char **argv)
 		{"disable_swim", no_argument, &test_g.t_disable_swim, 1},
 		{"get_swim_status", no_argument, 0, 'g'},
 		{"shutdown_delay", required_argument, 0, 'd'},
-		{"write_completion_file", no_argument, &test_g.t_write_completion_file, 1},
+		{"write_completion_file", no_argument,
+		 &test_g.t_write_completion_file, 1},
 		{0, 0, 0, 0}
 	};
 
