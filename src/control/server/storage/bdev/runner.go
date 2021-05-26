@@ -3,7 +3,6 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-
 package bdev
 
 import (
@@ -118,7 +117,7 @@ func (s *spdkSetupScript) Prepare(req PrepareRequest) error {
 	}
 
 	if req.PCIAllowlist != "" && req.PCIBlocklist != "" {
-		return errors.New("bdev_include and bdev_exclude can not be used together")
+		return errors.New("bdev_include and bdev_exclude can't be used together\n")
 	}
 
 	if req.PCIAllowlist != "" {

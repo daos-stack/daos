@@ -313,8 +313,8 @@ func detectVMD() ([]string, error) {
 }
 
 // hugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
-// name begins with prefix and owner has uid equal to tgtUID.
-func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn) filepath.WalkFunc {
+// name begins with prefix and owner has uid equal to tgtUid.
+func hugePageWalkFunc(hugePageDir, prefix, tgtUid string, remove removeFn) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		switch {
 		case err != nil:
@@ -334,7 +334,7 @@ func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn) filep
 		if !ok || stat == nil {
 			return errors.New("stat missing for file")
 		}
-		if strconv.Itoa(int(stat.Uid)) != tgtUID {
+		if strconv.Itoa(int(stat.Uid)) != tgtUid {
 			return nil // skip not owned by target user
 		}
 
@@ -349,9 +349,9 @@ func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn) filep
 // cleanHugePages removes hugepage files with pathPrefix that are owned by the
 // user with username tgtUsr by processing directory tree with filepath.WalkFunc
 // returned from hugePageWalkFunc.
-func cleanHugePages(hugePageDir, prefix, tgtUID string) error {
+func cleanHugePages(hugePageDir, prefix, tgtUid string) error {
 	return filepath.Walk(hugePageDir,
-		hugePageWalkFunc(hugePageDir, prefix, tgtUID, os.Remove))
+		hugePageWalkFunc(hugePageDir, prefix, tgtUid, os.Remove))
 }
 
 func (b *spdkBackend) vmdPrep(req PrepareRequest) (bool, error) {

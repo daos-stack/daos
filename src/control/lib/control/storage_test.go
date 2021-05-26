@@ -98,7 +98,7 @@ func TestControl_StorageMap(t *testing.T) {
 					NvmeDevices: storage.NvmeControllers{
 						&storage.NvmeController{
 							Namespaces: []*storage.NvmeNamespace{
-								{
+								&storage.NvmeNamespace{
 									Size: uint64(humanize.TByte),
 								},
 							},
@@ -110,7 +110,7 @@ func TestControl_StorageMap(t *testing.T) {
 					NvmeDevices: storage.NvmeControllers{
 						&storage.NvmeController{
 							Namespaces: []*storage.NvmeNamespace{
-								{
+								&storage.NvmeNamespace{
 									Size: uint64(humanize.TByte * 2),
 								},
 							},

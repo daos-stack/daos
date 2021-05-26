@@ -104,7 +104,7 @@ func TestBdev_Runner_Prepare(t *testing.T) {
 				DisableVFIO:           true,
 			},
 			expErr: errors.New(
-				"bdev_include and bdev_exclude can not be used together"),
+				"bdev_include and bdev_exclude can't be used together"),
 		},
 		"unknown target user fails": {
 			req: PrepareRequest{
