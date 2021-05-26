@@ -107,7 +107,7 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 	struct daos_prop_entry	*prop_entry;
 	struct daos_acl		*acl;
 	d_rank_list_t		*svc_list;
-	struct policy_desc_t 	*pd;
+	struct policy_desc_t	*pd;
 	unsigned int		offset = 0;
 	int			i;
 
@@ -174,9 +174,12 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_POLICY:
 			pd = prop_entry->dpe_val_ptr;
 			if (pd != NULL) {
-				iv_prop->pip_policy_desc = (void *)(iv_prop->pip_iv_buf + roundup(offset, 8));
+				iv_prop->pip_policy_desc = (void *)
+							 (iv_prop->pip_iv_buf +
+							 roundup(offset, 8));
 				iv_prop->pip_policy_desc_offset = offset;
-				memcpy(iv_prop->pip_policy_desc, pd, sizeof(*pd));
+				memcpy(iv_prop->pip_policy_desc, pd,
+				       sizeof(*pd));
 				offset += roundup(sizeof(*pd), 8);
 			}
 			break;
@@ -192,13 +195,12 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*prop_entry;
 	struct daos_acl		*acl;
-	struct policy_desc_t 	*pd;
+	struct policy_desc_t	*pd;
 	void			*label_alloc = NULL;
 	void			*owner_alloc = NULL;
 	void			*owner_grp_alloc = NULL;
 	void			*acl_alloc = NULL;
 	void			*pd_alloc = NULL;
-
 	d_rank_list_t		*svc_list = NULL;
 	d_rank_list_t		*dst_list;
 	int			i;
@@ -276,16 +278,16 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			}
 			break;
 		case DAOS_PROP_PO_POLICY:
-			iv_prop->pip_policy_desc = (void *)(iv_prop->pip_iv_buf +
-						   roundup(iv_prop->pip_policy_desc_offset, 8));
+			iv_prop->pip_policy_desc = (void *)
+				(iv_prop->pip_iv_buf +
+				roundup(iv_prop->pip_policy_desc_offset, 8));
 			pd = iv_prop->pip_policy_desc;
 
 			D_ALLOC(pd_alloc, sizeof(*pd));
 			if (pd_alloc != NULL) {
 				memcpy(pd_alloc, pd, sizeof(*pd));
 				prop_entry->dpe_val_ptr = pd_alloc;
-			}
-			else {
+			} else {
 				D_GOTO(out, rc = -DER_NOMEM);
 			}
 			break;

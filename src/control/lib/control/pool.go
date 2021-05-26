@@ -1021,7 +1021,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 // Returns an error if string cannot be found in the map
 func ParsePolicy(stringPolicy string, stringArgs []string) (policy uint32, parameters []uint32, err error) {
 
-	var p, found = PolicyMap[stringPolicy]
+	p, found := PolicyMap[stringPolicy]
 
 	var params []uint32
 	for _, val := range stringArgs {

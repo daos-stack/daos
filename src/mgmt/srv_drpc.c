@@ -239,20 +239,23 @@ out:
 }
 
 static int
-create_pool_props_from_req(daos_prop_t **out_prop, const Mgmt__PoolCreateReq *req)
+create_pool_props_from_req(daos_prop_t **out_prop,
+			   const Mgmt__PoolCreateReq *req)
 {
 	char			*out_owner = NULL;
 	char			*out_owner_grp = NULL;
 	char			*out_label = NULL;
 	struct daos_acl		*out_acl = NULL;
-	struct policy_desc_t 	*out_policy_desc = NULL;
+	struct policy_desc_t	*out_policy_desc = NULL;
 	daos_prop_t		*new_prop = NULL;
 	uint32_t		entries = 0;
 	uint32_t		idx = 0;
 	int			rc = 0;
+	int 			i;
 
 	if (req->acl != NULL && req->n_acl > 0) {
-		rc = daos_acl_from_strs((const char **)req->acl, req->n_acl, &out_acl);
+		rc = daos_acl_from_strs((const char **)req->acl, req->n_acl,
+					&out_acl);
 		if (rc != 0)
 			D_GOTO(err_out, rc);
 
@@ -284,19 +287,17 @@ create_pool_props_from_req(daos_prop_t **out_prop, const Mgmt__PoolCreateReq *re
 	}
 
 	D_ALLOC(out_policy_desc, sizeof(struct policy_desc_t));
- 		if (out_policy_desc == NULL)
+		if (out_policy_desc == NULL)
 			D_GOTO(err_out, rc = -DER_NOMEM);
 
-	if (req->policyparams != NULL)
-	{
+	if (req->policyparams != NULL) {
 		if (req->n_policyparams > DAOS_MEDIA_POLICY_PARAMS_MAX)
 			D_GOTO(err_out, rc = -DER_INVAL);
 
-		for (int i = 0; i < req->n_policyparams; i++)
+		for (i = 0; i < req->n_policyparams; i++)
 			out_policy_desc->params[i] = req->policyparams[i];
-	}
-	else {
-		for (int i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
+	} else {
+		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
 			out_policy_desc->params[i] = 0;
 	}
 	out_policy_desc->policy = req->policy;
@@ -338,7 +339,6 @@ create_pool_props_from_req(daos_prop_t **out_prop, const Mgmt__PoolCreateReq *re
 	/* pool tiering policy */
 	new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POLICY;
 	new_prop->dpp_entries[idx].dpe_val_ptr = out_policy_desc;
-	// idx++;
 
 	*out_prop = new_prop;
 
@@ -407,12 +407,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-<<<<<<< HEAD
-	rc = create_pool_props(&base_props, req->user, req->usergroup,
-			       (const char **)req->acl, req->n_acl);
-=======
 	rc = create_pool_props_from_req(&prop, req);
->>>>>>> 5c4a99d63 (Pool tiering policy)
 	if (rc != 0)
 		goto out;
 

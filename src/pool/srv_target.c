@@ -1348,15 +1348,14 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 static int
 update_vos_prop_on_targets(void *in)
 {
-	struct ds_pool 			*pool = (struct ds_pool *)in;
-	struct ds_pool_child 		*child = NULL;
-	//vos_ctl_set_policy_param 	param;
+	struct ds_pool			*pool = (struct ds_pool *)in;
+	struct ds_pool_child		*child = NULL;
 	struct policy_desc_t		policy_desc = {0};
-	int 				ret = 0;
+	int				ret = 0;
 
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
-		return -DER_NONEXIST; //no child created yet?
+		return -DER_NONEXIST;	/* no child created yet? */
 
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);

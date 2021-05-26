@@ -715,7 +715,8 @@ failed:
 }
 
 int
-vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *poh)
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
+	      daos_handle_t *poh)
 {
 	struct vos_pool_df	*pool_df;
 	struct vos_pool		*pool = NULL;
@@ -890,9 +891,10 @@ vos_pool_space_sys_set(daos_handle_t poh, daos_size_t *space_sys)
 }
 
 int
-vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void* param)
+vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 {
 	struct vos_pool		*pool;
+	int 			i;
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL)
@@ -913,16 +915,17 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void* param)
 			vea_flush(pool->vp_vea_info, false);
 		break;
 	case VOS_PO_CTL_SET_POLICY:
-		if (param == NULL) {
+		if (param == NULL)
 			return -DER_INVAL;
-		} else {
-			struct policy_desc_t *p = (struct policy_desc_t*)param;
-			pool->vp_policy_desc.policy = p->policy;
 
-			for (int i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++) {
-				pool->vp_policy_desc.params[i] = p->params[i];
-			}
+		struct policy_desc_t *p = (struct policy_desc_t *)param;
+
+		pool->vp_policy_desc.policy = p->policy;
+
+		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++) {
+			pool->vp_policy_desc.params[i] = p->params[i];
 		}
+		break;
 	}
 
 	return 0;
