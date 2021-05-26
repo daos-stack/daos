@@ -108,12 +108,13 @@ func (c *logCmd) setLog(log *logging.LeveledLogger) {
 }
 
 type cliOptions struct {
-	Debug     bool         `long:"debug" description:"enable debug output"`
-	Verbose   bool         `long:"verbose" description:"enable verbose output (when applicable)"`
-	JSON      bool         `long:"json" description:"enable JSON output"`
-	Container containerCmd `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
-	Pool      poolCmd      `command:"pool" description:"perform tasks related to DAOS pools"`
-	Version   versionCmd   `command:"version" description:"print daos version"`
+	Debug      bool         `long:"debug" description:"enable debug output"`
+	Verbose    bool         `long:"verbose" description:"enable verbose output (when applicable)"`
+	JSON       bool         `long:"json" description:"enable JSON output"`
+	Container  containerCmd `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
+	Pool       poolCmd      `command:"pool" description:"perform tasks related to DAOS pools"`
+	Filesystem fsCmd        `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
+	Version    versionCmd   `command:"version" description:"print daos version"`
 }
 
 type versionCmd struct{}

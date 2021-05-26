@@ -203,7 +203,7 @@ def scons():
                          "-L$BUILD_DIR/src/client/dfs "
                          "-L$BUILD_DIR/src/utils $_RPATH")
     dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
-    daosbin = install_go_bin(dbenv, gosrc, [daos_hdlrs_lib], "daos", "daos_new")
+    daosbin = install_go_bin(dbenv, gosrc, [daos_hdlrs_lib], "daos", "daos")
     AlwaysBuild([daosbin])
 
     SConscript('lib/spdk/SConscript', exports='denv')

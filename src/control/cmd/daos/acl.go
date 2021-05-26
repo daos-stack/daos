@@ -7,11 +7,7 @@
 package main
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../../utils
-#cgo LDFLAGS: -ldaos_common -ldaos_cmd_hdlrs
-
 #include <daos.h>
-#include <daos_security.h>
 #include <gurt/common.h>
 
 #include "daos_hdlr.h"
@@ -29,10 +25,13 @@ free_strings(char **str, size_t str_count)
 import "C"
 import (
 	"fmt"
+	"os"
 	"strings"
 	"unsafe"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 func getAclStrings(e *C.struct_daos_prop_entry) (out []string) {
@@ -187,7 +186,7 @@ func (cmd *containerUpdateACLCmd) Execute(args []string) error {
 type containerDeleteACLCmd struct {
 	existingContainerCmd
 
-	Principal string `long:"principal" short:"p" required:"1"`
+	Principal string `long:"principal" short:"P" required:"1"`
 }
 
 func (cmd *containerDeleteACLCmd) Execute(args []string) error {
@@ -216,8 +215,29 @@ func (cmd *containerDeleteACLCmd) Execute(args []string) error {
 	return nil
 }
 
+func convertACLProps(props []*property) (acl *control.AccessControlList) {
+	acl = new(control.AccessControlList)
+
+	for _, prop := range props {
+		switch prop.entry.dpe_type {
+		case C.DAOS_PROP_CO_ACL:
+			acl.Entries = strings.Split(prop.toString(prop.entry, "acls"), ", ")
+		case C.DAOS_PROP_CO_OWNER:
+			acl.Owner = prop.toString(prop.entry, "owner")
+		case C.DAOS_PROP_CO_OWNER_GROUP:
+			acl.OwnerGroup = prop.toString(prop.entry, "group")
+		}
+	}
+
+	return
+}
+
 type containerGetACLCmd struct {
 	existingContainerCmd
+
+	File    string `long:"outfile" short:"O" description:"write ACL to file"`
+	Force   bool   `long:"force" short:"f" description:"overwrite existing outfile"`
+	Verbose bool   `long:"verbose" short:"V" description:"show verbose output"`
 }
 
 func (cmd *containerGetACLCmd) Execute(args []string) error {
@@ -234,17 +254,30 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 	}
 	defer cleanupAcl()
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(aclProps, nil)
+	acl := convertACLProps(aclProps)
+
+	output := os.Stdout
+	if cmd.File != "" {
+		flags := os.O_CREATE | os.O_WRONLY
+		if !cmd.Force {
+			flags |= os.O_EXCL
+		}
+
+		output, err = os.OpenFile(cmd.File, flags, 0644)
+		if err != nil {
+			return errors.Wrap(err,
+				"failed to open ACL output file")
+		}
+		defer output.Close()
 	}
 
-	title := fmt.Sprintf("ACL for container %s", cmd.contUUID)
-	var bld strings.Builder
-	printProperties(&bld, title, aclProps...)
+	if cmd.jsonOutputEnabled() {
+		cmd.wroteJSON.SetTrue()
+		return outputJSON(output, acl, nil)
+	}
 
-	cmd.log.Info(bld.String())
-
-	return nil
+	_, err = fmt.Fprintf(output, control.FormatACL(acl, cmd.Verbose))
+	return err
 }
 
 type containerSetOwnerCmd struct {

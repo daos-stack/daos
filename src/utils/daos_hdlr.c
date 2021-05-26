@@ -718,7 +718,8 @@ cont_check_hdlr(struct cmd_args_s *ap)
 		duration = 1;
 
 	if (rc == 0 || rc == -DER_NOSYS || rc == -DER_MISMATCH) {
-		D_PRINT("check container "DF_UUIDF" completed at: %s\n"
+		fprintf(ap->outstream,
+			"check container "DF_UUIDF" completed at: %s\n"
 			"checked: %lu\n"
 			"skipped: %lu\n"
 			"inconsistent: %lu\n"

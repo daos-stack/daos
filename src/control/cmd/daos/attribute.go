@@ -17,15 +17,7 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../../utils
-#cgo LDFLAGS: -lgurt -lcart -ldaos -ldaos_common
-
-#include <stdlib.h>
 #include <daos.h>
-#include <daos/common.h>
-#include <daos/debug.h>
-
-#include "daos_hdlr.h"
 */
 import "C"
 
@@ -140,7 +132,7 @@ func getDaosAttribute(hdl C.daos_handle_t, at attrType, name string) (*attribute
 	var attrSize C.size_t
 
 	attrName := C.CString(name)
-	defer C.free(unsafe.Pointer(attrName))
+	defer freeString(attrName)
 
 	switch at {
 	case poolAttr:
@@ -189,9 +181,9 @@ func setDaosAttribute(hdl C.daos_handle_t, at attrType, attr *attribute) error {
 	}
 
 	attrName := C.CString(attr.Name)
-	defer C.free(unsafe.Pointer(attrName))
+	defer freeString(attrName)
 	attrValue := C.CString(attr.Value)
-	defer C.free(unsafe.Pointer(attrValue))
+	defer freeString(attrValue)
 	valueLen := C.uint64_t(len(attr.Value) + 1)
 
 	var rc C.int
@@ -211,7 +203,7 @@ func setDaosAttribute(hdl C.daos_handle_t, at attrType, attr *attribute) error {
 
 func delDaosAttribute(hdl C.daos_handle_t, at attrType, name string) error {
 	attrName := C.CString(name)
-	defer C.free(unsafe.Pointer(attrName))
+	defer freeString(attrName)
 
 	var rc C.int
 	switch at {
