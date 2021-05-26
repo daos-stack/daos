@@ -30,19 +30,20 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
 	fmt.Fprintln(w, "Pool space info:")
 	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
-	if pqr.Scm != nil {
-		fmt.Fprintln(w, "- SCM:")
-		fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(pqr.Scm.Total))
-		fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
-			humanize.Bytes(pqr.Scm.Free), humanize.Bytes(pqr.Scm.Min),
-			humanize.Bytes(pqr.Scm.Max), humanize.Bytes(pqr.Scm.Mean))
-	}
-	if pqr.Nvme != nil {
-		fmt.Fprintln(w, "- NVMe:")
-		fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(pqr.Nvme.Total))
-		fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
-			humanize.Bytes(pqr.Nvme.Free), humanize.Bytes(pqr.Nvme.Min),
-			humanize.Bytes(pqr.Nvme.Max), humanize.Bytes(pqr.Nvme.Mean))
+	if pqr.TierStats != nil {
+		for tierIdx, tierStats := range pqr.TierStats {
+			var tierName string
+			if tierIdx == 0 {
+				tierName = "- Storage tier 0 (SCM):"
+			} else {
+				tierName = fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
+			}
+			fmt.Fprintln(w, tierName)
+			fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierStats.Total))
+			fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
+				humanize.Bytes(tierStats.Free), humanize.Bytes(tierStats.Min),
+				humanize.Bytes(tierStats.Max), humanize.Bytes(tierStats.Mean))
+		}
 	}
 	if pqr.Rebuild != nil {
 		if pqr.Rebuild.Status == 0 {

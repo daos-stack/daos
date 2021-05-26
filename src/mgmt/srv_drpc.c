@@ -1355,6 +1355,16 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 	}
 }
 
+static void
+pool_query_free_tier_stats(Mgmt__PoolQueryResp *resp)
+{
+	if (resp->tier_stats != NULL) {
+		D_FREE(resp->tier_stats);
+		resp->tier_stats = NULL;
+	}
+	resp->n_tier_stats = 0;
+}
+
 void
 ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -1406,17 +1416,26 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.leader = pool_info.pi_leader;
 	resp.version = pool_info.pi_map_ver;
 
+	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
+	if (resp.tier_stats == NULL) {
+		D_ERROR("Failed to allocate tier_stats for resp\n");
+		D_GOTO(out_tiers, rc = -DER_NOMEM);
+	}
+
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
 					    DAOS_MEDIA_SCM);
-	resp.scm = &scm;
+	resp.tier_stats[DAOS_MEDIA_SCM] = &scm;
+	resp.n_tier_stats++;
 
 	storage_usage_stats_from_pool_space(&nvme, &pool_info.pi_space,
 					    DAOS_MEDIA_NVME);
-	resp.nvme = &nvme;
+	resp.tier_stats[DAOS_MEDIA_NVME] = &nvme;
+	resp.n_tier_stats++;
 
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
+out_tiers:
 out_ranks:
 	d_rank_list_free(svc_ranks);
 out:
@@ -1433,6 +1452,8 @@ out:
 	}
 
 	mgmt__pool_query_req__free_unpacked(req, &alloc.alloc);
+
+	pool_query_free_tier_stats(&resp);
 }
 
 void

@@ -336,15 +336,14 @@ type (
 
 	// PoolInfo contains information about the pool.
 	PoolInfo struct {
-		TotalTargets    uint32             `json:"total_targets"`
-		ActiveTargets   uint32             `json:"active_targets"`
-		TotalNodes      uint32             `json:"total_nodes"`
-		DisabledTargets uint32             `json:"disabled_targets"`
-		Version         uint32             `json:"version"`
-		Leader          uint32             `json:"leader"`
-		Rebuild         *PoolRebuildStatus `json:"rebuild"`
-		Scm             *StorageUsageStats `json:"scm"`
-		Nvme            *StorageUsageStats `json:"nvme"`
+		TotalTargets    uint32               `json:"total_targets"`
+		ActiveTargets   uint32               `json:"active_targets"`
+		TotalNodes      uint32               `json:"total_nodes"`
+		DisabledTargets uint32               `json:"disabled_targets"`
+		Version         uint32               `json:"version"`
+		Leader          uint32               `json:"leader"`
+		Rebuild         *PoolRebuildStatus   `json:"rebuild"`
+		TierStats       []*StorageUsageStats `json:"tier_stats"`
 	}
 
 	// PoolQueryResp contains the pool query response.

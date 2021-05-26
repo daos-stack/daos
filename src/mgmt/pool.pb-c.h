@@ -701,13 +701,10 @@ struct  _Mgmt__PoolQueryResp
    */
   Mgmt__PoolRebuildStatus *rebuild;
   /*
-   * SCM storage usage stats
+   * storage tiers usage stats
    */
-  Mgmt__StorageUsageStats *scm;
-  /*
-   * NVMe storage usage stats
-   */
-  Mgmt__StorageUsageStats *nvme;
+  size_t n_tier_stats;
+  Mgmt__StorageUsageStats **tier_stats;
   /*
    * total nodes in pool
    */
@@ -723,7 +720,7 @@ struct  _Mgmt__PoolQueryResp
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, NULL, NULL, 0, 0, 0 }
+    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, 0 }
 
 
 typedef enum {
