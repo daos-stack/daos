@@ -334,8 +334,6 @@ type SystemStopReq struct {
 	unaryRequest
 	msRequest
 	sysRequest
-	Prep  bool
-	Kill  bool
 	Force bool
 }
 
@@ -386,8 +384,6 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	pbReq := new(mgmtpb.SystemStopReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
-	pbReq.Prep = req.Prep
-	pbReq.Kill = req.Kill
 	pbReq.Force = req.Force
 	pbReq.Sys = req.getSystem(rpcClient)
 
@@ -446,6 +442,7 @@ type SystemEraseResp struct {
 	Results system.MemberResults
 }
 
+// Errors returns error if any of the results indicate a failure.
 func (resp *SystemEraseResp) Errors() error {
 	return resp.Results.Errors()
 }
