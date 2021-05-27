@@ -989,7 +989,7 @@ fs_op_hdlr(struct cmd_args_s *ap)
 {
 	enum fs_op	op;
 	char		*name = NULL, *dir_name = NULL;
-	int		rc = 0;
+	int		rc = 0, rc2 = 0;
 
 	assert(ap != NULL);
 	op = ap->fs_op;
@@ -1060,6 +1060,25 @@ fs_op_hdlr(struct cmd_args_s *ap)
 			ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 			ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
 		}
+
+		rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
+				&ap->pool, NULL, NULL);
+		if (rc != 0) {
+			fprintf(stderr,
+				"failed to connect to pool "DF_UUIDF": %s (%d)\n",
+				DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+			return rc;
+		}
+
+		rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW | DAOS_COO_FORCE,
+				&ap->cont, NULL, NULL);
+		if (rc != 0) {
+			fprintf(stderr,
+				"failed to open container "DF_UUIDF ": %s (%d)\n",
+				DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			D_GOTO(out_disconnect, rc);
+		}
+
 		rc = fs_dfs_hdlr(ap);
 		if (rc)
 			D_GOTO(out, rc);
@@ -1068,6 +1087,14 @@ fs_op_hdlr(struct cmd_args_s *ap)
 		break;
 	}
 
+out_disconnect:
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr,
+			"failed to disconnect from pool "DF_UUIDF": %s (%d)\n",
+			DP_UUID(ap->p_uuid), d_errdesc(rc2), rc2);
+	if (rc == 0)
+		rc = rc2;
 out:
 	D_FREE(dir_name);
 	D_FREE(name);

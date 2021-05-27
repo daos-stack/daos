@@ -13,6 +13,7 @@ import (
 	"os"
 	"unsafe"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
@@ -317,5 +318,48 @@ func (er *epochRange) UnmarshalFlag(fv string) error {
 	if er.begin >= er.end {
 		return errors.Errorf("range begin must be < end")
 	}
+	return nil
+}
+
+type chunkSize struct {
+	set  bool
+	size C.uint64_t
+}
+
+func (c *chunkSize) UnmarshalFlag(fv string) error {
+	if fv == "" {
+		return errors.New("empty chunk size")
+	}
+
+	size, err := humanize.ParseBytes(fv)
+	if err != nil {
+		return err
+	}
+	c.size = C.uint64_t(size)
+	c.set = true
+
+	return nil
+}
+
+type objectClass struct {
+	set   bool
+	class C.ushort
+}
+
+func (oc *objectClass) UnmarshalFlag(fv string) error {
+	if fv == "" {
+		return errors.New("empty object class")
+	}
+
+	cObjClass := C.CString(fv)
+	defer freeString(cObjClass)
+
+	oc.class = (C.ushort)(C.daos_oclass_name2id(cObjClass))
+	if oc.class == C.OC_UNKNOWN {
+		return errors.Errorf("unknown object class %q",
+			fv)
+	}
+	oc.set = true
+
 	return nil
 }

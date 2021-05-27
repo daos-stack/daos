@@ -14,7 +14,6 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -114,8 +113,8 @@ type containerCreateCmd struct {
 	UUID        string         `long:"cont" short:"c" description:"container UUID (optional)"`
 	Type        string         `long:"type" short:"t" description:"container type" choice:"POSIX" choice:"HDF5" default:"POSIX"`
 	Path        string         `long:"path" short:"d" description:"container namespace path"`
-	ChunkSize   string         `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass string         `long:"oclass" short:"o" description:"default object class"`
+	ChunkSize   chunkSize      `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass objectClass    `long:"oclass" short:"o" description:"default object class"`
 	Properties  PropertiesFlag `long:"properties" description:"container properties"`
 	ACLFile     string         `long:"acl-file" short:"A" description:"input file containing ACL"`
 	User        string         `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
@@ -176,22 +175,11 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	case "POSIX":
 		ap._type = C.DAOS_PROP_CO_LAYOUT_POSIX
 
-		if cmd.ChunkSize != "" {
-			chunkSize, err := humanize.ParseBytes(cmd.ChunkSize)
-			if err != nil {
-				return err
-			}
-			ap.chunk_size = C.ulong(chunkSize)
+		if cmd.ChunkSize.set {
+			ap.chunk_size = cmd.ChunkSize.size
 		}
-
-		if cmd.ObjectClass != "" {
-			cObjClass := C.CString(cmd.ObjectClass)
-			defer freeString(cObjClass)
-			ap.oclass = (C.ushort)(C.daos_oclass_name2id(cObjClass))
-			if ap.oclass == C.OC_UNKNOWN {
-				return errors.Errorf("unknown object class %q",
-					cmd.ObjectClass)
-			}
+		if cmd.ObjectClass.set {
+			ap.oclass = cmd.ObjectClass.class
 		}
 	case "HDF5":
 		ap._type = C.DAOS_PROP_CO_LAYOUT_HDF5
