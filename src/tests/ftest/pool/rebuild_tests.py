@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers, skipForTicket
-
+from daos_utils import DaosCommand
 
 class RebuildTests(TestWithServers):
     """Test class for rebuild tests.
@@ -111,7 +111,12 @@ class RebuildTests(TestWithServers):
         self.assertTrue(status, "Error confirming pool info after rebuild")
 
         # Verify the data after rebuild
+        self.daos_cmd = DaosCommand(self.bin)
         for index in range(pool_quantity):
+            self.daos_cmd.container_set_prop(
+                          self.pool[index].uuid,
+                          self.container[index].uuid,
+                          "status", "healthy")
             if self.container[index].object_qty.value != 0:
                 self.assertTrue(
                     self.container[index].read_objects(),
