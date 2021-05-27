@@ -296,15 +296,12 @@ def define_components(reqs):
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['cd dpdk; '                            \
-                          'git fetch; '                          \
-                          'git checkout origin/spdk-19.11.6',    \
-                          './configure --prefix="$SPDK_PREFIX"'                \
+                commands=['./configure --prefix="$SPDK_PREFIX"'                \
                           ' --disable-tests --without-vhost --without-crypto'  \
-                          ' --without-pmdk --without-vpp --without-rbd'        \
-                          ' --with-rdma --with-shared'                         \
+                          ' --without-pmdk --without-rbd --with-rdma'          \
                           ' --without-iscsi-initiator --without-isal'          \
-                          ' --without-vtune', 'make $JOBS_OPT', 'make install',
+                          ' --without-vtune --with-shared', 'make $JOBS_OPT',
+                          'make install',
                           'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
