@@ -31,12 +31,21 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
-	/* Check for flags that do not make sense in this context.
-	 */
+	/* Check for flags that do not make sense in this context. */
 	if (fi->flags & DFUSE_UNSUPPORTED_CREATE_FLAGS) {
 		DFUSE_TRA_INFO(parent, "unsupported flag requested 0%o",
 			       fi->flags);
 		D_GOTO(err, rc = ENOTSUP);
+	}
+
+	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
+	 * enabled so the kernel can do read-modify-write
+	 */
+	if (parent->ie_dfs->dfc_data_caching &&
+		fs_handle->dpi_info->di_wb_cache &&
+		(fi->flags & O_ACCMODE) == O_WRONLY) {
+		DFUSE_TRA_INFO(parent, "Upgrading fd to O_RDRW");
+		fi->flags |= O_RDWR;
 	}
 
 	/* Check that only the flag for a regular file is specified */
