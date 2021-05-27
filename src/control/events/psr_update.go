@@ -48,7 +48,7 @@ func PoolSvcInfoToProto(psi *PoolSvcInfo) (*sharedpb.RASEvent_PoolSvcInfo, error
 
 // NewPoolSvcReplicasUpdateEvent creates a specific PoolSvcRanksUpdate event from given inputs.
 func NewPoolSvcReplicasUpdateEvent(hostname string, rank uint32, poolUUID string, svcReps []uint32, leaderTerm uint64) *RASEvent {
-	return New(&RASEvent{
+	return fill(&RASEvent{
 		Msg:      fmt.Sprintf("DAOS pool service replica list updated to %v", svcReps),
 		ID:       RASPoolRepsUpdate,
 		Hostname: hostname,

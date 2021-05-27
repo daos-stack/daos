@@ -93,10 +93,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with no arguments",
 			"system stop",
 			strings.Join([]string{
-				printRequest(t, &control.SystemStopReq{
-					Prep: true,
-					Kill: true,
-				}),
+				printRequest(t, &control.SystemStopReq{}),
 			}, " "),
 			nil,
 		},
@@ -104,11 +101,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with force",
 			"system stop --force",
 			strings.Join([]string{
-				printRequest(t, &control.SystemStopReq{
-					Prep:  true,
-					Kill:  true,
-					Force: true,
-				}),
+				printRequest(t, &control.SystemStopReq{Force: true}),
 			}, " "),
 			nil,
 		},
@@ -116,7 +109,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with single rank",
 			"system stop --ranks 0",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
+				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":"","Force":false}`,
 			}, " "),
 			nil,
 		},
@@ -124,7 +117,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple ranks",
 			"system stop --ranks 0,1,4",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"[0-1,4]","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
+				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"[0-1,4]","Hosts":"","Force":false}`,
 			}, " "),
 			nil,
 		},
@@ -132,7 +125,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple hosts",
 			"system stop --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","Prep":true,"Kill":true,"Force":false}`,
+				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","Force":false}`,
 			}, " "),
 			nil,
 		},

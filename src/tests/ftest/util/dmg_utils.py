@@ -9,10 +9,12 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 import json
+import yaml
 
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
+from command_utils import CommandFailure
 
 
 def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -52,9 +54,6 @@ class DmgCommand(DmgCommandBase):
     METHOD_REGEX = {
         "run":
             r"(.*)",
-        "network_scan":
-            r"[-]+(?:\n|\n\r)([a-z0-9-]+)(?:\n|\n\r)[-]+|NUMA\s+"
-            r"Socket\s+(\d+)|(ofi\+[a-z0-9;_]+)\s+([a-z0-9, ]+)",
         "storage_query_list_pools":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
             r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
@@ -93,112 +92,162 @@ class DmgCommand(DmgCommandBase):
             self.output_check = prev_output_check
         return json.loads(self.result.stdout)
 
-    def network_scan(self, provider=None, all_devs=False):
+    def network_scan(self, provider=None):
         """Get the result of the dmg network scan command.
 
         Args:
             provider (str): name of network provider tied to the device
-            all_devs (bool, optional): Show all device info. Defaults to False.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: dictionary of output in JSON format
 
         Raises:
-            CommandFailure: if the dmg storage scan command fails.
+            CommandFailure: if the dmg network scan command fails.
 
         """
-        return self._get_result(
-            ("network", "scan"), provider=provider, all=all_devs)
+        # Sample json output for --provider=all. Output is abbreviated.
+        # {
+        #   "response": {
+        #     "host_errors": {},
+        #     "HostFabrics": {
+        #     "7046809990821404843": {
+        #         "HostFabric": {
+        #           "Interfaces": [
+        #             {
+        #               "Provider": "ofi+psm2",
+        #               "Device": "ib1",
+        #               "NumaNode": 1,
+        #               "Priority": 0,
+        #               "NetDevClass": 32
+        #             },
+        #             {
+        #               "Provider": "ofi+psm2",
+        #               "Device": "ib0",
+        #               "NumaNode": 0,
+        #               "Priority": 1,
+        #               "NetDevClass": 32
+        #             },
+        #             {
+        #               "Provider": "ofi+verbs;ofi_rxm",
+        #               "Device": "ib0",
+        #               "NumaNode": 0,
+        #               "Priority": 2,
+        #               "NetDevClass": 32
+        #             },
+        #             {
+        #               "Provider": "ofi+verbs;ofi_rxm",
+        #               "Device": "ib1",
+        #               "NumaNode": 1,
+        #               "Priority": 3,
+        #               "NetDevClass": 32
+        #             }
+        #           ],
+        #           "Providers": [
+        #             "ofi+psm2",
+        #             "ofi+verbs;ofi_rxm",
+        #             "ofi+tcp;ofi_rxm",
+        #             "ofi+verbs",
+        #             "ofi+tcp",
+        #             "ofi+sockets"
+        #           ],
+        #           "NumaCount": 2,
+        #           "CoresPerNuma": 24
+        #         },
+        #         "HostSet": "localhost:10001"
+        #       }
+        #     }
+        #   },
+        #   "error": null,
+        #   "status": 0
+        # }
+        return self._get_json_result(("network", "scan"), provider=provider)
 
     def storage_scan(self, verbose=False):
-        # pylint: disable=pointless-string-statement
         """Get the result of the dmg storage scan command.
 
         Args:
             verbose (bool, optional): create verbose output. Defaults to False.
 
         Returns:
-            dict: Values obtained from stdout in dictionary. Most of the values
-                are in list.
+            dict: dictionary of output in JSON format
 
         Raises:
             CommandFailure: if the dmg storage scan command fails.
 
         """
-        self._get_result(("storage", "scan"), verbose=verbose)
-
-        data = {}
-        if verbose:
-            # Sample dmg storage scan verbose output. Don't delete this sample
-            # because it helps to develop and debug the regex.
-            """
-            --------
-            wolf-130
-            --------
-            SCM Namespace Socket ID Capacity
-            ------------- --------- --------
-            pmem0         0         3.2 TB
-            pmem1         0         3.2 TB
-
-            NVMe PCI     Model                FW Revision Socket ID Capacity
-            --------     -----                ----------- --------- --------
-            0000:5e:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
-            0000:5f:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
-            0000:81:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
-            0000:da:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
-            """
-            match = re.findall(
-                r"(?:([a-zA-Z0-9]+-[0-9]+)|"
-                r"(?:([0-9a-fA-F:.]+)\s+([a-zA-Z0-9 ]+)\s+"
-                r"([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+))|"
-                r"(?:([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+)))",
-                self.result.stdout_text)
-            host = ""
-            for item in match:
-                if item[0]:
-                    host = item[0]
-                    data[host] = {"scm": {}, "nvme": {}}
-                elif item[1]:
-                    data[host]["nvme"][item[1]] = {
-                        "model": item[2],
-                        "fw": item[3],
-                        "socket": item[4],
-                        "capacity": item[5],
-                    }
-                elif item[6]:
-                    data[host]["scm"][item[6]] = {
-                        "socket": item[7],
-                        "capacity": item[8],
-                    }
-        else:
-            # Sample dmg storage scan non-verbose output. Don't delete this
-            # sample because it helps to develop and debug the regex.
-            """
-            Hosts    SCM Total             NVMe Total
-            -----    ---------             ----------
-            wolf-130 6.4 TB (2 namespaces) 4.7 TB (4 controllers)
-            """
-            values = re.findall(
-                r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+"
-                r"\(([\w\s]+)\)\s+([\d.]+)\s+([A-Z]+)\s+\(([\w\s]+)",
-                self.result.stdout_text)
-            self.log.info("--- Non-verbose output parse result ---")
-            self.log.info(values)
-
-            data = {}
-            for row in values:
-                host = row[0]
-                data[host] = {
-                    "scm": {"capacity": None, "details": None},
-                    "nvme": {"capacity": None, "details": None}}
-                data[host]["scm"]["capacity"] = " ".join(row[1:3])
-                data[host]["scm"]["details"] = row[3]
-                data[host]["nvme"]["capacity"] = " ".join(row[4:6])
-                data[host]["nvme"]["details"] = row[6]
-
-        self.log.info("storage_scan data: %s", str(data))
-        return data
+        # Sample json output. --verbose and non-verbose combined. Output is
+        # abbreviated.
+        # {
+        #     "response": {
+        #         "host_errors": {},
+        #         "HostStorage": {
+        #         "5044895924483624073": {
+        #             "storage": {
+        #             "nvme_devices": [
+        #                 {
+        #                     "info": "",
+        #                     "model": "INTEL SSDPED1K750GA",
+        #                     "serial": "PHKS750500GU750BGN",
+        #                     "pci_addr": "0000:90:00.0",
+        #                     "fw_rev": "E2010435",
+        #                     "socket_id": 1,
+        #                     "health_stats": null,
+        #                     "namespaces": [
+        #                       {
+        #                         "id": 1 ,
+        #                         "size": 750156374016
+        #                       }
+        #                     ],
+        #                   "smd_devices": null
+        #                 },
+        #                 {
+        #                     "info": "",
+        #                     "model": "",
+        #                     "serial": "",
+        #                     "pci_addr": "0000:da:00.0",
+        #                     "fw_rev": "",
+        #                     "socket_id": 1,
+        #                     "health_stats": null,
+        #                     "namespaces": [
+        #                       {
+        #                         "id": 1,
+        #                         "size": 750156374016
+        #                       }
+        #                   ],
+        #                   "smd_devices": null
+        #                 }
+        #             ],
+        #             "scm_modules": null,
+        #             "scm_namespaces": [
+        #                 {
+        #                     "uuid": "2270f4a6-b24b-4dba-a450-6f2d5d688708",
+        #                     "blockdev": "pmem1",
+        #                     "dev": "namespace1.0",
+        #                     "numa_node": 1,
+        #                     "size": 3183575302144,
+        #                     "mount": null
+        #                 },
+        #                 {
+        #                     "uuid": "7963f81a-0a6b-4cca-9845-bb68f0e81c46",
+        #                     "blockdev": "pmem0",
+        #                     "dev": "namespace0.0",
+        #                     "numa_node": 0,
+        #                     "size": 3183575302144,
+        #                     "mount": null
+        #                 }
+        #             ],
+        #             "scm_mount_points": null,
+        #             "smd_info": null,
+        #             "reboot_required": false
+        #           },
+        #           "hosts": "localhost:10001"
+        #         }
+        #       }
+        #     },
+        #     "error": null,
+        #     "status": 0
+        # }
+        return self._get_json_result(("storage", "scan"), verbose=verbose)
 
     def storage_format(self, reformat=False, timeout=30, verbose=False):
         """Get the result of the dmg storage format command.
@@ -430,9 +479,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool query command fails.
 
         Returns:
-            dict: dictionary of output in JSON format if use_json is set to
-                True. Otherwise, CmdResult that contains exit status, stdout,
-                and other information.
+            dict: dictionary of output in JSON format.
 
         """
         # Sample JSON output
@@ -717,7 +764,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system query command fails.
 
         Returns:
-            dict: a dictionary of host ranks and their unique states.
+            dict: dictionary of output in JSON format
 
         """
         # Sample output:
@@ -759,7 +806,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system query command fails.
 
         Returns:
-            dictionary of output in JSON format
+            dict: dictionary of output in JSON format
 
         """
         # Example JSON output:
@@ -848,6 +895,35 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "evict"), pool=pool)
 
+    def config_generate(self, access_points, num_engines=None, min_ssds=None,
+                        net_class=None):
+        """Produce a server configuration.
+        Args:
+            access_points (str): Comma separated list of access point addresses.
+            num_pmem (int): Number of SCM (pmem) devices required per
+                storage host in DAOS system. Defaults to None.
+            num_nvme (int): Minimum number of NVMe devices required per storage
+                host in DAOS system. Defaults to None.
+            net_class (str): Network class preferred. Defaults to None.
+                i.e. "best-available"|"ethernet"|"infiniband"
+        Returns:
+            dict: the contents of the generate config file.
+        Raises:
+            CommandFailure: if the dmg config generate command fails or if YAML
+                parser encounters an error condition while parsing the contents.
+        """
+        result = self._get_result(
+            ("config", "generate"), access_points=access_points,
+            num_engines=num_engines, min_ssds=min_ssds, net_class=net_class)
+
+        try:
+            yaml_data = yaml.safe_load(result.stdout)
+        except yaml.YAMLError as error:
+            raise CommandFailure(
+                "Error loading dmg generated config: {}".format(
+                    error)) from error
+
+        return yaml_data
 
 def check_system_query_status(data):
     """Check if any server crashed.
