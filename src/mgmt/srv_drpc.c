@@ -678,7 +678,8 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	if (req->n_tierbytes == 0 || req->n_tierbytes > DAOS_MEDIA_MAX) {
-		D_ERROR("Invalid number of storage tiers: "DF_U64"\n", req->n_tierbytes);
+		D_ERROR("Invalid number of storage tiers: "DF_U64"\n",
+			req->n_tierbytes);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
