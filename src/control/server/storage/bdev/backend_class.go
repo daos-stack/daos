@@ -169,11 +169,11 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 
 	enableVmd := !sb.IsVMDDisabled()
 
-	sb.log.Debugf("write nvme output ini config: %+v", req)
+	// sb.log.Debugf("write nvme output ini config: %+v", req)
 	// pass request by value to restrict the scope of side effects
-	if err := writeIniConfig(sb.log, enableVmd, *req); err != nil {
-		return err
-	}
+	// if err := writeIniConfig(sb.log, enableVmd, *req); err != nil {
+	//	return err
+	// }
 
 	if req.Class != storage.BdevClassNvme {
 		// aio json spdk config not supported yet
@@ -186,7 +186,7 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 		return nil
 	}
 
-	req.ConfigPath = req.ConfigPath + ".json"
+	//{req.ConfigPath = req.ConfigPath + ".json"
 	sb.log.Debugf("write nvme output json config: %+v", req)
 
 	return writeJsonConfig(sb.log, enableVmd, *req)
