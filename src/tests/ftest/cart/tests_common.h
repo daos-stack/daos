@@ -119,6 +119,8 @@ write_completion_file(void)
 	char	pid[6];
 	pid_t	_pid;
 
+	DBG_PRINT("Preparing to write completion file.\n");
+
 	_pid = getpid();
 	sprintf(pid, "%d", _pid);
 
@@ -127,6 +129,9 @@ write_completion_file(void)
 	completion_file = strcat(tmp_str, pid);
 
 	fptr = fopen(completion_file, "w");
+
+	DBG_PRINT("Opened completion file to write: %s.\n", completion_file);
+
 	fclose(fptr);
 	if (fptr == NULL) {
 		printf("Error opening completion file for writing.\n");

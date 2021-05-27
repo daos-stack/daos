@@ -166,7 +166,7 @@ int main(int argc, char **argv)
 	if (test_g.t_register_swim_callback)
 		tc_test_swim_enable(true);
 
-	DBG_PRINT("STARTING SERVER\n");
+	DBG_PRINT("STARTING SERVER 5.27\n");
 	test_run(my_rank);
 
 	return rc;
