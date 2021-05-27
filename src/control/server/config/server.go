@@ -73,7 +73,7 @@ type Server struct {
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
-	SocketDir  string              `yaml:"socket_dir"`
+	RuntimeDir string              `yaml:"runtime_dir"`
 	Fabric     engine.FabricConfig `yaml:",inline"`
 	Modules    string
 
@@ -129,11 +129,11 @@ func (cfg *Server) WithSystemName(name string) *Server {
 	return cfg
 }
 
-// WithSocketDir sets the default socket directory.
-func (cfg *Server) WithSocketDir(sockDir string) *Server {
-	cfg.SocketDir = sockDir
+// WithRuntimeDir sets the default runtime directory.
+func (cfg *Server) WithRuntimeDir(runDir string) *Server {
+	cfg.RuntimeDir = runDir
 	for _, engine := range cfg.Engines {
-		engine.WithSocketDir(sockDir)
+		engine.WithRuntimeDir(runDir)
 	}
 	return cfg
 }
@@ -191,7 +191,7 @@ func (cfg *Server) updateServerConfig(cfgPtr **engine.Config) {
 	engineCfg := *cfgPtr
 	engineCfg.Fabric.Update(cfg.Fabric)
 	engineCfg.SystemName = cfg.SystemName
-	engineCfg.SocketDir = cfg.SocketDir
+	engineCfg.RuntimeDir = cfg.RuntimeDir
 	engineCfg.Modules = cfg.Modules
 }
 
@@ -326,7 +326,7 @@ func (cfg *Server) WithTelemetryPort(port int) *Server {
 func DefaultServer() *Server {
 	return &Server{
 		SystemName:         build.DefaultSystemName,
-		SocketDir:          defaultRuntimeDir,
+		RuntimeDir:         defaultRuntimeDir,
 		AccessPoints:       []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
 		ControlPort:        build.DefaultControlPort,
 		TransportConfig:    security.DefaultServerTransportConfig(),
@@ -392,7 +392,7 @@ func (cfg *Server) SetPath(inPath string) error {
 
 // SaveActiveConfig saves read-only active config, tries config dir then /tmp/.
 func (cfg *Server) SaveActiveConfig(log logging.Logger) {
-	activeConfig := filepath.Join(cfg.SocketDir, configOut)
+	activeConfig := filepath.Join(cfg.RuntimeDir, configOut)
 
 	if err := cfg.SaveToFile(activeConfig); err != nil {
 		log.Debugf("active config could not be saved: %s", err.Error())

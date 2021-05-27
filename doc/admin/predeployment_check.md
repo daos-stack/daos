@@ -121,7 +121,7 @@ Unable to create socket directory: /var/run/daos_server
 By default, daos_server and daos_agent will use the directories
 /var/run/daos_server and /var/run/daos_agent respectively. To change
 the default location that daos_server uses for its runtime directory,
-either uncomment and set the socket_dir configuration value in
+either uncomment and set the runtime_dir configuration value in
 install/etc/daos_server.yml, or pass the location to daos_server on
 the command line using the -d flag. For the daos_agent, an alternate
 location can be passed on the command line using the --runtime_dir flag.

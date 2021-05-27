@@ -105,7 +105,7 @@ func TestGetDrpcServerSocketPath(t *testing.T) {
 	}
 }
 
-func TestDrpcCleanup_BadSocketDir(t *testing.T) {
+func TestDrpcCleanup_BadRuntimeDir(t *testing.T) {
 	badDir := "/some/fake/path"
 
 	err := drpcCleanup(badDir)

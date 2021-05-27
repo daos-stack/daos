@@ -135,14 +135,14 @@
 #hyperthreads: true
 #
 #
-## Use the given directory for creating unix domain sockets
+## Use the given directory for unix domain sockets and other runtime files.
 #
 ## DAOS Agent and DAOS Server both use unix domain sockets for communication
 ## with other system components. This setting is the base location to place
 ## the sockets in.
 #
 ## default: /var/run/daos_server
-#socket_dir: ./.daos/daos_server
+#runtime_dir: ./.daos/daos_server
 #
 #
 ## Number of hugepages to allocate for use by NVMe SSDs

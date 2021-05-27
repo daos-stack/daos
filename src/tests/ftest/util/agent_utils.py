@@ -220,7 +220,7 @@ class DaosAgentManager(SubprocessManager):
             get_log_file("daosCA/certs"), self._hosts)
 
         # Verify the socket directory exists when using a non-systemctl manager
-        self.verify_socket_directory(getuser())
+        self.verify_runtime_directory(getuser())
 
         super().start()
 

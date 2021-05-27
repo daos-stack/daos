@@ -232,7 +232,7 @@ class DaosServerCommand(YamlCommand):
             #   --firstcore=            index of first core for service thread
             #                           (default: 0)
             #   --group=                Server group name
-            #   --socket_dir=           Location for all daos_server and
+            #   --runtime_dir=          Location for all daos_server and
             #                           daos_engine sockets
             #   --insecure              allow for insecure connections
             #   --recreate-superblocks  recreate missing superblocks rather than
@@ -244,7 +244,7 @@ class DaosServerCommand(YamlCommand):
             self.xshelpernr = FormattedParameter("--xshelpernr={}")
             self.firstcore = FormattedParameter("--firstcore={}")
             self.group = FormattedParameter("--group={}")
-            self.sock_dir = FormattedParameter("--socket_dir={}")
+            self.run_dir = FormattedParameter("--runtime_dir={}")
             self.insecure = FormattedParameter("--insecure", False)
             self.recreate = FormattedParameter("--recreate-superblocks", False)
 
@@ -452,7 +452,7 @@ class DaosServerManager(SubprocessManager):
                         {"plm_rsh_args": "-l root"}, "orterun.mca", True)
 
         # Verify the socket directory exists when using a non-systemctl manager
-        self.verify_socket_directory(getuser())
+        self.verify_runtime_directory(getuser())
 
     def clean_files(self, verbose=True):
         """Clean up the daos server files.

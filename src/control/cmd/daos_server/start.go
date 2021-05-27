@@ -30,7 +30,7 @@ type startCmd struct {
 	NrXsHelpers         *uint16 `short:"x" long:"xshelpernr" description:"number of helper XS per VOS target"`
 	FirstCore           uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread"`
 	Group               string  `short:"g" long:"group" description:"Server group name"`
-	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_engine sockets"`
+	RuntimeDir          string  `short:"d" long:"runtime_dir" description:"Location for all DAOS sockets and other runtime data related to the control_server"`
 	Insecure            bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
 	RecreateSuperblocks bool    `long:"recreate-superblocks" description:"recreate missing superblocks rather than failing"`
 }
@@ -49,8 +49,8 @@ func (cmd *startCmd) setCLIOverrides() error {
 	if cmd.Group != "" {
 		cmd.config.WithSystemName(cmd.Group)
 	}
-	if cmd.SocketDir != "" {
-		cmd.config.WithSocketDir(cmd.SocketDir)
+	if cmd.RuntimeDir != "" {
+		cmd.config.WithRuntimeDir(cmd.RuntimeDir)
 	}
 	if cmd.Modules != nil {
 		cmd.config.WithModules(*cmd.Modules)

@@ -155,7 +155,7 @@ func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *even
 
 	drpcSetupReq := &drpcServerSetupReq{
 		log:     h.log,
-		sockDir: cfg.SocketDir,
+		runDir:  cfg.RuntimeDir,
 		engines: instances,
 		tc:      cfg.TransportConfig,
 		sysdb:   db,
@@ -166,7 +166,7 @@ func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *even
 		return errors.WithMessage(err, "dRPC server setup")
 	}
 	defer func() {
-		if err := drpcCleanup(cfg.SocketDir); err != nil {
+		if err := drpcCleanup(cfg.RuntimeDir); err != nil {
 			h.log.Errorf("error during dRPC cleanup: %s", err)
 		}
 	}()

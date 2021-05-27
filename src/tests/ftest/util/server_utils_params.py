@@ -72,7 +72,7 @@ class DaosServerYamlParameters(YamlParameters):
         #       parameter defines whether the DAOS service thread should only be
         #       bound to different physical cores (False) or hyperthreads (True)
         #
-        #   - socket_dir: <str>, e.g. /var/run/daos_server
+        #   - runtime_dir: <str>, e.g. /var/run/daos_server
         #       DAOS Agent and DAOS Server both use unix domain sockets for
         #       communication with other system components. This setting is the
         #       base location to place the sockets in.
@@ -106,7 +106,7 @@ class DaosServerYamlParameters(YamlParameters):
 
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
-        self.socket_dir = BasicParameter(None, "/var/run/daos_server")
+        self.runtime_dir = BasicParameter(None, "/var/run/daos_server")
         self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")

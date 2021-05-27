@@ -4,7 +4,7 @@ targets: 12
 nr_xs_helpers: 1
 first_core: 8
 name: foo
-socket_dir: /foo/bar
+runtime_dir: /foo/bar
 log_mask: DD_DEBUG
 log_file: /path/to/log
 scm_mount: /mnt/daostest

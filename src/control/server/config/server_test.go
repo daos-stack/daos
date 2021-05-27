@@ -218,7 +218,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithHelperLogFile("/tmp/daos_admin.log").
 		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
 		WithSystemName("daos_server").
-		WithSocketDir("./.daos/daos_server").
+		WithRuntimeDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
 		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30).
@@ -628,18 +628,18 @@ func TestServerConfig_WithEnginesInheritsMain(t *testing.T) {
 	testFabric := "test-fabric"
 	testModules := "a,b,c"
 	testSystemName := "test-system"
-	testSocketDir := "test-sockets"
+	testRuntimeDir := "test-sockets"
 
 	wantCfg := engine.NewConfig().
 		WithFabricProvider(testFabric).
 		WithModules(testModules).
-		WithSocketDir(testSocketDir).
+		WithRuntimeDir(testRuntimeDir).
 		WithSystemName(testSystemName)
 
 	config := DefaultServer().
 		WithFabricProvider(testFabric).
 		WithModules(testModules).
-		WithSocketDir(testSocketDir).
+		WithRuntimeDir(testRuntimeDir).
 		WithSystemName(testSystemName).
 		WithEngines(engine.NewConfig())
 
@@ -844,7 +844,7 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			cfg := DefaultServer().WithSocketDir(tc.cfgPath)
+			cfg := DefaultServer().WithRuntimeDir(tc.cfgPath)
 
 			cfg.SaveActiveConfig(log)
 
