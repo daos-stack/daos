@@ -1319,6 +1319,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	bool				bulk_bind;
 	bool				create_map;
 	bool				spec_fetch = false;
+	bool				iod_converted = false;
 	struct daos_recx_ep_list	*recov_lists = NULL;
 	daos_iod_t			*iods;
 	uint64_t			*offs;
@@ -1449,6 +1450,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 					"\n", DP_UOID(orw->orw_oid), DP_RC(rc));
 				goto out;
 			}
+			iod_converted = true;
 		}
 
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
@@ -1587,8 +1589,20 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				    orw->orw_sgls.ca_count);
 		}
 	}
-	if (obj_rpc_is_fetch(rpc) && create_map)
+	if (obj_rpc_is_fetch(rpc) && create_map) {
+		/* EC degraded fetch converted original iod to replica daos ext,
+		 * need to convert back to vos ext before creating iom, or the
+		 * client-side dc_rw_cb_csum_verify() may not work.
+		 */
+		if (iod_converted) {
+			struct daos_oclass_attr	*oca;
+
+			oca = daos_oclass_attr_find(orw->orw_oid.id_pub);
+			D_ASSERT(oca != NULL);
+			obj_iod_recx_daos2vos(orw->orw_nr, iods, oca);
+		}
 		rc = obj_fetch_create_maps(rpc, biod, iods);
+	}
 
 	if (rc == -DER_CSUM)
 		obj_log_csum_err();
@@ -2002,7 +2016,10 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	daos_key_t		*dkey;
 	struct daos_oclass_attr	*oca;
 	struct bio_desc		*biod;
-	daos_iod_t		 iod = { 0 };
+	daos_iod_t		*iod = &oea->ea_iod;
+	struct dcs_iod_csums	*iod_csums = oea->ea_iod_csums.ca_arrays;
+
+	crt_bulk_t		 parity_bulk = oea->ea_bulk;
 	daos_recx_t		 recx = { 0 };
 	struct obj_io_context	 ioc;
 	daos_handle_t		 ioh = DAOS_HDL_INVAL;
@@ -2021,18 +2038,10 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	}
 	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oea->ea_dkey;
-	iod.iod_name = oea->ea_akey;
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_size = oea->ea_rsize;
-	iod.iod_nr = 1;
-	if (iod.iod_size) {
-		recx.rx_idx = (oea->ea_stripenum * oca->u.ec.e_len) |
-			PARITY_INDICATOR;
-		recx.rx_nr = oca->u.ec.e_len;
-		iod.iod_recxs = &recx;
+	if (parity_bulk != CRT_BULK_NULL) {
 		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid,
 				      oea->ea_epoch_range.epr_hi, 0, dkey, 1,
-				      &iod, NULL, NULL, 0, &ioh, NULL);
+				      iod, iod_csums, NULL, 0, &ioh, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
@@ -2086,7 +2095,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 				oea->ea_remove_eps.ca_arrays[i];
 			rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl,
 						  oea->ea_oid, &epr, dkey,
-						  &oea->ea_akey, ea_recx);
+						  &iod->iod_name, ea_recx);
 			if (rc) {
 				D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
 					DP_UOID(oea->ea_oid), DP_RC(rc));
@@ -2099,7 +2108,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 		recx.rx_nr = oca->u.ec.e_k * oca->u.ec.e_len;
 		rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
 					  &oea->ea_epoch_range, dkey,
-					  &oea->ea_akey, &recx);
+					  &iod->iod_name, &recx);
 		if (rc) {
 			D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));

@@ -333,10 +333,10 @@ CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 	((uuid_t)		(ea_coh_uuid)		CRT_VAR)	\
 	((daos_unit_oid_t)	(ea_oid)		CRT_VAR)	\
 	((daos_key_t)		(ea_dkey)		CRT_VAR)	\
-	((daos_key_t)		(ea_akey)		CRT_VAR)	\
+	((daos_iod_t)		(ea_iod)		CRT_VAR)	\
+	((struct dcs_iod_csums)	(ea_iod_csums)		CRT_ARRAY)	\
 	((daos_epoch_range_t)	(ea_epoch_range)	CRT_VAR)	\
 	((uint64_t)		(ea_stripenum)		CRT_VAR)	\
-	((uint64_t)		(ea_rsize)		CRT_VAR)	\
 	((crt_bulk_t)		(ea_bulk)		CRT_VAR)	\
 	((uint32_t)		(ea_map_ver)		CRT_VAR)	\
 	((uint32_t)		(ea_remove_nr)		CRT_VAR)	\
