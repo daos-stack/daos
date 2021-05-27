@@ -810,7 +810,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	char *fill_uri = NULL;
 
 	if (ul_in->ul_tag != ul_out->ul_tag) {
-		if (crt_provider_is_contig_ep(ctx->cc_provider) == false) {
+		if (!crt_provider_is_contig_ep(ctx->cc_hg_ctx.chc_provider)) {
 			rc = crt_issue_uri_lookup(lookup_rpc->cr_ctx,
 						  lookup_rpc->cr_ep.ep_grp,
 						  ul_in->ul_rank, 0,

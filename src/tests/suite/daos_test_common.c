@@ -818,8 +818,8 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	/* build and invoke dmg cmd */
 	if (strncmp(sub_cmd, "extend", strlen("extend")) == 0)
 		dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF
-				  " --ranks=%d --scm-size="DF_U64, sub_cmd,
-				  DP_UUID(pool_uuid), rank, scm_size);
+				  " --ranks=%d", sub_cmd,
+				  DP_UUID(pool_uuid), rank);
 	else
 		dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF
 				  " --rank=%d", sub_cmd, DP_UUID(pool_uuid),

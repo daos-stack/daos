@@ -839,26 +839,80 @@ class DaosServerManager(SubprocessManager):
             list: a list of the maximum available SCM and NVMe sizes in bytes
 
         """
-        def get_host_capacity(key, device_names):
-            """Get the total storage capacity per host rank.
+        def fill_host_capacity(capacity_type, device_names, storage_dict,
+                               host_hash, host_capacity):
+            """Get the total storage size in device_names per host rank.
 
             Args:
-                key (str): the capacity type, e.g. "scm" or "nvme"
-                device_names (list): the device names of this capacity type
+                capacity_type (str): the capacity type, e.g. "scm" or "nvme"
+                device_names (list): the device names we'll use to get the total
+                    storage size
+                storage_dict (dict): JSON output at "HostStorage"
+                host_hash (str): Hash under "HostStorage"
+                host_capacity (dict): Dictionary to store the sum
 
             Returns:
-                dict: a dictionary of total storage capacity per host rank
+                dict: a dictionary of total storage size in device_names per
+                    host rank
+            """
+            # The hosts can be a single host such as wolf-1, or multiple
+            # hosts such as wolf-[1-7].
+            hosts = storage_dict[host_hash]["hosts"].split(":")[0]
+
+            if capacity_type == "nvme":
+                # Get nvme_devices list, iterate it, and sum the sizes.
+                nvme_devices = storage_dict[host_hash]["storage"][
+                    "nvme_devices"]
+                for nvme_device in nvme_devices:
+                    if nvme_device["pci_addr"] in device_names:
+                        for namespace in nvme_device["namespaces"]:
+                            size = namespace["size"]
+                            if hosts in host_capacity:
+                                host_capacity[hosts] += size
+                            else:
+                                host_capacity[hosts] = size
+
+            elif capacity_type == "scm":
+                # Get scm_namespaces list, iterate it, and sum the sizes.
+                scm_namespaces = storage_dict[host_hash]["storage"][
+                    "scm_namespaces"]
+                for scm_namespace in scm_namespaces:
+                    if scm_namespace["blockdev"] in device_names:
+                        size = scm_namespace["size"]
+                        if hosts in host_capacity:
+                            host_capacity[hosts] += size
+                        else:
+                            host_capacity[hosts] = size
+
+            return host_capacity
+
+        def get_host_capacity(capacity_type, device_names):
+            """Get the total storage size in device_names per host rank.
+
+            Args:
+                capacity_type (str): the capacity type, e.g. "scm" or "nvme"
+                device_names (list): the device names we'll use to get the total
+                    storage size
+
+            Returns:
+                dict: a dictionary of total storage size in device_names per
+                    host rank
 
             """
             host_capacity = {}
-            for host in data:
-                device_sizes = []
-                for device in data[host][key]:
-                    if device in device_names:
-                        device_sizes.append(
-                            human_to_bytes(
-                                data[host][key][device]["capacity"]))
-                host_capacity[host] = sum(device_sizes)
+
+            # Get nvme_devices and scm_namespaces list that are buried. There's
+            # a uint64 hash of the strcut under HostStorage.
+            storage_dict = data["response"]["HostStorage"]
+            struct_hashes = list(storage_dict.keys())
+
+            # Iterate the struct hashes, which corresponds to a set of hosts
+            # with the identical configuration.
+            for host_hash in struct_hashes:
+                host_capacity = fill_host_capacity(
+                    capacity_type, device_names, storage_dict, host_hash,
+                    host_capacity)
+
             return host_capacity
 
         # Default maximum bytes for SCM and NVMe
