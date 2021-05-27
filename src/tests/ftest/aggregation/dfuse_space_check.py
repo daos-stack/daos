@@ -89,7 +89,12 @@ class DfuseSpaceCheck(IorTestBase):
             return all the space back.
             Now create small files again until pool is out of space and check,
             whether out of space happens at the same file count as before.
-        :avocado: tags=all,hw,daosio,small,full_regression,dfusespacecheck
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=nvme
+        :avocado: tags=daosio
+        :avocado: tags=dfusespacecheck
         """
         # get test params for cont and pool count
         self.block_size = self.params.get("block_size",

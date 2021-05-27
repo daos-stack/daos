@@ -87,6 +87,7 @@ class CSumErrorLog(DaosCoreBase):
                           pool/container disconnect/reconnect.
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,pmem
         :avocado: tags=checksum,faults
         :avocado: tags=csum_error_log
         """

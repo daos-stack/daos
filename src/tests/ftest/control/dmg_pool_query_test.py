@@ -54,6 +54,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=small,hw
+        :avocado: tags=nvme,pmem
         :avocado: tags=dmg,pool_query,basic
         :avocado: tags=pool_query_basic
         """
@@ -124,6 +125,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=small,hw
+        :avocado: tags=nvme,pmem
         :avocado: tags=dmg,pool_query,basic
         :avocado: tags=pool_query_inputs
         """
@@ -171,6 +173,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=small,hw
+        :avocado: tags=nvme,pmem
         :avocado: tags=dmg,pool_query,basic
         :avocado: tags=pool_query_write
         """

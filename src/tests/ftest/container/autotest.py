@@ -20,6 +20,7 @@ class ContainerAutotestTest(TestWithServers):
 
         :avocado: tags=all,full_regression,daily_regression
         :avocado: tags=hw,small
+        :avocado: tags=nvme
         :avocado: tags=container,autotest,containerautotest,quick
         """
         self.log.info("Create a pool")

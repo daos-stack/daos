@@ -30,7 +30,10 @@ class DaosAggregationIOSmall(IorTestBase):
             and verify the data is initially written into SCM and later
             moved to SSD NV DIMMs.
 
-        :avocado: tags=all,full_regression,hw,large,aggregate,daosio
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme,pmem
+        :avocado: tags=aggregate,daosio
         :avocado: tags=aggregateiosmall
         """
         # Create pool and container

@@ -39,6 +39,7 @@ class AggregationChecksum(IorTestBase):
             option enabled.
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,small
+        :avocado: tags=nvme
         :avocado: tags=daosio,checksum,mpich
         :avocado: tags=aggregationchecksum
         """

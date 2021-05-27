@@ -30,7 +30,10 @@ class MultipleContainerDelete(IorTestBase):
             times.
             Verify both the SCM and SSD pool spaces are recovered
 
-        :avocado: tags=all,hw,large,full_regression,container
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme,pmem
+        :avocado: tags=container
         :avocado: tags=multicontainerdelete
         """
 
