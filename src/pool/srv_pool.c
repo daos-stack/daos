@@ -2972,8 +2972,8 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 		D_ERROR(DF_UUID": Failed to get rank:%u, idx:%d\n, rc:%d",
 			DP_UUID(in->pqii_op.pi_uuid), in->pqii_rank,
 			in->pqii_tgt, rc);
-		pool_svc_put_leader(svc);
-		D_GOTO(out, rc = -DER_NONEXIST);
+		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+		D_GOTO(out_svc, rc = -DER_NONEXIST);
 	} else {
 		rc = 0;
 	}
@@ -2982,6 +2982,7 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 
 	tgt_state = target->ta_comp.co_status;
 	out->pqio_state = enum_pool_comp_state_to_tgt_state(tgt_state);
+	out->pqio_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 
@@ -2996,7 +2997,8 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 	} else {
 		memset(&out->pqio_space, 0, sizeof(out->pqio_space));
 	}
-
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqio_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
 	out->pqio_op.po_rc = rc;
