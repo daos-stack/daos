@@ -85,9 +85,7 @@ class PoolSecurityTestBase(TestWithServers):
 
         pool_permission_list = []
         for line in result.stdout_text.splitlines():
-            if not line.startswith("A:"):
-                continue
-            elif line.startswith("A::"):
+            if line.startswith("A::"):
                 found_user = re.search(r"A::(.+)@:(.*)", line)
                 if found_user:
                     pool_permission_list.append(line)
@@ -533,7 +531,11 @@ class PoolSecurityTestBase(TestWithServers):
 
         # (3)Create a pool with acl
         self.dmg.exit_status_exception = False
-        data = self.dmg.pool_create(scm_size, acl_file=acl_file)
+        kwargs = {
+            "scm_size": scm_size,
+            "acl_file": acl_file
+        }
+        pool_uuid = self.dmg.pool_create(**kwargs)["uuid"]
         self.dmg.exit_status_exception = True
         self.log.info("  (2)dmg= %s", self.dmg)
         self.log.info("  (3)Create a pool with acl")
@@ -547,7 +549,7 @@ class PoolSecurityTestBase(TestWithServers):
         #    dmg pool get-acl --pool <UUID>
         self.log.info("  (5)Get a pool's acl list by: "
                       "dmg pool get-acl --pool --hostlist")
-        pool_acl_list = self.get_pool_acl_list(data["uuid"])
+        pool_acl_list = self.get_pool_acl_list(pool_uuid)
         self.log.info(
             "   pool original permission_list: %s", permission_list)
         self.log.info(
@@ -561,26 +563,27 @@ class PoolSecurityTestBase(TestWithServers):
         acl_principals = [secTestBase.acl_principal("user", tmp_ace),
                           secTestBase.acl_principal("group", tmp_ace)]
         for new_entry in new_entries:
-            self.update_pool_acl_entry(data["uuid"], "update", new_entry)
+            self.update_pool_acl_entry(pool_uuid, "update", new_entry)
         for principal in acl_principals:
-            self.update_pool_acl_entry(data["uuid"], "delete", principal)
+            self.update_pool_acl_entry(pool_uuid, "delete", principal)
 
         # (7)Verify pool read operation
         #    daos pool query --pool <uuid>
         self.log.info("  (7)Verify pool read by: daos pool query --pool")
         self.verify_pool_readwrite(
-            data["uuid"], "read", expect=read)
+            pool_uuid, "read", expect=read)
 
         # (8)Verify pool write operation
         #    daos container create --pool <uuid>
         self.log.info("  (8)Verify pool write by: daos container create --pool")
         self.verify_pool_readwrite(
-            data["uuid"], "write", expect=write)
+            pool_uuid, "write", expect=write)
         if secondary_grp_test:
             self.log.info("  (8-0)Verifying verify_pool_acl_prim_sec_groups")
             self.verify_pool_acl_prim_sec_groups(
-                pool_acl_list, acl_file, data["uuid"])
+                pool_acl_list, acl_file, pool_uuid)
 
         # (9)Cleanup user and destroy pool
         self.log.info("  (9)Cleanup users and groups")
         self.cleanup_user_group(num_user, num_group)
+        self.dmg.pool_destroy(pool=pool_uuid)
