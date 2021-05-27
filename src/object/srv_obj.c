@@ -2070,16 +2070,23 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	}
 	if (oea->ea_remove_nr) {
 		daos_epoch_range_t	epr;
+		uint64_t		stripe_end;
 		int			i;
 
+		stripe_end = (oea->ea_stripenum + 1) *
+			      oca->u.ec.e_len * oca->u.ec.e_k;
 		for (i = 0; i < oea->ea_remove_nr; i++) {
+			daos_recx_t *ea_recx;
+
+			ea_recx = &oea->ea_remove_recxs.ca_arrays[i];
+			if (DAOS_RECX_END(*ea_recx) > stripe_end)
+				continue;
+
 			epr.epr_hi = epr.epr_lo =
 				oea->ea_remove_eps.ca_arrays[i];
 			rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl,
 						  oea->ea_oid, &epr, dkey,
-						  &oea->ea_akey,
-						  &oea->
-						  ea_remove_recxs.ca_arrays[i]);
+						  &oea->ea_akey, ea_recx);
 			if (rc) {
 				D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
 					DP_UOID(oea->ea_oid), DP_RC(rc));
