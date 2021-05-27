@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -38,7 +39,10 @@ const (
 	dcpmMountOpts = "dax,nodelalloc"
 
 	ramFsType = fsTypeTmpfs
+)
 
+// User facing messages.
+const (
 	MsgRebootRequired     = "A reboot is required to process new SCM memory allocation goals."
 	MsgNoModules          = "no SCM modules to prepare"
 	MsgNotInited          = "SCM storage could not be accessed"
@@ -142,6 +146,7 @@ type (
 		Mkfs(fsType, device string, force bool) error
 		Getfs(device string) (string, error)
 		GetfsUsage(string) (uint64, uint64, error)
+		Stat(string) (os.FileInfo, error)
 	}
 
 	defaultSystemProvider struct {
@@ -165,6 +170,7 @@ type (
 	}
 )
 
+// CreateFormatRequest populates and returns a FormatRequest reference.
 func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatRequest, error) {
 	req := FormatRequest{
 		Mountpoint: scmCfg.MountPoint,
@@ -222,8 +228,8 @@ func (r FormatRequest) Validate() error {
 	return nil
 }
 
-func checkDevice(device string) error {
-	st, err := os.Stat(device)
+func (dsp *defaultSystemProvider) checkDevice(device string) error {
+	st, err := dsp.Stat(device)
 	if err != nil {
 		return errors.Wrapf(err, "stat failed on %s", device)
 	}
@@ -237,13 +243,13 @@ func checkDevice(device string) error {
 
 // Mkfs attempts to create a filesystem of the supplied type, on the
 // supplied device.
-func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error {
+func (dsp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error {
 	cmdPath, err := exec.LookPath(fmt.Sprintf("mkfs.%s", fsType))
 	if err != nil {
 		return errors.Wrapf(err, "unable to find mkfs.%s", fsType)
 	}
 
-	if err := checkDevice(device); err != nil {
+	if err := dsp.checkDevice(device); err != nil {
 		return err
 	}
 
@@ -288,13 +294,13 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 
 // Getfs probes the specified device in an attempt to determine the
 // formatted filesystem type, if any.
-func (ssp *defaultSystemProvider) Getfs(device string) (string, error) {
+func (dsp *defaultSystemProvider) Getfs(device string) (string, error) {
 	cmdPath, err := exec.LookPath("file")
 	if err != nil {
 		return fsTypeNone, errors.Wrap(err, "unable to find file")
 	}
 
-	if err := checkDevice(device); err != nil {
+	if err := dsp.checkDevice(device); err != nil {
 		return fsTypeNone, err
 	}
 
@@ -308,6 +314,11 @@ func (ssp *defaultSystemProvider) Getfs(device string) (string, error) {
 	}
 
 	return parseFsType(string(out))
+}
+
+// Stat probes the specified path and returns os level file info.
+func (dsp *defaultSystemProvider) Stat(path string) (os.FileInfo, error) {
+	return os.Stat(path)
 }
 
 func parseFsType(input string) (string, error) {
@@ -345,6 +356,8 @@ func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provi
 	return p
 }
 
+// WithForwardingDisabled returns a reference to the given Provider with the
+// disabled property set on the Provider's forwarder.
 func (p *Provider) WithForwardingDisabled() *Provider {
 	p.fwd.Disabled = true
 	return p
@@ -480,7 +493,7 @@ func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error)
 		if sr := p.createScanResponse(); len(sr.Namespaces) > 0 {
 			for _, ns := range sr.Namespaces {
 				nsDev := "/dev/" + ns.BlockDevice
-				isMounted, err := p.sys.IsMounted(nsDev)
+				isMounted, err := p.IsMounted(nsDev)
 				if err != nil {
 					if os.IsNotExist(errors.Cause(err)) {
 						continue
@@ -545,9 +558,9 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 		Formatted:  true,
 	}
 
-	isMounted, err := p.sys.IsMounted(req.Mountpoint)
+	isMounted, err := p.IsMounted(req.Mountpoint)
 	if err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrapf(err, "failed to check if %s is mounted", req.Mountpoint)
+		return nil, err
 	}
 	if isMounted {
 		res.Mounted = true
@@ -580,22 +593,61 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	return res, nil
 }
 
-func (p *Provider) clearMount(req FormatRequest) error {
-	mounted, err := p.sys.IsMounted(req.Mountpoint)
+func (p *Provider) clearMount(mntpt string) error {
+	mounted, err := p.IsMounted(mntpt)
 	if err != nil && !os.IsNotExist(err) {
-		return errors.Wrapf(err, "failed to check if %s is mounted", req.Mountpoint)
+		return err
 	}
 
 	if mounted {
-		_, err := p.unmount(req.Mountpoint, defaultUnmountFlags)
+		_, err := p.unmount(mntpt, defaultUnmountFlags)
 		if err != nil {
 			return err
 		}
 	}
 
-	if err := os.RemoveAll(req.Mountpoint); err != nil {
+	if err := os.RemoveAll(mntpt); err != nil {
 		if !os.IsNotExist(err) {
-			return errors.Wrapf(err, "failed to remove %s", req.Mountpoint)
+			return errors.Wrapf(err, "failed to remove %s", mntpt)
+		}
+	}
+
+	return nil
+}
+
+// makeMountPath will build the target path by creating any non-existent
+// subdirectories and setting ownership to target uid/gid to ensure that the
+// target user is able to access the created mount point if multiple layers
+// deep. If subdirectories in path already exist, their permissions will not be
+// modified.
+func (p *Provider) makeMountPath(path string, tgtUID, tgtGID int) error {
+	if !filepath.IsAbs(path) {
+		return errors.Errorf("expecting absolute target path, got %q", path)
+	}
+	if _, err := p.Stat(path); err == nil {
+		return nil // path already exists
+	}
+	// don't need to validate request UID/GID as they are populated inside
+	// this package during CreateFormatRequest()
+
+	sep := string(filepath.Separator)
+	dirs := strings.Split(path, sep)[1:] // omit empty element
+
+	for i := range dirs {
+		ps := sep + filepath.Join(dirs[:i+1]...)
+		_, err := p.Stat(ps)
+		switch {
+		case os.IsNotExist(err):
+			// subdir missing, attempt to create and chown
+			if err := os.Mkdir(ps, defaultMountPointPerms); err != nil {
+				return errors.Wrapf(err, "failed to create directory %q", ps)
+			}
+			if err := os.Chown(ps, tgtUID, tgtGID); err != nil {
+				return errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
+					ps, tgtUID, tgtGID)
+			}
+		case err != nil:
+			return errors.Wrapf(err, "unable to stat %q", ps)
 		}
 	}
 
@@ -618,8 +670,12 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 		return p.fwd.Format(req)
 	}
 
-	if err := p.clearMount(req); err != nil {
+	if err := p.clearMount(req.Mountpoint); err != nil {
 		return nil, errors.Wrap(err, "failed to clear existing mount")
+	}
+
+	if err := p.makeMountPath(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
+		return nil, errors.Wrap(err, "failed to create mount path")
 	}
 
 	switch {
@@ -664,9 +720,9 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 		return nil, FaultFormatMissingParam
 	}
 
-	alreadyMounted, err := p.sys.IsMounted(req.Dcpm.Device)
+	alreadyMounted, err := p.IsMounted(req.Dcpm.Device)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to check if %s is already mounted", req.Dcpm.Device)
+		return nil, err
 	}
 	if alreadyMounted {
 		return nil, errors.Wrap(FaultDeviceAlreadyMounted, req.Dcpm.Device)
@@ -702,9 +758,9 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 // MountDcpm attempts to mount a DCPM device at the specified mountpoint.
 func (p *Provider) MountDcpm(device, target string) (*MountResponse, error) {
 	// make sure the source device is not already mounted somewhere else
-	devMounted, err := p.sys.IsMounted(device)
+	devMounted, err := p.IsMounted(device)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to check if %s is mounted", device)
+		return nil, err
 	}
 	if devMounted {
 		return nil, errors.Wrap(FaultDeviceAlreadyMounted, device)
@@ -747,14 +803,10 @@ func (p *Provider) Mount(req MountRequest) (*MountResponse, error) {
 }
 
 func (p *Provider) mount(src, target, fsType string, flags uintptr, opts string) (*MountResponse, error) {
-	if err := os.MkdirAll(target, defaultMountPointPerms); err != nil {
-		return nil, errors.Wrapf(err, "failed to create mountpoint %s", target)
-	}
-
 	// make sure that we're not double-mounting over an existing mount
-	tgtMounted, err := p.sys.IsMounted(target)
+	tgtMounted, err := p.IsMounted(target)
 	if err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrapf(err, "unable to check if %s is mounted", target)
+		return nil, err
 	}
 	if tgtMounted {
 		return nil, errors.Wrap(FaultTargetAlreadyMounted, target)
@@ -790,10 +842,21 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 	}, nil
 }
 
-// IsMounted checks to see if the target device or directory
-// is mounted.
+// Stat probes the specified path and returns os level file info.
+func (p *Provider) Stat(path string) (os.FileInfo, error) {
+	return p.sys.Stat(path)
+}
+
+// IsMounted checks to see if the target device or directory is mounted and
+// returns flag to specify whether mounted or a relevant fault.
 func (p *Provider) IsMounted(target string) (bool, error) {
-	return p.sys.IsMounted(target)
+	isMounted, err := p.sys.IsMounted(target)
+
+	if errors.Is(err, os.ErrPermission) {
+		return false, errors.Wrap(FaultPathAccessDenied(target), "check if mounted")
+	}
+
+	return isMounted, err
 }
 
 // GetfsUsage returns space utilization info for a mount point.

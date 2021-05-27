@@ -308,14 +308,16 @@ agg_clear_extents(struct ec_agg_entry *entry)
 			entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 		}
 
-		entry->ae_cur_stripe.as_extent_cnt--;
-		d_list_del(&extent->ae_link);
 		if (extent->ae_orig_recx.rx_idx + extent->ae_orig_recx.rx_nr >
 		    next_stripe_st && !tail) {
+			d_list_del(&extent->ae_link);
+			entry->ae_cur_stripe.as_extent_cnt--;
 			d_list_add_tail(&extent->ae_link,
 					&entry->ae_cur_stripe.as_hoextents);
 			entry->ae_cur_stripe.as_ho_ext_cnt++;
 		} else if (!tail) {
+			d_list_del(&extent->ae_link);
+			entry->ae_cur_stripe.as_extent_cnt--;
 			D_FREE_PTR(extent);
 		}
 	}
@@ -880,7 +882,7 @@ agg_update_vos(struct ec_agg_entry *entry, bool write_parity)
 
 			se = ec_age2ss(entry) *
 			     (entry->ae_cur_stripe.as_stripenum + 1);
-			if (DAOS_RECX_END(ext->ae_orig_recx) <= se) {
+			if (DAOS_RECX_END(ext->ae_orig_recx) < se) {
 				epoch_range.epr_lo = epoch_range.epr_hi =
 					ext->ae_epoch;
 
@@ -2002,10 +2004,13 @@ agg_data_extent(struct dtx_handle *dth, vos_iter_entry_t *entry,
 	d_list_add_tail(&extent->ae_link,
 			&agg_entry->ae_cur_stripe.as_dextents);
 
-	if (!agg_entry->ae_cur_stripe.as_extent_cnt)
+	if (!agg_entry->ae_cur_stripe.as_extent_cnt) {
 		/* first extent in stripe: save the start offset */
 		agg_entry->ae_cur_stripe.as_offset =  extent->ae_recx.rx_idx -
 			rounddown(extent->ae_recx.rx_idx, ec_age2ss(agg_entry));
+		agg_entry->ae_cur_stripe.as_stripenum =
+				agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
+	}
 
 	agg_entry->ae_cur_stripe.as_extent_cnt++;
 	if (BIO_ADDR_IS_HOLE(&entry->ie_biov.bi_addr)) {
