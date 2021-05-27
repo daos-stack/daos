@@ -113,3 +113,5 @@ checksum:
   test_with_checksum: False
 test_rf:
   test_with_rf: True
+blank_node:
+  test_with_blank_node: True

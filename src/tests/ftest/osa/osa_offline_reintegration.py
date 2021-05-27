@@ -116,6 +116,9 @@ class OSAOfflineReintegration(OSAUtils):
 
             # Reintegrate the ranks which was excluded
             for val, _ in enumerate(rank):
+                if self.test_with_blank_node is True:
+                    ip_addr, p_num = self.get_ipaddr_for_rank(rank[val])
+                    self.remove_pool_dir(ip_addr, p_num)
                 if (val == 2 and "RP_2G" in oclass):
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                rank[val],
@@ -253,4 +256,17 @@ class OSAOfflineReintegration(OSAUtils):
         self.log.info("Offline Reintegration : RF")
         self.test_with_rf = self.params.get("test_with_rf",
                                             '/run/test_rf/*')
+        self.run_offline_reintegration_test(1, data=True)
+
+    def test_osa_offline_reintegrate_with_blank_node(self):
+        """Test ID: DAOS-6923
+        Test Description: Reintegrate rank with no data.
+
+        :avocado: tags=all,full_regression,hw,medium,ib2
+        :avocado: tags=osa,offline_reintegration_full
+        :avocado: tags=offline_reintegrate_with_blank_node
+        """
+        self.test_with_blank_node = self.params.get("test_with_blank_node",
+                                                    '/run/blank_node/*')
+        self.log.info("Offline Reintegration : Test with blank node")
         self.run_offline_reintegration_test(1, data=True)

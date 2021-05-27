@@ -28,7 +28,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_POOL_VERSION 2
+#define DAOS_POOL_VERSION 3
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -292,9 +292,9 @@ struct pool_target_addr_list {
 
 #define DAOS_ISEQ_POOL_EXTEND /* input fields */		 \
 	((struct pool_op_in)	(pei_op)		CRT_VAR) \
-	((uint32_t)		(pei_ntgts)		CRT_VAR) \
 	((uuid_t)		(pei_tgt_uuids)		CRT_ARRAY) \
 	((d_rank_list_t)	(pei_tgt_ranks)		CRT_PTR) \
+	((uint32_t)		(pei_ntgts)		CRT_VAR) \
 	((uint32_t)		(pei_ndomains)		CRT_VAR) \
 	((uint32_t)		(pei_domains)		CRT_ARRAY)
 
@@ -396,8 +396,8 @@ CRT_RPC_DECLARE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE,
 
 #define DAOS_ISEQ_POOL_ACL_DELETE	/* input fields */	 \
 	((struct pool_op_in)	(pdi_op)		CRT_VAR) \
-	((uint8_t)		(pdi_type)		CRT_VAR) \
-	((d_const_string_t)	(pdi_principal)		CRT_VAR)
+	((d_const_string_t)	(pdi_principal)		CRT_VAR) \
+	((uint8_t)		(pdi_type)		CRT_VAR)
 
 #define DAOS_OSEQ_POOL_ACL_DELETE	/* output fields */	 \
 	((struct pool_op_out)	(pdo_op)		CRT_VAR)

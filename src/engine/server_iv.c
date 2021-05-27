@@ -1009,8 +1009,8 @@ sync_comp_cb(void *arg, int rc)
 		 * in the mean time, it will rely on others to update the
 		 * ns for it.
 		 */
-		D_WARN("retry upon %d for class %d opc %d\n", rc,
-		       cb_arg->iv_key.class_id, IV_UPDATE);
+		D_WARN("retry for class %d opc %d rc "DF_RC"\n",
+			cb_arg->iv_key.class_id, IV_UPDATE, DP_RC(rc));
 		rc1 = iv_op(cb_arg->ns, &cb_arg->iv_key, &cb_arg->iv_value,
 			    &cb_arg->iv_sync, cb_arg->shortcut, cb_arg->retry,
 			    cb_arg->opc);

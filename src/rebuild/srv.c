@@ -1685,8 +1685,13 @@ regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 		id_list.pti_ids = &tgt_id;
 		id_list.pti_number = 1;
 
-		rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_fseq,
-					 &id_list, rebuild_op, 0);
+		if (rebuild_op == RB_OP_FAIL || rebuild_op == RB_OP_DRAIN)
+			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_fseq,
+						 &id_list, rebuild_op, 0);
+		else
+			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_in_ver,
+						 &id_list, rebuild_op, 0);
+
 		if (rc) {
 			D_ERROR(DF_UUID" schedule op %d ver %d failed: "
 				DF_RC"\n",
