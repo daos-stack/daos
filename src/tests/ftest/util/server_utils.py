@@ -310,9 +310,6 @@ class DaosServerManager(SubprocessManager):
         "OFI_PORT": "fabric_iface_port",
     }
 
-    # Defined in telemetry_common.h
-    D_TM_SHARED_MEMORY_KEY = 0x10242048
-
     def __init__(self, group, bin_dir,
                  svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
                  svr_config_temp=None, dmg_config_temp=None, manager="Orterun"):
@@ -470,10 +467,6 @@ class DaosServerManager(SubprocessManager):
             cmd = "sudo rm -fr {}/*".format(scm_mount)
             if cmd not in clean_commands:
                 clean_commands.append(cmd)
-
-            # Remove the shared memory segment associated with this io server
-            cmd = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
-            clean_commands.append(cmd)
 
             # Dismount the scm mount point
             cmd = "while sudo umount {}; do continue; done".format(scm_mount)

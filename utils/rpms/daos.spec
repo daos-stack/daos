@@ -7,8 +7,8 @@
 %global __python %{__python3}
 
 Name:          daos
-Version:       1.1.4
-Release:       5%{?relval}%{?dist}
+Version:       1.2
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -129,7 +129,7 @@ Requires: spdk-tools
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
-Requires: ipmctl < 02.00.00.3809
+Requires: ipmctl >= 02.00.00.3733
 Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
 %else
 Requires: ipmctl > 02.00.00.3816
@@ -259,9 +259,8 @@ mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{_sysconfdir}/daos/bash_completion.d %{buildroot}/%{_sysconfdir}
 
 %pre server
-getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
-getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics daos_server
+getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -347,7 +346,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
-%{_bindir}/dfuse_hl
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
 %{_libdir}/libduns.so
@@ -395,7 +393,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
-%{_bindir}/daos_metrics
 %{_sysconfdir}/daos/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
@@ -409,6 +406,23 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %changelog
+* Thu Apr 29 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.2-2
+- Version bump up to 1.2-rc2
+
+* Mon Apr 26 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.2-1
+- Version bump up to 1.2-rc1
+
+* Fri Apr 23 2021 Tom Nabarro <tom.nabarro@intel.com> - 1.1.4-8
+- Relax ipmctl version requirement on leap as runtime version checks
+  are in place
+
+* Wed Apr 21 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.4-7
+
+- Remove daos_metrics utility from 1.2 release
+
+* Wed Apr 16 2021 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 1.1.4-6
+- remove dfuse_hl
+
 * Wed Apr 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.1.4-5
 - Remove storage_estimator and io_conf from client packages to remove
   any client side dependence on bio and vos (and and PMDK/SPDK)
@@ -428,7 +442,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Fri Mar 19 2021 Maureen Jean <maureen.jean@intel.com> 1.1.3-5
 - Update to python3
 
-* Tue Mar 02 2021 Li Wei <wei.g.li@intel.com> 1.1.3-4
+* Thu Mar 02 2021 Li Wei <wei.g.li@intel.com> 1.1.3-4
 - Require raft-devel 0.7.3 that fixes an unstable leadership problem caused by
   removed replicas as well as some Coverity issues
 

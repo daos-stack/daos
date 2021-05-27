@@ -599,7 +599,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	int			 i;
 	int			 rc = 0;
 	struct daos_oclass_attr	*oca;
-	struct daos_csummer	*csummer;
+	struct daos_csummer	*csummer = NULL;
 	d_iov_t			*csums_iov = NULL;
 	d_iov_t			 csum_iov_fetch = {0};
 	d_iov_t			 tmp_csum_iov;

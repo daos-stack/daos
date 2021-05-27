@@ -502,11 +502,11 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct dss_enum_arg *arg,
 		}
 
 		rc = fill_data_csum(new_csum_info, &arg->csum_iov);
+		daos_csummer_free_ci(csummer, &new_csum_info);
 		if (rc != 0) {
 			D_ERROR("Issue filling csum data");
 			return rc;
 		}
-		daos_csummer_free_ci(csummer, &new_csum_info);
 	} else {
 		rc = fill_data_csum(&ent->ie_csum, &arg->csum_iov);
 		if (rc != 0) {

@@ -1,3 +1,27 @@
+daos (1.2-2) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Version bump up to 1.2-rc2
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 29 Apr 2021 19:16:40 -0400
+
+daos (1.2-1) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Version bump up to 1.2-rc1
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 26 Apr 2021 15:03:35 -0400
+
+daos (1.1.4-7) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Remove daos_metrics from 1.2 release
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Wed, 21 Apr 2021 17:58:03 -0000
+
+daos (1.1.4-6) unstable; urgency=medium
+  [ Mohamad Chaarawi ]
+  * Remove dfuse_hl
+
+ -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>  Wed, 16 Apr 2021 17:57:00 -0400
+
 daos (1.1.4-5) unstable; urgency=medium
   [ Jeff Olivier ]
   * Remove client dependencies on PMDK, SPDK, and argobots

@@ -252,7 +252,7 @@ db_delete(struct sys_db *db, char *table, d_iov_t *key)
 	if (rc == 0) {
 		int creds = 100;
 		/* vos_obj_del_key() wouldn't free space */
-		vos_gc_pool(vdb->db_poh, &creds);
+		vos_gc_pool_tight(vdb->db_poh, &creds);
 	}
 	return rc;
 }

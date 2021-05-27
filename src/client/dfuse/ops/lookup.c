@@ -193,7 +193,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 out_dfs:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
 out_dfp:
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfs->dfs_dfp->dfp_entry);
+	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 out_err:
 	return rc;
 }
@@ -215,7 +215,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
-		D_GOTO(err, rc = ENOMEM);
+		D_GOTO(out, rc = ENOMEM);
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
@@ -229,16 +229,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
 				strerror(rc));
 
-		if (rc == ENOENT && ie->ie_dfs->dfs_attr_timeout > 0) {
-			struct fuse_entry_param entry = {};
-
-			entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
-
-			DFUSE_REPLY_ENTRY(parent, req, entry);
-			D_GOTO(free, 0);
-		}
-
-		D_GOTO(err, rc);
+		D_GOTO(out_free, rc);
 	}
 
 	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
@@ -252,15 +243,24 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		DFUSE_TRA_DEBUG(ie,
 				"check_for_uns_ep() returned %d", rc);
 		if (rc != 0 && rc != EPERM)
-			D_GOTO(err, rc);
+			D_GOTO(out_release, rc);
 	}
 
 	dfuse_reply_entry(fs_handle, ie, NULL, false, req);
 	return;
 
-err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+out_release:
 	dfs_release(ie->ie_obj);
-free:
+out_free:
 	D_FREE(ie);
+out:
+	if (rc == ENOENT && parent->ie_dfs->dfs_attr_timeout > 0) {
+		struct fuse_entry_param entry = {};
+
+		entry.entry_timeout = parent->ie_dfs->dfs_attr_timeout;
+
+		DFUSE_REPLY_ENTRY(parent, req, entry);
+	} else {
+		DFUSE_REPLY_ERR_RAW(parent, req, rc);
+	}
 }
