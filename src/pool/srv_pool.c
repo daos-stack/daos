@@ -2982,7 +2982,8 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 
 	tgt_state = target->ta_comp.co_status;
 	out->pqio_state = enum_pool_comp_state_to_tgt_state(tgt_state);
-	out->pqio_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
+	out->pqio_op.po_map_version =
+			pool_map_get_version(svc->ps_pool->sp_map);
 
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 
