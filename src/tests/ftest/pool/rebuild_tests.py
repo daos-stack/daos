@@ -59,6 +59,7 @@ class RebuildTests(TestWithServers):
         rs_obj_nr = []
         rs_rec_nr = []
         for index in range(pool_quantity):
+            self.container[index].properties.value = "rf:2"
             self.container[index].create()
             self.container[index].write_objects(rank, obj_class)
 
