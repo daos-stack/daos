@@ -11,6 +11,7 @@
 #include <uuid/uuid.h>
 #include <abt.h>
 #include <spdk/env.h>
+#include <spdk/init.h>
 #include <spdk/nvme.h>
 #include <spdk/vmd.h>
 #include <spdk/thread.h>
@@ -58,7 +59,7 @@ struct bio_nvme_data {
 	/* All bdevs can be used by DAOS server */
 	d_list_t		 bd_bdevs;
 	uint64_t		 bd_scan_age;
-	struct spdk_conf	*bd_nvme_conf;
+	const char		*bd_nvme_conf;
 	int			 bd_shm_id;
 	/* When using SPDK primary mode, specifies memory allocation in MB */
 	int			 bd_mem_size;
@@ -68,60 +69,64 @@ struct bio_nvme_data {
 static struct bio_nvme_data nvme_glb;
 uint64_t vmd_led_period;
 
-static int
-is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
-		     int num_whitelist_devices)
-{
-	int			i;
-	struct spdk_pci_addr    tmp;
-
-	if (spdk_pci_addr_parse(&tmp, pci_addr) != 0) {
-		D_ERROR("Invalid address %s\n", pci_addr);
-		return -DER_INVAL;
-	}
-
-	for (i = 0; i < num_whitelist_devices; i++) {
-		if (spdk_pci_addr_compare(&tmp, &whitelist[i]) == 0) {
-			return 1;
-		}
-	}
-
-	return 0;
-}
+/*
+ * static int
+ * is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
+ * 		     int num_whitelist_devices)
+ * {
+ * 	int			i;
+ * 	struct spdk_pci_addr    tmp;
+ *
+ * 	if (spdk_pci_addr_parse(&tmp, pci_addr) != 0) {
+ * 		D_ERROR("Invalid address %s\n", pci_addr);
+ * 		return -DER_INVAL;
+ * 	}
+ *
+ * 	for (i = 0; i < num_whitelist_devices; i++) {
+ * 		if (spdk_pci_addr_compare(&tmp, &whitelist[i]) == 0) {
+ * 			return 1;
+ * 		}
+ * 	}
+ *
+ * 	return 0;
+ * }
+ */
 
 /*
  * Add PCI address to spdk_env_opts whitelist, ignoring any duplicates.
  */
-static int
-opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
-		  char *traddr)
-{
-	int			rc;
-	size_t			count = opts->num_pci_addr;
-	struct spdk_pci_addr   *tmp = *list;
-	struct spdk_pci_addr   *new;
-
-	rc = is_addr_in_whitelist(traddr, *list, count);
-	if (rc < 0) {
-		return rc;
-	}
-	if (rc == 1) {
-		return 0;
-	}
-
-	D_REALLOC_ARRAY(new, tmp, count, count + 1);
-	if (new == NULL)
-		return -DER_NOMEM;
-
-	*list = new;
-	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
-		D_ERROR("Invalid address %s\n", traddr);
-		return -DER_INVAL;
-	}
-
-	opts->num_pci_addr++;
-	return 0;
-}
+/*
+ * static int
+ * opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
+ * 		  char *traddr)
+ * {
+ * 	int			rc;
+ * 	size_t			count = opts->num_pci_addr;
+ * 	struct spdk_pci_addr   *tmp = *list;
+ * 	struct spdk_pci_addr   *new;
+ *
+ * 	rc = is_addr_in_whitelist(traddr, *list, count);
+ * 	if (rc < 0) {
+ * 		return rc;
+ * 	}
+ * 	if (rc == 1) {
+ * 		return 0;
+ * 	}
+ *
+ * 	D_REALLOC_ARRAY(new, tmp, count, count + 1);
+ * 	if (new == NULL)
+ * 		return -DER_NOMEM;
+ *
+ * 	*list = new;
+ * 	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
+ * 		D_ERROR("Invalid address %s\n", traddr);
+ * 		return -DER_INVAL;
+ * 	}
+ *
+ * 	opts->num_pci_addr++;
+ * 	return 0;
+ * }
+ */
 
 /*
  * Convert a transport id in the BDF form of "5d0505:01:00.0" or something
@@ -131,156 +136,160 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
  * \param dst String to be populated as output.
  * \param src Input bdf.
  */
-static int
-traddr_to_vmd(char *dst, const char *src)
-{
-	char traddr_tmp[SPDK_NVMF_TRADDR_MAX_LEN + 1];
-	char vmd_addr[SPDK_NVMF_TRADDR_MAX_LEN + 1] = "0000:";
-	char *ptr;
-	const char ch = ':';
-	char addr_split[3];
-	int position, iteration;
-	int n;
+/*
+ * static int
+ * traddr_to_vmd(char *dst, const char *src)
+ * {
+ * 	char traddr_tmp[SPDK_NVMF_TRADDR_MAX_LEN + 1];
+ * 	char vmd_addr[SPDK_NVMF_TRADDR_MAX_LEN + 1] = "0000:";
+ * 	char *ptr;
+ * 	const char ch = ':';
+ * 	char addr_split[3];
+ * 	int position, iteration;
+ * 	int n;
+ *
+ * 	n = snprintf(traddr_tmp, SPDK_NVMF_TRADDR_MAX_LEN, "%s", src);
+ * 	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
+ * 		D_ERROR("snprintf failed\n");
+ * 		return -DER_INVAL;
+ * 	}
+ *
+ * 	/\* Only the first chunk of data from the traddr is useful *\/
+ * 	ptr = strchr(traddr_tmp, ch);
+ * 	if (ptr == NULL) {
+ * 		D_ERROR("Transport id not valid\n");
+ * 		return -DER_INVAL;
+ * 	}
+ * 	position = ptr - traddr_tmp;
+ * 	traddr_tmp[position] = '\0';
+ *
+ * 	ptr = traddr_tmp;
+ * 	iteration = 0;
+ * 	while (*ptr != '\0') {
+ * 		n = snprintf(addr_split, sizeof(addr_split), "%s", ptr);
+ * 		if (n < 0) {
+ * 			D_ERROR("snprintf failed\n");
+ * 			return -DER_INVAL;
+ * 		}
+ * 		strcat(vmd_addr, addr_split);
+ *
+ * 		if (iteration != 0) {
+ * 			strcat(vmd_addr, ".");
+ * 			ptr = ptr + 3;
+ * 			/\** Hack alert!  Reuse existing buffer to ensure new
+ * 			 *  string is null terminated.
+ * 			 *\/
+ * 			addr_split[0] = ptr[0];
+ * 			addr_split[1] = '\0';
+ * 			strcat(vmd_addr, addr_split);
+ * 			break;
+ * 		}
+ * 		strcat(vmd_addr, ":");
+ * 		ptr = ptr + 2;
+ * 		iteration++;
+ * 	}
+ * 	n = snprintf(dst, SPDK_NVMF_TRADDR_MAX_LEN, "%s", vmd_addr);
+ * 	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
+ * 		D_ERROR("snprintf failed\n");
+ * 		return -DER_INVAL;
+ * 	}
+ *
+ * 	return 0;
+ * }
+ */
 
-	n = snprintf(traddr_tmp, SPDK_NVMF_TRADDR_MAX_LEN, "%s", src);
-	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
-		D_ERROR("snprintf failed\n");
-		return -DER_INVAL;
-	}
-
-	/* Only the first chunk of data from the traddr is useful */
-	ptr = strchr(traddr_tmp, ch);
-	if (ptr == NULL) {
-		D_ERROR("Transport id not valid\n");
-		return -DER_INVAL;
-	}
-	position = ptr - traddr_tmp;
-	traddr_tmp[position] = '\0';
-
-	ptr = traddr_tmp;
-	iteration = 0;
-	while (*ptr != '\0') {
-		n = snprintf(addr_split, sizeof(addr_split), "%s", ptr);
-		if (n < 0) {
-			D_ERROR("snprintf failed\n");
-			return -DER_INVAL;
-		}
-		strcat(vmd_addr, addr_split);
-
-		if (iteration != 0) {
-			strcat(vmd_addr, ".");
-			ptr = ptr + 3;
-			/** Hack alert!  Reuse existing buffer to ensure new
-			 *  string is null terminated.
-			 */
-			addr_split[0] = ptr[0];
-			addr_split[1] = '\0';
-			strcat(vmd_addr, addr_split);
-			break;
-		}
-		strcat(vmd_addr, ":");
-		ptr = ptr + 2;
-		iteration++;
-	}
-	n = snprintf(dst, SPDK_NVMF_TRADDR_MAX_LEN, "%s", vmd_addr);
-	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
-		D_ERROR("snprintf failed\n");
-		return -DER_INVAL;
-	}
-
-	return 0;
-}
-
-static int
-populate_whitelist(struct spdk_env_opts *opts)
-{
-	struct spdk_nvme_transport_id	*trid;
-	struct spdk_conf_section	*sp;
-	const char			*val;
-	size_t				 i;
-	int				 rc = 0;
-	bool				 vmd_enabled = false;
-
-	/* Don't need to pass whitelist for non-NVMe devices */
-	if (nvme_glb.bd_bdev_class != BDEV_CLASS_NVME)
-		return 0;
-
-	/*
-	 * Optionally VMD devices will be used, and will require a different
-	 * transport id to pass to whitelist for DPDK.
-	 */
-	sp = spdk_conf_find_section(NULL, "Vmd");
-	if (sp != NULL) {
-		if (spdk_conf_section_get_boolval(sp, "Enable", false))
-			vmd_enabled = true;
-	}
-
-	sp = spdk_conf_find_section(NULL, "Nvme");
-	if (sp == NULL) {
-		D_ERROR("unexpected empty config\n");
-		return -DER_INVAL;
-	}
-
-	D_ALLOC_PTR(trid);
-	if (trid == NULL)
-		return -DER_NOMEM;
-
-	for (i = 0; i < DAOS_NVME_MAX_CTRLRS; i++) {
-		val = spdk_conf_section_get_nmval(sp, "TransportID", i, 0);
-		if (val == NULL) {
-			break;
-		}
-
-		rc = spdk_nvme_transport_id_parse(trid, val);
-		if (rc < 0) {
-			D_ERROR("Unable to parse TransportID: %s\n", val);
-			rc = -DER_INVAL;
-			break;
-		}
-
-		if (trid->trtype != SPDK_NVME_TRANSPORT_PCIE) {
-			D_ERROR("unexpected non-PCIE transport\n");
-			rc = -DER_INVAL;
-			break;
-		}
-
-		if (vmd_enabled) {
-			if (strncmp(trid->traddr, "0", 1) != 0) {
-				/*
-				 * We can assume this is the transport id of the
-				 * backing NVMe SSD behind the VMD. DPDK will
-				 * not recognize this transport ID, instead need
-				 * to pass VMD address as the whitelist param.
-				 */
-				rc = traddr_to_vmd(trid->traddr, trid->traddr);
-				if (rc < 0) {
-					D_ERROR("Invalid traddr=%s\n",
-						trid->traddr);
-					rc = -DER_INVAL;
-					break;
-				}
-			}
-		}
-
-		rc = opts_add_pci_addr(opts, &opts->pci_allowed, trid->traddr);
-		if (rc < 0) {
-			D_ERROR("Invalid traddr=%s\n", trid->traddr);
-			rc = -DER_INVAL;
-			break;
-		}
-
-		/* Clear it for the next loop */
-		memset(trid, 0, sizeof(*trid));
-	}
-
-	D_FREE(trid);
-	if (rc && opts->pci_allowed != NULL) {
-		D_FREE(opts->pci_allowed);
-		opts->pci_allowed = NULL;
-	}
-
-	return rc;
-}
+/*
+ * static int
+ * populate_whitelist(struct spdk_env_opts *opts)
+ * {
+ * 	struct spdk_nvme_transport_id	*trid;
+ * 	struct spdk_conf_section	*sp;
+ * 	const char			*val;
+ * 	size_t				 i;
+ * 	int				 rc = 0;
+ * 	bool				 vmd_enabled = false;
+ *
+ * 	/\* Don't need to pass whitelist for non-NVMe devices *\/
+ * 	if (nvme_glb.bd_bdev_class != BDEV_CLASS_NVME)
+ * 		return 0;
+ *
+ * 	/\*
+ * 	 * Optionally VMD devices will be used, and will require a different
+ * 	 * transport id to pass to whitelist for DPDK.
+ * 	 *\/
+ * 	sp = spdk_conf_find_section(NULL, "Vmd");
+ * 	if (sp != NULL) {
+ * 		if (spdk_conf_section_get_boolval(sp, "Enable", false))
+ * 			vmd_enabled = true;
+ * 	}
+ *
+ * 	sp = spdk_conf_find_section(NULL, "Nvme");
+ * 	if (sp == NULL) {
+ * 		D_ERROR("unexpected empty config\n");
+ * 		return -DER_INVAL;
+ * 	}
+ *
+ * 	D_ALLOC_PTR(trid);
+ * 	if (trid == NULL)
+ * 		return -DER_NOMEM;
+ *
+ * 	for (i = 0; i < DAOS_NVME_MAX_CTRLRS; i++) {
+ * 		val = spdk_conf_section_get_nmval(sp, "TransportID", i, 0);
+ * 		if (val == NULL) {
+ * 			break;
+ * 		}
+ *
+ * 		rc = spdk_nvme_transport_id_parse(trid, val);
+ * 		if (rc < 0) {
+ * 			D_ERROR("Unable to parse TransportID: %s\n", val);
+ * 			rc = -DER_INVAL;
+ * 			break;
+ * 		}
+ *
+ * 		if (trid->trtype != SPDK_NVME_TRANSPORT_PCIE) {
+ * 			D_ERROR("unexpected non-PCIE transport\n");
+ * 			rc = -DER_INVAL;
+ * 			break;
+ * 		}
+ *
+ * 		if (vmd_enabled) {
+ * 			if (strncmp(trid->traddr, "0", 1) != 0) {
+ * 				/\*
+ * 				 * We can assume this is the transport id of the
+ * 				 * backing NVMe SSD behind the VMD. DPDK will
+ * 				 * not recognize this transport ID, instead need
+ * 				 * to pass VMD address as the whitelist param.
+ * 				 *\/
+ * 				rc = traddr_to_vmd(trid->traddr, trid->traddr);
+ * 				if (rc < 0) {
+ * 					D_ERROR("Invalid traddr=%s\n",
+ * 						trid->traddr);
+ * 					rc = -DER_INVAL;
+ * 					break;
+ * 				}
+ * 			}
+ * 		}
+ *
+ * 		rc = opts_add_pci_addr(opts, &opts->pci_allowed, trid->traddr);
+ * 		if (rc < 0) {
+ * 			D_ERROR("Invalid traddr=%s\n", trid->traddr);
+ * 			rc = -DER_INVAL;
+ * 			break;
+ * 		}
+ *
+ * 		/\* Clear it for the next loop *\/
+ * 		memset(trid, 0, sizeof(*trid));
+ * 	}
+ *
+ * 	D_FREE(trid);
+ * 	if (rc && opts->pci_allowed != NULL) {
+ * 		D_FREE(opts->pci_allowed);
+ * 		opts->pci_allowed = NULL;
+ * 	}
+ *
+ * 	return rc;
+ * }
+ */
 
 static int
 bio_spdk_env_init(void)
@@ -289,12 +298,6 @@ bio_spdk_env_init(void)
 	int			 rc;
 
 	D_ASSERT(nvme_glb.bd_nvme_conf != NULL);
-	if (spdk_conf_first_section(nvme_glb.bd_nvme_conf) == NULL) {
-		D_ERROR("Invalid NVMe conf format\n");
-		return -DER_INVAL;
-	}
-
-	spdk_conf_set_as_default(nvme_glb.bd_nvme_conf);
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos";
@@ -303,9 +306,11 @@ bio_spdk_env_init(void)
 	if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY)
 		opts.mem_size = nvme_glb.bd_mem_size;
 
-	rc = populate_whitelist(&opts);
-	if (rc != 0)
-		return rc;
+	/*
+	 * rc = populate_whitelist(&opts);
+	 * #if (rc != 0)
+	 *	return rc;
+	 */
 
 	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
 		opts.shm_id = nvme_glb.bd_shm_id;
@@ -340,8 +345,8 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	      struct sys_db *db)
 {
 	char		*env;
-	int		rc, fd;
-	uint64_t	size_mb = DAOS_DMA_CHUNK_MB;
+	int		 rc; /* , fd; */
+	uint64_t	 size_mb = DAOS_DMA_CHUNK_MB;
 
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
@@ -365,34 +370,38 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		return 0;
 	}
 
-	fd = open(nvme_conf, O_RDONLY, 0600);
-	if (fd < 0) {
-		D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
-		       nvme_conf, DP_RC(daos_errno2der(errno)));
-		nvme_glb.bd_nvme_conf = NULL;
-		return 0;
-	}
-	close(fd);
+	/*
+	 * fd = open(nvme_conf, O_RDONLY, 0600);
+	 * if (fd < 0) {
+	 * 	D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
+	 * 	       nvme_conf, DP_RC(daos_errno2der(errno)));
+	 * 	nvme_glb.bd_nvme_conf = NULL;
+	 * 	return 0;
+	 * }
+	 * close(fd);
+	 */
 
-	rc = smd_init(db);
-	if (rc != 0) {
-		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
+	 rc = smd_init(db);
+	 if (rc != 0) {
+	 	D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
+	 	return rc;
+	 }
 
-	nvme_glb.bd_nvme_conf = spdk_conf_allocate();
-	if (nvme_glb.bd_nvme_conf == NULL) {
-		D_ERROR("Failed to alloc SPDK config\n");
-		rc = -DER_NOMEM;
-		goto free_cond;
-	}
+	/*
+	 * nvme_glb.bd_nvme_conf = spdk_conf_allocate();
+	 * if (nvme_glb.bd_nvme_conf == NULL) {
+	 * 	D_ERROR("Failed to alloc SPDK config\n");
+	 * 	rc = -DER_NOMEM;
+	 * 	goto free_cond;
+	 * }
 
-	rc = spdk_conf_read(nvme_glb.bd_nvme_conf, nvme_conf);
-	if (rc != 0) {
-		rc = -DER_INVAL; /* spdk_conf_read() returns -1 */
-		D_ERROR("Failed to read %s, "DF_RC"\n", nvme_conf, DP_RC(rc));
-		goto free_conf;
-	}
+	 * rc = spdk_conf_read(nvme_glb.bd_nvme_conf, nvme_conf);
+	 * if (rc != 0) {
+	 * 	rc = -DER_INVAL;
+	 * 	D_ERROR("Failed to read %s, "DF_RC"\n", nvme_conf, DP_RC(rc));
+	 * 	goto free_conf;
+	 * }
+         */
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
@@ -402,18 +411,20 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 
-	env = getenv("VOS_BDEV_CLASS");
-	if (env && strcasecmp(env, "MALLOC") == 0) {
-		D_WARN("Malloc device(s) will be used!\n");
-		nvme_glb.bd_bdev_class = BDEV_CLASS_MALLOC;
-		nvme_glb.bd_bs_opts.cluster_sz = (1ULL << 20);
-		nvme_glb.bd_bs_opts.num_md_pages = 10;
-		size_mb = 2;
-		bio_chk_cnt_max = 32;
-	} else if (env && strcasecmp(env, "AIO") == 0) {
-		D_WARN("AIO device(s) will be used!\n");
-		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
-	}
+	/*
+	 * env = getenv("VOS_BDEV_CLASS");
+	 * if (env && strcasecmp(env, "MALLOC") == 0) {
+	 * 	D_WARN("Malloc device(s) will be used!\n");
+	 * 	nvme_glb.bd_bdev_class = BDEV_CLASS_MALLOC;
+	 * 	nvme_glb.bd_bs_opts.cluster_sz = (1ULL << 20);
+	 * 	nvme_glb.bd_bs_opts.num_md_pages = 10;
+	 * 	size_mb = 2;
+	 * 	bio_chk_cnt_max = 32;
+	 * } else if (env && strcasecmp(env, "AIO") == 0) {
+	 * 	D_WARN("AIO device(s) will be used!\n");
+	 * 	nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
+	 * }
+	 */
 
 	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
@@ -424,16 +435,17 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	nvme_glb.bd_shm_id = shm_id;
 	nvme_glb.bd_mem_size = mem_size;
 
+	nvme_glb.bd_nvme_conf = nvme_conf;
+
 	rc = bio_spdk_env_init();
 	if (rc)
 		goto free_conf;
 
 	return 0;
 
+
 free_conf:
-	spdk_conf_free(nvme_glb.bd_nvme_conf);
 	nvme_glb.bd_nvme_conf = NULL;
-free_cond:
 	ABT_cond_free(&nvme_glb.bd_barrier);
 free_mutex:
 	ABT_mutex_free(&nvme_glb.bd_mutex);
@@ -448,7 +460,6 @@ bio_spdk_env_fini(void)
 	if (nvme_glb.bd_nvme_conf != NULL) {
 		spdk_thread_lib_fini();
 		spdk_env_fini();
-		spdk_conf_free(nvme_glb.bd_nvme_conf);
 	}
 }
 
@@ -597,36 +608,26 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 	       void (*async_cb)(void *arg, struct spdk_blob_store *bs, int rc),
 	       void *async_arg)
 {
-	struct spdk_bdev_desc	*desc = NULL;
 	struct spdk_bs_dev	*bs_dev;
 	struct spdk_bs_opts	 bs_opts;
 	struct common_cp_arg	 cp_arg;
 	int			 rc;
-
-	rc = spdk_bdev_open_ext(bdev_name, true, bio_bdev_event_cb, NULL,
-				&desc);
-	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, %d\n", bdev_name, rc);
-		return NULL;
-	}
 
 	/*
 	 * bdev will be closed and bs_dev will be freed during
 	 * spdk_bs_unload(), or in the internal error handling code of
 	 * spdk_bs_init/load().
 	 */
-	D_ASSERT(desc != NULL);
-	bs_dev = spdk_bdev_create_bs_dev_from_desc(desc);
-	if (bs_dev == NULL) {
-		D_ERROR("failed to create bs_dev\n");
-		spdk_bdev_close(desc);
+	rc = spdk_bdev_create_bs_dev_ext(bdev_name, bio_bdev_event_cb, NULL,
+					 &bs_dev);
+	if (rc != 0) {
+		D_ERROR("failed to create bs_dev %s, %d\n", bdev_name, rc);
 		return NULL;
 	}
 
 	bs_opts = nvme_glb.bd_bs_opts;
 	/*
-	 * A little bit hacke here, we store a UUID in the 16 bytes 'bstype'
-	 * and use it as the block device ID.
+	 * A little hack here, we store a UUID in the 16 bytes 'bstype'* and use it as the block device ID.
 	 */
 	D_ASSERT(SPDK_BLOBSTORE_TYPE_LENGTH == 16);
 	if (bs_uuid == NULL)
@@ -1505,7 +1506,10 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 		/* Initialize all registered subsystems: bdev, vmd, copy. */
 		common_prep_arg(&cp_arg);
-		spdk_subsystem_init(subsys_init_cb, &cp_arg);
+		spdk_subsystem_init_from_json_config(nvme_glb.bd_nvme_conf,
+						     SPDK_DEFAULT_RPC_ADDR,
+						     subsys_init_cb, &cp_arg,
+						     true);
 		rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights, 0);
 		D_ASSERT(rc == 0);
 
