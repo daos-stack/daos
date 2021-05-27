@@ -58,20 +58,20 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 	       dirname ? dirname : "/");
 
 	while (nodelist) {
-		name = d_tm_conv_ptr(ctx, nodelist->dtnl_node->dtn_name);
+		node = nodelist->dtnl_node;
+
+		name = d_tm_get_name(ctx, node);
 		if (name == NULL)
 			return;
 
-		d_tm_get_metadata(ctx, &desc, &units,
-				  nodelist->dtnl_node);
+		d_tm_get_metadata(ctx, &desc, &units, node);
 
-		switch (nodelist->dtnl_node->dtn_type) {
+		switch (node->dtn_type) {
 		case D_TM_DIRECTORY:
 			fprintf(stdout, "Directory: %-20s\n", name);
 			break;
 		case D_TM_COUNTER:
-			rc = d_tm_get_counter(ctx, &val,
-					      nodelist->dtnl_node);
+			rc = d_tm_get_counter(ctx, &val, node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on counter read: " DF_RC "\n",
 				       DP_RC(rc));
@@ -81,8 +81,7 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 					   options, stdout);
 			break;
 		case D_TM_TIMESTAMP:
-			rc = d_tm_get_timestamp(ctx, &clk,
-						nodelist->dtnl_node);
+			rc = d_tm_get_timestamp(ctx, &clk, node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on timestamp read: " DF_RC "\n",
 				       DP_RC(rc));
@@ -94,35 +93,32 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME):
-			rc = d_tm_get_timer_snapshot(ctx, &tms,
-						     nodelist->dtnl_node);
+			rc = d_tm_get_timer_snapshot(ctx, &tms, node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on highres timer read: " DF_RC
 				       "\n", DP_RC(rc));
 				break;
 			}
 			d_tm_print_timer_snapshot(&tms, name,
-						  nodelist->dtnl_node->dtn_type,
+						  node->dtn_type,
 						  D_TM_STANDARD, options,
 						  stdout);
 			break;
 		case D_TM_DURATION | D_TM_CLOCK_REALTIME:
 		case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
 		case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
-			rc = d_tm_get_duration(ctx, &tms, &stats,
-					       nodelist->dtnl_node);
+			rc = d_tm_get_duration(ctx, &tms, &stats, node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on duration read: " DF_RC "\n",
 				       DP_RC(rc));
 				break;
 			}
 			d_tm_print_duration(&tms, &stats, name,
-					    nodelist->dtnl_node->dtn_type,
+					    node->dtn_type,
 					    D_TM_STANDARD, options, stdout);
 			break;
 		case D_TM_GAUGE:
-			rc = d_tm_get_gauge(ctx, &val, &stats,
-					    nodelist->dtnl_node);
+			rc = d_tm_get_gauge(ctx, &val, &stats, node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on gauge read: " DF_RC "\n",
 				       DP_RC(rc));
@@ -133,7 +129,7 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 			break;
 		default:
 			printf("Item: %s has unknown type: 0x%x\n",
-			       name, nodelist->dtnl_node->dtn_type);
+			       name, node->dtn_type);
 			break;
 		}
 
@@ -143,7 +139,7 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 		D_FREE_PTR(desc);
 		D_FREE_PTR(units);
 
-		if (nodelist->dtnl_node->dtn_type != D_TM_DIRECTORY)
+		if (node->dtn_type != D_TM_DIRECTORY)
 			printf("\n");
 
 		nodelist = nodelist->dtnl_next;

@@ -237,6 +237,8 @@ int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
+extern bool ec_agg_disabled;
+
 int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
 			  d_rank_list_t **ranks);
 
