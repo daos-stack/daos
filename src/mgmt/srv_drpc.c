@@ -717,17 +717,8 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	 * In the future, we may need to adjust the allocations somehow and
 	 * this is how we would let the caller know.
 	 */
-	D_ALLOC_ARRAY(resp.tier_bytes, req->n_tierbytes);
-	if (resp.tier_bytes != NULL) {
-		resp.n_tier_bytes = req->n_tierbytes;
-		resp.tier_bytes[DAOS_MEDIA_SCM] = scm_bytes;
-		if (req->n_tierbytes > DAOS_MEDIA_NVME) {
-			resp.tier_bytes[DAOS_MEDIA_NVME] = nvme_bytes;
-		}
-	} else {
-		resp.n_tier_bytes = 0;
-		resp.tier_bytes = NULL;
-	}
+	resp.n_tier_bytes = req->n_tierbytes;
+	resp.tier_bytes = req->tierbytes;
 
 out_list:
 	d_rank_list_free(rank_list);
@@ -745,9 +736,6 @@ out:
 	}
 
 	mgmt__pool_extend_req__free_unpacked(req, &alloc.alloc);
-
-	if (resp.tier_bytes != NULL)
-		D_FREE(resp.tier_bytes);
 }
 
 void
