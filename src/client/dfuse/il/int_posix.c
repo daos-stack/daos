@@ -134,7 +134,7 @@ ioil_shrink_cont(struct ioil_cont *cont)
 	if (!d_list_empty(&pool->iop_container_head))
 		return 0;
 
-	ioil_shrink_pool(pool);
+	return ioil_shrink_pool(pool);
 }
 
 static void
