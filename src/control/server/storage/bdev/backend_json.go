@@ -20,21 +20,41 @@ const (
 	BdevNvmeSetHotplug       = "bdev_nvme_set_hotplug"
 )
 
-// SpdkSubsystemConfigParams can apply to any SpdkSubsystemConfig method.
-type SpdkSubsystemConfigParams struct {
-	BdevIoPoolSize           uint64 `json:"bdev_io_pool_size,omitempty"`
-	BdevIoCacheSize          uint64 `json:"bdev_io_cache_size,omitempty"`
-	RetryCount               uint32 `json:"retry_count,omitempty"`
-	TimeoutUsec              uint64 `json:"timeout_us,omitempty"`
-	NvmeAdminqPollPeriodUsec uint32 `json:"nvme_adminq_poll_period_us,omitempty"`
-	ActionOnTimeout          string `json:"action_on_timeout,omitempty"`
-	NvmeIoqPollPeriodUsec    uint32 `json:"nvme_ioq_poll_period_us,omitempty"`
-	TransportType            string `json:"trtype,omitempty"`
-	DeviceName               string `json:"name,omitempty"`
-	TransportAddress         string `json:"traddr,omitempty"`
-	Enable                   bool   `json:"enable,omitempty"`
-	PeriodUsec               uint64 `json:"period_us,omitempty"`
+type SpdkSubsystemConfigParams interface {
+	isSpdkSubsystemConfigParams()
 }
+
+type setOptionsParams struct {
+	BdevIoPoolSize  uint64 `json:"bdev_io_pool_size"`
+	BdevIoCacheSize uint64 `json:"bdev_io_cache_size"`
+}
+
+func (sop setOptionsParams) isSpdkSubsystemConfigParams() {}
+
+type nvmeSetOptionsParams struct {
+	RetryCount               uint32 `json:"retry_count"`
+	TimeoutUsec              uint64 `json:"timeout_us"`
+	NvmeAdminqPollPeriodUsec uint32 `json:"nvme_adminq_poll_period_us"`
+	ActionOnTimeout          string `json:"action_on_timeout"`
+	NvmeIoqPollPeriodUsec    uint32 `json:"nvme_ioq_poll_period_us"`
+}
+
+func (nsop nvmeSetOptionsParams) isSpdkSubsystemConfigParams() {}
+
+type nvmeAttachControllerParams struct {
+	TransportType    string `json:"trtype"`
+	DeviceName       string `json:"name"`
+	TransportAddress string `json:"traddr"`
+}
+
+func (napp nvmeAttachControllerParams) isSpdkSubsystemConfigParams() {}
+
+type nvmeSetHotplugParams struct {
+	Enable     bool   `json:"enable"`
+	PeriodUsec uint64 `json:"period_us"`
+}
+
+func (nshp nvmeSetHotplugParams) isSpdkSubsystemConfigParams() {}
 
 // SpdkSubsystemConfig entries apply to any SpdkSubsystem.
 type SpdkSubsystemConfig struct {
@@ -58,14 +78,14 @@ func defaultSpdkConfig() *SpdkConfig {
 	bdevSubsystemConfigs := []*SpdkSubsystemConfig{
 		{
 			Method: BdevSetOptions,
-			Params: SpdkSubsystemConfigParams{
+			Params: setOptionsParams{
 				BdevIoPoolSize:  humanize.KiByte * 64,
 				BdevIoCacheSize: 256,
 			},
 		},
 		{
 			Method: BdevNvmeSetOptions,
-			Params: SpdkSubsystemConfigParams{
+			Params: nvmeSetOptionsParams{
 				RetryCount:               4,
 				NvmeAdminqPollPeriodUsec: 100 * 1000,
 				ActionOnTimeout:          "none",
@@ -73,7 +93,7 @@ func defaultSpdkConfig() *SpdkConfig {
 		},
 		{
 			Method: BdevNvmeSetHotplug,
-			Params: SpdkSubsystemConfigParams{
+			Params: nvmeSetHotplugParams{
 				PeriodUsec: 10 * 1000 * 1000,
 			},
 		},
@@ -96,7 +116,7 @@ func newNvmeSpdkConfig(deviceList []string, host string) *SpdkConfig {
 	for i, d := range deviceList {
 		sscs = append(sscs, &SpdkSubsystemConfig{
 			Method: BdevNvmeAttachController,
-			Params: SpdkSubsystemConfigParams{
+			Params: nvmeAttachControllerParams{
 				TransportType:    "PCIe",
 				DeviceName:       fmt.Sprintf("Nvme_%s_%d", host, i),
 				TransportAddress: d,
