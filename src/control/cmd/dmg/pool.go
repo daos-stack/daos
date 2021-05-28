@@ -369,10 +369,6 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 type PoolExtendCmd struct {
 	poolCmd
 	RankList string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
-	// Everything after this needs to be removed when pool info can be fetched
-	ScmSize  string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of the original DAOS pool being extended"`
-	NVMeSize string `short:"n" long:"nvme-size" description:"Size of NVMe component of the original DAOS pool being extended, or none if not originally supplied to pool create."`
-	// END TEMPORARY SECTION
 }
 
 // Execute is run when PoolExtendCmd subcommand is activated
@@ -389,26 +385,9 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 		return err
 	}
 
-	// Everything below this needs to be removed once Pool Info can be fetched
-
-	scmBytes, err := humanize.ParseBytes(cmd.ScmSize)
-	if err != nil {
-		return errors.Wrap(err, "pool SCM size")
-	}
-
-	var nvmeBytes uint64
-	if cmd.NVMeSize != "" {
-		nvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
-		if err != nil {
-			return errors.Wrap(err, "pool NVMe size")
-		}
-	}
-
 	req := &control.PoolExtendReq{
 		UUID: cmd.UUID, Ranks: ranks,
-		ScmBytes: scmBytes, NvmeBytes: nvmeBytes,
 	}
-	// END TEMP SECTION
 
 	err = control.PoolExtend(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {

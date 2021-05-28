@@ -56,7 +56,8 @@ func (svc *mgmtSvc) makePoolServiceCall(ctx context.Context, method drpc.Method,
 	return svc.harness.CallDrpc(ctx, method, req)
 }
 
-func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
+// getPoolService returns the pool service entry for the given UUID.
+func (svc *mgmtSvc) getPoolService(uuidStr string) (*system.PoolService, error) {
 	uuid, err := uuid.Parse(uuidStr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to parse request uuid %q", uuidStr)
@@ -69,6 +70,28 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 
 	if ps.State != system.PoolServiceStateReady {
 		return nil, drpc.DaosTryAgain
+	}
+
+	return ps, nil
+}
+
+// getPoolServiceStorage returns a slice of values representing the
+// per-rank allocation on each storage tier.
+func (svc *mgmtSvc) getPoolServiceStorage(uuidStr string) ([]uint64, error) {
+	ps, err := svc.getPoolService(uuidStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return ps.Storage.PerRankTierStorage, nil
+}
+
+// getPoolServiceRanks returns a slice of ranks designated as the
+// pool service hosts.
+func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
+	ps, err := svc.getPoolService(uuidStr)
+	if err != nil {
+		return nil, err
 	}
 
 	readyRanks := make([]system.Rank, 0, len(ps.Replicas))
@@ -84,7 +107,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 	}
 
 	if len(readyRanks) == 0 {
-		return nil, errors.Errorf("unable to find any available service ranks for pool %s", uuid)
+		return nil, errors.Errorf("unable to find any available service ranks for pool %s", uuidStr)
 	}
 
 	return system.RanksToUint32(readyRanks), nil
@@ -268,7 +291,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	ps = system.NewPoolService(uuid, req.Tierbytes[0], req.Tierbytes[1], system.RanksFromUint32(req.GetRanks()))
+	ps = system.NewPoolService(uuid, req.Tierbytes, system.RanksFromUint32(req.GetRanks()))
 	ps.PoolLabel = req.GetLabel()
 	if err := svc.sysdb.AddPoolService(ps); err != nil {
 		return nil, err
@@ -523,6 +546,14 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 		return nil, err
 	}
 	req.FaultDomains = fdTree
+
+	// Look up the pool service record to find the storage allocations
+	// used at creation.
+	ps, err := svc.getPoolService(req.GetUuid())
+	if err != nil {
+		return nil, err
+	}
+	req.Tierbytes = ps.Storage.PerRankTierStorage
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 

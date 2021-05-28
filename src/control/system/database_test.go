@@ -270,10 +270,9 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 			State:     PoolServiceStateReady,
 			Replicas:  <-replicas,
 			Storage: &PoolServiceStorage{
-				CreationRankStr: fmt.Sprintf("[0-%d]", maxRanks),
-				CurrentRankStr:  fmt.Sprintf("[0-%d]", maxRanks),
-				ScmPerRank:      1,
-				NVMePerRank:     2,
+				CreationRankStr:    fmt.Sprintf("[0-%d]", maxRanks),
+				CurrentRankStr:     fmt.Sprintf("[0-%d]", maxRanks),
+				PerRankTierStorage: []uint64{1, 2},
 			},
 		}
 		data, err := createRaftUpdate(raftOpAddPoolService, ps)

@@ -661,6 +661,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_t			uuid;
 	uint8_t			*body;
 	size_t			len;
+	uint64_t		scm_bytes, nvme_bytes = 0;
 	int			rc;
 
 	mgmt__pool_extend_resp__init(&resp);
@@ -674,6 +675,17 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (Extend target)\n");
 		return;
+	}
+
+	if (req->n_tierbytes == 0 || req->n_tierbytes > DAOS_MEDIA_MAX) {
+		D_ERROR("Invalid number of storage tiers: "DF_U64"\n",
+			req->n_tierbytes);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	scm_bytes = req->tierbytes[DAOS_MEDIA_SCM];
+	if (req->n_tierbytes > DAOS_MEDIA_NVME) {
+		nvme_bytes = req->tierbytes[DAOS_MEDIA_NVME];
 	}
 
 	rc = uuid_parse(req->uuid, uuid);
@@ -692,7 +704,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
 	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem",
-				 req->scmbytes, req->nvmebytes,
+				 scm_bytes, nvme_bytes,
 				 req->n_faultdomains, req->faultdomains);
 
 	if (rc != 0)
@@ -700,6 +712,13 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			DP_RC(rc));
 
 	d_rank_list_free(svc_ranks);
+
+	/* For the moment, just echo back the allocations from the request.
+	 * In the future, we may need to adjust the allocations somehow and
+	 * this is how we would let the caller know.
+	 */
+	resp.n_tier_bytes = req->n_tierbytes;
+	resp.tier_bytes = req->tierbytes;
 
 out_list:
 	d_rank_list_free(rank_list);

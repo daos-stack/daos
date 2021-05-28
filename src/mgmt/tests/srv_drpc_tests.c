@@ -1564,10 +1564,12 @@ static void
 setup_extend_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__PoolExtendReq req = MGMT__POOL_EXTEND_REQ__INIT;
+	uint64_t tierbytes = 1000000000;
 
 	req.uuid = uuid;
 	req.n_ranks = 3;
-	req.scmbytes = 1000000000;
+	req.n_tierbytes = 1;
+	req.tierbytes = &tierbytes;
 	req.ranks = TEST_RANKS;
 	pack_pool_extend_req(call, &req);
 }
