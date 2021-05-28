@@ -80,7 +80,7 @@ static const char * const bypass_status[] = {
  * have been left open, for example if there are problems on close.
  */
 
-static void
+static int
 ioil_shrink_pool(struct ioil_pool *pool)
 {
 	if (daos_handle_is_valid(pool->iop_poh)) {
