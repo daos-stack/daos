@@ -558,7 +558,8 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		 */
 		void *p;
 
-		D_REALLOC(p, csum_iov_fetch->iov_buf, csum_iov_fetch->iov_len);
+		D_REALLOC(p, csum_iov_fetch->iov_buf,
+			  csum_iov_fetch->iov_buf_len, csum_iov_fetch->iov_len);
 		if (p == NULL)
 			return -DER_NOMEM;
 		csum_iov_fetch->iov_buf_len = csum_iov_fetch->iov_len;
@@ -679,15 +680,28 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			D_DEBUG(DB_TRACE, "update start %d cnt %d\n",
 				start, iod_cnt);
 
-			rc = daos_csummer_alloc_iods_csums_with_packed(
-				csummer,
-				&mrone->mo_iods[start],
-				iod_cnt, &tmp_csum_iov,
-				&iod_csums);
-			if (rc != 0) {
-				D_ERROR("setting up iods csums failed: "
-						DF_RC"\n", DP_RC(rc));
-				break;
+			if (DAOS_OC_IS_EC(oca)) {
+				rc = daos_csummer_calc_iods(csummer,
+					&sgls[start],  &mrone->mo_iods[start],
+					NULL, iod_cnt, false, NULL, 0,
+					&iod_csums);
+				if (rc != 0) {
+					D_ERROR("Error calculating checksums: "
+						DF_RC"\n",
+						DP_RC(rc));
+					break;
+				}
+			} else {
+				rc = daos_csummer_alloc_iods_csums_with_packed(
+					csummer,
+					&mrone->mo_iods[start],
+					iod_cnt, &tmp_csum_iov,
+					&iod_csums);
+				if (rc != 0) {
+					D_ERROR("setting up iods csums failed: "
+							DF_RC"\n", DP_RC(rc));
+					break;
+				}
 			}
 
 			rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
@@ -719,6 +733,29 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				DP_RC(rc), fetch ? "FETCHED" : "INLINE");
 			D_GOTO(out, rc);
 		}
+
+		if (DAOS_OC_IS_EC(oca)) {
+			rc = daos_csummer_calc_iods(csummer,
+					&sgls[start],  &mrone->mo_iods[start],
+					NULL, iod_cnt, false, NULL, 0,
+					&iod_csums);
+			if (rc != 0) {
+				D_ERROR("Error calculating checksums: "
+						DF_RC"\n",
+					DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+		} else {
+			rc = daos_csummer_alloc_iods_csums_with_packed(
+				csummer, &mrone->mo_iods[start],
+				iod_cnt, &tmp_csum_iov, &iod_csums);
+			if (rc != 0) {
+				D_ERROR("setting up iods csums failed: "
+						DF_RC"\n", DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+		}
+
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_update_epoch,
 				    mrone->mo_version,
@@ -832,19 +869,13 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 			D_GOTO(out, rc);
 		}
 
-		rc = daos_csummer_alloc_iods_csums_with_packed(
-			csummer,
-			iod,
-			1, csum_iov, &iod_csums);
+		rc = daos_csummer_calc_iods(csummer, &tmp_sgl, iod, NULL, 1,
+					    false, NULL, 0, &iod_csums);
 		if (rc != 0) {
-			D_ERROR("Error allocating iods");
+			D_ERROR("Error calculating checksums: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out, rc);
 		}
-
-		D_ASSERTF(iod_csums == NULL, "DAOS-6811 - EC Rebuild with "
-					     "checksums is currently "
-					     "unsupported.");
-
 
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_epoch,
@@ -1071,6 +1102,8 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		los[i].cs_bytes = obj_ec_singv_cell_bytes(
 					mrone->mo_iods[i].iod_size, oca);
 		los[i].cs_nr = obj_ec_tgt_nr(oca);
+		D_DEBUG(DB_CSUM, "los[%d]: "DF_LAYOUT"\n", i,
+			DP_LAYOUT(los[i]));
 	}
 
 	rc = daos_csummer_csum_init_with_packed(&csummer, &csum_iov_fetch);
@@ -1081,10 +1114,16 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		/** Calc checksum for EC single value, since it may be striped,
 		 * and we need re-calculate the single stripe checksum.
 		 */
+		D_DEBUG(DB_CSUM,
+			DF_C_UOID_DKEY" REBUILD: Calculating csums\n",
+			DP_C_UOID_DKEY(mrone->mo_oid, &mrone->mo_dkey));
 		rc = daos_csummer_calc_iods(csummer, sgls, mrone->mo_iods, NULL,
-					    mrone->mo_iod_num, false, los,
+					    mrone->mo_iod_num, false, NULL,
 					    -1, &iod_csums);
 	} else {
+		D_DEBUG(DB_CSUM,
+			DF_C_UOID_DKEY" REBUILD: Using packed csums\n",
+			DP_C_UOID_DKEY(mrone->mo_oid, &mrone->mo_dkey));
 		tmp_csum_iov = csum_iov_fetch;
 		rc = daos_csummer_alloc_iods_csums_with_packed(csummer,
 							       mrone->mo_iods,
@@ -1150,7 +1189,8 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		return rc;
 	}
 
-	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_REBUILD);
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_REBUILD, NULL,
+			  CRT_BULK_RW);
 	if (rc) {
 		D_ERROR("Prepare EIOD for "DF_UOID" error: "DF_RC"\n",
 			DP_UOID(mrone->mo_oid), DP_RC(rc));
@@ -1192,15 +1232,30 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	if (rc != 0)
 		D_GOTO(post, rc);
 
-	tmp_csum_iov = csum_iov_fetch;
-	rc = daos_csummer_alloc_iods_csums_with_packed(csummer,
-						       mrone->mo_iods,
-						       mrone->mo_iod_num,
-						       &tmp_csum_iov,
-						       &iod_csums);
-	if (rc != 0) {
-		D_ERROR("Failed to alloc iod csums: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(post, rc);
+	if (DAOS_OC_IS_EC(oca)) {
+		D_DEBUG(DB_CSUM,
+			DF_C_UOID_DKEY" REBUILD: Calculating csums. "
+			"IOD count: %d\n",
+			DP_C_UOID_DKEY(mrone->mo_oid, &mrone->mo_dkey),
+			mrone->mo_iod_num);
+		rc = daos_csummer_calc_iods(csummer, sgls, mrone->mo_iods, NULL,
+					    mrone->mo_iod_num, false, NULL, -1,
+					    &iod_csums);
+	} else {
+		D_DEBUG(DB_CSUM,
+			DF_C_UOID_DKEY" REBUILD: Using packed csums\n",
+			DP_C_UOID_DKEY(mrone->mo_oid, &mrone->mo_dkey));
+		tmp_csum_iov = csum_iov_fetch;
+		rc = daos_csummer_alloc_iods_csums_with_packed(csummer,
+							mrone->mo_iods,
+							mrone->mo_iod_num,
+							&tmp_csum_iov,
+							&iod_csums);
+		if (rc != 0) {
+			D_ERROR("Failed to alloc iod csums: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(post, rc);
+		}
 	}
 
 	vos_set_io_csum(ioh, iod_csums);
@@ -1781,7 +1836,8 @@ struct enum_unpack_arg {
 	struct iter_obj_arg	*arg;
 	daos_epoch_range_t	epr;
 	d_list_t		merge_list;
-	uint32_t		iterate_parity:1;
+	uint32_t		iterate_parity:1,
+				invalid_inline_sgl:1;
 };
 
 static int
@@ -1850,7 +1906,8 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 	for (i = 0; i < iod_eph_total; i++) {
 		int j;
 
-		if (sgls[i].sg_nr == 0 || sgls[i].sg_iovs == NULL) {
+		if (sgls[i].sg_nr == 0 || sgls[i].sg_iovs == NULL ||
+		    arg->invalid_inline_sgl) {
 			inline_copy = false;
 			break;
 		}
@@ -1960,6 +2017,11 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 				if (rc)
 					return rc;
 
+				/* To avoid aligning  inline sgl, so let's set
+				 * invalid_inline_sgl and force re-fetching
+				 * the online data.
+				 */
+				arg->invalid_inline_sgl = 1;
 				/* No data needs to be migrate. */
 				if (iod->iod_nr == 0)
 					continue;
@@ -2149,6 +2211,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 				      DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
 				      DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION);
 retry:
+		unpack_arg.invalid_inline_sgl = 0;
 		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, NULL,
 				     &num, kds, &sgl, &anchor,
 				     &dkey_anchor, &akey_anchor, &csum);
@@ -2473,8 +2536,12 @@ free:
 
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
-	D_DEBUG(DB_REBUILD, "stop migrate obj "DF_UOID" for shard %u: "
-		DF_RC"\n", DP_UOID(arg->oid), arg->shard, DP_RC(rc));
+
+	D_DEBUG(DB_REBUILD, ""DF_UUID"/%u stop migrate obj "DF_UOID
+		" for shard %u executed "DF_U64" : " DF_RC"\n",
+		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version,
+		DP_UOID(arg->oid), arg->shard, tls->mpt_obj_executed_ult,
+		DP_RC(rc));
 	D_FREE(arg->snaps);
 	D_FREE(arg);
 	migrate_pool_tls_put(tls);
@@ -2558,8 +2625,10 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 
 	d_iov_set(&val_iov, &val, sizeof(struct migrate_obj_val));
 	rc = obj_tree_insert(toh, cont_arg->cont_uuid, oid, &val_iov);
-	D_DEBUG(DB_REBUILD, "Insert "DF_UUID"/"DF_UOID": "DF_RC"\n",
-		DP_UUID(cont_arg->cont_uuid), DP_UOID(oid), DP_RC(rc));
+	D_DEBUG(DB_REBUILD, "Insert "DF_UUID"/"DF_UUID"/"DF_UOID": ver %u "
+		"generated "DF_U64" "DF_RC"\n", DP_UUID(tls->mpt_pool_uuid),
+		DP_UUID(cont_arg->cont_uuid), DP_UOID(oid), tls->mpt_version,
+		tls->mpt_obj_generated_ult, DP_RC(rc));
 
 	return 0;
 
@@ -3049,10 +3118,10 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
 	ABT_cond_broadcast(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 
-	D_DEBUG(DB_REBUILD, "pool "DF_UUID" migrating=%s,"
+	D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver %u migrating=%s,"
 		" obj_count="DF_U64", rec_count="DF_U64
 		" size="DF_U64" obj %u/%u general %u/%u status %d\n",
-		DP_UUID(pool_uuid), dms->dm_migrating ? "yes" : "no",
+		DP_UUID(pool_uuid), ver, dms->dm_migrating ? "yes" : "no",
 		dms->dm_obj_count, dms->dm_rec_count, dms->dm_total_size,
 		arg.obj_generated_ult, arg.obj_executed_ult,
 		arg.generated_ult, arg.executed_ult, dms->dm_status);

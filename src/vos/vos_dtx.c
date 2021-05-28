@@ -1761,7 +1761,7 @@ vos_dtx_prepared(struct dtx_handle *dth)
 			dae->dae_oids = &dae->dae_oid_inline;
 		} else {
 			size = sizeof(daos_unit_oid_t) * dth->dth_oid_cnt;
-			D_ALLOC(dae->dae_oids, size);
+			D_ALLOC_NZ(dae->dae_oids, size);
 			if (dae->dae_oids == NULL) {
 				/* Not fatal. */
 				D_WARN("No DRAM to store ACT DTX OIDs "
@@ -1958,8 +1958,12 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 	bool				 allocated = false;
 
 	dbd = umem_off2ptr(umm, cont_df->cd_dtx_committed_tail);
-	if (dbd != NULL)
+	if (dbd != NULL) {
+		D_ASSERTF(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC,
+			  "Corrupted committed DTX blob %x\n", dbd->dbd_magic);
+
 		slots = dbd->dbd_cap - dbd->dbd_count;
+	}
 
 	if (slots == 0)
 		goto new_blob;
@@ -2311,10 +2315,10 @@ vos_dtx_aggregate(daos_handle_t coh)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	umm = vos_cont2umm(cont);
 	cont_df = cont->vc_cont_df;
-
 	dbd_off = cont_df->cd_dtx_committed_head;
+	umm = vos_cont2umm(cont);
+
 	dbd = umem_off2ptr(umm, dbd_off);
 	if (dbd == NULL || dbd->dbd_count == 0)
 		return 0;
@@ -2323,22 +2327,26 @@ vos_dtx_aggregate(daos_handle_t coh)
 	lrua_array_aggregate(cont->vc_dtx_array);
 
 	rc = umem_tx_begin(umm, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to TX begin for DTX aggregation "UMOFF_PF": "
+			DF_RC"\n", UMOFF_P(dbd_off), DP_RC(rc));
 		return rc;
+	}
 
-	for (i = 0; i < dbd->dbd_count &&
-	     !d_list_empty(&cont->vc_dtx_committed_list); i++) {
-		struct vos_dtx_cmt_ent	*dce;
-		d_iov_t			 kiov;
+	for (i = 0; i < dbd->dbd_count; i++) {
+		struct vos_dtx_cmt_ent_df	*dce_df;
+		d_iov_t				 kiov;
 
-		dce = d_list_entry(cont->vc_dtx_committed_list.next,
-				   struct vos_dtx_cmt_ent, dce_committed_link);
-		d_iov_set(&kiov, &DCE_XID(dce), sizeof(DCE_XID(dce)));
+		dce_df = &dbd->dbd_committed_data[i];
+		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
 		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
 				   &kiov, NULL);
-		if (rc != 0)
-			D_WARN("Failed to remove cmt DTX entry: "DF_RC"\n",
-			       DP_RC(rc));
+		if (rc != 0 && rc != -DER_NONEXIST) {
+			D_ERROR("Failed to remove entry for DTX aggregation "
+				UMOFF_PF": "DF_RC"\n",
+				UMOFF_P(dbd_off), DP_RC(rc));
+			goto out;
+		}
 	}
 
 	tmp = umem_off2ptr(umm, dbd->dbd_next);
@@ -2349,29 +2357,46 @@ vos_dtx_aggregate(daos_handle_t coh)
 
 		rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_tail,
 				     sizeof(cont_df->cd_dtx_committed_tail));
-		if (rc != 0)
-			return rc;
+		if (rc != 0) {
+			D_ERROR("Failed to update tail for DTX aggregation "
+				UMOFF_PF": "DF_RC"\n",
+				UMOFF_P(dbd_off), DP_RC(rc));
+			goto out;
+		}
 
 		cont_df->cd_dtx_committed_tail = UMOFF_NULL;
 	} else {
 		rc = umem_tx_add_ptr(umm, &tmp->dbd_prev,
 				     sizeof(tmp->dbd_prev));
-		if (rc != 0)
-			return rc;
+		if (rc != 0) {
+			D_ERROR("Failed to update prev for DTX aggregation "
+				UMOFF_PF": "DF_RC"\n",
+				UMOFF_P(dbd_off), DP_RC(rc));
+			goto out;
+		}
 
 		tmp->dbd_prev = UMOFF_NULL;
 	}
 
 	rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_head,
 			     sizeof(cont_df->cd_dtx_committed_head));
-	if (rc != 0)
-		return rc;
+	if (rc != 0) {
+		D_ERROR("Failed to update head for DTX aggregation "
+			UMOFF_PF": "DF_RC"\n",
+			UMOFF_P(dbd_off), DP_RC(rc));
+		goto out;
+	}
 
 	cont_df->cd_dtx_committed_head = dbd->dbd_next;
 
 	rc = umem_free(umm, dbd_off);
 
-	return umem_tx_end(umm, rc);
+out:
+	rc = umem_tx_end(umm, rc);
+	if (rc != 0)
+		D_ERROR("Failed to aggregate DTX blob "UMOFF_PF": "
+			DF_RC"\n", UMOFF_P(dbd_off), DP_RC(rc));
+	return rc;
 }
 
 void
@@ -2600,7 +2625,8 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 	if (dbd == NULL)
 		D_GOTO(out, rc = 1);
 
-	D_ASSERT(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC);
+	D_ASSERTF(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC,
+		  "Corrupted committed DTX blob (2) %x\n", dbd->dbd_magic);
 
 	cont->vc_reindex_cmt_dtx = 1;
 

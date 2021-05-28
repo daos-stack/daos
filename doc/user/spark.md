@@ -14,15 +14,12 @@ to access DAOS from Hadoop and Spark.
 
 1. Linux OS
 2. Java 8
-3. Hadoop 2.7.6
-4. Spark 3
+3. Hadoop 3.2 or later
+4. Spark 3.1 or later
 5. DAOS Readiness
 We assume that the DAOS servers and agents have already been deployed in the
 environment. Otherwise, they can be deployed by following the
 [DAOS Installation Guide](https://daos-stack.github.io/admin/installation/).
-
-!!! note DAOS support for Spark and Hadoop is not available in DAOS 1.0. 
-         It is targeted for the DAOS 1.2 release.
 
 ## Download DAOS Hadoop Filesystem
 
@@ -109,7 +106,7 @@ loadable by Hadoop DAOS FileSystem.
 
 ### Validate Hadoop Access
 
-If everything goes well, you should see “/user” directory being listed after
+If everything goes well, you should see `/user` directory being listed after
 issuing below command.
 
 ```bash

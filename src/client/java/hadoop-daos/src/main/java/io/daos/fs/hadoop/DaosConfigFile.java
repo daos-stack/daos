@@ -18,7 +18,7 @@ import java.util.Set;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.apache.commons.configuration2.ex.ConfigurationException;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

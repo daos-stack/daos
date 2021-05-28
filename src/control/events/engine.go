@@ -58,14 +58,15 @@ func EngineStateInfoToProto(rsi *EngineStateInfo) (*sharedpb.RASEvent_EngineStat
 }
 
 // NewEngineDiedEvent creates a specific EngineDied event from given inputs.
-func NewEngineDiedEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus) *RASEvent {
-	return New(&RASEvent{
-		Msg:      "DAOS engine exited unexpectedly",
+func NewEngineDiedEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus, exPid uint64) *RASEvent {
+	return fill(&RASEvent{
+		Msg:      fmt.Sprintf("DAOS engine %d exited unexpectedly: %s", instanceIdx, exitErr),
 		ID:       RASEngineDied,
 		Hostname: hostname,
 		Rank:     rank,
 		Type:     RASTypeStateChange,
 		Severity: RASSeverityError,
+		ProcID:   exPid, // pid of exited engine
 		ExtendedInfo: &EngineStateInfo{
 			InstanceIdx: instanceIdx,
 			ExitErr:     exitErr,
@@ -75,7 +76,7 @@ func NewEngineDiedEvent(hostname string, instanceIdx uint32, rank uint32, exitEr
 
 // NewEngineFormatRequiredEvent creates a EngineFormatRequired event from given inputs.
 func NewEngineFormatRequiredEvent(hostname string, instanceIdx uint32, formatType string) *RASEvent {
-	return New(&RASEvent{
+	return fill(&RASEvent{
 		Msg:      fmt.Sprintf("DAOS engine %d requires a %s format", instanceIdx, formatType),
 		ID:       RASEngineFormatRequired,
 		Hostname: hostname,

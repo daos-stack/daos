@@ -59,7 +59,7 @@ main(int argc, char **argv)
 {
 	struct d_tm_node_t	*root = NULL;
 	struct d_tm_node_t	*node = NULL;
-	uint64_t		*shmem_root = NULL;
+	struct d_tm_context	*ctx = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
 	bool			show_meta = false;
 	bool			show_when_read = false;
@@ -148,16 +148,16 @@ main(int argc, char **argv)
 		filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP |
 			 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE;
 
-	shmem_root = d_tm_get_shared_memory(srv_idx);
-	if (!shmem_root)
+	ctx = d_tm_open(srv_idx);
+	if (!ctx)
 		goto failure;
 
-	root = d_tm_get_root(shmem_root);
+	root = d_tm_get_root(ctx);
 	if (!root)
 		goto failure;
 
 	if (strncmp(dirname, "/", D_TM_MAX_NAME_LEN) != 0) {
-		node = d_tm_find_metric(shmem_root, dirname);
+		node = d_tm_find_metric(ctx, dirname);
 		if (node != NULL) {
 			root = node;
 		} else {
@@ -183,7 +183,7 @@ main(int argc, char **argv)
 		d_tm_print_field_descriptors(extra_descriptors, stdout);
 
 	while ((num_iter == 0) || (iteration < num_iter)) {
-		d_tm_print_my_children(shmem_root, root, 0, filter, NULL,
+		d_tm_print_my_children(ctx, root, 0, filter, NULL,
 				       format, extra_descriptors, stdout);
 		iteration++;
 		sleep(delay);
@@ -191,6 +191,7 @@ main(int argc, char **argv)
 			printf("\n\n");
 	}
 
+	d_tm_close(&ctx);
 	return 0;
 
 failure:
@@ -200,5 +201,6 @@ failure:
 	       "Verify user/group settings match those that started the I/O "
 	       "Engine.\n",
 	       srv_idx);
+	d_tm_close(&ctx);
 	return -1;
 }
