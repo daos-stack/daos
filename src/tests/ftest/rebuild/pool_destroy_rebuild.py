@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -33,7 +33,10 @@ class PoolDestroyWithIO(IorTestBase):
           Destroy Pool during rebuild.
           Re-create pool on reamining ranks.
 
-        :avocado: tags=all,pr,hw,medium,ib2,pool,rebuild,pooldestroywithio
+        :avocado: tags=all,pr,hw
+        :avocado: tags=medium,ib2
+        :avocado: tags=pool,rebuild,mpich
+        :avocado: tags=pooldestroywithio
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*/0/*")

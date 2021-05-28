@@ -1283,6 +1283,9 @@ cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 	ABT_thread		ec_eph_leader_ult = ABT_THREAD_NULL;
 	int			rc;
 
+	if (unlikely(ec_agg_disabled))
+		return 0;
+
 	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
 
 	rc = dss_ult_create(cont_agg_eph_leader_ult, svc, DSS_XS_SYS,
@@ -2890,7 +2893,7 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		size_t	realloc_elems = (ap->conts_len == 0) ? 1 :
 					ap->conts_len * 2;
 
-		D_REALLOC_ARRAY(ptr, ap->conts, realloc_elems);
+		D_REALLOC_ARRAY(ptr, ap->conts, ap->conts_len, realloc_elems);
 		if (ptr == NULL)
 			return -DER_NOMEM;
 		ap->conts = ptr;

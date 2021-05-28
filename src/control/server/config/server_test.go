@@ -84,7 +84,8 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 	}
 }
 
-// supply mock external interface, populates config from given file path
+// mockConfigFromFile returns a populated server config file from the
+// file at the given path.
 func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
 	t.Helper()
 	c := DefaultServer().
@@ -202,6 +203,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 
 	var numaNode0 uint = 0
 	var numaNode1 uint = 1
+	var bypass = true
 
 	// Next, construct a config to compare against the first one. It should be
 	// possible to construct an identical configuration with the helpers.
@@ -242,6 +244,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode0).
+				WithBypassHealthChk(&bypass).
 				WithEnvVars("CRT_TIMEOUT=30").
 				WithLogFile("/tmp/daos_engine.0.log").
 				WithLogMask("WARN"),
@@ -253,10 +256,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithScmMountPoint("/mnt/daos/2").
 				WithScmClass("dcpm").
 				WithScmDeviceList("/dev/pmem0").
-				WithBdevClass("malloc").
+				WithBdevClass("file").
 				WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-				WithBdevDeviceCount(1).
-				WithBdevFileSize(4).
+				WithBdevFileSize(16).
 				WithFabricInterface("qib1").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode1).
@@ -706,9 +708,9 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 		},
 		"overlapping bdev_list": {
 			configA: configA().
-				WithBdevDeviceList("a"),
+				WithBdevDeviceList(MockPCIAddr(1)),
 			configB: configB().
-				WithBdevDeviceList("b", "a"),
+				WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
 		},
 		"duplicates in bdev_list": {

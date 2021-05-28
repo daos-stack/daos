@@ -87,8 +87,6 @@ class OSAOnlineExtend(OSAUtils):
         for val in range(0, num_pool):
             threads = []
             self.pool = pool[val]
-            scm_size = self.pool.scm_size
-            nvme_size = self.pool.nvme_size
 
             # Start the additional servers and extend the pool
             self.log.info("Extra Servers = %s", self.extra_servers)
@@ -123,9 +121,7 @@ class OSAOnlineExtend(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                  self.ranks, scm_size,
-                                                  nvme_size)
+            output = self.dmg_command.pool_extend(self.pool.uuid, rank)
             self.print_and_assert_on_rebuild_failure(output)
 
             pver_extend = self.get_pool_version()

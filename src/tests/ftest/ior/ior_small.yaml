@@ -62,5 +62,6 @@ ior:
 #            - "RP_2GX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
+    disable_caching: True
 hdf5_vol:
     plugin_path: /usr/lib64/mpich/lib

@@ -457,8 +457,8 @@ pool_properties(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
-#if 0
 	char			*label = "test_pool_properties";
+#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	uint64_t		 space_rb = 36;
 #endif
 	daos_prop_t		*prop = NULL;
@@ -474,11 +474,16 @@ pool_properties(void **state)
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_rc_equal(rc, 0);
 
-/* FIXME (DAOS-5456): label/space_rb props not supported with dmg */
-#if 0
-	prop = daos_prop_alloc(2);
+	prop = daos_prop_alloc(1);
+	/* label - set arg->pool_label to use daos_pool_connect_bylabel() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
-	prop->dpp_entries[0].dpe_str = strdup(label);
+	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
+	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
+	D_STRNDUP(arg->pool_label, label, DAOS_PROP_LABEL_MAX_LEN);
+	assert_ptr_not_equal(arg->pool_label, NULL);
+
+#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
+	/* change daos_prop_alloc() above, specify 2 entries not 1 */
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SPACE_RB;
 	prop->dpp_entries[1].dpe_val = space_rb;
 #endif
@@ -501,13 +506,13 @@ pool_properties(void **state)
 	assert_rc_equal(rc, 0);
 
 	assert_int_equal(prop_query->dpp_nr, DAOS_PROP_PO_NUM);
-#if 0
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
 		print_message("label verification filed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SPACE_RB);
 	if (entry == NULL || entry->dpe_val != space_rb) {
 		print_message("space_rb verification filed.\n");

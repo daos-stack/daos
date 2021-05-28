@@ -47,6 +47,9 @@ extern int		 dss_nvme_mem_size;
 /** I/O Engine instance index */
 extern unsigned int	 dss_instance_idx;
 
+/** Bypass for the nvme health check */
+extern bool		 dss_nvme_bypass_health_check;
+
 /**
  * Stackable Module API
  * Provides a modular interface to load and register server-side code on
@@ -122,7 +125,7 @@ void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
 /** pthread names are limited to 16 chars */
-#define DSS_XS_NAME_LEN		16
+#define DSS_XS_NAME_LEN		(32)
 
 struct srv_profile_chunk {
 	d_list_t	spc_chunk_list;
@@ -257,6 +260,7 @@ sched_req_attr_init(struct sched_req_attr *attr, unsigned int type,
 		    uuid_t *pool_id)
 {
 	attr->sra_type = type;
+	attr->sra_flags = 0;
 	uuid_copy(attr->sra_pool_id, *pool_id);
 }
 
@@ -827,9 +831,9 @@ void dss_init_state_set(enum dss_init_state state);
 int
 ds_notify_bio_error(int media_err_type, int tgt_id);
 
-/* Retrieve current pool service replicas for a given pool UUID. */
-int
-ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
+int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
+int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
+			 d_rank_list_t **svc_ranks);
 
 bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
 
