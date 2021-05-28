@@ -96,25 +96,28 @@ co_attribute(void **state)
 	int		 rc;
 
 	char const *const names[] = { "AVeryLongName", "Name" };
+	char const *const names_get[] = { "AVeryLongName", "Wrong", "Name" };
 	size_t const name_sizes[] = {
 				strlen(names[0]) + 1,
 				strlen(names[1]) + 1,
 	};
 	void const *const in_values[] = {
 				"value",
-				"this is a long value"
+				"this is a long value",
 	};
 	size_t const in_sizes[] = {
 				strlen(in_values[0]),
-				strlen(in_values[1])
+				strlen(in_values[1]),
 	};
 	int			 n = (int) ARRAY_SIZE(names);
+	int			 m = (int) ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
-						  &out_buf[1 * BUFSIZE]
+						  &out_buf[1 * BUFSIZE],
+						  &out_buf[2 * BUFSIZE],
 						};
-	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE };
+	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE, BUFSIZE };
 	size_t			 total_size;
 
 	if (arg->async) {
@@ -162,7 +165,7 @@ co_attribute(void **state)
 	print_message("getting container attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 
-	rc = daos_cont_get_attr(arg->coh, n, names, out_values, out_sizes,
+	rc = daos_cont_get_attr(arg->coh, m, names_get, out_values, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -172,20 +175,26 @@ co_attribute(void **state)
 	assert_memory_equal(out_values[0], in_values[0], in_sizes[0]);
 
 	print_message("Verifying Name-Value (B)..\n");
-	assert_true(in_sizes[1] > BUFSIZE);
-	assert_int_equal(out_sizes[1], in_sizes[1]);
-	assert_memory_equal(out_values[1], in_values[1], BUFSIZE);
+	assert_int_equal(out_sizes[1], 0);
 
-	rc = daos_cont_get_attr(arg->coh, n, names, NULL, out_sizes,
+	print_message("Verifying Name-Value (C)..\n");
+	assert_true(in_sizes[1] > BUFSIZE);
+	assert_int_equal(out_sizes[2], in_sizes[1]);
+	assert_memory_equal(out_values[2], in_values[1], BUFSIZE);
+
+	rc = daos_cont_get_attr(arg->coh, m, names_get, NULL, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("Verifying with NULL buffer..\n");
 	assert_int_equal(out_sizes[0], in_sizes[0]);
-	assert_int_equal(out_sizes[1], in_sizes[1]);
+	assert_int_equal(out_sizes[1], 0);
+	assert_int_equal(out_sizes[2], in_sizes[1]);
 
-	rc = daos_cont_del_attr(arg->coh, n, names, arg->async ? &ev : NULL);
+	rc = daos_cont_del_attr(arg->coh, m, names_get,
+				arg->async ? &ev : NULL);
+	/* should work even if "Wrong" do not exist */
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
@@ -580,7 +589,7 @@ co_acl(void **state)
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_int_equal(rc, 0);
 
-	print_message("Case 1: initial non-default ACL/ownership\n");
+	print_message("CONTACL1: initial non-default ACL/ownership\n");
 	/*
 	 * Want to set up with a non-default ACL and owner/group.
 	 * This ACL gives the effective user permissions to interact
@@ -628,7 +637,15 @@ co_acl(void **state)
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
-	print_message("Case 2: overwrite ACL\n");
+	print_message("CONTACL2: overwrite ACL with bad inputs\n");
+	/* Invalid inputs */
+	rc = daos_cont_overwrite_acl(arg->coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = daos_cont_overwrite_acl(DAOS_HDL_INVAL, exp_acl, NULL);
+	assert_rc_equal(rc, -DER_NO_HDL);
+
+	print_message("CONTACL3: overwrite ACL\n");
 	/*
 	 * Modify the existing ACL - don't want to clobber the user entry
 	 * though.
@@ -656,8 +673,13 @@ co_acl(void **state)
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
-	print_message("Case 3: update ACL\n");
+	print_message("CONTACL4: update ACL with bad inputs\n");
+	rc = daos_cont_update_acl(DAOS_HDL_INVAL, update_acl, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = daos_cont_update_acl(arg->coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
 
+	print_message("CONTACL5: update ACL\n");
 	/* Add one new entry and update an entry already in our ACL */
 	update_acl = daos_acl_create(NULL, 0);
 	add_ace_with_perms(&update_acl, DAOS_ACL_USER, "friendlyuser@",
@@ -679,12 +701,18 @@ co_acl(void **state)
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
-	print_message("Case 4: delete entry from ACL with bad handle\n");
+	print_message("CONTACL6: delete entry from ACL with bad inputs\n");
 	rc = daos_cont_delete_acl(DAOS_HDL_INVAL, type_to_remove,
 				  name_to_remove, NULL);
 	assert_rc_equal(rc, -DER_NO_HDL);
 
-	print_message("Case 5: delete entry from ACL\n");
+	rc = daos_cont_delete_acl(arg->coh, -1, name_to_remove, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = daos_cont_delete_acl(arg->coh, type_to_remove, "bad", NULL);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	print_message("CONTACL7: delete entry from ACL\n");
 
 	/* Update expected ACL to remove the entry */
 	assert_rc_equal(daos_acl_remove_ace(&exp_acl, type_to_remove,
@@ -696,7 +724,7 @@ co_acl(void **state)
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
-	print_message("Case 6: delete entry no longer in ACL\n");
+	print_message("CONTACL8: delete entry no longer in ACL\n");
 
 	/* try deleting same entry again - should be gone */
 	rc = daos_cont_delete_acl(arg->coh, type_to_remove, name_to_remove,
@@ -816,12 +844,6 @@ co_create_access_denied(void **state)
 		uuid_generate(arg->co_uuid);
 		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL, NULL);
 		assert_rc_equal(rc, -DER_NO_PERM);
-
-		/*
-		 * Clear the UUID to avoid attempts to destroy, since it wasn't
-		 * created
-		 */
-		uuid_clear(arg->co_uuid);
 	}
 
 	uuid_clear(arg->co_uuid); /* wasn't actually created */
@@ -991,17 +1013,17 @@ co_open_access(void **state)
 
 	print_message("cont ACL gives the user RO, they want RW\n");
 	expect_cont_open_access(arg, DAOS_ACL_PERM_READ, DAOS_COO_RW,
-				   -DER_NO_PERM);
+				-DER_NO_PERM);
 
 	print_message("cont ACL gives the user RO, they want RO\n");
 	expect_cont_open_access(arg, DAOS_ACL_PERM_READ, DAOS_COO_RO,
-				   0);
+				0);
 
 	print_message("cont ACL gives the user RW, they want RO\n");
 	expect_cont_open_access(arg,
-				   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
-				   DAOS_COO_RO,
-				   0);
+				DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				DAOS_COO_RO,
+				0);
 
 	print_message("cont ACL gives the user RW, they want RW\n");
 	expect_cont_open_access(arg,
@@ -1934,6 +1956,13 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 					(void * const*)&value,
 					&val_size,
 					NULL);
+
+		/* 0 size means non-existing attr and this is possible
+		 * only because we do not support empty attrs for now
+		 */
+		if (val_size == 0)
+			rc = -DER_NONEXIST;
+
 		assert_rc_equal(rc, exp_result);
 	}
 

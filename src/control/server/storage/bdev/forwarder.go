@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package bdev
 
 import (
@@ -10,10 +11,12 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
+// Forwarder forwards requests to the DAOS admin binary.
 type Forwarder struct {
 	pbin.Forwarder
 }
 
+// NewForwarder creates a new Forwarder.
 func NewForwarder(log logging.Logger) *Forwarder {
 	pf := pbin.NewForwarder(log, pbin.DaosAdminName)
 
@@ -22,6 +25,7 @@ func NewForwarder(log logging.Logger) *Forwarder {
 	}
 }
 
+// Scan forwards an Bdev scan request.
 func (f *Forwarder) Scan(req ScanRequest) (*ScanResponse, error) {
 	req.Forwarded = true
 
@@ -33,6 +37,7 @@ func (f *Forwarder) Scan(req ScanRequest) (*ScanResponse, error) {
 	return res, nil
 }
 
+// Prepare forwards an Bdev prepare request.
 func (f *Forwarder) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	req.Forwarded = true
 
@@ -44,6 +49,7 @@ func (f *Forwarder) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	return res, nil
 }
 
+// Format forwards an Bdev format request.
 func (f *Forwarder) Format(req FormatRequest) (*FormatResponse, error) {
 	req.Forwarded = true
 

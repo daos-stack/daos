@@ -42,11 +42,11 @@ var defEvtCmpOpts = append(common.DefaultCmpOpts(),
 )
 
 func TestEvents_HandleClusterEvent(t *testing.T) {
-	genericEvent := mockGenericEvent(t)
+	genericEvent := mockEvtGeneric(t)
 	pbGenericEvent, _ := genericEvent.ToProto()
-	engineDiedEvent := mockDiedEvt(t)
+	engineDiedEvent := mockEvtDied(t)
 	pbEngineDiedEvent, _ := engineDiedEvent.ToProto()
-	psrEvent := mockSvcRepsEvt(t)
+	psrEvent := mockEvtSvcReps(t)
 	pbPSREvent, _ := psrEvent.ToProto()
 
 	for name, tc := range map[string]struct {
