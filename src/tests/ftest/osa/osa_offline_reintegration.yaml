@@ -6,6 +6,8 @@ hosts:
   test_clients:
     - client-D
 timeout: 800
+setup:
+  start_servers_once: False
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -109,3 +111,5 @@ rebuild:
   test_with_rebuild: True
 checksum:
   test_with_checksum: False
+blank_node:
+  test_with_blank_node: True

@@ -238,15 +238,24 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_lookup(tx, path, &key, &iovs[j]);
 
-		if (rc != 0) {
-			D_CDEBUG(rc == -DER_NONEXIST, DB_ANY, DLOG_ERR,
-				 "%s: failed to lookup attribute '"DF_KEY"': "
-				 DF_RC"\n",
-				 svc->s_name, DP_KEY(&key), DP_RC(rc));
+		if (rc == -DER_NONEXIST) {
+			/* attribute do not exist */
+			iovs[j].iov_buf_len = sizes[i];
+			iovs[j].iov_len = 0;
+			sizes[i] = 0;
+			/* fake crt_sgl_valid() */
+			iovs[j].iov_buf = (void *)(-1);
+
+			D_DEBUG(DB_ANY, "%s: failed to lookup attribute '"DF_KEY"': "DF_RC"\n",
+				svc->s_name, DP_KEY(&key), DP_RC(rc));
+		} else if (rc != 0) {
+			D_ERROR("%s: failed to lookup attribute '"DF_KEY"': "DF_RC"\n",
+				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_iovs;
+		} else {
+			iovs[j].iov_buf_len = sizes[i];
+			sizes[i] = iovs[j].iov_len;
 		}
-		iovs[j].iov_buf_len = sizes[i];
-		sizes[i] = iovs[j].iov_len;
 
 		/* If buffer length is zero, send only size */
 		if (iovs[j].iov_buf_len > 0)
@@ -273,9 +282,11 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		size = min(sgl.sg_iovs[i].iov_len,
 				       sgl.sg_iovs[i].iov_buf_len);
-		rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
-					remote_bulk, local_offset,
-					remote_offset, size);
+		/* only xfer if attr exists and there is a dest buffer */
+		if (iovs[i].iov_buf_len > 0 && sizes[i - 1] != 0)
+			rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
+						remote_bulk, local_offset,
+						remote_offset, size);
 		if (rc != 0)
 			goto out_iovs;
 
