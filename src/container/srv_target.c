@@ -269,7 +269,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		return 0;
 	}
 
-	D_DEBUG(DB_EPC, "hlc "DF_U64" epoch_max "DF_U64" agg max "DF_U64"\n",
+	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch_max "DF_X64" agg max "DF_X64"\n",
 		hlc, epoch_max, cont->sc_aggregation_max);
 	/* Cap the aggregation upper bound to the snapshot in creating */
 	if (epoch_max >= cont->sc_aggregation_max)
@@ -342,13 +342,14 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		D_GOTO(free, rc = 0);
 
 	*msecs = 0;
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: %lu; HLC: %lu\n",
+	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: "DF_X64"; HLC: "DF_X64"\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_min, hlc);
 
 	for ( ; i < snapshots_nr && snapshots[i] < epoch_max; ++i) {
 		epoch_range.epr_hi = snapshots[i];
-		D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
+		D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {"DF_X64" -> "
+			DF_X64"}\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
@@ -363,7 +364,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		goto out;
 
 	epoch_range.epr_hi = epoch_max;
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
+	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {"DF_X64" -> "DF_X64"}\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
@@ -2308,6 +2309,7 @@ lookup_insert_cont_ec_eph(d_list_t *ec_list, uuid_t cont_uuid)
 	if (found == NULL)
 		return NULL;
 
+	found->ce_first = 1;
 	d_list_add(&found->ce_list, ec_list);
 	uuid_copy(found->ce_cont_uuid, cont_uuid);
 	return found;
@@ -2325,6 +2327,8 @@ cont_ec_eph_reduce(void *agg_arg, void *xs_arg)
 
 		c_eph = lookup_insert_cont_ec_eph(&pool->sp_ec_ephs_list,
 						  x_arg->ephs[i].cont_uuid);
+		if (x_arg->ephs[i].eph < c_eph->ce_last_eph)
+			continue;
 		if (c_eph->ce_first) {
 			c_eph->ce_eph = x_arg->ephs[i].eph;
 			c_eph->ce_first = 0;
@@ -2444,9 +2448,6 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 				cont_ec_eph_destroy(ec_eph);
 				continue;
 			}
-
-			if (ec_eph->ce_eph <= ec_eph->ce_last_eph)
-				continue;
 
 			D_DEBUG(DB_MD, "eph "DF_X64" "DF_UUID"\n",
 				ec_eph->ce_eph, DP_UUID(ec_eph->ce_cont_uuid));

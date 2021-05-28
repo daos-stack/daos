@@ -2267,6 +2267,7 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
 		agg_reset_pos(type, agg_entry);
+		D_DEBUG(DB_EPC, "EC aggregation yield type %d.\n", type);
 		if (ec_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
 			rc = 1;
@@ -2282,11 +2283,17 @@ static void
 agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 		struct daos_oclass_attr *oca)
 {
-	agg_entry->ae_oid	= entry->ie_oid;
-	agg_entry->ae_oca	= *oca;
 	agg_entry->ae_rsize	= 0UL;
-	agg_entry->ae_codec	= obj_id2ec_codec(entry->ie_oid.id_pub);
-	D_ASSERT(agg_entry->ae_codec);
+	if (entry) {
+		agg_entry->ae_oid	= entry->ie_oid;
+		agg_entry->ae_codec	= obj_id2ec_codec(entry->ie_oid.id_pub);
+		D_ASSERT(agg_entry->ae_codec);
+	} else {
+		agg_reset_pos(VOS_ITER_OBJ, agg_entry);
+		agg_entry->ae_codec = NULL;
+	}
+	if (oca)
+		agg_entry->ae_oca	= *oca;
 
 	if (daos_handle_is_valid(agg_entry->ae_obj_hdl)) {
 		dsc_obj_close(agg_entry->ae_obj_hdl);
@@ -2318,7 +2325,7 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (!daos_unit_oid_compare(agg_param->ap_agg_entry.ae_oid,
 				   entry->ie_oid)) {
-		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" ec agg on re-probe\n",
+		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" ec agg on re-probe.\n",
 			DP_UOID(entry->ie_oid));
 		*acts |= VOS_ITER_CB_SKIP;
 		goto out;
@@ -2342,7 +2349,6 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = ds_pool_check_dtx_leader(info->api_pool, &entry->ie_oid,
 				      info->api_pool->sp_map_version, true);
-
 	if (rc == 1 && entry->ie_oid.id_shard >= oca.u.ec.e_k) {
 		D_DEBUG(DB_EPC, "oid:"DF_UOID" ec agg starting\n",
 			DP_UOID(entry->ie_oid));
@@ -2572,6 +2578,8 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
+
+	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
 	rc = dtx_begin(cont->sc_hdl, &dti, &epoch, 0, 0, &oid,
 		       NULL, 0, 0, NULL, &dth);

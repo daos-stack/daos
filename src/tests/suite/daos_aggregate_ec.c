@@ -792,8 +792,13 @@ cleanup_ec_agg_tests(struct ec_agg_test_ctx *ctx)
 static void
 test_all_ec_agg(void **statep)
 {
+	test_arg_t		*arg = *statep;
 	struct ec_agg_test_ctx	 ctx = { 0 };
 
+	if (!test_runable(arg, 5))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	setup_ec_agg_tests(statep, &ctx);
 	test_filled_stripe(&ctx);
 	test_half_stripe(&ctx);
