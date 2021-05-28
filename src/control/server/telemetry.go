@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,7 +30,9 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []*En
 	cleanupFns := make([]func(), 0, numEngines)
 	defer func() {
 		if err != nil {
-			cleanupAll(cleanupFns)
+			for _, cleanup := range cleanupFns {
+				cleanup()
+			}
 		}
 	}()
 
@@ -61,18 +64,15 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []*En
 	return cleanupFns, nil
 }
 
-func cleanupAll(cleanupFns []func()) {
-	for _, cleanup := range cleanupFns {
-		cleanup()
-	}
-}
-
 func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, engines []*EngineInstance) (func(), error) {
 	cleanupFns, err := regPromEngineSources(ctx, log, engines)
 	if err != nil {
 		return nil, err
 	}
 
+	listenAddress := fmt.Sprintf("0.0.0.0:%d", port)
+
+	srv := http.Server{Addr: listenAddress}
 	http.Handle("/metrics", promhttp.HandlerFor(
 		prometheus.DefaultGatherer, promhttp.HandlerOpts{},
 	))
@@ -89,17 +89,26 @@ func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, 
 		}
 	})
 
-	listenAddress := fmt.Sprintf("0.0.0.0:%d", port)
-	log.Infof("Listening on %s", listenAddress)
-
 	// http listener is a blocking call
 	go func() {
-		err := http.ListenAndServe(listenAddress, nil)
+		log.Infof("Listening on %s", listenAddress)
+		err := srv.ListenAndServe()
 		log.Infof("Prometheus web exporter stopped: %s", err.Error())
 	}()
 
 	return func() {
-		log.Debug("cleaning up telemetry bindings")
-		cleanupAll(cleanupFns)
+		log.Debug("Shutting down Prometheus web exporter")
+
+		// When this cleanup function is called, the original context
+		// will probably have already been canceled.
+		timedCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(timedCtx); err != nil {
+			log.Infof("HTTP server didn't shut down within timeout: %s", err.Error())
+		}
+
+		for _, cleanup := range cleanupFns {
+			cleanup()
+		}
 	}, nil
 }

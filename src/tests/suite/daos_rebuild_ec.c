@@ -29,6 +29,7 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 	struct ioreq		req;
 	d_rank_t		kill_ranks[4] = { -1 };
 	int			kill_ranks_num = 0;
+	d_rank_t		extra_kill_ranks[4] = { -1 };
 
 	if (oclass == OC_EC_2P1G1 && !test_runable(arg, 4))
 		return;
@@ -47,25 +48,21 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 	else if (write_type == PARTIAL_FULL_UPDATE)
 		write_ec_partial_full(&req, arg->index, 0);
 
-	ioreq_fini(&req);
-
 	get_killing_rank_by_oid(arg, oid, kill_data_nr, kill_parity_nr,
 				kill_ranks, &kill_ranks_num);
 
 	rebuild_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num, false);
-
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/*
 	 * let's kill another 2 data node to do degrade fetch, so to
 	 * verify degrade fetch is correct.
 	 */
 	if (oclass == OC_EC_2P1G1) {
-		get_killing_rank_by_oid(arg, oid, 2, 0, kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &kill_ranks[1], 1, false);
+		get_killing_rank_by_oid(arg, oid, 2, 0, extra_kill_ranks, NULL);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[1], 1, false);
 	} else { /* oclass OC_EC_4P2G1 */
-		get_killing_rank_by_oid(arg, oid, 4, 0, kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &kill_ranks[2], 2, false);
+		get_killing_rank_by_oid(arg, oid, 4, 0, extra_kill_ranks, NULL);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2, false);
 	}
 
 	if (write_type == PARTIAL_UPDATE)
@@ -76,15 +73,25 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 		verify_ec_full_partial(&req, arg->index, 0);
 	else if (write_type == PARTIAL_FULL_UPDATE)
 		verify_ec_full(&req, arg->index, 0);
-
 	ioreq_fini(&req);
-#if 0
-	/* Disable reintegrate due to DAOS-5884 */
-	if (kill_parity_nr > 0)
-		reintegrate_pools_ranks(&arg, 1, &kill_data_rank, 1);
 
 	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num);
-#endif
+	if (oclass == OC_EC_2P1G1)
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[1], 1);
+	else /* oclass OC_EC_4P2G1 */
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	if (write_type == PARTIAL_UPDATE)
+		verify_ec_partial(&req, arg->index, 0);
+	else if (write_type == FULL_UPDATE)
+		verify_ec_full(&req, arg->index, 0);
+	else if (write_type == FULL_PARTIAL_UPDATE)
+		verify_ec_full_partial(&req, arg->index, 0);
+	else if (write_type == PARTIAL_FULL_UPDATE)
+		verify_ec_full(&req, arg->index, 0);
+
+	ioreq_fini(&req);
 }
 
 #define CELL_SIZE	1048576

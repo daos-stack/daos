@@ -15,12 +15,12 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include "wrap_cmocka.h"
-#include "gurt/common.h"
-#include "gurt/list.h"
-#include "gurt/heap.h"
-#include "gurt/dlog.h"
-#include "gurt/hash.h"
-#include "gurt/atomic.h"
+#include <gurt/common.h>
+#include <gurt/list.h>
+#include <gurt/heap.h>
+#include <gurt/dlog.h>
+#include <gurt/hash.h>
+#include <gurt/atomic.h>
 
 /* machine epsilon */
 #define EPSILON (1.0E-16)
@@ -809,9 +809,9 @@ test_log(void **state)
 	d_log_fini();
 }
 
-#define TEST_GURT_HASH_NUM_BITS (12)
+#define TEST_GURT_HASH_NUM_BITS (D_ON_VALGRIND ? 4 : 12)
 #define TEST_GURT_HASH_NUM_ENTRIES (1 << TEST_GURT_HASH_NUM_BITS)
-#define TEST_GURT_HASH_NUM_THREADS (16)
+#define TEST_GURT_HASH_NUM_THREADS (D_ON_VALGRIND ? 4 : 16)
 #define TEST_GURT_HASH_ENTRIES_PER_THREAD \
 	(TEST_GURT_HASH_NUM_ENTRIES / TEST_GURT_HASH_NUM_THREADS)
 #define TEST_GURT_HASH_KEY_LEN (65L)
@@ -1166,11 +1166,14 @@ test_gurt_hash_decref(void **state)
 	assert_int_equal(rc, 0);
 }
 
+#define GA_BUF_SIZE 32
 static void
 test_gurt_alloc(void **state)
 {
 	const char *str1 = "Hello World1";
 	const char str2[] = "Hello World2";
+	char zero_buf[GA_BUF_SIZE] = {0};
+	char fill_buf[GA_BUF_SIZE] = {0};
 	char *testptr;
 	char *newptr;
 	int *testint;
@@ -1179,6 +1182,8 @@ test_gurt_alloc(void **state)
 	int *ptr1, *ptr2;
 	int nr = 10;
 	int rc;
+
+	memset(fill_buf, 'f', sizeof(fill_buf));
 
 	rc = d_log_init();
 	assert_int_equal(rc, 0);
@@ -1197,10 +1202,10 @@ test_gurt_alloc(void **state)
 	assert_string_equal(testptr, str2);
 	D_FREE(testptr);
 	assert_null(testptr);
-	D_REALLOC(newptr, testptr, 10);
+	D_REALLOC(newptr, testptr, 0, 10);
 	assert_non_null(newptr);
 	assert_null(testptr);
-	D_REALLOC(testptr, newptr, 20);
+	D_REALLOC(testptr, newptr, 10, 20);
 	assert_non_null(testptr);
 	assert_null(newptr);
 	D_FREE(testptr);
@@ -1218,19 +1223,43 @@ test_gurt_alloc(void **state)
 	assert_non_null(testint);
 	D_FREE(testint);
 	assert_null(testint);
+	D_ALLOC_PTR_NZ(testint);
+	assert_non_null(testint);
+	D_FREE(testint);
+	assert_null(testint);
 
 	D_ALLOC_ARRAY(ptr1, nr);
 	assert_non_null(ptr1);
-
-	D_REALLOC_ARRAY(ptr2, ptr1, nr + 10);
-
+	D_REALLOC_ARRAY(ptr2, ptr1, nr, nr + 10);
 	assert_non_null(ptr2);
 	assert_null(ptr1);
-	/* Fill memory to catch wrong allocation via valgrind */
-	memset(ptr2, 0x0, (nr + 10) * sizeof(*ptr2));
-
 	D_FREE(ptr2);
 	assert_null(ptr2);
+
+	D_ALLOC_ARRAY_NZ(ptr1, nr);
+	assert_non_null(ptr1);
+	D_REALLOC_ARRAY_NZ(ptr2, ptr1, nr + 10);
+	assert_non_null(ptr2);
+	assert_null(ptr1);
+	D_FREE(ptr2);
+	assert_null(ptr2);
+
+	D_ALLOC(newptr, GA_BUF_SIZE);
+	assert_non_null(newptr);
+	assert_memory_equal(newptr, zero_buf, sizeof(zero_buf));
+	D_FREE(newptr);
+	assert_null(newptr);
+	D_REALLOC(newptr, testptr, 0, GA_BUF_SIZE);
+	assert_non_null(newptr);
+	assert_memory_equal(newptr, zero_buf, sizeof(zero_buf));
+	memset(newptr, 'f', sizeof(fill_buf));
+	D_REALLOC(testptr, newptr, GA_BUF_SIZE, GA_BUF_SIZE * 2);
+	assert_non_null(testptr);
+	newptr = testptr;
+	assert_memory_equal(newptr, fill_buf, sizeof(fill_buf));
+	assert_memory_equal(newptr + GA_BUF_SIZE, zero_buf, sizeof(zero_buf));
+	D_FREE(newptr);
+	assert_null(newptr);
 
 	d_log_fini();
 }
@@ -2075,7 +2104,8 @@ hash_perf(int hash_type, unsigned int buckets, unsigned int loop)
 static void
 test_hash_perf(void **state)
 {
-	unsigned el = (16 << 10); /* elements per buckert */
+	unsigned shift = D_ON_VALGRIND ? 3 : 10;
+	unsigned el = (16 << shift); /* elements per buckert */
 	unsigned i;
 
 	/* hash buckets: 2, 4, 8... 8192 */

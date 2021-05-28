@@ -42,6 +42,9 @@ enum {
 	TS_MODE_DAOS, /* full stack */
 };
 
+bool			 ts_const_akey;
+char			*ts_dkey_prefix;
+uint64_t		 ts_flags;
 int			 ts_mode = TS_MODE_DAOS;
 int			 ts_class = OC_SX;
 
@@ -100,6 +103,10 @@ struct pf_param {
 		struct {
 			bool	verbose;
 		} pa_oit;
+		/* private parameter for query */
+		struct {
+			int	verbose;
+		} pa_query;
 		/* private parameter for update, fetch and verify */
 		struct {
 			/* offset within stride */
@@ -355,7 +362,7 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		if (rc)
 			return rc;
 
-		rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO);
+		rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, NULL, 0);
 		if (rc)
 			goto end;
 
@@ -492,7 +499,10 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	recx = &cred->tc_recx;
 
 	/* setup dkey */
-	len = min(strlen(dkey), DTS_KEY_LEN);
+	if (ts_dkey_prefix == NULL)
+		len = sizeof(uint64_t);
+	else
+		len = min(strlen(dkey), DTS_KEY_LEN);
 	memcpy(cred->tc_dbuf, dkey, len);
 	d_iov_set(&cred->tc_dkey, cred->tc_dbuf, len);
 
@@ -562,7 +572,7 @@ static int
 dkey_update_or_fetch(enum ts_op_type op_type, char *dkey, daos_epoch_t *epoch,
 		     struct pf_param *param)
 {
-	char		 akey[DTS_KEY_LEN];
+	char		 akey[DTS_KEY_LEN] = "0";
 	int		 i;
 	int		 j;
 	int		 k;
@@ -575,7 +585,8 @@ dkey_update_or_fetch(enum ts_op_type op_type, char *dkey, daos_epoch_t *epoch,
 	}
 
 	for (i = 0; i < ts_akey_p_dkey; i++) {
-		dts_key_gen(akey, DTS_KEY_LEN, PF_AKEY_PREF);
+		if (!ts_const_akey)
+			dts_key_gen(akey, DTS_KEY_LEN, PF_AKEY_PREF);
 		for (j = 0; j < ts_recx_p_akey; j++) {
 			for (k = 0; k < ts_obj_p_cont; k++) {
 				rc = akey_update_or_fetch(k, op_type, dkey,
@@ -599,7 +610,7 @@ objects_open(void)
 		if (!ts_oid_init) {
 			ts_oids[i] = daos_test_oid_gen(
 				ts_mode == TS_MODE_VOS ? DAOS_HDL_INVAL :
-				ts_ctx.tsc_coh, ts_class, 0, 0,
+				ts_ctx.tsc_coh, ts_class, ts_flags, 0,
 				ts_ctx.tsc_mpi_rank);
 			if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 				ts_oids[i] = dts_oid_set_rank(ts_oids[i],
@@ -657,7 +668,7 @@ objects_update(struct pf_param *param)
 	for (i = 0; i < ts_dkey_p_obj; i++) {
 		char	 dkey[DTS_KEY_LEN];
 
-		dts_key_gen(dkey, DTS_KEY_LEN, PF_DKEY_PREF);
+		dts_key_gen(dkey, DTS_KEY_LEN, ts_dkey_prefix);
 		rc = dkey_update_or_fetch(TS_DO_UPDATE, dkey, &epoch,
 					  param);
 		if (rc)
@@ -688,7 +699,7 @@ objects_fetch(struct pf_param *param)
 	for (i = 0; i < ts_dkey_p_obj; i++) {
 		char	 dkey[DTS_KEY_LEN];
 
-		dts_key_gen(dkey, DTS_KEY_LEN, PF_DKEY_PREF);
+		dts_key_gen(dkey, DTS_KEY_LEN, ts_dkey_prefix);
 		rc = dkey_update_or_fetch(TS_DO_FETCH, dkey, &epoch,
 					  param);
 		if (rc != 0)
@@ -700,6 +711,51 @@ objects_fetch(struct pf_param *param)
 
 	if (dts_is_async(&ts_ctx))
 		TS_TIME_END(&param->pa_duration, start);
+	return rc;
+}
+
+static int
+objects_query(struct pf_param *param)
+{
+	daos_epoch_t epoch = crt_hlc_get();
+	char		*akey = "0";
+	d_iov_t		dkey_iov;
+	d_iov_t		akey_iov;
+	daos_recx_t	recx;
+	int		i;
+	int		rc = 0;
+	uint64_t	start = 0;
+
+
+	d_iov_set(&akey_iov, akey, 1);
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	for (i = 0; i < ts_obj_p_cont; i++) {
+		d_iov_set(&dkey_iov, NULL, 0);
+		rc = vos_obj_query_key(ts_ctx.tsc_coh, ts_uoids[i],
+				       DAOS_GET_MAX | DAOS_GET_DKEY |
+				       DAOS_GET_RECX, epoch, &dkey_iov,
+				       &akey_iov, &recx, NULL);
+		if (rc != 0 && rc != -DER_NONEXIST)
+			break;
+		if (param->pa_query.verbose) {
+			if (rc == -DER_NONEXIST) {
+				printf("query_key "DF_UOID ": -DER_NONEXIST\n",
+				       DP_UOID(ts_uoids[i]));
+			} else {
+				printf("query_key "DF_UOID ": dkey="DF_U64
+				       " recx="DF_RECX"\n",
+				       DP_UOID(ts_uoids[i]),
+				       *(uint64_t *)dkey_iov.iov_buf,
+				       DP_RECX(recx));
+			}
+		}
+		rc = 0;
+	}
+
+	TS_TIME_END(&param->pa_duration, start);
+
 	return rc;
 }
 
@@ -1052,6 +1108,37 @@ pf_parse_rw(char *str, struct pf_param *param, char **strp)
 		return -1;
 	}
 	return 0;
+}
+
+static int
+pf_parse_query_cb(char *str, struct pf_param *pa, char **strp)
+{
+	switch (*str) {
+	default:
+		str++;
+		break;
+	case 'v':
+		pa->pa_query.verbose = true;
+		str++;
+		break;
+	}
+	*strp = str;
+	return 0;
+}
+
+/**
+ * Example: "U;p Q;p;"
+ * 'U' is update test.  Integer dkey required
+ *	'p': parameter of update and it means outputting performance result
+ *
+ * 'Q' is query test
+ *	'p': parameter of query and it means outputting performance result
+ *	'v' enables verbosity
+ */
+static int
+pf_parse_query(char *str, struct pf_param *pa, char **strp)
+{
+	return pf_parse_common(str, pa, pf_parse_query_cb, strp);
 }
 
 static int
@@ -1459,6 +1546,10 @@ The options are as follows:\n\
 \n\
 -x	run vos perf test in a ABT ult mode.\n\
 \n\
+-i	Use integer dkeys.  Required if running QUERY test.\n\
+\n\
+-I	Use constant akey.  Required for QUERY test.\n\
+\n\
 -p	run vos perf with profile.\n");
 }
 
@@ -1481,6 +1572,8 @@ static struct option ts_ops[] = {
 	{ "dmg_conf",	required_argument,	NULL,	'g' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ "wait",	no_argument,		NULL,	'w' },
+	{ "int_dkey",	no_argument,		NULL,	'i' },
+	{ "const_akey",	no_argument,		NULL,	'I' },
 	{ NULL,		0,			NULL,	0   },
 };
 
@@ -1526,9 +1619,14 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 		double		latency;
 		double		rate;
 
-		total = ts_ctx.tsc_mpi_size * param->pa_iteration *
-			ts_obj_p_cont * ts_dkey_p_obj *
-			ts_akey_p_dkey * ts_recx_p_akey;
+		if (strcmp(test_name, "QUERY") == 0) {
+			total = ts_ctx.tsc_mpi_size * param->pa_iteration *
+				ts_obj_p_cont;
+		} else {
+			total = ts_ctx.tsc_mpi_size * param->pa_iteration *
+				ts_obj_p_cont * ts_dkey_p_obj *
+				ts_akey_p_dkey * ts_recx_p_akey;
+		}
 
 		rate = total / agg_duration;
 		latency = duration_max / total;
@@ -1564,13 +1662,16 @@ main(int argc, char **argv)
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
 	int		rc;
 
+	ts_dkey_prefix = PF_AKEY_PREF;
+	ts_flags = 0;
+
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:n:s:R:g:G:zf:hwxpA::",
+				 "P:N:T:C:c:o:d:a:n:s:R:g:G:zf:hiIwxpA::",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1580,6 +1681,13 @@ main(int argc, char **argv)
 			return -1;
 		case 'w':
 			ts_pause = true;
+			break;
+		case 'i':
+			ts_flags |= DAOS_OF_DKEY_UINT64;
+			ts_dkey_prefix = NULL;
+			break;
+		case 'I':
+			ts_const_akey = true;
 			break;
 		case 'T':
 			if (!strcasecmp(optarg, "echo")) {
@@ -1674,6 +1782,8 @@ main(int argc, char **argv)
 			return 0;
 		}
 	}
+	if (ts_const_akey)
+		ts_akey_p_dkey = 1;
 
 	if (!cmds) {
 		D_PRINT("Please provide command string\n");
@@ -1796,8 +1906,8 @@ main(int argc, char **argv)
 			"\tpool size     : SCM: %u MB, NVMe: %u MB\n"
 			"\tcredits       : %d (sync I/O for -ve)\n"
 			"\tobj_per_cont  : %u x %d (procs)\n"
-			"\tdkey_per_obj  : %u\n"
-			"\takey_per_dkey : %u\n"
+			"\tdkey_per_obj  : %u (%s)\n"
+			"\takey_per_dkey : %u%s\n"
 			"\trecx_per_akey : %u\n"
 			"\tvalue type    : %s\n"
 			"\tstride size   : %u\n"
@@ -1809,8 +1919,8 @@ main(int argc, char **argv)
 			credits,
 			ts_obj_p_cont,
 			ts_ctx.tsc_mpi_size,
-			ts_dkey_p_obj,
-			ts_akey_p_dkey,
+			ts_dkey_p_obj, ts_dkey_prefix == NULL ? "int" : "buf",
+			ts_akey_p_dkey, ts_const_akey ? " (const)" : "",
 			ts_recx_p_akey,
 			ts_val_type(),
 			ts_stride,

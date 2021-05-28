@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2020-2021 Intel Corporation.
 
@@ -8,7 +8,7 @@
 
 import traceback
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 
 
@@ -35,7 +35,6 @@ class SameKeyDifferentValue(TestWithServers):
             self.log.info(traceback.format_exc())
             self.fail("Test failed during setup.\n")
 
-    @skipForTicket("DAOS-7220")
     def test_single_to_array_value(self):
         """
         Jira ID: DAOS-2218
@@ -141,7 +140,6 @@ class SameKeyDifferentValue(TestWithServers):
             except DaosApiError as excp:
                 self.fail("Failed to write to akey/dkey or punch the object")
 
-    @skipForTicket("DAOS-7220")
     def test_array_to_single_value(self):
         """
         Jira ID: DAOS-2218

@@ -11,14 +11,11 @@ import io.daos.Constants;
 import io.daos.DaosEventQueue;
 import io.daos.DaosIOException;
 import io.netty.buffer.ByteBuf;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * IO description for fetching and updating object records on given dkey. Each record is described in {@link Entry}.

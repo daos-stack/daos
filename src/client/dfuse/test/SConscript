@@ -11,7 +11,7 @@ def build_static_tests(env):
     #linker magic.  Disabled for now.
     if IOIL_BUILD_STATIC:
         to_build = env.get('libioil')
-        if to_build == 'none' or to_build == 'shared':
+        if to_build in ('none', 'shared'):
             return []
 
         ilenv = env.Clone()
@@ -33,7 +33,7 @@ def build_static_tests(env):
 def scons():
     """Scons function"""
 
-    Import('dfuse_env prereqs')
+    Import('dfuse_env', 'prereqs')
 
     if not prereqs.check_component('cunit'):
         print("\n************************************************")

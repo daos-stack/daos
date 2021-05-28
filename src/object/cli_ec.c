@@ -280,7 +280,8 @@ obj_ec_recov_tgt_recx_nrs(struct obj_reasb_req *reasb_req,
 		if (tgt_nr == obj_ec_data_tgt_nr(oca))
 			break;
 	}
-	D_ASSERT(tgt_nr == obj_ec_data_tgt_nr(oca));
+	D_ASSERTF(tgt_nr == obj_ec_data_tgt_nr(oca), "%d != %d",
+		  tgt_nr, obj_ec_data_tgt_nr(oca));
 }
 
 /** scan the iod to find the full_stripe recxs and some help info */
@@ -1597,9 +1598,8 @@ obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 	 * request to server to query it, and then retry the IO request to do
 	 * the real fetch. If only with single-value, need not size_fetch ahead.
 	 */
-	if (reasb_req->orr_size_fetch) {
+	if (reasb_req->orr_size_fetched) {
 		reasb_req->orr_size_fetch = 0;
-		reasb_req->orr_size_fetched = 1;
 		iods = reasb_req->orr_uiods;
 	} else if (!update) {
 		for (i = 0; i < iod_nr; i++) {

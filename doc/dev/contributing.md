@@ -4,8 +4,11 @@ Your contributions are most welcome! There are several good ways to suggest new
 features, offer to add a feature, or just begin a dialog about DAOS:
 
 - Open an issue in [jira](https://jira.hpdd.intel.com)
-- Suggest a feature, ask a question, start a discussion, etc. in our [user group](https://daos.groups.io/g/daos)
-- Chat with members of the DAOS community real-time on [Gitter](https://gitter.im/daos-storage)
+- Suggest a feature, ask a question, start a discussion, etc. in our
+  [community mailing list](https://daos.groups.io/g/daos)
+- Chat with members of the DAOS community real-time on [slack](https://daos-stack.slack.com/).
+  An invitation to join the slack workspace is automatically sent when joining
+  the community mailing list.
 
 ## Coding Rules
 

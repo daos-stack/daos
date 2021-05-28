@@ -1,11 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from daos_core_base import DaosCoreBase
-
 
 class DaosCoreTest(DaosCoreBase):
     # pylint: disable=too-many-ancestors,too-many-public-methods
@@ -154,6 +153,21 @@ class DaosCoreTest(DaosCoreBase):
 
         Test Description:
             Run daos_test -i -l"EC_4P2G1"
+
+        Use cases:
+            Core tests for daos_test
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,ib2,medium
+        :avocado: tags=daos_test,daos_core_test,test_daos_io
+        """
+        self.run_subtest()
+
+    def test_daos_ec_obj(self):
+        """Jira ID: DAOS-1568
+
+        Test Description:
+            Run daos_test -I
 
         Use cases:
             Core tests for daos_test
