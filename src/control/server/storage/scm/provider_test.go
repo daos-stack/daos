@@ -930,11 +930,8 @@ func TestProvider_Format(t *testing.T) {
 				}
 			}
 
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(testDir)
+			testDir, clean := common.CreateTestDir(t)
+			defer clean()
 
 			mbc := MockBackendConfig{
 				DiscoverErr:         tc.discoverErr,
