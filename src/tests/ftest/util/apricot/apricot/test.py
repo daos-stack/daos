@@ -26,10 +26,11 @@ from command_utils_base import CommandFailure, EnvironmentVariables
 from agent_utils import DaosAgentManager, include_local_host
 from dmg_utils import get_dmg_command
 from daos_utils import DaosCommand
+from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing
+    get_default_config_file, pcmd, get_file_listing, run_command
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -668,17 +669,20 @@ class TestWithServers(TestWithoutServers):
                     log_dir)
                 pcmd(hosts, "chmod a+rw {}".format(log_dir))
 
+
         # Start the clients (agents)
         if self.setup_start_agents:
             self.start_agents()
+
 
         # Start the servers
         if self.setup_start_servers:
             self.start_servers()
 
-        self.agent_managers[0].dump_attachinfo()
-        self.log.info("Agent attachinfo: %s",
-                      self.agent_managers[0].attachinfo)
+        # Write an ID string to the log file for cross rerferencing logs with 
+        # tests
+        id_str = '"AvocadoTest._Test__name: ' + str(self._Test__name) + '"'
+        self.write_string_to_logfile(id_str)
 
         # Setup a job manager command for running the test command
         manager_class_name = self.params.get(
@@ -691,6 +695,42 @@ class TestWithServers(TestWithoutServers):
             self.job_manager = get_job_manager_class(
                 manager_class_name, None, manager_subprocess, manager_mpi_type)
             self.set_job_manager_timeout()
+
+    def write_string_to_logfile(self, s):
+        """Write a string to the server log
+
+        """
+
+        # Fetch attachinfo data from server
+        self.agent_managers[0].dump_attachinfo()
+        self.log.info("Agent attachinfo: %s",
+                      self.agent_managers[0].attachinfo)
+
+        a = self.agent_managers[0].attachinfo
+
+        # Filter log messages from attachinfo content
+        l = [x for x in a if re.match(r"^(name\s|size\s|all|\d+\s)", x)]
+        attach_info_contents = "\n".join(l)
+
+        # Write an attach_info_tmp file in this directory for cart_ctl to use
+        attachinfo_file_name = '/tmp/daos_server.attach_info_tmp'
+        file1 = open(attachinfo_file_name, 'w')
+        file1.write(attach_info_contents)
+        file1.close()
+          
+        cp_command = "sudo cp {} {}".format(attachinfo_file_name, ".")
+        run_command(cp_command, verbose=True, raise_exception=False)
+
+        # Compose and run cart_ctl command
+        cart_ctl = CartCtl()
+        cart_ctl.add_log_msg.value = "add_log_msg"
+        cart_ctl.rank.value = 0
+        cart_ctl.group_name.value = "daos_server"
+        cart_ctl.m.value = s
+
+        cart_ctl.n.value = None
+        cart_ctl.sudo_E = True
+        cart_ctl.run()
 
     def set_job_manager_timeout(self):
         """Set the timeout for the job manager.

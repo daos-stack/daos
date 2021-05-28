@@ -55,6 +55,7 @@ class ExecutableCommand(CommandWithParameters):
         self.verbose = True
         self.env = None
         self.sudo = False
+        self.sudo_E = False
 
         # A list of environment variable names to set and export prior to
         # running the command.  Values can be set via the get_environment()
@@ -77,6 +78,8 @@ class ExecutableCommand(CommandWithParameters):
         value = super().__str__()
         if self.sudo:
             value = " ".join(["sudo -n", value])
+        if self.sudo_E:
+            value = " ".join(["sudo -n -E", value])
         return value
 
     @property
