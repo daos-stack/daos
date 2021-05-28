@@ -220,14 +220,7 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons-3 --jobs $JOBS client install PREFIX=/opt/daos COMPILER=$COMPILER && \
-    utils/check.sh /opt/daos/bin/dmg && \
-    utils/check.sh -n /opt/daos/bin/daos_engine && \
-    scons-3 --jobs $JOBS server install PREFIX=/opt/daos COMPILER=$COMPILER && \
-    utils/check.sh /opt/daos/bin/daos_engine && \
-    utils/check.sh -n /opt/daos/bin/vos_tests && \
-    scons-3 --jobs $JOBS test install PREFIX=/opt/daos COMPILER=$COMPILER && \
-    utils/check.sh /opt/daos/bin/vos_tests && \
+    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos; }
 
