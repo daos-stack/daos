@@ -221,7 +221,7 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = drr->drr_rank;
-	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_DTX, drr->drr_tag);
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, drr->drr_tag);
 	opc = DAOS_RPC_OPCODE(dra->dra_opc, DAOS_DTX_MODULE, DAOS_DTX_VERSION);
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
