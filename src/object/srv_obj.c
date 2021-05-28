@@ -466,7 +466,6 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			sgl = sgls[i];
 		} else {
 			struct bio_sglist *bsgl;
-			bool deduped_skip = true;
 
 			D_ASSERT(daos_handle_is_valid(ioh));
 			bsgl = vos_iod_sgl_at(ioh, i);
@@ -476,12 +475,11 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 				if (rc)
 					break;
 				bsgl = &bsgls_dup[i];
-				deduped_skip = false;
 			}
 			D_ASSERT(bsgl != NULL);
 
 			sgl = &tmp_sgl;
-			rc = bio_sgl_convert(bsgl, sgl, deduped_skip);
+			rc = bio_sgl_convert(bsgl, sgl);
 			if (rc)
 				break;
 		}
@@ -514,7 +512,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 
 		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
 		fbsgl = vos_iod_sgl_at(ioh, 0);
-		bio_sgl_convert(fbsgl, &fsgl, false);
+		bio_sgl_convert(fbsgl, &fsgl);
 		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
 		*fbuffer += 0x2;
 		d_sgl_fini(&fsgl, false);
@@ -1095,70 +1093,6 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod, daos_iod_t *iods)
 	return 0;
 }
 
-/*
- * Check if the dedup data is identical to the RDMA data in a temporal
- * allocated SCM extent, if memcmp fails, update the temporal SCM address
- * in VOS tree, otherwise, keep using the original dedup data address
- * in VOS tree and free the temporal SCM extent.
- */
-static int
-obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
-{
-	struct bio_sglist	*bsgl, *bsgl_dup;
-	int			 i, j, rc;
-
-	D_ASSERT(daos_handle_is_valid(ioh));
-	D_ASSERT(bsgls_dup != NULL);
-
-	for (i = 0; i < sgl_nr; i++) {
-		bsgl = vos_iod_sgl_at(ioh, i);
-		D_ASSERT(bsgl != NULL);
-		bsgl_dup = &bsgls_dup[i];
-
-		D_ASSERT(bsgl->bs_nr_out == bsgl_dup->bs_nr_out);
-		for (j = 0; j < bsgl->bs_nr_out; j++) {
-			struct bio_iov	*biov = &bsgl->bs_iovs[j];
-			struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[j];
-
-			if (bio_iov2buf(biov) == NULL) {
-				D_ASSERT(bio_iov2buf(biov_dup) == NULL);
-				continue;
-			}
-
-			/* Didn't use deduped extent */
-			if (!BIO_ADDR_IS_DEDUP(&biov->bi_addr)) {
-				D_ASSERT(
-					!BIO_ADDR_IS_DEDUP(&biov_dup->bi_addr));
-				continue;
-			}
-			D_ASSERT(BIO_ADDR_IS_DEDUP(&biov_dup->bi_addr));
-
-			D_ASSERT(bio_iov2len(biov) == bio_iov2len(biov_dup));
-			rc = memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
-				    bio_iov2len(biov));
-
-			if (rc == 0) {	/* verify succeeded */
-				D_DEBUG(DB_IO, "Verify dedup succeeded\n");
-				continue;
-			}
-
-			/*
-			 * Replace the dedup addr in VOS tree with the temporal
-			 * SCM extent, ignore space leak if later transaction
-			 * failed to commit.
-			 */
-			biov->bi_addr.ba_off = biov_dup->bi_addr.ba_off;
-			BIO_ADDR_SET_NOT_DEDUP(&biov->bi_addr);
-			biov_dup->bi_addr.ba_off = UMOFF_NULL;
-
-			D_DEBUG(DB_IO, "Verify dedup extents failed, "
-				"use newly allocated extent\n");
-		}
-	}
-
-	return 0;
-}
-
 static int
 obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		uint64_t cond_flags, daos_key_t *dkey, unsigned int iod_nr,
@@ -1571,8 +1505,9 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 	if (obj_rpc_is_update(rpc)) {
 		if (bsgls_dup != NULL) {	/* dedup verify */
-			rc = obj_dedup_verify(ioh, bsgls_dup, orw->orw_nr);
-			D_GOTO(post, rc);
+			rc = vos_dedup_verify(ioh, bsgls_dup);
+			if (rc)
+				goto post;
 		}
 
 		rc = obj_verify_bio_csum(orw->orw_oid.id_pub, iods, iod_csums,
@@ -3661,7 +3596,7 @@ obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 			return -DER_CSUM;
 		}
 
-		rc = bio_sgl_convert(bsgl, &sgl, false);
+		rc = bio_sgl_convert(bsgl, &sgl);
 
 		if (rc == 0)
 			rc = daos_csummer_verify_iod(csummer, iod, &sgl,
@@ -3972,8 +3907,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			}
 
 			if (bsgls_dups != NULL && bsgls_dups[i] != NULL) {
-				rc = obj_dedup_verify(iohs[i], bsgls_dups[i],
-						      dcsr->dcsr_nr);
+				rc = vos_dedup_verify(iohs[i], bsgls_dups[i]);
 				if (rc != 0) {
 					D_ERROR("dedup_verify failed for obj "
 						DF_UOID", DTX "DF_DTI
