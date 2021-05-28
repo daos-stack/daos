@@ -96,25 +96,28 @@ co_attribute(void **state)
 	int		 rc;
 
 	char const *const names[] = { "AVeryLongName", "Name" };
+	char const *const names_get[] = { "AVeryLongName", "Wrong", "Name" };
 	size_t const name_sizes[] = {
 				strlen(names[0]) + 1,
 				strlen(names[1]) + 1,
 	};
 	void const *const in_values[] = {
 				"value",
-				"this is a long value"
+				"this is a long value",
 	};
 	size_t const in_sizes[] = {
 				strlen(in_values[0]),
-				strlen(in_values[1])
+				strlen(in_values[1]),
 	};
 	int			 n = (int) ARRAY_SIZE(names);
+	int			 m = (int) ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
-						  &out_buf[1 * BUFSIZE]
+						  &out_buf[1 * BUFSIZE],
+						  &out_buf[2 * BUFSIZE],
 						};
-	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE };
+	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE, BUFSIZE };
 	size_t			 total_size;
 
 	if (arg->async) {
@@ -162,7 +165,7 @@ co_attribute(void **state)
 	print_message("getting container attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 
-	rc = daos_cont_get_attr(arg->coh, n, names, out_values, out_sizes,
+	rc = daos_cont_get_attr(arg->coh, m, names_get, out_values, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -172,20 +175,26 @@ co_attribute(void **state)
 	assert_memory_equal(out_values[0], in_values[0], in_sizes[0]);
 
 	print_message("Verifying Name-Value (B)..\n");
-	assert_true(in_sizes[1] > BUFSIZE);
-	assert_int_equal(out_sizes[1], in_sizes[1]);
-	assert_memory_equal(out_values[1], in_values[1], BUFSIZE);
+	assert_int_equal(out_sizes[1], 0);
 
-	rc = daos_cont_get_attr(arg->coh, n, names, NULL, out_sizes,
+	print_message("Verifying Name-Value (C)..\n");
+	assert_true(in_sizes[1] > BUFSIZE);
+	assert_int_equal(out_sizes[2], in_sizes[1]);
+	assert_memory_equal(out_values[2], in_values[1], BUFSIZE);
+
+	rc = daos_cont_get_attr(arg->coh, m, names_get, NULL, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("Verifying with NULL buffer..\n");
 	assert_int_equal(out_sizes[0], in_sizes[0]);
-	assert_int_equal(out_sizes[1], in_sizes[1]);
+	assert_int_equal(out_sizes[1], 0);
+	assert_int_equal(out_sizes[2], in_sizes[1]);
 
-	rc = daos_cont_del_attr(arg->coh, n, names, arg->async ? &ev : NULL);
+	rc = daos_cont_del_attr(arg->coh, m, names_get,
+				arg->async ? &ev : NULL);
+	/* should work even if "Wrong" do not exist */
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
@@ -1947,6 +1956,13 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 					(void * const*)&value,
 					&val_size,
 					NULL);
+
+		/* 0 size means non-existing attr and this is possible
+		 * only because we do not support empty attrs for now
+		 */
+		if (val_size == 0)
+			rc = -DER_NONEXIST;
+
 		assert_rc_equal(rc, exp_result);
 	}
 
