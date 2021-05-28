@@ -94,7 +94,7 @@ obj_tls_init(int xs_id, int tgt_id)
 	for (opc = 0; opc < OBJ_PROTO_CLI_COUNT; opc++) {
 		/** Start with number of active requests, of type gauge */
 		rc = d_tm_add_metric(&tls->ot_op_active[opc], D_TM_GAUGE,
-				     "number of active object RPCs", "",
+				     "number of active object RPCs", "ops",
 				     "io/%u/ops/%s/active", tgt_id,
 				     obj_opc_to_str(opc));
 		if (rc)
@@ -104,7 +104,7 @@ obj_tls_init(int xs_id, int tgt_id)
 		/** Then the total number of requests, of type counter */
 		rc = d_tm_add_metric(&tls->ot_op_total[opc], D_TM_COUNTER,
 				     "total number of processed object RPCs",
-				     "", "io/%u/ops/%s/total", tgt_id,
+				     "ops", "io/%u/ops/%s/total", tgt_id,
 				     obj_opc_to_str(opc));
 		if (rc)
 			D_WARN("Failed to create total cnt sensor: "DF_RC"\n",
@@ -118,7 +118,7 @@ obj_tls_init(int xs_id, int tgt_id)
 
 		/** And finally the per-opcode latency, of type gauge */
 		rc = d_tm_add_metric(&tls->ot_op_lat[opc], D_TM_GAUGE,
-				     "object RPC processing time (in us)", "",
+				     "object RPC processing time", "us",
 				     "io/%u/ops/%s/latency", tgt_id,
 				     obj_opc_to_str(opc));
 		if (rc)
@@ -154,8 +154,8 @@ obj_tls_init(int xs_id, int tgt_id)
 				D_ASPRINTF(path, "io/%u/%s_latency_GT4MB",
 					   tgt_id, opc ? "fetch" : "update");
 			rc = d_tm_add_metric(&tm[opc][i], D_TM_GAUGE,
-					     "Per-I/O size RPC processing time "
-					     "(in us)", "", path);
+					     "Per-I/O size RPC processing time",
+					     "us", path);
 			D_FREE(path);
 			if (rc)
 				D_WARN("Failed to create per-I/O size latency "
@@ -166,7 +166,7 @@ obj_tls_init(int xs_id, int tgt_id)
 
 	/** Total number of silently restarted updates, of type counter */
 	rc = d_tm_add_metric(&tls->ot_update_restart, D_TM_COUNTER,
-			     "total number of restarted update ops", "",
+			     "total number of restarted update ops", "updates",
 			     "io/%u/ops/%s/restarted", tgt_id,
 			     obj_opc_to_str(DAOS_OBJ_RPC_UPDATE));
 	if (rc)
@@ -175,7 +175,7 @@ obj_tls_init(int xs_id, int tgt_id)
 
 	/** Total number of resent updates, of type counter */
 	rc = d_tm_add_metric(&tls->ot_update_resent, D_TM_COUNTER,
-			     "total number of resent update RPCs", "",
+			     "total number of resent update RPCs", "updates",
 			     "io/%u/ops/%s/resent", tgt_id,
 			     obj_opc_to_str(DAOS_OBJ_RPC_UPDATE));
 	if (rc)
@@ -184,7 +184,7 @@ obj_tls_init(int xs_id, int tgt_id)
 
 	/** Total bytes read */
 	rc = d_tm_add_metric(&tls->ot_fetch_bytes, D_TM_COUNTER,
-			     "total number of bytes fetched/read", "",
+			     "total number of bytes fetched/read", "bytes",
 			     "io/%u/fetch_bytes", tgt_id);
 	if (rc)
 		D_WARN("Failed to create bytes fetch sensor: "DF_RC"\n",
@@ -192,7 +192,7 @@ obj_tls_init(int xs_id, int tgt_id)
 
 	/** Total bytes written */
 	rc = d_tm_add_metric(&tls->ot_update_bytes, D_TM_COUNTER,
-			     "total number of bytes updated/written", "",
+			     "total number of bytes updated/written", "bytes",
 			     "io/%u/update_bytes", tgt_id);
 	if (rc)
 		D_WARN("Failed to create bytes update sensor: "DF_RC"\n",

@@ -2,20 +2,16 @@
 import os
 import daos_build
 
-def scons():
-    """Execute build"""
-    Import('env', 'prereqs', 'control_tgts')
-
-    env.AppendUnique(LIBPATH=[Dir('.')])
-
+def build_bio(env, standalone, control_tgts):
+    """build bio"""
     denv = env.Clone()
-    denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
-    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    prereqs.require(denv, 'pmdk', 'spdk', 'argobots', 'protobufc', 'hwloc')
 
-    SConscript('smd/SConscript')
-    denv.AppendUnique(LIBPATH=['smd'])
-    denv.AppendUnique(OBJPREFIX='b_')
+    if standalone:
+        denv.Append(CPPDEFINES={'BIO_STANDALONE' : '1'})
+        denv.Append(OBJPREFIX="s_")
+        name = 'bio'
+    else:
+        name = 'bio_srv'
 
     # SPDK related libs
     libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']
@@ -32,8 +28,26 @@ def scons():
     libs += ['numa', 'dl', 'smd']
 
     tgts = Glob('*.c') + control_tgts
-    bio = daos_build.library(denv, "bio", tgts, install_off="../..", LIBS=libs)
+    bio = daos_build.library(denv, name, tgts, install_off="../..", LIBS=libs)
     denv.Install('$PREFIX/lib64/daos_srv', bio)
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs', 'control_tgts')
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
+
+    denv = env.Clone()
+    denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    prereqs.require(denv, 'pmdk', 'spdk', 'argobots', 'protobufc', 'hwloc')
+
+    SConscript('smd/SConscript')
+    denv.AppendUnique(LIBPATH=['smd'])
+    denv.AppendUnique(OBJPREFIX='b_')
+
+    build_bio(denv, False, control_tgts)
+    build_bio(denv, True, control_tgts)
 
 if __name__ == "SCons.Script":
     scons()

@@ -10,8 +10,10 @@
 #include "bio_internal.h"
 
 static void
-dma_free_chunk(struct bio_dma_chunk *chunk)
+dma_free_chunk(struct bio_dma_chunk *chunk, unsigned int cnt)
 {
+	struct bio_tls		*tls = bio_tls_get();
+
 	D_ASSERT(chunk->bdc_ptr != NULL);
 	D_ASSERT(chunk->bdc_pg_idx == 0);
 	D_ASSERT(chunk->bdc_ref == 0);
@@ -23,18 +25,22 @@ dma_free_chunk(struct bio_dma_chunk *chunk)
 		free(chunk->bdc_ptr);
 
 	D_FREE(chunk);
+
+	if (tls)
+		d_tm_dec_gauge(tls->btl_dma_buf, cnt << BIO_DMA_PAGE_SHIFT);
 }
 
 static struct bio_dma_chunk *
 dma_alloc_chunk(unsigned int cnt)
 {
-	struct bio_dma_chunk *chunk;
-	ssize_t bytes = (ssize_t)cnt << BIO_DMA_PAGE_SHIFT;
-	int rc;
+	struct bio_tls		*tls = bio_tls_get();
+	struct bio_dma_chunk	*chunk;
+	ssize_t			bytes = (ssize_t)cnt << BIO_DMA_PAGE_SHIFT;
+	int			rc;
 
 	D_ASSERT(bytes > 0);
 	D_ALLOC_PTR(chunk);
-	if (chunk == NULL) {
+	if (unlikely(chunk == NULL)) {
 		D_ERROR("Failed to allocate chunk\n");
 		return NULL;
 	}
@@ -43,16 +49,19 @@ dma_alloc_chunk(unsigned int cnt)
 		chunk->bdc_ptr = spdk_dma_malloc(bytes, BIO_DMA_PAGE_SZ, NULL);
 	} else {
 		rc = posix_memalign(&chunk->bdc_ptr, BIO_DMA_PAGE_SZ, bytes);
-		if (rc)
+		if (unlikely(rc))
 			chunk->bdc_ptr = NULL;
 	}
 
-	if (chunk->bdc_ptr == NULL) {
+	if (unlikely(chunk->bdc_ptr == NULL)) {
 		D_ERROR("Failed to allocate %u pages DMA buffer\n", cnt);
 		D_FREE(chunk);
 		return NULL;
 	}
 	D_INIT_LIST_HEAD(&chunk->bdc_link);
+
+	if (tls)
+		d_tm_inc_gauge(tls->btl_dma_buf, bytes);
 
 	return chunk;
 }
@@ -67,7 +76,7 @@ dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
 			break;
 
 		d_list_del_init(&chunk->bdc_link);
-		dma_free_chunk(chunk);
+		dma_free_chunk(chunk, bio_chk_sz);
 
 		D_ASSERT(buf->bdb_tot_cnt > 0);
 		buf->bdb_tot_cnt--;
@@ -270,7 +279,7 @@ iod_release_buffer(struct bio_desc *biod)
 			chunk->bdc_type);
 
 		if (dma_chunk_is_huge(chunk)) {
-			dma_free_chunk(chunk);
+			dma_free_chunk(chunk, bio_chk_sz);
 		} else if (chunk->bdc_ref == 0) {
 			chunk->bdc_pg_idx = 0;
 			D_ASSERT(bdb->bdb_used_cnt[chunk->bdc_type] > 0);
@@ -627,7 +636,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		chk->bdc_type = biod->bd_chk_type;
 		rc = iod_add_chunk(biod, chk);
 		if (rc) {
-			dma_free_chunk(chk);
+			dma_free_chunk(chk, pg_cnt);
 			return rc;
 		}
 		bio_iov_set_raw_buf(biov, chk->bdc_ptr + pg_off);

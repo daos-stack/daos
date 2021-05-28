@@ -14,8 +14,6 @@
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
-#include <gurt/telemetry_common.h>
-#include <gurt/telemetry_producer.h>
 #include "dtx_internal.h"
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
@@ -30,10 +28,6 @@ dtx_opc_to_str(crt_opcode_t opc)
 	}
 	return "dtx_unknown";
 }
-
-struct dtx_tls {
-	struct d_tm_node_t	*ot_op_total[DTX_PROTO_SRV_RPC_COUNT];
-};
 
 static void *
 dtx_tls_init(int xs_id, int tgt_id)
@@ -53,13 +47,20 @@ dtx_tls_init(int xs_id, int tgt_id)
 	/** Register different per-opcode sensors */
 	for (opc = 0; opc < DTX_PROTO_SRV_RPC_COUNT; opc++) {
 		rc = d_tm_add_metric(&tls->ot_op_total[opc], D_TM_COUNTER,
-				     "total number of processed DTX RPCs", "",
-				     "io/%u/ops/%s/total_cnt",
+				     "total number of processed DTX RPCs",
+				     "ops", "io/%u/ops/%s/total",
 				     tgt_id, dtx_opc_to_str(opc));
 		if (rc != DER_SUCCESS)
 			D_WARN("Failed to create DTX RPC cnt sensor for %s: "
 			       DF_RC"\n", dtx_opc_to_str(opc), DP_RC(rc));
 	}
+
+	rc = d_tm_add_metric(&tls->ot_op_committable, D_TM_GAUGE,
+			     "total number of committable DTX entries",
+			     "entries", "io/%u/dtx_committable", tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX committable sensor: " DF_RC"\n",
+		       DP_RC(rc));
 
 	return tls;
 }
@@ -76,12 +77,6 @@ struct dss_module_key dtx_module_key = {
 	.dmk_init	= dtx_tls_init,
 	.dmk_fini	= dtx_tls_fini,
 };
-
-static inline struct dtx_tls *
-dtx_tls_get(void)
-{
-	return dss_module_key_get(dss_tls_get(), &dtx_module_key);
-}
 
 static void
 dtx_handler(crt_rpc_t *rpc)

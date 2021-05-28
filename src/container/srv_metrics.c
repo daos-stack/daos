@@ -27,29 +27,29 @@ ds_cont_metrics_init(void)
 	memset(&ds_cont_metrics, 0, sizeof(ds_cont_metrics));
 
 	rc = d_tm_add_metric(&ds_cont_metrics.op_open_ctr, D_TM_COUNTER,
-			     "Number of times cont_open has been called", "",
-			     "container/ops/open/total");
+			     "Number of times cont_open has been called",
+			     "ops", "container/ops/open/total");
 	if (rc != 0)
 		D_ERROR("failed to add open counter: "
 			DF_RC "\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ds_cont_metrics.open_cont_gauge, D_TM_GAUGE,
-			     "Number of open container handles", "",
+			     "Number of open container handles", "hdls",
 			     "container/ops/open/active");
 	if (rc != 0)
 		D_ERROR("failed to add open cont gauge: "
 			DF_RC "\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ds_cont_metrics.op_close_ctr, D_TM_COUNTER,
-			     "Number of times cont_close has been called", "",
-			     "container/ops/close/total");
+			     "Number of times cont_close has been called",
+			     "ops", "container/ops/close/total");
 	if (rc != 0)
 		D_ERROR("failed to add close counter: "
 			DF_RC "\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ds_cont_metrics.op_destroy_ctr, D_TM_COUNTER,
-			     "Number of times cont_destroy has been called", "",
-			     "container/ops/destroy/total");
+			     "Number of times cont_destroy has been called",
+			     "ops", "container/ops/destroy/total");
 	if (rc != 0)
 		D_ERROR("failed to add close counter: "
 			DF_RC "\n", DP_RC(rc));

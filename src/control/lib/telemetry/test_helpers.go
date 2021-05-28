@@ -71,7 +71,7 @@ func setupTestMetrics(t *testing.T) (context.Context, testMetricsMap) {
 			sum:    107,
 			mean:   35.666666666666664,
 			stddev: 31.973947728319903,
-			str:    "test_gauge: 42 rpc/s, min: 1, max: 64, mean: 35.666667, sample size: 3, std dev: 31.973948",
+			str:    "test_gauge: 42 rpc/s [min: 1, max: 64, avg: 36, stddev: 32, samples: 3]",
 		},
 		MetricTypeCounter: {
 			name:  "test_counter",

@@ -30,7 +30,7 @@
 #include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
-#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
+#define MODULE_LIST	"bio,vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -184,6 +184,8 @@ modules_load(void)
 			mod = "mgmt";
 		else if (strcmp(mod, "vos") == 0)
 			mod = "vos_srv";
+		else if (strcmp(mod, "bio") == 0)
+			mod = "bio_srv";
 
 		rc = dss_module_load(mod);
 		if (rc != 0) {

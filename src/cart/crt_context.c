@@ -245,7 +245,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 
 		ret = d_tm_add_metric(&ctx->cc_timedout, D_TM_COUNTER,
 				      "Total number of timed out RPC requests",
-				      "", "net/%d/%u/req_timeout",
+				      "reqs", "net/%d/%u/req_timeout",
 				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create timed out req counter: "DF_RC
@@ -253,7 +253,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 
 		ret = d_tm_add_metric(&ctx->cc_timedout_uri, D_TM_COUNTER,
 				      "Total number of timed out URI lookup "
-				      "requests", "",
+				      "requests", "reqs",
 				      "net/%d/%u/uri_lookup_timeout",
 				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
 		if (ret)
@@ -262,7 +262,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 
 		ret = d_tm_add_metric(&ctx->cc_failed_addr, D_TM_COUNTER,
 				      "Total number of failed address "
-				      "resolution attempts", "",
+				      "resolution attempts", "reqs",
 				      "net/%d/%u/failed_addr",
 				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
 		if (ret)

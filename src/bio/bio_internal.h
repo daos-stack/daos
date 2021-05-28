@@ -25,6 +25,26 @@
 #define NVME_MONITOR_PERIOD	    (60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 #define NVME_MONITOR_SHORT_PERIOD   (3ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 
+/**
+ * BIO TLS
+ */
+
+struct bio_tls {
+	struct d_tm_node_t *btl_dma_buf;
+};
+
+extern struct dss_module_key bio_module_key;
+
+static inline struct bio_tls *
+bio_tls_get(void)
+{
+#ifdef BIO_STANDALONE
+	return NULL;
+#else
+	return dss_module_key_get(dss_tls_get(), &bio_module_key);
+#endif
+}
+
 struct bio_bulk_args {
 	void		*ba_bulk_ctxt;
 	unsigned int	 ba_bulk_perm;
@@ -115,28 +135,28 @@ struct bio_dma_buffer {
 	  "data units", D_TM_COUNTER)					\
 	X(bdh_write_cmds, "commands/host_write_cmds",			\
 	  "number of write commands completed by to the controller",	\
-	  "commands", D_TM_COUNTER)					\
+	  "cmds", D_TM_COUNTER)						\
 	X(bdh_read_cmds, "commands/host_read_cmds",			\
 	  "number of read commands completed by to the controller",	\
-	  "commands", D_TM_COUNTER)					\
+	  "cmds", D_TM_COUNTER)						\
 	X(bdh_ctrl_busy_time, "commands/ctrl_busy_time",		\
 	  "Amount of time the controller is busy with I/O commands",	\
 	  "minutes", D_TM_COUNTER)					\
 	X(bdh_media_errs, "commands/media_errs",			\
 	  "Number of unrecovered data integrity error",			\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_read_errs, "commands/read_errs",				\
-	  "Number of errors reported to the engine on read commands",      \
-	  "errors", D_TM_COUNTER)					\
+	  "Number of errors reported to the engine on read commands",	\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_write_errs, "commands/write_errs",			\
-	  "Number of errors reported to the engine on write commands",     \
-	  "errors", D_TM_COUNTER)					\
+	  "Number of errors reported to the engine on write commands",	\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_unmap_errs, "commands/unmap_errs",			\
 	  "Number of errors reported to the engine on unmap/trim commands",\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_checksum_errs, "commands/checksum_mismatch",		\
 	  "Number of checksum mismatch detected by the engine",		\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_power_cycles, "power_cycles",				\
 	  "Number of power cycles",					\
 	  "cycles", D_TM_COUNTER)					\

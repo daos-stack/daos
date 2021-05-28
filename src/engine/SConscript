@@ -9,7 +9,7 @@ def scons():
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv']
-    libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
+    libraries += ['bio_srv', 'dl', 'uuid', 'pthread', 'abt']
     libraries += ['hwloc', 'pmemobj', 'protobuf-c', 'isal']
 
     prereqs.require(denv, 'hwloc', 'argobots', 'protobufc', 'isal')
