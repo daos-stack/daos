@@ -90,28 +90,29 @@ ioil_shrink_pool(struct ioil_pool *pool)
 		if (rc != 0) {
 			D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n",
 				DP_RC(rc));
-			return;
+			return rc;
 		}
 		pool->iop_poh = DAOS_HDL_INVAL;
 	}
 	d_list_del(&pool->iop_pools);
 	D_FREE(pool);
+	return 0;
 }
 
-static void
-ioil_shrink(struct ioil_cont *cont)
+static int
+ioil_shrink_cont(struct ioil_cont *cont)
 {
 	struct ioil_pool	*pool;
 	int			rc;
 
 	if (cont->ioc_open_count != 0)
-		return;
+		return 0;
 
 	if (cont->ioc_dfs != NULL) {
 		rc = dfs_umount(cont->ioc_dfs);
 		if (rc != 0) {
 			D_ERROR("dfs_umount() failed, %d\n", rc);
-			return;
+			return rc;
 		}
 		cont->ioc_dfs = NULL;
 	}
@@ -121,7 +122,7 @@ ioil_shrink(struct ioil_cont *cont)
 		if (rc != 0) {
 			D_ERROR("daos_cont_close() failed, " DF_RC "\n",
 				DP_RC(rc));
-			return;
+			return rc;
 		}
 		cont->ioc_coh = DAOS_HDL_INVAL;
 	}
@@ -131,7 +132,7 @@ ioil_shrink(struct ioil_cont *cont)
 	D_FREE(cont);
 
 	if (!d_list_empty(&pool->iop_container_head))
-		return;
+		return 0;
 
 	ioil_shrink_pool(pool);
 }
@@ -150,7 +151,7 @@ entry_array_close(void *arg) {
 
 	/* Do not close container/pool handles at this point
 	 * to allow for re-use.
-	 * ioil_shrink(entry->fd_cont);
+	 * ioil_shrink_cont(entry->fd_cont);
 	*/
 }
 
@@ -252,9 +253,8 @@ ioil_init(void)
 	D_INIT_LIST_HEAD(&ioil_iog.iog_pools_head);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc) {
+	if (rc)
 		ioil_iog.iog_no_daos = true;
-	}
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 
@@ -286,6 +286,7 @@ ioil_fini(void)
 {
 	struct ioil_pool *pool, *pnext;
 	struct ioil_cont *cont, *cnext;
+	int rc;
 
 	ioil_iog.iog_initialized = false;
 
@@ -298,14 +299,21 @@ ioil_fini(void)
 		d_list_for_each_entry_safe(cont, cnext,
 					   &pool->iop_container_head,
 					   ioc_containers) {
-			ioil_shrink(cont);
+			/* Retry disconnect on out of memory errors, this is
+			 * mainly for fault injection testing.
+			 */
+			rc = ioil_shrink_cont(cont);
+			if (rc == -DER_NOMEM)
+				ioil_shrink_cont(cont);
 		}
 	}
 
 	/* Tidy up any pools which do not have open containers */
 	d_list_for_each_entry_safe(pool, pnext,
 				   &ioil_iog.iog_pools_head, iop_pools) {
-		ioil_shrink_pool(pool);
+		rc = ioil_shrink_pool(pool);
+		if (rc == -DER_NOMEM)
+			ioil_shrink_pool(pool);
 	}
 
 	if (ioil_iog.iog_daos_init)
@@ -737,7 +745,7 @@ obj_close:
 	dfs_release(entry->fd_dfsoh);
 
 shrink:
-	ioil_shrink(cont);
+	ioil_shrink_cont(cont);
 
 err:
 	rc = pthread_mutex_unlock(&ioil_iog.iog_lock);
