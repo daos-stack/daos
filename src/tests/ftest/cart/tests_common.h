@@ -128,7 +128,10 @@ write_completion_file(void)
 	tmp_str = strcat(dir, "/test-servers-completed.txt.");
 	completion_file = strcat(tmp_str, pid);
 
+	DBG_PRINT("Preparing to fopen completion file: %s.\n", completion_file);
+
 	fptr = fopen(completion_file, "w");
+
 	DBG_PRINT("Opened completion file to write: %s.\n", completion_file);
 
 	if (fptr == NULL) {
