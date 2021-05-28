@@ -438,7 +438,7 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 /* given a pointer @ptr to the field @member embedded into type (usually
  *  * struct) @type, return pointer to the embedding instance of @type. */
 # define container_of(ptr, type, member)		\
-	        ((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
+	 ((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 #endif
 
 #ifndef offsetof
@@ -466,11 +466,11 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 
 #ifndef min_t
 #define min_t(type, x, y) \
-	        ({ type __x = (x); type __y = (y); __x < __y ? __x : __y; })
+	     ({ type __x = (x); type __y = (y); __x < __y ? __x : __y; })
 #endif
 #ifndef max_t
 #define max_t(type, x, y) \
-	        ({ type __x = (x); type __y = (y); __x > __y ? __x : __y; })
+	     ({ type __x = (x); type __y = (y); __x > __y ? __x : __y; })
 #endif
 
 #define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
