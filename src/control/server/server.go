@@ -59,6 +59,8 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 type server struct {
 	log         *logging.LeveledLogger
 	cfg         *config.Server
+	hostname    string
+	runningUser string
 	faultDomain *system.FaultDomain
 	ctlAddr     *net.TCPAddr
 	netDevClass uint32
@@ -81,6 +83,16 @@ type server struct {
 }
 
 func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, errors.Wrap(err, "get hostname")
+	}
+
+	cu, err := user.Current()
+	if err != nil {
+		return nil, errors.Wrap(err, "get username")
+	}
+
 	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
 	// Create storage subsystem providers.
@@ -90,6 +102,8 @@ func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Serv
 	return &server{
 		log:          log,
 		cfg:          cfg,
+		hostname:     hostname,
+		runningUser:  cu.Username,
 		faultDomain:  faultDomain,
 		harness:      harness,
 		scmProvider:  scmProvider,
@@ -188,12 +202,7 @@ func (srv *server) initNetwork(ctx context.Context) error {
 func (srv *server) initStorage() error {
 	defer srv.logDuration(track("time to init storage"))
 
-	runningUser, err := user.Current()
-	if err != nil {
-		return errors.Wrap(err, "unable to lookup current user")
-	}
-
-	if err := prepBdevStorage(srv, runningUser, iommuDetected(), getHugePageInfo); err != nil {
+	if err := prepBdevStorage(srv, iommuDetected(), getHugePageInfo); err != nil {
 		return err
 	}
 
@@ -213,13 +222,7 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 	// Indicate whether VMD devices have been detected and can be used.
 	cfg.Storage.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
 
-	// TODO: ClassProvider should be encapsulated within bdevProvider
-	bcp, err := bdev.NewClassProvider(srv.log, cfg.Storage.SCM.MountPoint, &cfg.Storage.Bdev)
-	if err != nil {
-		return nil, err
-	}
-
-	engine := NewEngineInstance(srv.log, bcp, srv.scmProvider, joinFn,
+	engine := NewEngineInstance(srv.log, srv.bdevProvider, srv.scmProvider, joinFn,
 		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
 	if idx == 0 {
 		configureFirstEngine(ctx, engine, srv.sysdb, joinFn)
@@ -240,7 +243,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 			return err
 		}
 
-		registerEngineCallbacks(engine, srv.pubSub, &allStarted)
+		registerEngineEventCallbacks(engine, srv.hostname, srv.pubSub, &allStarted)
 
 		if err := srv.harness.AddInstance(engine); err != nil {
 			return err
@@ -291,16 +294,16 @@ func (srv *server) setupGrpc() error {
 }
 
 func (srv *server) registerEvents() {
-	registerInitialSubscriptions(srv)
+	registerFollowerSubscriptions(srv)
 
 	srv.sysdb.OnLeadershipGained(func(ctx context.Context) error {
-		srv.log.Infof("MS leader running on %s", hostname())
+		srv.log.Infof("MS leader running on %s", srv.hostname)
 		srv.mgmtSvc.startJoinLoop(ctx)
 		registerLeaderSubscriptions(srv)
 		return nil
 	})
 	srv.sysdb.OnLeadershipLost(func() error {
-		srv.log.Infof("MS leader no longer running on %s", hostname())
+		srv.log.Infof("MS leader no longer running on %s", srv.hostname)
 		registerFollowerSubscriptions(srv)
 		return nil
 	})

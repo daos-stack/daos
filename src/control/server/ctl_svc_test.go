@@ -44,14 +44,10 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 	}
 
 	for _, engineCfg := range cfg.Engines {
-		bp, err := bdev.NewClassProvider(log, "", &engineCfg.Storage.Bdev)
-		if err != nil {
-			t.Fatal(err)
-		}
 		rCfg := new(engine.TestRunnerConfig)
 		rCfg.Running.SetTrue()
 		runner := engine.NewTestRunner(rCfg, engineCfg)
-		instance := NewEngineInstance(log, bp, cs.scm, nil, runner)
+		instance := NewEngineInstance(log, cs.bdev, cs.scm, nil, runner)
 		instance.setSuperblock(&Superblock{
 			Rank: system.NewRankPtr(engineCfg.Rank.Uint32()),
 		})

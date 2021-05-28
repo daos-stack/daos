@@ -411,10 +411,18 @@ struct  _Mgmt__PoolExtendResp
    * DAOS error code
    */
   int32_t status;
+  /*
+   * SCM allocated on rank(s)
+   */
+  uint64_t scm_bytes;
+  /*
+   * NVMe allocated on rank(s)
+   */
+  uint64_t nvme_bytes;
 };
 #define MGMT__POOL_EXTEND_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_resp__descriptor) \
-    , 0 }
+    , 0, 0, 0 }
 
 
 /*
