@@ -225,7 +225,7 @@ daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 		d_iov_t tmp;
 
 		d_iov_set(&tmp, buf, buf_len);
-		C_TRACE("Updated csum(type=%s) for'"DF_KEY"'\n",
+		C_TRACE("Updated csum(type=%s) for "DF_KEY"\n",
 			daos_csummer_get_name(obj), DP_KEY(&tmp));
 	}
 
@@ -756,7 +756,6 @@ calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov,
 	if (rc != 0) {
 		D_ERROR("daos_csummer_update error: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(done, rc);
-
 	}
 
 	rc = daos_csummer_finish(csummer);
@@ -812,7 +811,7 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 		return rc;
 	}
 
-	iods_csums_nr = (uint32_t) rc;
+	iods_csums_nr = (uint32_t)rc;
 
 	for (i = 0; i < iods_csums_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
@@ -882,7 +881,7 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 	if (csum_info == NULL)
 		return -DER_NOMEM;
 
-	dkey_csum_buf = (uint8_t *) &csum_info[1];
+	dkey_csum_buf = (uint8_t *)&csum_info[1];
 
 	ci_set(csum_info, dkey_csum_buf, size, size, 1, CSUM_NO_CHUNK, type);
 
@@ -900,7 +899,6 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 	return rc;
 }
 
-
 void
 daos_csummer_free_ic(struct daos_csummer *obj, struct dcs_iod_csums **p_cds)
 {
@@ -908,7 +906,6 @@ daos_csummer_free_ic(struct daos_csummer *obj, struct dcs_iod_csums **p_cds)
 		return;
 	D_FREE((*p_cds));
 }
-
 
 void
 daos_csummer_free_ci(struct daos_csummer *obj, struct dcs_csum_info **p_cis)
@@ -1162,13 +1159,13 @@ uint64_t
 ci_buf2uint64(const uint8_t *buf, uint16_t len)
 {
 	if (len >= 8)
-		return *(uint64_t *) buf;
+		return *(uint64_t *)buf;
 	if (len >= 4)
-		return *(uint32_t *) buf;
+		return *(uint32_t *)buf;
 	if (len >= 2)
-		return *(uint16_t *) buf;
+		return *(uint16_t *)buf;
 	if (len == 1)
-		return *(uint16_t *) buf;
+		return *(uint16_t *)buf;
 
 	return 0;
 }
@@ -1250,6 +1247,7 @@ csum_chunk_align_floor(daos_off_t off, size_t chunksize)
 	D_ASSERT(chunksize != 0);
 	return off - (off % chunksize);
 }
+
 daos_off_t
 csum_chunk_align_ceiling(daos_off_t off, size_t chunksize)
 {
