@@ -129,15 +129,14 @@ write_completion_file(void)
 	completion_file = strcat(tmp_str, pid);
 
 	fptr = fopen(completion_file, "w");
-
 	DBG_PRINT("Opened completion file to write: %s.\n", completion_file);
 
-	fclose(fptr);
 	if (fptr == NULL) {
-		printf("Error opening completion file for writing.\n");
+		D_ERROR("Error opening completion file for writing.\n");
 		return;
 	}
 	DBG_PRINT("Wrote completion file: %s.\n", completion_file);
+	fclose(fptr);
 }
 
 
