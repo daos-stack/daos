@@ -121,7 +121,7 @@ type (
 		msRequest
 		unaryRequest
 		retryableRequest
-		Name       string
+		Label      string
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList
@@ -622,10 +622,6 @@ type PoolExtendReq struct {
 	msRequest
 	UUID  string
 	Ranks []system.Rank
-	// TEMP SECTION
-	ScmBytes  uint64
-	NvmeBytes uint64
-	// END TEMP SECTION
 }
 
 // PoolExtend will extend the DAOS pool by the specified ranks.

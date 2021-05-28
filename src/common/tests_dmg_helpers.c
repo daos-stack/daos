@@ -344,6 +344,45 @@ out:
 }
 
 int
+dmg_pool_set_prop(const char *dmg_config_file,
+		  const char *prop_name, const char *prop_value,
+		  const uuid_t pool_uuid)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	uuid_unparse_lower(pool_uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "--pool=%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "--name=%s ", prop_name);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "--value=%s ", prop_value);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool set-prop", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
 dmg_pool_create(const char *dmg_config_file,
 		uid_t uid, gid_t gid, const char *grp,
 		const d_rank_list_t *tgts,
@@ -443,6 +482,12 @@ dmg_pool_create(const char *dmg_config_file,
 					    "--acl-file=%s ", tmp_name);
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_LABEL);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--label=%s ",
+					    entry->dpe_str);
 		}
 	}
 

@@ -1514,6 +1514,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		map_comp.co_id = (p - uuids) + num_comps;
 		map_comp.co_rank = target_addrs->rl_ranks[i];
 		map_comp.co_ver = map_version;
+		map_comp.co_in_ver = map_version;
 		map_comp.co_fseq = 1;
 		map_comp.co_flags = PO_COMPF_NONE;
 		map_comp.co_nr = dss_tgt_nr;
@@ -1542,6 +1543,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
 			map_comp.co_rank = target_addrs->rl_ranks[i];
 			map_comp.co_ver = map_version;
+			map_comp.co_in_ver = map_version;
 			map_comp.co_fseq = 1;
 			map_comp.co_flags = PO_COMPF_NONE;
 			map_comp.co_nr = 1;

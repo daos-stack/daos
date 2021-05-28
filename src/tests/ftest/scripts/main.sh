@@ -220,10 +220,13 @@ if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
     fi
 fi
 
+# need to increase the number of oopen files (on EL8 at least)
+ulimit -n 4096
 
 launch_args="-jcrisa"
 # can only process cores on EL7 currently
-if [ "$(lsb_release -s -i)" = "CentOS" ]; then
+if [ "$(lsb_release -s -i)" = "CentOS" ] ||
+   [ "$(lsb_release -s -i)" = "openSUSE" ]; then
     launch_args="-jcrispa"
 fi
 

@@ -32,6 +32,12 @@ func FormatTimeNoMicro(t time.Time) string {
 	return t.Format(iso8601NoMicro)
 }
 
+// ParseTime returns time.Time object from ISO8601 formatted timestamp with
+// microsecond resolution.
+func ParseTime(ts string) (time.Time, error) {
+	return time.Parse(iso8601, ts)
+}
+
 // ExpBackoffWithJitter is like ExpBackoff but allows for a custom
 // amount of jitter to be specified.
 func ExpBackoffWithJitter(base, jitter time.Duration, cur, limit uint64) time.Duration {
