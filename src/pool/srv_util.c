@@ -381,7 +381,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 		/*
 		 * The SMD pool info could be inconsistent with global pool
 		 * info when pool creation/destroy partially succeed or fail.
-		 * For exmaple: If a pool destroy happened after a blobstore
+		 * For example: If a pool destroy happened after a blobstore
 		 * is torndown for faulty SSD, the blob and SMD info for the
 		 * affected pool targets will be left behind.
 		 *
