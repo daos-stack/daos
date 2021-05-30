@@ -32,7 +32,7 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_CONT_MD_VERSION 2
+#define DS_CONT_MD_VERSION 1
 
 /* Lowest compatible layout version */
 #define DS_CONT_MD_VERSION_LOW 1
@@ -45,16 +45,8 @@
  * ds_cont_prop_version stores the version of the whole layout.
  */
 extern d_iov_t ds_cont_prop_version;		/* uint32_t */
-extern d_iov_t ds_cont_prop_cuuids;		/* container UUIDs KVS */
 extern d_iov_t ds_cont_prop_conts;		/* container KVS */
 extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
-
-/*
- * Container UUIDs KVS (RDB_KVS_GENERIC)
- *
- * This maps container labels (string, without '\0') to container UUID (uuid_t).
- * Used to get UUID key for lookup in container KVS.
- */
 
 /*
  * Container KVS (RDB_KVS_GENERIC)

@@ -129,7 +129,6 @@ typedef struct {
 	struct test_pool	pool;
 	char			*pool_label;
 	uuid_t			co_uuid;
-	char			*cont_label;
 	unsigned int		uid;
 	unsigned int		gid;
 	daos_handle_t		eq;
