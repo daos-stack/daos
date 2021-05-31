@@ -242,8 +242,8 @@ bio_bs_hold(struct bio_blobstore *bbs)
 	if (bbs->bb_state == BIO_BS_STATE_TEARDOWN ||
 	    bbs->bb_state == BIO_BS_STATE_OUT ||
 	    bbs->bb_state == BIO_BS_STATE_SETUP) {
-		D_ERROR("Blobstore %p is in %s state, reject request.\n",
-			bbs, bio_state_enum_to_str(bbs->bb_state));
+		D_ERROR("Blobstore %p is in %d state, reject request.\n",
+			bbs, bbs->bb_state);
 		rc = -DER_DOS;
 		goto out;
 	}
