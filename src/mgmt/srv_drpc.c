@@ -251,7 +251,7 @@ create_pool_props_from_req(daos_prop_t **out_prop,
 	uint32_t		entries = 0;
 	uint32_t		idx = 0;
 	int			rc = 0;
-	int 			i;
+	int			i;
 
 	if (req->acl != NULL && req->n_acl > 0) {
 		rc = daos_acl_from_strs((const char **)req->acl, req->n_acl,

@@ -25,8 +25,8 @@
 static enum daos_media_type_t
 policy_io_size(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 {
-	enum daos_media_type_t 	medium;
-	uint32_t 		scm_threshold;
+	enum daos_media_type_t	medium;
+	uint32_t		scm_threshold;
 
 	if (pool->vp_vea_info == NULL)
 		return DAOS_MEDIA_SCM;

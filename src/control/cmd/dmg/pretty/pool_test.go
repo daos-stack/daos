@@ -157,11 +157,11 @@ func TestPretty_PrintPoolCreateResp(t *testing.T) {
 Pool created with 5.66%%%%,94.34%%%% storage tier ratio
 ---------------------------------------------------
   UUID                 : %s
-  Service Ranks        : [0-2]                               
-  Storage Ranks        : [0-3]                               
-  Total Size           : 42 GB                               
-  Storage tier 0 (SCM) : 2.4 GB (600 MB / rank)              
-  Storage tier 1 (NVMe): 40 GB (10 GB / rank)                
+  Service Ranks        : [0-2]
+  Storage Ranks        : [0-3]
+  Total Size           : 42 GB
+  Storage tier 0 (SCM) : 2.4 GB (600 MB / rank)
+  Storage tier 1 (NVMe): 40 GB (10 GB / rank)
 
 `, common.MockUUID()),
 		},
@@ -178,10 +178,10 @@ Pool created with 5.66%%%%,94.34%%%% storage tier ratio
 Pool created with 100.00%%%% storage tier ratio
 ---------------------------------------------
   UUID                 : %s
-  Service Ranks        : [0-2]                               
-  Storage Ranks        : [0-3]                               
-  Total Size           : 2.4 GB                              
-  Storage tier 0 (SCM) : 2.4 GB (600 MB / rank)              
+  Service Ranks        : [0-2]
+  Storage Ranks        : [0-3]
+  Total Size           : 2.4 GB
+  Storage tier 0 (SCM) : 2.4 GB (600 MB / rank)
 
 `, common.MockUUID()),
 		},
@@ -294,10 +294,10 @@ no pools in system
 				},
 			},
 			expPrintStr: `
-Pool     Size   Used Imbalance Disabled 
-----     ----   ---- --------- -------- 
-00000001 6.0 TB 83%  12%       0/16     
-two      6.0 TB 83%  12%       8/64     
+Pool     Size   Used Imbalance Disabled
+----     ----   ---- --------- --------
+00000001 6.0 TB 83%  12%       0/16
+two      6.0 TB 83%  12%       8/64
 
 `,
 		},
@@ -326,10 +326,10 @@ two      6.0 TB 83%  12%       8/64
 				},
 			},
 			expPrintStr: `
-Pool Size   Used Imbalance Disabled 
----- ----   ---- --------- -------- 
-one  6.0 TB 83%  12%       0/16     
-two  100 GB 80%  12%       8/64     
+Pool Size   Used Imbalance Disabled
+---- ----   ---- --------- --------
+one  6.0 TB 83%  12%       0/16
+two  100 GB 80%  12%       8/64
 
 `,
 		},
@@ -355,9 +355,9 @@ two  100 GB 80%  12%       8/64
 			expPrintStr: `
 Query on pool "two" unsuccessful, error: "stats unavailable"
 
-Pool Size   Used Imbalance Disabled 
----- ----   ---- --------- -------- 
-one  6.0 TB 83%  12%       0/16     
+Pool Size   Used Imbalance Disabled
+---- ----   ---- --------- --------
+one  6.0 TB 83%  12%       0/16
 
 `,
 		},
@@ -389,9 +389,9 @@ one  6.0 TB 83%  12%       0/16
 Query on pool "00000002" unsuccessful, error: "stats unavailable"
 Query on pool "three" unsuccessful, status: "DER_UNINIT"
 
-Pool Size   Used Imbalance Disabled 
----- ----   ---- --------- -------- 
-one  6.0 TB 83%  12%       0/16     
+Pool Size   Used Imbalance Disabled
+---- ----   ---- --------- --------
+one  6.0 TB 83%  12%       0/16
 
 `,
 		},
@@ -415,9 +415,9 @@ no pools in system
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
------ ----                                 ------- -------- -------- ------------- --------- --------- -------------- -------- 
--     00000001-0001-0001-0001-000000000001 N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
+Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled
+----- ----                                 ------- -------- -------- ------------- --------- --------- -------------- --------
+-     00000001-0001-0001-0001-000000000001 N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16
 
 `,
 		},
@@ -444,10 +444,10 @@ Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalan
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
------ ----                                 ------- -------- -------- ------------- --------- --------- -------------- -------- 
-one   00000001-0001-0001-0001-000000000001 [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
-two   00000002-0002-0002-0002-000000000002 [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64     
+Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled
+----- ----                                 ------- -------- -------- ------------- --------- --------- -------------- --------
+one   00000001-0001-0001-0001-000000000001 [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16
+two   00000002-0002-0002-0002-000000000002 [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64
 
 `,
 		},
