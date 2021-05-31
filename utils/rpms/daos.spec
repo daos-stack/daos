@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.0
-Release:       15%{?relval}%{?dist}
+Version:       1.3.101
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -246,6 +246,12 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %description firmware
 This is the package needed to manage server storage firmware on DAOS servers.
 
+%if (0%{?suse_version} > 0)
+%global __debug_package 1
+%global _debuginfo_subpackages 0
+%debug_package
+%endif
+
 %prep
 %autosetup
 
@@ -332,14 +338,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{conf_dir}
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
-%{_libdir}/libdaos_common.so
-%{_libdir}/*.so.*
-# TODO: this should move from daos_srv to daos
-%{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
 %dir %{_libdir}/%{name}
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
+%{_libdir}/libcart.so.*
+%{_libdir}/libgurt.so.*
 %doc
 
 %files server
@@ -366,6 +370,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos_size.so
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
+%{_libdir}/daos_srv/libplacement.so
 %{_libdir}/libdaos_common_pmem.so
 %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
@@ -376,10 +381,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
 %endif
 %{_datadir}/%{name}
-%{_datadir}/%{name}/ioil-ld-opts
+%exclude %{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 
 %files client
+%{_libdir}/libdaos_common.so
+%{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg
@@ -446,6 +453,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files devel
 %{_includedir}/*
 %{_libdir}/libdaos.so
+%{_libdir}/libgurt.so
+%{_libdir}/libcart.so
 %{_libdir}/*.a
 %{_libdir}/*.so
 
@@ -454,6 +463,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Thu May 20 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-101-2
+- Remove client libs from common package
+
+* Wed May 19 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.101-1
+- Version bump to 1.3.101 for 2.0 test build 1
+
+* Fri May 07 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-16
+- Enable debuginfo package building on SUSE platforms
+
 * Thu May 06 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-15
 - Update to build on EL8
 

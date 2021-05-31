@@ -217,11 +217,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					}
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
-				bdevProvider, err := bdev.NewClassProvider(log,
-					engineCfg.Storage.SCM.MountPoint, &engineCfg.Storage.Bdev)
-				if err != nil {
-					t.Fatal(err)
-				}
+				bdevProvider := bdev.NewMockProvider(log, &bdev.MockBackendConfig{})
 				scmProvider := scm.NewMockProvider(log, nil, &scm.MockSysConfig{IsMountedBool: true})
 
 				idx := uint32(i)

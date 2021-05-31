@@ -12,13 +12,69 @@ LABEL maintainer="daos@daos.groups.io"
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
+# Switch to using DNF instead of yum.
+#
+# If a local distro repository is supplied, then we should use it
+# and disable using the distro repositories.
+# The Docker image starts out with the DISTRO provided GPG keys
+# on the disk, but not installed.  These must be installed before
+# adding any repo that needs GPG keys but does not provide meta
+# data for installing those keys.  Then the epel-release package
+# version from the extras repository must be installed and the
+# GPG key it provides must be installed.
+ARG REPO_URL=""
+ARG REPO_DISTRO=""
+RUN if [ -n "$REPO_DISTRO" ]; then                              \
+      rpm --import /etc/pki/rpm-gpg/* ;                         \
+      MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
+      MY_NAME="${MY_REPO#*//}";                                 \
+      MY_NAME="${MY_NAME//\//_}";                               \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=0\n\
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
+      sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
+          -i /etc/yum.conf;                                     \
+      yum -y install --disablerepo=base,extras,updates          \
+             dnf dnf-plugins-core epel-release-7-11;            \
+      rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7;         \
+      dnf config-manager --assumeyes --quiet                    \
+          --disable base epel extras updates;                   \
+    else                                                        \
+      yum -y install dnf dnf-plugins-core epel-release-7-11;    \
+    fi;                                                         \
+    dnf -y upgrade epel-release;                                \
+    yum clean all;                                              \
+    dnf clean all
+
+# If a local DAOS repository is supplied, then we should use it
+# This is mainly for quickbuilds
+ARG REPO_DAOS=""
+RUN if [ -n "$REPO_DAOS" ]; then                                \
+      MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
+      MY_NAME="${MY_REPO#*//}";                                 \
+      MY_NAME="${MY_NAME//\//_}";                               \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=0\n\
+exclude=fuse-3* fuse-devel-3* fuse-libs-3* fuse-debuginfo-3* ompi*\n\
+gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
+    fi
+
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
-RUN yum -y install deltarpm && \
-    yum -y install epel-release && \
-    yum -y upgrade && \
-    yum -y install \
+# Switch to dnf as it seems a bit faster.
+# libatomic should be in this list, but can not for now due to CI
+# post provisioning issue.
+# *** Keep these in as much alphbetical order as possible ***
+RUN dnf -y install deltarpm && \
+    dnf -y upgrade && \
+    dnf -y install \
         boost-python36-devel \
         clang-analyzer \
         cmake \
@@ -57,6 +113,7 @@ RUN yum -y install deltarpm && \
         ndctl \
         numactl \
         numactl-devel \
+        openmpi3-devel \
         openssl-devel \
         pandoc \
         patch \
@@ -65,12 +122,10 @@ RUN yum -y install deltarpm && \
         python36-Cython \
         python36-devel \
         python36-distro \
-        python36-jira \
         python36-junit_xml \
         python36-numpy \
         python36-paramiko \
         python36-pylint \
-        python36-requests \
         python36-requests \
         python36-tabulate \
         python36-pyxattr \
@@ -80,23 +135,21 @@ RUN yum -y install deltarpm && \
         sudo \
         valgrind-devel \
         yasm && \
-    yum clean all
-
-# Install this individually because of potential conflicts
-RUN yum -y install openmpi3-devel && yum clean all
+    dnf clean all
 
 ARG UID=1000
 
 # Add DAOS users
-RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home/daos daos_server
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
+            --home /home/daos daos_server
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&	\
-    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&	\
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
 # Dependencies
@@ -106,31 +159,7 @@ ARG JENKINS_URL=""
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS=""
 ARG REPOS=""
-ARG REPO_URL=""
-ARG REPO_EL7=""
-# Need to clean this up later
-RUN if [ -n "$REPO_URL" ]; then                                                \
-      version=$(sed -e 's/.* \([0-9\.]*\)\.[0-9]*.*/\1/' /etc/centos-release); \
-      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";         \
-      MY_NAME="${MY_REPO#*//}";                                                \
-      MY_NAME="${MY_NAME//\//_}";                                              \
-      echo -e "[${MY_NAME}]\n\
-name=created from ${MY_REPO}\n\
-baseurl=${MY_REPO}\n\
-enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;                \
-      yum-config-manager --assumeyes --quiet                                  \
-                         --disable base epel extra updates;                   \
-    fi
 RUN if $QUICKBUILD; then                                                      \
-        MY_REPO="${REPO_URL}${REPO_EL7}";                                     \
-        MY_NAME="${MY_REPO#*//}";                                             \
-        MY_NAME="${MY_NAME//\//_}";                                           \
-        echo -e "[${MY_NAME}]\n\
-name=created from ${MY_REPO}\n\
-baseurl=${MY_REPO}\n\
-enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
         for repo in $REPOS; do                                                \
             branch="master";                                                  \
             build_number="lastSuccessfulBuild";                               \
@@ -150,7 +179,8 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
         done;                                                                 \
         echo "Installing: $QUICKBUILD_DEPS";                                  \
         echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |             \
-          xargs -0 yum -y install;                                            \
+          xargs -0 dnf -y install;                                            \
+        dnf clean all;                                                        \
     fi
 
 ARG BULLSEYE=""
@@ -171,11 +201,10 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
 # seconds.
 WORKDIR /home/daos/pre
 COPY SConstruct .
-COPY utils/sl utils/sl
+COPY site_scons site_scons
 COPY utils/build.config utils/
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -187,8 +216,9 @@ ARG DAOS_DEPS_BUILD=yes
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    yum clean all; }
+    { dnf -y upgrade \
+          --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+      dnf clean all; }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
@@ -200,18 +230,19 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 USER root:root
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST
-RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    yum clean all
+RUN dnf -y upgrade \
+        --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    dnf clean all
 USER daos_server:daos_server
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
+COPY site_scons site_scons
 COPY utils utils
 COPY src src
 USER root:root
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
-RUN ln -s utils/sl site_scons
 
 # select compiler to use
 ARG COMPILER=gcc

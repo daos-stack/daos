@@ -88,9 +88,6 @@ class OSADmgNegativeTest(OSAUtils):
         for val in range(0, num_pool):
             for i in range(len(self.test_seq)):
                 self.pool = pool[val]
-                if extend is True:
-                    scm_size = self.pool.scm_size
-                    nvme_size = self.pool.nvme_size
                 rank = self.test_seq[i][0]
                 target = "{}".format(self.test_seq[i][1])
                 expected_result = "{}".format(self.test_seq[i][2])
@@ -98,10 +95,7 @@ class OSADmgNegativeTest(OSAUtils):
                 # There is no need to extend rank 0
                 # Avoid DER_ALREADY
                 if extend is True and rank != "0":
-                    output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                          rank,
-                                                          scm_size,
-                                                          nvme_size)
+                    output = self.dmg_command.pool_extend(self.pool.uuid, rank)
                     self.log.info(output)
                     self.validate_results(expected_result, output.stdout_text)
                 if (extend is False and rank in ["4","5"]):

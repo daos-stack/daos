@@ -400,6 +400,9 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	uuid_t		target_uuids[] = {"12345678", "23456789",
 					  "34567890", "4567890a" };
 
+	/* Only support add same node/target domain for the moment */
+	assert_int_equal(ctx->target_nr, target_count);
+	assert_int_equal(ctx->node_nr, node_count);
 	if (domain_count > max_domains)
 		fail_msg("Only %lu domains can be added", max_domains);
 
@@ -453,8 +456,6 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	assert_success(rc);
 
 	ctx->domain_nr += domain_count;
-	ctx->target_nr += target_count;
-	ctx->node_nr += node_count;
 
 	jtc_print_pool(ctx);
 
@@ -1557,7 +1558,7 @@ one_server_is_added(void **state)
 
 	jtc_init(&ctx, 4, 1, 3, OC_UNKNOWN, g_verbose);
 	/* set oid so that it would place a shard in one of the last targets */
-	assert_success(jtc_pool_map_extend(&ctx, 1, 1, 4));
+	assert_success(jtc_pool_map_extend(&ctx, 1, 1, 3));
 
 	/* Make sure that the oid will place on the added target ids */
 	is_true(jtc_set_oid_with_shard_in_targets(&ctx, new_target_ids,
@@ -1694,19 +1695,18 @@ placement_handles_multiple_states_with_addition(void **state)
 {
 	struct jm_test_ctx	 ctx;
 
-	jtc_init_with_layout(&ctx, 3, 1, 8, OC_RP_2G1, g_verbose);
+	jtc_init_with_layout(&ctx, 3, 1, 4, OC_RP_3G1, g_verbose);
 	/* first shard goes down, rebuilt, then back up */
 	jtc_set_status_on_shard_target(&ctx, DOWN, 0);
 	jtc_set_status_on_shard_target(&ctx, DOWNOUT, 0);
 	jtc_set_status_on_shard_target(&ctx, UP, 0);
+
+	/* a new domain is added */
+	jtc_pool_map_extend(&ctx, 1, 1, 4);
+
 	/* second shard goes down */
 	jtc_set_status_on_shard_target(&ctx, DOWN, 1);
 
-	/* a new domain is added */
-	jtc_pool_map_extend(&ctx, 1, 1, 1);
-
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6301: Hits D_ASSERT(original->ol_nr == new->ol_nr)");
 	assert_success(jtc_create_layout(&ctx));
 
 	is_false(jtc_layout_has_duplicate(&ctx));
@@ -1715,11 +1715,14 @@ placement_handles_multiple_states_with_addition(void **state)
 	uint32_t rebuilding = jtc_get_layout_rebuild_count(&ctx);
 
 	/* 1 each for down, up, new ... maybe? */
-	assert_int_equal(3, rebuilding);
+	assert_true(rebuilding == 2 || rebuilding == 3);
 
-	assert_int_equal(ctx.rebuild.out_nr, 1);
+	/* Both DOWN and UP target will be remapped during remap */
+	assert_int_equal(ctx.rebuild.out_nr, 2);
 	assert_int_equal(ctx.reint.out_nr, 1);
-	assert_int_equal(ctx.new.out_nr, 1);
+
+	/* JCH might cause multiple shards remap to the new target */
+	assert_true(ctx.new.out_nr >= 1);
 
 	jtc_fini(&ctx);
 }

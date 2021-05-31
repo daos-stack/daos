@@ -110,8 +110,11 @@ create_entry(struct dfuse_projection_info *fs_handle,
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	entry->attr_timeout = parent->ie_dfs->dfs_attr_timeout;
-	entry->entry_timeout = parent->ie_dfs->dfs_attr_timeout;
+	entry->attr_timeout = parent->ie_dfs->dfc_attr_timeout;
+	if (S_ISDIR(ie->ie_stat.st_mode))
+		entry->entry_timeout = parent->ie_dfs->dfc_dentry_dir_timeout;
+	else
+		entry->entry_timeout = parent->ie_dfs->dfc_dentry_timeout;
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
@@ -158,6 +161,9 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		DFUSE_TRA_DEBUG(inode,
 				"Maybe updating parent inode %#lx dfs_ino %#lx",
 				entry->ino, ie->ie_dfs->dfs_ino);
+
+		/** update the chunk size and oclass of inode entry */
+		dfs_obj_copy_attr(inode->ie_obj, ie->ie_obj);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");

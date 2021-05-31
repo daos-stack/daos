@@ -320,6 +320,7 @@ co_properties(void **state)
 	prop->dpp_entries[0].dpe_str = strdup(label);
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
 	prop->dpp_entries[1].dpe_val = snapshot_max;
+	D_STRNDUP(arg->cont_label, label, DAOS_PROP_LABEL_MAX_LEN);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
@@ -580,7 +581,7 @@ co_acl(void **state)
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_int_equal(rc, 0);
 
-	print_message("Case 1: initial non-default ACL/ownership\n");
+	print_message("CONTACL1: initial non-default ACL/ownership\n");
 	/*
 	 * Want to set up with a non-default ACL and owner/group.
 	 * This ACL gives the effective user permissions to interact
@@ -628,7 +629,15 @@ co_acl(void **state)
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
-	print_message("Case 2: overwrite ACL\n");
+	print_message("CONTACL2: overwrite ACL with bad inputs\n");
+	/* Invalid inputs */
+	rc = daos_cont_overwrite_acl(arg->coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = daos_cont_overwrite_acl(DAOS_HDL_INVAL, exp_acl, NULL);
+	assert_rc_equal(rc, -DER_NO_HDL);
+
+	print_message("CONTACL3: overwrite ACL\n");
 	/*
 	 * Modify the existing ACL - don't want to clobber the user entry
 	 * though.
@@ -656,8 +665,13 @@ co_acl(void **state)
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
-	print_message("Case 3: update ACL\n");
+	print_message("CONTACL4: update ACL with bad inputs\n");
+	rc = daos_cont_update_acl(DAOS_HDL_INVAL, update_acl, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = daos_cont_update_acl(arg->coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
 
+	print_message("CONTACL5: update ACL\n");
 	/* Add one new entry and update an entry already in our ACL */
 	update_acl = daos_acl_create(NULL, 0);
 	add_ace_with_perms(&update_acl, DAOS_ACL_USER, "friendlyuser@",
@@ -679,12 +693,18 @@ co_acl(void **state)
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
-	print_message("Case 4: delete entry from ACL with bad handle\n");
+	print_message("CONTACL6: delete entry from ACL with bad inputs\n");
 	rc = daos_cont_delete_acl(DAOS_HDL_INVAL, type_to_remove,
 				  name_to_remove, NULL);
 	assert_rc_equal(rc, -DER_NO_HDL);
 
-	print_message("Case 5: delete entry from ACL\n");
+	rc = daos_cont_delete_acl(arg->coh, -1, name_to_remove, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = daos_cont_delete_acl(arg->coh, type_to_remove, "bad", NULL);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	print_message("CONTACL7: delete entry from ACL\n");
 
 	/* Update expected ACL to remove the entry */
 	assert_rc_equal(daos_acl_remove_ace(&exp_acl, type_to_remove,
@@ -696,7 +716,7 @@ co_acl(void **state)
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
-	print_message("Case 6: delete entry no longer in ACL\n");
+	print_message("CONTACL8: delete entry no longer in ACL\n");
 
 	/* try deleting same entry again - should be gone */
 	rc = daos_cont_delete_acl(arg->coh, type_to_remove, name_to_remove,
@@ -816,12 +836,6 @@ co_create_access_denied(void **state)
 		uuid_generate(arg->co_uuid);
 		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL, NULL);
 		assert_rc_equal(rc, -DER_NO_PERM);
-
-		/*
-		 * Clear the UUID to avoid attempts to destroy, since it wasn't
-		 * created
-		 */
-		uuid_clear(arg->co_uuid);
 	}
 
 	uuid_clear(arg->co_uuid); /* wasn't actually created */
@@ -991,17 +1005,17 @@ co_open_access(void **state)
 
 	print_message("cont ACL gives the user RO, they want RW\n");
 	expect_cont_open_access(arg, DAOS_ACL_PERM_READ, DAOS_COO_RW,
-				   -DER_NO_PERM);
+				-DER_NO_PERM);
 
 	print_message("cont ACL gives the user RO, they want RO\n");
 	expect_cont_open_access(arg, DAOS_ACL_PERM_READ, DAOS_COO_RO,
-				   0);
+				0);
 
 	print_message("cont ACL gives the user RW, they want RO\n");
 	expect_cont_open_access(arg,
-				   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
-				   DAOS_COO_RO,
-				   0);
+				DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				DAOS_COO_RO,
+				0);
 
 	print_message("cont ACL gives the user RW, they want RW\n");
 	expect_cont_open_access(arg,

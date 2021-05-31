@@ -932,7 +932,8 @@ ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	int			rc = 0;
 
 	/* Only used for exclude the rank for the moment */
-	if (src != CRT_EVS_GRPMOD || type != CRT_EVT_DEAD ||
+	if ((src != CRT_EVS_GRPMOD && src != CRT_EVS_SWIM) ||
+	    type != CRT_EVT_DEAD ||
 	    pool_disable_exclude) {
 		D_DEBUG(DB_MGMT, "ignore src/type/exclude %u/%u/%d\n",
 			src, type, pool_disable_exclude);
@@ -1142,7 +1143,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	for (i = 0; i < doms_cnt; i++) {
 		struct swim_member_state state;
 
-		/* Only check if UPIN server is excluded for now */
+		/* Only check if UPIN server is excluded or dead for now */
 		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
 			continue;
 
@@ -1154,10 +1155,15 @@ pool_svc_check_node_status(struct pool_svc *svc)
 			break;
 		}
 
+		/* Since there is a big chance the INACTIVE node will become
+		 * ACTIVE soon, let's only evict the DEAD node rank for the
+		 * moment.
+		 */
 		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
 			doms[i].do_comp.co_rank,
 			rc == -DER_NONEXIST ? -1 : state.sms_status);
-		if (rc == -DER_NONEXIST) {
+		if (rc == -DER_NONEXIST ||
+		    state.sms_status == SWIM_MEMBER_DEAD) {
 			rc = pool_exclude_rank(svc, doms[i].do_comp.co_rank);
 			if (rc) {
 				D_ERROR("failed to exclude rank %u: %d\n",
@@ -2891,6 +2897,53 @@ enum_pool_comp_state_to_tgt_state(int tgt_state)
 	return DAOS_TS_UNKNOWN;
 }
 
+static int
+pool_query_tgt_space(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
+		     d_rank_t rank, uint32_t tgt_idx, struct daos_space *ds)
+{
+	struct pool_tgt_query_in	*in;
+	struct pool_tgt_query_out	*out;
+	crt_rpc_t			*rpc;
+	crt_endpoint_t			 tgt_ep = { 0 };
+	crt_opcode_t			 opcode;
+	int				 rc;
+
+	D_DEBUG(DB_MD, DF_UUID": query target for rank:%u tgt:%u\n",
+		DP_UUID(svc->ps_uuid), rank, tgt_idx);
+
+	tgt_ep.ep_rank = rank;
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, tgt_idx);
+	opcode = DAOS_RPC_OPCODE(POOL_TGT_QUERY, DAOS_POOL_MODULE,
+				 DAOS_POOL_VERSION);
+	rc = crt_req_create(ctx, &tgt_ep, opcode, &rpc);
+	if (rc) {
+		D_ERROR("crt_req_create failed: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
+	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		goto out_rpc;
+
+	out = crt_reply_get(rpc);
+	rc = out->tqo_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to query rank:%u, tgt:%u, "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), rank, tgt_idx, DP_RC(rc));
+	} else {
+		D_ASSERT(ds != NULL);
+		*ds = out->tqo_space.ps_space;
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+	return rc;
+}
+
 void
 ds_pool_query_info_handler(crt_rpc_t *rpc)
 {
@@ -2919,8 +2972,9 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 		D_ERROR(DF_UUID": Failed to get rank:%u, idx:%d\n, rc:%d",
 			DP_UUID(in->pqii_op.pi_uuid), in->pqii_rank,
 			in->pqii_tgt, rc);
-		D_GOTO(out, rc = -DER_NONEXIST);
-	 } else {
+		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+		D_GOTO(out_svc, rc = -DER_NONEXIST);
+	} else {
 		rc = 0;
 	}
 
@@ -2928,13 +2982,24 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 
 	tgt_state = target->ta_comp.co_status;
 	out->pqio_state = enum_pool_comp_state_to_tgt_state(tgt_state);
-
-	/**
-	 * TODO (DAOS-3625): Send pool tgt query RPC (server->server) to
-	 * return pool target space info (including fragmentation).
-	 */
+	out->pqio_op.po_map_version =
+			pool_map_get_version(svc->ps_pool->sp_map);
 
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+
+	if (tgt_state == PO_COMP_ST_UPIN) {
+		rc = pool_query_tgt_space(rpc->cr_ctx, svc, in->pqii_op.pi_hdl,
+					  in->pqii_rank, in->pqii_tgt,
+					  &out->pqio_space);
+		if (rc)
+			D_ERROR(DF_UUID": Failed to query rank:%u, tgt:%d, "
+				""DF_RC"\n", DP_UUID(in->pqii_op.pi_uuid),
+				in->pqii_rank, in->pqii_tgt, DP_RC(rc));
+	} else {
+		memset(&out->pqio_space, 0, sizeof(out->pqio_space));
+	}
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqio_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
 	out->pqio_op.po_rc = rc;
