@@ -548,14 +548,7 @@ func getCPUDetails(log logging.Logger, numaSSDs numaSSDsMap, coresPerNuma int) (
 func defaultEngineCfg(idx int) *engine.Config {
 	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
-		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx)).
-		WithStorage(
-			storage.NewTierConfig().
-				WithScmClass(storage.ClassDCPM.String()),
-			storage.NewTierConfig().
-				WithBdevClass(storage.ClassNvme.String()).
-				WithBdevDeviceList([]string{}...),
-		)
+		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx))
 }
 
 // genConfig generates server config file from details of available network,
@@ -573,7 +566,7 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 		return nil, errors.Errorf(errInsufNrPMemGroups, sd.numaPMems, nd.engineCount,
 			len(sd.numaPMems))
 	}
-	if len(sd.numaSSDs) < nd.engineCount {
+	if len(sd.numaSSDs) > 0 && (len(sd.numaSSDs) < nd.engineCount) {
 		return nil, errors.New("invalid number of ssd groups") // shouldn't happen
 	}
 	if len(ccs) < nd.engineCount {
@@ -583,15 +576,23 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 	engines := make([]*engine.Config, 0, nd.engineCount)
 	for nn := 0; nn < nd.engineCount; nn++ {
 		engineCfg := defaultEngineCfg(nn).
-			WithStorage(
-				storage.NewTierConfig().
-					WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
-					WithScmDeviceList(sd.numaPMems[nn][0]),
-				storage.NewTierConfig().
-					WithBdevDeviceList(sd.numaSSDs[nn]...),
-			).
 			WithTargetCount(ccs[nn].nrTgts).
 			WithHelperStreamCount(ccs[nn].nrHlprs)
+		if len(sd.numaPMems) > 0 {
+			engineCfg.WithStorage(
+				storage.NewTierConfig().
+					WithScmClass(storage.ClassDCPM.String()).
+					WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
+					WithScmDeviceList(sd.numaPMems[nn][0]),
+			)
+		}
+		if len(sd.numaSSDs) > 0 {
+			engineCfg.WithStorage(
+				storage.NewTierConfig().
+					WithBdevClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(sd.numaSSDs[nn]...),
+			)
+		}
 
 		pnn := uint(nn)
 		engineCfg.Fabric = engine.FabricConfig{
