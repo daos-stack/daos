@@ -84,7 +84,7 @@ ds_pool_prop_default_init(void)
 {
 	struct daos_prop_entry	*entry;
 	struct policy_desc_t	*pd;
-	int 			i;
+	int			i;
 
 	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_ACL);
 	if (entry != NULL) {

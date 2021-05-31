@@ -474,7 +474,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	const d_rank_list_t	*svc_list;
 	d_rank_list_t		*dst_list;
 	int			rc;
-	struct policy_desc_t 	*pd;
+	struct policy_desc_t	*pd;
 
 	D_ASSERT(entry != NULL);
 	D_ASSERT(entry_dup != NULL);
