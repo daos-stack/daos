@@ -550,8 +550,8 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	}
 
 	seenValues := make(map[string]int)
-	//seenScmSet := make(map[string]int)
-	//seenBdevSet := make(map[string]int)
+	seenScmSet := make(map[string]int)
+	seenBdevSet := make(map[string]int)
 
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
@@ -574,30 +574,34 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 			seenValues[logConfig] = idx
 		}
 
-		/*scmConf := engine.Storage.SCM
-		mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.MountPoint)
-		if seenIn, exists := seenValues[mountConfig]; exists {
-			log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
-			return FaultConfigDuplicateScmMount(idx, seenIn)
+		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
+			mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.Scm.MountPoint)
+			if seenIn, exists := seenValues[mountConfig]; exists {
+				log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
+				return FaultConfigDuplicateScmMount(idx, seenIn)
+			}
+			seenValues[mountConfig] = idx
 		}
-		seenValues[mountConfig] = idx
 
-		for _, dev := range scmConf.DeviceList {
-			if seenIn, exists := seenScmSet[dev]; exists {
-				log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
-				return FaultConfigDuplicateScmDeviceList(idx, seenIn)
+		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
+			for _, dev := range scmConf.Scm.DeviceList {
+				if seenIn, exists := seenScmSet[dev]; exists {
+					log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
+					return FaultConfigDuplicateScmDeviceList(idx, seenIn)
+				}
+				seenScmSet[dev] = idx
 			}
-			seenScmSet[dev] = idx
-		}*/
+		}
 
-		/*bdevConf := engine.Storage.Bdev
-		for _, dev := range bdevConf.DeviceList {
-			if seenIn, exists := seenBdevSet[dev]; exists {
-				log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
-				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
+		for _, bdevConf := range engine.Storage.Tiers.BdevConfigs() {
+			for _, dev := range bdevConf.Bdev.DeviceList {
+				if seenIn, exists := seenBdevSet[dev]; exists {
+					log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
+					return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
+				}
+				seenBdevSet[dev] = idx
 			}
-			seenBdevSet[dev] = idx
-		}*/
+		}
 	}
 
 	return nil

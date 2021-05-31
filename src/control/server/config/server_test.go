@@ -710,58 +710,68 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithLogFile(configA().LogFile),
 			expErr: FaultConfigDuplicateLogFile(1, 0),
 		},
-		/*"duplicate scm_mount": {
+		/* todo_tiering */
+		"duplicate scm_mount": {
 			configA: configA(),
 			configB: configB().
 				WithStorage(
-					storage.NewConfig().
-						WithScmMountPoint(configA().Storage.SCM.MountPoint),
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDCPM.String()).
+						WithScmDeviceList("a").
+						WithScmMountPoint(configA().Storage.Tiers.ScmConfigs()[0].Scm.MountPoint),
 				),
 			expErr: FaultConfigDuplicateScmMount(1, 0),
 		},
 		"duplicate scm_list": {
 			configA: configA().
 				WithStorage(
-					storage.NewConfig().
-						WithScmClass("dcpm").
-						WithScmRamdiskSize(0).
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDCPM.String()).
+						WithScmMountPoint("aa").
 						WithScmDeviceList("a"),
 				),
 			configB: configB().
 				WithStorage(
-					storage.NewConfig().
-						WithScmClass("dcpm").
-						WithScmRamdiskSize(0).
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDCPM.String()).
+						WithScmMountPoint("bb").
 						WithScmDeviceList("a"),
 				),
 			expErr: FaultConfigDuplicateScmDeviceList(1, 0),
-		},*/
-		/*"overlapping bdev_list": {
+		},
+		/* todo_tiering */
+		/* todo_tiering */
+		"overlapping bdev_list": {
 			configA: configA().
 				WithStorage(
-					storage.NewConfig().
-						WithBdevDeviceList("a"),
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList("0000:00:01.0"),
 				),
 			configB: configB().
 				WithStorage(
-					storage.NewConfig().
-						WithBdevDeviceList("b", "a"),
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList("0000:00:01.1", "0000:00:01.0"),
 				),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
 		},
 		"duplicates in bdev_list": {
 			configA: configA().
 				WithStorage(
-					storage.NewConfig().
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
 				),
 			configB: configB().
 				WithStorage(
-					storage.NewConfig().
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
 				),
 			expErr: errors.New("bdev_list contains duplicate pci addresses"),
-		},*/
+		},
+		/* todo_tiering */
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
