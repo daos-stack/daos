@@ -681,9 +681,9 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_agents:
             self.start_agents(force=force_agent_start)
 
-        # Write an ID string to the log file for cross rerferencing logs with 
+        # Write an ID string to the log file for cross rerferencing logs with
         # tests
-        id_str = '"AvocadoTest._Test__name: ' + str(self._Test__name) + '"'
+        id_str = '"Test.name: ' + str(self) + '"'
         self.write_string_to_logfile(id_str)
 
         # Setup a job manager command for running the test command
@@ -701,6 +701,12 @@ class TestWithServers(TestWithoutServers):
     def write_string_to_logfile(self, s):
         """Write a string to the server log
 
+        Args:
+            s (string): string to write to log file.  Log message will be in
+                the following format:
+                  $date $hostname DAOS[$pid/0/6] rpc EMIT \
+                    src/cart/crt_rpc.c:53 crt_hdlr_ctl_log_add_msg() $s
+
         """
 
         # Fetch attachinfo data from server
@@ -715,11 +721,12 @@ class TestWithServers(TestWithoutServers):
         attach_info_contents = "\n".join(l)
 
         # Write an attach_info_tmp file in this directory for cart_ctl to use
-        attachinfo_file_name = '/tmp/daos_server.attach_info_tmp'
+        tmpdir = tempfile.gettempdir()
+        attachinfo_file_name = tmpdir + "/daos_server.attach_info_tmp"
         file1 = open(attachinfo_file_name, 'w')
         file1.write(attach_info_contents)
         file1.close()
-          
+
         cp_command = "sudo cp {} {}".format(attachinfo_file_name, ".")
         run_command(cp_command, verbose=True, raise_exception=False)
 
