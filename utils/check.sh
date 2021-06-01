@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/bin/sh
+set -xe
 
 # Script to test existence or non-existence of a file
 
