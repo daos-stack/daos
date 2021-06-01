@@ -4179,6 +4179,8 @@ dc_obj_fetch_task(tse_task_t *task)
 		obj_auxi->flags |= ORF_FOR_MIGRATION;
 		obj_auxi->no_retry = 1;
 	}
+	if (args->extra_flags & DIOF_FOR_EC_AGG)
+		obj_auxi->flags |= ORF_FOR_EC_AGG;
 
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
 		obj_auxi->flags |= ORF_CHECK_EXISTENCE;

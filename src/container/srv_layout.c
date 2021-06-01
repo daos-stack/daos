@@ -105,7 +105,7 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_CO_STATUS,
 		.dpe_val	= DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
-							  0),
+							  0, 0),
 	}, {
 		.dpe_type	= DAOS_PROP_CO_ALLOCED_OID,
 		.dpe_val	= 0,
