@@ -195,23 +195,37 @@ static void
 rw_args_store_csum(const struct rw_cb_args *rw_args,
 		   const struct dcs_iod_csums *iod_csum)
 {
-	int	c, rc;
-	int	csum_iov_too_small = false;
-	d_iov_t *csum_iov;
+	d_iov_t			*csum_iov;
+	struct obj_rw_in	*orw;
+	int			 c, rc;
+	int			 csum_iov_too_small = false;
 
 	if (!rw_args_has_csum_iov(rw_args) || iod_csum == NULL)
 		return;
 
+	orw = crt_req_get(rw_args->rpc);
 	csum_iov = rw_args2csum_iov(rw_args);
+	D_DEBUG(DB_CSUM, DF_C_UOID_DKEY "Storing %d csum(s) in iov: "DF_IOV"\n",
+		DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
+		iod_csum->ic_nr,
+		DP_IOV(csum_iov));
 	for (c = 0; c < iod_csum->ic_nr; c++) {
 		if (!csum_iov_too_small) {
+			D_DEBUG(DB_CSUM, DF_C_UOID_DKEY
+					"Serializing "DF_CI
+					" into iov: "DF_IOV"\n",
+				DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
+				DP_CI(iod_csum->ic_data[c]),
+				DP_IOV(csum_iov));
 			rc = ci_serialize(&iod_csum->ic_data[c],
 					  csum_iov);
 			csum_iov_too_small = rc == -DER_REC2BIG;
 		}
 
-		if (csum_iov_too_small)
+		if (csum_iov_too_small) {
+			D_DEBUG(DB_CSUM, "IOV is too small\n");
 			csum_iov->iov_len += ci_size(iod_csum->ic_data[c]);
+		}
 	}
 }
 
@@ -272,6 +286,11 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	shard_idx = rw_args->shard_args->auxi.shard -
 		    rw_args->shard_args->auxi.start_shard;
 	singv_los = dc_rw_cb_singv_lo_get(iods, sgls, orw->orw_nr, reasb_req);
+
+	D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"VERIFY %d iods\n",
+		DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
+		orw->orw_nr);
+
 	for (i = 0; i < orw->orw_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
 		daos_iod_t		 shard_iod = *iod;
@@ -309,14 +328,18 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
 				D_ERROR("Data Verification failed (object: "
-					DF_OID" shard %d): "DF_RC"\n",
-					DP_OID(orw->orw_oid.id_pub), shard_idx,
+					DF_C_UOID_DKEY" shard %d): "DF_RC"\n",
+					DP_C_UOID_DKEY(orw->orw_oid,
+						     &orw->orw_dkey),
+					shard_idx,
 					DP_RC(rc));
 			} else  if (iod->iod_type == DAOS_IOD_ARRAY) {
 				D_ERROR("Data Verification failed (object: "
-					DF_OID" shard %d, extent: "DF_RECX"): "
+					DF_C_UOID_DKEY" shard %d, extent: "
+						DF_RECX"): "
 					DF_RC"\n",
-					DP_OID(orw->orw_oid.id_pub),
+					DP_C_UOID_DKEY(orw->orw_oid,
+						     &orw->orw_dkey),
 					shard_idx, DP_RECX(iod->iod_recxs[i]),
 					DP_RC(rc));
 			}
@@ -367,7 +390,7 @@ iom_recx_merge(daos_iom_t *dst, daos_recx_t *recx, bool iom_realloc)
 	D_ASSERT(dst->iom_nr_out <= dst->iom_nr);
 	if (iom_realloc && dst->iom_nr_out == dst->iom_nr) {
 		iom_nr = dst->iom_nr + 32;
-		D_REALLOC_ARRAY(tmpr, dst->iom_recxs, iom_nr);
+		D_REALLOC_ARRAY(tmpr, dst->iom_recxs, dst->iom_nr, iom_nr);
 		if (tmpr == NULL)
 			return -DER_NOMEM;
 		dst->iom_recxs = tmpr;
@@ -761,7 +784,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * rec2big errors which can be expected.
 		 */
 		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST ||
-		    rc == -DER_EXIST)
+		    rc == -DER_EXIST || rc == -DER_RF)
 			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d"
 				" failed: "DF_RC"\n", rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank,

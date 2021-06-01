@@ -355,18 +355,20 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 			result.Addr = member.Addr.String()
 		}
 
-		// don't update members if:
-		// - result reports an error and updateOnFail is false or
+		// don't update members if any of the following is true:
+		// - result reports an error and state != errored
+		// - result reports an error and updateOnFail is false
 		// - if transition from current to result state is illegal
+
 		if result.Errored {
-			if !updateOnFail {
-				continue
-			}
 			if result.State != MemberStateErrored {
-				// this indicates a programming error
+				// result content mismatch (programming error)
 				return errors.Errorf(
 					"errored result for rank %d has conflicting state '%s'",
 					result.Rank, result.State)
+			}
+			if !updateOnFail {
+				continue
 			}
 		}
 
@@ -474,19 +476,19 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 		return err
 	}
 
-	ts := MemberStateEvicted
-	if member.State().isTransitionIllegal(ts) {
-		msg := msgBadStateTransition(member, ts)
+	ns := MemberStateEvicted
+	if member.State().isTransitionIllegal(ns) {
+		msg := msgBadStateTransition(member, ns)
 		// evicted->evicted transitions expected for multiple swim
 		// notifications, if so return error to skip group update
-		if member.State() != ts {
+		if member.State() != ns {
 			m.log.Error(msg)
 		}
 
 		return errors.New(msg)
 	}
 
-	member.state = ts
+	member.state = ns
 	return m.db.UpdateMember(member)
 }
 
@@ -510,14 +512,14 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 	//
 	// e.g. if member.Addr.IP.Equal(net.ResolveIPAddr(evt.Hostname))
 
-	ts := MemberStateErrored
-	if member.State().isTransitionIllegal(ts) {
-		m.log.Debugf("skipping %s", msgBadStateTransition(member, ts))
+	ns := MemberStateErrored
+	if member.State().isTransitionIllegal(ns) {
+		m.log.Debugf("skipping %s", msgBadStateTransition(member, ns))
 		return
 	}
 
-	member.state = ts
-	member.Info = errors.Wrap(ei.ExitErr, evt.Msg).Error()
+	member.state = ns
+	member.Info = evt.Msg
 
 	if err := m.db.UpdateMember(member); err != nil {
 		m.log.Errorf("updating member with rank %d: %s", member.Rank, err)
@@ -529,6 +531,8 @@ func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {
 	case events.RASEngineDied:
 		m.handleEngineFailure(evt)
+	default:
+		m.log.Debugf("no handler registered for event: %v", evt)
 	}
 }
 

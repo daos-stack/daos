@@ -1606,7 +1606,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			D_GOTO(out, rc = grp_idx);
 
 		i = pl_select_leader(obj->cob_md.omd_id, grp_idx,
-				     obj->cob_grp_size, false,
+				     obj->cob_grp_size, NULL,
 				     obj_get_shard, obj);
 		if (i < 0)
 			D_GOTO(out, rc = i);

@@ -172,7 +172,7 @@ log_event(Shared__RASEvent *evt)
 
 out:
 	fclose(stream);
-	D_DEBUG(DB_MGMT, "&&& RAS EVENT%s", buf);
+	D_INFO("&&& RAS EVENT%s\n", buf);
 	D_FREE(buf);
 }
 
@@ -332,8 +332,7 @@ ds_notify_swim_rank_dead(d_rank_t rank)
 {
 	Shared__RASEvent	evt = SHARED__RASEVENT__INIT;
 
-	return raise_ras(RAS_SWIM_RANK_DEAD,
-			 "SWIM marked rank as dead.",
+	return raise_ras(RAS_SWIM_RANK_DEAD, "SWIM marked rank as dead.",
 			 RAS_TYPE_STATE_CHANGE, RAS_SEV_NOTICE, NULL /* hwid */,
 			 &rank /* rank */, NULL /* jobid */, NULL /* pool */,
 			 NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
