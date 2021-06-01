@@ -118,9 +118,6 @@ typedef enum {
 	DAOS_OPC_KV_REMOVE,
 	DAOS_OPC_KV_LIST,
 
-	/** Pool API additions */
-	DAOS_OPC_POOL_CONNECT_LBL,
-
 	DAOS_OPC_MAX
 } daos_opc_t;
 
@@ -186,21 +183,9 @@ typedef struct {
 	daos_handle_t		*poh;
 	/** Optional, returned pool information. */
 	daos_pool_info_t	*info;
-} daos_pool_connect_t;
-
-/** pool connect by label args */
-typedef struct {
-	/** Label of the pool. */
+	/** Pool label, API v1.2.2 (placed at end for ABI compatibility) */
 	const char		*label;
-	/** Process set name of the DAOS servers managing the pool. */
-	const char		*grp;
-	/** Connect mode represented by the DAOS_PC_ bits. */
-	unsigned int		 flags;
-	/** Returned open handle. */
-	daos_handle_t		*poh;
-	/** Optional, returned pool information. */
-	daos_pool_info_t	*info;
-} daos_pool_connect_lbl_t;
+} daos_pool_connect_t;
 
 /** pool disconnect args */
 typedef struct {
@@ -347,7 +332,7 @@ typedef struct {
 	daos_prop_t		*prop;
 } daos_cont_create_t;
 
-/** Container open args */
+/** Container open by UUID args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
@@ -359,6 +344,8 @@ typedef struct {
 	daos_handle_t		*coh;
 	/** Optional, return container information. */
 	daos_cont_info_t	*info;
+	/** Container label, API v1.2.2 (placed at end for ABI compatibility) */
+	const char		*label;
 } daos_cont_open_t;
 
 /** Container close args */

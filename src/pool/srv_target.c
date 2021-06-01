@@ -1273,6 +1273,8 @@ out:
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (map != NULL)
 		pool_map_decref(map);
+	if (rc == 0)
+		rc = ds_cont_rf_check(pool->sp_uuid);
 	return rc;
 }
 
