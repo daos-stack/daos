@@ -25,7 +25,7 @@
 /** Metrics for each individual active pool */
 struct ds_pool_metrics {
 	uuid_t			pm_pool_uuid;
-	pthread_mutex_t		pm_lock; /* multiple threads may have access */
+	ABT_mutex		pm_lock; /* multiple threads may have access */
 
 	struct d_tm_node_t	*pm_started_timestamp;
 	/* TODO: add more per-pool metrics */
@@ -42,7 +42,7 @@ ds_pool_metrics_lock(struct ds_pool_metrics *metrics)
 	if (unlikely(metrics == NULL))
 		return;
 
-	D_MUTEX_LOCK(&metrics->pm_lock);
+	ABT_mutex_lock(metrics->pm_lock);
 }
 
 /**
@@ -56,7 +56,7 @@ ds_pool_metrics_unlock(struct ds_pool_metrics *metrics)
 	if (unlikely(metrics == NULL))
 		return;
 
-	D_MUTEX_UNLOCK(&metrics->pm_lock);
+	ABT_mutex_unlock(metrics->pm_lock);
 }
 
 struct ds_pool_metrics *ds_pool_metrics_get(const uuid_t pool_uuid);

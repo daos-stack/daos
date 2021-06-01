@@ -7,6 +7,7 @@
 #define D_LOGFAC DD_FAC(pool)
 
 #include "srv_internal.h"
+#include <abt.h>
 #include <gurt/telemetry_producer.h>
 
 /*
@@ -28,7 +29,7 @@ struct pool_metrics ds_global_pool_metrics;
  * Per-pool metrics
  */
 static d_list_t		per_pool_metrics;
-static pthread_mutex_t	per_pool_lock;
+static ABT_mutex	per_pool_lock;
 
 struct per_pool_entry {
 	struct ds_pool_metrics	metrics;
@@ -46,7 +47,11 @@ ds_pool_metrics_init(void)
 	memset(&ds_global_pool_metrics, 0, sizeof(ds_global_pool_metrics));
 
 	D_INIT_LIST_HEAD(&per_pool_metrics);
-	D_MUTEX_INIT(&per_pool_lock, NULL);
+	rc = ABT_mutex_create(&per_pool_lock);
+	if (rc != 0) {
+		D_ERROR("Failed to create ABT mutex, err code=%d\n", rc);
+		return -DER_UNKNOWN;
+	}
 
 	rc = d_tm_add_metric(&ds_global_pool_metrics.open_hdl_gauge, D_TM_GAUGE,
 			     "Number of open pool handles", "",
@@ -61,31 +66,35 @@ ds_pool_metrics_init(void)
 static void
 per_pool_metrics_lock(void)
 {
-	int rc = D_MUTEX_LOCK(&per_pool_lock);
+	int rc = ABT_mutex_lock(per_pool_lock);
 
 	if (unlikely(rc != 0))
-		D_ERROR("failed to lock per-pool metrics, "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("Failed to lock per-pool metrics, err code=%d\n", rc);
 }
 
 static void
 per_pool_metrics_unlock(void)
 {
-	int rc = D_MUTEX_UNLOCK(&per_pool_lock);
+	int rc = ABT_mutex_unlock(per_pool_lock);
 
 	if (unlikely(rc != 0))
-		D_ERROR("failed to unlock per-pool metrics, "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("Failed to unlock per-pool metrics, err code=%d\n",
+			rc);
 }
 
 static void
 free_per_pool_metrics(struct per_pool_entry *entry)
 {
+	int rc;
+
 	if (entry == NULL)
 		return;
 
 	d_list_del(&entry->link);
-	D_MUTEX_DESTROY(&entry->metrics.pm_lock);
+	rc = ABT_mutex_free(&entry->metrics.pm_lock);
+	if (rc != 0)
+		D_ERROR(DF_UUID ": Failed to free ABT mutex, err code=%d\n",
+			entry->metrics.pm_pool_uuid, rc);
 	D_FREE(entry);
 }
 
@@ -119,6 +128,7 @@ ds_pool_metrics_fini(void)
 	struct per_pool_entry	*cur = NULL;
 	struct per_pool_entry	*next = NULL;
 	uuid_t			 uuid;
+	int			 rc;
 
 	per_pool_metrics_lock();
 	d_list_for_each_entry_safe(cur, next, &per_pool_metrics, link) {
@@ -130,7 +140,14 @@ ds_pool_metrics_fini(void)
 
 	D_DEBUG(DB_TRACE, "Finalized pool metrics\n");
 
-	return D_MUTEX_DESTROY(&per_pool_lock);
+	rc = ABT_mutex_free(&per_pool_lock);
+	if (rc != 0) {
+		D_ERROR("Failed to free per-pool metrics mutex, err code=%d\n",
+			rc);
+		return -DER_UNKNOWN;
+	}
+
+	return 0;
 }
 
 /**
@@ -172,7 +189,13 @@ new_per_pool_metrics(const uuid_t pool_uuid, const char *path)
 		return -DER_NOMEM;
 	}
 
-	D_MUTEX_INIT(&entry->metrics.pm_lock, NULL);
+	rc = ABT_mutex_create(&entry->metrics.pm_lock);
+	if (unlikely(rc != 0)) {
+		D_ERROR(DF_UUID ": failed to create metrics mutex, "
+			"err code = %d\n", DP_UUID(pool_uuid), rc);
+		D_FREE(entry);
+		return -DER_UNKNOWN;
+	}
 	uuid_copy(entry->metrics.pm_pool_uuid, pool_uuid);
 
 	/* Init all of the per-pool metrics */
@@ -225,6 +248,11 @@ ds_pool_metrics_start(const uuid_t pool_uuid)
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": unable to start metrics for pool, "
 			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
+		rc = d_tm_del_ephemeral_dir(path);
+		if (rc != 0)
+			D_ERROR(DF_UUID ": unable to clean up metrics dir for "
+				"pool, "DF_RC "\n", DP_UUID(pool_uuid),
+				DP_RC(rc));
 		return;
 	}
 
