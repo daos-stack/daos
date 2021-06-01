@@ -112,7 +112,7 @@ RUN dnf -y install deltarpm && \
         meson \
         nasm \
         ndctl \
-        ninja \
+        ninja-build \
         numactl \
         numactl-devel \
         openmpi3-devel \
@@ -121,6 +121,7 @@ RUN dnf -y install deltarpm && \
         patch \
         patchelf \
         pciutils \
+        python-pyelftools \
         python36-Cython \
         python36-devel \
         python36-distro \
@@ -130,7 +131,6 @@ RUN dnf -y install deltarpm && \
         python36-pylint \
         python36-requests \
         python36-tabulate \
-        python36-pyelftools \
         python36-pyxattr \
         python36-PyYAML \
         python36-scons \
