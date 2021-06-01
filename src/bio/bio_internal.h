@@ -308,6 +308,8 @@ struct bio_rsrvd_region {
 	uint64_t		 brr_off;
 	/* End (not included) in bytes */
 	uint64_t		 brr_end;
+	/* Media type this DMA region mapped to */
+	uint8_t			 brr_media;
 };
 
 /* Reserved DMA buffer for certain io descriptor */
@@ -341,7 +343,8 @@ struct bio_desc {
 	unsigned int		 bd_buffer_prep:1,
 				 bd_update:1,
 				 bd_dma_issued:1,
-				 bd_retry:1;
+				 bd_retry:1,
+				 bd_rdma:1;
 	/* Cached bulk handles being used by this IOD */
 	struct bio_bulk_hdl    **bd_bulk_hdls;
 	unsigned int		 bd_bulk_max;
@@ -410,6 +413,7 @@ struct media_error_msg {
 };
 
 /* bio_xstream.c */
+extern bool		bio_scm_rdma;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
@@ -440,7 +444,8 @@ void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
 int dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg);
 int iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
-		   unsigned int chk_pg_idx, uint64_t off, uint64_t end);
+		   unsigned int chk_pg_idx, uint64_t off, uint64_t end,
+		   uint8_t media);
 int dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt);
 
 static inline struct bio_dma_buffer *
