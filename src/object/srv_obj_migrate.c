@@ -568,7 +568,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 
 		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
 				   mrone->mo_iod_num, mrone->mo_iods, sgls,
-				   NULL, DIOF_TO_LEADER, NULL, csum_iov_fetch);
+				   NULL, flags, NULL, csum_iov_fetch);
 	}
 
 	return rc;
@@ -1203,7 +1203,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		bsgl = vos_iod_sgl_at(ioh, i);
 		D_ASSERT(bsgl != NULL);
 
-		rc = bio_sgl_convert(bsgl, &sgls[i], false);
+		rc = bio_sgl_convert(bsgl, &sgls[i]);
 		if (rc)
 			goto post;
 		sgl_cnt++;

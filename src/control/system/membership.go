@@ -121,7 +121,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 			}
 		}
 
-		if curMember.state == MemberStateExcluded {
+		if curMember.state == MemberStateAdminExcluded {
 			return nil, errAdminExcluded(curMember.UUID, curMember.Rank)
 		}
 		if !curMember.Rank.Equals(req.Rank) {
@@ -476,10 +476,10 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 		return err
 	}
 
-	ns := MemberStateEvicted
+	ns := MemberStateExcluded
 	if member.State().isTransitionIllegal(ns) {
 		msg := msgBadStateTransition(member, ns)
-		// evicted->evicted transitions expected for multiple swim
+		// excluded->excluded transitions expected for multiple swim
 		// notifications, if so return error to skip group update
 		if member.State() != ns {
 			m.log.Error(msg)
