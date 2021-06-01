@@ -400,6 +400,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                 self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
             self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
+            self.container.oclass.update(None)
 
 
     def assert_on_exception(self, out_queue=None):
