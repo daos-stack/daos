@@ -898,15 +898,15 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	if (!args.argv)
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	args.argv[0] = strndup("", 1);
+	args.argv[0] = strdup("");
 	if (!args.argv[0])
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	args.argv[1] = strndup("-ofsname=dfuse", 32);
+	args.argv[1] = strdup("-ofsname=dfuse");
 	if (!args.argv[1])
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	args.argv[2] = strndup("-osubtype=daos", 32);
+	args.argv[2] = strdup("-osubtype=daos");
 	if (!args.argv[2])
 		D_GOTO(err, rc = -DER_NOMEM);
 
@@ -914,7 +914,7 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	if (rc < 0 || !args.argv[3])
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	args.argv[4] = strndup("-odefault_permissions", 32);
+	args.argv[4] = strdup("-odefault_permissions");
 	if (!args.argv[4])
 		D_GOTO(err, rc = -DER_NOMEM);
 
