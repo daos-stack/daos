@@ -676,7 +676,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	d_iov_set(&kiov, &key, sizeof(key));
 	key.sk_epoch	= ioc->ic_bound;
-	key.sk_minor_epc = VOS_MINOR_EPC_MAX - 1;
+	key.sk_minor_epc = VOS_SUB_OP_MAX;
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	memset(&biov, 0, sizeof(biov));
@@ -2073,7 +2073,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	/* Update tree index */
 	err = dkey_update(ioc, pm_ver, dkey, dtx_is_valid_handle(dth) ?
-			  dth->dth_op_seq : VOS_MINOR_EPC_MAX - 1);
+			  dth->dth_op_seq : VOS_SUB_OP_MAX);
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
 				DP_RC(err));

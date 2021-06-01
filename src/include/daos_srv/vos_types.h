@@ -15,6 +15,8 @@
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
+#define VOS_SUB_OP_MAX	((uint16_t)-2)
+
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
 	d_list_t		dru_nvme;

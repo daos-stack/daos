@@ -602,7 +602,7 @@ prepare_segments(struct agg_merge_window *mw)
 		if (ent_in->ei_ver == 0 ||
 		    ent_in->ei_ver > phy_ent->pe_ver)
 			ent_in->ei_ver = phy_ent->pe_ver;
-		ent_in->ei_rect.rc_minor_epc = VOS_MINOR_EPC_MAX - 1;
+		ent_in->ei_rect.rc_minor_epc = VOS_SUB_OP_MAX;
 	}
 
 	if (mw->mw_csum_support) {
