@@ -167,34 +167,6 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
 
 /**
- * Open an existing container identified by label property \a label.
- * Upon successful completion, \a coh and \a info, both of which shall be
- * allocated by the caller, return the container handle and the latest
- * container information respectively.
- *
- * \param[in]	poh	Pool connection handle.
- * \param[in]	label	Label property to identify the container.
- * \param[in]	flags	Open mode, represented by the DAOS_COO_ bits.
- * \param[out]	coh	Returned open handle.
- * \param[out]	info	Optional, return container information
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Container is nonexistent
- *			-DER_RF		#failures exceed RF, data possibly lost
- */
-int
-daos_cont_open_by_label(daos_handle_t poh, const char *label,
-			unsigned int flags, daos_handle_t *coh,
-			daos_cont_info_t *info, daos_event_t *ev);
-
-/**
  * Close a container handle. Upon successful completion, the container handle's
  * epoch hold (i.e., if LHE < DAOS_EPOCH_MAX) is released, and any uncommitted
  * updates from the container handle are discarded.

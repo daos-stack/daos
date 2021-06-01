@@ -156,11 +156,11 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 		if (arg->pool_label) {
 			print_message("setup: connecting to pool by label %s\n",
 				      arg->pool_label);
-			rc = daos_pool_connect_by_label(arg->pool_label,
-							arg->group, flags,
-							&arg->pool.poh,
-							&arg->pool.pool_info,
-							NULL);
+			rc = daos_pool_connect_bylabel(arg->pool_label,
+						       arg->group, flags,
+						       &arg->pool.poh,
+						       &arg->pool.pool_info,
+						       NULL);
 		} else {
 			print_message("setup: connecting to pool "DF_UUID"\n",
 				      DP_UUID(arg->pool.pool_uuid));
@@ -236,21 +236,10 @@ test_setup_cont_open(void **state)
 	int rc = 0;
 
 	if (arg->myrank == 0) {
-		if (arg->cont_label) {
-			print_message("setup: opening container by label %s\n",
-				      arg->cont_label);
-			rc = daos_cont_open_by_label(arg->pool.poh,
-						     arg->cont_label,
-						     arg->cont_open_flags,
-						     &arg->coh, &arg->co_info,
-						     NULL);
-		} else {
-			print_message("setup: opening container "DF_UUID"\n",
-				      DP_UUID(arg->co_uuid));
-			rc = daos_cont_open(arg->pool.poh, arg->co_uuid,
-					    arg->cont_open_flags,
-					    &arg->coh, &arg->co_info, NULL);
-		}
+		print_message("setup: opening container\n");
+		rc = daos_cont_open(arg->pool.poh, arg->co_uuid,
+				    arg->cont_open_flags,
+				    &arg->coh, &arg->co_info, NULL);
 		if (rc)
 			print_message("daos_cont_open failed, rc: %d\n", rc);
 	}

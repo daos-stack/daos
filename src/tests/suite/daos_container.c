@@ -320,7 +320,6 @@ co_properties(void **state)
 	prop->dpp_entries[0].dpe_str = strdup(label);
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
 	prop->dpp_entries[1].dpe_val = snapshot_max;
-	D_STRNDUP(arg->cont_label, label, DAOS_PROP_LABEL_MAX_LEN);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);

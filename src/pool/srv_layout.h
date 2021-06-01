@@ -26,7 +26,7 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_POOL_MD_VERSION 2
+#define DS_POOL_MD_VERSION 1
 
 /* Lowest compatible layout version */
 #define DS_POOL_MD_VERSION_LOW 1
