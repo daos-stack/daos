@@ -338,7 +338,7 @@ var propHdlrs = propHdlrMap{
 			return vh(e, v)
 		},
 		valHdlrMap{
-			"healthy": setDpeVal(C.daos_prop_co_status_val(C.DAOS_PROP_CO_HEALTHY, 0)),
+			"healthy": setDpeVal(C.daos_prop_co_status_val(C.DAOS_PROP_CO_HEALTHY, 0, 0)),
 		},
 		func(e *C.struct_daos_prop_entry, name string) string {
 			if e == nil {

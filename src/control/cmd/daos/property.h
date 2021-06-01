@@ -9,9 +9,9 @@
 /* cgo is unable to work directly with preprocessor macros
    so we have to provide these glue helpers. */
 static inline uint64_t
-daos_prop_co_status_val(uint32_t status, uint32_t ver)
+daos_prop_co_status_val(uint32_t status, uint32_t flag, uint32_t ver)
 {
-	return DAOS_PROP_CO_STATUS_VAL(status, ver);
+	return DAOS_PROP_CO_STATUS_VAL(status, flag, ver);
 }
 
 /* cgo is unable to work directly with unions, so we have
