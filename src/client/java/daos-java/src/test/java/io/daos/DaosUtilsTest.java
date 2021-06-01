@@ -1,6 +1,6 @@
 package io.daos;
 
-import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.lang3.StringEscapeUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
