@@ -336,7 +336,8 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
-	pool->sp_policy_desc.policy = DAOS_MEDIA_POLICY_IO_SIZE; /* default tiering policy */
+	pool->sp_policy_desc.policy =
+			DAOS_MEDIA_POLICY_IO_SIZE; /* default tiering policy */
 
 	uuid_unparse_lower(key, group_id);
 	rc = crt_group_secondary_create(group_id, NULL /* primary_grp */,
