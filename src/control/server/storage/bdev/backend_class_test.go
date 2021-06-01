@@ -304,13 +304,16 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "retry_count": 4,
+            "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
-            "action_on_timeout": "none"
+            "action_on_timeout": "none",
+            "nvme_ioq_poll_period_us": 0
           },
           "method": "bdev_nvme_set_options"
         },
         {
           "params": {
+            "enable": false,
             "period_us": 10000000
           },
           "method": "bdev_nvme_set_hotplug"
@@ -350,13 +353,16 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "retry_count": 4,
+            "timeout_us": 0,
             "nvme_adminq_poll_period_us": 100000,
-            "action_on_timeout": "none"
+            "action_on_timeout": "none",
+            "nvme_ioq_poll_period_us": 0
           },
           "method": "bdev_nvme_set_options"
         },
         {
           "params": {
+            "enable": false,
             "period_us": 10000000
           },
           "method": "bdev_nvme_set_hotplug"
