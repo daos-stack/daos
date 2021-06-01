@@ -234,6 +234,26 @@ bool
 ds_sec_cont_can_write_data(uint64_t cont_capas);
 
 /**
+ * Calculate the new capability after enable CONT_CAPA_WRITE_DATA.
+ *
+ * \param	cont_capas	Input capability.
+ *
+ * \return	Output capability
+ */
+uint64_t
+ds_sec_cont_capa_write_data_enable(uint64_t cont_capas);
+
+/**
+ * Calculate the new capability after disable CONT_CAPA_WRITE_DATA.
+ *
+ * \param	cont_capas	Input capability.
+ *
+ * \return	Output capability
+ */
+uint64_t
+ds_sec_cont_capa_write_data_disable(uint64_t cont_capas);
+
+/**
  * Determine if the container can be read based on the container security
  * capabilities.
  *

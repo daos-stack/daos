@@ -124,3 +124,18 @@ out:
 
 	return rc;
 }
+
+struct daos_csummer *
+dsc_cont2csummer(daos_handle_t coh)
+{
+	struct dc_cont		*cont = NULL;
+	struct daos_csummer	*csummer;
+
+	cont = dc_hdl2cont(coh);
+	if (cont == NULL)
+		return NULL;
+	csummer = cont->dc_csummer;
+	dc_cont_put(cont);
+
+	return csummer;
+}

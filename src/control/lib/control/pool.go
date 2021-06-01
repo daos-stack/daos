@@ -622,10 +622,6 @@ type PoolExtendReq struct {
 	msRequest
 	UUID  string
 	Ranks []system.Rank
-	// TEMP SECTION
-	ScmBytes  uint64
-	NvmeBytes uint64
-	// END TEMP SECTION
 }
 
 // PoolExtend will extend the DAOS pool by the specified ranks.
