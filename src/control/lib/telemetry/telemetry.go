@@ -98,7 +98,7 @@ const (
 	handleKey telemetryKey = "handle"
 )
 
-func (h *handle) IsValid() bool {
+func (h *handle) isValid() bool {
 	return h != nil && h.ctx != nil && h.root != nil && h.rank != nil
 }
 
@@ -238,18 +238,20 @@ func (sm *statsMetric) SampleSize() uint64 {
 	return uint64(sm.stats.sample_size)
 }
 
-func startGarbageCollection(ctx context.Context) {
+func collectGarbageLoop(ctx context.Context) {
+	ticker := time.NewTicker(60 * time.Second)
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(60 * time.Second):
+		case <-ticker.C:
 			hdl, err := getHandle(ctx)
 			if err != nil {
 				return // can't do anything with this
 			}
 			hdl.Lock()
-			if !hdl.IsValid() {
+			if !hdl.isValid() {
+				// Handle won't become valid again on this ctx
 				hdl.Unlock()
 				return
 			}
@@ -278,7 +280,7 @@ func Init(parent context.Context, idx uint32) (context.Context, error) {
 	}
 
 	newCtx := context.WithValue(parent, handleKey, handle)
-	go startGarbageCollection(newCtx)
+	go collectGarbageLoop(newCtx)
 
 	return newCtx, nil
 }

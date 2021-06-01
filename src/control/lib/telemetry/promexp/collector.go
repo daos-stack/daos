@@ -113,8 +113,7 @@ func sanitizeMetricName(in string) string {
 	}, strings.TrimLeft(in, "/"))
 }
 
-func parseNameSubstr(labels labelMap, name string, matchRE string, replacement string,
-	assignLabels func(labelMap, []string)) string {
+func parseNameSubstr(labels labelMap, name string, matchRE string, replacement string, assignLabels func(labelMap, []string)) string {
 	re := regexp.MustCompile(matchRE)
 	matches := re.FindStringSubmatch(name)
 	if len(matches) > 0 {
