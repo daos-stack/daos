@@ -86,7 +86,8 @@ enum daos_rpc_type {
 	DAOS_REQ_IV,
 	DAOS_REQ_BCAST,
 	DAOS_REQ_SWIM,
-	DAOS_REQ_DTX,
+	/** Per VOS target request */
+	DAOS_REQ_TGT,
 };
 
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
@@ -108,7 +109,7 @@ daos_rpc_tag(int req_type, int tgt_idx)
 	switch (req_type) {
 	/* for normal IO request, send to the main service thread/context */
 	case DAOS_REQ_IO:
-	case DAOS_REQ_DTX:
+	case DAOS_REQ_TGT:
 		return DAOS_IO_CTX_ID(tgt_idx);
 	/* target tag 0 is to handle below requests */
 	case DAOS_REQ_MGMT:
@@ -187,7 +188,7 @@ static inline bool
 daos_rpc_retryable_rc(int rc)
 {
 	return daos_crt_network_error(rc) || rc == -DER_TIMEDOUT ||
-	       rc == -DER_GRPVER || rc == -DER_EVICTED;
+	       rc == -DER_GRPVER || rc == -DER_EXCLUDED;
 }
 
 /* Determine if the RPC is from a client. If not, it's from a server rank. */

@@ -3653,7 +3653,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	if (obj_auxi->map_ver_reply > obj_auxi->map_ver_req ||
 	    daos_crt_network_error(task->dt_result) ||
 	    task->dt_result == -DER_STALE || task->dt_result == -DER_TIMEDOUT ||
-	    task->dt_result == -DER_EVICTED) {
+	    task->dt_result == -DER_EXCLUDED) {
 		D_DEBUG(DB_IO, "map_ver stale (req %d, reply %d). result %d\n",
 			obj_auxi->map_ver_req, obj_auxi->map_ver_reply,
 			task->dt_result);
@@ -4179,6 +4179,8 @@ dc_obj_fetch_task(tse_task_t *task)
 		obj_auxi->flags |= ORF_FOR_MIGRATION;
 		obj_auxi->no_retry = 1;
 	}
+	if (args->extra_flags & DIOF_FOR_EC_AGG)
+		obj_auxi->flags |= ORF_FOR_EC_AGG;
 
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
 		obj_auxi->flags |= ORF_CHECK_EXISTENCE;
