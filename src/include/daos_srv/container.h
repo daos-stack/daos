@@ -255,6 +255,7 @@ ds_csum_agg_recalc(void *args);
 int dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 		  unsigned int flags, daos_handle_t *coh);
 int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
+struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
 
 void ds_cont_tgt_ec_eph_query_ult(void *data);
 #endif /* ___DAOS_SRV_CONTAINER_H_ */
