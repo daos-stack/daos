@@ -203,7 +203,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	})
 	if err != nil {
 		return system.NilRank, false, err
-	} else if resp.State == system.MemberStateEvicted {
+	} else if resp.State == system.MemberStateExcluded {
 		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
 	}
 	r = system.Rank(resp.Rank)
