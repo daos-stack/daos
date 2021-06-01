@@ -156,12 +156,13 @@ class DaosCoreBase(TestWithServers):
             # Set each expected rank state to be either stopped or running
             for manager in self.server_managers:
                 manager.update_expected_states(
-                    None, ["Joined", "Stopped", "Evicted"])
+                    None, ["Joined", "Stopped", "Excluded"])
         else:
             # Set the specific expected rank state to stopped
             for rank in stopped_ranks:
                 for manager in self.server_managers:
-                    manager.update_expected_states(rank, ["Stopped", "Evicted"])
+                    manager.update_expected_states(
+                        rank, ["Stopped", "Excluded"])
 
         try:
             process.run(cmd, env=env)
