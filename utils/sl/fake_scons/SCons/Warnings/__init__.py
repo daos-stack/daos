@@ -19,18 +19,12 @@
 # SOFTWARE.
 """Fake scons environment shutting up pylint on SCons files"""
 
-class Warning:
-    """Fake warning"""
-    pass
-
 def warningAsException(flag=1):
     """Fake warningAsException"""
     return flag
 
 def enableWarningClass(_name):
     """Fake enableWarningClass"""
-    pass
 
 class MissingSConscriptWarning(Exception):
     """Fake MissingSConscriptWarning"""
-    pass
