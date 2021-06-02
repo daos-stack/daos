@@ -833,8 +833,7 @@ int crt_swim_enable(struct crt_grp_priv *grp_priv, int crt_ctx_idx)
 	int			 old_ctx_idx = -1;
 	int			 rc = 0;
 
-	if (!crt_initialized() || !crt_is_service() ||
-	    !crt_gdata.cg_swim_inited)
+	if (!crt_gdata.cg_swim_inited)
 		D_GOTO(out, rc = 0);
 
 	if (self == CRT_NO_RANK) {
@@ -883,8 +882,7 @@ int crt_swim_disable(struct crt_grp_priv *grp_priv, int crt_ctx_idx)
 	int			 old_ctx_idx = -1;
 	int			 rc = -DER_NONEXIST;
 
-	if (!crt_initialized() || !crt_is_service() ||
-	    !crt_gdata.cg_swim_inited)
+	if (!crt_gdata.cg_swim_inited)
 		D_GOTO(out, rc = 0);
 
 	if (crt_ctx_idx < 0) {
@@ -920,8 +918,7 @@ void crt_swim_disable_all(void)
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	int			 old_ctx_idx;
 
-	if (!crt_initialized() || !crt_is_service() ||
-	    !crt_gdata.cg_swim_inited)
+	if (!crt_gdata.cg_swim_inited)
 		return;
 
 	crt_swim_csm_lock(csm);
@@ -942,8 +939,7 @@ void crt_swim_suspend_all(void)
 	struct crt_swim_target	*cst;
 	swim_id_t		 self_id;
 
-	if (!crt_initialized() || !crt_is_service() ||
-	    !crt_gdata.cg_swim_inited)
+	if (!crt_gdata.cg_swim_inited)
 		return;
 
 	self_id = swim_self_get(csm->csm_ctx);
@@ -970,8 +966,7 @@ void crt_swim_accommodate(void)
 	uint64_t		 average = 0;
 	uint64_t		 count = 0;
 
-	if (!crt_initialized() || !crt_is_service() ||
-	    !crt_gdata.cg_swim_inited)
+	if (!crt_gdata.cg_swim_inited)
 		return;
 
 	crt_swim_csm_lock(csm);
@@ -1012,8 +1007,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	bool			 rank_in_list = false;
 	int			 n, rc = 0;
 
-	if (!crt_initialized() || !crt_is_service() ||
-	    !crt_gdata.cg_swim_inited)
+	if (!crt_gdata.cg_swim_inited)
 		return 0;
 
 	if (self == CRT_NO_RANK) {
@@ -1096,8 +1090,7 @@ int crt_swim_rank_del(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	struct crt_swim_target	*cst, *next = NULL;
 	int			 rc = -DER_NONEXIST;
 
-	if (!crt_initialized() || !crt_is_service() ||
-	    !crt_gdata.cg_swim_inited)
+	if (!crt_gdata.cg_swim_inited)
 		return 0;
 
 	crt_swim_csm_lock(csm);
@@ -1137,8 +1130,7 @@ void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv)
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_swim_target	*cst;
 
-	if (!crt_initialized() || !crt_is_service() ||
-	    !crt_gdata.cg_swim_inited)
+	if (!crt_gdata.cg_swim_inited)
 		return;
 
 	crt_swim_csm_lock(csm);

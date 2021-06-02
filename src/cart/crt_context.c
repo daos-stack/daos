@@ -873,11 +873,18 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 	D_ASSERT(crt_ctx != NULL);
 
-	if (crt_initialized() && crt_is_service() && crt_gdata.cg_swim_inited) {
+	if (crt_gdata.cg_swim_inited) {
 		struct crt_grp_priv	*gp = crt_gdata.cg_grp->gg_primary_grp;
 		struct crt_swim_membs	*csm = &gp->gp_membs_swim;
 		swim_id_t		 self_id = swim_self_get(csm->csm_ctx);
 
+		/*
+		 * Check for network idle in SWIM context.
+		 * If the time passed from last received RPC till now is more
+		 * than 2/3 of suspicion timeout suspends eviction.
+		 * The max_delay should be less suspicion timeout to guarantee
+		 * the already suspected members will not be expired.
+		 */
 		if (crt_ctx->cc_idx == csm->csm_crt_ctx_idx &&
 		    crt_ctx->cc_last_unpack_hlc != 0 &&
 		    self_id != SWIM_ID_INVALID) {

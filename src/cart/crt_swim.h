@@ -32,7 +32,7 @@ struct crt_swim_membs {
 	int				 csm_crt_ctx_idx;
 };
 
-static inline int
+static inline void
 crt_swim_csm_lock(struct crt_swim_membs *csm)
 {
 	int rc;
@@ -40,11 +40,9 @@ crt_swim_csm_lock(struct crt_swim_membs *csm)
 	rc = D_SPIN_LOCK(&csm->csm_lock);
 	if (rc != 0)
 		D_ERROR("D_SPIN_LOCK(): %s\n", strerror(rc));
-
-	return rc;
 }
 
-static inline int
+static inline void
 crt_swim_csm_unlock(struct crt_swim_membs *csm)
 {
 	int rc;
@@ -52,8 +50,6 @@ crt_swim_csm_unlock(struct crt_swim_membs *csm)
 	rc = D_SPIN_UNLOCK(&csm->csm_lock);
 	if (rc != 0)
 		D_ERROR("D_SPIN_UNLOCK(): %s\n", strerror(rc));
-
-	return rc;
 }
 
 static inline uint32_t
