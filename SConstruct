@@ -166,7 +166,7 @@ def set_defaults(env, daos_version):
         env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
 
 def build_misc():
-    """Build miscelaneous items"""
+    """Build miscellaneous items"""
     # install the configuration files
     SConscript('utils/config/SConscript')
 
