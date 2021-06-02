@@ -96,28 +96,25 @@ co_attribute(void **state)
 	int		 rc;
 
 	char const *const names[] = { "AVeryLongName", "Name" };
-	char const *const names_get[] = { "AVeryLongName", "Wrong", "Name" };
 	size_t const name_sizes[] = {
 				strlen(names[0]) + 1,
 				strlen(names[1]) + 1,
 	};
 	void const *const in_values[] = {
 				"value",
-				"this is a long value",
+				"this is a long value"
 	};
 	size_t const in_sizes[] = {
 				strlen(in_values[0]),
-				strlen(in_values[1]),
+				strlen(in_values[1])
 	};
 	int			 n = (int) ARRAY_SIZE(names);
-	int			 m = (int) ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
-						  &out_buf[1 * BUFSIZE],
-						  &out_buf[2 * BUFSIZE],
+						  &out_buf[1 * BUFSIZE]
 						};
-	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE, BUFSIZE };
+	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE };
 	size_t			 total_size;
 
 	if (arg->async) {
@@ -165,7 +162,7 @@ co_attribute(void **state)
 	print_message("getting container attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 
-	rc = daos_cont_get_attr(arg->coh, m, names_get, out_values, out_sizes,
+	rc = daos_cont_get_attr(arg->coh, n, names, out_values, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -175,26 +172,20 @@ co_attribute(void **state)
 	assert_memory_equal(out_values[0], in_values[0], in_sizes[0]);
 
 	print_message("Verifying Name-Value (B)..\n");
-	assert_int_equal(out_sizes[1], 0);
-
-	print_message("Verifying Name-Value (C)..\n");
 	assert_true(in_sizes[1] > BUFSIZE);
-	assert_int_equal(out_sizes[2], in_sizes[1]);
-	assert_memory_equal(out_values[2], in_values[1], BUFSIZE);
+	assert_int_equal(out_sizes[1], in_sizes[1]);
+	assert_memory_equal(out_values[1], in_values[1], BUFSIZE);
 
-	rc = daos_cont_get_attr(arg->coh, m, names_get, NULL, out_sizes,
+	rc = daos_cont_get_attr(arg->coh, n, names, NULL, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("Verifying with NULL buffer..\n");
 	assert_int_equal(out_sizes[0], in_sizes[0]);
-	assert_int_equal(out_sizes[1], 0);
-	assert_int_equal(out_sizes[2], in_sizes[1]);
+	assert_int_equal(out_sizes[1], in_sizes[1]);
 
-	rc = daos_cont_del_attr(arg->coh, m, names_get,
-				arg->async ? &ev : NULL);
-	/* should work even if "Wrong" do not exist */
+	rc = daos_cont_del_attr(arg->coh, n, names, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
@@ -329,6 +320,7 @@ co_properties(void **state)
 	prop->dpp_entries[0].dpe_str = strdup(label);
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
 	prop->dpp_entries[1].dpe_val = snapshot_max;
+	D_STRNDUP(arg->cont_label, label, DAOS_PROP_LABEL_MAX_LEN);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
@@ -1956,13 +1948,6 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 					(void * const*)&value,
 					&val_size,
 					NULL);
-
-		/* 0 size means non-existing attr and this is possible
-		 * only because we do not support empty attrs for now
-		 */
-		if (val_size == 0)
-			rc = -DER_NONEXIST;
-
 		assert_rc_equal(rc, exp_result);
 	}
 
@@ -2100,6 +2085,7 @@ co_open_fail_destroy(void **state)
 static void
 co_rf_simple(void **state)
 {
+#define STACK_BUF_LEN	(128)
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	daos_obj_id_t		 oid;
@@ -2109,6 +2095,14 @@ co_rf_simple(void **state)
 	struct daos_prop_entry	*entry;
 	struct daos_co_status	 stat = { 0 };
 	daos_cont_info_t	 info = { 0 };
+	daos_obj_id_t		 io_oid;
+	daos_handle_t		 io_oh;
+	d_iov_t			 dkey;
+	char			 stack_buf[STACK_BUF_LEN];
+	d_sg_list_t		 sgl;
+	d_iov_t			 sg_iov;
+	daos_iod_t		 iod;
+	daos_recx_t		 recx;
 	int			 rc;
 
 	/* needs 3 alive nodes after excluding 3 */
@@ -2187,6 +2181,29 @@ co_rf_simple(void **state)
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 
+	/* IO testing */
+	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+	dts_buf_render(stack_buf, STACK_BUF_LEN);
+	d_iov_set(&sg_iov, stack_buf, STACK_BUF_LEN);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 1;
+	sgl.sg_iovs	= &sg_iov;
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	recx.rx_idx = 0;
+	recx.rx_nr  = STACK_BUF_LEN;
+	iod.iod_size	= 1;
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	print_message("obj update should success before RF broken\n");
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
 	if (arg->myrank == 0)
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, 3);
@@ -2198,6 +2215,14 @@ co_rf_simple(void **state)
 	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_UNCLEAN);
 	rc = daos_cont_open(arg->pool.poh, arg->co_uuid, arg->cont_open_flags,
 			    &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_RF);
+	print_message("obj update should fail after RF broken\n");
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, -DER_RF);
+	print_message("obj fetch should fail after RF broken\n");
+	rc = daos_obj_fetch(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
 	assert_rc_equal(rc, -DER_RF);
 
 	if (arg->myrank == 0) {
@@ -2213,11 +2238,13 @@ co_rf_simple(void **state)
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
+	print_message("obj update should success after re-integrate\n");
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
 	/* clear the UNCLEAN status */
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_STATUS;
-	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_STATUS_VAL(
-						DAOS_PROP_CO_HEALTHY, 0);
-	rc = daos_cont_set_prop(arg->coh, prop, NULL);
+	rc = daos_cont_status_clear(arg->coh, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
@@ -2241,6 +2268,9 @@ co_rf_simple(void **state)
 	rc = daos_cont_close(coh_g2l, NULL);
 	assert_int_equal(rc, 0);
 	free(ghdl.iov_buf);
+
+	rc = daos_obj_close(io_oh, NULL);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);

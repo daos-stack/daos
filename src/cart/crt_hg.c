@@ -1028,8 +1028,9 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	case HG_CANCELED:
 		if (!CRT_RANK_PRESENT(rpc_pub->cr_ep.ep_grp,
 				     rpc_pub->cr_ep.ep_rank)) {
-			RPC_TRACE(DB_NET, rpc_priv, "request target evicted\n");
-			rc = -DER_EVICTED;
+			RPC_TRACE(DB_NET, rpc_priv,
+				  "request target excluded\n");
+			rc = -DER_EXCLUDED;
 		} else if (crt_req_timedout(rpc_priv)) {
 			RPC_TRACE(DB_NET, rpc_priv, "request timedout\n");
 			rc = -DER_TIMEDOUT;

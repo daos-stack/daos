@@ -479,9 +479,11 @@ bypass_bulk_cache(struct bio_iov *biov, unsigned int pg_cnt)
 	/* Hole, no RDMA */
 	if (bio_addr_is_hole(&biov->bi_addr))
 		return true;
-	/* SCM, RDMA to SCM directly */
-	if (biov->bi_addr.ba_type == DAOS_MEDIA_SCM)
-		return true;
+	/* Direct SCM RDMA or deduped SCM extent */
+	if (bio_iov2media(biov) == DAOS_MEDIA_SCM) {
+		if (bio_scm_rdma || BIO_ADDR_IS_DEDUP(&biov->bi_addr))
+			return true;
+	}
 	/* Huge IOV, allocate DMA buffer & create bulk handle on-the-fly */
 	if (pg_cnt > bio_chk_sz)
 		return true;
@@ -544,6 +546,7 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 	D_ASSERT(arg != NULL && arg->ba_bulk_ctxt != NULL);
 
 	D_ASSERT(biod && biod->bd_chk_type == BIO_CHK_TYPE_IO);
+	D_ASSERT(biod->bd_rdma);
 	D_ASSERT(biov && bio_iov2raw_len(biov) != 0);
 
 	if (biod->bd_bulk_hdls == NULL) {
@@ -563,6 +566,7 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 		rc = dma_map_one(biod, biov, NULL);
 		goto done;
 	}
+	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
 
 	hdl = bulk_get_hdl(biod, roundup_pgs(pg_cnt), pg_off, arg);
 	if (hdl == NULL) {
@@ -574,7 +578,8 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 	}
 
 	bio_iov_set_raw_buf(biov, bulk_hdl2addr(hdl));
-	rc = iod_add_region(biod, hdl->bbh_chunk, hdl->bbh_pg_idx, off, end);
+	rc = iod_add_region(biod, hdl->bbh_chunk, hdl->bbh_pg_idx, off, end,
+			    bio_iov2media(biov));
 	if (rc) {
 		bulk_hdl_unhold(hdl);
 		return rc;
