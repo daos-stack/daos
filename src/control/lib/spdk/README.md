@@ -35,7 +35,8 @@ Setup environment:
     export SPDK_LIB=${DAOS_ROOT}/opt/spdk
     export LD_LIBRARY_PATH=${SPDK_LIB}/build/lib:${SPDK_LIB}/include:${GOSPDK}/spdk:${LD_LIBRARY_PATH}
     export CGO_CFLAGS="-I${SPDK_LIB}/include"
-    export CGO_LDFLAGS="-L${SPDK_LIB}/build/lib -lspdk"
+    CGO_LDFLAGS="-L${SPDK_LIB}/build/lib -lspdk_nvme -lnvme_control -lspdk_env_dpdk -lspdk_vmd"
+    export CGO_LDFLAGS=$CGO_LDFLAGS" -lrte_mempool -lrte_mempool_ring -lrte_bus_pci"
 
 Build NVMe libs:
 
