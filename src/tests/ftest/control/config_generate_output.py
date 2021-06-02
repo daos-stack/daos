@@ -179,7 +179,7 @@ class ConfigGenerateOutput(TestWithServers):
                 expected_ap, actual_ap)
             errors.append(msg)
 
-        # Host + valid port number
+        # Host + valid port number.
         expected_ap_port = "wolf-a:12345"
         generated_yaml = dmg.config_generate(access_points=expected_ap_port)
         actual_ap_port = generated_yaml["access_points"][0]
