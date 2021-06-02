@@ -183,8 +183,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	char				*names;
 	size_t				*sizes;
 	int				 rc;
-	int				 i;
-	int				 j;
+	uint64_t			 i, j, nonexist = 0;
 
 	rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 	if (rc != 0)
@@ -248,6 +247,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 			D_DEBUG(DB_ANY, "%s: failed to lookup attribute '"DF_KEY"': "DF_RC"\n",
 				svc->s_name, DP_KEY(&key), DP_RC(rc));
+			nonexist++;
 		} else if (rc != 0) {
 			D_ERROR("%s: failed to lookup attribute '"DF_KEY"': "DF_RC"\n",
 				svc->s_name, DP_KEY(&key), DP_RC(rc));
@@ -273,6 +273,14 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 				0, key_length, count * sizeof(*sizes));
 	if (rc != 0)
 		goto out_iovs;
+
+	/* sizes have been sent back, so if none of attrs exist, just stop here
+	 * and return -DER_NONEXIST
+	 */
+	if (nonexist == count) {
+		rc = -DER_NONEXIST
+		goto out_iovs;
+	}
 
 	local_offset = count * sizeof(*sizes);
 	remote_offset = key_length + count * sizeof(*sizes);
