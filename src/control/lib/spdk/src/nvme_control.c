@@ -464,7 +464,8 @@ daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 		for (i = 0; i < nr_pcil; i++) {
 			fprintf(stderr, "spdk env adding pci: %s\n", pcil[i]);
 
-			rc = opts_add_pci_addr(&opts, &opts.pci_allowed, pcil[i]);
+			rc = opts_add_pci_addr(&opts, &opts.pci_allowed,
+					       pcil[i]);
 			if (rc < 0) {
 				fprintf(stderr, "spdk env add pci: %d\n", rc);
 				sprintf(ret->info, "DAOS SPDK add pci failed");

@@ -157,24 +157,22 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		return 0;
 	}
 
-	 rc = smd_init(db);
-	 if (rc != 0) {
-	 	D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
-	 	return rc;
-	 }
+	rc = smd_init(db);
+	if (rc != 0) {
+		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
-	/*
-	 * env = getenv("VOS_BDEV_CLASS");
-	 * if (env && strcasecmp(env, "AIO") == 0) {
-	 * 	D_WARN("AIO device(s) will be used!\n");
-	 * 	nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
-	 * }
-	 */
+	env = getenv("VOS_BDEV_CLASS");
+	if (env && strcasecmp(env, "AIO") == 0) {
+		D_WARN("AIO device(s) will be used!\n");
+		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
+	}
 
 	env = getenv("VMD_LED_PERIOD");
 	vmd_led_period = env ? atoi(env) : 0;
