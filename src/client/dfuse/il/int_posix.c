@@ -88,7 +88,7 @@ ioil_shrink_pool(struct ioil_pool *pool)
 
 		rc = daos_pool_disconnect(pool->iop_poh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n",
+			D_ERROR("daos_pool_disconnect() failed, "DF_RC"\n",
 				DP_RC(rc));
 			return rc;
 		}
@@ -120,7 +120,7 @@ ioil_shrink_cont(struct ioil_cont *cont)
 	if (daos_handle_is_valid(cont->ioc_coh)) {
 		rc = daos_cont_close(cont->ioc_coh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_cont_close() failed, " DF_RC "\n",
+			D_ERROR("daos_cont_close() failed, "DF_RC"\n",
 				DP_RC(rc));
 			return rc;
 		}
@@ -164,7 +164,7 @@ ioil_initialize_fd_table(int max_fds)
 			 entry_array_close);
 	if (rc != 0)
 		DFUSE_LOG_ERROR("Could not allocate file descriptor table"
-				", disabling kernel bypass: rc = " DF_RC,
+				", disabling kernel bypass: rc = "DF_RC,
 				DP_RC(rc));
 	return rc;
 }
@@ -453,7 +453,7 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 
 	rc = daos_pool_global2local(iov, &pool->iop_poh);
 	if (rc) {
-		DFUSE_LOG_WARNING("Failed to use pool handle " DF_RC,
+		DFUSE_LOG_WARNING("Failed to use pool handle "DF_RC,
 				  DP_RC(rc));
 		return daos_der2errno(rc);
 	}
@@ -538,7 +538,7 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 
 	rc = daos_cont_global2local(pool->iop_poh, iov, &cont->ioc_coh);
 	if (rc) {
-		DFUSE_LOG_WARNING("Failed to use cont handle " DF_RC,
+		DFUSE_LOG_WARNING("Failed to use cont handle "DF_RC,
 				  DP_RC(rc));
 		D_FREE(iov.iov_buf);
 		return daos_der2errno(rc);
@@ -649,7 +649,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (!ioil_iog.iog_daos_init) {
 		rc = daos_init();
 		if (rc) {
-			DFUSE_LOG_DEBUG("daos_init() failed, " DF_RC,
+			DFUSE_LOG_DEBUG("daos_init() failed, "DF_RC,
 					DP_RC(rc));
 			ioil_iog.iog_no_daos = true;
 			return false;
