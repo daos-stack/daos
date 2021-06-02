@@ -77,6 +77,9 @@ permissions for specific actions.
 The permissions of a handle last for the duration of its existence, similar to
 an open file descriptor in a POSIX system. A handle cannot currently be revoked.
 
+A DAOS ACL is composed of zero or more Access Control Entries (ACEs). The ACEs
+are the [rules](https://daos-stack.github.io/overview/security/#enforcement)
+used to grant or deny privileges to a user who requests access to a resource.
 
 #### Access Control Entries
 
