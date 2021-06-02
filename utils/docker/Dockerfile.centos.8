@@ -209,7 +209,6 @@ COPY VERSION LICENSE ftest.sh SConstruct ./
 COPY site_scons site_scons
 COPY utils utils
 COPY src src
-COPY doc doc
 USER root:root
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
@@ -223,11 +222,13 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 RUN [ "$DAOS_BUILD" != "yes" ] || \
     { scons-3 --jobs $JOBS client install PREFIX=/opt/daos COMPILER=$COMPILER && \
     utils/check.sh /opt/daos/bin/dmg && \
-    utils/check.sh -n /opt/daos/bin/daos_engine && \
-    scons-3 --jobs $JOBS server install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    utils/check.sh -n /opt/daos/bin/daos_engine; }
+RUN [ "$DAOS_BUILD" != "yes" ] || \
+    { scons-3 --jobs $JOBS server install PREFIX=/opt/daos COMPILER=$COMPILER && \
     utils/check.sh /opt/daos/bin/daos_engine && \
-    utils/check.sh -n /opt/daos/bin/vos_tests && \
-    scons-3 --jobs $JOBS test install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    utils/check.sh -n /opt/daos/bin/vos_tests; }
+RUN [ "$DAOS_BUILD" != "yes" ] || \
+    { scons-3 --jobs $JOBS test install PREFIX=/opt/daos COMPILER=$COMPILER && \
     utils/check.sh /opt/daos/bin/vos_tests && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos; }
