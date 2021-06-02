@@ -5,10 +5,11 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
+    env.AppendUnique(LIBPATH=[Dir('.')])
+
     if not prereqs.server_requested():
         return
 
-    env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')

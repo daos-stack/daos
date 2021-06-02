@@ -3,8 +3,6 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
-    env.AppendUnique(LIBPATH=[Dir('.')])
-
     denv = env.Clone()
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     prereqs.require(denv, 'pmdk', 'argobots', 'protobufc')

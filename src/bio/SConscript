@@ -6,10 +6,11 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs', 'control_tgts')
 
+    env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(LIBPATH=[Dir('smd')])
+
     if not prereqs.server_requested():
         return
-
-    env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
