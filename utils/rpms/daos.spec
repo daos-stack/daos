@@ -462,7 +462,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Wed June 02 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.101-3
+* Wed Jun 02 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.101-3
 - Remove libs from devel package
 
 * Thu May 20 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-101-2
