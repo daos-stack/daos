@@ -898,6 +898,37 @@ test_ephemeral_nested(void **state)
 }
 
 static void
+test_ephemeral_cleared_sibling(void **state)
+{
+	char			*path1 = "gurt/tests/cleared_link/1";
+	char			*path2 = "gurt/tests/cleared_link/2";
+	struct d_tm_node_t	*node1 = NULL;
+	struct d_tm_node_t	*node2 = NULL;
+	key_t			 key1;
+	key_t			 key2;
+	size_t			 test_mem_size = 1024;
+	int			 rc;
+
+	rc = d_tm_add_ephemeral_dir(&node1, test_mem_size, path1);
+	assert_rc_equal(rc, 0);
+	assert_non_null(node1);
+	key1 = node1->dtn_shmem_key;
+
+	rc = d_tm_add_ephemeral_dir(&node2, test_mem_size, path2);
+	assert_rc_equal(rc, 0);
+	assert_non_null(node2);
+	key2 = node2->dtn_shmem_key;
+
+	rc = d_tm_del_ephemeral_dir(path1);
+	assert_rc_equal(rc, 0);
+	verify_ephemeral_gone(path1, key1);
+
+	rc = d_tm_del_ephemeral_dir(path2);
+	assert_rc_equal(rc, 0);
+	verify_ephemeral_gone(path2, key2);
+}
+
+static void
 expect_num_attached(int shmid, int expected)
 {
 	struct shmid_ds	shm_info = {0};
@@ -1212,6 +1243,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_units),
 		cmocka_unit_test(test_ephemeral_simple),
 		cmocka_unit_test(test_ephemeral_nested),
+		cmocka_unit_test(test_ephemeral_cleared_sibling),
 		cmocka_unit_test(test_gc_ctx),
 		/* Run after the tests that populate the metrics */
 		cmocka_unit_test(test_list_ephemeral),

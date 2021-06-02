@@ -485,13 +485,17 @@ find_child(struct d_tm_context *ctx, struct d_tm_node_t *parent,
 		return NULL;
 
 	client_name = conv_ptr(shmem, child->dtn_name);
-	while ((child != NULL) && (client_name != NULL) &&
-	       strncmp(client_name, name, D_TM_MAX_NAME_LEN) != 0) {
+
+	/*
+	 * cleared links don't have names but we still want to traverse
+	 * their siblings
+	 */
+	while ((child != NULL) && (client_name == NULL ||
+		strncmp(client_name, name, D_TM_MAX_NAME_LEN) != 0)) {
 		child = conv_ptr(shmem, child->dtn_sibling);
 		client_name = NULL;
 		if (child == NULL)
 			break;
-
 		client_name = conv_ptr(shmem, child->dtn_name);
 	}
 
@@ -2315,11 +2319,15 @@ clear_region_entry_for_key(struct d_tm_shmem_hdr *shmem, key_t key)
 
 	d_list_for_each_entry(tmp, &shmem->sh_subregions, rl_link) {
 		if (tmp->rl_key == key) {
+			D_DEBUG(DB_TRACE,
+				"cleared shmem metadata for key 0x%x\n", key);
 			tmp->rl_link_node = NULL;
 			tmp->rl_key = 0;
 			return;
 		}
 	}
+
+	D_WARN("shmem metadata not found for key 0x%x\n", key);
 }
 
 static int
@@ -2348,8 +2356,10 @@ rm_ephemeral_dir(struct d_tm_context *ctx, struct d_tm_node_t *link)
 	}
 
 	node = d_tm_follow_link(ctx, link);
-	if (node == NULL)
+	if (node == NULL) {
+		D_WARN("got NULL after following link [%s]\n", link->dtn_name);
 		D_GOTO(out_link, rc = 0);
+	}
 	key = node->dtn_shmem_key;
 
 	shmem = get_shmem_for_key(ctx, key);
