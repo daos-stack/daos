@@ -209,6 +209,7 @@ COPY VERSION LICENSE ftest.sh SConstruct ./
 COPY site_scons site_scons
 COPY utils utils
 COPY src src
+COPY doc doc
 USER root:root
 RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
