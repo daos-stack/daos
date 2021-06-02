@@ -20,9 +20,6 @@ features are as follows:
 * VMD enablement and discovery
 * format (wipe) of device namespaces
 
-Functionality is exposed through the package's `Env` and `Nvme` public
-interfaces.
-
 ### How to build these bindings
 
 Using these bindings assumes SPDK shared lib is installed in
