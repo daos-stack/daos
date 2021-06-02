@@ -30,3 +30,7 @@ def warningAsException(flag=1):
 def enableWarningClass(_name):
     """Fake enableWarningClass"""
     pass
+
+class MissingSConscriptWarning(Exception):
+    """Fake MissingSConscriptWarning"""
+    pass

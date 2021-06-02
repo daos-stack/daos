@@ -165,6 +165,20 @@ def set_defaults(env, daos_version):
     if env.get('BUILD_TYPE') != 'release':
         env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
 
+def build_misc():
+    """Build miscelaneous items"""
+    # install the configuration files
+    SConscript('utils/config/SConscript')
+
+    # install certificate generation files
+    SConscript('utils/certs/SConscript')
+
+    # install man pages
+    try:
+        SConscript('doc/man/SConscript', must_exist=0)
+    except SCons.Warnings.MissingSConscriptWarning as _warn:
+        print("Missing doc/man/SConscript...")
+
 def scons(): # pylint: disable=too-many-locals
     """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
@@ -440,14 +454,7 @@ def scons(): # pylint: disable=too-many-locals
         env.Install("$PREFIX/lib64/daos", api_version)
     env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
 
-    # install the configuration files
-    SConscript('utils/config/SConscript')
-
-    # install certificate generation files
-    SConscript('utils/certs/SConscript')
-
-    # install man pages
-    SConscript('doc/man/SConscript')
+    build_misc()
 
     Default(build_prefix)
     Depends('install', build_prefix)
