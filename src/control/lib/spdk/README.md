@@ -8,8 +8,8 @@ installed.
 To install please follow steps in the
 [SPDK github instructions](https://github.com/spdk/spdk).
 
-These bindings are currently working against SPDK 20.01.2 and DPDK 19.11.6
-which are the versions pinned in the DAOS 1.2 release.
+These bindings are currently working against SPDK 21.07-pre and DPDK 21.02.0
+which are the versions pinned in the DAOS 2.0 release.
 
 This is not a general purpose set of SPDK go bindings but provides a set of
 capabilities tailored to the specific needs of DAOS, the NVMe SSD related
