@@ -2330,7 +2330,7 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 
 		D_ASSERT(bio_iov2len(biov) != 0);
 		D_ALLOC(biov_dup->bi_buf, bio_iov2len(biov));
-		if (biov_dup->bi_buf) {
+		if (biov_dup->bi_buf == NULL) {
 			D_ERROR("Failed to alloc "DF_U64" bytes\n",
 				bio_iov2len(biov));
 			return -DER_NOMEM;
