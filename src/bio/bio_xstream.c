@@ -93,8 +93,6 @@ bio_spdk_env_init(void)
 	opts.env_context = "--log-level=lib.eal:4";
 
 	rc = spdk_env_init(&opts);
-	if (opts.pci_allowed != NULL)
-		D_FREE(opts.pci_allowed);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
@@ -188,7 +186,6 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		goto free_conf;
 
 	return 0;
-
 
 free_conf:
 	nvme_glb.bd_nvme_conf = NULL;

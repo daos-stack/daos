@@ -511,12 +511,4 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
-/*
- * FIXME copied from spdk_internal/event.h, should be removed once they are
- * exported by SPDK.
- */
-typedef void (*spdk_subsystem_init_fn)(int rc, void *ctx);
-void spdk_subsystem_init(spdk_subsystem_init_fn cb_fn, void *cb_arg);
-void spdk_subsystem_fini(spdk_msg_fn cb_fn, void *cb_arg);
-
 #endif /* __BIO_INTERNAL_H__ */
