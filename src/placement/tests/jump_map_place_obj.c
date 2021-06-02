@@ -90,7 +90,6 @@ object_class_is_verified(void **state)
 	struct pool_map		*po_map;
 	struct pl_map		*pl_map;
 
-#define DAOS_6295 0
 	/*
 	 * ---------------------------------------------------------
 	 * with a single target
@@ -108,13 +107,10 @@ object_class_is_verified(void **state)
 	assert_invalid_param(pl_map, OC_RP_4G1);
 	assert_invalid_param(pl_map, OC_RP_8G1);
 
-#if DAOS_6295
 	/* Multiple groups should fail because there's only 1 target */
-	print_message("Skipping rest until DAOS-XXXX is resolved");
 	assert_invalid_param(pl_map, OC_S2);
 	assert_invalid_param(pl_map, OC_S4);
 	assert_invalid_param(pl_map, OC_S512);
-#endif
 	free_pool_and_placement_map(po_map, pl_map);
 
 
@@ -138,11 +134,9 @@ object_class_is_verified(void **state)
 	assert_invalid_param(pl_map, OC_RP_3G1);
 	assert_invalid_param(pl_map, OC_RP_4G1);
 	assert_invalid_param(pl_map, OC_RP_8G1);
-#if DAOS_6295
 	/* The following require more targets than available. */
 	assert_invalid_param(pl_map, OC_S4);
 	assert_invalid_param(pl_map, OC_S512);
-#endif
 	free_pool_and_placement_map(po_map, pl_map);
 
 	/*
@@ -155,10 +149,8 @@ object_class_is_verified(void **state)
 	assert_placement_success(pl_map, OC_S1);
 	assert_placement_success(pl_map, OC_RP_2G1);
 	assert_placement_success(pl_map, OC_RP_2GX);
-#if DAOS_6295
 	assert_invalid_param(pl_map, OC_RP_2G2);
 	assert_invalid_param(pl_map, OC_RP_2G4);
-#endif
 
 	assert_invalid_param(pl_map, OC_RP_2G512);
 	assert_invalid_param(pl_map, OC_RP_3G1);
@@ -172,9 +164,7 @@ object_class_is_verified(void **state)
 	 */
 	gen_maps(2, 1, 2, &po_map, &pl_map);
 	assert_placement_success(pl_map, OC_RP_2G2);
-#if DAOS_6295
 	assert_invalid_param(pl_map, OC_RP_2G4);
-#endif
 
 	free_pool_and_placement_map(po_map, pl_map);
 
@@ -184,9 +174,7 @@ object_class_is_verified(void **state)
 	 * ---------------------------------------------------------
 	 */
 	gen_maps(2, 1, 4, &po_map, &pl_map);
-#if DAOS_6295
 	assert_placement_success(pl_map, OC_RP_2G4);
-#endif
 	/* even though it's 8 total, still need a domain for each replica */
 	assert_invalid_param(pl_map, OC_RP_4G2);
 
@@ -203,7 +191,6 @@ object_class_is_verified(void **state)
 	free_pool_and_placement_map(po_map, pl_map);
 
 	/* The End */
-	skip_msg("DAOS-6295: a bunch commented out in this test. ");
 }
 
 /*
@@ -1802,8 +1789,6 @@ unbalanced_config(void **state)
 	TEST_NON_STANDARD_SYSTEMS(domain_targets_nr, domain_targets,
 				  OC_RP_3G2, 6);
 
-	skip_msg("DAOS-6348: The following two tests have duplicate targets "
-		 "picked");
 	TEST_NON_STANDARD_SYSTEMS(domain_targets_nr, domain_targets,
 				  OC_RP_3GX, (total_targets / 3) * 3);
 
