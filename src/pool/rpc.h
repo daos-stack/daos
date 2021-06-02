@@ -215,6 +215,7 @@ CRT_RPC_DECLARE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
 	((struct pool_op_out)	  (pqio_op)		CRT_VAR) \
 	((d_rank_t)		  (pqio_rank)		CRT_VAR) \
 	((uint32_t)		  (pqio_tgt)		CRT_VAR) \
+	((struct daos_space)	  (pqio_space)		CRT_RAW) \
 	((daos_target_state_t)	  (pqio_state)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
