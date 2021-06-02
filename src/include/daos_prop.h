@@ -273,7 +273,7 @@ enum {
 
 /**
  * Level of fault-domain to use for object allocation
- * node is hardcoded to 1, [2-254] are defined by the admin
+ * rank is hardcoded to 1, [2-254] are defined by the admin
  */
 enum {
 	DAOS_PROP_CO_REDUN_MIN	= 1,

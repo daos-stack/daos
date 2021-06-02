@@ -15,7 +15,8 @@
 #include <daos/common.h>
 
 #define POOL_MAP_VER_1		(1)
-#define POOL_MAP_VERSION	POOL_MAP_VER_1
+#define POOL_MAP_VER_2		(2)
+#define POOL_MAP_VERSION	POOL_MAP_VER_2
 
 #define DF_TARGET "Target[%d] (rank %u idx %u status %u)"
 #define DP_TARGET(t) t->ta_comp.co_id, t->ta_comp.co_rank, t->ta_comp.co_index,\
