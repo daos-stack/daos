@@ -63,6 +63,7 @@ enum pool_component_flags {
 	PO_COMPF_DOWN2OUT	= 1,
 };
 
+#define co_in_ver	co_out_ver
 /** parent class of all all pool components: target, domain */
 struct pool_component {
 	/** pool_comp_type_t */
@@ -84,11 +85,16 @@ struct pool_component {
 	uint32_t	co_ver;
 	/** failure sequence */
 	uint32_t		co_fseq;
+
 	/**
-	 * version it's been EXCLUDE_OUT (when status set to
-	 * PO_COMP_ST_DOWNOUT).
+	 * co_in_ver and co_out_ver are shared the same item here.
+	 * If the target status(co_status) is PO_COMP_ST_DOWNOUT.
+	 * it means the map version when the target is excluded.
+	 * Otherwise, it is the map version when the target is
+	 * extended or reintegrated.
 	 */
-	uint32_t		co_out_ver;
+	uint32_t		co_out_ver; /* co_in_ver */
+
 	/** flags, see enum pool_component_flags */
 	uint32_t		co_flags;
 	/** number of children or storage partitions */

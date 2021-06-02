@@ -91,8 +91,8 @@ const (
 	DaosNotAttached DaosStatus = -C.DER_NOTATTACH
 	// DaosMismatch indicates a version mismatch
 	DaosMismatch DaosStatus = -C.DER_MISMATCH
-	// DaosEvicted indicates that the rank was evicted
-	DaosEvicted DaosStatus = -C.DER_EVICTED
+	// DaosExcluded indicates that the rank was excluded
+	DaosExcluded DaosStatus = -C.DER_EXCLUDED
 	// DaosNoReply indicates that there was no reply to an RPC
 	DaosNoReply DaosStatus = -C.DER_NOREPLY
 	// DaosDenialOfService indicates that there was a denial of service

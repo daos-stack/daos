@@ -568,7 +568,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 
 		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
 				   mrone->mo_iod_num, mrone->mo_iods, sgls,
-				   NULL, DIOF_TO_LEADER, NULL, csum_iov_fetch);
+				   NULL, flags, NULL, csum_iov_fetch);
 	}
 
 	return rc;
@@ -1203,7 +1203,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		bsgl = vos_iod_sgl_at(ioh, i);
 		D_ASSERT(bsgl != NULL);
 
-		rc = bio_sgl_convert(bsgl, &sgls[i], false);
+		rc = bio_sgl_convert(bsgl, &sgls[i]);
 		if (rc)
 			goto post;
 		sgl_cnt++;
@@ -2536,8 +2536,12 @@ free:
 
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
-	D_DEBUG(DB_REBUILD, "stop migrate obj "DF_UOID" for shard %u: "
-		DF_RC"\n", DP_UOID(arg->oid), arg->shard, DP_RC(rc));
+
+	D_DEBUG(DB_REBUILD, ""DF_UUID"/%u stop migrate obj "DF_UOID
+		" for shard %u executed "DF_U64" : " DF_RC"\n",
+		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version,
+		DP_UOID(arg->oid), arg->shard, tls->mpt_obj_executed_ult,
+		DP_RC(rc));
 	D_FREE(arg->snaps);
 	D_FREE(arg);
 	migrate_pool_tls_put(tls);
@@ -2621,8 +2625,10 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 
 	d_iov_set(&val_iov, &val, sizeof(struct migrate_obj_val));
 	rc = obj_tree_insert(toh, cont_arg->cont_uuid, oid, &val_iov);
-	D_DEBUG(DB_REBUILD, "Insert "DF_UUID"/"DF_UOID": "DF_RC"\n",
-		DP_UUID(cont_arg->cont_uuid), DP_UOID(oid), DP_RC(rc));
+	D_DEBUG(DB_REBUILD, "Insert "DF_UUID"/"DF_UUID"/"DF_UOID": ver %u "
+		"generated "DF_U64" "DF_RC"\n", DP_UUID(tls->mpt_pool_uuid),
+		DP_UUID(cont_arg->cont_uuid), DP_UOID(oid), tls->mpt_version,
+		tls->mpt_obj_generated_ult, DP_RC(rc));
 
 	return 0;
 
@@ -3112,10 +3118,10 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
 	ABT_cond_broadcast(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 
-	D_DEBUG(DB_REBUILD, "pool "DF_UUID" migrating=%s,"
+	D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver %u migrating=%s,"
 		" obj_count="DF_U64", rec_count="DF_U64
 		" size="DF_U64" obj %u/%u general %u/%u status %d\n",
-		DP_UUID(pool_uuid), dms->dm_migrating ? "yes" : "no",
+		DP_UUID(pool_uuid), ver, dms->dm_migrating ? "yes" : "no",
 		dms->dm_obj_count, dms->dm_rec_count, dms->dm_total_size,
 		arg.obj_generated_ult, arg.obj_executed_ult,
 		arg.generated_ult, arg.executed_ult, dms->dm_status);
