@@ -7,7 +7,7 @@
 from apricot import TestWithServers, skipForTicket
 from daos_utils import DaosCommand
 
-class RebuildTests(TestWithServers):
+class RbldBasic(TestWithServers):
     """Test class for rebuild tests.
 
     Test Class Description:
