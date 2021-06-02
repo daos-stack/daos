@@ -634,12 +634,21 @@ type containerSetAttributeCmd struct {
 	existingContainerCmd
 
 	Args struct {
-		Name  string `positional-arg-name:"<attribute name>"`
+		Attr  string `positional-arg-name:"<attribute name>"`
 		Value string `positional-arg-name:"<attribute value>"`
-	} `positional-args:"yes" required:"yes"`
+	} `positional-args:"yes"`
+	FlagAttr  string `long:"attr" short:"a" description:"attribute name"`
+	FlagValue string `long:"value" short:"v" description:"attribute value"`
 }
 
 func (cmd *containerSetAttributeCmd) Execute(args []string) error {
+	if cmd.FlagAttr != "" {
+		cmd.Args.Attr = cmd.FlagAttr
+	}
+	if cmd.FlagValue != "" {
+		cmd.Args.Value = cmd.FlagValue
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
@@ -653,12 +662,12 @@ func (cmd *containerSetAttributeCmd) Execute(args []string) error {
 	defer cleanup()
 
 	if err := setDaosAttribute(cmd.cContHandle, contAttr, &attribute{
-		Name:  cmd.Args.Name,
+		Name:  cmd.Args.Attr,
 		Value: cmd.Args.Value,
 	}); err != nil {
 		return errors.Wrapf(err,
 			"failed to set attribute %q on container %s",
-			cmd.Args.Name, cmd.ContainerID())
+			cmd.Args.Attr, cmd.ContainerID())
 	}
 
 	return nil
