@@ -27,7 +27,7 @@ tests: !mux
   test_group:
     name: test_group_basic
     test_servers_bin: crt_launch
-    test_servers_arg: "-e test_group_np_srv --name tg_srv_grp_swim_test --use_cfg 0 --register_swim_callback 1 --shutdown_delay 8 --write_completion_file"
+    test_servers_arg: "-e test_group_np_srv --name tg_srv_grp_swim_test --use_cfg 0 --register_swim_callback 1 --shutdown_delay 2 --write_completion_file"
     test_servers_env: ""
     test_servers_ppn: "3"
     test_clients_bin: test_group_np_cli

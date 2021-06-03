@@ -105,6 +105,19 @@ CRT_RPC_DECLARE(test_disable_swim,
 CRT_RPC_DEFINE(test_disable_swim,
 	       CRT_ISEQ_TEST_DISABLE_SWIM, CRT_OSEQ_TEST_DISABLE_SWIM)
 
+/* input fields */
+#define CRT_ISEQ_TEST_SHUTDOWN				 \
+	((uint32_t)		(rank)			CRT_VAR)
+
+/* output fields */
+#define CRT_OSEQ_TEST_SHUTDOWN				 \
+	((uint32_t)		(bool_val)		CRT_VAR)
+
+CRT_RPC_DECLARE(test_shutdown,
+		CRT_ISEQ_TEST_SHUTDOWN, CRT_OSEQ_TEST_SHUTDOWN)
+CRT_RPC_DEFINE(test_shutdown,
+	       CRT_ISEQ_TEST_SHUTDOWN, CRT_OSEQ_TEST_SHUTDOWN)
+
 static void
 test_checkin_handler(crt_rpc_t *rpc_req)
 {
@@ -348,14 +361,35 @@ client_cb_common(const struct crt_cb_info *cb_info)
 static void
 test_shutdown_handler(crt_rpc_t *rpc_req)
 {
-	DBG_PRINT("tier1 test_srver received shutdown request, opc: %#x.\n",
-		  rpc_req->cr_opc);
+	struct test_shutdown_in		*e_req;
+	struct test_shutdown_out	*e_reply;
+	int				rc = 0;
 
-	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
-	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
+	/* CaRT internally already allocated the input/output buffer */
+	e_req = crt_req_get(rpc_req);
+
+	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
+
+	DBG_PRINT("tier1 test_server recv'd shutdown, opc: %#x.\n",
+		  rpc_req->cr_opc);
+	DBG_PRINT("tier1 shutdown input - rank: %d.\n",
+		  e_req->rank);
+
+	e_reply = crt_reply_get(rpc_req);
+
+	/* If we got past the previous assert, then we've succeeded */
+	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
+		  e_reply);
+	e_reply->bool_val = true;
+
+	rc = crt_reply_send(rpc_req);
+	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
 	tc_progress_stop();
-	DBG_PRINT("tier1 test_srver set shutdown flag.\n");
+
+	DBG_PRINT("tier1 test_srver sent shutdown reply,"
+		  "e_reply->bool_val: %d.\n",
+		  e_reply->bool_val);
 }
 
 static void
@@ -400,8 +434,8 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
 		.prf_hdlr	= test_checkin_handler,
 		.prf_co_ops	= NULL,
 	}, {
-		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
-		.prf_req_fmt	= NULL,
+		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
+		.prf_req_fmt	= &CQF_test_shutdown,
 		.prf_hdlr	= test_shutdown_handler,
 		.prf_co_ops	= NULL,
 	}, {
