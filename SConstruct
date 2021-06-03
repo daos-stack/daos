@@ -2,12 +2,11 @@
 import os
 import platform
 import subprocess
-from subprocess import call
 import time
 import errno
 import SCons.Warnings
 from SCons.Script import BUILD_TARGETS
-import distutils.spawn
+from distutils.spawn import find_executable
 
 SCons.Warnings.warningAsException()
 
@@ -66,7 +65,7 @@ def get_version():
 
 def is_valid_binary(binary_name):
     """ Check if binary is valid system binary """
-    binpath = distutils.spawn.find_executable(binary_name)
+    binpath = find_executable(binary_name)
     return bool(binpath.startswith("/usr")), binpath
 
 API_VERSION_MAJOR = "1"
@@ -183,7 +182,7 @@ def set_defaults(env, daos_version):
             print("Endeavor patch exists")
             res = is_valid_binary('git')
             if res[0]:
-                call([res[1], "apply", patchfile])
+                subprocess.call([res[1], "apply", patchfile])
         else:
             print("Missing patchfile, not in endeavor?.. skip patching")
 
