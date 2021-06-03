@@ -4,6 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from logging import error
 from apricot import TestWithServers
 from telemetry_utils import TelemetryUtils
 
@@ -18,7 +19,18 @@ class TestWithTelemetry(TestWithServers):
         """Initialize a Test object."""
         super().__init__(*args, **kwargs)
         self.container = []
-        self.metrics = {"open": 0, "active": 0, "close": 0, "destroy": 0}
+        self.metrics = {
+            "open_count": 0,
+            "active_count": 0,
+            "close_count": 0,
+            "destroy_count": 0
+        }
+
+    def create_container(self):
+        """Create a new container and update the metrics."""
+        self.container.append(self.get_container(self.pool))
+        self.metrics["open_count"] += 1
+        self.metrics["close_count"] += 1
 
     def open_container(self, container):
         """Open the container and update the metrics.
@@ -27,8 +39,8 @@ class TestWithTelemetry(TestWithServers):
             container (TestContainer): container to open
         """
         container.open()
-        self.metrics["open"] += 1
-        self.metrics["active"] += 1
+        self.metrics["open_count"] += 1
+        self.metrics["active_count"] += 1
 
     def close_container(self, container):
         """Close the container and update the metrics.
@@ -36,9 +48,9 @@ class TestWithTelemetry(TestWithServers):
         Args:
             container (TestContainer): container to close
         """
-        container.open()
-        self.metrics["close"] += 1
-        self.metrics["active"] -= 1
+        container.close()
+        self.metrics["close_count"] += 1
+        self.metrics["active_count"] -= 1
 
     def destroy_container(self, container):
         """Destroy the container and update the metrics.
@@ -47,7 +59,7 @@ class TestWithTelemetry(TestWithServers):
             container (TestContainer): container to destroy
         """
         container.destroy()
-        self.metrics["destroy"] += 1
+        self.metrics["destroy_count"] += 1
 
     def check_metrics(self, telemetry):
         """Check the container telemetry metrics.
@@ -56,6 +68,48 @@ class TestWithTelemetry(TestWithServers):
             telemetry (TelemetryUtils): TelemetryUtils object
         """
         errors = telemetry.check_container_metrics(**self.metrics)
+        if errors:
+            for error in errors:
+                self.log.error("MERTIC_ERROR: %s", error)
+            # self.fail("\n".join(errors))
+
+    def test_telemetry_list(self):
+        """JIRA ID: DAOS-7667 / SRS-324.
+
+        Test Description:
+            Verify the dmg telemetry list command.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,telemetry
+        :avocado: tags=test_with_telemetry,test_telemetry_list
+        """
+        metric_list_qty = self.params.get("metric_list_qty", "/run/test/*", 1)
+        telemetry = TelemetryUtils(
+            self.get_dmg_command(), self.server_managers[0].hosts)
+
+        # List all of the telemetry metrics
+        result = telemetry.list_metrics()
+
+        # Verify the list
+        errors = []
+        self.log.info(
+            "Verifying telemetry metrics list for %s/%s hosts:",
+            len(result), len(self.server_managers[0].hosts))
+        if sorted(result) != sorted(self.server_managers[0].hosts):
+            msg = "Telemetry metrics names missing for hosts {}: {}".format(
+                self.server_managers[0].hosts, result)
+            self.log.error("  - %s", msg)
+            errors.append(msg)
+        for host in result:
+            self.log.info(
+                "  %s: detected %s/%s telemetry metric names",
+                host, len(result[host]), metric_list_qty)
+            if len(result[host]) != metric_list_qty:
+                msg = "Missing {} telemetry metrics for {}".format(
+                    metric_list_qty - len(result[host]), host)
+                self.log.error("    - %s", msg)
+                errors.append(msg)
         if errors:
             self.fail("\n".join(errors))
 
@@ -67,7 +121,7 @@ class TestWithTelemetry(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=telemetry,container
+        :avocado: tags=control,telemetry,container
         :avocado: tags=test_with_telemetry,test_container_telemetry
         """
         container_qty = self.params.get("container_qty", "/run/test/*", 1)
@@ -78,11 +132,20 @@ class TestWithTelemetry(TestWithServers):
 
         # Verify container telemetry metrics report 0 before container creation
         self.log.info("Before container creation")
-        self.check_metrics(telemetry)
+        data = telemetry.get_container_metrics()
+        for host in data:
+            self.metrics["open_count"] = \
+                data[host]["engine_container_ops_open_total"]
+            self.metrics["active_count"] = \
+                data[host]["engine_container_ops_open_active"]
+            self.metrics["close_count"] = \
+                data[host]["engine_container_ops_close_total"]
+            self.metrics["destroy_count"] = \
+                data[host]["engine_container_ops_destroy_total"]
 
         # Create a number of containers and verify metrics
         for loop in range(1, container_qty + 1):
-            self.container.append(self.get_container(self.pool))
+            self.create_container()
             self.log.info(
                 "Container %s/%s: After create()", loop, container_qty + 1)
             self.check_metrics(telemetry)
@@ -99,7 +162,7 @@ class TestWithTelemetry(TestWithServers):
 
             # Close each container and verify metrics
             for loop, container in enumerate(self.container):
-                self.close_container()
+                self.close_container(container)
                 self.log.info(
                     "Loop %s/%s: Container %s/%s: After close()",
                     outer_loop, open_close_qty + 1, loop, len(self.container))

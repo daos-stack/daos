@@ -22,6 +22,25 @@ class TelemetryUtils():
         self.dmg = dmg
         self.hosts = NodeSet.fromlist(servers)
 
+    def list_metrics(self):
+        """List the available metrics for each host.
+
+        Returns:
+            dict: a dictionary of host keys linked to a list of metric names
+
+        """
+        info = {}
+        self.log.info("Listing telemetry metrics from %s", self.hosts)
+        for host in self.hosts:
+            data = self.dmg.telemetry_metrics_list(host=host)
+            info[host] = []
+            if "response" in data:
+                if "available_metric_sets" in data["response"]:
+                    for entry in data["response"]["available_metric_sets"]:
+                        if "name" in entry:
+                            info[host].append(entry["name"])
+        return info
+
     def get_metrics(self, name):
         """Obtain the specified metric informaton for each host.
 
@@ -48,18 +67,46 @@ class TelemetryUtils():
         self.log.debug("INFO = %s", info)
         return info
 
-    def check_container_metrics(self, open=None, active=None, close=None,
-                                destroy=None):
+    def get_container_metrics(self):
+        """Get the container telemetry metrics.
+
+        Returns:
+            dict: dictionary of  of errors detected
+
+        """
+        names = [
+            "engine_container_ops_open_total",
+            "engine_container_ops_open_active",
+            "engine_container_ops_close_total",
+            "engine_container_ops_destroy_total",
+        ]
+        data = {}
+        info = self.get_metrics(",".join(names))
+        self.log.info("Container Telemetry Information")
+        for host in info:
+            data[host] = {key: 0 for key in names}
+            for name in names:
+                if name in info[host]:
+                    description = info[host][name]["description"]
+                    for metric in info[host][name]["metrics"]:
+                        self.log.info(
+                            "  %s (%s): %s (%s)",
+                            description, name, metric["value"], host)
+                        data[host][name] = metric["value"]
+        return data
+
+    def check_container_metrics(self, open_count=None, active_count=None,
+                                close_count=None, destroy_count=None):
         """Verify the container telemetry metrics.
 
         Args:
-            open (int, optional): Number of times cont_open has been called.
+            open_count (int, optional): Number of times cont_open has been
+                called. Defaults to None.
+            active_count (int, optional): Number of open container handles.
                 Defaults to None.
-            active (int, optional): Number of open container handles. Defaults
-                to None.
-            close (int, optional): Number of times cont_close has been called.
-                Defaults to None.
-            destroy (int, optional): Number of times cont_destroy has been
+            close_count (int, optional): Number of times cont_close has been
+                called. Defaults to None.
+            destroy_count (int, optional): Number of times cont_destroy has been
                 called. Defaults to None.
 
         Returns:
@@ -74,29 +121,20 @@ class TelemetryUtils():
             "engine_container_ops_destroy_total",
         ]
         expected = {
-            "engine_container_ops_open_total": open,
-            "engine_container_ops_open_active": active,
-            "engine_container_ops_close_total": close,
-            "engine_container_ops_destroy_total": destroy,
+            "engine_container_ops_open_total": open_count,
+            "engine_container_ops_open_active": active_count,
+            "engine_container_ops_close_total": close_count,
+            "engine_container_ops_destroy_total": destroy_count,
         }
-        info = self.get_metrics(",".join(names))
-        self.log.info("Container Telemetry Information")
-        for host in info:
+        data = self.get_container_metrics()
+        for host in data:
             for name in names:
-                if name in info[host]:
-                    description = info[host][name]["description"]
-                    for metric in info[host][name]["metrics"]:
-                        value = metric["value"]
-                        self.log.info(
-                            "  %s (%s): %s (%s)",
-                            description, name, metric["value"], host)
-                        if (expected[name] is not None and
-                                expected[name] != metric["value"]):
-                            errors.append(
-                                "{} mismatch on {} - {}: {} != {}".format(
-                                    description, host, metric["label"],
-                                    metric["value"], open))
+                if name in data[host]:
+                    if (expected[name] is not None and
+                            expected[name] != data[host][name]):
+                        errors.append(
+                            "{} mismatch on {}: expected={}; actual={}".format(
+                                name, host, expected[name], data[host][name]))
                 else:
                     errors.append("No {} data for {}".format(name, host))
-
         return errors

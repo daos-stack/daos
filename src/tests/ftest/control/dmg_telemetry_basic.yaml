@@ -3,7 +3,9 @@ hosts:
     - server-A
   test_clients:
     - client-A
-timeout: 130
+timeouts:
+  test_telemetry_list: 15
+  test_container_telemetry: 60
 pool:
   scm_size: 10G
   control_method: dmg
@@ -11,5 +13,6 @@ container:
   type: POSIX
   control_method: daos
 test:
+  metric_list_qty: 160
   container_qty: 5
   open_close_qty: 3

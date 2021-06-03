@@ -4,6 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=pylint-too-many-lines
+
 from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
@@ -926,8 +928,24 @@ class DmgCommand(DmgCommandBase):
 
         return yaml_data
 
+    def telemetry_metrics_list(self, host):
+        """List telemetry metrics.
+
+        Args:
+            host (str): Server host from which to obtain the metrics
+
+        Raises:
+            CommandFailure: if the dmg system query command fails.
+
+        Returns:
+            dict: dictionary of output in JSON format
+
+        """
+        return self._get_json_result(
+            ("telemetry", "metrics", "list"), host=host)
+
     def telemetry_metrics_query(self, host, metrics=None):
-        """Query telemetry metrics to obtain the status of the servers.
+        """Query telemetry metrics.
 
         Args:
             host (str): Server host from which to obtain the metrics
