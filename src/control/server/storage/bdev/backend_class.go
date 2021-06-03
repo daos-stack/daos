@@ -116,21 +116,13 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 		return nil
 	}
 
-	enableVmd := !sb.IsVMDDisabled()
-
 	// TODO: enable AIO config support
 	if req.Class != storage.BdevClassNvme {
 		sb.log.Info("Skipping JSON SPDK config creation for non-NVMe bdev class")
 		return nil
 	}
 
-	// TODO: enable VMD config support
-	if enableVmd {
-		sb.log.Info("Skipping JSON SPDK config creation for VMD enabled hosts")
-		return nil
-	}
-
 	sb.log.Debugf("write nvme output json config: %+v", req)
 
-	return writeJsonConfig(sb.log, enableVmd, req)
+	return writeJsonConfig(sb.log, !sb.IsVMDDisabled(), req)
 }
