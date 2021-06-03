@@ -50,7 +50,7 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 			devList: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
 			expExtraBdevCfgs: []*SpdkSubsystemConfig{
 				{
-					Method: BdevNvmeAttachController,
+					Method: SpdkBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
 						DeviceName:       fmt.Sprintf("Nvme_%s_0", host),
@@ -58,7 +58,7 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 					},
 				},
 				{
-					Method: BdevNvmeAttachController,
+					Method: SpdkBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
 						DeviceName:       fmt.Sprintf("Nvme_%s_1", host),
@@ -361,6 +361,73 @@ func TestBackend_createJsonFile(t *testing.T) {
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
+        }
+      ]
+    }
+  ]
+}
+`,
+		},
+		"nvme; multiple ssds; vmd enabled": {
+			confIn: storage.BdevConfig{
+				Class:      storage.BdevClassNvme,
+				DeviceList: common.MockPCIAddrs(1, 2),
+			},
+			enableVmd: true,
+			expOut: `
+{
+  "subsystems": [
+    {
+      "subsystem": "bdev",
+      "config": [
+        {
+          "params": {
+            "bdev_io_pool_size": 65536,
+            "bdev_io_cache_size": 256
+          },
+          "method": "bdev_set_options"
+        },
+        {
+          "params": {
+            "retry_count": 4,
+            "timeout_us": 0,
+            "nvme_adminq_poll_period_us": 100000,
+            "action_on_timeout": "none",
+            "nvme_ioq_poll_period_us": 0
+          },
+          "method": "bdev_nvme_set_options"
+        },
+        {
+          "params": {
+            "enable": false,
+            "period_us": 10000000
+          },
+          "method": "bdev_nvme_set_hotplug"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_0",
+            "traddr": "0000:01:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_1",
+            "traddr": "0000:02:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        }
+      ]
+    },
+    {
+      "subsystem": "vmd",
+      "config": [
+        {
+          "params": {},
+          "method": "enable_vmd"
         }
       ]
     }
