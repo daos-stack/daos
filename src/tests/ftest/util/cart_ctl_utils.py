@@ -19,7 +19,8 @@ class CartCtlCommand(ExecutableCommand):
         """Create a CartCtl Command object."""
         super().__init__(namespace, command)
 
-        # cmds: get_uri_cache, list_ctx, get_hostname, get_pid, set_log, set_fi_attr, add_log_msg
+        # cmds: get_uri_cache, list_ctx, get_hostname, get_pid, set_log,
+        #       set_fi_attr, add_log_msg
         #
         # set_log:
         #         Set log to mask passed via -l <mask> argument
