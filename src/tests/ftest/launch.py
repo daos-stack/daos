@@ -1897,18 +1897,21 @@ def get_service_status(host_list, service):
     hosts = {"stop": NodeSet(), "disable": NodeSet()}
     # Possible states:
     #   active, inactive, activating, deactivating, failed, unknown
-    states_requiring_stop = ["active", "activating", "deactivating"]
-    states_requiring_disable = states_requiring_stop + ["failed"]
+    check_states = {
+        "stop": ["active", "activating", "deactivating"],
+        "disable": ["active", "activating", "deactivating", "failed"]
+    }
     command = "systemctl is-active {}".format(service)
     task = get_remote_output(host_list, command)
     for output, nodelist in task.iter_buffers():
-        output_str = "\n".join([line.decode("utf-8") for line in output])
+        output_lines = [line.decode("utf-8") for line in output]
         nodeset = NodeSet.fromlist(nodelist)
-        if output_str in states_requiring_stop:
-            hosts["stop"].add(nodeset)
-        if output_str in states_requiring_disable:
-            hosts["disable"].add(nodeset)
-        print("  {}: {}".format(nodeset, output_str))
+        print("  {}: {}".format(nodeset, "\n".join(output_lines)))
+        for key in ["stop", "disable"]:
+            for line in output_lines:
+                if line in check_states[key]:
+                    hosts[key].add(nodeset)
+                    break
     if task.num_timeout() > 0:
         status = 512
         hosts["stop"].add(nodeset)

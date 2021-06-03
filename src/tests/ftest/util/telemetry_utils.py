@@ -64,7 +64,6 @@ class TelemetryUtils():
                             "description": entry["description"],
                             "metrics": entry["metrics"]
                         }
-        self.log.debug("INFO = %s", info)
         return info
 
     def get_container_metrics(self):
@@ -87,11 +86,11 @@ class TelemetryUtils():
             data[host] = {key: 0 for key in names}
             for name in names:
                 if name in info[host]:
-                    description = info[host][name]["description"]
                     for metric in info[host][name]["metrics"]:
                         self.log.info(
                             "  %s (%s): %s (%s)",
-                            description, name, metric["value"], host)
+                            info[host][name]["description"], name,
+                            metric["value"], host)
                         data[host][name] = metric["value"]
         return data
 

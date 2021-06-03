@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-# pylint: disable=pylint-too-many-lines
+# pylint: disable=too-many-lines
 
 from getpass import getuser
 from grp import getgrgid

@@ -4,6 +4,8 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import random
+
 from apricot import TestWithServers
 from telemetry_utils import TelemetryUtils
 
@@ -25,11 +27,19 @@ class TestWithTelemetry(TestWithServers):
             "destroy_count": 0
         }
 
-    def create_container(self):
-        """Create a new container and update the metrics."""
-        self.container.append(self.get_container(self.pool))
-        self.metrics["open_count"] += 1
-        self.metrics["close_count"] += 1
+    def create_container(self, posix):
+        """Create a new container and update the metrics.
+
+        Args:
+            posix (bool): Whether or not to create a posix container
+        """
+        self.container.append(self.get_container(self.pool, create=False))
+        self.container[-1].type.update(
+            "POSIX" if posix else None, "container.type")
+        self.container[-1].create()
+        if self.container[-1].type.value == "POSIX":
+            self.metrics["open_count"] += 1
+            self.metrics["close_count"] += 1
 
     def open_container(self, container):
         """Open the container and update the metrics.
@@ -142,9 +152,9 @@ class TestWithTelemetry(TestWithServers):
 
         # Create a number of containers and verify metrics
         for loop in range(1, container_qty + 1):
-            self.create_container()
+            self.create_container(random.choice([True, False]))
             self.log.info(
-                "Container %s/%s: After create()", loop, container_qty + 1)
+                "Container %s/%s: After create()", loop, container_qty)
             self.check_metrics(telemetry)
 
         # Open each container and verify metrics
@@ -154,7 +164,7 @@ class TestWithTelemetry(TestWithServers):
                 self.open_container(container)
                 self.log.info(
                     "Loop %s/%s: Container %s/%s: After open()",
-                    outer_loop, open_close_qty + 1, loop, len(self.container))
+                    outer_loop, open_close_qty, loop, len(self.container))
                 self.check_metrics(telemetry)
 
             # Close each container and verify metrics
@@ -162,7 +172,7 @@ class TestWithTelemetry(TestWithServers):
                 self.close_container(container)
                 self.log.info(
                     "Loop %s/%s: Container %s/%s: After close()",
-                    outer_loop, open_close_qty + 1, loop, len(self.container))
+                    outer_loop, open_close_qty, loop, len(self.container))
                 self.check_metrics(telemetry)
 
         # Destroy each container
