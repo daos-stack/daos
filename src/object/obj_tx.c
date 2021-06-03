@@ -23,6 +23,8 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+/* For test master. */
+
 /* Server side minor epoch is 16 bits, and starts from 1, that allows at most
  * '2 ^ 16 - 1' sub modifications.
  */
