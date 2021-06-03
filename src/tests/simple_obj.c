@@ -166,7 +166,7 @@ example_daos_key_array()
 	daos_obj_id_t	oid;
 	d_iov_t		dkey;
 	int		total_nr = 0;
-	char		dkey_str[10];
+	char		dkey_str[32] = {0};
 	int		i, rc;
 
 	if (rank == 0)
@@ -327,8 +327,8 @@ example_daos_key_sv()
 	daos_obj_id_t	oid;
 	d_iov_t		dkey;
 	int		total_nr = 0;
-	char		dkey_str[10];
-	char		akey_str[10];
+	char		dkey_str[32] = {0};
+	char		akey_str[32] = {0};
 	int		i, rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -594,7 +594,7 @@ example_daos_kv()
 	daos_handle_t	oh;
 	char		buf[BUFLEN], rbuf[BUFLEN];
 	daos_obj_id_t	oid;
-	char		key[10];
+	char		key[32] = {0};
 	int		i, rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);

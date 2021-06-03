@@ -149,8 +149,8 @@ daos_tests:
     test_daos_degraded_ec_8to23: X
     test_daos_dedup: U
   args:
-    test_daos_degraded_ec_0to6: -u subtests="0-6"
-    test_daos_degraded_ec_8to23: -u subtests="8-23"
+    test_daos_degraded_ec_0to6: -u subtests="0-6" --csum_type=crc64
+    test_daos_degraded_ec_8to23: -u subtests="8-23" --csum_type=crc64
     test_daos_ec_io: -l"EC_4P2G1"
   scalable_endpoint:
     test_daos_degraded_mode: True
