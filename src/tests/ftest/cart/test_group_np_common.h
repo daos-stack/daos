@@ -381,9 +381,9 @@ test_disable_swim_handler(crt_rpc_t *rpc_req)
 	e_reply = crt_reply_get(rpc_req);
 
 	/* If we got past the previous assert, then we've succeeded */
-	e_reply->bool_val = true;
 	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
 		  e_reply);
+	e_reply->bool_val = true;
 
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
