@@ -3304,6 +3304,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 			/* on_put() done in crt_ivsync_rpc_issue() */
 			if (rc == 0)
 				D_GOTO(exit, rc);
+			D_GOTO(exit, rc);
 		}
 
 		D_GOTO(put, rc);

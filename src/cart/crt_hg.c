@@ -439,7 +439,7 @@ d_list_t
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return &(prov_data->cpg_ctx_list);
+	return &prov_data->cpg_ctx_list;
 }
 
 static int
@@ -1358,6 +1358,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		D_ERROR("HG_Bulk_create failed, hg_ret: %d.\n", hg_ret);
 		rc = -DER_HG;
 	}
+	rc = -DER_HG;
 
 out:
 	/* HG_Bulk_create copied the parameters, can free here */
