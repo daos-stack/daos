@@ -4190,19 +4190,24 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 			goto out;
 	}
 
-	/* For resent RPC, abort it firstly if exist but with different (old)
-	 * epoch, then re-execute with new epoch.
-	 */
-	if (rc1 == -DER_MISMATCH) {
+	switch (rc1) {
+	case -DER_NONEXIST:
+	case 0:
+		break;
+	case -DER_MISMATCH:
+		/* For resent RPC, abort it firstly if exist but with different
+		 * (old) epoch, then re-execute with new epoch.
+		 */
 		rc = vos_dtx_abort(ioc->ioc_vos_coh, DAOS_EPOCH_MAX,
 				   &dcsh->dcsh_xid, 1);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
+		break;
+	default:
+		D_ASSERTF(rc1 < 0, "Resend check result: %d\n", rc1);
+		D_GOTO(out, rc = rc1);
 	}
-
-	if (rc1 < 0 && rc1 != -DER_NONEXIST)
-		goto out;
 
 	if (oci->oci_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
