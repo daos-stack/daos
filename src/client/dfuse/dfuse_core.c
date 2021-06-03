@@ -55,7 +55,6 @@ dfuse_progress_thread(void *arg)
 	return NULL;
 }
 
-#if 0
 /* Parse a string to a time, used for reading container attributes info
  * timeouts.
  */
@@ -91,7 +90,6 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 	*_out = out;
 	return 0;
 }
-#endif
 
 /* Inode entry hash table operations */
 
@@ -492,8 +490,6 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
  */
 #define ATTR_VALUE_LEN 128
 
-static void dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
-
 /* Setup caching attributes for a container.
  *
  * These are read from pool attributes, or can be overwritten on the command
@@ -506,13 +502,6 @@ static void dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
 static int
 dfuse_cont_get_cache(struct dfuse_cont *dfc)
 {
-#if 1
-	/**
-	 * XXX use default cache value until DAOS-7671 is fixed
-	 */
-	dfuse_set_default_cont_cache_values(dfc);
-	return 0;
-#else
 	size_t		size;
 	char		*buff;
 	int		rc;
@@ -617,7 +606,6 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 out:
 	D_FREE(buff);
 	return rc;
-#endif
 }
 
 /* Set default cache values for a container.
@@ -969,19 +957,21 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
-	if (!dfuse_launch_fuse(fs_handle, fuse_ops, &args)) {
-		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
-		D_GOTO(err_ie_remove, rc = -DER_INVAL);
-	}
-
+	rc = dfuse_launch_fuse(fs_handle, fuse_ops, &args);
 	D_FREE(fuse_ops);
+	if (!rc) {
+		(void)dfuse_fs_fini(fs_handle);
+		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
+		return -DER_INVAL;
+	}
 
 	return -DER_SUCCESS;
 
 err_ie_remove:
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
-	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: %d", rc);
+	DFUSE_TRA_ERROR(fs_handle,
+			"Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
 	D_FREE(fuse_ops);
 	D_FREE(ie);
 	return rc;
