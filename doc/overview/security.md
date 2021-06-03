@@ -39,13 +39,13 @@ The DAOS management components communicate over the network using the
 
 Each trusted DAOS component (`daos_server`, `daos_agent`, and the `dmg`
 administrative tool) is authenticated by means of a certificate generated for
-that component by system administrator. All of the component certificates must
-be generated with the same root certificate and distributed to the appropriate
-DAOS nodes, as described in the
+that component by the system administrator. All of the component certificates
+must be generated with the same root certificate and distributed to the
+appropriate DAOS nodes, as described in the
 [DAOS Administration Guide](https://daos-stack.github.io/admin/deployment/#certificate-configuration).
 
 DAOS components identify one another over the DAOS management network via
-mutually-authenticated TLS over gRPC using their respective component
+gRPC over mutually-authenticated TLS using their respective component
 certificates. DAOS verifies the certificate chain, as well as the Common Name
 (CN) in the certificate, to authenticate the component's identity.
 
