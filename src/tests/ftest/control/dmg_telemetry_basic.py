@@ -4,7 +4,6 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import error
 from apricot import TestWithServers
 from telemetry_utils import TelemetryUtils
 
@@ -69,9 +68,7 @@ class TestWithTelemetry(TestWithServers):
         """
         errors = telemetry.check_container_metrics(**self.metrics)
         if errors:
-            for error in errors:
-                self.log.error("MERTIC_ERROR: %s", error)
-            # self.fail("\n".join(errors))
+            self.fail("\n".join(errors))
 
     def test_telemetry_list(self):
         """JIRA ID: DAOS-7667 / SRS-324.
