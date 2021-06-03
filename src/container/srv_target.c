@@ -2242,7 +2242,8 @@ struct cont_ec_eph {
 	d_list_t	ce_list;
 	daos_epoch_t	ce_eph;
 	daos_epoch_t	ce_last_eph;
-	int		ce_destroy:1;
+	int		ce_destroy:1,
+			ce_first:1;
 };
 
 /* Argument to query ec aggregate epoch from each xstream */
@@ -2324,15 +2325,11 @@ cont_ec_eph_reduce(void *agg_arg, void *xs_arg)
 
 		c_eph = lookup_insert_cont_ec_eph(&pool->sp_ec_ephs_list,
 						  x_arg->ephs[i].cont_uuid);
-		if (c_eph->ce_eph == 0) {
+		if (c_eph->ce_first) {
 			c_eph->ce_eph = x_arg->ephs[i].eph;
-			continue;
-		}
-		if (x_arg->ephs[i].eph != 0 &&
-		    x_arg->ephs[i].eph > c_eph->ce_last_eph) {
-			if (c_eph->ce_eph <= c_eph->ce_last_eph ||
-			    x_arg->ephs[i].eph < c_eph->ce_eph)
-				c_eph->ce_eph = x_arg->ephs[i].eph;
+			c_eph->ce_first = 0;
+		} else if (x_arg->ephs[i].eph < c_eph->ce_eph) {
+			c_eph->ce_eph = x_arg->ephs[i].eph;
 		}
 	}
 }
@@ -2448,9 +2445,8 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 				continue;
 			}
 
-			if (ec_eph->ce_eph == 0 ||
-			    ec_eph->ce_eph < ec_eph->ce_last_eph)
-				ec_eph->ce_eph = 0;
+			if (ec_eph->ce_eph <= ec_eph->ce_last_eph)
+				continue;
 
 			D_DEBUG(DB_MD, "eph "DF_X64" "DF_UUID"\n",
 				ec_eph->ce_eph, DP_UUID(ec_eph->ce_cont_uuid));
@@ -2460,6 +2456,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 			if (rc == 0) {
 				ec_eph->ce_last_eph = ec_eph->ce_eph;
 				ec_eph->ce_eph = 0;
+				ec_eph->ce_first = 1;
 			} else {
 				D_INFO(DF_CONT": Update min epoch: %d\n",
 				       DP_CONT(pool->sp_uuid,
