@@ -10,6 +10,7 @@
 import os
 import json
 import re
+import tempfile
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
