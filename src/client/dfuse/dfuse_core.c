@@ -991,7 +991,8 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 err_ie_remove:
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
-	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: %d", rc);
+	DFUSE_TRA_ERROR(fs_handle,
+			"Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
 	D_FREE(fuse_ops);
 	D_FREE(ie);
 	return rc;
