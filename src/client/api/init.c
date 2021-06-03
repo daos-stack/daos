@@ -29,8 +29,11 @@
 /** protect against concurrent daos_init/fini calls */
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 
+/** has daos_init has been called at least once */
+static bool module_initialized;
+
 /** refcount on how many times daos_init has been called */
-static int		module_initialized;
+static int module_refcount;
 
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
@@ -135,7 +138,7 @@ daos_init(void)
 	D_MUTEX_LOCK(&module_lock);
 	if (module_initialized > 0) {
 		/** already initialized, report success */
-		module_initialized++;
+		module_refcount++;
 		D_GOTO(unlock, rc = 0);
 	}
 
@@ -198,7 +201,8 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
-	module_initialized++;
+	module_initialized = true;
+	module_refcount++;
 	D_GOTO(unlock, rc = 0);
 
 out_co:
@@ -230,36 +234,39 @@ unlock:
 int
 daos_fini(void)
 {
-	int	rc;
+	int	rc = 0;
 
 	D_MUTEX_LOCK(&module_lock);
-	if (module_initialized == 0) {
+	if (module_refcount == 0) {
 		/** calling fini without init, report an error */
-		D_GOTO(unlock, rc = -DER_UNINIT);
-	} else if (module_initialized > 1) {
+		rc = -DER_UNINIT;
+	} else if (module_refcount > 1) {
 		/**
 		 * DAOS was initialized multiple times.
 		 * Can happen when using multiple DAOS-aware middleware.
 		 */
-		module_initialized--;
-		D_GOTO(unlock, rc = 0);
+		module_refcount--;
+	}
+	D_MUTEX_UNLOCK(&module_lock);
+
+	return rc;
+}
+
+static __attribute__((destructor)) void
+__daos_fini(void)
+{
+	D_MUTEX_LOCK(&module_lock);
+	if (module_initialized == false) {
+		/** was not initialized, skip */
+		goto unlock;
 	}
 
-	rc = daos_eq_lib_fini();
-	if (rc != 0) {
-		D_ERROR("failed to finalize eq: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(unlock, rc);
-	}
-
+	(void)daos_eq_lib_fini();
 	dc_obj_fini();
 	dc_cont_fini();
 	dc_pool_fini();
 	dc_mgmt_fini();
-
-	rc = dc_mgmt_notify_exit();
-	if (rc != 0)
-		D_ERROR("failed to disconnect some resources may leak, "
-			DF_RC"\n", DP_RC(rc));
+	(void)dc_mgmt_notify_exit();
 
 	dc_agent_fini();
 	dc_job_fini();
@@ -267,8 +274,8 @@ daos_fini(void)
 	pl_fini();
 	daos_hhash_fini();
 	daos_debug_fini();
-	module_initialized = 0;
+
+	module_initialized = false;
 unlock:
 	D_MUTEX_UNLOCK(&module_lock);
-	return rc;
 }
