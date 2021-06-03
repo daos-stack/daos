@@ -21,10 +21,13 @@ const (
 	BdevNvmeSetHotplug       = "bdev_nvme_set_hotplug"
 )
 
+// SpdkSubsystemConfigParams is an interface that defines an object that
+// contains details for a subsystem configuration method.
 type SpdkSubsystemConfigParams interface {
 	isSpdkSubsystemConfigParams()
 }
 
+// SetOptionsParms specifies details for a BdevSetOptions method.
 type SetOptionsParams struct {
 	BdevIoPoolSize  uint64 `json:"bdev_io_pool_size"`
 	BdevIoCacheSize uint64 `json:"bdev_io_cache_size"`
@@ -32,6 +35,7 @@ type SetOptionsParams struct {
 
 func (sop SetOptionsParams) isSpdkSubsystemConfigParams() {}
 
+// NvmeSetOptionsParms specifies details for a BdevNvmeSetOptions method.
 type NvmeSetOptionsParams struct {
 	RetryCount               uint32 `json:"retry_count"`
 	TimeoutUsec              uint64 `json:"timeout_us"`
@@ -42,6 +46,8 @@ type NvmeSetOptionsParams struct {
 
 func (nsop NvmeSetOptionsParams) isSpdkSubsystemConfigParams() {}
 
+// NvmeAttachControllerParams specifies details for a BdevNvmeAttachController
+// method.
 type NvmeAttachControllerParams struct {
 	TransportType    string `json:"trtype"`
 	DeviceName       string `json:"name"`
@@ -50,6 +56,7 @@ type NvmeAttachControllerParams struct {
 
 func (napp NvmeAttachControllerParams) isSpdkSubsystemConfigParams() {}
 
+// NvmeSetHotplugParams specifies details for a BdevNvmeSetHotplug method.
 type NvmeSetHotplugParams struct {
 	Enable     bool   `json:"enable"`
 	PeriodUsec uint64 `json:"period_us"`
@@ -112,10 +119,9 @@ func defaultSpdkConfig() *SpdkConfig {
 	}
 }
 
-func newNvmeSpdkConfig(log logging.Logger, enableVmd bool, req *FormatRequest) (*SpdkConfig, error) {
-	var sscs []*SpdkSubsystemConfig
-	for i, d := range req.DeviceList {
-		name := fmt.Sprintf("Nvme_%s_%d", req.Hostname, i)
+func getNvmeAttachMethods(devs []string, host string) (sscs []*SpdkSubsystemConfig) {
+	for i, d := range devs {
+		name := fmt.Sprintf("Nvme_%s_%d", host, i)
 		sscs = append(sscs, &SpdkSubsystemConfig{
 			Method: BdevNvmeAttachController,
 			Params: NvmeAttachControllerParams{
@@ -126,10 +132,16 @@ func newNvmeSpdkConfig(log logging.Logger, enableVmd bool, req *FormatRequest) (
 		})
 	}
 
+	return
+}
+
+func newNvmeSpdkConfig(log logging.Logger, enableVmd bool, req *FormatRequest) (*SpdkConfig, error) {
 	sc := defaultSpdkConfig()
+
 	// default spdk config will have only one bdev subsystem, append device
 	// attach config method calls
-	sc.Subsystems[0].Configs = append(sc.Subsystems[0].Configs, sscs...)
+	sc.Subsystems[0].Configs = append(sc.Subsystems[0].Configs,
+		getNvmeAttachMethods(req.DeviceList, req.Hostname)...)
 
 	return sc, nil
 }
