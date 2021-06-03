@@ -813,12 +813,6 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 
 	fs_handle->dpi_info = dfuse_info;
 
-	/* Max read and max write are handled differently because of the way
-	 * the interception library handles reads vs writes
-	 */
-	fs_handle->dpi_max_read = 1024 * 1024 * 4;
-	fs_handle->dpi_max_write = 1024 * 1024;
-
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
 					 3, fs_handle, &pool_hops,
 					 &fs_handle->dpi_pool_table);
@@ -900,7 +894,7 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	args.argc = 5;
+	args.argc = 4;
 
 	/* These allocations are freed later by libfuse so do not use the
 	 * standard allocation macros
@@ -922,12 +916,8 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	if (!args.argv[2])
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	rc = asprintf(&args.argv[3], "-omax_read=%u", fs_handle->dpi_max_read);
-	if (rc < 0 || !args.argv[3])
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	args.argv[4] = strdup("-odefault_permissions");
-	if (!args.argv[4])
+	args.argv[3] = strdup("-odefault_permissions");
+	if (!args.argv[3])
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	fuse_ops = dfuse_get_fuse_ops();
