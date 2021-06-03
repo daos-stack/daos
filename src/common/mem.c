@@ -381,33 +381,6 @@ umem_tx_errno(int err)
 
 	return daos_errno2der(err);
 }
-
-static int
-pmem_no_tx_add(struct umem_instance *umm, umem_off_t umoff,
-	       uint64_t offset, size_t size)
-{
-	return 0;
-}
-
-static int
-pmem_no_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
-{
-	return 0;
-}
-
-static umem_ops_t	pmem_no_snap_ops = {
-	.mo_tx_free		= pmem_tx_free,
-	.mo_tx_alloc		= pmem_tx_alloc,
-	.mo_tx_add		= pmem_no_tx_add,
-	.mo_tx_add_ptr		= pmem_no_tx_add_ptr,
-	.mo_tx_abort		= pmem_tx_abort,
-	.mo_tx_begin		= pmem_tx_begin,
-	.mo_tx_commit		= pmem_tx_commit,
-	.mo_reserve		= pmem_reserve,
-	.mo_cancel		= pmem_cancel,
-	.mo_tx_publish		= pmem_tx_publish,
-	.mo_tx_add_callback	= pmem_tx_add_callback,
-};
 #endif
 
 /* volatile memory operations */
@@ -475,11 +448,6 @@ static struct umem_class umem_class_defined[] = {
 		.umc_id		= UMEM_CLASS_PMEM,
 		.umc_ops	= &pmem_ops,
 		.umc_name	= "pmem",
-	},
-	{
-		.umc_id		= UMEM_CLASS_PMEM_NO_SNAP,
-		.umc_ops	= &pmem_no_snap_ops,
-		.umc_name	= "pmem_no_snap",
 	},
 #endif
 	{
