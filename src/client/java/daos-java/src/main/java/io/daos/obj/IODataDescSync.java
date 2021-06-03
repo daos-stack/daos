@@ -9,12 +9,10 @@ package io.daos.obj;
 import io.daos.BufferAllocator;
 import io.daos.Constants;
 import io.netty.buffer.ByteBuf;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * IO description for fetching and updating object records on given dkey. Each record is described in {@link Entry}.

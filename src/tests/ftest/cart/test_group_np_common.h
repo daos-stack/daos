@@ -133,8 +133,11 @@ struct rank_status {
 	int num_dead;
 };
 
-/* Keep a table of whether each rank is alive (0) or dead (1) */
-static char *swim_status_by_rank[MAX_NUM_RANKS];
+/**
+ * As we want to catch swim status flickering (sequenes of dead, alive, dead);
+ * track swim state sequences by rank, e.g., 0001 (0=alive, 1=dead) by rank .
+ */
+static char swim_seq_by_rank[MAX_NUM_RANKS][MAX_SWIM_STATUSES] = { { 0 } };
 
 static void
 test_swim_status_handler(crt_rpc_t *rpc_req)
@@ -146,48 +149,48 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	regex_t				 regex_dead;
 	static const char		*dead_regex = ".?0*1";
 	static const char		*alive_regex = ".?0*";
-	char				swim_seq[MAX_SWIM_STATUSES];
-	size_t				sc = sizeof(char);
+	int				rank;
+	int				rc_dead;
+	int				rc_alive;
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
+	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
-	if (swim_status_by_rank[e_req->rank] != NULL)
-		memcpy(swim_seq,
-		       swim_status_by_rank[e_req->rank],
-		       strlen(swim_status_by_rank[e_req->rank]) * sc);
-	else
-		memset(swim_seq, 0x0, MAX_SWIM_STATUSES);
+	rank = e_req->rank;
 
 	/* compile and run regex's */
 	regcomp(&regex_dead, dead_regex, REG_EXTENDED);
-	int rc_dead = regexec(&regex_dead,
-			      swim_seq,
+	rc_dead = regexec(&regex_dead,
+			      swim_seq_by_rank[rank],
 			      0, NULL, 0);
 	regcomp(&regex_alive, alive_regex, REG_EXTENDED);
-	int rc_alive = regexec(&regex_alive,
-			       swim_seq,
+	rc_alive = regexec(&regex_alive,
+			       swim_seq_by_rank[rank],
 			       0, NULL, 0);
 
-	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
+	regfree(&regex_alive);
+	regfree(&regex_dead);
 
 	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
 		  rpc_req->cr_opc);
 	DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
-		  e_req->rank, e_req->exp_status);
+		  rank, e_req->exp_status);
 
 	if (e_req->exp_status == CRT_EVT_ALIVE)
 		D_ASSERTF(rc_alive == 0,
-			  "Swim status sequence (%s) does not match '%s'.\n",
-			  swim_seq, alive_regex);
+			  "Swim status alive sequence (%s) "
+			  "does not match '%s' for rank %d.\n",
+			  swim_seq_by_rank[rank], alive_regex, rank);
 	else if (e_req->exp_status == CRT_EVT_DEAD)
 		D_ASSERTF(rc_dead == 0,
-			  "Swim status sequence (%s) does not match '%s'.\n",
-			  swim_seq, dead_regex);
+			  "Swim status dead sequence (%s) "
+			  "does not match '%s' for rank %d..\n",
+			  swim_seq_by_rank[rank], dead_regex, rank);
 
 	DBG_PRINT("Rank [%d] SWIM state sequence (%s) for "
 		  "status [%d] is as expected.\n",
-		  e_req->rank, swim_seq,
+		  rank, swim_seq_by_rank[rank],
 		  e_req->exp_status);
 
 	e_reply = crt_reply_get(rpc_req);

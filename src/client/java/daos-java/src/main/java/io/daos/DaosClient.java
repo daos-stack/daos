@@ -7,7 +7,7 @@
 package io.daos;
 
 import io.daos.dfs.*;
-import org.apache.commons.lang.ObjectUtils;
+import org.apache.commons.lang3.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

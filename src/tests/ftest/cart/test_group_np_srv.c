@@ -23,8 +23,8 @@ static void
 swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		  enum crt_event_type type, void *arg)
 {
-	char type_to_a[2];
-	int max = MAX_SWIM_STATUSES;
+	int maxlen;
+	char swim_state_str[2];
 
 	/* Example output for SWIM CRT_EVT_DEAD on rank #2:
 	 *	 rank = 2, crt_event_source = 1, crt_event_type = 1
@@ -43,17 +43,14 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		"rank = %d, "
 		"crt_event_source = %d, "
 		"crt_event_type = %d\n",
-		 rank, src, type);
+		rank, src, type);
 
-	/* convert integer to string */
-	snprintf(type_to_a, 2, "%d", type);
+	swim_state_str[0] = type + '0';
+	swim_state_str[1] = 0;
 
-	if (swim_status_by_rank[rank] == NULL) {
-		swim_status_by_rank[rank] = (char *)malloc(max * sizeof(char));
-		strcpy(swim_status_by_rank[rank], "\0");
-	}
-
-	strcat(swim_status_by_rank[rank], type_to_a);
+	maxlen = MAX_SWIM_STATUSES - strlen(swim_state_str);
+	if (strlen(swim_seq_by_rank[rank]) < maxlen)
+		strcat(swim_seq_by_rank[rank], swim_state_str);
 
 	/* Remove rank from context, so we stop sending swim RPCs to it. */
 	if (src == CRT_EVS_SWIM && type == CRT_EVT_DEAD) {

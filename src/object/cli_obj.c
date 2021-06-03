@@ -3653,7 +3653,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	if (obj_auxi->map_ver_reply > obj_auxi->map_ver_req ||
 	    daos_crt_network_error(task->dt_result) ||
 	    task->dt_result == -DER_STALE || task->dt_result == -DER_TIMEDOUT ||
-	    task->dt_result == -DER_EVICTED) {
+	    task->dt_result == -DER_EXCLUDED) {
 		D_DEBUG(DB_IO, "map_ver stale (req %d, reply %d). result %d\n",
 			obj_auxi->map_ver_req, obj_auxi->map_ver_reply,
 			task->dt_result);
@@ -4179,6 +4179,8 @@ dc_obj_fetch_task(tse_task_t *task)
 		obj_auxi->flags |= ORF_FOR_MIGRATION;
 		obj_auxi->no_retry = 1;
 	}
+	if (args->extra_flags & DIOF_FOR_EC_AGG)
+		obj_auxi->flags |= ORF_FOR_EC_AGG;
 
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
 		obj_auxi->flags |= ORF_CHECK_EXISTENCE;
@@ -5586,4 +5588,36 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 	daos_obj_set_oid(oid, ofeats, cid, args);
 
 	return rc;
+}
+
+daos_oclass_id_t
+daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+		  daos_oclass_hints_t hints, uint32_t args)
+{
+	daos_handle_t		poh;
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr;
+	uint64_t		rf_factor;
+	daos_oclass_id_t	cid;
+	int			rc;
+
+	/** select the oclass */
+	poh = dc_cont_hdl2pool_hdl(coh);
+	if (daos_handle_is_inval(poh))
+		return -DER_NO_HDL;
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+
+	rf_factor = dc_cont_hdl2redunfac(coh);
+	rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
+			   attr.pa_target_nr, ofeats, hints, &cid);
+	if (rc)
+		return 0;
+
+	return cid;
 }
