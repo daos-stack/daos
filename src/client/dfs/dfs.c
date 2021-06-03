@@ -3898,6 +3898,7 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 	daos_size_t		size;
 	daos_array_iod_t	iod;
 	daos_range_t		rg;
+	daos_off_t		hi;
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -3923,13 +3924,18 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 	if (size <= offset)
 		return 0;
 
+	if ((offset + len) < offset)
+		hi = DFS_MAX_FSIZE;
+	else
+		hi = offset + len;
+
 	/** if fsize is between the range to punch, just truncate to offset */
-	if (offset < size && size <= offset + len) {
+	if (offset < size && size <= hi) {
 		rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, offset, NULL);
 		return daos_der2errno(rc);
 	}
 
-	D_ASSERT(size > offset + len);
+	D_ASSERT(size > hi);
 
 	/** Punch offset -> len */
 	iod.arr_nr = 1;
