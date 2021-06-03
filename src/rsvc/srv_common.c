@@ -278,7 +278,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	 * and return -DER_NONEXIST
 	 */
 	if (nonexist == count) {
-		rc = -DER_NONEXIST
+		rc = -DER_NONEXIST;
 		goto out_iovs;
 	}
 
