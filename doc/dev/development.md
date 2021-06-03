@@ -7,14 +7,18 @@ only required for development purposes.
 
 ## Building DAOS for Development
 
-Prerequisite when built using `--build-deps` are installed in component
-specific directories under PREFIX/prereq/$TARGET_TYPE.  Initialize and update
-the git submodules:
+The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
+To checkout the current development version, simply run:
 
 ```bash
-$ git submodule init
-$ git submodule update
+$ git clone --recurse-submodules https://github.com/daos-stack/daos.git
 ```
+
+For a specific branch or tag (e.g. v1.2), add `-b v1.2` to the command
+line above.
+
+Prerequisite when built using `--build-deps` are installed in component
+specific directories under PREFIX/prereq/$TARGET_TYPE.
 
 Run the following `scons` command:
 
@@ -29,7 +33,7 @@ Installing the components into separate directories allow upgrading the
 components individually by replacing `--build-deps=yes` with
 `--update-prereq={component\_name}`. This requires a change to the environment
 configuration from before. For automated environment setup, source
-`utils/sl/utils/setup_local.sh`.
+`utils/sl/setup_local.sh`.
 
 The install path should be relocatable with the exception that `daos_admin`
 will not be able to find the new location of daos and dependencies. All other

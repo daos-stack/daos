@@ -89,17 +89,13 @@ class OSAOfflineExtend(OSAUtils):
             else:
                 val = 0
             self.pool = pool[val]
-            scm_size = self.pool.scm_size
-            nvme_size = self.pool.nvme_size
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # Enable aggregation for multiple pool testing only.
             if self.test_during_aggregation is True and (num_pool > 1):
                 self.delete_extra_container(self.pool)
-            output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                  rank_val, scm_size,
-                                                  nvme_size)
+            output = self.dmg_command.pool_extend(self.pool.uuid, rank_val)
             self.print_and_assert_on_rebuild_failure(output)
 
             pver_extend = self.get_pool_version()
@@ -168,6 +164,7 @@ class OSAOfflineExtend(OSAUtils):
         self.log.info("Offline Extend Testing: Multiple Pools")
         self.run_offline_extend_test(5, data=True)
 
+    @skipForTicket("DAOS-7493")
     def test_osa_offline_extend_oclass(self):
         """Test ID: DAOS-6924
         Test Description: Validate Offline extend without

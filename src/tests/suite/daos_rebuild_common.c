@@ -152,13 +152,16 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			args[i]->rebuild_cb(args[i]);
 
 	sleep(10); /* make sure the rebuild happens after exclude/add/kill */
-	if (args[0]->myrank == 0)
+	if (args[0]->myrank == 0 && !args[0]->no_rebuild)
 		test_rebuild_wait(args, args_cnt);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	for (i = 0; i < args_cnt; i++)
+	for (i = 0; i < args_cnt; i++) {
+		daos_cont_status_clear(args[i]->coh, NULL);
+
 		if (args[i]->rebuild_post_cb)
 			args[i]->rebuild_post_cb(args[i]);
+	}
 }
 
 
@@ -559,6 +562,9 @@ rebuild_io_verify(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 	int	rc;
 	int	i;
 
+	rc = daos_cont_status_clear(arg->coh, NULL);
+	assert_rc_equal(rc, 0);
+
 	print_message("rebuild io verify obj %d\n", oids_nr);
 	for (i = 0; i < oids_nr; i++) {
 		/* XXX: skip punch object. */
@@ -570,11 +576,12 @@ rebuild_io_verify(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 	}
 }
 
-#define DATA_SIZE		(1048576 * 4 + 512)
-#define PARTIAL_DATA_SIZE	1024
-#define IOD3_DATA_SIZE		300
-#define LARGE_SINGLE_VALUE_SIZE	8500
-#define SMALL_SINGLE_VALUE_SIZE	32
+/* using some un-aligned size */
+#define DATA_SIZE			(1048576 * 4 + 347)
+#define PARTIAL_DATA_SIZE		(933)
+#define IOD3_DATA_SIZE			(311)
+#define LARGE_SINGLE_VALUE_SIZE		(8569)
+#define SMALL_SINGLE_VALUE_SIZE		(37)
 
 #define KEY_NR 5
 void make_buffer(char *buffer, char start, int total)
@@ -607,7 +614,6 @@ write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 		recx.rx_idx = off + i * 10485760;
 		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, size, req);
-
 		recx.rx_nr = IOD3_DATA_SIZE;
 		insert_recxs(key, "a_key_iod3", 3, DAOS_TX_NONE, &recx, 1,
 			     data, IOD3_DATA_SIZE * 3, req);
@@ -615,7 +621,8 @@ write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 		req->iod_type = DAOS_IOD_SINGLE;
 		memset(single_data, 'a' + i, LARGE_SINGLE_VALUE_SIZE);
 		sprintf(key, "dkey_single_small_%d_%d", index, i);
-		insert_single(key, "a_key", 0, single_data, 32, DAOS_TX_NONE,
+		insert_single(key, "a_key", 0, single_data,
+			      SMALL_SINGLE_VALUE_SIZE, DAOS_TX_NONE,
 			      req);
 
 		sprintf(key, "dkey_single_large_%d_%d", index, i);
@@ -693,19 +700,23 @@ verify_ec(struct ioreq *req, int index, char *verify_data, daos_off_t off,
 void
 write_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
 {
-	char	buffer[PARTIAL_DATA_SIZE];
+	char	*buffer;
 
+	buffer = (char *)malloc(PARTIAL_DATA_SIZE);
 	make_buffer(buffer, 'a', PARTIAL_DATA_SIZE);
 	write_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE);
+	free(buffer);
 }
 
 void
 verify_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
 {
-	char	buffer[PARTIAL_DATA_SIZE];
+	char	*buffer;
 
+	buffer = (char *)malloc(PARTIAL_DATA_SIZE);
 	make_buffer(buffer, 'a', PARTIAL_DATA_SIZE);
 	verify_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE);
+	free(buffer);
 }
 
 void
@@ -747,11 +758,13 @@ write_ec_partial_full(struct ioreq *req, int test_idx, daos_off_t off)
 void
 verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off)
 {
-	char	buffer[DATA_SIZE];
+	char	*buffer;
 
+	buffer = (char *)malloc(DATA_SIZE);
 	make_buffer(buffer, 'b', DATA_SIZE);
 	make_buffer(buffer, 'a', PARTIAL_DATA_SIZE);
 	verify_ec(req, test_idx, buffer, off, DATA_SIZE);
+	free(buffer);
 }
 
 void
@@ -818,6 +831,7 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 		idx++;
 	}
 	rebuild_pools_ranks(&arg, 1, ranks, idx, false);
+	daos_cont_status_clear(co_hdl, NULL);
 
 	/* Verify full stripe */
 	d_iov_set(&iov, buf, buf_size);
@@ -905,6 +919,26 @@ get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	print_message("idx %u grp %u rank %d\n", idx, grp_idx, rank);
 	daos_obj_layout_free(layout);
 	return rank;
+}
+
+int
+ec_data_nr_get(daos_obj_id_t oid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(oid);
+	assert_true(oca->ca_resil == DAOS_RES_EC);
+	return oca->u.ec.e_k;
+}
+
+int
+ec_parity_nr_get(daos_obj_id_t oid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(oid);
+	assert_true(oca->ca_resil == DAOS_RES_EC);
+	return oca->u.ec.e_p;
 }
 
 void

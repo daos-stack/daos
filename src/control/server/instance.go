@@ -12,8 +12,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
@@ -28,9 +28,10 @@ import (
 
 type (
 	systemJoinFn     func(context.Context, *control.SystemJoinReq) (*control.SystemJoinResp, error)
+	onAwaitFormatFn  func(context.Context, uint32, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
-	onInstanceExitFn func(context.Context, system.Rank, error) error
+	onInstanceExitFn func(context.Context, uint32, system.Rank, error, uint64) error
 )
 
 // EngineInstance encapsulates control-plane specific configuration
@@ -41,22 +42,23 @@ type (
 // be used with EngineHarness to manage and monitor multiple instances
 // per node.
 type EngineInstance struct {
-	log               logging.Logger
-	runner            EngineRunner
-	bdevClassProvider *bdev.ClassProvider
-	scmProvider       *scm.Provider
-	waitFormat        atm.Bool
-	storageReady      chan bool
-	waitDrpc          atm.Bool
-	drpcReady         chan *srvpb.NotifyReadyReq
-	ready             atm.Bool
-	startRequested    chan bool
-	fsRoot            string
-	hostFaultDomain   *system.FaultDomain
-	joinSystem        systemJoinFn
-	onStorageReady    []onStorageReadyFn
-	onReady           []onReadyFn
-	onInstanceExit    []onInstanceExitFn
+	log             logging.Logger
+	runner          EngineRunner
+	bdevProvider    *bdev.Provider
+	scmProvider     *scm.Provider
+	waitFormat      atm.Bool
+	storageReady    chan bool
+	waitDrpc        atm.Bool
+	drpcReady       chan *srvpb.NotifyReadyReq
+	ready           atm.Bool
+	startRequested  chan bool
+	fsRoot          string
+	hostFaultDomain *system.FaultDomain
+	joinSystem      systemJoinFn
+	onAwaitFormat   []onAwaitFormatFn
+	onStorageReady  []onStorageReadyFn
+	onReady         []onReadyFn
+	onInstanceExit  []onInstanceExitFn
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
@@ -69,19 +71,18 @@ type EngineInstance struct {
 
 // NewEngineInstance returns an *EngineInstance initialized with
 // its dependencies.
-func NewEngineInstance(log logging.Logger,
-	bcp *bdev.ClassProvider, sp *scm.Provider,
+func NewEngineInstance(log logging.Logger, bp *bdev.Provider, sp *scm.Provider,
 	joinFn systemJoinFn, r EngineRunner) *EngineInstance {
 
 	return &EngineInstance{
-		log:               log,
-		runner:            r,
-		bdevClassProvider: bcp,
-		scmProvider:       sp,
-		joinSystem:        joinFn,
-		drpcReady:         make(chan *srvpb.NotifyReadyReq),
-		storageReady:      make(chan bool),
-		startRequested:    make(chan bool),
+		log:            log,
+		runner:         r,
+		bdevProvider:   bp,
+		scmProvider:    sp,
+		joinSystem:     joinFn,
+		drpcReady:      make(chan *srvpb.NotifyReadyReq),
+		storageReady:   make(chan bool),
+		startRequested: make(chan bool),
 	}
 }
 
@@ -109,6 +110,12 @@ func (ei *EngineInstance) isStarted() bool {
 // drpc and storage ready states, and currently active.
 func (ei *EngineInstance) isReady() bool {
 	return ei.ready.Load() && ei.isStarted()
+}
+
+// OnAwaitFormat adds a list of callbacks to invoke when the instance
+// requires formatting.
+func (ei *EngineInstance) OnAwaitFormat(fns ...onAwaitFormatFn) {
+	ei.onAwaitFormat = append(ei.onAwaitFormat, fns...)
 }
 
 // OnStorageReady adds a list of callbacks to invoke when the instance
@@ -196,7 +203,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	})
 	if err != nil {
 		return system.NilRank, false, err
-	} else if resp.State == system.MemberStateEvicted {
+	} else if resp.State == system.MemberStateExcluded {
 		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
 	}
 	r = system.Rank(resp.Rank)

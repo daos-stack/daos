@@ -329,6 +329,85 @@ out:
 }
 
 int
+ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
+		     d_rank_list_t **svc_ranks)
+{
+	struct drpc_alloc		alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Srv__PoolFindByLabelReq		frq = SRV__POOL_FIND_BY_LABEL_REQ__INIT;
+	Srv__PoolFindByLabelResp       *frsp = NULL;
+	Drpc__Response		       *dresp;
+	uint8_t			       *req;
+	size_t				req_size;
+	d_rank_list_t		       *ranks;
+	int				rc;
+
+	D_STRNDUP(frq.label, label, DAOS_PROP_LABEL_MAX_LEN);
+	if (frq.label == NULL) {
+		D_ERROR("failed to duplicate pool label string\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	D_DEBUG(DB_MGMT, "fetching svc_ranks for pool %s\n", label);
+
+	req_size = srv__pool_find_by_label_req__get_packed_size(&frq);
+	D_ALLOC(req, req_size);
+	if (req == NULL)
+		D_GOTO(out_label, rc = -DER_NOMEM);
+	srv__pool_find_by_label_req__pack(&frq, req);
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_POOL_FIND_BYLABEL,
+			   req, req_size, 0 /* flags */, &dresp);
+	if (rc != 0)
+		goto out_req;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n",
+			dresp->status);
+		D_GOTO(out_dresp, rc = -DER_IO);
+	}
+
+	frsp = srv__pool_find_by_label_resp__unpack(&alloc.alloc,
+						    dresp->body.len,
+						    dresp->body.data);
+	if (alloc.oom) {
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+	} else if (frsp == NULL) {
+		D_ERROR("failed to unpack resp (get pool svc)\n");
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+	}
+
+	if (frsp->status != 0) {
+		if (frsp->status == -DER_NONEXIST) /* not an error */
+			D_DEBUG(DB_MGMT, "pool %s not found, "DF_RC"\n",
+				frq.label, DP_RC(frsp->status));
+		else
+			D_ERROR("failure finding pool %s, "DF_RC"\n",
+				frq.label, DP_RC(frsp->status));
+		D_GOTO(out_resp, rc = frsp->status);
+	}
+
+	ranks = uint32_array_to_rank_list(frsp->svcreps,
+					  frsp->n_svcreps);
+	if (ranks == NULL)
+		D_GOTO(out_resp, rc = -DER_NOMEM);
+	*svc_ranks = ranks;
+	uuid_parse(frsp->uuid, pool_uuid);
+	D_DEBUG(DB_MGMT, "pool %s: UUID="DF_UUID", %u svc replicas\n",
+		frq.label, DP_UUID(pool_uuid), ranks->rl_nr);
+
+out_resp:
+	srv__pool_find_by_label_resp__free_unpacked(frsp, &alloc.alloc);
+out_dresp:
+	drpc_response_free(dresp);
+out_req:
+	D_FREE(req);
+out_label:
+	D_FREE(frq.label);
+out:
+	return rc;
+}
+
+
+int
 drpc_init(void)
 {
 	D_ASSERT(dss_drpc_path == NULL);

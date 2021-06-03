@@ -13,7 +13,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import io.daos.*;
-import org.apache.commons.lang.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -625,6 +624,23 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
   native void dfsRelease(long objId) throws IOException;
 
   /**
+   * allocate native dfs desc struct.
+   *
+   * @param descBufAddress
+   * memory address of desc buffer.
+   * @return handle of native dfs desc
+   */
+  native static long allocateDfsDesc(long descBufAddress);
+
+  /**
+   * release native dfs desc struct.
+   *
+   * @param nativeHandle
+   * handle of native dfs desc
+   */
+  native static void releaseDfsDesc(long nativeHandle);
+
+  /**
    * read data from file to buffer.
    *
    * @param dfsPtr
@@ -637,14 +653,14 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
    * file offset
    * @param len
    * length in byte to read from file
-   * @param eventNo
-   * event no.
    * @return number of bytes actual read
    * @throws IOException
    * {@link DaosIOException}
    */
-  native long dfsRead(long dfsPtr, long objId, long bufferAddress, long offset, long len, int eventNo)
+  native long dfsRead(long dfsPtr, long objId, long bufferAddress, long offset, long len)
       throws IOException;
+
+  native void dfsReadAsync(long dfsPtr, long objId, long memoryAddress) throws IOException;
 
   /**
    * write data from buffer to file.
@@ -659,14 +675,13 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
    * file offset
    * @param len
    * length in byte to write to file
-   * @param eventNo
-   * event no.
    * @return number of bytes actual written
    * @throws IOException
    * {@link DaosIOException}
    */
-  native long dfsWrite(long dfsPtr, long objId, long bufferAddress, long offset, long len,
-                       int eventNo) throws IOException;
+  native long dfsWrite(long dfsPtr, long objId, long bufferAddress, long offset, long len) throws IOException;
+
+  native void dfsWriteAsync(long dfsPtr, long objId, long memoryAddress) throws IOException;
 
   /**
    * read children.
@@ -1058,7 +1073,12 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
     public DaosFsClient build() throws IOException {
       String poolId = getPoolId();
       String contId = getContId();
-      DaosFsClientBuilder builder = (DaosFsClientBuilder) ObjectUtils.clone(this);
+      DaosFsClientBuilder builder;
+      try {
+        builder = clone();
+      } catch (CloneNotSupportedException e) {
+        throw new IllegalStateException("clone not supported.", e);
+      }
       DaosFsClient fsClient;
       if (!builder.shareFsClient) {
         fsClient = new DaosFsClient(poolId, contId, builder);

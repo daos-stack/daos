@@ -45,7 +45,7 @@ func (ei *EngineInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeContro
 		info = fault.ShowResolutionFor(inErr)
 	}
 	return &ctlpb.NvmeControllerResult{
-		Pciaddr: pciAddr,
+		PciAddr: pciAddr,
 		State:   newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_NVME, info),
 	}
 }
@@ -81,19 +81,10 @@ func (ei *EngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeContro
 	cfg := ei.bdevConfig()
 	results = make(proto.NvmeControllerResults, 0, len(cfg.DeviceList))
 
-	// A config with SCM and no block devices is valid.
-	if len(cfg.DeviceList) == 0 {
-		return
-	}
-
 	ei.log.Infof("Instance %d: starting format of %s block devices %v",
 		engineIdx, cfg.Class, cfg.DeviceList)
 
-	res, err := p.Format(bdev.FormatRequest{
-		Class:      cfg.Class,
-		DeviceList: cfg.DeviceList,
-		MemSize:    cfg.MemSize,
-	})
+	res, err := p.Format(bdev.FormatRequestFromConfig(ei.log, &cfg))
 	if err != nil {
 		results = append(results, ei.newCret("", err))
 		return
@@ -166,8 +157,6 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, reformat bool) (
 
 // StorageFormatNVMe performs format on NVMe if superblock needs writing.
 func (ei *EngineInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
-	ei.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName, ei.Index())
-
 	// If no superblock exists, format NVMe and populate response with results.
 	needsSuperblock, err := ei.NeedsSuperblock()
 	if err != nil {
@@ -177,6 +166,8 @@ func (ei *EngineInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResul
 	}
 
 	if needsSuperblock {
+		ei.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName,
+			ei.Index())
 		cResults = ei.bdevFormat(bdevProvider)
 	}
 

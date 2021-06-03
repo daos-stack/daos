@@ -6,7 +6,6 @@
 """
 from osa_utils import OSAUtils
 from test_utils_pool import TestPool
-from apricot import skipForTicket
 
 
 class OSADmgNegativeTest(OSAUtils):
@@ -38,7 +37,11 @@ class OSADmgNegativeTest(OSAUtils):
             dmg_output (str) : dmg output string.
         """
         if exp_result == "Pass":
-            self.is_rebuild_done(3)
+            # Check state before hand as wait for rebuild
+            # does not consider the idle state
+            state = self.get_rebuild_state()
+            if state not in ("done", "idle"):
+                self.is_rebuild_done(3)
             if "succeeded" in dmg_output:
                 self.log.info("Test Passed")
             else:
@@ -85,18 +88,14 @@ class OSADmgNegativeTest(OSAUtils):
         for val in range(0, num_pool):
             for i in range(len(self.test_seq)):
                 self.pool = pool[val]
-                if extend is True:
-                    scm_size = self.pool.scm_size
-                    nvme_size = self.pool.nvme_size
                 rank = self.test_seq[i][0]
                 target = "{}".format(self.test_seq[i][1])
                 expected_result = "{}".format(self.test_seq[i][2])
                 # Extend the pool
-                if extend is True:
-                    output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                          rank,
-                                                          scm_size,
-                                                          nvme_size)
+                # There is no need to extend rank 0
+                # Avoid DER_ALREADY
+                if extend is True and rank != "0":
+                    output = self.dmg_command.pool_extend(self.pool.uuid, rank)
                     self.log.info(output)
                     self.validate_results(expected_result, output.stdout_text)
                 if (extend is False and rank in ["4","5"]):
@@ -140,7 +139,6 @@ class OSADmgNegativeTest(OSAUtils):
         # Perform testing with a single pool
         self.run_osa_dmg_test(1, False)
 
-    @skipForTicket("DAOS-6838")
     def test_osa_dmg_cmd_with_extend(self):
         """
         JIRA ID: DAOS-5866

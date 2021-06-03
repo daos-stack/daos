@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -273,6 +273,7 @@ class CartTest(TestWithoutServers):
     def build_cmd(self, env, host, **kwargs):
         """Build a command string."""
         tst_cmd = ""
+        tst_cont = None
 
         index = kwargs.get('index', None)
 
@@ -335,6 +336,11 @@ class CartTest(TestWithoutServers):
             self.orterun, mca_flags, tst_ppn, hostfile)
 
         tst_cmd += env
+
+        tst_cont = os.getenv("CRT_TEST_CONT", "0")
+        if tst_cont is not None:
+            if tst_cont == "1":
+                tst_cmd += " --continuous"
 
         if tst_ctx is not None:
             tst_cmd += " -x CRT_CTX_NUM=" + tst_ctx

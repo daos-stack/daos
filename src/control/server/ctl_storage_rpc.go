@@ -18,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
@@ -44,7 +45,7 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 
 // TODO: de-duplicate logic to populate prepare request from server config after
 //       DAOS-7002 is completed
-func updateNvmePrepareReq(req *bdev.PrepareRequest, cfg *config.Server) {
+func updateNvmePrepareReq(log logging.Logger, req *bdev.PrepareRequest, cfg *config.Server) {
 	if req.HugePageCount == 0 {
 		req.HugePageCount = minHugePageCount
 		if cfgHasBdevs(cfg) {
@@ -53,17 +54,20 @@ func updateNvmePrepareReq(req *bdev.PrepareRequest, cfg *config.Server) {
 			req.HugePageCount = cfg.NrHugepages * len(cfg.Engines)
 		}
 	}
-	if req.TargetUser == "" {
-		if runningUser, err := user.Current(); err == nil {
-			req.TargetUser = runningUser.Username
-		}
-	}
 	if req.PCIAllowlist == "" {
 		req.PCIAllowlist = strings.Join(cfg.BdevInclude, " ")
 	}
 	req.PCIBlocklist = strings.Join(cfg.BdevExclude, " ")
 	req.DisableVFIO = cfg.DisableVFIO
 	req.DisableVMD = cfg.DisableVMD || cfg.DisableVFIO || !iommuDetected()
+	if req.TargetUser == "" {
+		usr, err := user.Current()
+		if err != nil {
+			log.Errorf("look up current user: %s", err)
+			return
+		}
+		req.TargetUser = usr.Username
+	}
 }
 
 // doNvmePrepare issues prepare request and returns response.
@@ -72,15 +76,15 @@ func (c *ControlService) doNvmePrepare(pbReq *ctlpb.PrepareNvmeReq) *ctlpb.Prepa
 	pnr := new(ctlpb.PrepareNvmeResp)
 
 	req := bdev.PrepareRequest{
-		HugePageCount: int(pbReq.GetNrhugepages()),
-		TargetUser:    pbReq.GetTargetuser(),
-		PCIAllowlist:  pbReq.GetPciwhitelist(),
+		HugePageCount: int(pbReq.GetNrHugePages()),
+		TargetUser:    pbReq.GetTargetUser(),
+		PCIAllowlist:  pbReq.GetPciAllowList(),
 		ResetOnly:     pbReq.GetReset_(),
 		// Default to minimum necessary for scan to work correctly.
 	}
 
 	if !req.ResetOnly {
-		updateNvmePrepareReq(&req, c.srvCfg)
+		updateNvmePrepareReq(c.log, &req, c.srvCfg)
 	}
 
 	_, err := c.NvmePrepare(req)
@@ -234,8 +238,7 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 func stripNvmeDetails(pbc *ctlpb.NvmeController) {
 	pbc.Serial = ""
 	pbc.Model = ""
-	pbc.Fwrev = ""
-	pbc.Namespaces = nil
+	pbc.FwRev = ""
 }
 
 // newScanBdevResp populates protobuf NVMe scan response with controller info
@@ -257,10 +260,10 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 	// trim unwanted fields so responses can be coalesced from hash map
 	for _, pbc := range pbCtrlrs {
 		if !req.GetHealth() {
-			pbc.Healthstats = nil
+			pbc.HealthStats = nil
 		}
 		if !req.GetMeta() {
-			pbc.Smddevices = nil
+			pbc.SmdDevices = nil
 		}
 		if req.GetBasic() {
 			stripNvmeDetails(pbc)
@@ -467,17 +470,11 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 	// TODO: perform bdev format in parallel
 	for _, srv := range instances {
-		if len(srv.bdevConfig().DeviceList) == 0 {
-			continue
-		}
-
 		if instanceErrored[srv.Index()] {
 			// if scm errored, indicate skipping bdev format
-			if len(srv.bdevConfig().DeviceList) > 0 {
-				ret := srv.newCret("", nil)
-				ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, srv.Index())
-				resp.Crets = append(resp.Crets, ret)
-			}
+			ret := srv.newCret("", nil)
+			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, srv.Index())
+			resp.Crets = append(resp.Crets, ret)
 			continue
 		}
 		// SCM formatted correctly on this instance, format NVMe

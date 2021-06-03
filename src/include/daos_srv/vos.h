@@ -133,9 +133,10 @@ vos_dtx_aggregate(daos_handle_t coh);
  *
  * \param coh	[IN]	Container open handle.
  * \param stat	[OUT]	The structure to hold the DTXs information.
+ * \param flags	[IN]	The flags for stat operation.
  */
 void
-vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
+vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags);
 
 /**
  * Set the DTX committable as committable.
@@ -1061,8 +1062,8 @@ int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
-vos_gc_pool_run(daos_handle_t poh, int credits,
-		bool (*yield_func)(void *arg), void *yield_arg);
+vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
+	    void *yield_arg);
 bool
 vos_gc_pool_idle(daos_handle_t poh);
 
@@ -1093,6 +1094,8 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 		   struct bio_sglist *bsgl_dup);
 void
 vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
+int
+vos_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup);
 
 /** Raise a RAS event on incompatible durable format
  *

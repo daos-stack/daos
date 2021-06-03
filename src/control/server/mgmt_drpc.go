@@ -7,9 +7,9 @@
 package server
 
 import (
-	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
@@ -67,6 +67,8 @@ func (mod *srvModule) HandleCall(session *drpc.Session, method drpc.Method, req 
 		return nil, mod.handleBioErr(req)
 	case drpc.MethodGetPoolServiceRanks:
 		return mod.handleGetPoolServiceRanks(req)
+	case drpc.MethodPoolFindByLabel:
+		return mod.handlePoolFindByLabel(req)
 	case drpc.MethodClusterEvent:
 		return mod.handleClusterEvent(req)
 	default:
@@ -99,11 +101,34 @@ func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
 		resp.Status = int32(drpc.DaosNonexistant)
 		mod.log.Debugf("GetPoolSvcResp: %+v", resp)
 		return proto.Marshal(resp)
-		// return nil, err
 	}
 
 	resp.Svcreps = system.RanksToUint32(ps.Replicas)
 
+	mod.log.Debugf("GetPoolSvcResp: %+v", resp)
+
+	return proto.Marshal(resp)
+}
+
+func (mod *srvModule) handlePoolFindByLabel(reqb []byte) ([]byte, error) {
+	req := new(srvpb.PoolFindByLabelReq)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	mod.log.Debugf("handling PoolFindByLabel: %+v", req)
+
+	resp := new(srvpb.PoolFindByLabelResp)
+
+	ps, err := mod.sysdb.FindPoolServiceByLabel(req.GetLabel())
+	if err != nil {
+		resp.Status = int32(drpc.DaosNonexistant)
+		mod.log.Debugf("PoolFindByLabelResp: %+v", resp)
+		return proto.Marshal(resp)
+	}
+
+	resp.Svcreps = system.RanksToUint32(ps.Replicas)
+	resp.Uuid = ps.PoolUUID.String()
 	mod.log.Debugf("GetPoolSvcResp: %+v", resp)
 
 	return proto.Marshal(resp)

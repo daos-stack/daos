@@ -938,11 +938,14 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	 */
 	if (unlikely(is_extending || is_adding_new)) {
 		/* Needed to check if domains are being added to pool map */
-		D_DEBUG(DB_PL, DF_OID"/%d is being extended.\n",
-			DP_OID(oid), md->omd_ver);
+		D_DEBUG(DB_PL, DF_OID"/%d is being added: %s or extended: %s\n",
+			DP_OID(oid), md->omd_ver, is_adding_new ? "yes" : "no",
+			is_extending ? "yes" : "no");
+
 		if (is_adding_new)
 			allow_status |= PO_COMP_ST_NEW;
-		else
+
+		if (is_extending)
 			allow_status |= PO_COMP_ST_UP | PO_COMP_ST_DRAIN;
 
 		/* Don't repeat remapping failed shards during this phase -

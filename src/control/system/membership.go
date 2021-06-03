@@ -121,9 +121,11 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 			}
 		}
 
+		if curMember.state == MemberStateAdminExcluded {
+			return nil, errAdminExcluded(curMember.UUID, curMember.Rank)
+		}
 		if !curMember.Rank.Equals(req.Rank) {
 			return nil, errRankChanged(req.Rank, curMember.Rank, curMember.UUID)
-
 		}
 		if curMember.UUID != req.UUID {
 			return nil, errUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
@@ -353,18 +355,20 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 			result.Addr = member.Addr.String()
 		}
 
-		// don't update members if:
-		// - result reports an error and updateOnFail is false or
+		// don't update members if any of the following is true:
+		// - result reports an error and state != errored
+		// - result reports an error and updateOnFail is false
 		// - if transition from current to result state is illegal
+
 		if result.Errored {
-			if !updateOnFail {
-				continue
-			}
 			if result.State != MemberStateErrored {
-				// this indicates a programming error
+				// result content mismatch (programming error)
 				return errors.Errorf(
 					"errored result for rank %d has conflicting state '%s'",
 					result.Rank, result.State)
+			}
+			if !updateOnFail {
+				continue
 			}
 		}
 
@@ -472,32 +476,28 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 		return err
 	}
 
-	ts := MemberStateEvicted
-	if member.State().isTransitionIllegal(ts) {
-		msg := msgBadStateTransition(member, ts)
-		// evicted->evicted transitions expected for multiple swim
+	ns := MemberStateExcluded
+	if member.State().isTransitionIllegal(ns) {
+		msg := msgBadStateTransition(member, ns)
+		// excluded->excluded transitions expected for multiple swim
 		// notifications, if so return error to skip group update
-		if member.State() != ts {
+		if member.State() != ns {
 			m.log.Error(msg)
 		}
 
 		return errors.New(msg)
 	}
 
-	member.state = ts
+	member.state = ns
 	return m.db.UpdateMember(member)
 }
 
-func (m *Membership) handleRankDown(evt *events.RASEvent) {
-	ei := evt.GetRankStateInfo()
+func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
+	ei := evt.GetEngineStateInfo()
 	if ei == nil {
-		m.log.Error("no extended info in RankDown event received")
+		m.log.Error("no extended info in EngineDied event received")
 		return
 	}
-
-	// TODO: sanity check that the correct member is being updated by
-	// performing lookup on provided hostname and matching returned
-	// addresses with the member address with matching rank.
 
 	member, err := m.db.FindMemberByRank(Rank(evt.Rank))
 	if err != nil {
@@ -505,14 +505,21 @@ func (m *Membership) handleRankDown(evt *events.RASEvent) {
 		return
 	}
 
-	ts := MemberStateErrored
-	if member.State().isTransitionIllegal(ts) {
-		m.log.Debugf("skipping %s", msgBadStateTransition(member, ts))
+	// TODO DAOS-7261: sanity check that the correct member is being
+	//                 updated by performing lookup on provided hostname
+	//                 and matching returned addresses with the address
+	//                 of the member with the matching rank.
+	//
+	// e.g. if member.Addr.IP.Equal(net.ResolveIPAddr(evt.Hostname))
+
+	ns := MemberStateErrored
+	if member.State().isTransitionIllegal(ns) {
+		m.log.Debugf("skipping %s", msgBadStateTransition(member, ns))
 		return
 	}
 
-	member.state = ts
-	member.Info = errors.Wrap(ei.ExitErr, evt.Msg).Error()
+	member.state = ns
+	member.Info = evt.Msg
 
 	if err := m.db.UpdateMember(member); err != nil {
 		m.log.Errorf("updating member with rank %d: %s", member.Rank, err)
@@ -522,8 +529,10 @@ func (m *Membership) handleRankDown(evt *events.RASEvent) {
 // OnEvent handles events on channel and updates member states accordingly.
 func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {
-	case events.RASRankDown:
-		m.handleRankDown(evt)
+	case events.RASEngineDied:
+		m.handleEngineFailure(evt)
+	default:
+		m.log.Debugf("no handler registered for event: %v", evt)
 	}
 }
 

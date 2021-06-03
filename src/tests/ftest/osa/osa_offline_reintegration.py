@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2020-2021 Intel Corporation.
 
@@ -9,7 +9,6 @@ from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
-from apricot import skipForTicket
 
 
 class OSAOfflineReintegration(OSAUtils):
@@ -117,6 +116,9 @@ class OSAOfflineReintegration(OSAUtils):
 
             # Reintegrate the ranks which was excluded
             for val, _ in enumerate(rank):
+                if self.test_with_blank_node is True:
+                    ip_addr, p_num = self.get_ipaddr_for_rank(rank[val])
+                    self.remove_pool_dir(ip_addr, p_num)
                 if (val == 2 and "RP_2G" in oclass):
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                rank[val],
@@ -154,8 +156,9 @@ class OSAOfflineReintegration(OSAUtils):
         Test Description: Validate Offline Reintegration
         without enabling checksum in container properties.
 
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_daily
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,offline_reintegration_daily,mpich
         :avocado: tags=offline_reintegration_without_csum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -171,21 +174,20 @@ class OSAOfflineReintegration(OSAUtils):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=offline_reintegration_daily
+        :avocado: tags=offline_reintegration_daily,mpich
         :avocado: tags=offline_reintegration_multiple_pools
         """
         self.log.info("Offline Reintegration : Multiple Pools")
         self.run_offline_reintegration_test(5, data=True)
 
-    @skipForTicket("DAOS-6807")
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
 
         Test Description: Validate Offline Reintegration with server stop
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,pr,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=offline_reintegration_daily
+        :avocado: tags=offline_reintegration_full,mpich
         :avocado: tags=offline_reintegration_srv_stop
         """
         self.log.info("Offline Reintegration : System Start/Stop")
@@ -196,8 +198,9 @@ class OSAOfflineReintegration(OSAUtils):
         Test Description: Reintegrate rank while rebuild
         is happening in parallel
 
-        :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,offline_reintegration_full,mpich
         :avocado: tags=offline_reintegrate_during_rebuild
         """
         self.loop_test_cnt = self.params.get("iterations",
@@ -212,8 +215,9 @@ class OSAOfflineReintegration(OSAUtils):
         Test Description: Validate Offline Reintegration
         with different object class
 
-        :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,offline_reintegration_full,mpich
         :avocado: tags=offline_reintegration_oclass
         """
         self.log.info("Offline Reintegration : Object Class")
@@ -227,11 +231,25 @@ class OSAOfflineReintegration(OSAUtils):
         Test Description: Reintegrate rank while aggregation
         is happening in parallel
 
-        :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,offline_reintegration_full,mpich
         :avocado: tags=offline_reintegrate_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
         self.log.info("Offline Reintegration : Aggregation")
+        self.run_offline_reintegration_test(1, data=True)
+
+    def test_osa_offline_reintegrate_with_blank_node(self):
+        """Test ID: DAOS-6923
+        Test Description: Reintegrate rank with no data.
+
+        :avocado: tags=all,full_regression,hw,medium,ib2
+        :avocado: tags=osa,offline_reintegration_full
+        :avocado: tags=offline_reintegrate_with_blank_node
+        """
+        self.test_with_blank_node = self.params.get("test_with_blank_node",
+                                                    '/run/blank_node/*')
+        self.log.info("Offline Reintegration : Test with blank node")
         self.run_offline_reintegration_test(1, data=True)

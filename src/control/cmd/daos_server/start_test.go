@@ -54,11 +54,9 @@ func genMinimalConfig() *config.Server {
 }
 
 func genDefaultExpected() *config.Server {
-	hostname, _ := os.Hostname()
 	return genMinimalConfig().
 		WithEngines(
 			engine.NewConfig().
-				WithHostname(hostname).
 				WithScmClass("ram").
 				WithScmRamdiskSize(1).
 				WithScmMountPoint("/mnt/daos").

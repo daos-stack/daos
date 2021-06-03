@@ -232,6 +232,7 @@ rdb_vos_set_iods(enum rdb_vos_op op, int n, d_iov_t akeys[],
 		iods[i].iod_name = akeys[i];
 		iods[i].iod_type = DAOS_IOD_SINGLE;
 		iods[i].iod_size = 0;
+		iods[i].iod_flags = 0;
 		iods[i].iod_recxs = NULL;
 		if (op == RDB_VOS_UPDATE) {
 			D_ASSERT(values[i].iov_len > 0);
@@ -325,7 +326,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	if (rc != 0)
 		return rc;
 
-	rc = bio_iod_prep(vos_ioh2desc(io), BIO_CHK_TYPE_IO);
+	rc = bio_iod_prep(vos_ioh2desc(io), BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc) {
 		D_ERROR("prep io descriptor error:"DF_RC"\n", DP_RC(rc));
 		goto out;

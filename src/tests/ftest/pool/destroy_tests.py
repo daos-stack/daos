@@ -4,20 +4,21 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
+import os
 
 from server_utils import ServerFailed
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from test_utils_base import CallbackHandler
-from general_utils import create_string_buffer
+from general_utils import get_default_config_file
+from dmg_utils import get_dmg_command
+
 
 class DestroyTests(TestWithServers):
     """Tests DAOS pool removal.
 
     :avocado: recursive
     """
-
     def get_group(self, name, hosts):
         """Get the server group dictionary.
 
@@ -36,18 +37,35 @@ class DestroyTests(TestWithServers):
         return {name: self.get_group_info(hosts)}
 
     @staticmethod
-    def get_group_info(hosts):
+    def get_group_info(hosts, svr_config_file=None, dmg_config_file=None,
+                       svr_config_temp=None, dmg_config_temp=None):
         """Get the server group information.
 
         Args:
             hosts (list): list of hosts
+            svr_config_file (str, optional): daos_server configuration file name
+                and path. Defaults to None.
+            dmg_config_file (str, optional): dmg configuration file name and
+                path. Defaults to None.
+            svr_config_temp (str, optional): file name and path used to generate
+                the daos_server configuration file locally and copy it to all
+                the hosts using the config_file specification. Defaults to None.
+            dmg_config_temp (str, optional): file name and path used to generate
+                the dmg configuration file locally and copy it to all the hosts
+                using the config_file specification. Defaults to None.
 
         Returns:
             dict: a dictionary identifying the hosts and access points for the
                 server group dictionary
-
         """
-        return {"hosts": hosts, "access_points": hosts[:1]}
+        return {
+            "hosts": hosts,
+            "access_points": hosts[:1],
+            "svr_config_file": svr_config_file,
+            "dmg_config_file": dmg_config_file,
+            "svr_config_temp": svr_config_temp,
+            "dmg_config_temp": dmg_config_temp
+        }
 
     def execute_test(self, hosts, group_name, case, exception_expected=False):
         """Execute the pool destroy test.
@@ -88,7 +106,8 @@ class DestroyTests(TestWithServers):
         #    self.pool.check_files(hosts),
         #    "Pool data not detected on servers before destroy")
 
-    def validate_pool_destroy(self, hosts, case, exception_expected=False):
+    def validate_pool_destroy(self, hosts, case, exception_expected=False,
+                              new_dmg=None):
         # pylint: disable=unused-argument
         """Validate a pool destroy.
 
@@ -101,6 +120,11 @@ class DestroyTests(TestWithServers):
         exception_detected = False
         saved_uuid = self.pool.uuid
         self.log.info("Attempting to destroy pool %s", case)
+
+        if new_dmg:
+            self.log.info("Re-assigning new_dmg to self.pool.dmg")
+            self.pool.dmg = new_dmg
+
         try:
             self.pool.destroy(0)
         except TestFail as result:
@@ -108,11 +132,11 @@ class DestroyTests(TestWithServers):
             if exception_expected:
                 self.log.info(
                     "Expected exception - destroying pool %s: %s",
-                    case, str(result))
+                    case, result)
             else:
                 self.log.error(
                     "Unexpected exception - destroying pool %s: %s",
-                    case, str(result))
+                    case, result)
 
         if not exception_detected and exception_expected:
             # The pool-destroy did not raise an exception as expected
@@ -144,8 +168,8 @@ class DestroyTests(TestWithServers):
     def test_destroy_single(self):
         """Test destroying a pool created on a single server.
 
-        :avocado: tags=all,medium,pr,daily_regression
-        :avocado: tags=pool,destroy,destroysingle
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=pool,destroy,destroy_single
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -156,8 +180,8 @@ class DestroyTests(TestWithServers):
     def test_destroy_multi(self):
         """Test destroying a pool created on two servers.
 
-        :avocado: tags=all,medium,pr,daily_regression
-        :avocado: tags=pool,destroy,destroymutli
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=pool,destroy,destroy_multi
         """
         hostlist_servers = self.hostlist_servers[:2]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -171,8 +195,8 @@ class DestroyTests(TestWithServers):
         Test destroy and recreate one right after the other multiple times
         Should fail.
 
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroysingleloop
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool,destroy,destroy_single_loop
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -194,8 +218,8 @@ class DestroyTests(TestWithServers):
     def test_destroy_multi_loop(self):
         """Test destroy on a large (relative) number of servers.
 
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroymutliloop
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool,destroy,destroy_multi_loop
         """
         hostlist_servers = self.hostlist_servers[:6]
 
@@ -214,12 +238,11 @@ class DestroyTests(TestWithServers):
                 hostlist_servers,
                 "with multiple servers - pass {}".format(counter))
 
-    @skipForTicket("DAOS-2739")
     def test_destroy_invalid_uuid(self):
         """Test destroying a pool uuid that doesn't exist.
 
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroyinvaliduuid
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool,destroy,destroy_invalid_uuid
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -231,74 +254,192 @@ class DestroyTests(TestWithServers):
         self.validate_pool_creation(hostlist_servers, setid)
 
         # Change the pool uuid
-        valid_uuid = self.pool.pool.uuid
-        self.pool.pool.set_uuid_str("81ef94d7-a59d-4a5e-935b-abfbd12f2105")
+        valid_uuid = self.pool.uuid
+        invalid_uuid = "81ef94d7-a59d-4a5e-935b-abfbd12f2105"
+        self.pool.uuid = invalid_uuid
 
         # Attempt to destroy the pool with an invalid UUID
         self.validate_pool_destroy(
-            hostlist_servers,
-            "with an invalid UUID {}".format(self.pool.pool.get_uuid_str()),
-            True)
+            hosts=hostlist_servers,
+            case="with an invalid UUID {}".format(
+                self.pool.pool.get_uuid_str()),
+            exception_expected=True)
 
-        # Restore th valid uuid to allow tearDown() to pass
-        self.log.info(
-            "Restoring the pool's valid uuid: %s", str(valid_uuid.value))
-        self.pool.pool.uuid = valid_uuid
+        # Restore the valid uuid to allow tearDown() to pass
+        self.log.info("Restoring the pool's valid uuid: %s", valid_uuid)
+        self.pool.uuid = valid_uuid
 
-    @skipForTicket("DAOS-5545")
     def test_destroy_invalid_group(self):
-        """Test destroying a valid pool but use the wrong server group.
+        """Test destroying a pool with invalid server group.
 
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroyinvalidgroup
+        Test Steps:
+        Run a server with group name "daos_server_a" and create a pool on it.
+        Try destroying this pool specifying daos_server_i. "i" for invalid.
+
+        We create a second dmg config file and specify the invalid server name
+        in the name field and the right hostlist as below.
+
+        daos_control_a.yml
+        hostlist:
+        - wolf-a
+        name: daos_server_a
+
+        daos_control_i.yml
+        hostlist:
+        - wolf-a
+        name: daos_server_i
+
+        We'll use daos_control_i.yml during dmg pool destroy and verify that it
+        fails. It should show something like:
+        "request system does not match running system (daos_server_i !=
+        daos_server_a)"
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool,destroy,destroy_invalid_group
         """
-        hostlist_servers = self.hostlist_servers[:1]
-        setid = self.params.get("setname", '/run/setnames/validsetname/')
-        badsetid = self.params.get("setname", '/run/setnames/badsetname/')
+        server_group_a = self.server_group + "_a"
+        server_group_i = self.server_group + "_i"
 
-        # Start servers
-        self.start_servers(self.get_group(setid, hostlist_servers))
+        # Prepare and configure dmg config files for a.
+        dmg_config_file_a = get_default_config_file(name="control_a")
+        dmg_config_temp_a = self.get_config_file(
+            name=server_group_a, command="dmg", path=self.test_dir)
 
-        # Create a pool
-        self.validate_pool_creation(hostlist_servers, setid)
+        # Prepare server group info with corresponding dmg config file.
+        group_info_a = self.get_group_info(
+            hosts=[self.hostlist_servers[0]], dmg_config_file=dmg_config_file_a,
+            dmg_config_temp=dmg_config_temp_a)
 
-        # Change the pool server group name
-        valid_group = self.pool.pool.group
-        self.pool.pool.group = create_string_buffer(badsetid)
-
-        # Attempt to destroy the pool with an invalid server group name
-        self.validate_pool_destroy(
-            hostlist_servers,
-            "with an invalid server group name {}".format(badsetid),
-            True)
-
-        # Restore the valid pool server group name to allow tearDown() to pass
-        self.log.info(
-            "Restoring the pool's valid server group name: %s",
-            str(valid_group.value))
-        self.pool.pool.group = valid_group
-
-    @skipForTicket("DAOS-2742")
-    def test_destroy_wrong_group(self):
-        """Test destroying a pool.
-
-         Destroy a pool on group A that was created on server group B,
-         should fail.
-
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroywronggroup
-        """
-        group_names = [self.server_group + "_a", self.server_group + "_b"]
-        group_hosts = {
-            group_names[0]: self.get_group_info(self.hostlist_servers[:1]),
-            group_names[1]: self.get_group_info(self.hostlist_servers[1:2]),
+        # Put everything into a dictionary and start server a.
+        server_groups_a = {
+            server_group_a: group_info_a,
         }
-        self.start_servers(group_hosts)
+        self.start_servers(server_groups=server_groups_a)
 
-        self.log.info("Create a pool in server group %s", group_names[0])
-        self.add_pool(create=False)
-        self.pool.create()
-        self.log.info("Pool UUID is %s", self.pool.uuid)
+        self.add_pool(connect=False)
+
+        # Get dmg_i instance that uses daos_control_i.yml. Server group is i.
+        cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
+        dmg_config_file_i = get_default_config_file(name="control_i")
+        dmg_config_temp_i = self.get_config_file(
+            name=server_group_i, command="dmg", path=self.test_dir)
+        dmg_i = get_dmg_command(
+            group=server_group_i, cert_dir=cert_dir, bin_dir=self.bin,
+            config_file=dmg_config_file_i, config_temp=dmg_config_temp_i)
+
+        # Update the second server manager's hostlist from "localhost" to
+        # daos_server_a's hostname.
+        dmg_i.hostlist = self.hostlist_servers[0]
+
+        # Try destroying the pool in server a with dmg_i. Should fail because
+        # of the group name mismatch.
+        case_i = "Pool is in a, hostlist is a, and name is i."
+        self.validate_pool_destroy(
+            hosts=[self.hostlist_servers[0]], case=case_i,
+            exception_expected=True, new_dmg=dmg_i)
+
+        # Try destroying the pool in server a with the dmg that uses
+        # daos_control_a.yml. Should pass.
+        case_a = "Pool is in a, hostlist is a, and name is a."
+        self.validate_pool_destroy(
+            hosts=[self.hostlist_servers[0]], case=case_a,
+            exception_expected=False, new_dmg=self.server_managers[0].dmg)
+
+    def test_destroy_wrong_group(self):
+        """Test destroying a pool with wrong server group.
+
+        Test Steps:
+        Two servers run with different group names, daos_server_a and
+        daos_server_b. A pool is created on daos_server_a. Try destroying this
+        pool specifying daos_server_b.
+
+        We create a third dmg config file and specify the wrong server name in
+        the name field and the right hostlist as below.
+
+        daos_control_a.yml
+        hostlist:
+        - wolf-a
+        name: daos_server_a
+
+        daos_control_b.yml
+        hostlist:
+        - wolf-b
+        name: daos_server_b
+
+        daos_control_c.yml
+        hostlist:
+        - wolf-a
+        name: daos_server_b
+
+        We'll use daos_control_c.yml during dmg pool destroy and verify that it
+        fails. It should show something like:
+        "request system does not match running system (daos_server_b !=
+        daos_server_a)"
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool,destroy,destroy_wrong_group
+        """
+        server_group_a = self.server_group + "_a"
+        server_group_b = self.server_group + "_b"
+
+        # Prepare and configure dmg config files for a and b.
+        dmg_config_file_a = get_default_config_file(name="control_a")
+        dmg_config_temp_a = self.get_config_file(
+            name=server_group_a, command="dmg", path=self.test_dir)
+        dmg_config_file_b = get_default_config_file(name="control_b")
+        dmg_config_temp_b = self.get_config_file(
+            name=server_group_b, command="dmg", path=self.test_dir)
+
+        # Prepare server group info with corresponding dmg config file.
+        group_info_a = self.get_group_info(
+            hosts=[self.hostlist_servers[0]], dmg_config_file=dmg_config_file_a,
+            dmg_config_temp=dmg_config_temp_a)
+        group_info_b = self.get_group_info(
+            hosts=[self.hostlist_servers[1]], dmg_config_file=dmg_config_file_b,
+            dmg_config_temp=dmg_config_temp_b)
+
+        # Put everything into a dictionary and start server a and b.
+        server_groups_a_b = {
+            server_group_a: group_info_a,
+            server_group_b: group_info_b
+        }
+        self.start_servers(server_groups=server_groups_a_b)
+
+        self.add_pool(connect=False)
+
+        # Get dmg_c instance that uses daos_control_c.yml. Server group is b.
+        cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
+        dmg_config_file_c = get_default_config_file(name="control_c")
+        dmg_config_temp_c = self.get_config_file(
+            name=server_group_b, command="dmg", path=self.test_dir)
+        dmg_c = get_dmg_command(
+            group=server_group_b, cert_dir=cert_dir, bin_dir=self.bin,
+            config_file=dmg_config_file_c, config_temp=dmg_config_temp_c)
+
+        # Update the third server manager's hostlist from "localhost" to
+        # daos_server_a's hostname.
+        dmg_c.hostlist = self.hostlist_servers[:1]
+
+        # Try destroying the pool in server a with dmg_c. Should fail because
+        # of the group name mismatch.
+        case_c = "Pool is in a, hostlist is a, and name is b."
+        self.validate_pool_destroy(
+            hosts=[self.hostlist_servers[0]], case=case_c,
+            exception_expected=True, new_dmg=dmg_c)
+
+        # Try destroying the pool in server a with the dmg that uses
+        # daos_control_b.yml. Should fail because the pool doesn't exist in b.
+        case_b = "Pool is in a, hostlist is b, and name is b."
+        self.validate_pool_destroy(
+            hosts=[self.hostlist_servers[0]], case=case_b,
+            exception_expected=True, new_dmg=self.server_managers[1].dmg)
+
+        # Try destroying the pool in server a with the dmg that uses
+        # daos_control_a.yml. Should pass.
+        case_a = "Pool is in a, hostlist is a, and name is a."
+        self.validate_pool_destroy(
+            hosts=[self.hostlist_servers[0]], case=case_a,
+            exception_expected=False, new_dmg=self.server_managers[0].dmg)
 
         # Commented out due to DAOS-3836.
         # self.assertTrue(
@@ -310,30 +451,14 @@ class DestroyTests(TestWithServers):
         #    "Pool UUID {} detected in server group {}".format(
         #        self.pool.uuid, group_names[1]))
 
-        # Attempt to delete the pool from the wrong server group - should fail
-        self.pool.pool.group = create_string_buffer(group_names[1])
-        self.validate_pool_destroy(
-            group_hosts[group_names[0]],
-            "{} from the wrong server group {}".format(
-                self.pool.uuid, group_names[1]),
-            True)
-
-        # Attempt to delete the pool from the right server group - should pass
-        self.pool.pool.group = create_string_buffer(group_names[0])
-        self.validate_pool_destroy(
-            group_hosts[group_names[1]],
-            "{} from the right server group {}".format(
-                self.pool.uuid, group_names[0]),
-            False)
-
     def test_destroy_connected(self):
         """Destroy pool with connected client.
 
         Test destroying a pool that has a connected client with force == false.
         Should fail.
 
-        :avocado: tags=all,medium,pr,daily_regression
-        :avocado: tags=pool,destroy,destroyconnected
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=pool,destroy,destroy_connected
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -382,8 +507,8 @@ class DestroyTests(TestWithServers):
         Test destroying a pool that has a connected client with force == true.
         Should pass.
 
-        :avocado: tags=all,medium,pr,daily_regression
-        :avocado: tags=pool,destroy,forcedestroyconnected
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=pool,destroy,force_destroy_connected
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -421,8 +546,8 @@ class DestroyTests(TestWithServers):
         Test destroy and recreate one right after the other multiple times
         Should fail.
 
-        :avocado: tags=all,medium,pr,daily_regression
-        :avocado: tags=pool,destroy,destroywithdata
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=pool,destroy,destroy_with_data
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -472,94 +597,3 @@ class DestroyTests(TestWithServers):
         self.assertTrue(
             exception_detected,
             "No exception when deleting a connected pool with data")
-
-    @skipForTicket("DAOS-2742")
-    def test_destroy_async(self):
-        """Destroy pool asynchronously.
-
-        Create two server groups. Perform destroy asynchronously
-        Expect the destroy to work on the server group where the pool was
-        created and expect the destroy pool to fail on the second server.
-
-        :avocado: tags=all,medium,full_regression
-        :avocado: tags=pool,destroy,destroyasync
-        """
-        # Start two server groups
-        group_names = [self.server_group + "_a", self.server_group + "_b"]
-        group_hosts = {
-            group_names[0]: self.get_group_info(self.hostlist_servers[:1]),
-            group_names[1]: self.get_group_info(self.hostlist_servers[1:2])
-        }
-        self.start_servers(group_hosts)
-
-        self.add_pool(create=False)
-        self.pool.create()
-        self.log.info("Pool UUID is %s on server_group %s",
-                      self.pool.uuid, group_names[0])
-
-        # Commented out due to DAOS-3836.
-        # # Check that the pool was created on server_group_a
-        # self.assertTrue(
-        #    self.pool.check_files(group_hosts[group_names[0]]),
-        #    "Pool data not detected on servers before destroy")
-
-        # Commented out due to DAOS-3836.
-        # # Check that the pool was not created on server_group_b
-        # self.assertFalse(
-        #    self.pool.check_files(group_hosts[group_names[1]]),
-        #    "Pool data detected on servers before destroy")
-
-        # Create callback handler
-        cb_handler = CallbackHandler()
-
-        # Destroy pool on server_group_a with callback
-        self.log.info("Attempting to destroy pool")
-        self.pool.pool.destroy(0, cb_handler.callback)
-        cb_handler.wait()
-        if cb_handler.ret_code != 0:
-            self.fail("destroy-pool was expected to PASS")
-
-        # Commented out due to DAOS-3836.
-        # self.assertFalse(
-        #    self.pool.check_files(group_hosts[group_names[0]]),
-        #    "Pool data detected on {} after destroy".format(group_names[0]))
-
-        # Destroy pool with callback while stopping other server
-        # Create new pool on server_group_a
-        self.add_pool(create=False)
-        self.pool.create()
-        self.log.info("Pool UUID is %s on server_group %s",
-                      self.pool.uuid, group_names[0])
-
-        # Commented out due to DAOS-3836.
-        # # Check that the pool was created on server_group_a
-        # self.assertTrue(
-        #    self.pool.check_files(group_hosts[group_names[0]]),
-        #    "Pool data not detected on servers before destroy")
-
-        # Commented out due to DAOS-3836.
-        # # Check that the pool was not created on server_group_b
-        # self.assertFalse(
-        #    self.pool.check_files(group_hosts[group_names[1]]),
-        #    "Pool data detected on servers before destroy")
-
-        self.log.info("Stopping one server")
-        try:
-            self.server_managers[1].stop()
-        except ServerFailed as error:
-            self.fail(
-                "Error stopping daos server group '{}': {}".format(
-                    group_names[1], error))
-
-        self.log.info("Attempting to destroy pool")
-        self.pool.pool.destroy(0, cb_handler.callback)
-        cb_handler.wait()
-        if cb_handler.ret_code != 0:
-            # Avoid attempting to destroy the pool again in tearDown()
-            self.pool.pool = None
-            self.fail("destroy-pool was expected to PASS")
-
-        # Commented out due to DAOS-3836.
-        # self.assertFalse(
-        #    self.pool.check_files(group_hosts[group_names[1]]),
-        #    "Pool data detected on servers after destroy")
