@@ -43,10 +43,10 @@ class SnapshotAggregation(IorTestBase):
             the writes and confirm that deleting the snapshot reduces the pool
             capacity by half.
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=pr,hw,large
-        :avocado: tags=snap
-        :avocado: tags=container,snapshot,napshot_aggregation
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=container,snapshot,snap
+        :avocado: tags=snapshot_aggregation
         """
         self.dmg = self.get_dmg_command()
         daos = DaosCommand(self.bin)
