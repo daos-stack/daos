@@ -3093,10 +3093,12 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 			 * Check here for change in version prior to getting
 			 * next
 			 */
-			D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
+			D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->
+					gp_rwlock);
 			grp_ver_current =
 				ivns_internal->cii_grp_priv->gp_membs_ver;
-			D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
+			D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->
+					gp_rwlock);
 			if (grp_ver_entry != grp_ver_current) {
 				D_DEBUG(DB_ALL,
 					"Group (%s) version mismatch. "
