@@ -57,14 +57,7 @@ func (ei *EngineInstance) format(ctx context.Context, recreateSBs bool) error {
 	return nil
 }
 
-// start checks to make sure that the instance has a valid superblock before
-// performing any required NVMe preparation steps and launching a managed
-// daos_engine instance.
 func (ei *EngineInstance) start(ctx context.Context, errChan chan<- error) error {
-	if err := ei.bdevClassProvider.GenConfigFile(); err != nil {
-		return errors.Wrap(err, "start failed; unable to generate NVMe configuration for SPDK")
-	}
-
 	if err := ei.logScmStorage(); err != nil {
 		ei.log.Errorf("instance %d: unable to log SCM storage stats: %s", ei.Index(), err)
 	}

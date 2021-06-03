@@ -23,6 +23,10 @@
 #define BIO_ADDR_IS_DEDUP(addr) ((addr)->ba_flags & BIO_FLAG_DEDUP)
 #define BIO_ADDR_SET_DEDUP(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP)
 #define BIO_ADDR_CLEAR_DEDUP(addr) ((addr)->ba_flags &= ~(BIO_FLAG_DEDUP))
+#define BIO_ADDR_IS_DEDUP_BUF(addr) ((addr)->ba_flags == BIO_FLAG_DEDUP_BUF)
+#define BIO_ADDR_SET_DEDUP_BUF(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP_BUF)
+#define BIO_ADDR_SET_NOT_DEDUP_BUF(addr)	\
+			((addr)->ba_flags &= ~(BIO_FLAG_DEDUP_BUF))
 #define BIO_ADDR_IS_CORRUPTED(addr) ((addr)->ba_flags & BIO_FLAG_CORRUPTED)
 #define BIO_ADDR_SET_CORRUPTED(addr) ((addr)->ba_flags |= BIO_FLAG_CORRUPTED)
 
@@ -30,8 +34,11 @@
 enum BIO_FLAG {
 	/* The address is a hole */
 	BIO_FLAG_HOLE = (1 << 0),
+	/* The address is a deduped extent */
 	BIO_FLAG_DEDUP = (1 << 1),
-	BIO_FLAG_CORRUPTED = (1 << 2),
+	/* The address is a buffer for dedup verify */
+	BIO_FLAG_DEDUP_BUF = (1 << 2),
+	BIO_FLAG_CORRUPTED = (1 << 3),
 };
 
 typedef struct {
@@ -229,7 +236,7 @@ bio_iov2req_len(const struct bio_iov *biov)
 }
 
 static inline
-uint16_t bio_iov2media(const struct bio_iov *biov)
+uint8_t bio_iov2media(const struct bio_iov *biov)
 {
 	return biov->bi_addr.ba_type;
 }
@@ -266,7 +273,7 @@ bio_sgl_fini(struct bio_sglist *sgl)
  * call d_sgl_fini(sgl, false) to free iovs.
  */
 static inline int
-bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
+bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 {
 	int i, rc;
 
@@ -284,7 +291,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
 		d_iov_t	*iov = &sgl->sg_iovs[i];
 
 		/* Skip bulk transfer for deduped extent */
-		if (BIO_ADDR_IS_DEDUP(&biov->bi_addr) && deduped_skip)
+		if (BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 			iov->iov_buf = NULL;
 		else
 			iov->iov_buf = bio_iov2req_buf(biov);
@@ -382,6 +389,16 @@ struct bio_reaction_ops {
  */
 void bio_register_ract_ops(struct bio_reaction_ops *ops);
 
+/*
+ * Register bulk operations for bulk cache.
+ *
+ * \param[IN]	bulk_create	Bulk create operation
+ * \param[IN]	bulk_free	Bulk free operation
+ */
+void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
+					      unsigned int perm,
+					      void **bulk_hdl),
+			   int (*bulk_free)(void *bulk_hdl));
 /**
  * Global NVMe initialization.
  *
@@ -401,6 +418,11 @@ int bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
  * \return		N/A
  */
 void bio_nvme_fini(void);
+
+/**
+ * Check if NVMe is configured
+ */
+bool bio_nvme_configured(void);
 
 enum {
 	/* Notify BIO that all xsxtream contexts created */
@@ -477,21 +499,23 @@ int bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt);
  * \param[IN] xs_ctxt	Per-xstream NVMe context
  * \param[IN] umem	umem instance
  * \param[IN] uuid	Pool UUID
+ * \param[IN] skip_blob	Skip blob open since no NVMe partition
  *
  * \returns		Zero on success, negative value on error
  */
 int bio_ioctxt_open(struct bio_io_context **pctxt,
 		    struct bio_xs_context *xs_ctxt,
-		    struct umem_instance *umem, uuid_t uuid);
+		    struct umem_instance *umem, uuid_t uuid, bool skip_blob);
 
 /*
  * Finalize per VOS instance I/O context.
  *
  * \param[IN] ctxt	I/O context
+ * \param[IN] skip_blob	Skip blob close since no NVMe partition
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_ioctxt_close(struct bio_io_context *ctxt);
+int bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob);
 
 /*
  * Unmap (TRIM) the extent being freed.
@@ -597,10 +621,13 @@ enum bio_chunk_type {
  *
  * \param biod       [IN]	io descriptor
  * \param type       [IN]	chunk type used by this iod
+ * \param bulk_ctxt  [IN]	Bulk context for bulk operations
+ * \param bulk_perm  [IN]	Bulk permission
  *
  * \return			Zero on success, negative value on error
  */
-int bio_iod_prep(struct bio_desc *biod, unsigned int type);
+int bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
+		 unsigned int bulk_perm);
 
 /*
  * Post operation after the RDMA transfer or local copy done for the io
@@ -646,6 +673,19 @@ void bio_iod_flush(struct bio_desc *biod);
  * \return			SG list, or NULL on error
  */
 struct bio_sglist *bio_iod_sgl(struct bio_desc *biod, unsigned int idx);
+
+/*
+ * Helper function to get the specified bulk for an io descriptor
+ *
+ * \param biod       [IN]	io descriptor
+ * \param sgl_idx    [IN]	Index of the SG list
+ * \param iov_idx    [IN]	IOV index within the SG list
+ * \param bulk_off   [OUT]	Bulk offset
+ *
+ * \return			Cached bulk, or NULL if no cached bulk
+ */
+void *bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
+		   unsigned int *bulk_off);
 
 /*
  * Wrapper of ABT_thread_yield()

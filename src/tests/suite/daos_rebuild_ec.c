@@ -497,6 +497,7 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 		rebuild_pools_ranks(&arg, 1, &ranks[idx], 1, false);
 		idx++;
 
+		daos_cont_status_clear(co_hdl, NULL);
 		/* Verify full stripe */
 		d_iov_set(&iov, buf, buf_size);
 		memset(buf, 0, buf_size);
