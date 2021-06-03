@@ -371,6 +371,75 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	return rc;
 }
 
+/* check if container exists by UUID and (if applicable) non-default label */
+static int
+cont_existence_check(struct rdb_tx *tx, struct cont_svc *svc,
+		     uuid_t puuid, uuid_t cuuid, char *clabel)
+{
+	d_iov_t		key;
+	d_iov_t		val;
+	bool		may_exist = false;
+	uuid_t		match_cuuid;
+	int		rc;
+
+	/* Find by UUID in cs_conts KVS. */
+	d_iov_set(&key, cuuid, sizeof(uuid_t));
+	d_iov_set(&val, NULL /* buf */, 0 /* size */);
+	rc = rdb_tx_lookup(tx, &svc->cs_conts, &key, &val);
+	if (rc != -DER_NONEXIST) {
+		if (rc != 0)
+			return rc;	/* other lookup failure */
+		may_exist = true;
+	}
+
+	/* If no label in request, return cs_conts lookup result */
+	if (clabel == NULL) {
+		D_DEBUG(DF_DSMS, DF_CONT": no label, lookup by UUID "DF_UUIDF
+			" "DF_RC"\n", DP_CONT(puuid, cuuid), DP_UUID(cuuid),
+			DP_RC(rc));
+		return rc;
+	}
+
+	/* Label provided in request - search for it in cs_uuids KVS
+	 * and perform additional sanity checks.
+	 */
+	d_iov_set(&key, clabel, strnlen(clabel, DAOS_PROP_LABEL_MAX_LEN+1));
+	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
+	rc = rdb_tx_lookup(tx, &svc->cs_uuids, &key, &val);
+	if (rc != -DER_NONEXIST) {
+		if (rc == 0) {
+			/* not found by UUID, but label matched - invalid */
+			if (!may_exist) {
+				D_ERROR(DF_CONT": non-unique label: %s\n",
+					DP_CONT(puuid, cuuid), clabel);
+				return -DER_INVAL;
+			}
+
+			/* found by UUID, and found by label: make sure the
+			 * label lookup returned same UUID as the request UUID.
+			 */
+			if (uuid_compare(cuuid, match_cuuid)) {
+				D_ERROR(DF_CONT": label=%s -> "DF_UUID
+					" (mismatch)\n", DP_CONT(puuid, cuuid),
+					clabel, DP_UUID(match_cuuid));
+				return -DER_INVAL;
+			}
+			return 0;
+		} else {
+			return rc;	/* other lookup failure */
+		}
+	}
+
+	/* not found by UUID, and not found by label - legitimate "non-exist" */
+	if (!may_exist)
+		return rc;	/* -DER_NONEXIST */
+
+	/* found by UUID, not found by label - invalid label input */
+	D_ERROR(DF_CONT": found by UUID but not by label: %s\n",
+		DP_CONT(puuid, cuuid), clabel);
+	return -DER_INVAL;
+}
+
 /* copy \a prop to \a prop_def (duplicated default prop) for cont_create */
 static int
 cont_create_prop_prepare(daos_prop_t *prop_def, daos_prop_t *prop,
@@ -657,6 +726,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	uint32_t		pm_ver;
 	struct daos_prop_entry *lbl_ent;
 	struct daos_prop_entry *def_lbl_ent;
+	d_string_t		lbl = NULL;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p\n",
@@ -670,10 +740,37 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
-	/* Check if a container with this UUID already exists. */
-	d_iov_set(&key, in->cci_op.ci_uuid, sizeof(uuid_t));
-	d_iov_set(&value, NULL /* buf */, 0 /* size */);
-	rc = rdb_tx_lookup(tx, &svc->cs_conts, &key, &value);
+	/* duplicate the default properties, overwrite it with cont create
+	 * parameter (write to rdb below).
+	 */
+	prop_dup = daos_prop_dup(&cont_prop_default, false);
+	if (prop_dup == NULL) {
+		D_ERROR(DF_CONT" daos_prop_dup failed.\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid));
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	pm_ver = ds_pool_get_version(pool_hdl->sph_pool);
+	rc = cont_create_prop_prepare(prop_dup, in->cci_prop, pm_ver);
+	if (rc != 0) {
+		D_ERROR(DF_CONT" cont_create_prop_prepare failed: "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	/* Determine if non-default label property supplied */
+	def_lbl_ent = daos_prop_entry_get(&cont_prop_default,
+					  DAOS_PROP_CO_LABEL);
+	lbl_ent = daos_prop_entry_get(prop_dup, DAOS_PROP_CO_LABEL);
+	if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
+		    DAOS_PROP_LABEL_MAX_LEN)) {
+		lbl = lbl_ent->dpe_str;
+	}
+
+	/* Check if a container with this UUID and label already exists */
+	rc = cont_existence_check(tx, svc, pool_hdl->sph_pool->sp_uuid,
+				  in->cci_op.ci_uuid, lbl);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0)
 			D_DEBUG(DF_DSMS, DF_CONT": container already exists\n",
@@ -733,24 +830,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out_kvs, rc);
 	}
 
-	/* duplicate the default properties, overwrite it with cont create
-	 * parameter and then write to rdb.
-	 */
-	prop_dup = daos_prop_dup(&cont_prop_default, false);
-	if (prop_dup == NULL) {
-		D_ERROR(DF_CONT" daos_prop_dup failed.\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cci_op.ci_uuid));
-		D_GOTO(out_kvs, rc = -DER_NOMEM);
-	}
-	pm_ver = ds_pool_get_version(pool_hdl->sph_pool);
-	rc = cont_create_prop_prepare(prop_dup, in->cci_prop, pm_ver);
-	if (rc != 0) {
-		D_ERROR(DF_CONT" cont_create_prop_prepare failed: "DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cci_op.ci_uuid), DP_RC(rc));
-		D_GOTO(out_kvs, rc);
-	}
+	/* write container properties to rdb. */
 	rc = cont_prop_write(tx, &kvs, prop_dup);
 	if (rc != 0) {
 		D_ERROR(DF_CONT" cont_prop_write failed: "DF_RC"\n",
@@ -760,42 +840,21 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 	/* If non-default label provided, add it in container UUIDs KVS */
-	def_lbl_ent = daos_prop_entry_get(&cont_prop_default,
-					  DAOS_PROP_CO_LABEL);
-	lbl_ent = daos_prop_entry_get(prop_dup, DAOS_PROP_CO_LABEL);
-	if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
-		    DAOS_PROP_LABEL_MAX_LEN)) {
-		d_iov_set(&key, lbl_ent->dpe_str,
-			  strnlen(lbl_ent->dpe_str, DAOS_PROP_LABEL_MAX_LEN+1));
-
-		d_iov_set(&value, NULL /* buf */, 0 /* size */);
-		rc = rdb_tx_lookup(tx, &svc->cs_uuids, &key, &value);
-		if (rc != -DER_NONEXIST) {
-			if (rc == 0)
-				D_DEBUG(DF_DSMS, DF_CONT": %s: label exists\n",
-					DP_CONT(pool_hdl->sph_pool->sp_uuid,
-						in->cci_op.ci_uuid),
-						lbl_ent->dpe_str);
-			else
-				D_ERROR(DF_CONT": %s: lookup failed: "DF_RC"\n",
-					DP_CONT(pool_hdl->sph_pool->sp_uuid,
-						in->cci_op.ci_uuid),
-						lbl_ent->dpe_str, DP_RC(rc));
-			D_GOTO(out_kvs, rc);
-		}
-
+	if (lbl) {
+		/* If we have come this far (see existence check), there must
+		 * not be an entry with this label in cs_uuids. Just update.
+		 */
+		d_iov_set(&key, lbl, strnlen(lbl, DAOS_PROP_LABEL_MAX_LEN+1));
 		d_iov_set(&value, in->cci_op.ci_uuid, sizeof(uuid_t));
 		rc = rdb_tx_update(tx, &svc->cs_uuids, &key, &value);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": update cuuids failed: "DF_RC"\n",
+			D_ERROR(DF_CONT": update cs_uuids failed: "DF_RC"\n",
 				DP_CONT(pool_hdl->sph_pool->sp_uuid,
 					in->cci_op.ci_uuid), DP_RC(rc));
 			D_GOTO(out_kvs, rc);
 		}
-		D_DEBUG(DF_DSMS, DF_UUID": creating cont: (lbl len %zu), "
-			"label=%s -> cuuid="DF_UUID"\n",
-			DP_UUID(svc->cs_pool_uuid), key.iov_len,
-			lbl_ent->dpe_str, DP_UUID(in->cci_op.ci_uuid));
+		D_DEBUG(DF_DSMS, DF_CONT": creating container, label: %s\n",
+			DP_CONT(svc->cs_pool_uuid, in->cci_op.ci_uuid), lbl);
 	}
 
 	/* Create the snapshot KVS. */
@@ -832,9 +891,9 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 out_kvs:
-	daos_prop_free(prop_dup);
 	rdb_path_fini(&kvs);
 out:
+	daos_prop_free(prop_dup);
 	return rc;
 }
 
