@@ -53,9 +53,9 @@ class ConfigGenerateOutput(TestWithServers):
             self.nvme_socket_to_addrs[socket_id].append(pci_addr)
             self.pci_address_set.add(pci_addr)
 
-        self.log.debug(
-            "nvme_socket_to_addrs = {}".format(self.nvme_socket_to_addrs))
-        self.log.info("pci_address_set = {}".format(self.pci_address_set))
+        self.log.info(
+            "nvme_socket_to_addrs = %s", self.nvme_socket_to_addrs)
+        self.log.info("pci_address_set = %s", self.pci_address_set)
 
         # Fill in the dictionary and the set for SCM.
         for scm_namespace in scm_namespaces:
@@ -65,9 +65,8 @@ class ConfigGenerateOutput(TestWithServers):
             self.scm_namespace_set.add(blockdev)
 
         self.log.info(
-            "scm_socket_to_namespaces = {}".format(
-                self.scm_socket_to_namespaces))
-        self.log.info("scm_namespace_set = {}".format(self.scm_namespace_set))
+            "scm_socket_to_namespaces = %s", self.scm_socket_to_namespaces)
+        self.log.info("scm_namespace_set = %s", self.scm_namespace_set)
 
         # Call dmg network scan --provider=all --json.
         network_out = dmg.network_scan(provider="all")
@@ -85,8 +84,8 @@ class ConfigGenerateOutput(TestWithServers):
             self.interface_set.add(device)
 
         self.log.info(
-            "interface_to_providers = {}".format(self.interface_to_providers))
-        self.log.debug("interface_set = {}".format(self.interface_set))
+            "interface_to_providers = %s", self.interface_to_providers)
+        self.log.info("interface_set = %s", self.interface_set)
 
     def check_errors(self, errors):
         """Check if there's any error in given list. If so, fail the test.
@@ -197,8 +196,7 @@ class ConfigGenerateOutput(TestWithServers):
                 "Host + invalid port number succeeded! {}".format(
                     expected_ap_port))
         except CommandFailure as err:
-            self.log.info(
-                "Expected error from invalid port number: {}".format(err))
+            self.log.info("Expected error from invalid port number: %s", err)
 
         self.check_errors(errors)
 
@@ -223,7 +221,7 @@ class ConfigGenerateOutput(TestWithServers):
         # number of interfaces. Go over this step if we have issue with the
         # max_engine assumption.
         max_engine = len(list(self.nvme_socket_to_addrs.keys()))
-        self.log.debug("max_engine threshold = {}".format(max_engine))
+        self.log.info("max_engine threshold = %s", max_engine)
 
         dmg = self.get_dmg_command()
         errors = []
@@ -249,7 +247,7 @@ class ConfigGenerateOutput(TestWithServers):
                     max_engine + 1))
         except CommandFailure as err:
             self.log.info(
-                "Expected error from invalid num_engines: {}".format(err))
+                "Expected error from invalid num_engines: %s", err)
 
         self.check_errors(errors)
 
@@ -323,7 +321,7 @@ class ConfigGenerateOutput(TestWithServers):
         2. Call dmg config generate --net-class=infiniband
         --num-engines=<1 to ib_count> and verify that it works.
         3. In addition, verify provider using the dictionary. i.e., iterate
-        "engines" fields and verify "provider" is in the list where key is 
+        "engines" fields and verify "provider" is in the list where key is
         "fabric_iface".
         4. Similarly find eth_count and call dmg config generate
         --net-class=ethernet --num-engines=<1 to eth_count> and verify that it
@@ -344,7 +342,7 @@ class ConfigGenerateOutput(TestWithServers):
         for interface in self.interface_set:
             if interface[:2] == "ib":
                 ib_count += 1
-        self.log.info("ib_count = {}".format(ib_count))
+        self.log.info("ib_count = %d", ib_count)
 
         dmg = self.get_dmg_command()
         errors = []
@@ -398,7 +396,7 @@ class ConfigGenerateOutput(TestWithServers):
         for interface in self.interface_set:
             if interface[:3] == "eth":
                 eth_count += 1
-        self.log.info("eth_count = {}".format(eth_count))
+        self.log.info("eth_count = %d", eth_count)
 
         # Call dmg config generate --num-engines=<1 to eth_count>
         # --net-class=ethernet. Should pass.
