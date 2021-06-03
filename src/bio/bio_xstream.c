@@ -128,12 +128,12 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
+	nvme_glb.bd_nvme_conf = NULL;
 	D_INIT_LIST_HEAD(&nvme_glb.bd_bdevs);
 
 	rc = ABT_mutex_create(&nvme_glb.bd_mutex);
 	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto fini_smd;
+		return dss_abterr2der(rc);
 	}
 
 	rc = ABT_cond_create(&nvme_glb.bd_barrier);
@@ -151,14 +151,13 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 
 	if (nvme_conf == NULL || strlen(nvme_conf) == 0) {
 		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
-		nvme_glb.bd_nvme_conf = NULL;
 		return 0;
 	}
 
 	rc = smd_init(db);
 	if (rc != 0) {
 		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
-		return rc;
+		goto free_cond;
 	}
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
@@ -179,21 +178,21 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	nvme_glb.bd_shm_id = shm_id;
 	nvme_glb.bd_mem_size = mem_size;
 
-	nvme_glb.bd_nvme_conf = nvme_conf;
-
 	rc = bio_spdk_env_init();
 	if (rc)
-		goto free_conf;
+		goto fini_smd;
+
+	nvme_glb.bd_nvme_conf = nvme_conf;
 
 	return 0;
 
-free_conf:
-	nvme_glb.bd_nvme_conf = NULL;
+fini_smd:
+	smd_fini();
+free_cond:
 	ABT_cond_free(&nvme_glb.bd_barrier);
 free_mutex:
 	ABT_mutex_free(&nvme_glb.bd_mutex);
-fini_smd:
-	smd_fini();
+
 	return rc;
 }
 
@@ -370,7 +369,7 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 
 	bs_opts = nvme_glb.bd_bs_opts;
 	/*
-	 * A little hack here, we store a UUID in the 16 bytes 'bstype'* and
+	 * A little hack here, we store a UUID in the 16 bytes 'bstype' and
 	 * use it as the block device ID.
 	 */
 	D_ASSERT(SPDK_BLOBSTORE_TYPE_LENGTH == 16);
@@ -1504,7 +1503,8 @@ bio_nvme_poll(struct bio_xs_context *ctxt, bool bypass)
 	D_ASSERT(ctxt != NULL && ctxt->bxc_thread != NULL);
 	rc = spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
-	/* To avoid complicated race handling (init xstream and starting
+	/*
+	 * To avoid complicated race handling (init xstream and starting
 	 * VOS xstream concurrently access global device list & xstream
 	 * context array), we just simply disable faulty device detection
 	 * and hot remove/plug processing during server start/shutdown.
