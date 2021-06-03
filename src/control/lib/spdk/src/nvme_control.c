@@ -395,64 +395,12 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	return ret;
 }
 
-static int
-is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
-		     int num_whitelist_devices)
-{
-	int			i;
-	struct spdk_pci_addr    tmp;
-
-	if (spdk_pci_addr_parse(&tmp, pci_addr) != 0) {
-		fprintf(stderr, "invalid address %s\n", pci_addr);
-		return -EINVAL;
-	}
-
-	for (i = 0; i < num_whitelist_devices; i++) {
-		if (spdk_pci_addr_compare(&tmp, &whitelist[i]) == 0) {
-			return 1;
-		}
-	}
-
-	return 0;
-}
-
-/** Add PCI address to spdk_env_opts whitelist, ignoring any duplicates. */
-static int
-opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
-		  char *traddr)
-{
-	int			rc;
-	size_t			count = opts->num_pci_addr;
-	struct spdk_pci_addr   *tmp = *list;
-
-	rc = is_addr_in_whitelist(traddr, *list, count);
-	if (rc < 0)
-		return rc;
-	if (rc == 1)
-		return 0;
-
-	tmp = realloc(tmp, sizeof(*tmp) * (count + 1));
-	if (tmp == NULL) {
-		fprintf(stderr, "realloc error\n");
-		return -ENOMEM;
-	}
-
-	*list = tmp;
-	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
-		fprintf(stderr, "Invalid address %s\n", traddr);
-		return -EINVAL;
-	}
-
-	opts->num_pci_addr++;
-	return 0;
-}
-
 struct ret_t *
 daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 {
 	struct ret_t		*ret = init_ret();
 	struct spdk_env_opts	 opts = {};
-	int			 rc, i;
+	int			 rc;
 
 	spdk_env_opts_init(&opts);
 
@@ -470,7 +418,6 @@ daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 		sprintf(ret->info, "DAOS SPDK init failed");
 	}
 
-out:
 	ret->rc = rc;
 	return ret;
 }
