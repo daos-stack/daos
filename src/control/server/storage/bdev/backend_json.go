@@ -9,6 +9,7 @@ package bdev
 import (
 	"fmt"
 
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/dustin/go-humanize"
 )
 
@@ -24,14 +25,14 @@ type SpdkSubsystemConfigParams interface {
 	isSpdkSubsystemConfigParams()
 }
 
-type setOptionsParams struct {
+type SetOptionsParams struct {
 	BdevIoPoolSize  uint64 `json:"bdev_io_pool_size"`
 	BdevIoCacheSize uint64 `json:"bdev_io_cache_size"`
 }
 
-func (sop setOptionsParams) isSpdkSubsystemConfigParams() {}
+func (sop SetOptionsParams) isSpdkSubsystemConfigParams() {}
 
-type nvmeSetOptionsParams struct {
+type NvmeSetOptionsParams struct {
 	RetryCount               uint32 `json:"retry_count"`
 	TimeoutUsec              uint64 `json:"timeout_us"`
 	NvmeAdminqPollPeriodUsec uint32 `json:"nvme_adminq_poll_period_us"`
@@ -39,22 +40,22 @@ type nvmeSetOptionsParams struct {
 	NvmeIoqPollPeriodUsec    uint32 `json:"nvme_ioq_poll_period_us"`
 }
 
-func (nsop nvmeSetOptionsParams) isSpdkSubsystemConfigParams() {}
+func (nsop NvmeSetOptionsParams) isSpdkSubsystemConfigParams() {}
 
-type nvmeAttachControllerParams struct {
+type NvmeAttachControllerParams struct {
 	TransportType    string `json:"trtype"`
 	DeviceName       string `json:"name"`
 	TransportAddress string `json:"traddr"`
 }
 
-func (napp nvmeAttachControllerParams) isSpdkSubsystemConfigParams() {}
+func (napp NvmeAttachControllerParams) isSpdkSubsystemConfigParams() {}
 
-type nvmeSetHotplugParams struct {
+type NvmeSetHotplugParams struct {
 	Enable     bool   `json:"enable"`
 	PeriodUsec uint64 `json:"period_us"`
 }
 
-func (nshp nvmeSetHotplugParams) isSpdkSubsystemConfigParams() {}
+func (nshp NvmeSetHotplugParams) isSpdkSubsystemConfigParams() {}
 
 // SpdkSubsystemConfig entries apply to any SpdkSubsystem.
 type SpdkSubsystemConfig struct {
@@ -78,14 +79,14 @@ func defaultSpdkConfig() *SpdkConfig {
 	bdevSubsystemConfigs := []*SpdkSubsystemConfig{
 		{
 			Method: BdevSetOptions,
-			Params: setOptionsParams{
+			Params: SetOptionsParams{
 				BdevIoPoolSize:  humanize.KiByte * 64,
 				BdevIoCacheSize: 256,
 			},
 		},
 		{
 			Method: BdevNvmeSetOptions,
-			Params: nvmeSetOptionsParams{
+			Params: NvmeSetOptionsParams{
 				RetryCount:               4,
 				NvmeAdminqPollPeriodUsec: 100 * 1000,
 				ActionOnTimeout:          "none",
@@ -93,7 +94,7 @@ func defaultSpdkConfig() *SpdkConfig {
 		},
 		{
 			Method: BdevNvmeSetHotplug,
-			Params: nvmeSetHotplugParams{
+			Params: NvmeSetHotplugParams{
 				PeriodUsec: 10 * 1000 * 1000,
 			},
 		},
@@ -111,14 +112,15 @@ func defaultSpdkConfig() *SpdkConfig {
 	}
 }
 
-func newNvmeSpdkConfig(deviceList []string, host string) *SpdkConfig {
+func newNvmeSpdkConfig(log logging.Logger, enableVmd bool, req *FormatRequest) (*SpdkConfig, error) {
 	var sscs []*SpdkSubsystemConfig
-	for i, d := range deviceList {
+	for i, d := range req.DeviceList {
+		name := fmt.Sprintf("Nvme_%s_%d", req.Hostname, i)
 		sscs = append(sscs, &SpdkSubsystemConfig{
 			Method: BdevNvmeAttachController,
-			Params: nvmeAttachControllerParams{
+			Params: NvmeAttachControllerParams{
 				TransportType:    "PCIe",
-				DeviceName:       fmt.Sprintf("Nvme_%s_%d", host, i),
+				DeviceName:       name,
 				TransportAddress: d,
 			},
 		})
@@ -129,5 +131,5 @@ func newNvmeSpdkConfig(deviceList []string, host string) *SpdkConfig {
 	// attach config method calls
 	sc.Subsystems[0].Configs = append(sc.Subsystems[0].Configs, sscs...)
 
-	return sc
+	return sc, nil
 }
