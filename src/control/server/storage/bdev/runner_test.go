@@ -18,7 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestBdev_Runner_Prepare(t *testing.T) {
+func TestRunner_Prepare(t *testing.T) {
 	const (
 		testNrHugePages       = 42
 		nonexistentTargetUser = "nonexistentTargetUser"

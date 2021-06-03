@@ -41,7 +41,8 @@ int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
 
 int ds_cont_tgt_close(uuid_t hdl_uuid);
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas);
+		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
+		     uint32_t status_pm_ver);
 /*
  * Per-thread container (memory) object
  *
@@ -111,6 +112,10 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_cos_list;
 	/* The pool map version for the latest DTX resync on the container. */
 	uint32_t		 sc_dtx_resync_ver;
+	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
+	uint32_t		 sc_status_pm_ver;
+	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
+	uint32_t		 sc_rw_disabled:1;
 };
 
 typedef uint64_t (*agg_param_get_eph_t)(struct ds_cont_child *cont);
@@ -142,7 +147,7 @@ struct ds_cont_hdl {
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
-	int			sch_ref;
+	int32_t			sch_ref;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
@@ -151,9 +156,6 @@ void ds_cont_hdl_get(struct ds_cont_hdl *hdl);
 
 int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
-int ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		       uuid_t cont_uuid, uint64_t flags,
-		       uint64_t sec_capas, struct ds_cont_hdl **cont_hdl);
 int ds_cont_local_close(uuid_t cont_hdl_uuid);
 
 int ds_cont_child_start_all(struct ds_pool_child *pool_child);
@@ -161,6 +163,7 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
+int ds_cont_rf_check(uuid_t pool_uuid);
 
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
@@ -252,7 +255,7 @@ ds_csum_agg_recalc(void *args);
 int dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 		  unsigned int flags, daos_handle_t *coh);
 int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
-
+struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
 
 void ds_cont_tgt_ec_eph_query_ult(void *data);
 #endif /* ___DAOS_SRV_CONTAINER_H_ */
