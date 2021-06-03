@@ -160,7 +160,7 @@ char *daos_key2str(daos_key_t *key);
 				daos_key2str(key)
 #endif
 
-#define DF_RECX			"["DF_U64"-"DF_U64"]"
+#define DF_RECX			"["DF_X64"-"DF_X64"]"
 #define DP_RECX(r)		(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1)
 #define DF_IOM			"{nr: %d, lo: "DF_RECX", hi: "DF_RECX"}"
 #define DP_IOM(m)		(m)->iom_nr, DP_RECX((m)->iom_recx_lo), \

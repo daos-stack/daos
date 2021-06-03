@@ -1676,11 +1676,6 @@ run_mvcc_tests(const char *cfg)
 
 	dts_create_config(test_name, "VOS MVCC Tests %s", cfg);
 
-	if (getenv("DAOS_IO_BYPASS")) {
-		print_message("Skipping MVCC tests: DAOS_IO_BYPASS is set\n");
-		return 0;
-	}
-
 	return cmocka_run_group_tests_name(test_name, mvcc_tests,
 					   setup_mvcc, teardown_mvcc);
 }
