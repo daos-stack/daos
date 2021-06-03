@@ -13,7 +13,7 @@ import daos_build
 # pylint: disable=ungrouped-imports
 import SCons.Action
 
-HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h', 'crt_utils.h']
+HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h']
 
 SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
        'crt_ctl.c', 'crt_debug.c', 'crt_group.c', 'crt_hg.c', 'crt_hg_proc.c',
@@ -81,7 +81,6 @@ def scons():
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('../gurt').srcnode()])
-    env.AppendUnique(CPPPATH=['#/src/include/cart'])
 
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
