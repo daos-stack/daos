@@ -724,9 +724,16 @@ class TestWithServers(TestWithoutServers):
         # Write an attach_info_tmp file in this directory for cart_ctl to use
         tmpdir = tempfile.gettempdir()
         attachinfo_file_name = tmpdir + "/daos_server.attach_info_tmp"
-        file1 = open(attachinfo_file_name, 'w')
-        file1.write(attach_info_contents)
-        file1.close()
+
+        file1 = None
+        try:
+            file1 = open(attachinfo_file_name, 'w')
+            file1.write(attach_info_contents)
+        finally:
+            file1.close()
+
+        print('DEBUG log:735, attachinfo_file_name=', attachinfo_file_name)
+        print('DEBUG log:736, attach_info_contents= ', attach_info_contents)
 
         cp_command = "sudo cp {} {}".format(attachinfo_file_name, ".")
         run_command(cp_command, verbose=True, raise_exception=False)
