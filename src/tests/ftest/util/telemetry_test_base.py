@@ -36,7 +36,7 @@ class TestWithTelemetry(TestWithServers):
             description (str): description of the lists being compared
 
         Returns:
-            list: any errors detected when comapring the two lists
+            list: any errors detected when comparing the two lists
 
         """
         errors = []
@@ -80,36 +80,6 @@ class TestWithTelemetry(TestWithServers):
             errors.extend(
                 self.compare_lists(
                     expected, result[host], 2, host, "telemetry metric names"))
-
-        # errors = []
-        # self.log.info(
-        #     "Verifying telemetry metrics list for %s/%s hosts:",
-        #     len(result), len(self.server_managers[0].hosts))
-        # if sorted(result) != sorted(self.server_managers[0].hosts):
-        #     msg = "Telemetry metrics names missing for hosts {}: {}".format(
-        #         self.server_managers[0].hosts, result)
-        #     self.log.error("  - %s", msg)
-        #     errors.append(msg)
-        # for host in result:
-        #     self.log.info(
-        #         "  %s: detected %s/%s telemetry metric names",
-        #         host, len(result[host]), len(expected))
-        #     difference = set(expected) - set(result[host])
-        #     self.log.info(
-        #         "  %s: difference between expected and actual: %s",
-        #         host, difference)
-        #     symmetric_difference = set(expected) ^ set(result[host])
-        #     self.log.info(
-        #         "  %s: symmetric difference between expected and actual: %s",
-        #         host, symmetric_difference)
-        #     if difference:
-        #         errors.append(
-        #             "Difference found in telemetry metrics list on {}".format(
-        #                 host))
-        #     if symmetric_difference:
-        #         errors.append(
-        #             "Symmetric difference found in telemetry metrics list on "
-        #             "{}".format(host))
         if errors:
             self.fail("\n".join(errors))
 
