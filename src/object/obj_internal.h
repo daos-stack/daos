@@ -536,7 +536,8 @@ obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
-	       err == -DER_EVICTED || err == -DER_CSUM || err == -DER_TX_BUSY ||
+	       err == -DER_EXCLUDED || err == -DER_CSUM ||
+	       err == -DER_TX_BUSY ||
 	       daos_crt_network_error(err);
 }
 
@@ -849,10 +850,11 @@ int
 dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);
 
 int
-dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task);
+dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
+	     tse_task_t *task);
 
 int
-dc_tx_convert(enum obj_rpc_opc opc, tse_task_t *task);
+dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task);
 
 /* obj_enum.c */
 int

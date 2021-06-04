@@ -231,6 +231,55 @@ daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev)
 	return dc_task_schedule(task, true);
 }
 
+static int
+dcsc_prop_free(tse_task_t *task, void *data)
+{
+	daos_prop_t *prop = *((daos_prop_t **)data);
+
+	daos_prop_free(prop);
+	return task->dt_result;
+}
+
+int
+daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev)
+{
+	daos_cont_set_prop_t	*args;
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*entry;
+	tse_task_t		*task;
+	int			 rc;
+
+	prop = daos_prop_alloc(1);
+	if (prop == NULL)
+		return -DER_NOMEM;
+
+	entry = &prop->dpp_entries[0];
+	entry->dpe_type = DAOS_PROP_CO_STATUS;
+	entry->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
+						 DAOS_PROP_CO_CLEAR, 0);
+
+	DAOS_API_ARG_ASSERT(*args, CONT_SET_PROP);
+	rc = dc_task_create(dc_cont_set_prop, NULL, ev, &task);
+	if (rc) {
+		daos_prop_free(prop);
+		return rc;
+	}
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->prop	= prop;
+
+	rc = tse_task_register_comp_cb(task, dcsc_prop_free, &prop,
+				       sizeof(prop));
+	if (rc) {
+		daos_prop_free(prop);
+		tse_task_complete(task, rc);
+		return rc;
+	}
+
+	return dc_task_schedule(task, true);
+}
+
 int
 daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
 			daos_event_t *ev)
