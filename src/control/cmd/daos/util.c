@@ -97,7 +97,7 @@ resolve_duns_path(struct cmd_args_s *ap)
 		}
 		if (ap->dfs_path == NULL)
 			D_GOTO(out, rc = ENOMEM);
-	}		
+	}
 
 out:
 	D_FREE(dir_name);

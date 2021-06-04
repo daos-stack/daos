@@ -7,7 +7,8 @@
 #include <daos.h>
 
 /* cgo is unable to work directly with preprocessor macros
-   so we have to provide these glue helpers. */
+ * so we have to provide these glue helpers.
+ */
 static inline uint64_t
 daos_prop_co_status_val(uint32_t status, uint32_t flag, uint32_t ver)
 {
@@ -15,7 +16,8 @@ daos_prop_co_status_val(uint32_t status, uint32_t flag, uint32_t ver)
 }
 
 /* cgo is unable to work directly with unions, so we have
-   to provide these glue helpers. */
+ *  to provide these glue helpers.
+ */
 static inline char *
 get_dpe_str(struct daos_prop_entry *dpe)
 {
