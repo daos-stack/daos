@@ -914,7 +914,7 @@ pipeline {
         } // stage('Test Hardware')
         stage ('Test Report') {
             parallel {
-                stage('Bullseye Report') {
+                stage('Bullseye Report ') {
                     when {
                       beforeAgent true
                       expression { ! skipStage() }
