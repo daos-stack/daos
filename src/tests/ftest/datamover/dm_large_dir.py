@@ -108,7 +108,7 @@ class DmLargeDir(DataMoverTestBase):
             an external POSIX file system using dcp.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_large_dir,dm_large_dir_dcp
         """
         self.run_dm_large_dir("DCP")

@@ -381,10 +381,12 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_REDUN_LVL:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_PROP_CO_REDUN_RACK &&
-			    val != DAOS_PROP_CO_REDUN_NODE) {
-				D_ERROR("invalid redundancy level "DF_U64".\n",
-					val);
+			if (val < DAOS_PROP_CO_REDUN_MIN ||
+			    val > DAOS_PROP_CO_REDUN_MAX) {
+				D_ERROR("invalid redundancy level "DF_U64
+					", must be within [%d - %d]\n",
+					val, DAOS_PROP_CO_REDUN_RANK,
+					DAOS_PROP_CO_REDUN_MAX);
 				return false;
 			}
 			break;

@@ -7,7 +7,6 @@
 package io.daos.obj;
 
 import io.daos.*;
-import org.apache.commons.lang.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -420,7 +419,12 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
     public DaosObjClient build() throws IOException {
       String poolId = getPoolId();
       String contId = getContId();
-      DaosObjClientBuilder builder = (DaosObjClientBuilder) ObjectUtils.clone(this);
+      DaosObjClientBuilder builder;
+      try {
+        builder = clone();
+      } catch (CloneNotSupportedException e) {
+        throw new IllegalStateException("clone not supported", e);
+      }
       DaosObjClient objClient;
       if (!builder.shareFsClient) {
         objClient = new DaosObjClient(poolId, contId, builder);
