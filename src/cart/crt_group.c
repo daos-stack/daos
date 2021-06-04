@@ -10,6 +10,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <semaphore.h>
 #include "crt_internal.h"
 
 static int crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
@@ -3550,5 +3551,113 @@ crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list)
 	}
 	D_RWLOCK_UNLOCK(&prim_grp_priv->gp_rwlock);
 out:
+	return rc;
+}
+
+static void
+ping_cb(const struct crt_cb_info *info) {
+	sem_t	*sem;
+
+	if (info->cci_rc != 0)
+		D_ERROR("Ping failed with rc = %d\n", info->cci_rc);
+
+	sem = (sem_t *)info->cci_arg;
+
+	sem_post(sem);
+}
+
+int
+crt_group_ping(crt_context_t ctx, int num_tags)
+{
+	crt_group_t			*grp;
+	int				i;
+	int				shift;
+	d_rank_list_t			*rank_list = NULL;
+	sem_t				sem;
+	int				rc = 0;
+
+	if (crt_is_service())
+		/** not supported on the server side */
+		return -DER_INVAL;
+
+	rc = sem_init(&sem, 0, 0);
+	if (rc < 0) {
+		D_ERROR("Failed to initialize semaphore\n");
+		return -DER_INVAL;
+	}
+
+	grp = crt_group_lookup(NULL);
+	if (grp == NULL) {
+		D_ERROR("Failed to find group\n");
+		rc = -DER_INVAL;
+		goto exit;
+	}
+
+	rc = crt_group_ranks_get(grp, &rank_list);
+	if (rc != 0) {
+		D_ERROR("Failed to get rank list, "DF_RC"\n", DP_RC(rc));
+		goto exit;
+	}
+
+	/** Randomize start order to minimize load for large-scale job */
+	shift = rand() + (int)getpid();
+	if (shift < 0)
+		shift = rand();
+
+	D_DEBUG(DB_TRACE, "Pinging %d ranks, shifting at %d\n",
+		rank_list->rl_nr, shift);
+
+	for (i = 0; i < rank_list->rl_nr; i++) {
+		int tag;
+
+		for (tag = 0;  tag < num_tags; tag++) {
+			crt_endpoint_t		server_ep;
+			crt_rpc_t		*rpc = NULL;
+			struct crt_ctl_ep_ls_in	*in_args;
+			int			idx;
+
+			idx = (i + shift) % rank_list->rl_nr;
+			server_ep.ep_rank = rank_list->rl_ranks[idx];
+			server_ep.ep_tag = (tag + shift) % num_tags;
+			server_ep.ep_grp = grp;
+
+			rc = crt_req_create(ctx, &server_ep, CRT_OPC_CTL_LS, &rpc);
+			if (rc != 0) {
+				D_ERROR("Failed to allocate req "DF_RC"\n",
+					DP_RC(rc));
+				goto exit;
+			}
+			D_ASSERTF(rc == 0, "crt_req_create failed; rc=%d\n", rc);
+
+			in_args = crt_req_get(rpc);
+			in_args->cel_grp_id = grp->cg_grpid;
+			in_args->cel_rank = server_ep.ep_rank;
+
+			rc = crt_req_send(rpc, ping_cb, &sem);
+			if (rc != 0) {
+				D_ERROR("Failed to ping rank=%d:%d, "DF_RC"\n",
+					server_ep.ep_rank, server_ep.ep_tag,
+					DP_RC(rc));
+				goto exit;
+			}
+
+			while (sem_trywait(&sem) == -1) {
+				rc = crt_progress(ctx, 0);
+				if (rc && rc != -DER_TIMEDOUT) {
+					D_ERROR("failed to progress context, "
+						DF_RC"\n", DP_RC(rc));
+					break;
+				}
+			}
+			rc = 0;
+		}
+	}
+	D_DEBUG(DB_TRACE, "Pinging done\n");
+
+exit:
+	(void)sem_destroy(&sem);
+	if (rank_list)
+		d_rank_list_free(rank_list);
+
 	return rc;
 }

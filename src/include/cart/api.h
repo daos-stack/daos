@@ -2229,6 +2229,19 @@ int crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
 			uint32_t version);
 
 /**
+ * Pro-actively ping each rank in primary group.
+ * This forces underlying connection to be set up.
+ * Only supported from a client (not between server)
+ *
+ * \param[in] ctx        Context index to initialize swim on
+ * \param[in] num_tags	 Number of tags for each rank to ping
+ *
+ * \return               DER_SUCCESS on success, negative value on
+ *                       failure.
+ */
+int crt_group_ping(crt_context_t ctx, int num_tags);
+
+/**
  * Initialize swim on the specified context index.
  *
  * \param[in] crt_ctx_idx        Context index to initialize swim on

@@ -30,6 +30,8 @@ struct rsvc_client_state {
 	struct dc_mgmt_sys *scs_sys;
 };
 
+static pthread_once_t ping_once = PTHREAD_ONCE_INIT;
+
 /**
  * Initialize pool interface
  */
@@ -356,6 +358,24 @@ struct pool_connect_arg {
 	daos_handle_t		*hdlp;
 };
 
+static void
+ping_all(void)
+{
+	char	*env;
+	int	ret;
+
+	env = getenv("DAOS_PING_ALL");
+	if (!env)
+		return;
+	if (strcasecmp("1", env) != 0)
+		return;
+
+	/** XXX: should not be assuming 16 targets */
+	ret = crt_group_ping(daos_get_crt_ctx(), daos_rpc_tag(DAOS_REQ_TGT, 16));
+	if (ret)
+		D_ERROR("ping all failed with %d\n", ret);
+}
+
 static int
 pool_connect_cp(tse_task_t *task, void *data)
 {
@@ -425,6 +445,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 		" master\n", DP_UUID(pool->dp_pool), arg->hdlp->cookie,
 		DP_UUID(pool->dp_pool_hdl));
 
+	(void)pthread_once(&ping_once, ping_all);
 out:
 	crt_req_decref(arg->rpc);
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
@@ -1002,6 +1023,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 		" slave\n", DP_UUID(pool->dp_pool), poh->cookie,
 		DP_UUID(pool->dp_pool_hdl));
 
+	(void)pthread_once(&ping_once, ping_all);
 out:
 	if (rc != 0)
 		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
