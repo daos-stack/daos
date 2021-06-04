@@ -3,7 +3,7 @@
 REPOS_DIR=/etc/yum.repos.d
 DISTRO_NAME=centos8
 LSB_RELEASE=redhat-lsb-core
-EXCLUDE_UPGRADE=fuse,mercury,daos,daos-\*
+EXCLUDE_UPGRADE=dpdk,fuse,mercury,daos,daos-\*
 
 bootstrap_dnf() {
     :
@@ -49,6 +49,9 @@ post_provision_config_nodes() {
     # the group repo is always on the test image
     #add_group_repo
     #add_local_repo
+
+    # workaround until Nexus has 8.4
+    dnf config-manager --enable baseos
     time dnf repolist
 
     if [ -n "$INST_REPOS" ]; then
