@@ -57,6 +57,9 @@ extern d_iov_t ds_pool_prop_nhandles;		/* uint32_t */
 extern d_iov_t ds_pool_prop_handles;		/* pool handle KVS */
 extern d_iov_t ds_pool_prop_ec_cell_sz;		/* pool EC cell size */
 extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
+extern d_iov_t ds_pool_prop_scrub_sched;	/* uint64_t */
+extern d_iov_t ds_pool_prop_scrub_freq;		/* uint64_t */
+extern d_iov_t ds_pool_prop_scrub_cred;		/* uint64_t */
 
 /*
  * Pool handle KVS (RDB_KVS_GENERIC)

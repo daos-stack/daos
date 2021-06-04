@@ -385,6 +385,11 @@ co_properties(void **state)
 		print_message("csum server verify verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SCRUBBER_DISABLED);
+	if (entry == NULL || entry->dpe_val == true) {
+		print_message("scrubber disabled failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ENCRYPT);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_ENCRYPT_OFF) {
 		print_message("encrypt verification failed.\n");

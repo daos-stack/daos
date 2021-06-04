@@ -75,6 +75,7 @@ extern d_iov_t ds_cont_prop_layout_ver;		/* uint64_t */
 extern d_iov_t ds_cont_prop_csum;		/* uint64_t */
 extern d_iov_t ds_cont_prop_csum_chunk_size;	/* uint64_t */
 extern d_iov_t ds_cont_prop_csum_server_verify;	/* uint64_t */
+extern d_iov_t ds_cont_prop_scrubber_disabled;	/* uint64_t */
 extern d_iov_t ds_cont_prop_dedup;		/* uint64_t */
 extern d_iov_t ds_cont_prop_dedup_threshold;	/* uint64_t */
 extern d_iov_t ds_cont_prop_redun_fac;		/* uint64_t */

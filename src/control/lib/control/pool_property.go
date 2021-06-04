@@ -116,6 +116,64 @@ func PoolProperties() PoolPropertyMap {
 				jsonNumeric: true,
 			},
 		},
+		"scrub": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyScrubSched,
+				Description: "Checksum scrubbing schedule",
+			},
+			values: map[string]uint64{
+				"off":        drpc.PoolScrubSchedOff,
+				"wait":       drpc.PoolScrubSchedWait,
+				"continuous": drpc.PoolScrubSchedContinuous,
+				"run_once":   drpc.PoolScrubSchedRunOnce,
+				"no_yield":   drpc.PoolScrubSchedNoYield,
+			},
+		},
+		"scrub-freq": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyScrubFreq,
+				Description: "Checksum scrubbing schedule",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					rbErr := errors.Errorf("invalid Scrubbing Frequency value %s", s)
+					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
+					if err != nil {
+						return nil, rbErr
+					}
+					return &PoolPropertyValue{rsPct}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d%%", n)
+				},
+				jsonNumeric: true,
+			},
+		},
+		"scrub-cred": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyScrubCred,
+				Description: "Checksum scrubbing schedule",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					rbErr := errors.Errorf("invalid Scrubbing Credits value %s", s)
+					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
+					if err != nil {
+						return nil, rbErr
+					}
+
+					return &PoolPropertyValue{rsPct}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d%%", n)
+				},
+				jsonNumeric: true,
+			},
+		},
 	}
 }
 
