@@ -576,7 +576,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	}
 
 	srv_iov = &sgl->sg_iovs[0];
-	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO);
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		goto end;
 
@@ -643,7 +643,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	}
 
 	dst_iov = &sgl->sg_iovs[0];
-	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO);
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		goto end;
 
@@ -2281,9 +2281,6 @@ io_query_key(void **state)
 			       NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey_read.iov_buf, KEY_INC * 2);
-
-	if (getenv("DAOS_IO_BYPASS"))
-		return;
 
 	/* Only execute the transactional tests when rollback is available */
 

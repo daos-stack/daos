@@ -57,15 +57,36 @@ type (
 
 	// ConfigGenerateResp contains the request response.
 	ConfigGenerateResp struct {
-		HostErrorsResp
 		ConfigOut *config.Server
 	}
+
+	// ConfigGenerateError implements the error interface and
+	// contains a set of host-specific errors encountered while
+	// attempting to generate a configuration.
+	ConfigGenerateError struct {
+		HostErrorsResp
+	}
 )
+
+func (cge *ConfigGenerateError) Error() string {
+	return cge.Errors().Error()
+}
+
+// GetHostErrors returns the wrapped HostErrorsMap.
+func (cge *ConfigGenerateError) GetHostErrors() HostErrorsMap {
+	return cge.HostErrors
+}
+
+// IsConfigGenerateError returns true if the provided error is a *ConfigGenerateError.
+func IsConfigGenerateError(err error) bool {
+	_, ok := errors.Cause(err).(*ConfigGenerateError)
+	return ok
+}
 
 // ConfigGenerate attempts to automatically detect hardware and generate a DAOS
 // server config file for a set of hosts with homogeneous hardware setup.
 //
-// Returns API response and error.
+// Returns API response or error.
 func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerateResp, error) {
 	req.Log.Debugf("ConfigGenerate called with request %+v", req)
 
@@ -73,14 +94,18 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, errors.New("no hosts specified")
 	}
 
-	nd, hostErrs, err := getNetworkDetails(ctx, req)
-	if err != nil {
-		return checkHostErrors(hostErrs), err
+	if len(req.AccessPoints) == 0 {
+		return nil, errors.New("no access points specified")
 	}
 
-	sd, hostErrs, err := getStorageDetails(ctx, req, nd.engineCount)
+	nd, err := getNetworkDetails(ctx, req)
 	if err != nil {
-		return checkHostErrors(hostErrs), err
+		return nil, err
+	}
+
+	sd, err := getStorageDetails(ctx, req, nd.engineCount)
+	if err != nil {
+		return nil, err
 	}
 
 	ccs, err := getCPUDetails(req.Log, sd.numaSSDs, nd.numaCoreCount)
@@ -88,24 +113,12 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, err
 	}
 
-	cfg, err := genConfig(req.AccessPoints, nd, sd, ccs)
+	cfg, err := genConfig(req.Log, req.AccessPoints, nd, sd, ccs)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := cfg.Validate(req.Log); err != nil {
-		return nil, errors.Wrap(err, "validation failed on auto generated config")
-	}
-
 	return &ConfigGenerateResp{ConfigOut: cfg}, nil
-}
-
-func checkHostErrors(hes *HostErrorsResp) *ConfigGenerateResp {
-	if hes == nil {
-		hes = &HostErrorsResp{}
-	}
-
-	return &ConfigGenerateResp{HostErrorsResp: *hes}
 }
 
 // getNetworkSet retrieves the result of network scan over host list and
@@ -113,23 +126,23 @@ func checkHostErrors(hes *HostErrorsResp) *ConfigGenerateResp {
 // that network hardware setup is homogeneous across all hosts.
 //
 // Return host errors, network scan results for the host set or error.
-func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostFabricSet, *HostErrorsResp, error) {
+func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostFabricSet, error) {
 	scanReq := new(NetworkScanReq)
 	scanReq.SetHostList(hostList)
 
 	scanResp, err := NetworkScan(ctx, client, scanReq)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	if len(scanResp.GetHostErrors()) > 0 {
-		return nil, &scanResp.HostErrorsResp, scanResp.Errors()
+		return nil, &ConfigGenerateError{HostErrorsResp: scanResp.HostErrorsResp}
 	}
 
 	// verify homogeneous network
 	switch len(scanResp.HostFabrics) {
 	case 0:
-		return nil, nil, errors.New("no host responses")
+		return nil, errors.New("no host responses")
 	case 1: // success
 	default: // more than one means non-homogeneous hardware
 		log.Info("Heterogeneous network hardware configurations detected, " +
@@ -139,7 +152,7 @@ func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, c
 			log.Info(hns.HostSet.String())
 		}
 
-		return nil, nil, errors.New("network hardware not consistent across hosts")
+		return nil, errors.New("network hardware not consistent across hosts")
 	}
 
 	networkSet := scanResp.HostFabrics[scanResp.HostFabrics.Keys()[0]]
@@ -147,7 +160,7 @@ func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, c
 	log.Debugf("Network hardware is consistent for hosts %s:\n\t%v",
 		networkSet.HostSet, networkSet.HostFabric.Interfaces)
 
-	return networkSet, nil, nil
+	return networkSet, nil
 }
 
 // numaNetIfaceMap is an alias for a map of NUMA node ID to optimal
@@ -261,10 +274,10 @@ type networkDetails struct {
 //
 // Returns map of NUMA node ID to chosen fabric interfaces, number of engines to
 // provide mappings for, per-NUMA core count and any host errors.
-func getNetworkDetails(ctx context.Context, req ConfigGenerateReq) (*networkDetails, *HostErrorsResp, error) {
-	netSet, hostErrs, err := getNetworkSet(ctx, req.Log, req.HostList, req.Client)
+func getNetworkDetails(ctx context.Context, req ConfigGenerateReq) (*networkDetails, error) {
+	netSet, err := getNetworkSet(ctx, req.Log, req.HostList, req.Client)
 	if err != nil {
-		return nil, hostErrs, err
+		return nil, err
 	}
 
 	nd := &networkDetails{
@@ -276,18 +289,18 @@ func getNetworkDetails(ctx context.Context, req ConfigGenerateReq) (*networkDeta
 		nd.engineCount = int(netSet.HostFabric.NumaCount)
 	}
 	if nd.engineCount == 0 {
-		return nil, nil, errors.Errorf(errNoNuma, netSet.HostSet)
+		return nil, errors.Errorf(errNoNuma, netSet.HostSet)
 	}
 
 	req.Log.Debugf("engine count for generated config set to %d", nd.engineCount)
 
 	numaIfaces, err := getNetIfaces(req.Log, req.NetClass, nd.engineCount, netSet)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	nd.numaIfaces = numaIfaces
 
-	return nd, nil, nil
+	return nd, nil
 }
 
 // getStorageSet retrieves the result of storage scan over host list and
@@ -299,22 +312,22 @@ func getNetworkDetails(ctx context.Context, req ConfigGenerateReq) (*networkDeta
 // configuration to work with different combinations of SSD models.
 //
 // Return host errors, storage scan results for the host set or error.
-func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostErrorsResp, *HostStorageSet, error) {
+func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostStorageSet, error) {
 	scanReq := &StorageScanReq{NvmeBasic: true}
 	scanReq.SetHostList(hostList)
 
 	scanResp, err := StorageScan(ctx, client, scanReq)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if len(scanResp.GetHostErrors()) > 0 {
-		return &scanResp.HostErrorsResp, nil, scanResp.Errors()
+		return nil, &ConfigGenerateError{HostErrorsResp: scanResp.HostErrorsResp}
 	}
 
 	// verify homogeneous storage
 	switch len(scanResp.HostStorage) {
 	case 0:
-		return nil, nil, errors.New("no host responses")
+		return nil, errors.New("no host responses")
 	case 1: // success
 	default: // more than one means non-homogeneous hardware
 		log.Info("Heterogeneous storage hardware configurations detected, " +
@@ -324,7 +337,7 @@ func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, c
 			log.Info(hss.HostSet.String())
 		}
 
-		return nil, nil, errors.New("storage hardware not consistent across hosts")
+		return nil, errors.New("storage hardware not consistent across hosts")
 	}
 
 	storageSet := scanResp.HostStorage[scanResp.HostStorage.Keys()[0]]
@@ -333,7 +346,7 @@ func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, c
 		storageSet.HostSet.String(), storageSet.HostStorage.ScmNamespaces.Summary(),
 		storageSet.HostStorage.NvmeDevices.Summary())
 
-	return nil, storageSet, nil
+	return storageSet, nil
 }
 
 // numaPMemsMap is an alias for a map of NUMA node ID to slice of string sorted
@@ -418,14 +431,14 @@ func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSD
 // devices.
 //
 // Returns storage details struct or host error response and outer error.
-func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount int) (*storageDetails, *HostErrorsResp, error) {
+func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount int) (*storageDetails, error) {
 	if engineCount < 1 {
-		return nil, nil, errors.Errorf(errInvalNrEngines, 1, engineCount)
+		return nil, errors.Errorf(errInvalNrEngines, 1, engineCount)
 	}
 
-	hostErrs, storageSet, err := getStorageSet(ctx, req.Log, req.HostList, req.Client)
+	storageSet, err := getStorageSet(ctx, req.Log, req.HostList, req.Client)
 	if err != nil {
-		return nil, hostErrs, err
+		return nil, err
 	}
 
 	sd := &storageDetails{
@@ -433,10 +446,10 @@ func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount i
 		numaSSDs:  mapSSDs(storageSet.HostStorage.NvmeDevices),
 	}
 	if err := sd.validate(req.Log, engineCount, req.MinNrSSDs); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return sd, nil, nil
+	return sd, nil
 }
 
 func calcHelpers(log logging.Logger, targets, cores int) int {
@@ -543,7 +556,7 @@ func defaultEngineCfg(idx int) *engine.Config {
 
 // genConfig generates server config file from details of available network,
 // storage and CPU hardware.
-func genConfig(accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
+func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
 	// basic sanity checks
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
@@ -563,7 +576,7 @@ func genConfig(accessPoints []string, nd *networkDetails, sd *storageDetails, cc
 		return nil, errors.New("invalid number of core count groups") // shouldn't happen
 	}
 
-	cfg := config.DefaultServer()
+	engines := make([]*engine.Config, 0, nd.engineCount)
 	for nn := 0; nn < nd.engineCount; nn++ {
 		engineCfg := defaultEngineCfg(nn).
 			WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
@@ -580,18 +593,14 @@ func genConfig(accessPoints []string, nd *networkDetails, sd *storageDetails, cc
 			PinnedNumaNode: &pnn,
 		}
 
-		cfg.Engines = append(cfg.Engines, engineCfg)
+		engines = append(engines, engineCfg)
 	}
 
-	if len(accessPoints) != 0 {
-		cfg = cfg.WithAccessPoints(accessPoints...)
-	}
+	cfg := config.DefaultServer().
+		WithAccessPoints(accessPoints...).
+		WithFabricProvider(engines[0].Fabric.Provider).
+		WithEngines(engines...).
+		WithControlLogFile(defaultControlLogFile)
 
-	// apply global config parameters across engines
-	return cfg.WithSystemName(cfg.SystemName).
-		WithSocketDir(cfg.SocketDir).
-		WithFabricProvider(cfg.Engines[0].Fabric.Provider).
-		WithSystemName(cfg.SystemName).
-		WithSocketDir(cfg.SocketDir).
-		WithControlLogFile(defaultControlLogFile), nil
+	return cfg, cfg.Validate(log)
 }

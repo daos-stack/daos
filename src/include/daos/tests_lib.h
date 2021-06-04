@@ -241,6 +241,19 @@ int dmg_pool_destroy(const char *dmg_config_file,
 		     const uuid_t uuid, const char *grp, int force);
 
 /**
+ * Set property of the pool with \a pool_uuid.
+ *
+ * \param dmg_config_file	[IN] DMG config file.
+ * \param pool_uuid		[IN] UUID of the pool.
+ * \param prop_name		[IN] the name of the property.
+ * \param prop_value		[IN] the value of the property.
+ */
+int
+dmg_pool_set_prop(const char *dmg_config_file,
+		  const char *prop_name, const char *prop_value,
+		  const uuid_t pool_uuid);
+
+/**
  * List all disks in the specified DAOS system.
  *
  * \param dmg_config_file

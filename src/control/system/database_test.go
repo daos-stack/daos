@@ -64,7 +64,7 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 	memberStates := []MemberState{
 		MemberStateUnknown, MemberStateAwaitFormat, MemberStateStarting,
 		MemberStateReady, MemberStateJoined, MemberStateStopping, MemberStateStopped,
-		MemberStateEvicted, MemberStateErrored, MemberStateUnresponsive,
+		MemberStateExcluded, MemberStateErrored, MemberStateUnresponsive,
 	}
 
 	for i, ms := range memberStates {
@@ -713,6 +713,102 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expPoolSvcs, poolSvcs, cmpOpts...); diff != "" {
 				t.Errorf("unexpected pool service replicas (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_Database_GroupMap(t *testing.T) {
+	membersWithStates := func(states ...MemberState) []*Member {
+		members := make([]*Member, len(states))
+
+		for i, ms := range states {
+			members[i] = MockMember(t, uint32(i), ms)
+		}
+
+		return members
+	}
+
+	for name, tc := range map[string]struct {
+		members     []*Member
+		expGroupMap *GroupMap
+		expErr      error
+	}{
+		"empty membership": {
+			expErr: ErrEmptyGroupMap,
+		},
+		"excluded members not included": {
+			// This is a bit fragile, but I don't see a better way to maintain
+			// this list. We'll just need to keep it updated as the states change.
+			members: membersWithStates(
+				MemberStateUnknown,       // rank 0
+				MemberStateAwaitFormat,   // rank 1, excluded
+				MemberStateStarting,      // rank 2
+				MemberStateReady,         // rank 3
+				MemberStateJoined,        // rank 4
+				MemberStateStopping,      // rank 5
+				MemberStateStopped,       // rank 6
+				MemberStateExcluded,      // rank 7, excluded
+				MemberStateAdminExcluded, // rank 8, excluded
+				MemberStateErrored,       // rank 9
+				MemberStateUnresponsive,  // rank 10
+			),
+			expGroupMap: &GroupMap{
+				Version: 11,
+				RankURIs: map[Rank]string{
+					0:  mockControlAddr(t, 0).String(),
+					2:  mockControlAddr(t, 2).String(),
+					3:  mockControlAddr(t, 3).String(),
+					4:  mockControlAddr(t, 4).String(),
+					5:  mockControlAddr(t, 5).String(),
+					6:  mockControlAddr(t, 6).String(),
+					9:  mockControlAddr(t, 9).String(),
+					10: mockControlAddr(t, 10).String(),
+				},
+			},
+		},
+		"MS ranks included": {
+			members: membersWithStates(MemberStateJoined, MemberStateJoined),
+			expGroupMap: &GroupMap{
+				Version: 2,
+				RankURIs: map[Rank]string{
+					0: mockControlAddr(t, 0).String(),
+					1: mockControlAddr(t, 1).String(),
+				},
+				MSRanks: []Rank{1},
+			},
+		},
+		"unset fabric URI skipped": {
+			members: append([]*Member{
+				NewMember(2, common.MockUUID(2), "", mockControlAddr(t, 2), MemberStateJoined),
+			}, membersWithStates(MemberStateJoined)...),
+			expGroupMap: &GroupMap{
+				Version: 2,
+				RankURIs: map[Rank]string{
+					0: mockControlAddr(t, 0).String(),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			for _, m := range tc.members {
+				if err := db.AddMember(m); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			gotGroupMap, gotErr := db.GroupMap()
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expGroupMap, gotGroupMap); diff != "" {
+				t.Fatalf("unexpected GroupMap (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

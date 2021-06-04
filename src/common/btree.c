@@ -477,6 +477,12 @@ static int
 btr_rec_alloc(struct btr_context *tcx, d_iov_t *key, d_iov_t *val,
 	       struct btr_record *rec)
 {
+	if (btr_is_direct_key(tcx) && (key->iov_len > EMBEDDED_KEY_MAX)) {
+		D_ERROR("Key size (%zd) > Anchor size (%u)\n",
+			key->iov_len, EMBEDDED_KEY_MAX);
+		return -DER_KEY2BIG;
+	}
+
 	return btr_ops(tcx)->to_rec_alloc(&tcx->tc_tins, key, val, rec);
 }
 

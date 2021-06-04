@@ -59,14 +59,10 @@ static int
 dsc_cont_csummer_init(struct daos_csummer **csummer,
 		      uuid_t pool_uuid, uuid_t cont_uuid)
 {
-	struct ds_pool	*pool;
 	int		 rc;
 	struct cont_props cont_props;
 
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL)
-		return -DER_NONEXIST;
-	rc = ds_get_cont_props(&cont_props, pool->sp_iv_ns, cont_uuid);
+	rc = ds_get_cont_props(&cont_props, pool_uuid, cont_uuid);
 
 	if (rc == 0 &&
 	    daos_cont_csum_prop_is_enabled(cont_props.dcp_csum_type))
@@ -74,8 +70,6 @@ dsc_cont_csummer_init(struct daos_csummer **csummer,
 			 daos_contprop2hashtype(cont_props.dcp_csum_type),
 			 cont_props.dcp_chunksize,
 			 cont_props.dcp_srv_verify);
-
-	ds_pool_put(pool);
 
 	return rc;
 }
@@ -129,4 +123,19 @@ out:
 		dc_pool_put(pool);
 
 	return rc;
+}
+
+struct daos_csummer *
+dsc_cont2csummer(daos_handle_t coh)
+{
+	struct dc_cont		*cont = NULL;
+	struct daos_csummer	*csummer;
+
+	cont = dc_hdl2cont(coh);
+	if (cont == NULL)
+		return NULL;
+	csummer = cont->dc_csummer;
+	dc_cont_put(cont);
+
+	return csummer;
 }

@@ -8,6 +8,7 @@ ENV:
     - D_LOG_MASK: "WARN"
     - CRT_PHY_ADDR_STR: "ofi+sockets"
     - OFI_INTERFACE: "eth0"
+    - CRT_TEST_CONT: "1"
     - test_servers_CRT_CTX_NUM: "16"
     - test_clients_CRT_CTX_NUM: "16"
 env_CRT_CTX_SHARE_ADDR: !mux

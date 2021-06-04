@@ -186,7 +186,7 @@ struct crt_rpc_priv {
 };
 
 #define CRT_PROTO_INTERNAL_VERSION 4
-#define CRT_PROTO_FI_VERSION 2
+#define CRT_PROTO_FI_VERSION 3
 #define CRT_PROTO_ST_VERSION 1
 #define CRT_PROTO_CTL_VERSION 1
 #define CRT_PROTO_IV_VERSION 1
@@ -536,8 +536,8 @@ CRT_RPC_DECLARE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 	((uint64_t)		(fa_max_faults)		CRT_VAR) \
 	((uint32_t)		(fa_err_code)		CRT_VAR) \
 	((uint32_t)		(fa_probability_x)	CRT_VAR) \
-	((uint32_t)		(fa_probability_y)	CRT_VAR) \
-	((d_string_t)		(fa_argument)		CRT_VAR)
+	((d_string_t)		(fa_argument)		CRT_VAR) \
+	((uint32_t)		(fa_probability_y)	CRT_VAR)
 
 #define CRT_OSEQ_CTL_FI_ATTR_SET	/* output fields */	 \
 	((int32_t)		(fa_ret)		CRT_VAR)

@@ -44,6 +44,8 @@ unsigned int bio_chk_sz;
 unsigned int bio_chk_cnt_max;
 /* Per-xstream initial DMA buffer size (in chunk count) */
 static unsigned int bio_chk_cnt_init;
+/* Diret RDMA over SCM */
+bool bio_scm_rdma;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -67,6 +69,7 @@ struct bio_nvme_data {
 };
 
 static struct bio_nvme_data nvme_glb;
+uint64_t vmd_led_period;
 
 static int
 is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
@@ -109,7 +112,7 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		return 0;
 	}
 
-	D_REALLOC_ARRAY(new, tmp, count + 1);
+	D_REALLOC_ARRAY(new, tmp, count, count + 1);
 	if (new == NULL)
 		return -DER_NOMEM;
 
@@ -334,6 +337,12 @@ bio_spdk_env_init(void)
 	return rc;
 }
 
+bool
+bio_nvme_configured(void)
+{
+	return nvme_glb.bd_nvme_conf != NULL;
+}
+
 int
 bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	      struct sys_db *db)
@@ -357,6 +366,13 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		rc = dss_abterr2der(rc);
 		goto free_mutex;
 	}
+
+	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
+	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
+	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
+
+	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
+	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
 	if (nvme_conf == NULL || strlen(nvme_conf) == 0) {
 		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
@@ -398,23 +414,21 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
-	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
-	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
-
 	env = getenv("VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "MALLOC") == 0) {
 		D_WARN("Malloc device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_MALLOC;
 		nvme_glb.bd_bs_opts.cluster_sz = (1ULL << 20);
 		nvme_glb.bd_bs_opts.num_md_pages = 10;
-		size_mb = 2;
 		bio_chk_cnt_max = 32;
 	} else if (env && strcasecmp(env, "AIO") == 0) {
 		D_WARN("AIO device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
 
-	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
+	env = getenv("VMD_LED_PERIOD");
+	vmd_led_period = env ? atoi(env) : 0;
+	vmd_led_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	nvme_glb.bd_shm_id = shm_id;
 	nvme_glb.bd_mem_size = mem_size;
@@ -1382,7 +1396,8 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
-	nvme_glb.bd_xstream_cnt--;
+	if (nvme_glb.bd_xstream_cnt > 0)
+		nvme_glb.bd_xstream_cnt--;
 
 	if (nvme_glb.bd_init_thread != NULL) {
 		if (is_init_xstream(ctxt)) {
@@ -1453,18 +1468,24 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	char			 th_name[32];
 	int			 rc;
 
-	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
-	if (nvme_glb.bd_nvme_conf == NULL) {
-		*pctxt = NULL;
-		return 0;
-	}
-
 	D_ALLOC_PTR(ctxt);
 	if (ctxt == NULL)
 		return -DER_NOMEM;
 
 	D_INIT_LIST_HEAD(&ctxt->bxc_io_ctxts);
 	ctxt->bxc_tgt_id = tgt_id;
+
+	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
+	if (!bio_nvme_configured()) {
+		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+		if (ctxt->bxc_dma_buf == NULL) {
+			D_FREE(ctxt);
+			*pctxt = NULL;
+			return -DER_NOMEM;
+		}
+		*pctxt = ctxt;
+		return 0;
+	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
 
@@ -1700,16 +1721,18 @@ void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_bdev         *d_bdev;
-	static uint64_t          led_event_period = NVME_MONITOR_PERIOD;
+
+	/*
+	 * Check VMD_LED_PERIOD environment variable, if not set use default
+	 * NVME_MONITOR_PERIOD of 60 seconds.
+	 */
+	if (vmd_led_period == 0)
+		vmd_led_period = NVME_MONITOR_PERIOD;
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if (d_bdev->bb_led_start_time != 0) {
-			/*
-			 * TODO: Make NVME_LED_EVENT_PERIOD configurable from
-			 * command line
-			 */
-			if (d_bdev->bb_led_start_time + led_event_period >= now)
+			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
 				continue;
 
 			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,
@@ -1723,21 +1746,23 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
  * Execute the messages on msg ring, call all registered pollers.
  *
  * \param[IN] ctxt	Per-xstream NVMe context
+ * \param[IN] bypass	Set to bypass the health check
  *
  * \returns		0: If mo work was done
  *			1: If work was done
  *			-1: If thread has exited
  */
 int
-bio_nvme_poll(struct bio_xs_context *ctxt)
+bio_nvme_poll(struct bio_xs_context *ctxt, bool bypass)
 {
 	uint64_t now = d_timeus_secdiff(0);
 	int rc;
 
 	/* NVMe context setup was skipped */
-	if (ctxt == NULL)
+	if (!bio_nvme_configured())
 		return 0;
 
+	D_ASSERT(ctxt != NULL && ctxt->bxc_thread != NULL);
 	rc = spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
 	/* To avoid complicated race handling (init xstream and starting
@@ -1754,7 +1779,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	 */
 	if (ctxt->bxc_blobstore != NULL &&
 	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
-		bio_bs_monitor(ctxt, now);
+		bio_bs_monitor(ctxt, now, bypass);
 
 	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);

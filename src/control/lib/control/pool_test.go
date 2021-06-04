@@ -51,6 +51,28 @@ func TestControl_PoolDestroy(t *testing.T) {
 			},
 			expErr: errors.New("invalid UUID"),
 		},
+		"-DER_GRPVER is retried": {
+			req: &PoolDestroyReq{
+				UUID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosGroupVersionMismatch, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDestroyResp{}),
+				},
+			},
+		},
+		"-DER_AGAIN is retried": {
+			req: &PoolDestroyReq{
+				UUID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosTryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDestroyResp{}),
+				},
+			},
+		},
 		"success": {
 			req: &PoolDestroyReq{
 				UUID: common.MockUUID(),
@@ -266,7 +288,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expResp: &PoolCreateResp{},
 		},
-		"create -DER_GRPVER is retried": {
+		"-DER_GRPVER is retried": {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
@@ -276,7 +298,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expResp: &PoolCreateResp{},
 		},
-		"create -DER_AGAIN is retried": {
+		"-DER_AGAIN is retried": {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{

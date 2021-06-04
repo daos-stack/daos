@@ -23,12 +23,6 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
-#ifdef DAOS_HAS_VALGRIND
-#include <valgrind/valgrind.h>
-#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
-#else
-#define DAOS_ON_VALGRIND 0
-#endif
 
 #include <daos_errno.h>
 #include <daos/debug.h>
@@ -43,12 +37,17 @@
 #include <daos/dtx.h>
 #include <daos/cmd_parser.h>
 
+#define DAOS_ON_VALGRIND D_ON_VALGRIND
+
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
 
 #define DF_UOID		DF_OID".%u"
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
-
+#define DF_BOOL "%s"
+#define DP_BOOL(b) ((b) ? "true" : "false")
+#define DF_IOV "<%p, %zu/%zu>"
+#define DP_IOV(i) (i)->iov_buf, (i)->iov_len, (i)->iov_buf_len
 #define MAX_TREE_ORDER_INC	7
 
 struct daos_node_overhead {
@@ -161,8 +160,11 @@ char *daos_key2str(daos_key_t *key);
 				daos_key2str(key)
 #endif
 
-#define DF_RECX			"["DF_U64"-"DF_U64"]"
+#define DF_RECX			"["DF_X64"-"DF_X64"]"
 #define DP_RECX(r)		(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1)
+#define DF_IOM			"{nr: %d, lo: "DF_RECX", hi: "DF_RECX"}"
+#define DP_IOM(m)		(m)->iom_nr, DP_RECX((m)->iom_recx_lo), \
+				DP_RECX((m)->iom_recx_hi)
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
@@ -758,6 +760,10 @@ enum {
 #define DAOS_VOS_GC_CONT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x94)
 #define DAOS_VOS_GC_CONT_NULL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x95)
 
+#define DAOS_OBJ_SKIP_PARITY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x96)
+#define DAOS_OBJ_FORCE_DEGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x97)
+#define DAOS_FORCE_EC_AGG		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x98)
+
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
@@ -827,9 +833,12 @@ daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
-int crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti);
-int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
-int crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data);
+int crt_proc_struct_dtx_id(crt_proc_t proc, crt_proc_op_t proc_op,
+			   struct dtx_id *dti);
+int crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			 daos_prop_t **data);
+int crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
+			     struct daos_acl **data);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);

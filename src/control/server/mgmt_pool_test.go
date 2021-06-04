@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -753,6 +753,114 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				if diff := cmp.Diff(tc.expDrpcReq, gotReq, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected dRPC call (-want, +got):\n%s\n", diff)
 				}
+			}
+		})
+	}
+}
+
+func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
+	testLog, _ := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, testLog)
+	missingSB.harness.instances[0]._superblock = nil
+	notAP := newTestMgmtSvc(t, testLog)
+	scmAllocation := uint64(1)
+	nvmeAllocation := uint64(2)
+	testPoolService := &system.PoolService{
+		PoolUUID: uuid.MustParse(mockUUID),
+		State:    system.PoolServiceStateReady,
+		Replicas: []system.Rank{0},
+		Storage: &system.PoolServiceStorage{
+			CreationRankStr: "0",
+			CurrentRankStr:  "0",
+			ScmPerRank:      scmAllocation,
+			NVMePerRank:     nvmeAllocation,
+		},
+	}
+
+	for name, tc := range map[string]struct {
+		mgmtSvc       *mgmtSvc
+		setupMockDrpc func(_ *mgmtSvc, _ error)
+		req           *mgmtpb.PoolExtendReq
+		expResp       *mgmtpb.PoolExtendResp
+		expErr        error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			req:    &mgmtpb.PoolExtendReq{Uuid: mockUUID, Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
+		},
+		"missing superblock": {
+			mgmtSvc: missingSB,
+			req:     &mgmtpb.PoolExtendReq{Uuid: mockUUID, Ranks: []uint32{1}},
+			expErr:  errors.New("not an access point"),
+		},
+		"not access point": {
+			mgmtSvc: notAP,
+			req:     &mgmtpb.PoolExtendReq{Uuid: mockUUID, Ranks: []uint32{1}},
+			expErr:  errors.New("not an access point"),
+		},
+		"dRPC send fails": {
+			req:    &mgmtpb.PoolExtendReq{Uuid: mockUUID, Ranks: []uint32{1}},
+			expErr: errors.New("send failure"),
+		},
+		"garbage resp": {
+			req: &mgmtpb.PoolExtendReq{Uuid: mockUUID, Ranks: []uint32{1}},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				// dRPC call returns junk in the message body
+				badBytes := makeBadBytes(42)
+
+				setupMockDrpcClientBytes(svc, badBytes, err)
+			},
+			expErr: errors.New("unmarshal"),
+		},
+		"missing uuid": {
+			req:    &mgmtpb.PoolExtendReq{Ranks: []uint32{1}},
+			expErr: errors.New("invalid UUID"),
+		},
+		"successfully extended": {
+			req: &mgmtpb.PoolExtendReq{Uuid: mockUUID, Ranks: []uint32{1}},
+			expResp: &mgmtpb.PoolExtendResp{
+				ScmBytes:  scmAllocation,
+				NvmeBytes: nvmeAllocation,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.mgmtSvc == nil {
+				tc.mgmtSvc = newTestMgmtSvc(t, log)
+			}
+			tc.mgmtSvc.log = log
+			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
+
+			if tc.setupMockDrpc == nil {
+				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
+				}
+			}
+			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
+
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+
+			if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, 1, system.MemberStateJoined)); err != nil {
+				t.Fatal(err)
+			}
+
+			gotResp, gotErr := tc.mgmtSvc.PoolExtend(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
 	}

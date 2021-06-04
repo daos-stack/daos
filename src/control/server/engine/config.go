@@ -7,6 +7,7 @@
 package engine
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -32,10 +33,15 @@ func (sc *StorageConfig) Validate() error {
 	if err := sc.SCM.Validate(); err != nil {
 		return errors.Wrap(err, "scm config validation failed")
 	}
-	if err := sc.Bdev.Validate(); err != nil {
-		return errors.Wrap(err, "bdev config validation failed")
+
+	// set persistent location for engine bdev config file to be consumed by
+	// provider backend, set to empty when no devices specified
+	sc.Bdev.OutputPath = filepath.Join(sc.SCM.MountPoint, storage.BdevOutConfName)
+	if len(sc.Bdev.DeviceList) == 0 {
+		sc.Bdev.OutputPath = ""
 	}
-	return nil
+
+	return errors.Wrap(sc.Bdev.Validate(), "bdev config validation failed")
 }
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -44,6 +50,7 @@ type FabricConfig struct {
 	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
 	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
 	PinnedNumaNode  *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
+	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 }
@@ -78,16 +85,18 @@ func (fc *FabricConfig) GetNumaNode() (uint, error) {
 
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
-	if fc.Provider == "" {
+	switch {
+	case fc.Provider == "":
 		return errors.New("provider not set")
-	}
-	if fc.Interface == "" {
+	case fc.Interface == "":
 		return errors.New("fabric_iface not set")
-	}
-	if fc.InterfacePort == 0 {
+	case fc.InterfacePort == 0:
 		return errors.New("fabric_iface_port not set")
+	case fc.InterfacePort < 0:
+		return errors.New("fabric_iface_port cannot be negative")
+	default:
+		return nil
 	}
-	return nil
 }
 
 // cleanEnvVars scrubs the supplied slice of environment
@@ -248,12 +257,6 @@ func (c *Config) WithSystemName(name string) *Config {
 	return c
 }
 
-// WithHostname sets the hostname to be used when generating NVMe configurations.
-func (c *Config) WithHostname(name string) *Config {
-	c.Storage.Bdev.Hostname = name
-	return c
-}
-
 // WithSocketDir sets the path to the instance's dRPC socket directory.
 func (c *Config) WithSocketDir(dir string) *Config {
 	c.SocketDir = dir
@@ -272,7 +275,7 @@ func (c *Config) WithScmMountPoint(scmPath string) *Config {
 	return c
 }
 
-// WithScmRamdiskSize sets the size (in GB) of the ramdisk used
+// WithScmRamdiskSize sets the size (in GiB) of the ramdisk used
 // to emulate SCM (no effect if ScmClass is not RAM).
 func (c *Config) WithScmRamdiskSize(size int) *Config {
 	c.Storage.SCM.RamdiskSize = size
@@ -297,21 +300,24 @@ func (c *Config) WithBdevDeviceList(devices ...string) *Config {
 	return c
 }
 
-// WithBdevDeviceCount sets the number of devices to be created when BdevClass is malloc.
-func (c *Config) WithBdevDeviceCount(count int) *Config {
-	c.Storage.Bdev.DeviceCount = count
-	return c
-}
-
-// WithBdevFileSize sets the backing file size (used when BdevClass is malloc or file).
+// WithBdevFileSize sets the backing file size in GiB (used when BdevClass is
+// set to "file").
 func (c *Config) WithBdevFileSize(size int) *Config {
 	c.Storage.Bdev.FileSize = size
 	return c
 }
 
-// WithBdevConfigPath sets the path to the generated NVMe config file used by SPDK.
-func (c *Config) WithBdevConfigPath(cfgPath string) *Config {
-	c.Storage.Bdev.ConfigPath = cfgPath
+// WithBdevOutputConfigPath sets the path to the generated NVMe config file
+// used by SPDK.
+func (c *Config) WithBdevOutputConfigPath(outPath string) *Config {
+	c.Storage.Bdev.OutputPath = outPath
+	return c
+}
+
+// WithBdevVosEnv sets the VOS environment variable value to be passed to the
+// engine process on invocation.
+func (c *Config) WithBdevVosEnv(value string) *Config {
+	c.Storage.Bdev.VosEnv = value
 	return c
 }
 
@@ -342,6 +348,12 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 // WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
 func (c *Config) WithPinnedNumaNode(numa *uint) *Config {
 	c.Fabric.PinnedNumaNode = numa
+	return c
+}
+
+// WithBypassHealthChk sets the NVME health check bypass for this instance
+func (c *Config) WithBypassHealthChk(bypass *bool) *Config {
+	c.Fabric.BypassHealthChk = bypass
 	return c
 }
 

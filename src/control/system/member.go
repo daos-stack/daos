@@ -36,13 +36,18 @@ const (
 	MemberStateStopping MemberState = 0x0010
 	// MemberStateStopped indicates process has been stopped.
 	MemberStateStopped MemberState = 0x0020
-	// MemberStateEvicted indicates rank has been evicted from DAOS system.
-	MemberStateEvicted MemberState = 0x0040
+	// MemberStateExcluded indicates rank has been automatically excluded from DAOS system.
+	MemberStateExcluded MemberState = 0x0040
 	// MemberStateErrored indicates the process stopped with errors.
 	MemberStateErrored MemberState = 0x0080
 	// MemberStateUnresponsive indicates the process is not responding.
 	MemberStateUnresponsive MemberState = 0x0100
+	// MemberStateAdminExcluded indicates that the rank has been administratively excluded.
+	MemberStateAdminExcluded MemberState = 0x0200
 
+	// ExcludedMemberFilter defines the state(s) to be used when determining
+	// whether or not a member should be excluded from CaRT group map updates.
+	ExcludedMemberFilter = MemberStateAwaitFormat | MemberStateExcluded | MemberStateAdminExcluded
 	// AvailableMemberFilter defines the state(s) to be used when determining
 	// whether or not a member is available for the purposes of pool creation, etc.
 	AvailableMemberFilter = MemberStateReady | MemberStateJoined
@@ -64,8 +69,10 @@ func (ms MemberState) String() string {
 		return "Stopping"
 	case MemberStateStopped:
 		return "Stopped"
-	case MemberStateEvicted:
-		return "Evicted"
+	case MemberStateExcluded:
+		return "Excluded"
+	case MemberStateAdminExcluded:
+		return "AdminExcluded"
 	case MemberStateErrored:
 		return "Errored"
 	case MemberStateUnresponsive:
@@ -89,8 +96,10 @@ func memberStateFromString(in string) MemberState {
 		return MemberStateStopping
 	case "stopped":
 		return MemberStateStopped
-	case "evicted":
-		return MemberStateEvicted
+	case "excluded":
+		return MemberStateExcluded
+	case "adminexcluded":
+		return MemberStateAdminExcluded
 	case "errored":
 		return MemberStateErrored
 	case "unresponsive":
@@ -114,13 +123,13 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 
 	return map[MemberState]map[MemberState]bool{
 		MemberStateAwaitFormat: {
-			MemberStateEvicted: true,
+			MemberStateExcluded: true,
 		},
 		MemberStateStarting: {
-			MemberStateEvicted: true,
+			MemberStateExcluded: true,
 		},
 		MemberStateReady: {
-			MemberStateEvicted: true,
+			MemberStateExcluded: true,
 		},
 		MemberStateJoined: {
 			MemberStateReady: true,
@@ -128,7 +137,7 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		MemberStateStopping: {
 			MemberStateReady: true,
 		},
-		MemberStateEvicted: {
+		MemberStateExcluded: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
