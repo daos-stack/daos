@@ -437,7 +437,7 @@ ec_full_partial_update_agg(void **state)
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	data_nr = ec_data_nr_get(oid);
-	full_update_size = 3 * data_nr * EC_CELL_SIZE;
+	full_update_size = 3 * ((daos_size_t)data_nr) * EC_CELL_SIZE;
 	partial_update_size = EC_CELL_SIZE / 2;
 
 	data = (char *)malloc(full_update_size);
@@ -499,7 +499,7 @@ ec_partial_full_update_agg(void **state)
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	data_nr = ec_data_nr_get(oid);
-	full_update_size = 3 * data_nr * EC_CELL_SIZE;
+	full_update_size = 3 * ((daos_size_t)data_nr) * EC_CELL_SIZE;
 	partial_update_size = EC_CELL_SIZE / 2;
 
 	data = (char *)malloc(full_update_size);

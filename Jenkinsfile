@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-@Library(value="pipeline-lib@DAOS-7489") _
+//@Library(value="pipeline-lib@your_branch") _
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -79,7 +79,7 @@ pipeline {
                description: 'Test-repeat to use for this run.  Specifies the ' +
                             'number of times to repeat each functional test. ' +
                             'CAUTION: only use in combination with a reduced ' +
-                            'number of tests specified with the Test-tag ' +
+                            'number of tests specified with the TestTag ' +
                             'parameter.')
     }
 
