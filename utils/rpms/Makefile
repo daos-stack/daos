@@ -24,12 +24,10 @@ include packaging/Makefile_packaging.mk
 
 PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
 
-$(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
+$(NAME)-$(VERSION).tar.gz: $(shell git ls-files --recurse-submodules :/:)
 	echo Creating $@
 	echo $(basename $@)
-	cd ../../ &&                                          \
-	git archive --format tar --prefix $(NAME)-$(VERSION)/ \
-	            -o $$OLDPWD/$(basename $@) HEAD ./
+	cd ../../ && utils/rpms/archive.sh $(NAME) $(VERSION) $$OLDPWD tar
 	rm -f $@
 	gzip $(basename $@)
 
