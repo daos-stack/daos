@@ -141,9 +141,7 @@ def define_mercury(reqs):
                                         'LDFLAGS="-Wl,--enable-new-dtags ' +
                                         '-Wl,-rpath=$PSM2_PREFIX/lib64" ',
                                         ''),
-                                  '--disable-psm2 ') + exclude(reqs, 'psm3',
-                                  '',
-                                  '--disable-psm3 '),
+                                  '--disable-psm2 ') + '--disable-psm3 ',
                           'make $JOBS_OPT',
                           'make install'],
                 libs=['fabric'],
