@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -74,7 +75,11 @@ func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body
 	if sb := ei.getSuperblock(); sb != nil {
 		rankMsg = fmt.Sprintf(" (rank %s)", sb.Rank)
 	}
-	ei.log.Debugf("%dB dRPC to index %d%s: %s", proto.Size(body), ei.Index(), rankMsg, method)
+
+	startedAt := time.Now()
+	defer func() {
+		ei.log.Debugf("dRPC to index %d%s: %s/%dB/%s", ei.Index(), rankMsg, method, proto.Size(body), time.Since(startedAt))
+	}()
 
 	return makeDrpcCall(ctx, ei.log, dc, method, body)
 }

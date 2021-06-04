@@ -16,10 +16,19 @@
 #include <gurt/telemetry_common.h>
 
 /**
- * Metrics collected on pools
+ * Global pool metrics
  */
 struct pool_metrics {
-	struct d_tm_node_t *open_hdl_gauge;
+	struct d_tm_node_t	*open_hdl_gauge;
+};
+
+/* Metrics for each individual active pool */
+struct active_pool_metrics {
+	uuid_t			pool_uuid;
+	d_list_t		link;
+
+	struct d_tm_node_t	*started_timestamp;
+	/* TODO: add more per-pool metrics */
 };
 
 extern struct pool_metrics ds_pool_metrics;
@@ -129,7 +138,6 @@ void ds_pool_attr_get_handler(crt_rpc_t *rpc);
 void ds_pool_attr_set_handler(crt_rpc_t *rpc);
 void ds_pool_attr_del_handler(crt_rpc_t *rpc);
 void ds_pool_list_cont_handler(crt_rpc_t *rpc);
-int ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank);
 void ds_pool_query_info_handler(crt_rpc_t *rpc);
 void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
 
@@ -189,5 +197,8 @@ void ds_stop_scrubbing_ult(struct ds_pool_child *child);
  */
 int ds_pool_metrics_init(void);
 int ds_pool_metrics_fini(void);
+void ds_pool_metrics_start(uuid_t pool_uuid);
+void ds_pool_metrics_stop(uuid_t pool_uuid);
+struct active_pool_metrics *ds_pool_metrics_get(uuid_t pool_uuid);
 
 #endif /* __POOL_SRV_INTERNAL_H__ */

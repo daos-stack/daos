@@ -33,6 +33,7 @@ dc_sec_request_creds(d_iov_t *creds)
 
 	rc = request_credentials_via_drpc(&response);
 	if (rc != DER_SUCCESS) {
+		drpc_response_free(response);
 		return rc;
 	}
 

@@ -239,9 +239,10 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		rc = rdb_tx_lookup(tx, path, &key, &iovs[j]);
 
 		if (rc != 0) {
-			D_ERROR("%s: failed to lookup attribute '"DF_KEY
-				"': %d\n",
-				svc->s_name, DP_KEY(&key), rc);
+			D_CDEBUG(rc == -DER_NONEXIST, DB_ANY, DLOG_ERR,
+				 "%s: failed to lookup attribute '"DF_KEY"': "
+				 DF_RC"\n",
+				 svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_iovs;
 		}
 		iovs[j].iov_buf_len = sizes[i];
@@ -430,7 +431,7 @@ attr_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 		if (i_args->iov_index == i_args->iov_count) {
 			void *ptr;
 
-			D_REALLOC_ARRAY(ptr, i_args->iovs,
+			D_REALLOC_ARRAY(ptr, i_args->iovs, i_args->iov_count,
 					i_args->iov_count * 2);
 			/*
 			 * TODO: Fail or continue transferring

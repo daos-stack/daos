@@ -598,17 +598,17 @@ pl_map_query(uuid_t po_uuid, struct pl_map_attr *attr)
  * \param [IN]  oid             The object identifier.
  * \param [IN]  grp_idx         The group index.
  * \param [IN]  grp_size        Group size of obj layout.
- * \param [IN]  for_tgt_id      Require leader target id or leader shard index.
+ * \param [OUT] tgt_id          If non-NULL, Require leader target id.
  * \param [IN]  pl_get_shard    The callback function to parse out pl_obj_shard
  *                              from the given @data.
  * \param [IN]  data            The parameter used by the @pl_get_shard.
  *
- * \return                      The selected leader on success: its tgt_id or
- *                              shard index. Negative value if error.
+ * \return                      The selected leader shard on success
+ *                              Negative value if error.
  */
 int
 pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
-		 bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data)
+		 int *tgt_id, pl_get_shard_t pl_get_shard, void *data)
 {
 	struct pl_obj_shard             *shard;
 	struct daos_oclass_attr         *oc_attr;
@@ -636,9 +636,12 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 			shard = pl_get_shard(data, idx);
 		}
 
-		if (for_tgt_id)
-			return shard->po_target == -1 ? -DER_IO :
-						shard->po_target;
+		if (tgt_id != NULL) {
+			if (shard->po_target == -1)
+				return -DER_IO;
+
+			*tgt_id = shard->po_target;
+		}
 
 		return shard->po_shard == -1 ? -DER_IO : shard->po_shard;
 	}
@@ -665,8 +668,8 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		 * it moves between ranks
 		 */
 
-		if (for_tgt_id)
-			return shard->po_target;
+		if (tgt_id != NULL)
+			*tgt_id = shard->po_target;
 
 		/* return pos rather than shard->po_shard for pool extending */
 		return pos;
@@ -699,8 +702,8 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 			pos = off;
 	}
 	if (pos != -1) {
-		if (for_tgt_id)
-			return pl_get_shard(data, pos)->po_target;
+		if (tgt_id != NULL)
+			*tgt_id = pl_get_shard(data, pos)->po_target;
 
 		/*
 		 * Here should not return "pl_get_shard(data, pos)->po_shard",
