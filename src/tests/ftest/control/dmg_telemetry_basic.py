@@ -6,11 +6,10 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
 
-from apricot import TestWithServers
-from telemetry_utils import TelemetryUtils
+from telemetry_test_base import TestWithTelemetry
 
 
-class TestWithTelemetry(TestWithServers):
+class TestWithTelemetryBasic(TestWithTelemetry):
     """Test container telemetry metrics.
 
     :avocado: recursive
@@ -70,13 +69,9 @@ class TestWithTelemetry(TestWithServers):
         container.destroy()
         self.metrics["destroy_count"] += 1
 
-    def check_metrics(self, telemetry):
-        """Check the container telemetry metrics.
-
-        Args:
-            telemetry (TelemetryUtils): TelemetryUtils object
-        """
-        errors = telemetry.check_container_metrics(**self.metrics)
+    def check_metrics(self):
+        """Check the container telemetry metrics."""
+        errors = self.telemetry.check_container_metrics(**self.metrics)
         if errors:
             self.fail("\n".join(errors))
 
@@ -89,36 +84,9 @@ class TestWithTelemetry(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,telemetry
-        :avocado: tags=test_with_telemetry,test_telemetry_list
+        :avocado: tags=test_with_telemetry_basic,test_telemetry_list
         """
-        metric_list_qty = self.params.get("metric_list_qty", "/run/test/*", 1)
-        telemetry = TelemetryUtils(
-            self.get_dmg_command(), self.server_managers[0].hosts)
-
-        # List all of the telemetry metrics
-        result = telemetry.list_metrics()
-
-        # Verify the list
-        errors = []
-        self.log.info(
-            "Verifying telemetry metrics list for %s/%s hosts:",
-            len(result), len(self.server_managers[0].hosts))
-        if sorted(result) != sorted(self.server_managers[0].hosts):
-            msg = "Telemetry metrics names missing for hosts {}: {}".format(
-                self.server_managers[0].hosts, result)
-            self.log.error("  - %s", msg)
-            errors.append(msg)
-        for host in result:
-            self.log.info(
-                "  %s: detected %s/%s telemetry metric names",
-                host, len(result[host]), metric_list_qty)
-            if len(result[host]) != metric_list_qty:
-                msg = "Missing {} telemetry metrics for {}".format(
-                    metric_list_qty - len(result[host]), host)
-                self.log.error("    - %s", msg)
-                errors.append(msg)
-        if errors:
-            self.fail("\n".join(errors))
+        self.verify_telemetry_list()
 
     def test_container_telemetry(self):
         """JIRA ID: DAOS-7667 / SRS-324.
@@ -129,17 +97,15 @@ class TestWithTelemetry(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,telemetry,container
-        :avocado: tags=test_with_telemetry,test_container_telemetry
+        :avocado: tags=test_with_telemetry_basic,test_container_telemetry
         """
         container_qty = self.params.get("container_qty", "/run/test/*", 1)
         open_close_qty = self.params.get("open_close_qty", "/run/test/*", 2)
-        telemetry = TelemetryUtils(
-            self.get_dmg_command(), self.server_managers[0].hosts)
         self.add_pool(connect=False)
 
         # Verify container telemetry metrics report 0 before container creation
         self.log.info("Before container creation")
-        data = telemetry.get_container_metrics()
+        data = self.telemetry.get_container_metrics()
         for host in data:
             self.metrics["open_count"] = \
                 data[host]["engine_container_ops_open_total"]
@@ -155,7 +121,7 @@ class TestWithTelemetry(TestWithServers):
             self.create_container(random.choice([True, False]))
             self.log.info(
                 "Container %s/%s: After create()", loop, container_qty)
-            self.check_metrics(telemetry)
+            self.check_metrics()
 
         # Open each container and verify metrics
         for outer_loop in range(1, open_close_qty + 1):
@@ -165,7 +131,7 @@ class TestWithTelemetry(TestWithServers):
                 self.log.info(
                     "Loop %s/%s: Container %s/%s: After open()",
                     outer_loop, open_close_qty, loop, len(self.container))
-                self.check_metrics(telemetry)
+                self.check_metrics()
 
             # Close each container and verify metrics
             for loop, container in enumerate(self.container):
@@ -173,11 +139,13 @@ class TestWithTelemetry(TestWithServers):
                 self.log.info(
                     "Loop %s/%s: Container %s/%s: After close()",
                     outer_loop, open_close_qty, loop, len(self.container))
-                self.check_metrics(telemetry)
+                self.check_metrics()
 
-        # Destroy each container
+        # Destroy each container and verify metrics
         for loop, container in enumerate(self.container):
             self.destroy_container(container)
             self.log.info(
                 "Container %s/%s: After destroy()", loop, len(self.container))
-            self.check_metrics(telemetry)
+            self.check_metrics()
+
+        self.log.info("Test PASSED")
