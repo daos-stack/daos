@@ -10,6 +10,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <semaphore.h>
 #include "crt_internal.h"
 
 static int crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
