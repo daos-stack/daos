@@ -1,6 +1,5 @@
 """Build DAOS utilities"""
 import daos_build
-Import('env')
 
 def scons():
     """Execute build"""
@@ -31,7 +30,7 @@ def scons():
     daos_hdlrs_lib = daos_build.library(denv, 'daos_cmd_hdlrs',
                                         daos_hdlrs_src,
                                         LIBS=libs)
-    env.Install('$PREFIX/lib64/', daos_hdlrs_lib)
+    denv.Install('$PREFIX/lib64/', daos_hdlrs_lib)
     libs += ['daos_cmd_hdlrs']
 
     Export('daos_hdlrs_lib')
@@ -40,7 +39,7 @@ def scons():
     daos_obj = [cmd_parser, dc_credit]
     daos_src = ['daos.c', 'daos_obj_ctl.c']
 
-    daos = daos_build.program(denv, 'daos_old', [daos_src, daos_obj], LIBS=libs)
+    daos = daos_build.program(denv, 'daos', [daos_src, daos_obj], LIBS=libs)
     denv.Install('$PREFIX/bin/', daos)
 
 if __name__ == "SCons.Script":
