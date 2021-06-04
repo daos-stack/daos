@@ -450,52 +450,72 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	/* Initialize the layout version. */
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_version, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to update version, "DF_RC"\n", DP_RC(rc));
 		goto out;
+	}
 
 	/* Generate the pool buffer. */
 	rc = gen_pool_buf(NULL, &map_buf, map_version, ndomains, nnodes,
 			ntargets, domains, target_uuids, target_addrs, &uuids,
 			dss_tgt_nr);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to generate pool buf, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_map_buf, rc);
+	}
 
 	/* Initialize the pool map properties. */
 	rc = write_map_buf(tx, kvs, map_buf, map_version);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to write map properties, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 	d_iov_set(&value, uuids, sizeof(uuid_t) * nnodes);
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_map_uuids, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to update map UUIDs, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Write the optional properties. */
 	rc = pool_prop_write(tx, kvs, prop);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to write props, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Write connectable property */
 	connectable = 1;
 	d_iov_set(&value, &connectable, sizeof(connectable));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_connectable, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to write connectable prop, "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Write the handle properties. */
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_nhandles, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to update handle props, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_prop_handles, &attr);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to create handle prop KVS, "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Create pool user attributes KVS */
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_attr_user, &attr);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to create user attr KVS, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 out_uuids:
 	D_FREE(uuids);
