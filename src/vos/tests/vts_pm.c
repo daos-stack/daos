@@ -2728,9 +2728,6 @@ run_pm_tests(const char *cfg)
 	rc = cmocka_run_group_tests_name(test_name, punch_model_tests_all,
 					 setup_io, teardown_io);
 
-	if (getenv("DAOS_IO_BYPASS"))
-		return rc;
-
 	dts_create_config(test_name, "VOS PMDK only Punch Model tests %s", cfg);
 
 	rc += cmocka_run_group_tests_name(test_name, punch_model_tests_pmdk,

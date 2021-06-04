@@ -1094,6 +1094,8 @@ vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
 		   struct bio_sglist *bsgl_dup);
 void
 vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
+int
+vos_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup);
 
 /** Raise a RAS event on incompatible durable format
  *

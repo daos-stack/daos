@@ -450,52 +450,72 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	/* Initialize the layout version. */
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_version, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to update version, "DF_RC"\n", DP_RC(rc));
 		goto out;
+	}
 
 	/* Generate the pool buffer. */
 	rc = gen_pool_buf(NULL, &map_buf, map_version, ndomains, nnodes,
 			ntargets, domains, target_uuids, target_addrs, &uuids,
 			dss_tgt_nr);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to generate pool buf, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_map_buf, rc);
+	}
 
 	/* Initialize the pool map properties. */
 	rc = write_map_buf(tx, kvs, map_buf, map_version);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to write map properties, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 	d_iov_set(&value, uuids, sizeof(uuid_t) * nnodes);
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_map_uuids, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to update map UUIDs, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Write the optional properties. */
 	rc = pool_prop_write(tx, kvs, prop);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to write props, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Write connectable property */
 	connectable = 1;
 	d_iov_set(&value, &connectable, sizeof(connectable));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_connectable, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to write connectable prop, "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Write the handle properties. */
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_nhandles, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to update handle props, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_prop_handles, &attr);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to create handle prop KVS, "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Create pool user attributes KVS */
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_attr_user, &attr);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to create user attr KVS, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 out_uuids:
 	D_FREE(uuids);
@@ -2897,6 +2917,53 @@ enum_pool_comp_state_to_tgt_state(int tgt_state)
 	return DAOS_TS_UNKNOWN;
 }
 
+static int
+pool_query_tgt_space(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
+		     d_rank_t rank, uint32_t tgt_idx, struct daos_space *ds)
+{
+	struct pool_tgt_query_in	*in;
+	struct pool_tgt_query_out	*out;
+	crt_rpc_t			*rpc;
+	crt_endpoint_t			 tgt_ep = { 0 };
+	crt_opcode_t			 opcode;
+	int				 rc;
+
+	D_DEBUG(DB_MD, DF_UUID": query target for rank:%u tgt:%u\n",
+		DP_UUID(svc->ps_uuid), rank, tgt_idx);
+
+	tgt_ep.ep_rank = rank;
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, tgt_idx);
+	opcode = DAOS_RPC_OPCODE(POOL_TGT_QUERY, DAOS_POOL_MODULE,
+				 DAOS_POOL_VERSION);
+	rc = crt_req_create(ctx, &tgt_ep, opcode, &rpc);
+	if (rc) {
+		D_ERROR("crt_req_create failed: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
+	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		goto out_rpc;
+
+	out = crt_reply_get(rpc);
+	rc = out->tqo_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to query rank:%u, tgt:%u, "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), rank, tgt_idx, DP_RC(rc));
+	} else {
+		D_ASSERT(ds != NULL);
+		*ds = out->tqo_space.ps_space;
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+	return rc;
+}
+
 void
 ds_pool_query_info_handler(crt_rpc_t *rpc)
 {
@@ -2925,8 +2992,9 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 		D_ERROR(DF_UUID": Failed to get rank:%u, idx:%d\n, rc:%d",
 			DP_UUID(in->pqii_op.pi_uuid), in->pqii_rank,
 			in->pqii_tgt, rc);
-		D_GOTO(out, rc = -DER_NONEXIST);
-	 } else {
+		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+		D_GOTO(out_svc, rc = -DER_NONEXIST);
+	} else {
 		rc = 0;
 	}
 
@@ -2934,13 +3002,24 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 
 	tgt_state = target->ta_comp.co_status;
 	out->pqio_state = enum_pool_comp_state_to_tgt_state(tgt_state);
-
-	/**
-	 * TODO (DAOS-3625): Send pool tgt query RPC (server->server) to
-	 * return pool target space info (including fragmentation).
-	 */
+	out->pqio_op.po_map_version =
+			pool_map_get_version(svc->ps_pool->sp_map);
 
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+
+	if (tgt_state == PO_COMP_ST_UPIN) {
+		rc = pool_query_tgt_space(rpc->cr_ctx, svc, in->pqii_op.pi_hdl,
+					  in->pqii_rank, in->pqii_tgt,
+					  &out->pqio_space);
+		if (rc)
+			D_ERROR(DF_UUID": Failed to query rank:%u, tgt:%d, "
+				""DF_RC"\n", DP_UUID(in->pqii_op.pi_uuid),
+				in->pqii_rank, in->pqii_tgt, DP_RC(rc));
+	} else {
+		memset(&out->pqio_space, 0, sizeof(out->pqio_space));
+	}
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqio_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
 	out->pqio_op.po_rc = rc;
