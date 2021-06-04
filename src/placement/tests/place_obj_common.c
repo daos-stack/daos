@@ -350,17 +350,12 @@ plt_next_level(pool_comp_type_t current)
 {
 	switch (current) {
 	case PO_COMP_TP_ROOT:
-		return PO_COMP_TP_RACK;
-	case PO_COMP_TP_RACK:
 		return PO_COMP_TP_NODE;
 	case PO_COMP_TP_NODE:
-		return PO_COMP_TP_TARGET;
-
-	/* these are not used by the test layout */
-	case PO_COMP_TP_TARGET:
-	case PO_COMP_TP_UNKNOWN:
+		return PO_COMP_TP_RANK;
+	case PO_COMP_TP_RANK:
 	default:
-		return PO_COMP_TP_UNKNOWN;
+		return PO_COMP_TP_TARGET;
 	}
 }
 
@@ -408,7 +403,7 @@ plt_set_domain_status(uint32_t id, int status, uint32_t *ver,
 				      po_map, pl_debug_msg,
 				      plt_next_level(level));
 	}
-	if (level == PO_COMP_TP_NODE) {
+	if (level == PO_COMP_TP_RANK) {
 		for (i = 0; i < domain->do_target_nr; i++) {
 			plt_set_tgt_status(domain->do_targets[i].ta_comp.co_id,
 				status, ver, po_map, pl_debug_msg);
@@ -564,7 +559,7 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 	comp = &comps[0];
 	/* fake the pool map */
 	for (i = 0; i < num_domains; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_RACK;
+		comp->co_type   = PO_COMP_TP_NODE;
 		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id     = i;
 		comp->co_rank   = i;
@@ -573,7 +568,7 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 	}
 
 	for (i = 0; i < num_domains * nodes_per_domain; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_NODE;
+		comp->co_type   = PO_COMP_TP_RANK;
 		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id     = i;
 		comp->co_rank   = i;
@@ -609,7 +604,7 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 
 	mia.ia_type         = pl_type;
 	mia.ia_ring.ring_nr = 1;
-	mia.ia_ring.domain  = PO_COMP_TP_RACK;
+	mia.ia_ring.domain  = PO_COMP_TP_NODE;
 
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
 	assert_success(rc);
@@ -642,7 +637,7 @@ gen_pool_and_placement_map_non_standard(int num_domains,
 	comp = &comps[0];
 	/* fake the pool map */
 	for (i = 0; i < num_domains; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_RACK;
+		comp->co_type   = PO_COMP_TP_NODE;
 		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id     = i;
 		comp->co_rank   = i;
@@ -652,7 +647,7 @@ gen_pool_and_placement_map_non_standard(int num_domains,
 
 	/* Using 1 node for each domain */
 	for (i = 0; i < num_domains; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_NODE;
+		comp->co_type   = PO_COMP_TP_RANK;
 		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id     = i;
 		comp->co_rank   = i;
@@ -696,7 +691,7 @@ gen_pool_and_placement_map_non_standard(int num_domains,
 
 	mia.ia_type         = pl_type;
 	mia.ia_ring.ring_nr = 1;
-	mia.ia_ring.domain  = PO_COMP_TP_RACK;
+	mia.ia_ring.domain  = PO_COMP_TP_NODE;
 
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
 	assert_success(rc);

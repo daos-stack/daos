@@ -209,7 +209,7 @@ daos_cont_prop2redunlvl(daos_prop_t *props)
 	struct daos_prop_entry *prop =
 		daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_LVL);
 
-	return prop == NULL ? DAOS_PROP_CO_REDUN_NODE : (uint32_t)prop->dpe_val;
+	return prop == NULL ? DAOS_PROP_CO_REDUN_RANK : (uint32_t)prop->dpe_val;
 }
 
 /** Convert the redun_fac to number of allowed failures */
