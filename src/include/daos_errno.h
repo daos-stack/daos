@@ -118,9 +118,9 @@ extern "C" {
 	/** version mismatch */						\
 	ACTION(DER_MISMATCH,		(DER_ERR_GURT_BASE + 31),	\
 	       Version mismatch)					\
-	/** rank has been evicted */					\
-	ACTION(DER_EVICTED,		(DER_ERR_GURT_BASE + 32),	\
-	       Rank has been evicted)					\
+	/** rank has been excluded */					\
+	ACTION(DER_EXCLUDED,		(DER_ERR_GURT_BASE + 32),	\
+	       Rank has been excluded)					\
 	/** user-provided RPC handler didn't send reply back */		\
 	ACTION(DER_NOREPLY,		(DER_ERR_GURT_BASE + 33),	\
 	       User provided RPC handler did not send reply back)	\

@@ -118,6 +118,8 @@ struct cont_iv_snapshot {
 struct cont_iv_capa {
 	uint64_t	flags;
 	uint64_t	sec_capas;
+	/* the pool map_ver of updating DAOS_PROP_CO_STATUS property */
+	uint32_t	status_pm_ver;
 };
 
 /* flattened container properties */
@@ -252,13 +254,16 @@ void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
 void ds_cont_oid_alloc_handler(crt_rpc_t *rpc);
 
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas);
+		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
+		     uint32_t status_pm_ver);
 int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint64_t *snapshots, int snap_count);
 int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
 int ds_cont_tgt_close(uuid_t cont_hdl_uuid);
 int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 				daos_epoch_t eph);
+int ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
+				 uint32_t pm_ver);
 /**
  * oid_iv.c
  */
@@ -271,7 +276,8 @@ int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 int ds_cont_iv_init(void);
 int ds_cont_iv_fini(void);
 int cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-			      uint64_t flags, uint64_t sec_capas);
+			      uint64_t flags, uint64_t sec_capas,
+			      uint32_t pm_ver);
 int cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid,
 				  int sync_mode);
 int cont_iv_prop_fetch(uuid_t pool_uuid, uuid_t cont_uuid,

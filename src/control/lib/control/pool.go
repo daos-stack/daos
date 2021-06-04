@@ -243,6 +243,7 @@ func PoolResolveID(ctx context.Context, rpcClient UnaryInvoker, req *PoolResolve
 type PoolDestroyReq struct {
 	msRequest
 	unaryRequest
+	retryableRequest
 	UUID  string
 	Force bool
 }
@@ -259,6 +260,21 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 			Force: req.Force,
 		})
 	})
+	req.retryTestFn = func(reqErr error, _ uint) bool {
+		switch e := reqErr.(type) {
+		case drpc.DaosStatus:
+			switch e {
+			// These destroy errors can be retried.
+			case drpc.DaosGroupVersionMismatch,
+				drpc.DaosTryAgain:
+				return true
+			default:
+				return false
+			}
+		default:
+			return false
+		}
+	}
 
 	rpcClient.Debugf("Destroy DAOS pool request: %v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
