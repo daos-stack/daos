@@ -1036,3 +1036,18 @@ class DaosServerManager(SubprocessManager):
 
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
+
+    def get_host(self, rank):
+        """Get the host name that matches the specified rank.
+
+        Args:
+            rank (int): server rank number
+
+        Returns:
+            str: host name matching the specified rank
+
+        """
+        host = None
+        if rank in self._expected_states:
+            host = self._expected_states[rank]["host"]
+        return host

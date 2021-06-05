@@ -21,11 +21,11 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         super().__init__(*args, **kwargs)
         self.container = []
         self.metrics = {
-            "open_count": 0,
-            "active_count": 0,
-            "close_count": 0,
-            "destroy_count": 0
-        }
+            "open_count": {},
+            "active_count": {},
+            "close_count": {},
+            "destroy_count": {}}
+        self.pool_leader_host = None
 
     def create_container(self, posix):
         """Create a new container and update the metrics.
@@ -38,8 +38,8 @@ class TestWithTelemetryBasic(TestWithTelemetry):
             "POSIX" if posix else None, "container.type")
         self.container[-1].create()
         if self.container[-1].type.value == "POSIX":
-            self.metrics["open_count"] += 1
-            self.metrics["close_count"] += 1
+            self.metrics["open_count"][self.pool_leader_host] += 1
+            self.metrics["close_count"][self.pool_leader_host] += 1
 
     def open_container(self, container):
         """Open the container and update the metrics.
@@ -48,8 +48,8 @@ class TestWithTelemetryBasic(TestWithTelemetry):
             container (TestContainer): container to open
         """
         container.open()
-        self.metrics["open_count"] += 1
-        self.metrics["active_count"] += 1
+        self.metrics["open_count"][self.pool_leader_host] += 1
+        self.metrics["active_count"][self.pool_leader_host] += 1
 
     def close_container(self, container):
         """Close the container and update the metrics.
@@ -58,8 +58,8 @@ class TestWithTelemetryBasic(TestWithTelemetry):
             container (TestContainer): container to close
         """
         container.close()
-        self.metrics["close_count"] += 1
-        self.metrics["active_count"] -= 1
+        self.metrics["close_count"][self.pool_leader_host] += 1
+        self.metrics["active_count"][self.pool_leader_host] -= 1
 
     def destroy_container(self, container):
         """Destroy the container and update the metrics.
@@ -68,7 +68,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
             container (TestContainer): container to destroy
         """
         container.destroy()
-        self.metrics["destroy_count"] += 1
+        self.metrics["destroy_count"][self.pool_leader_host] += 1
 
     def check_metrics(self):
         """Check the container telemetry metrics."""
@@ -103,18 +103,25 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         container_qty = self.params.get("container_qty", "/run/test/*", 1)
         open_close_qty = self.params.get("open_close_qty", "/run/test/*", 2)
         self.add_pool(connect=False)
+        self.pool.set_query_data()
+        pool_leader_rank = self.pool.query_data["response"]["leader"]
+        self.pool_leader_host = self.server_managers[0].get_host(
+            pool_leader_rank)
+        self.log.info(
+            "Pool leader host: %s (rank: %s)",
+            self.pool_leader_host, pool_leader_rank)
 
         # Verify container telemetry metrics report 0 before container creation
         self.log.info("Before container creation")
         data = self.telemetry.get_container_metrics()
         for host in data:
-            self.metrics["open_count"] = \
+            self.metrics["open_count"][host] = \
                 data[host]["engine_container_ops_open_total"]
-            self.metrics["active_count"] = \
+            self.metrics["active_count"][host] = \
                 data[host]["engine_container_ops_open_active"]
-            self.metrics["close_count"] = \
+            self.metrics["close_count"][host] = \
                 data[host]["engine_container_ops_close_total"]
-            self.metrics["destroy_count"] = \
+            self.metrics["destroy_count"][host] = \
                 data[host]["engine_container_ops_destroy_total"]
 
         # Create a number of containers and verify metrics
@@ -131,7 +138,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
                 self.open_container(container)
                 self.log.info(
                     "Loop %s/%s: Container %s/%s: After open()",
-                    outer_loop, open_close_qty, loop, len(self.container))
+                    outer_loop, open_close_qty, loop + 1, len(self.container))
                 self.check_metrics()
 
             # Close each container and verify metrics
@@ -139,14 +146,15 @@ class TestWithTelemetryBasic(TestWithTelemetry):
                 self.close_container(container)
                 self.log.info(
                     "Loop %s/%s: Container %s/%s: After close()",
-                    outer_loop, open_close_qty, loop, len(self.container))
+                    outer_loop, open_close_qty, loop + 1, len(self.container))
                 self.check_metrics()
 
         # Destroy each container and verify metrics
         for loop, container in enumerate(self.container):
             self.destroy_container(container)
             self.log.info(
-                "Container %s/%s: After destroy()", loop, len(self.container))
+                "Container %s/%s: After destroy()",
+                loop + 1, len(self.container))
             self.check_metrics()
 
         self.log.info("Test PASSED")

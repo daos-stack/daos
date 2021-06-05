@@ -327,14 +327,14 @@ class TelemetryUtils():
         """Verify the container telemetry metrics.
 
         Args:
-            open_count (int, optional): Number of times cont_open has been
-                called. Defaults to None.
-            active_count (int, optional): Number of open container handles.
-                Defaults to None.
-            close_count (int, optional): Number of times cont_close has been
-                called. Defaults to None.
-            destroy_count (int, optional): Number of times cont_destroy has been
-                called. Defaults to None.
+            open_count (dict, optional): Number of times cont_open has been
+                called per host key. Defaults to None.
+            active_count (dict, optional): Number of open container handles per
+                host key. Defaults to None.
+            close_count (dict, optional): Number of times cont_close has been
+                called per host key. Defaults to None.
+            destroy_count (dict, optional): Number of times cont_destroy has
+                been called per host key. Defaults to None.
 
         Returns:
             list: list of errors detected
@@ -351,11 +351,13 @@ class TelemetryUtils():
         for host in data:
             for name in self.ENGINE_CONTAINER_METRICS:
                 if name in data[host]:
-                    if (expected[name] is not None and
-                            expected[name] != data[host][name]):
+                    if (expected[name] is not None
+                            and host in expected[name]
+                            and expected[name][host] != data[host][name]):
                         errors.append(
                             "{} mismatch on {}: expected={}; actual={}".format(
-                                name, host, expected[name], data[host][name]))
+                                name, host, expected[name][host],
+                                data[host][name]))
                 else:
                     errors.append("No {} data for {}".format(name, host))
         return errors

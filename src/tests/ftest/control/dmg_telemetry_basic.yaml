@@ -6,7 +6,7 @@ hosts:
     - client-A
 timeouts:
   test_telemetry_list: 60
-  test_container_telemetry: 100
+  test_container_telemetry: 130
 server_config:
   name: daos_server
   servers:
@@ -17,5 +17,5 @@ pool:
 container:
   control_method: daos
 test:
-  container_qty: 10
+  container_qty: 5
   open_close_qty: 3
