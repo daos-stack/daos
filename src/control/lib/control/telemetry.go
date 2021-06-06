@@ -8,10 +8,12 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -160,6 +162,42 @@ func (_ *SimpleMetric) IsMetric() {}
 // IsMetric identifies SummaryMetric as a Metric.
 func (_ *SummaryMetric) IsMetric() {}
 
+// UnmarshalJSON unmarshals a SummaryMetric from JSON.
+func (m *SummaryMetric) UnmarshalJSON(data []byte) error {
+	if m == nil {
+		return errors.New("nil SummaryMetric")
+	}
+
+	type Alias SummaryMetric
+	aux := &struct {
+		StrQuantiles map[string]string `json:"quantiles"`
+		*Alias
+	}{
+		Alias: (*Alias)(m),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Translate from strings to floats
+	m.Quantiles = make(QuantileMap)
+	for key, val := range aux.StrQuantiles {
+		floatKey, err := strconv.ParseFloat(key, 64)
+		if err != nil {
+			return errors.Wrapf(err, "key %q can't be converted to float", key)
+		}
+
+		floatVal, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return errors.Wrapf(err, "value %q can't be converted to float", val)
+		}
+
+		m.Quantiles[floatKey] = floatVal
+	}
+
+	return nil
+}
+
 // IsMetric identifies HistogramMetric as a Metric.
 func (_ *HistogramMetric) IsMetric() {}
 
@@ -181,6 +219,21 @@ func (m QuantileMap) Keys() []float64 {
 	}
 	sort.Float64s(result)
 	return result
+}
+
+// MarshalJSON marshals the QuantileMap into JSON.
+func (m QuantileMap) MarshalJSON() ([]byte, error) {
+	strMap := make(map[string]string)
+
+	fmtFloat := func(f float64) string {
+		return strconv.FormatFloat(f, 'g', -1, 64)
+	}
+
+	for key, val := range m {
+		strMap[fmtFloat(key)] = fmtFloat(val)
+	}
+
+	return json.Marshal(&strMap)
 }
 
 type (
