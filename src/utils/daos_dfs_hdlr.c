@@ -75,7 +75,8 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 
 		daos_oclass_id2name(info.doi_oclass_id, oclass_name);
 		fprintf(ap->outstream, "Object Class = %s\n", oclass_name);
-		fprintf(ap->outstream, "Object Chunk Size = %zu\n", info.doi_chunk_size);
+		fprintf(ap->outstream,
+			"Object Chunk Size = %zu\n", info.doi_chunk_size);
 		break;
 	}
 	case FS_RESET_ATTR:
@@ -92,7 +93,8 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 		if (ap->fs_op != FS_RESET_CHUNK_SIZE) {
 			rc = dfs_obj_set_oclass(dfs, obj, 0, 0);
 			if (rc) {
-				fprintf(ap->errstream, "failed to set object class "
+				fprintf(ap->errstream,
+					"failed to set object class "
 					"(%s)\n", strerror(rc));
 				D_GOTO(out_release, rc);
 			}
@@ -101,7 +103,8 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 		if (ap->fs_op != FS_RESET_OCLASS) {
 			rc = dfs_obj_set_chunk_size(dfs, obj, 0, 0);
 			if (rc) {
-				fprintf(ap->errstream, "failed to set chunk size "
+				fprintf(ap->errstream,
+					"failed to set chunk size "
 					"(%s)\n", strerror(rc));
 				D_GOTO(out_release, rc);
 			}
@@ -136,7 +139,8 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 				      O_CREAT | O_EXCL | O_RDONLY, ap->oclass,
 				      ap->chunk_size, NULL, &obj);
 			if (rc)
-				fprintf(ap->errstream, "dfs_open %s failed (%s)\n",
+				fprintf(ap->errstream,
+					"dfs_open %s failed (%s)\n",
 					name, strerror(rc));
 			dfs_release(parent);
 			break;
@@ -146,7 +150,8 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 		if (ap->oclass) {
 			rc = dfs_obj_set_oclass(dfs, obj, 0, ap->oclass);
 			if (rc) {
-				fprintf(ap->errstream, "failed to set object class "
+				fprintf(ap->errstream,
+					"failed to set object class "
 					"(%s)\n", strerror(rc));
 				D_GOTO(out_release, rc);
 			}
@@ -155,7 +160,8 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 			rc = dfs_obj_set_chunk_size(dfs, obj, 0,
 						    ap->chunk_size);
 			if (rc) {
-				fprintf(ap->errstream, "failed to set chunk size "
+				fprintf(ap->errstream,
+					"failed to set chunk size "
 					"(%s) %d\n", strerror(rc), rc);
 				D_GOTO(out_release, rc);
 			}

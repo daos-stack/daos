@@ -108,7 +108,8 @@ step_new(int step, char *msg)
 static inline void
 step_init(void)
 {
-	fprintf(autotest_ap->outstream, "\033[1;35mStep Operation               ");
+	fprintf(autotest_ap->outstream,
+		"\033[1;35mStep Operation               ");
 	fprintf(autotest_ap->outstream, "Status Time(sec) Comment\033[0m\n");
 }
 
@@ -820,10 +821,12 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 	}
 
 	if (force) {
-		fprintf(ap->outstream, "\nSome steps \033[0;31mfailed\033[0m.\n");
+		fprintf(ap->outstream,
+			"\nSome steps \033[0;31mfailed\033[0m.\n");
 		rc = 1;
 	} else {
-		fprintf(ap->outstream, "\nAll steps \033[0;32mpassed\033[0m.\n");
+		fprintf(ap->outstream,
+			"\nAll steps \033[0;32mpassed\033[0m.\n");
 		rc = 0;
 	}
 

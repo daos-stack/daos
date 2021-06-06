@@ -1071,8 +1071,9 @@ fs_op_hdlr(struct cmd_args_s *ap)
 			return rc;
 		}
 
-		rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW | DAOS_COO_FORCE,
-				&ap->cont, NULL, NULL);
+		rc = daos_cont_open(ap->pool, ap->c_uuid,
+				    DAOS_COO_RW | DAOS_COO_FORCE,
+				    &ap->cont, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr,
 				"failed to open container "DF_UUIDF ": %s (%d)\n",

@@ -98,7 +98,8 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_SPACE_RB);
 	if (entry == NULL) {
-		fprintf(ap->errstream, "rebuild space ratio property not found\n");
+		fprintf(ap->errstream,
+			"rebuild space ratio property not found\n");
 		rc = -DER_INVAL;
 	} else {
 		D_PRINT("rebuild space ratio:\t"DF_U64"%%\n", entry->dpe_val);
@@ -118,8 +119,8 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 					"auto" : "manual");
 		if (entry->dpe_val & ~(DAOS_SELF_HEAL_AUTO_EXCLUDE |
 				       DAOS_SELF_HEAL_AUTO_REBUILD))
-			D_PRINT("unknown bits set in self-healing property ("DF_X64")\n",
-				entry->dpe_val);
+			D_PRINT("unknown bits set in self-healing property"
+				"("DF_X64")\n", entry->dpe_val);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_RECLAIM);
@@ -202,7 +203,8 @@ pool_get_prop_hdlr(struct cmd_args_s *ap)
 
 	rc = daos_pool_query(ap->pool, NULL, NULL, prop_query, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to query properties for pool "DF_UUIDF
+		fprintf(ap->errstream,
+			"failed to query properties for pool "DF_UUIDF
 			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
 	}
@@ -238,7 +240,8 @@ pool_set_attr_hdlr(struct cmd_args_s *ap)
 	assert(ap->p_op == POOL_SET_ATTR);
 
 	if (ap->attrname_str == NULL || ap->value_str == NULL) {
-		fprintf(ap->errstream, "both attribute name and value must be provided\n");
+		fprintf(ap->errstream,
+			"both attribute name and value must be provided\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -257,7 +260,8 @@ pool_set_attr_hdlr(struct cmd_args_s *ap)
 				(const void * const*)&ap->value_str,
 				(const size_t *)&value_size, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to set attribute '%s' for pool "DF_UUIDF
+		fprintf(ap->errstream,
+			"failed to set attribute '%s' for pool "DF_UUIDF
 			": %s (%d)\n", ap->attrname_str, DP_UUID(ap->p_uuid),
 			d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
@@ -354,7 +358,8 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 				(const char * const*)&ap->attrname_str, NULL,
 				&attr_size, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to retrieve size of attribute '%s' for "
+		fprintf(ap->errstream,
+			"failed to retrieve size of attribute '%s' for "
 			"pool "DF_UUIDF": %s (%d)\n", ap->attrname_str,
 			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
@@ -375,14 +380,16 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 				(const char * const*)&ap->attrname_str,
 				(void * const*)&buf, &attr_size, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to get attribute '%s' for pool "DF_UUIDF
+		fprintf(ap->errstream,
+			"failed to get attribute '%s' for pool "DF_UUIDF
 			": %s (%d)\n", ap->attrname_str, DP_UUID(ap->p_uuid),
 			d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
 	}
 
 	if (expected_size < attr_size)
-		fprintf(ap->errstream, "size required to get attributes has raised, "
+		fprintf(ap->errstream,
+			"size required to get attributes has raised, "
 			"value has been truncated\n");
 	D_PRINT("%s\n", buf);
 
@@ -426,7 +433,8 @@ pool_list_attrs_hdlr(struct cmd_args_s *ap)
 	total_size = 0;
 	rc = daos_pool_list_attr(ap->pool, NULL, &total_size, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to list attribute for pool "DF_UUIDF
+		fprintf(ap->errstream,
+			"failed to list attribute for pool "DF_UUIDF
 			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
 	}
@@ -444,18 +452,22 @@ pool_list_attrs_hdlr(struct cmd_args_s *ap)
 	expected_size = total_size;
 	rc = daos_pool_list_attr(ap->pool, buf, &total_size, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to list attribute for pool "DF_UUIDF
+		fprintf(ap->errstream,
+			"failed to list attribute for pool "DF_UUIDF
 			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
 	}
 
 	if (expected_size < total_size)
-		fprintf(ap->errstream, "size required to gather all attributes has raised, list has been truncated\n");
+		fprintf(ap->errstream,
+			"size required to gather all attributes has raised,"
+			" list has been truncated\n");
 	while (cur < total_size) {
 		len = strnlen(buf + cur, total_size - cur);
 		if (len == total_size - cur) {
 			fprintf(ap->errstream,
-				"end of buf reached but no end of string encountered, ignoring\n");
+				"end of buf reached but no end of string"
+				" encountered, ignoring\n");
 			break;
 		}
 		D_PRINT("%s\n", buf + cur);
@@ -504,7 +516,8 @@ pool_list_containers_hdlr(struct cmd_args_s *ap)
 	rc = daos_pool_list_cont(ap->pool, &ncont, NULL /* cbuf */,
 				 NULL /* ev */);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to retrieve number of containers for "
+		fprintf(ap->errstream,
+			"failed to retrieve number of containers for "
 			"pool "DF_UUIDF": %s (%d)\n", DP_UUID(ap->p_uuid),
 			d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
@@ -529,7 +542,8 @@ pool_list_containers_hdlr(struct cmd_args_s *ap)
 
 	rc = daos_pool_list_cont(ap->pool, &ncont, conts, NULL /* ev */);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to list containers for pool "DF_UUIDF
+		fprintf(ap->errstream,
+			"failed to list containers for pool "DF_UUIDF
 			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_free, rc);
 	}
