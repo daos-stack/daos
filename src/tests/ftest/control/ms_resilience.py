@@ -33,7 +33,7 @@ class ManagementServiceResilience(TestWithServers):
         self.L_QUERY_TIMER = 300 # adjust down as we learn more
         self.SWIM_SUSP_TIMEOUT = 8
 
-    def find_pool(self, uuid):
+    def find_pool(self, search_uuid):
         """Find a pool in the output of `dmg pool list`.
 
         Args:
@@ -42,10 +42,9 @@ class ManagementServiceResilience(TestWithServers):
         Returns:
             Pool entry, if found, or None.
         """
-        pools = self.get_dmg_command().pool_list()["response"]["pools"]
-        for pool in pools:
-            if pool["uuid"].lower() == uuid.lower():
-                return pool
+        for pool_uuid in self.get_dmg_command().pool_list():
+            if pool_uuid.lower() == search_uuid.lower():
+                return pool_uuid
         return None
 
     def create_pool(self):
