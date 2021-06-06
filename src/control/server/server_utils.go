@@ -345,6 +345,7 @@ func registerLeaderSubscriptions(srv *server) {
 					srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
 					return
 				}
+				srv.log.Debugf("evt: %s", evt)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
 				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), ts); err == nil {

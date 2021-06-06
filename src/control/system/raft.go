@@ -270,6 +270,7 @@ func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
 	if err != nil {
 		return err
 	}
+	db.log.Debugf("member %d updated @ %s", m.Member.Rank, m.Member.LastUpdate)
 	return db.submitRaftUpdate(data)
 }
 

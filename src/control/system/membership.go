@@ -491,6 +491,7 @@ func (m *Membership) MarkRankDead(rank Rank, timestamp time.Time) error {
 
 		return errors.New(msg)
 	}
+	m.log.Debugf("member %d last update: %s", rank, timestamp)
 
 	// Not entirely sure this is correct. We clearly don't want to allow an old
 	// SWIM event to take a newly-joined rank back out of service, but maybe we
