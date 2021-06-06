@@ -31,14 +31,15 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 	host, _ := os.Hostname()
 
 	tests := map[string]struct {
-		class            storage.BdevClass
-		devList          []string
-		enableVmd        bool
-		fileSize         int // relevant for FILE
-		vosEnv           string
-		expExtraBdevCfgs []*SpdkSubsystemConfig
-		expValidateErr   error
-		expErr           error
+		class              storage.BdevClass
+		devList            []string
+		enableVmd          bool
+		fileSize           int // relevant for FILE
+		vosEnv             string
+		expExtraBdevCfgs   []*SpdkSubsystemConfig
+		expExtraSubsystems []*SpdkSubsystem
+		expValidateErr     error
+		expErr             error
 	}{
 		"config validation failure": {
 			class:          storage.BdevClassNvme,
@@ -68,7 +69,41 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 			},
 			vosEnv: "NVME",
 		},
-		// TODO: uncomment block when VMD and AIO enabled in config
+		"multiple controllers; vmd enabled": {
+			class:     storage.BdevClassNvme,
+			enableVmd: true,
+			devList:   []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			expExtraBdevCfgs: []*SpdkSubsystemConfig{
+				{
+					Method: SpdkBdevNvmeAttachController,
+					Params: NvmeAttachControllerParams{
+						TransportType:    "PCIe",
+						DeviceName:       fmt.Sprintf("Nvme_%s_0", host),
+						TransportAddress: common.MockPCIAddr(1),
+					},
+				},
+				{
+					Method: SpdkBdevNvmeAttachController,
+					Params: NvmeAttachControllerParams{
+						TransportType:    "PCIe",
+						DeviceName:       fmt.Sprintf("Nvme_%s_1", host),
+						TransportAddress: common.MockPCIAddr(2),
+					},
+				},
+			},
+			expExtraSubsystems: []*SpdkSubsystem{
+				{
+					Name: "vmd",
+					Configs: []*SpdkSubsystemConfig{
+						{
+							Method: SpdkVmdEnable,
+							Params: VmdEnableParams{},
+						},
+					},
+				},
+			},
+			vosEnv: "NVME",
+		},
 		//		"VMD devices": {
 		//			class:     storage.BdevClassNvme,
 		//			enableVmd: true,
@@ -169,7 +204,7 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 
 			req := FormatRequestFromConfig(log, &cfg)
 
-			gotCfg, gotErr := newNvmeSpdkConfig(log, tc.enableVmd, &req)
+			gotCfg, gotErr := newSpdkConfig(log, tc.enableVmd, &req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -179,6 +214,9 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 			expCfg := defaultSpdkConfig()
 			for _, ec := range tc.expExtraBdevCfgs {
 				expCfg.Subsystems[0].Configs = append(expCfg.Subsystems[0].Configs, ec)
+			}
+			for _, ess := range tc.expExtraSubsystems {
+				expCfg.Subsystems = append(expCfg.Subsystems, ess)
 			}
 
 			if diff := cmp.Diff(expCfg, gotCfg); diff != "" {
@@ -238,7 +276,7 @@ func TestBackend_createEmptyFile(t *testing.T) {
 				return
 			}
 
-			expSize := (tc.size / clsFileBlkSize) * clsFileBlkSize
+			expSize := (tc.size / aioBlockSize) * aioBlockSize
 
 			st, err := os.Stat(tc.path)
 			if err != nil {

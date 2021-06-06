@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/dustin/go-humanize"
 )
 
@@ -20,6 +21,7 @@ const (
 	SpdkBdevNvmeAttachController = "bdev_nvme_attach_controller"
 	SpdkBdevNvmeSetHotplug       = "bdev_nvme_set_hotplug"
 	SpdkVmdEnable                = "enable_vmd"
+	SpdkBdevAioCreate            = "bdev_aio_create"
 )
 
 // SpdkSubsystemConfigParams is an interface that defines an object that
@@ -68,7 +70,15 @@ func (nshp NvmeSetHotplugParams) isSpdkSubsystemConfigParams() {}
 // VmdEnableParams specifies details for a SpdkVmdEnable method.
 type VmdEnableParams struct{}
 
-func (nshp VmdEnableParams) isSpdkSubsystemConfigParams() {}
+func (vep VmdEnableParams) isSpdkSubsystemConfigParams() {}
+
+type AioCreateParams struct {
+	BlockSize  uint64 `json:"block_size"`
+	DeviceName string `json:"name"`
+	Filename   string `json:"filename"`
+}
+
+func (acp AioCreateParams) isSpdkSubsystemConfigParams() {}
 
 // SpdkSubsystemConfig entries apply to any SpdkSubsystem.
 type SpdkSubsystemConfig struct {
@@ -125,17 +135,55 @@ func defaultSpdkConfig() *SpdkConfig {
 	}
 }
 
-func getNvmeAttachMethods(devs []string, host string) (sscs []*SpdkSubsystemConfig) {
-	for i, d := range devs {
-		name := fmt.Sprintf("Nvme_%s_%d", host, i)
-		sscs = append(sscs, &SpdkSubsystemConfig{
-			Method: SpdkBdevNvmeAttachController,
-			Params: NvmeAttachControllerParams{
-				TransportType:    "PCIe",
-				DeviceName:       name,
-				TransportAddress: d,
-			},
-		})
+type configMethodGetter func(string, string) *SpdkSubsystemConfig
+
+func getNvmeAttachMethod(name, pci string) *SpdkSubsystemConfig {
+	return &SpdkSubsystemConfig{
+		Method: SpdkBdevNvmeAttachController,
+		Params: NvmeAttachControllerParams{
+			TransportType:    "PCIe",
+			DeviceName:       fmt.Sprintf("Nvme_%s", name),
+			TransportAddress: pci,
+		},
+	}
+}
+
+func getAioFileCreateMethod(name, path string) *SpdkSubsystemConfig {
+	return &SpdkSubsystemConfig{
+		Method: SpdkBdevAioCreate,
+		Params: AioCreateParams{
+			DeviceName: fmt.Sprintf("AIO_%s", name),
+			Filename:   path,
+			BlockSize:  aioBlockSize,
+		},
+	}
+}
+
+func getAioKdevCreateMethod(name, path string) *SpdkSubsystemConfig {
+	return &SpdkSubsystemConfig{
+		Method: SpdkBdevAioCreate,
+		Params: AioCreateParams{
+			DeviceName: fmt.Sprintf("AIO_%s", name),
+			Filename:   path,
+		},
+	}
+}
+
+func getSpdkConfigMethods(req *FormatRequest) (sscs []*SpdkSubsystemConfig) {
+	var f configMethodGetter
+
+	switch req.Class {
+	case storage.BdevClassNvme:
+		f = getNvmeAttachMethod
+	case storage.BdevClassFile:
+		f = getAioFileCreateMethod
+	case storage.BdevClassKdev:
+		f = getAioKdevCreateMethod
+	}
+
+	for index, dev := range req.DeviceList {
+		name := fmt.Sprintf("%s_%d", req.Hostname, index)
+		sscs = append(sscs, f(name, dev))
 	}
 
 	return
@@ -155,17 +203,27 @@ func (sc *SpdkConfig) WithVmdEnabled() *SpdkConfig {
 	return sc
 }
 
-func newNvmeSpdkConfig(log logging.Logger, enableVmd bool, req *FormatRequest) (*SpdkConfig, error) {
-	sc := defaultSpdkConfig()
+func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *FormatRequest) *SpdkConfig {
+	for _, ss := range sc.Subsystems {
+		if ss.Name != "bdev" {
+			continue
+		}
 
-	// default spdk config will have only one bdev subsystem, append device
-	// attach config method calls
-	sc.Subsystems[0].Configs = append(sc.Subsystems[0].Configs,
-		getNvmeAttachMethods(req.DeviceList, req.Hostname)...)
+		ss.Configs = append(ss.Configs, getSpdkConfigMethods(req)...)
 
-	if enableVmd {
-		return sc.WithVmdEnabled(), nil
+		return sc
 	}
 
-	return sc, nil
+	log.Error("no bdev subsystem found in spdk config")
+	return sc
+}
+
+func newSpdkConfig(log logging.Logger, enableVmd bool, req *FormatRequest) (*SpdkConfig, error) {
+	sc := defaultSpdkConfig()
+
+	if enableVmd && req.Class == storage.BdevClassNvme {
+		sc.WithVmdEnabled()
+	}
+
+	return sc.WithBdevConfigs(log, req), nil
 }

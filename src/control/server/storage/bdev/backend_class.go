@@ -23,7 +23,7 @@ import (
 
 const (
 	// device block size hardcoded to 4096
-	clsFileBlkSize = humanize.KiByte * 4
+	aioBlockSize = humanize.KiByte * 4
 )
 
 func createEmptyFile(log logging.Logger, path string, size uint64) error {
@@ -39,7 +39,7 @@ func createEmptyFile(log logging.Logger, path string, size uint64) error {
 	}
 
 	// adjust file size to align with block size
-	size = (size / clsFileBlkSize) * clsFileBlkSize
+	size = (size / aioBlockSize) * aioBlockSize
 
 	log.Debugf("allocating blank file %s of size %s", path, humanize.Bytes(size))
 	file, err := common.TruncFile(path)
@@ -88,7 +88,7 @@ func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *FormatRequest) er
 }
 
 func writeJsonConfig(log logging.Logger, enableVmd bool, req *FormatRequest) error {
-	nsc, err := newNvmeSpdkConfig(log, enableVmd, req)
+	nsc, err := newSpdkConfig(log, enableVmd, req)
 	if err != nil {
 		return err
 	}
