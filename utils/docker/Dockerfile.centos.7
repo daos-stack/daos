@@ -109,8 +109,10 @@ RUN dnf -y install deltarpm && \
         make \
         man \
         maven \
+        meson \
         nasm \
         ndctl \
+        ninja-build \
         numactl \
         numactl-devel \
         openmpi3-devel \
@@ -119,6 +121,7 @@ RUN dnf -y install deltarpm && \
         patch \
         patchelf \
         pciutils \
+        python3-pyelftools \
         python36-Cython \
         python36-devel \
         python36-distro \
@@ -195,6 +198,9 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
       rm -f bullseye.tar; \
       rm -rf bullseye; \
     fi
+
+# Add packages provided by PR-repos that have just been set up.
+RUN dnf -y install python3-pyelftools
 
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few
