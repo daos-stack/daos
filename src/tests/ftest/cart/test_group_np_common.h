@@ -14,6 +14,13 @@
 #define TEST_GROUP_BASE					0x010000000
 #define TEST_GROUP_VER					 0
 
+/* Set array indices into my_proto_fmt_test_group arrays */
+#define TEST_OPC_CHECKIN	CRT_PROTO_OPC(0x010000000, 0, 0)
+#define TEST_OPC_PING_DELAY	CRT_PROTO_OPC(0x010000000, 0, 3)
+#define TEST_OPC_SWIM_STATUS	CRT_PROTO_OPC(0x010000000, 0, 2)
+#define TEST_OPC_SHUTDOWN	CRT_PROTO_OPC(0x010000000, 0, 1)
+#define TEST_OPC_DISABLE_SWIM	CRT_PROTO_OPC(0x010000000, 0, 4)
+
 #define MAX_NUM_RANKS		1024
 #define MAX_SWIM_STATUSES	1024
 #define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
@@ -59,6 +66,24 @@ struct test_t {
 struct test_t test_g = { .t_hold_time = 0,
 			 .t_srv_ctx_num = 1,
 			 .t_roomno = 1082 };
+
+/* input fields */
+#define CRT_ISEQ_TEST_PING_DELAY				 \
+	((int32_t)		(age)			CRT_VAR) \
+	((int32_t)		(days)			CRT_VAR) \
+	((d_string_t)		(name)			CRT_VAR) \
+	((uint32_t)		(delay)			CRT_VAR)
+
+/* output fields */
+#define CRT_OSEQ_TEST_PING_DELAY				 \
+	((int32_t)		(ret)			CRT_VAR) \
+	((uint32_t)		(room_no)		CRT_VAR)
+
+
+CRT_RPC_DECLARE(crt_test_ping_delay,
+		CRT_ISEQ_TEST_PING_DELAY, CRT_OSEQ_TEST_PING_DELAY)
+CRT_RPC_DEFINE(crt_test_ping_delay,
+		CRT_ISEQ_TEST_PING_DELAY, CRT_OSEQ_TEST_PING_DELAY)
 
 /* input fields */
 #define CRT_ISEQ_TEST_PING_CHECK				 \
@@ -278,6 +303,9 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	struct test_disable_swim_in	*disable_swim_rpc_req_input;
 	struct test_disable_swim_out	*disable_swim_rpc_req_output;
 
+	struct test_shutdown_in		*shutdown_rpc_req_input;
+	struct test_shutdown_out	*shutdown_rpc_req_output;
+
 	rpc_req = cb_info->cci_rpc;
 
 	if (cb_info->cci_arg != NULL) {
@@ -330,10 +358,26 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		D_ASSERT(swim_status_rpc_req_output->bool_val == true);
 		break;
 	case TEST_OPC_SHUTDOWN:
+
 		DBG_PRINT("Received TEST_OPC_SHUTDOWN.\n");
-		tc_progress_stop();
+
+		shutdown_rpc_req_input = crt_req_get(rpc_req);
+		D_ASSERT(shutdown_rpc_req_input != NULL);
+		shutdown_rpc_req_output = crt_reply_get(rpc_req);
+		D_ASSERT(shutdown_rpc_req_output != NULL);
+
+		if (cb_info->cci_rc != 0) {
+			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
+				rpc_req->cr_opc, cb_info->cci_rc);
+			break;
+		}
+		DBG_PRINT("shutdown result - rank: %d, result: %d.\n",
+			  shutdown_rpc_req_input->rank,
+			  shutdown_rpc_req_output->bool_val);
 		sem_post(&test_g.t_token_to_proceed);
+		D_ASSERT(shutdown_rpc_req_output->bool_val == true);
 		break;
+
 	case TEST_OPC_DISABLE_SWIM:
 
 		disable_swim_rpc_req_input = crt_req_get(rpc_req);
@@ -412,6 +456,7 @@ test_disable_swim_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("tier1 disable_swim input - rank: %d.\n",
 		  e_req->rank);
 
+	crt_rank_abort_all(NULL);
 	crt_swim_disable_all();
 	crt_swim_fini();
 
