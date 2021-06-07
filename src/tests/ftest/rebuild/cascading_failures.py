@@ -6,7 +6,7 @@
 """
 from rebuild_test_base import RebuildTestBase
 
-class CascadingFailures(RebuildTestBase):
+class RbldCascadingFailures(RebuildTestBase):
     # pylint: disable=too-many-ancestors
     """Test cascading failures during rebuild.
 

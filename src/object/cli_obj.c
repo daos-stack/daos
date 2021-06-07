@@ -445,27 +445,49 @@ obj_auxi_free_failed_tgt_list(struct obj_auxi_args *obj_auxi)
 	obj_auxi->failed_tgt_list = NULL;
 }
 
+static int
+obj_init_oca(struct dc_object *obj)
+{
+	struct daos_oclass_attr *oca;
+	bool			 priv;
+
+	oca = daos_oclass_attr_find(obj->cob_md.omd_id, &priv);
+	if (!oca)
+		return -DER_INVAL;
+
+	obj->cob_oca = *oca;
+	if (daos_oclass_is_ec(oca) && !priv) {
+		struct cont_props	props;
+
+		/* Use the cell size from container property to overwrite
+		 * the default value.
+		 * NB: don't ovewrite cell size of private class.
+		 */
+		props = dc_cont_hdl2props(obj->cob_coh);
+		if (props.dcp_ec_cell_sz != 0)
+			obj->cob_oca.u.ec.e_len = props.dcp_ec_cell_sz;
+	}
+	return 0;
+}
+
 struct daos_oclass_attr *
 obj_get_oca(struct dc_object *obj)
 {
-	if (obj->cob_oca == NULL)
-		obj->cob_oca = daos_oclass_attr_find(obj->cob_md.omd_id);
-
-	return obj->cob_oca;
+	return &obj->cob_oca;
 }
 
 bool
 obj_is_ec(struct dc_object *obj)
 {
-	return DAOS_OC_IS_EC(obj_get_oca(obj));
+	return daos_oclass_is_ec(obj_get_oca(obj));
 }
 
 int
 obj_get_replicas(struct dc_object *obj)
 {
 	struct daos_oclass_attr *oc_attr = obj_get_oca(obj);
-	D_ASSERT(oc_attr != NULL);
-	if (DAOS_OC_IS_EC(oc_attr))
+
+	if (daos_oclass_is_ec(oc_attr))
 		return obj_ec_tgt_nr(oc_attr);
 
 	D_ASSERT(oc_attr->ca_resil == DAOS_RES_REPL);
@@ -792,8 +814,8 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		    struct dtx_epoch *epoch, struct obj_auxi_args *obj_auxi)
 {
 	struct obj_reasb_req	*reasb_req = &obj_auxi->reasb_req;
+	struct daos_oclass_attr	*oca = obj_get_oca(obj);
 	daos_obj_id_t		 oid = obj->cob_md.omd_id;
-	struct daos_oclass_attr	*oca;
 	int			 rc = 0;
 
 	if (epoch != NULL && !obj_auxi->req_reasbed)
@@ -807,10 +829,8 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	obj_auxi->iod_nr = args->nr;
 
 	/** XXX possible re-order/merge for both replica and EC */
-	oca = obj_get_oca(obj);
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE ||
-	    args->extra_flags & DIOF_TO_SPEC_SHARD ||
-	    !DAOS_OC_IS_EC(oca))
+	    args->extra_flags & DIOF_TO_SPEC_SHARD || !obj_is_ec(obj))
 		return 0;
 
 	if (!obj_auxi->req_reasbed) {
@@ -1228,18 +1248,12 @@ dc_obj_list_class(tse_task_t *task)
 static int
 dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 {
-	struct daos_oclass_attr	*oca;
+	struct daos_oclass_attr	*oca = obj_get_oca(obj);
 	int			 obj_tf;	/* obj #tolerate failures */
 	int			 cont_rf;	/* cont redun_fac */
 	int			 cont_tf;	/* cont #tolerate failures */
 	int			 rc;
 
-	oca = obj_get_oca(obj);
-	if (oca == NULL) {
-		D_ERROR(DF_OID" obj_get_oca failed.\n",
-			DP_OID(obj->cob_md.omd_id));
-		return -DER_INVAL;
-	}
 
 	cont_rf = dc_cont_hdl2redunfac(coh);
 	if (cont_rf < 0) {
@@ -1248,7 +1262,7 @@ dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 		return cont_rf;
 	}
 
-	if (DAOS_OC_IS_EC(oca)) {
+	if (obj_is_ec(obj)) {
 		obj_tf = obj_ec_parity_tgt_nr(oca);
 	} else {
 		D_ASSERT(oca->ca_resil == DAOS_RES_REPL);
@@ -1298,6 +1312,10 @@ dc_obj_open(tse_task_t *task)
 
 	/* it is a local operation for now, does not require event */
 	rc = dc_obj_fetch_md(args->oid, &obj->cob_md);
+	if (rc != 0)
+		D_GOTO(fail_rwlock_created, rc);
+
+	rc = obj_init_oca(obj);
 	if (rc != 0)
 		D_GOTO(fail_rwlock_created, rc);
 
@@ -1435,7 +1453,6 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 		return -DER_NO_HDL;
 
 	oc_attr = obj_get_oca(obj);
-	D_ASSERT(oc_attr != NULL);
 	grp_size = daos_oclass_grp_size(oc_attr);
 	grp_nr = daos_oclass_grp_nr(oc_attr, &obj->cob_md);
 	if (grp_nr == DAOS_OBJ_GRP_MAX)
@@ -2333,7 +2350,6 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 			struct daos_oclass_attr	*oca;
 
 			oca = obj_get_oca(obj);
-			D_ASSERT(oca != NULL);
 			if (shard_idx % obj_ec_tgt_nr(oca) <
 			    obj_ec_data_tgt_nr(oca)) {
 				/* Client dispatch for EC recx enumeration */
@@ -2965,7 +2981,6 @@ obj_ec_recxs_convert(d_list_t *merge_list, daos_recx_t *recx,
 	int			stripe_nr;
 
 	oca = obj_get_oca(shard_auxi->obj);
-	D_ASSERT(oca != NULL);
 	/* Normally the enumeration is sent to the parity node */
 	/* convert the parity off to daos off */
 	if (recx->rx_idx & PARITY_INDICATOR) {
@@ -3336,7 +3351,7 @@ anchor_check_eof(struct dc_object *obj, daos_anchor_t *anchor)
 	struct daos_oclass_attr	*oca = obj_get_oca(obj);
 	int i;
 
-	if (!anchor->da_sub_anchors || !DAOS_OC_IS_EC(oca))
+	if (!anchor->da_sub_anchors || !obj_is_ec(obj))
 		return;
 
 	for (i = 0; i < obj_ec_data_tgt_nr(oca); i++) {
@@ -4520,7 +4535,6 @@ shard_list_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	shard_arg = container_of(shard_auxi, struct shard_list_args, la_auxi);
 	shard_arg->la_api_args = obj_args;
 	oca = obj_get_oca(obj);
-	D_ASSERT(oca != NULL);
 	if (obj_auxi->is_ec_obj &&
 	    shard_auxi->shard < obj_ec_data_tgt_nr(oca)) {
 		uint32_t		idx = shard_auxi->shard;
@@ -4528,7 +4542,7 @@ shard_list_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 		int			shard_nr;
 		int			rc;
 
-		D_ASSERT(DAOS_OC_IS_EC(oca));
+		D_ASSERT(obj_is_ec(obj));
 		shard_nr = obj_ec_data_tgt_nr(oca);
 
 		/* check and allocate the sub_anchors */
@@ -4609,7 +4623,6 @@ obj_ec_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 	int			i;
 
 	oca = obj_get_oca(obj);
-	D_ASSERT(oca != NULL);
 	obj_ec_get_parity_shards(obj, grp_idx, obj_ec_parity_tgt_nr(oca),
 				 obj_ec_data_tgt_nr(oca), parities);
 	if (unlikely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
@@ -5281,7 +5294,6 @@ dc_obj_query_key(tse_task_t *api_task)
 					D_GOTO(out_task, rc);
 				}
 				oca = obj_get_oca(obj);
-				D_ASSERT(oca != NULL);
 				D_ASSERT(shard_first == 0 &&
 					 (i % replicas == 0));
 				shard = i;
@@ -5450,7 +5462,6 @@ dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr)
 		return -DER_NO_HDL;
 
 	oc_attr = obj_get_oca(obj);
-	D_ASSERT(oc_attr != NULL);
 
 	/* XXX: Currently, only support to verify replicated object.
 	 *	Need more work for EC object in the future.

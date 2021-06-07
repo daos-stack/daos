@@ -979,7 +979,7 @@ all_healthy(void **state)
 		int	grp_nr;
 
 		gen_oid(&oid, 0, 0, object_classes[i]);
-		oa = daos_oclass_attr_find(oid);
+		oa = daos_oclass_attr_find(oid, NULL);
 		grp_sz = daos_oclass_grp_size(oa);
 		grp_nr = daos_oclass_grp_nr(oa, NULL);
 

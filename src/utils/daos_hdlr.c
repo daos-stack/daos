@@ -151,6 +151,20 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 		}
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_PO_EC_CELL_SZ);
+	if (entry == NULL) {
+		fprintf(stderr, "EC cell size not found\n");
+		rc = -DER_INVAL;
+	} else {
+		if (!daos_ec_cs_valid(entry->dpe_val)) {
+			D_PRINT("Invalid EC cell size: %u\n",
+				(uint32_t)entry->dpe_val);
+		} else {
+			D_PRINT("EC cell size = %u\n",
+				(uint32_t)entry->dpe_val);
+		}
+	}
+
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_OWNER);
 	if (entry == NULL || entry->dpe_str == NULL) {
 		fprintf(ap->errstream, "owner property not found\n");
@@ -1297,6 +1311,13 @@ cont_decode_props(struct cmd_args_s *ap, daos_prop_t *props,
 			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ);
+	if (entry == NULL) {
+		fprintf(stderr, "EC cell size property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("EC cell size:\t%d\n", (int)entry->dpe_val);
+	}
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID);
 	if (entry == NULL) {
 		fprintf(ap->errstream,
