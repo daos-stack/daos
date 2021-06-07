@@ -222,6 +222,11 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle,
 		struct dfuse_cont **_dfs);
 
 int
+dfuse_pool_open_by_label(struct dfuse_projection_info *fs_handle,
+			const char *label,
+			struct dfuse_pool **_dfp);
+
+int
 dfuse_pool_open(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 		struct dfuse_pool **_dfp);
 

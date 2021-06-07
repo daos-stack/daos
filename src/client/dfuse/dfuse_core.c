@@ -383,6 +383,80 @@ d_hash_table_ops_t cont_hops = {
 	.hop_rec_free		= ch_free,
 };
 
+/* Return a pool connection by label.
+ *
+ * Only used for command line parsing, so does not check for existing pools
+ *
+ * Return code is a system errno.
+ */
+int
+dfuse_pool_open_by_label(struct dfuse_projection_info *fs_handle,
+			const char *label,
+			struct dfuse_pool **_dfp)
+{
+	struct dfuse_pool	*dfp;
+	daos_pool_info_t        p_info = {};
+	d_list_t		*rlink;
+	int			rc;
+
+	D_ALLOC_PTR(dfp);
+	if (dfp == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
+	atomic_store_relaxed(&dfp->dfp_ref, 1);
+
+	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
+
+	rc = daos_pool_connect_by_label(label,
+				       fs_handle->dpi_info->di_group,
+				       DAOS_PC_RW,
+				       &dfp->dfp_poh, &p_info, NULL);
+	if (rc) {
+		if (rc == -DER_NO_PERM)
+			DFUSE_TRA_INFO(dfp,
+				"daos_pool_connect() failed, "
+				DF_RC, DP_RC(rc));
+		else
+			DFUSE_TRA_ERROR(dfp,
+					"daos_pool_connect() failed, "
+					DF_RC, DP_RC(rc));
+		D_GOTO(err_free, rc = daos_der2errno(rc));
+	}
+
+	uuid_copy(dfp->dfp_pool, p_info.pi_uuid);
+
+	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
+					 3, fs_handle, &cont_hops,
+					 &dfp->dfp_cont_table);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(dfp, "Failed to create hash table: "DF_RC,
+				DP_RC(rc));
+		D_GOTO(err_disconnect, rc = daos_der2errno(rc));
+	}
+
+	rlink = d_hash_rec_find_insert(&fs_handle->dpi_pool_table,
+				       &dfp->dfp_pool, sizeof(dfp->dfp_pool),
+				       &dfp->dfp_entry);
+
+	if (rlink != &dfp->dfp_entry) {
+		DFUSE_TRA_DEBUG(dfp, "Found existing pool, reusing");
+		_ph_free(dfp);
+		dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
+	}
+
+	DFUSE_TRA_DEBUG(dfp, "Returning dfp for "DF_UUID,
+			DP_UUID(dfp->dfp_pool));
+
+	*_dfp = dfp;
+	return rc;
+err_disconnect:
+	daos_pool_disconnect(dfp->dfp_poh, NULL);
+err_free:
+	D_FREE(dfp);
+err:
+	return rc;
+}
+
 /* Return a pool connection by uuid.
  *
  * Re-use an existing connection if possible, otherwise open new connection.

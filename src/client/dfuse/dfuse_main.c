@@ -223,7 +223,7 @@ show_help(char *name)
 	printf("usage: %s -m=PATHSTR -s=RANKS\n"
 		"\n"
 		"	-m --mountpoint=PATHSTR	Mount point to use\n"
-		"	   --pool=UUID		pool UUID\n"
+		"	   --pool=<name>	pool UUID/label\n"
 		"	   --container=UUID	container UUID\n"
 		"	   --sys-name=STR	DAOS system name context for servers\n"
 		"	-S --singlethreaded	Single threaded\n"
@@ -248,6 +248,7 @@ main(int argc, char **argv)
 	int			ret = -DER_SUCCESS;
 	int			rc;
 	bool			have_thread_count = false;
+	bool			have_pool_label = false;
 
 	struct option long_options[] = {
 		{"pool",		required_argument, 0, 'p'},
@@ -360,15 +361,15 @@ main(int argc, char **argv)
 	dfuse_info->di_thread_count -= 1;
 
 	if (dfuse_info->di_pool) {
+		/* Check pool uuid here, but do not abort */
 		if (uuid_parse(dfuse_info->di_pool, pool_uuid) < 0) {
-			printf("Invalid pool uuid\n");
-			exit(1);
-		}
+			have_pool_label = true;
 
-		if (dfuse_info->di_cont) {
-			if (uuid_parse(dfuse_info->di_cont, cont_uuid) < 0) {
-				printf("Invalid container uuid\n");
-				exit(1);
+			if (dfuse_info->di_cont) {
+				if (uuid_parse(dfuse_info->di_cont, cont_uuid) < 0) {
+					printf("Invalid container uuid\n");
+					exit(1);
+				}
 			}
 		}
 	}
@@ -390,6 +391,16 @@ main(int argc, char **argv)
 	rc = dfuse_fs_init(dfuse_info, &fs_handle);
 	if (rc != 0)
 		D_GOTO(out_debug, ret = rc);
+
+	if (have_pool_label) {
+		rc = dfuse_pool_open_by_label(fs_handle,
+					      dfuse_info->di_pool,
+					      &dfp);
+		if (rc != -DER_SUCCESS) {
+			printf("Failed to connect to pool (%d)\n", rc);
+			D_GOTO(out_dfs, 0);
+		}
+	}
 
 	duns_attr.da_no_reverse_lookup = true;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
@@ -421,10 +432,12 @@ main(int argc, char **argv)
 	/* Connect to DAOS pool, uuid may be null here but we still allocate a
 	 * dfp
 	 */
-	rc = dfuse_pool_open(fs_handle, &pool_uuid, &dfp);
-	if (rc != -DER_SUCCESS) {
-		printf("Failed to connect to pool (%d)\n", rc);
-		D_GOTO(out_dfs, 0);
+	if (!have_pool_label) {
+		rc = dfuse_pool_open(fs_handle, &pool_uuid, &dfp);
+		if (rc != -DER_SUCCESS) {
+			printf("Failed to connect to pool (%d)\n", rc);
+			D_GOTO(out_dfs, 0);
+		}
 	}
 
 	rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
@@ -438,7 +451,7 @@ main(int argc, char **argv)
 	 */
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 
-	if (uuid_is_null(pool_uuid) != 0)
+	if (uuid_is_null(dfp->dfp_pool) != 0)
 		dfs->dfs_ops = &dfuse_pool_ops;
 
 	rc = dfuse_start(fs_handle, dfs);

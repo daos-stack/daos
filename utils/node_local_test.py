@@ -375,6 +375,25 @@ def get_base_env(clean=False):
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
+class DaosPool():
+    """Class to store data about daos pools"""
+    def __init__(self, server, pool_uuid):
+        self._server = server
+        self.uuid = pool_uuid
+
+    def _get_label(self):
+        """Fetch the pool label, does not work
+
+        TODO: Once DAOS-7805 is resolved them implement this, and change
+        needs_dfuse() to use the label from the pool rather than a
+        hardcoded one.
+        """
+        data = self._server.run_dmg_json(['pool',
+                                          'query',
+                                          '--pool',
+                                          self.uuid])
+        print(data)
+
 class DaosServer():
     """Manage a DAOS server instance"""
 
@@ -418,6 +437,7 @@ class DaosServer():
 
         self._yaml_file = None
         self._io_server_dir = None
+        self.test_pool = None
 
     def __del__(self):
         if self._agent:
@@ -599,21 +619,26 @@ class DaosServer():
         }
 
         cmd = ['storage', 'format', '--json']
+        prev_cmd = None
         while True:
-            try:
-                self._sp.wait(timeout=5)
-                res = 'daos server died waiting for start'
-                self._add_test_case('format', failure=res)
-                raise Exception(res)
-            except subprocess.TimeoutExpired:
-                pass
+            # Wait between commands, but only if running the same command as
+            # before.  If the command is different then just run it.
+            # The intention here is to not flood the server/logs with failing
+            # commands in a loop.
+            if cmd == prev_cmd:
+                try:
+                    self._sp.wait(timeout=0.5)
+                    res = 'daos server died waiting for start'
+                    self._add_test_case('format', failure=res)
+                    raise Exception(res)
+                except subprocess.TimeoutExpired:
+                    pass
+            prev_cmd = cmd
             rc = self.run_dmg(cmd)
 
             data = json.loads(rc.stdout.decode('utf-8'))
             print('cmd: {} data: {}'.format(cmd, data))
 
-            if rc.returncode == 0:
-                break
             if data['error'] is not None:
                 resolved = False
                 for res in error_resolutions.values():
@@ -662,6 +687,7 @@ class DaosServer():
         duration = time.time() - start
         self._add_test_case('start', duration=duration)
         print('Server started in {:.2f} seconds'.format(duration))
+        self.fetch_pools()
 
     def _stop_agent(self):
         self._agent.send_signal(signal.SIGINT)
@@ -757,6 +783,72 @@ class DaosServer():
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE,
                               check=False)
+
+    def run_dmg_json(self, cmd):
+        """Run the specified dmg command in json mode
+
+        return data as json, or raise exception on failure
+        """
+
+        cmd.append('--json')
+        rc = self.run_dmg(cmd)
+        print(rc)
+        assert rc.returncode == 0
+        assert rc.stderr == b''
+        data = json.loads(rc.stdout.decode('utf-8'))
+        assert not data['error']
+        assert data['status'] == 0
+        try:
+            assert data['response']['status'] == 0
+        except KeyError:
+            assert data['response']['Status'] == 0
+            print('ERROR: Incorrect json from: {}'.format(' '.join(cmd)))
+        return data
+
+    def fetch_pools(self):
+        """Query the server and return a list of pool objects"""
+        data = self.run_dmg_json(['pool', 'list'])
+
+        uuids = []
+        # This should exist but might be 'None' so check for that rather than
+        # iterating.
+        if data['response']['pools']:
+            for pool in data['response']['pools']:
+                uuids.append(pool['uuid'])
+
+        pools = []
+        for p_uuid in sorted(uuids):
+            pobj = DaosPool(self, p_uuid)
+            pools.append(pobj)
+
+        if pools:
+            self.test_pool = pools[0]
+        return pools
+
+    def _make_pool(self):
+        """Create a DAOS pool"""
+
+        size = 1024*2
+
+        rc = self.run_dmg(['pool',
+                           'create',
+                           '--label',
+                           'NLT',
+                           '--scm-size',
+                           '{}M'.format(size)])
+        print(rc)
+        assert rc.returncode == 0
+        self.fetch_pools()
+
+    def get_test_pool(self):
+        """Return a pool uuid to be used for testing
+
+        Create a pool as required"""
+
+        if self.test_pool is None:
+            self._make_pool()
+
+        return self.test_pool.uuid
 
 def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     """Run a command under the interception library
@@ -1037,23 +1129,6 @@ class DFuse():
         # prefix to the src dir.
         self.valgrind.convert_xml()
 
-def get_pool_list(server):
-    """Return a list of valid pool names"""
-    pools = []
-
-    for idx in range(server.engines):
-        for fname in os.listdir('/mnt/daos_{}'.format(idx)):
-            if len(fname) != 36:
-                continue
-            if fname in pools:
-                continue
-            try:
-                uuid.UUID(fname)
-            except ValueError:
-                continue
-            pools.append(fname)
-    return pools
-
 def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
     my_stat = os.fstat(fd)
@@ -1182,28 +1257,6 @@ def check_dfs_tool_output(output, oclass, csize):
             return False
     return True
 
-def make_pool(daos):
-    """Create a DAOS pool"""
-
-    size = 1024*2
-
-    attempt = 0
-    max_tries = 5
-    while attempt < max_tries:
-        rc = daos.run_dmg(['pool',
-                           'create',
-                           '--scm-size',
-                           '{}M'.format(size)])
-        if rc.returncode == 0:
-            break
-        attempt += 1
-        time.sleep(0.5)
-
-    print(rc)
-    assert rc.returncode == 0
-
-    return get_pool_list(daos)
-
 def needs_dfuse(method):
     """Decorator function for starting dfuse under posix_tests class
 
@@ -1219,10 +1272,12 @@ def needs_dfuse(method):
         else:
             caching=False
 
+        # TODO: Update this to use the actual pool label rather than a
+        # hard-coded default.
         self.dfuse = DFuse(self.server,
                            self.conf,
                            caching=caching,
-                           pool=self.pool,
+                           pool='NLT',
                            container=self.container)
         self.dfuse.start(v_hint=self.test_name)
         rc = method(self)
@@ -1899,10 +1954,7 @@ def run_posix_tests(server, conf, test=None):
                 break
             pt.call_index = pt.call_index + 1
 
-    pools = get_pool_list(server)
-    while len(pools) < 1:
-        pools = make_pool(server)
-    pool = pools[0]
+    pool = server.get_test_pool()
 
     pt = posix_tests(server, conf, pool=pool)
     if test:
@@ -2223,9 +2275,7 @@ def run_duns_overlay_test(server, conf):
     and expose the container.
     """
 
-    pools = get_pool_list(server)
-    while len(pools) < 1:
-        pools = make_pool(server)
+    pool = server.get_test_pool()
 
     parent_dir = tempfile.TemporaryDirectory(dir=conf.dfuse_parent_dir,
                                              prefix='dnt_uns_')
@@ -2235,7 +2285,7 @@ def run_duns_overlay_test(server, conf):
     rc = run_daos_cmd(conf, ['container',
                              'create',
                              '--pool',
-                             pools[0],
+                             pool,
                              '--type',
                              'POSIX',
                              '--path',
@@ -2260,9 +2310,7 @@ def run_dfuse(server, conf):
 
     fatal_errors = BoolRatchet()
 
-    pools = get_pool_list(server)
-    while len(pools) < 1:
-        pools = make_pool(server)
+    pool = server.get_test_pool()
 
     dfuse = DFuse(server, conf, caching=False)
     try:
@@ -2278,17 +2326,17 @@ def run_dfuse(server, conf):
     print('Running dfuse with nothing')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
-    for pool in pools:
-        pool_stat = os.stat(os.path.join(dfuse.dir, pool))
-        print('stat for {}'.format(pool))
-        print(pool_stat)
-        cdir = os.path.join(dfuse.dir, pool, container)
-        os.mkdir(cdir)
-        #create_and_read_via_il(dfuse, cdir)
+
+    pool_stat = os.stat(os.path.join(dfuse.dir, pool))
+    print('stat for {}'.format(pool))
+    print(pool_stat)
+    cdir = os.path.join(dfuse.dir, pool, container)
+    os.mkdir(cdir)
+    #create_and_read_via_il(dfuse, cdir)
     fatal_errors.add_result(dfuse.stop())
 
     container2 = str(uuid.uuid4())
-    dfuse = DFuse(server, conf, pool=pools[0], caching=False)
+    dfuse = DFuse(server, conf, pool=pool, caching=False)
     pre_stat = os.stat(dfuse.dir)
     dfuse.start(v_hint='pool_only')
     print('Running dfuse with pool only')
@@ -2301,7 +2349,7 @@ def run_dfuse(server, conf):
 
     fatal_errors.add_result(dfuse.stop())
 
-    dfuse = DFuse(server, conf, pool=pools[0], container=container,
+    dfuse = DFuse(server, conf, pool=pool, container=container,
                   caching=False)
     dfuse.cores = 2
     pre_stat = os.stat(dfuse.dir)
@@ -2325,33 +2373,27 @@ def run_dfuse(server, conf):
 def run_il_test(server, conf):
     """Run a basic interception library test"""
 
-    pools = get_pool_list(server)
+    pool = server.get_test_pool()
 
     # TODO:                       # pylint: disable=W0511
-    # This doesn't work with two pools, partly related to
-    # DAOS-5109 but there may be other issues.
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    print('pools are ', ','.join(pools))
+    # Implement a test which copies across two pools.
 
     dfuse = DFuse(server, conf, caching=False)
     dfuse.start()
 
     dirs = []
 
-    for p in pools:
-        for _ in range(2):
-            # Use a unique ID for each container to avoid DAOS-5109
-            container = str(uuid.uuid4())
+    for _ in range(2):
+        # Use a unique ID for each container to avoid DAOS-5109
+        container = str(uuid.uuid4())
 
-            d = os.path.join(dfuse.dir, p, container)
-            try:
-                print('Making directory {}'.format(d))
-                os.mkdir(d)
-            except FileExistsError:
-                pass
-            dirs.append(d)
+        d = os.path.join(dfuse.dir, pool, container)
+        try:
+            print('Making directory {}'.format(d))
+            os.mkdir(d)
+        except FileExistsError:
+            pass
+        dirs.append(d)
 
     # Create a file natively.
     f = os.path.join(dirs[0], 'file')
@@ -2400,12 +2442,7 @@ def run_in_fg(server, conf):
     Block until ctrl-c is pressed.
     """
 
-    pools = get_pool_list(server)
-
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool=pools[0]
+    pool = server.get_test_pool()
 
     dfuse = DFuse(server, conf, pool=pool)
     dfuse.start()
@@ -2503,12 +2540,7 @@ def check_readdir_perf(server, conf):
                                 headers=headers,
                                 floatfmt=".2f"))
 
-    pools = get_pool_list(server)
-
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
+    pool = server.get_test_pool()
 
     container = str(uuid.uuid4())
 
@@ -2635,12 +2667,7 @@ def test_pydaos_kv(server, conf):
     os.environ['D_LOG_FILE'] = pydaos_log_file.name
     daos = import_daos(server, conf)
 
-    pools = get_pool_list(server)
-
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
+    pool = server.get_test_pool()
 
     c_uuid = create_cont(conf, pool)
 
@@ -2978,12 +3005,7 @@ def test_alloc_fail_cat(server, conf, wf):
     itself yet.
     """
 
-    pools = get_pool_list(server)
-
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
+    pool = server.get_test_pool()
 
     dfuse = DFuse(server, conf, pool=pool)
     dfuse.use_valgrind = False
@@ -3011,12 +3033,7 @@ def test_alloc_fail_cat(server, conf, wf):
 def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection"""
 
-    pools = get_pool_list(server)
-
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
+    pool = server.get_test_pool()
 
     cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
            'pool',
@@ -3131,9 +3148,9 @@ def main():
     if args.mode == 'server-valgrind':
         server = DaosServer(conf, valgrind=True, test_class='valgrind')
         server.start(clean=False)
-        pools = get_pool_list(server)
+        pools = server.fetch_pools()
         for pool in pools:
-            cmd = ['pool', 'list-containers', '--pool', pool]
+            cmd = ['pool', 'list-containers', '--pool', pool.uuid]
             run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop(wf_server) != 0:
             fatal_errors.add_result(True)
