@@ -1025,7 +1025,7 @@ def run_tests(test_files, tag_filter, args):
                 "valgrind log files",
                 os.path.join(valgrind_logs_dir, "latest", "valgrind_logs"),
                 test_hosts,
-                "{}/valgrind*".format(logs_dir),
+                "{}/valgrind*".format(valgrind_logs_dir),
                 args,
                 avocado_logs_dir,
                 get_test_category(test_file["py"]))
