@@ -56,9 +56,10 @@ func addTestPools(t *testing.T, sysdb *system.Database, poolUUIDs ...string) {
 
 	for _, uuidStr := range poolUUIDs {
 		addTestPoolService(t, sysdb, &system.PoolService{
-			PoolUUID: uuid.MustParse(uuidStr),
-			State:    system.PoolServiceStateReady,
-			Replicas: []system.Rank{0},
+			PoolUUID:  uuid.MustParse(uuidStr),
+			PoolLabel: uuidStr,
+			State:     system.PoolServiceStateReady,
+			Replicas:  []system.Rank{0},
 		})
 	}
 }
@@ -1085,14 +1086,16 @@ func TestListPools_Success(t *testing.T) {
 
 	testPools := []*system.PoolService{
 		{
-			PoolUUID: uuid.MustParse(common.MockUUID(0)),
-			State:    system.PoolServiceStateReady,
-			Replicas: []system.Rank{0, 1, 2},
+			PoolUUID:  uuid.MustParse(common.MockUUID(0)),
+			PoolLabel: "0",
+			State:     system.PoolServiceStateReady,
+			Replicas:  []system.Rank{0, 1, 2},
 		},
 		{
-			PoolUUID: uuid.MustParse(common.MockUUID(1)),
-			State:    system.PoolServiceStateReady,
-			Replicas: []system.Rank{0, 1, 2},
+			PoolUUID:  uuid.MustParse(common.MockUUID(1)),
+			PoolLabel: "1",
+			State:     system.PoolServiceStateReady,
+			Replicas:  []system.Rank{0, 1, 2},
 		},
 	}
 	expectedResp := new(mgmtpb.ListPoolsResp)
@@ -1104,6 +1107,7 @@ func TestListPools_Success(t *testing.T) {
 		}
 		expectedResp.Pools = append(expectedResp.Pools, &mgmtpb.ListPoolsResp_Pool{
 			Uuid:    ps.PoolUUID.String(),
+			Label:   ps.PoolLabel,
 			SvcReps: []uint32{0, 1, 2},
 		})
 	}
