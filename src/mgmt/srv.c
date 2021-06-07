@@ -389,6 +389,44 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 	d_rank_list_free(out->gsr_ranks);
 }
 
+void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_pool_find_in	*in;
+	struct mgmt_pool_find_out	*out;
+	int					 rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	D_DEBUG(DB_MGMT, "find pool uuid:"DF_UUID", lbl %s\n",
+		DP_UUID(in->pfi_puuid), in->pfi_label);
+
+	out = crt_reply_get(rpc);
+
+	if (in->pfi_bylabel) {
+		rc = ds_pool_find_bylabel(in->pfi_label, out->pfo_puuid,
+					  &out->pfo_ranks);
+	} else {
+		rc = ds_get_pool_svc_ranks(in->pfi_puuid, &out->pfo_ranks);
+	}
+	if (rc == -DER_NONEXIST) /* not an error */
+		D_DEBUG(DB_MGMT, DF_UUID": %s: ds_pool_find() not found, "
+			DF_RC"\n", DP_UUID(in->pfi_puuid), in->pfi_label,
+			DP_RC(rc));
+	else if (rc != 0)
+		D_ERROR(DF_UUID": %s: ds_pool_find_bylabel() upcall failed, "
+			DF_RC"\n", DP_UUID(in->pfi_puuid), in->pfi_label,
+			DP_RC(rc));
+	out->pfo_rc = rc;
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR(DF_UUID": %s: crt_reply_send() failed, "DF_RC"\n",
+			DP_UUID(in->pfi_puuid), in->pfi_label, DP_RC(rc));
+
+	d_rank_list_free(out->pfo_ranks);
+}
+
 static int
 ds_mgmt_init()
 {

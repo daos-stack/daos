@@ -140,7 +140,7 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 				      (ex: S{1,2,4,X}, RP_2G{1,2,4,X}, RP_3G{1,2,4,X}, RP_4G{1,2,4,X}, RP_XSF)
 .br
-	  \fB--chunk_size=\fRBYTES chunk size of files created. Supports suffixes:
+	  \fB--chunk-size=\fRBYTES chunk size of files created. Supports suffixes:
 .br
 				      K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)
 .br
@@ -238,12 +238,34 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .TP
 .I filesystem \fR(\fIfs\fR) \fBCOMMAND\fRs:
 	  \fBcopy\fR           	 copy data to/from a container to POSIX path
+.br
+	  \fBset-attr\fR     	 set attributes (object class or chunk size) of a (new) file or (existing directory)
+.br
+	  \fBget-attr\fR     	 retrieve attributes of a file or directory
+.br
+	  \fBreset-attr\fR     	 reset attributes to default of a directory
+.br
+	  \fBreset-chunk-size\fR reset chunk size to default of a directory
+.br
+	  \fBreset-oclass\fR   	 reset object class to default of a directory
 .TP
 .I filesystem \fR(\fIfs\fR) \fBOPTION\fRs:
 .br
-	  \fB--src=\fRSTR     src=daos://<pool/cont>[/<path>] | <path>
+	  \fB--path=\fRPATHSTR        path of file or directory to access, including the UNS link to the DFS container
 .br
-	  \fB--dst=\fRSTR     dst=daos://<pool/cont>[/<path>] | <path>
+	  \fB--chunk-size=\fRBYTES    chunk size of file or directory.
+.br
+	  \fB--oclass=\fROCLSSTR      container object class
+.br
+				      (ex: S{1,2,4,X}, RP_2G{1,2,4,X}, RP_3G{1,2,4,X}, RP_4G{1,2,4,X}, RP_XSF)
+.br
+	  \fB--dfs-path=\fRSTR        <path> used with \fB--cont\fR) and \fB--pool\fR) option to specify the path of the file or directory in the DFS container
+.br
+	  \fB--dfs-prefix=\fRSTR      <path> a prefix to be trimmed from the absolute path when looking up the dfs-path in the container
+.br
+	  \fB--src=\fRSTR             src=daos://<pool/cont>[/<path>] | <path>
+.br
+	  \fB--dst=\fRSTR             dst=daos://<pool/cont>[/<path>] | <path>
 .br
 		type is daos, only specified if pool/cont used
 .TP

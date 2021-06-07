@@ -121,7 +121,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 			}
 		}
 
-		if curMember.state == MemberStateExcluded {
+		if curMember.state == MemberStateAdminExcluded {
 			return nil, errAdminExcluded(curMember.UUID, curMember.Rank)
 		}
 		if !curMember.Rank.Equals(req.Rank) {
@@ -355,18 +355,20 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 			result.Addr = member.Addr.String()
 		}
 
-		// don't update members if:
-		// - result reports an error and updateOnFail is false or
+		// don't update members if any of the following is true:
+		// - result reports an error and state != errored
+		// - result reports an error and updateOnFail is false
 		// - if transition from current to result state is illegal
+
 		if result.Errored {
-			if !updateOnFail {
-				continue
-			}
 			if result.State != MemberStateErrored {
-				// this indicates a programming error
+				// result content mismatch (programming error)
 				return errors.Errorf(
 					"errored result for rank %d has conflicting state '%s'",
 					result.Rank, result.State)
+			}
+			if !updateOnFail {
+				continue
 			}
 		}
 
@@ -474,10 +476,10 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 		return err
 	}
 
-	ns := MemberStateEvicted
+	ns := MemberStateExcluded
 	if member.State().isTransitionIllegal(ns) {
 		msg := msgBadStateTransition(member, ns)
-		// evicted->evicted transitions expected for multiple swim
+		// excluded->excluded transitions expected for multiple swim
 		// notifications, if so return error to skip group update
 		if member.State() != ns {
 			m.log.Error(msg)

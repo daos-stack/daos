@@ -248,7 +248,7 @@ dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
 	/** truncate the buffer to a large size, read should return all */
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = dfs_punch(dfs_mt, obj, 1048576 * 2, 0);
+		rc = dfs_punch(dfs_mt, obj, 1048576 * 2, DFS_MAX_FSIZE);
 		assert_int_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
