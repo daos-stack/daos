@@ -622,12 +622,7 @@ dc_shard_csum_report(tse_task_t *task, crt_rpc_t *rpc)
 	csum_orw->orw_bulks.ca_arrays = NULL;
 	crt_req_addref(csum_rpc);
 	crt_req_addref(rpc);
-	rc = crt_req_send(csum_rpc, csum_report_cb, rpc);
-	if (rc != 0)
-		D_ERROR("Fail to send csum report, rpc %p, "DF_RC"\n",
-			rpc, DP_RC(rc));
-
-	return rc;
+	return crt_req_send(csum_rpc, csum_report_cb, rpc);
 }
 
 static int
@@ -1151,11 +1146,6 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			rc = crt_req_set_timeout(req, 3);
 
 		rc = daos_rpc_send(req, task);
-		if (rc != 0) {
-			D_ERROR("update/fetch rpc failed rc "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(out_args, rc);
-		}
 	}
 	return rc;
 
@@ -1264,15 +1254,11 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	opi->opi_dti_cos.ca_arrays = NULL;
 
 	rc = daos_rpc_send(req, task);
-	if (rc != 0) {
-		D_ERROR("punch rpc failed rc "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_req, rc);
-	}
-
 	dc_pool_put(pool);
-	return 0;
+	return rc;
 
 out_req:
+	crt_req_decref(req);
 	crt_req_decref(req);
 out:
 	if (pool != NULL)
@@ -1758,13 +1744,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	if (rc != 0)
 		D_GOTO(out_eaa, rc);
 
-	rc = daos_rpc_send(req, task);
-	if (rc != 0) {
-		D_ERROR("enumerate rpc failed rc "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_eaa, rc);
-	}
-
-	return rc;
+	return daos_rpc_send(req, task);
 
 out_eaa:
 	crt_req_decref(req);
@@ -2093,15 +2073,11 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 	daos_dti_copy(&okqi->okqi_dti, dti);
 
 	rc = daos_rpc_send(req, task);
-	if (rc != 0) {
-		D_ERROR("query_key rpc failed rc "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_req, rc);
-	}
-
 	dc_pool_put(pool);
-	return 0;
+	return rc;
 
 out_req:
+	crt_req_decref(req);
 	crt_req_decref(req);
 out:
 	if (pool)
@@ -2219,15 +2195,11 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	osi->osi_map_ver	= args->sa_auxi.map_ver;
 
 	rc = daos_rpc_send(req, task);
-	if (rc != 0) {
-		D_ERROR("OBJ_SYNC_RPC failed: rc = "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_req, rc);
-	}
-
 	dc_pool_put(pool);
-	return 0;
+	return rc;
 
 out_req:
+	crt_req_decref(req);
 	crt_req_decref(req);
 
 out:
