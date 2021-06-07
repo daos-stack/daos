@@ -9,6 +9,7 @@ from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
+from apricot import skipForTicket
 
 
 class OSAOfflineReintegration(OSAUtils):
@@ -239,6 +240,24 @@ class OSAOfflineReintegration(OSAUtils):
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
         self.log.info("Offline Reintegration : Aggregation")
+        self.run_offline_reintegration_test(1, data=True)
+
+    @skipForTicket("DAOS-7783,DAOS-7790")
+    def test_osa_offline_reintegration_with_rf(self):
+        """Test ID: DAOS-6923
+        Test Description: Validate Offline Reintegration
+        with just redundancy factor setting.
+        Don't set the oclass during ior run.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=offline_reintegration_full,mpich
+        :avocado: tags=offline_reintegration_with_rf
+        """
+        self.log.info("Offline Reintegration : RF")
+        self.test_with_rf = self.params.get("test_with_rf",
+                                            '/run/test_rf/*')
         self.run_offline_reintegration_test(1, data=True)
 
     def test_osa_offline_reintegrate_with_blank_node(self):

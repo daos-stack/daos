@@ -169,7 +169,7 @@ int ds_cont_rf_check(uuid_t pool_uuid);
  * checksum related properties from IV
  */
 int ds_cont_csummer_init(struct ds_cont_child *cont);
-int ds_get_cont_props(struct cont_props *cont_props, uuid_t pool_uuid,
+int ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 		      uuid_t cont_uuid);
 
 void ds_cont_child_put(struct ds_cont_child *cont);
@@ -256,6 +256,7 @@ int dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 		  unsigned int flags, daos_handle_t *coh);
 int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
 struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
+int dsc_cont_get_props(daos_handle_t coh, struct cont_props *props);
 
 void ds_cont_tgt_ec_eph_query_ult(void *data);
 #endif /* ___DAOS_SRV_CONTAINER_H_ */
