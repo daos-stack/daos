@@ -119,8 +119,8 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 					"auto" : "manual");
 		if (entry->dpe_val & ~(DAOS_SELF_HEAL_AUTO_EXCLUDE |
 				       DAOS_SELF_HEAL_AUTO_REBUILD))
-			D_PRINT("unknown bits set in self-healing property"
-				"("DF_X64")\n", entry->dpe_val);
+			D_PRINT("unknown bits set in self-healing property ("
+				DF_X64")\n", entry->dpe_val);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_RECLAIM);

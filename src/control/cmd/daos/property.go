@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"unsafe"
 
@@ -27,6 +28,7 @@ import (
 #include <daos/multihash.h>
 #include <daos/compression.h>
 #include <daos/cipher.h>
+#include <daos/object.h>
 
 #include "property.h"
 */
@@ -78,7 +80,15 @@ var propHdlrs = propHdlrMap{
 			return nil
 		},
 		nil,
-		strValStringer,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+			if C.get_dpe_str(e) == nil {
+				return "container label not set"
+			}
+			return strValStringer(e, name)
+		},
 	},
 	"cksum": {
 		C.DAOS_PROP_CO_CSUM,
@@ -290,7 +300,7 @@ var propHdlrs = propHdlrMap{
 	},
 	"rf": {
 		C.DAOS_PROP_CO_REDUN_FAC,
-		"Redundancy",
+		"Redundancy Factor",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
 			vh, err := h.valHdlrs.get("rf", v)
 			if err != nil {
@@ -312,15 +322,15 @@ var propHdlrs = propHdlrMap{
 			}
 			switch C.get_dpe_val(e) {
 			case C.DAOS_PROP_CO_REDUN_RF0:
-				return "0"
+				return "rf0"
 			case C.DAOS_PROP_CO_REDUN_RF1:
-				return "1"
+				return "rf1"
 			case C.DAOS_PROP_CO_REDUN_RF2:
-				return "2"
+				return "rf2"
 			case C.DAOS_PROP_CO_REDUN_RF3:
-				return "3"
+				return "rf3"
 			case C.DAOS_PROP_CO_REDUN_RF4:
-				return "4"
+				return "rf4"
 			default:
 				return propInvalidValue(e, name)
 			}
@@ -358,6 +368,36 @@ var propHdlrs = propHdlrMap{
 			}
 		},
 	},
+	"ec_cell": {
+		C.DAOS_PROP_CO_EC_CELL_SZ,
+		"EC Cell Size",
+		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			size, err := strconv.ParseUint(v, 10, 64)
+			if err != nil {
+				return errors.Wrapf(err,
+					"unable to parse EC cell size %q", v)
+			}
+
+			if !C.daos_ec_cs_valid(C.uint32_t(size)) {
+				return errors.Errorf("invalid EC cell size %d", size)
+			}
+
+			C.set_dpe_val(e, C.uint64_t(size))
+			return nil
+		},
+		nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+
+			size := C.get_dpe_val(e)
+			if !C.daos_ec_cs_valid(C.uint32_t(size)) {
+				return fmt.Sprintf("invalid size %d", size)
+			}
+			return humanSizeStringer(e, name)
+		},
+	},
 	// Read-only properties here for use by get-property.
 	"layout_type": {
 		C.DAOS_PROP_CO_LAYOUT_TYPE,
@@ -383,17 +423,19 @@ var propHdlrs = propHdlrMap{
 	},
 	"rf_lvl": {
 		C.DAOS_PROP_CO_REDUN_LVL,
-		"RF Level",
+		"Redundancy Level",
 		nil, nil,
 		func(e *C.struct_daos_prop_entry, name string) string {
 			if e == nil {
 				return propNotFound(name)
 			}
-			switch C.get_dpe_val(e) {
+
+			lvl := C.get_dpe_val(e)
+			switch lvl {
 			case C.DAOS_PROP_CO_REDUN_RANK:
-				return "rank"
+				return fmt.Sprintf("rank (%d)", lvl)
 			default:
-				return propInvalidValue(e, name)
+				return fmt.Sprintf("(%d)", lvl)
 			}
 		},
 	},
@@ -550,20 +592,33 @@ func debugStringer(e *C.struct_daos_prop_entry, name string) string {
 	if e == nil {
 		return propNotFound(name)
 	}
+
 	return fmt.Sprintf("property %q: %+v", name, e)
 }
 
 func uintStringer(e *C.struct_daos_prop_entry, name string) string {
+	if e == nil {
+		return propNotFound(name)
+	}
+
 	return fmt.Sprintf("%d", C.get_dpe_str(e))
 }
 
 func humanSizeStringer(e *C.struct_daos_prop_entry, name string) string {
+	if e == nil {
+		return propNotFound(name)
+	}
+
 	return humanize.IBytes(uint64(C.get_dpe_val(e)))
 }
 
 var hssFn = humanSizeStringer
 
 func strValStringer(e *C.struct_daos_prop_entry, name string) string {
+	if e == nil {
+		return propNotFound(name)
+	}
+
 	cStr := C.get_dpe_str(e)
 	if cStr == nil {
 		return propNotFound(name)
@@ -870,6 +925,7 @@ func (p *property) MarshalJSON() ([]byte, error) {
 	// numeric values that would have to be converted back to a number).
 	switch p.entry.dpe_type {
 	case C.DAOS_PROP_CO_ALLOCED_OID,
+		C.DAOS_PROP_CO_EC_CELL_SZ,
 		C.DAOS_PROP_CO_LAYOUT_VER,
 		C.DAOS_PROP_CO_SNAPSHOT_MAX,
 		C.DAOS_PROP_CO_CSUM_CHUNK_SIZE,
