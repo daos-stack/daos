@@ -362,9 +362,9 @@ main(int argc, char **argv)
 
 	if (dfuse_info->di_pool) {
 		/* Check pool uuid here, but do not abort */
-		if (uuid_parse(dfuse_info->di_pool, pool_uuid) < 0) {
+		if (uuid_parse(dfuse_info->di_pool, pool_uuid) < 0)
 			have_pool_label = true;
-		}
+
 		if (dfuse_info->di_cont) {
 			if (uuid_parse(dfuse_info->di_cont, cont_uuid) < 0) {
 				printf("Invalid container uuid\n");
