@@ -129,7 +129,8 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 			rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent,
 					NULL, NULL);
 			if (rc) {
-				fprintf(ap->errstream, "dfs_lookup %s failed (%s)\n",
+				fprintf(ap->errstream,
+					"dfs_lookup %s failed (%s)\n",
 					dir_name, strerror(rc));
 				D_GOTO(out_names, rc);
 			}

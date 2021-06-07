@@ -118,7 +118,7 @@ func (cmd *containerScrubCmd) Execute(_ []string) error {
 	// This will automatically free any C-based memory allocated
 	// along the way, and is always invoked regardless of error
 	// status.
-	defer freeArgs() 
+	defer freeArgs()
 
 	// Now attempt to connect to the pool/container, populating
 	// the handle/uuid fields in ap:

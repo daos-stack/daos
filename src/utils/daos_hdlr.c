@@ -307,7 +307,8 @@ pool_del_attr_hdlr(struct cmd_args_s *ap)
 	rc = daos_pool_del_attr(ap->pool, 1,
 				(const char * const*)&ap->attrname_str, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to delete attribute '%s' for pool "
+		fprintf(ap->errstream,
+			"failed to delete attribute '%s' for pool "
 			DF_UUIDF": %s (%d)\n", ap->attrname_str,
 			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
@@ -1098,7 +1099,8 @@ out:
 }
 
 static int
-cont_decode_props(struct cmd_args_s *ap, daos_prop_t *props, daos_prop_t *prop_acl)
+cont_decode_props(struct cmd_args_s *ap, daos_prop_t *props,
+		  daos_prop_t *prop_acl)
 {
 	struct daos_prop_entry		*entry;
 	char				type[10];
@@ -2374,7 +2376,8 @@ file_close(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file)
 			file_dfs->obj = NULL;
 	} else {
 		rc = EINVAL;
-		fprintf(ap->errstream, "File type not known, file=%s, type=%d\n",
+		fprintf(ap->errstream,
+			"File type not known, file=%s, type=%d\n",
 			file, file_dfs->type);
 	}
 	return rc;
@@ -2588,7 +2591,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 			D_GOTO(out, rc = ENOMEM);
 
 		/* stat the next source path */
-		rc = file_lstat(ap, src_file_dfs, next_src_path, &next_src_stat);
+		rc = file_lstat(ap,
+				src_file_dfs, next_src_path, &next_src_stat);
 		if (rc != 0) {
 			fprintf(ap->errstream, "Cannot stat path %s, %s\n",
 				next_src_path, strerror(errno));
@@ -2859,8 +2863,8 @@ dm_connect(struct cmd_args_s *ap,
 		 * set them in the destination when
 		 * the --preserve option is added
 		 */
-		rc = dm_get_cont_prop(ap, ca->src_coh, sysname, src_cont_info, size,
-				      dpe_types, dpe_vals);
+		rc = dm_get_cont_prop(ap, ca->src_coh, sysname, src_cont_info,
+				      size, dpe_types, dpe_vals);
 		if (rc != 0) {
 			fprintf(ap->errstream, "failed to query source "
 				"container: %d\n", rc);
@@ -2997,7 +3001,7 @@ err_dst:
 err_dst_root:
 	rc = daos_pool_disconnect(ca->dst_poh, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to disconnect from destintaion "
+		fprintf(ap->errstream, "failed to disconnect from destination "
 			"pool "DF_UUIDF ": %s (%d)\n", DP_UUID(ca->src_p_uuid),
 			d_errdesc(rc), rc);
 	}
@@ -3010,7 +3014,8 @@ err_src:
 err_src_root:
 	rc = daos_pool_disconnect(ca->src_poh, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to disconnect from source pool "DF_UUIDF
+		fprintf(ap->errstream,
+			"failed to disconnect from source pool "DF_UUIDF
 			": %s (%d)\n", DP_UUID(ca->src_p_uuid),
 			d_errdesc(rc), rc);
 	}
@@ -4215,8 +4220,8 @@ cont_list_objs_hdlr(struct cmd_args_s *ap)
 	/* open OIT */
 	rc = daos_oit_open(ap->cont, ap->epc, &oit, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "open of container's OIT failed: "DF_RC"\n",
-			DP_RC(rc));
+		fprintf(ap->errstream,
+			"open of container's OIT failed: "DF_RC"\n", DP_RC(rc));
 		goto out_snap;
 	}
 
@@ -4252,13 +4257,15 @@ obj_query_hdlr(struct cmd_args_s *ap)
 
 	rc = daos_obj_layout_get(ap->cont, ap->oid, &layout);
 	if (rc) {
-		fprintf(ap->errstream, "failed to retrieve layout for object "DF_OID
+		fprintf(ap->errstream,
+			"failed to retrieve layout for object "DF_OID
 			": %s (%d)\n", DP_OID(ap->oid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
 	/* Print the object layout */
-	fprintf(ap->outstream, "oid: "DF_OID" ver %d grp_nr: %d\n", DP_OID(ap->oid),
+	fprintf(ap->outstream,
+		"oid: "DF_OID" ver %d grp_nr: %d\n", DP_OID(ap->oid),
 		layout->ol_ver, layout->ol_nr);
 
 	for (i = 0; i < layout->ol_nr; i++) {

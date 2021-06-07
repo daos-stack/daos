@@ -390,10 +390,8 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 			switch C.get_dpe_val(e) {
-			case C.DAOS_PROP_CO_REDUN_RACK:
-				return "rack"
-			case C.DAOS_PROP_CO_REDUN_NODE:
-				return "node"
+			case C.DAOS_PROP_CO_REDUN_RANK:
+				return "rank"
 			default:
 				return propInvalidValue(e, name)
 			}
