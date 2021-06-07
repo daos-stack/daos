@@ -72,6 +72,7 @@ type VmdEnableParams struct{}
 
 func (vep VmdEnableParams) isSpdkSubsystemConfigParams() {}
 
+// AioCreateParams specifies details for a SpdkAioCreate method.
 type AioCreateParams struct {
 	BlockSize  uint64 `json:"block_size"`
 	DeviceName string `json:"name"`
@@ -93,7 +94,7 @@ type SpdkSubsystem struct {
 }
 
 // SpdkConfig is used to indicate which devices are to be used by SPDK and the
-// desired behaviour of SPDK subsystems.
+// desired behavior of SPDK subsystems.
 type SpdkConfig struct {
 	Subsystems []*SpdkSubsystem `json:"subsystems"`
 }
@@ -189,6 +190,7 @@ func getSpdkConfigMethods(req *FormatRequest) (sscs []*SpdkSubsystemConfig) {
 	return
 }
 
+// WithVmdEnabled adds vmd subsystem with enable method to an SpdkConfig.
 func (sc *SpdkConfig) WithVmdEnabled() *SpdkConfig {
 	sc.Subsystems = append(sc.Subsystems, &SpdkSubsystem{
 		Name: "vmd",
@@ -203,6 +205,8 @@ func (sc *SpdkConfig) WithVmdEnabled() *SpdkConfig {
 	return sc
 }
 
+// WithBdevConfigs adds config methods derived from the input FormatRequest to
+// the bdev subsystem of an SpdkConfig.
 func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *FormatRequest) *SpdkConfig {
 	for _, ss := range sc.Subsystems {
 		if ss.Name != "bdev" {
