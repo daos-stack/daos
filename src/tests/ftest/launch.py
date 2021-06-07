@@ -1898,7 +1898,7 @@ def get_service_status(host_list, service):
     # Possible states:
     #   active, inactive, activating, deactivating, failed, unknown
     check_states = {
-        "stop": ["active", "activating", "deactivating"],
+        "stop": ["active", "activating", "deactivating", "failed"],
         "disable": ["active", "activating", "deactivating", "failed"]
     }
     command = "systemctl is-active {}".format(service)
