@@ -12,7 +12,7 @@ from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
 
-class ContainerCreate(TestWithServers):
+class RbldContainerCreate(TestWithServers):
     """Rebuild with container creation test cases.
 
     Test Class Description:

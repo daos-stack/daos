@@ -118,9 +118,9 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				 rc == -DER_TX_RESTART || rc == -DER_EXIST ||
 				 rc == -DER_NONEXIST,
 				 DLOG_DBG, DLOG_ERR,
-				 DF_UOID " %s end failed: %d\n",
+				 DF_UOID " %s end failed: "DF_RC"\n",
 				 DP_UOID(orwi->orw_oid),
-				 update ? "Update" : "Fetch", rc);
+				 update ? "Update" : "Fetch", DP_RC(rc));
 			if (status == 0)
 				status = rc;
 		}
@@ -1515,6 +1515,11 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		rc = obj_verify_bio_csum(orw->orw_oid.id_pub, iods, iod_csums,
 					 biod, ioc->ioc_coc->sc_csummer,
 					 orw->orw_iod_array.oia_iod_nr);
+		if (rc != 0)
+			D_ERROR(DF_C_UOID_DKEY " verify_bio_csum failed: "
+				DF_RC"\n",
+				DP_C_UOID_DKEY(orw->orw_oid, dkey),
+				DP_RC(rc));
 		/** CSUM Verified on update, now corrupt to fake corruption
 		 * on disk
 		 */
@@ -3642,9 +3647,14 @@ obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 		struct bio_sglist	*bsgl = bio_iod_sgl(biod, i);
 		d_sg_list_t		 sgl;
 
+		if (!csum_iod_is_supported(iod))
+			continue;
+
 		if (!ci_is_valid(iod_csums[i].ic_data)) {
 			D_ERROR("Checksums is enabled but the csum info is "
-				"invalid.");
+				"invalid for iod_csums %d/%d. ic_nr: %d, "
+				"iod: "DF_C_IOD"\n",
+				i, iods_nr, iod_csums[i].ic_nr, DP_C_IOD(iod));
 			return -DER_CSUM;
 		}
 
@@ -3662,8 +3672,7 @@ obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 				D_ERROR("Data Verification failed (object: "
 					DF_OID"): %d\n",
 					DP_OID(oid), rc);
-			}
-			if (iod->iod_type == DAOS_IOD_ARRAY) {
+			} else if (iod->iod_type == DAOS_IOD_ARRAY) {
 				D_ERROR("Data Verification failed (object: "
 					DF_OID ", extent: "DF_RECX"): %d\n",
 					DP_OID(oid), DP_RECX(iod->iod_recxs[i]),
