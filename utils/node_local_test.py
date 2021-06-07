@@ -1291,8 +1291,6 @@ def needs_dfuse(method):
         else:
             caching=False
 
-        # TODO: Update this to use the actual pool label rather than a
-        # hard-coded default.
         self.dfuse = DFuse(self.server,
                            self.conf,
                            caching=caching,
