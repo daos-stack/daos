@@ -6,12 +6,25 @@
 
 package server
 
-/* todo_tiering
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
+)
+
 func TestServer_Instance_createSuperblock(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
+	defer common.ShowBufferOnFailure(t, buf)
 
-	testDir, cleanup := CreateTestDir(t)
+	testDir, cleanup := common.CreateTestDir(t)
 	defer cleanup()
 
 	h := NewEngineHarness(log)
@@ -23,7 +36,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			WithRank(uint32(idx)).
 			WithSystemName(t.Name()).
 			WithStorage(
-				storage.NewConfig().
+				storage.NewTierConfig().
 					WithScmClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint(mnt),
@@ -32,8 +45,9 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		msc := &scm.MockSysConfig{
 			IsMountedBool: true,
 		}
-		mp := scm.NewMockProvider(log, nil, msc)
-		ei := NewEngineInstance(log, nil, mp, nil, r).
+		mbc := &scm.MockBackendConfig{}
+		mp := storage.NewProvider(log, 0, &cfg.Storage, scm.NewMockSysProvider(msc), scm.NewMockProvider(log, mbc, msc), nil)
+		ei := NewEngineInstance(log, mp, nil, r).
 			WithHostFaultDomain(system.MustCreateFaultDomainFromString("/host1"))
 		ei.fsRoot = testDir
 		if err := h.AddInstance(ei); err != nil {
@@ -61,7 +75,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
 		}
 
-		AssertEqual(t, i.hostFaultDomain.String(), i._superblock.HostFaultDomain, fmt.Sprintf("instance %d", idx))
+		common.AssertEqual(t, i.hostFaultDomain.String(), i._superblock.HostFaultDomain, fmt.Sprintf("instance %d", idx))
 
 		if i == mi {
 			continue
@@ -71,5 +85,3 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		}
 	}
 }
-
- todo_tiering */
