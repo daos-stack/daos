@@ -611,6 +611,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 45,
+                                 target: 'ubuntu20.04',
                                  inst_repos: prRepos(),
                                  test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unitPackages()
