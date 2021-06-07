@@ -150,3 +150,23 @@ dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 
 	return dsc_task_run(task, NULL, &oh, sizeof(oh), true);
 }
+
+int
+dsc_obj_id2oc_attr(daos_obj_id_t oid, struct cont_props *prop,
+		   struct daos_oclass_attr *oca)
+{
+	struct daos_oclass_attr *tmp;
+	bool			 priv;
+
+	tmp = daos_oclass_attr_find(oid, &priv);
+	if (!tmp)
+		return -DER_NOSCHEMA;
+
+	*oca = *tmp;
+	if (daos_oclass_is_ec(oca) && !priv) {
+		/* don't ovewrite cell size of private class */
+		D_ASSERT(prop->dcp_ec_cell_sz > 0);
+		oca->u.ec.e_len = prop->dcp_ec_cell_sz;
+	}
+	return 0;
+}

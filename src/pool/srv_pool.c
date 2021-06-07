@@ -318,6 +318,7 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_PO_SPACE_RB:
 		case DAOS_PROP_PO_SELF_HEAL:
 		case DAOS_PROP_PO_RECLAIM:
+		case DAOS_PROP_PO_EC_CELL_SZ:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_ACL:
@@ -340,7 +341,8 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 }
 
 static int
-pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
+pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
+		bool create)
 {
 	struct daos_prop_entry	*entry;
 	d_iov_t			 value;
@@ -352,6 +354,14 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
+		if (!create &&
+		    (entry->dpe_type == DAOS_PROP_PO_EC_CELL_SZ)) {
+			D_ERROR("Can't change immutable property=%d\n",
+				entry->dpe_type);
+			rc = -DER_NO_PERM;
+			break;
+		}
+
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			if (entry->dpe_str == NULL ||
@@ -364,24 +374,18 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_label,
 					   &value);
-			if (rc)
-				return rc;
 			break;
 		case DAOS_PROP_PO_OWNER:
 			d_iov_set(&value, entry->dpe_str,
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_owner,
 					   &value);
-			if (rc)
-				return rc;
 			break;
 		case DAOS_PROP_PO_OWNER_GROUP:
 			d_iov_set(&value, entry->dpe_str,
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_owner_group,
 					   &value);
-			if (rc)
-				return rc;
 			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
@@ -391,8 +395,6 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				d_iov_set(&value, acl, daos_acl_get_size(acl));
 				rc = rdb_tx_update(tx, kvs, &ds_pool_prop_acl,
 						   &value);
-				if (rc)
-					return rc;
 			}
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
@@ -400,24 +402,24 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_space_rb,
 					   &value);
-			if (rc)
-				return rc;
 			break;
 		case DAOS_PROP_PO_SELF_HEAL:
 			d_iov_set(&value, &entry->dpe_val,
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_self_heal,
 					   &value);
-			if (rc)
-				return rc;
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			d_iov_set(&value, &entry->dpe_val,
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_reclaim,
 					   &value);
-			if (rc)
-				return rc;
+			break;
+		case DAOS_PROP_PO_EC_CELL_SZ:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_ec_cell_sz,
+					   &value);
 			break;
 		case DAOS_PROP_PO_SVC_LIST:
 			break;
@@ -425,8 +427,12 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
 			return -DER_INVAL;
 		}
+		if (rc) {
+			D_ERROR("Failed to update entry type=%d, rc="DF_RC"\n",
+				entry->dpe_type, DP_RC(rc));
+			break;
+		}
 	}
-
 	return rc;
 }
 
@@ -478,7 +484,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	}
 
 	/* Write the optional properties. */
-	rc = pool_prop_write(tx, kvs, prop);
+	rc = pool_prop_write(tx, kvs, prop, true);
 	if (rc != 0) {
 		D_ERROR("failed to write props, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
@@ -1622,6 +1628,8 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		nr++;
 	if (bits & DAOS_PO_QUERY_PROP_SVC_LIST)
 		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_EC_CELL_SZ)
+		nr++;
 	if (nr == 0)
 		return 0;
 
@@ -1678,6 +1686,17 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			return rc;
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_RECLAIM;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_EC_CELL_SZ) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_ec_cell_sz,
+				   &value);
+		if (rc != 0)
+			return rc;
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_EC_CELL_SZ;
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
@@ -2836,6 +2855,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 			case DAOS_PROP_PO_SPACE_RB:
 			case DAOS_PROP_PO_SELF_HEAL:
 			case DAOS_PROP_PO_RECLAIM:
+			case DAOS_PROP_PO_EC_CELL_SZ:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -3486,7 +3506,7 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = pool_prop_write(&tx, &svc->ps_root, in->psi_prop);
+	rc = pool_prop_write(&tx, &svc->ps_root, in->psi_prop, false);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to write prop for pool: %d\n",
 			DP_UUID(in->psi_op.pi_uuid), rc);
@@ -3681,7 +3701,7 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 		D_GOTO(out_prop, rc);
 	}
 
-	rc = pool_prop_write(&tx, &svc->ps_root, prop);
+	rc = pool_prop_write(&tx, &svc->ps_root, prop, false);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to write updated ACL for pool: %d\n",
 			DP_UUID(in->pui_op.pi_uuid), rc);
@@ -3831,7 +3851,7 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 		D_GOTO(out_prop, rc);
 	}
 
-	rc = pool_prop_write(&tx, &svc->ps_root, prop);
+	rc = pool_prop_write(&tx, &svc->ps_root, prop, false);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to write updated ACL for pool: %d\n",
 			DP_UUID(in->pdi_op.pi_uuid), rc);
