@@ -73,7 +73,7 @@ agg_rate_ctl(void *arg)
 }
 
 int
-ds_get_cont_props(struct cont_props *cont_props, uuid_t pool_uuid,
+ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 		  uuid_t cont_uuid)
 {
 	daos_prop_t	*props;
@@ -82,7 +82,7 @@ ds_get_cont_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	/* The provided prop entry types should cover the types used in
 	 * daos_props_2cont_props().
 	 */
-	props = daos_prop_alloc(9);
+	props = daos_prop_alloc(10);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -95,9 +95,9 @@ ds_get_cont_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	props->dpp_entries[6].dpe_type = DAOS_PROP_CO_ENCRYPT;
 	props->dpp_entries[7].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	props->dpp_entries[8].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
+	props->dpp_entries[9].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 
 	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
-
 	if (rc == DER_SUCCESS)
 		daos_props_2cont_props(props, cont_props);
 
@@ -124,7 +124,7 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	 * Need the pool for the IV namespace
 	 */
 	D_ASSERT(cont->sc_csummer == NULL);
-	rc = ds_get_cont_props(cont_props, cont->sc_pool_uuid, cont->sc_uuid);
+	rc = ds_cont_get_props(cont_props, cont->sc_pool_uuid, cont->sc_uuid);
 	if (rc != 0)
 		goto done;
 

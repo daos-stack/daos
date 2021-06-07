@@ -118,8 +118,8 @@ pool_decode_props(daos_prop_t *props)
 					"auto" : "manual");
 		if (entry->dpe_val & ~(DAOS_SELF_HEAL_AUTO_EXCLUDE |
 				       DAOS_SELF_HEAL_AUTO_REBUILD))
-			D_PRINT("unknown bits set in self-healing property ("DF_X64")\n",
-				entry->dpe_val);
+			D_PRINT("unknown bits set in self-healing property ("
+				DF_X64")\n", entry->dpe_val);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_RECLAIM);
@@ -147,6 +147,20 @@ pool_decode_props(daos_prop_t *props)
 		default:
 			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 			break;
+		}
+	}
+
+	entry = daos_prop_entry_get(props, DAOS_PROP_PO_EC_CELL_SZ);
+	if (entry == NULL) {
+		fprintf(stderr, "EC cell size not found\n");
+		rc = -DER_INVAL;
+	} else {
+		if (!daos_ec_cs_valid(entry->dpe_val)) {
+			D_PRINT("Invalid EC cell size: %u\n",
+				(uint32_t)entry->dpe_val);
+		} else {
+			D_PRINT("EC cell size = %u\n",
+				(uint32_t)entry->dpe_val);
 		}
 	}
 
@@ -1250,6 +1264,13 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ);
+	if (entry == NULL) {
+		fprintf(stderr, "EC cell size property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("EC cell size:\t%d\n", (int)entry->dpe_val);
+	}
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID);
 	if (entry == NULL) {
 		fprintf(stderr, "Container allocated oid property not found\n");
