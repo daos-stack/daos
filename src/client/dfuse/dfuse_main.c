@@ -364,12 +364,11 @@ main(int argc, char **argv)
 		/* Check pool uuid here, but do not abort */
 		if (uuid_parse(dfuse_info->di_pool, pool_uuid) < 0) {
 			have_pool_label = true;
-
-			if (dfuse_info->di_cont) {
-				if (uuid_parse(dfuse_info->di_cont, cont_uuid) < 0) {
-					printf("Invalid container uuid\n");
-					exit(1);
-				}
+		}
+		if (dfuse_info->di_cont) {
+			if (uuid_parse(dfuse_info->di_cont, cont_uuid) < 0) {
+				printf("Invalid container uuid\n");
+				exit(1);
 			}
 		}
 	}
@@ -451,7 +450,7 @@ main(int argc, char **argv)
 	 */
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 
-	if (uuid_is_null(dfp->dfp_pool) != 0)
+	if (uuid_is_null(dfp->dfp_pool))
 		dfs->dfs_ops = &dfuse_pool_ops;
 
 	rc = dfuse_start(fs_handle, dfs);
