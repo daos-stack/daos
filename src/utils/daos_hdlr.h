@@ -7,6 +7,9 @@
 #ifndef __DAOS_HDLR_H__
 #define __DAOS_HDLR_H__
 
+#define RC_PRINT_HELP	2
+#define RC_NO_HELP	-2
+
 enum fs_op {
 	FS_COPY,
 	FS_SET_ATTR,
@@ -79,6 +82,10 @@ struct cmd_args_s {
 	daos_handle_t		pool;
 	uuid_t			c_uuid;		/* --cont */
 	daos_handle_t		cont;
+	char			*label_in;	/* --label */
+	char			*label_dup;	/* label_input, modified */
+	char			*pool_label;	/* points within label_dup */
+	char			*cont_label;	/* points within label_dup */
 	int			force;		/* --force */
 	char			*attrname_str;	/* --attr attribute name */
 	char			*value_str;	/* --value attribute value */
@@ -114,12 +121,31 @@ struct cmd_args_s {
 	char			*principal;	/* --principal for ACL */
 };
 
-#define ARGS_VERIFY_PUUID(ap, label, rcexpr)			\
-	do {							\
-		if (uuid_is_null((ap)->p_uuid)) {		\
-			fprintf(stderr, "pool UUID required\n");\
-			D_GOTO(label, (rcexpr));		\
-		}						\
+/* Pool identified by either UUID or label */
+#define ARGS_VERIFY_POOL(ap, gotolabel, rcexpr)				       \
+	do {								       \
+		if ((uuid_is_null((ap)->p_uuid)) &&			       \
+		    (((ap)->pool_label) == NULL)) {			       \
+			fprintf(stderr, "pool UUID or label required\n");      \
+			D_GOTO(gotolabel, (rcexpr));			       \
+		}							       \
+		if ((!uuid_is_null((ap)->p_uuid)) && ((ap)->pool_label)) {     \
+			fprintf(stderr, "specify pool UUID or label\n");       \
+			D_GOTO(gotolabel, (rcexpr));			       \
+		}							       \
+	} while (0)
+
+#define ARGS_VERIFY_CONT(ap, label, rcexpr)				       \
+	do {								       \
+		if ((uuid_is_null((ap)->c_uuid)) &&			       \
+		    (((ap)->cont_label) == NULL)) {			       \
+			fprintf(stderr, "container UUID or label required\n"); \
+			D_GOTO(label, (rcexpr));			       \
+		}							       \
+		if ((!uuid_is_null((ap)->c_uuid)) && ((ap)->cont_label)) {     \
+			fprintf(stderr, "specify container UUID or label\n");  \
+			D_GOTO(label, (rcexpr));			       \
+		}							       \
 	} while (0)
 
 #define ARGS_VERIFY_CUUID(ap, label, rcexpr)				\
@@ -170,6 +196,9 @@ struct cmd_args_s {
 	} while (0)
 
 typedef int (*command_hdlr_t)(struct cmd_args_s *ap);
+
+/* Pool and container labels input parsing */
+int parse_labels(struct cmd_args_s *ap);
 
 /* Pool operations */
 int pool_query_hdlr(struct cmd_args_s *ap);

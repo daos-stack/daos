@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <regex.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -187,13 +188,28 @@ pool_get_prop_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_GET_PROP);
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RO, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
+	if (ap->pool_label) {
+		daos_pool_info_t pinfo = {0};
+
+		rc = daos_pool_connect_by_label(ap->pool_label, ap->sysname,
+						DAOS_PC_RO, &ap->pool,
+						&pinfo, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool %s: "
+				"%s (%d)\n", ap->pool_label, d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+		uuid_copy(ap->p_uuid, pinfo.pi_uuid);
+	} else {
+		rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+				       DAOS_PC_RO, &ap->pool,
+				       NULL /* info */, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->p_uuid),
+				d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
 	}
 
 	prop_query = daos_prop_alloc(0);
@@ -242,15 +258,29 @@ pool_set_attr_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RW, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
+	if (ap->pool_label) {
+		daos_pool_info_t pinfo = {0};
 
+		rc = daos_pool_connect_by_label(ap->pool_label, ap->sysname,
+						DAOS_PC_RW, &ap->pool,
+						&pinfo, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool %s: "
+				"%s (%d)\n", ap->pool_label, d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+		uuid_copy(ap->p_uuid, pinfo.pi_uuid);
+	} else {
+		rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+				       DAOS_PC_RW, &ap->pool,
+				       NULL /* info */, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->p_uuid),
+				d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+	}
 	value_size = strlen(ap->value_str);
 	rc = daos_pool_set_attr(ap->pool, 1,
 				(const char * const*)&ap->attrname_str,
@@ -291,15 +321,29 @@ pool_del_attr_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RW, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
+	if (ap->pool_label) {
+		daos_pool_info_t pinfo = {0};
 
+		rc = daos_pool_connect_by_label(ap->pool_label, ap->sysname,
+						DAOS_PC_RW, &ap->pool,
+						&pinfo, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool %s: "
+				"%s (%d)\n", ap->pool_label, d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+		uuid_copy(ap->p_uuid, pinfo.pi_uuid);
+	} else {
+		rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+				       DAOS_PC_RW, &ap->pool,
+				       NULL /* info */, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->p_uuid),
+				d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+	}
 	rc = daos_pool_del_attr(ap->pool, 1,
 				(const char * const*)&ap->attrname_str, NULL);
 	if (rc != 0) {
@@ -339,13 +383,28 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RO, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
+	if (ap->pool_label) {
+		daos_pool_info_t pinfo = {0};
+
+		rc = daos_pool_connect_by_label(ap->pool_label, ap->sysname,
+						DAOS_PC_RO, &ap->pool,
+						&pinfo, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool %s: "
+				"%s (%d)\n", ap->pool_label, d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+		uuid_copy(ap->p_uuid, pinfo.pi_uuid);
+	} else {
+		rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+				       DAOS_PC_RO, &ap->pool,
+				       NULL /* info */, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->p_uuid),
+				d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
 	}
 
 	/* evaluate required size to get attr */
@@ -413,15 +472,29 @@ pool_list_attrs_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_LIST_ATTRS);
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RO, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
+	if (ap->pool_label) {
+		daos_pool_info_t pinfo = {0};
 
+		rc = daos_pool_connect_by_label(ap->pool_label, ap->sysname,
+						DAOS_PC_RO, &ap->pool,
+						&pinfo, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool %s: "
+				"%s (%d)\n", ap->pool_label, d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+		uuid_copy(ap->p_uuid, pinfo.pi_uuid);
+	} else  {
+		rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+				       DAOS_PC_RO, &ap->pool,
+				       NULL /* info */, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->p_uuid),
+				d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+	}
 	/* evaluate required size to get all attrs */
 	total_size = 0;
 	rc = daos_pool_list_attr(ap->pool, NULL, &total_size, NULL);
@@ -491,15 +564,29 @@ pool_list_containers_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_LIST_CONTAINERS);
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RO, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
+	if (ap->pool_label) {
+		daos_pool_info_t pinfo = {0};
 
+		rc = daos_pool_connect_by_label(ap->pool_label, ap->sysname,
+						DAOS_PC_RO, &ap->pool,
+						NULL /* info */, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool %s: "
+				"%s (%d)\n", ap->pool_label, d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+		uuid_copy(ap->p_uuid, pinfo.pi_uuid);
+	} else {
+		rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+				       DAOS_PC_RO, &ap->pool,
+				       NULL /* info */, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->p_uuid),
+				d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+	}
 	/* Issue first API call to get current number of containers */
 	rc = daos_pool_list_cont(ap->pool, &ncont, NULL /* cbuf */,
 				 NULL /* ev */);
@@ -577,13 +664,25 @@ pool_query_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_QUERY);
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RO, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
+	if (ap->pool_label) {
+		rc = daos_pool_connect_by_label(ap->pool_label, ap->sysname,
+					       DAOS_PC_RO, &ap->pool,
+					       NULL /* info */, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool %s: "
+				"%s (%d)\n", ap->pool_label, d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+	} else {
+		rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+				       DAOS_PC_RO, &ap->pool,
+				       NULL /* info */, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->p_uuid),
+				d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
 	}
 
 	pinfo.pi_bits = DPI_ALL;
@@ -1578,7 +1677,6 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	struct duns_attr_t	dattr = {0};
 	char			type[10];
 	int			rc;
-	const int		RC_PRINT_HELP = 2;
 
 	/* Required: pool UUID, container type, obj class, chunk_size.
 	 * Optional: user-specified container UUID.
@@ -1711,6 +1809,140 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 		fprintf(stdout, "Successfully destroyed container "
 				DF_UUIDF"\n", DP_UUID(ap->c_uuid));
 
+	return rc;
+}
+
+/* Direct by label format: specify pool and optionally container by labels */
+#define DAOS_LABEL_FORMAT "^daos://"DAOS_LABEL_REGEX"/"DAOS_LABEL_REGEX"[/]?$"
+#define LABEL_FORMAT "^[/]{1}"DAOS_LABEL_REGEX"/"DAOS_LABEL_REGEX"[/]?$"
+#define DAOS_LABEL_FORMAT_NO_CONT "^daos://"DAOS_LABEL_REGEX"[/]?$"
+#define LABEL_FORMAT_NO_CONT "^[/]?"DAOS_LABEL_REGEX"[/]?$"
+
+static bool
+has_prefix(const char *path)
+{
+	const char *prefix = "daos://";
+
+	if (path == NULL)
+		return false;
+
+	return (strncmp(path, prefix, strlen(prefix)) == 0);
+}
+
+static int
+check_direct_label_format(const char *path, bool no_prefix, bool *pool_only)
+{
+	regex_t		regx;
+	int		rc;
+
+	if (no_prefix)
+		rc = regcomp(&regx, LABEL_FORMAT, REG_EXTENDED | REG_ICASE);
+	else
+		rc = regcomp(&regx, DAOS_LABEL_FORMAT,
+			     REG_EXTENDED | REG_ICASE);
+	if (rc)
+		return EINVAL;
+
+	rc = regexec(&regx, path, 0, NULL, 0);
+	regfree(&regx);
+	if (rc == 0) {
+		*pool_only = false;
+		return rc;
+	} else if (rc != REG_NOMATCH) {
+		return rc;
+	}
+
+	if (no_prefix)
+		rc = regcomp(&regx, LABEL_FORMAT_NO_CONT,
+			     REG_EXTENDED | REG_ICASE);
+	else
+		rc = regcomp(&regx, DAOS_LABEL_FORMAT_NO_CONT,
+			     REG_EXTENDED | REG_ICASE);
+	if (rc)
+		return EINVAL;
+
+	rc = regexec(&regx, path, 0, NULL, 0);
+	if (rc == 0)
+		*pool_only = true;
+
+	regfree(&regx);
+	return rc;
+}
+
+/* Parse --label argument, determine pool and optional container included */
+int
+parse_labels(struct cmd_args_s *ap)
+{
+	bool		no_prefix;
+	bool		pool_only;
+	char	       *t, *saveptr;
+	int		rc;
+	const size_t	MAX_LABEL_IN_LEN = (2 * DAOS_PROP_LABEL_MAX_LEN + 32);
+
+	/* if no label specified, nothing to do */
+	if (ap->label_in == NULL)
+		return 0;
+
+	no_prefix = !has_prefix(ap->label_in);
+	rc = check_direct_label_format(ap->label_in, no_prefix, &pool_only);
+	if (rc) {
+		fprintf(stderr, "Error parsing pool, container labels in: %s\n",
+			ap->label_in);
+		return RC_PRINT_HELP;
+	}
+
+	D_STRNDUP(ap->label_dup, ap->label_in, MAX_LABEL_IN_LEN);
+	if (ap->label_dup == NULL) {
+		fprintf(stderr, "Error duplicating label input string\n");
+		return -DER_NOMEM;
+	}
+
+	/* Pool label is after any daos:// prefix, and before next "/"
+	 * But there may be no "/" at all if it is just a pool label.
+	 */
+	t = strtok_r(ap->label_dup, "/", &saveptr);
+	if (t == NULL) {
+		fprintf(stderr, "Invalid labels input: %s\n", ap->label_in);
+		rc = RC_PRINT_HELP;
+		goto err_dup;
+	}
+
+	if (pool_only && no_prefix) {
+		ap->pool_label = t;
+		return 0;
+	}
+
+	/* If there is a prefix, skip over second "/" from daos:// */
+	if (!no_prefix) {
+		t = strtok_r(NULL, "/", &saveptr);
+		if (t == NULL) {
+			fprintf(stderr, "Invalid labels format: %s\n",
+				ap->label_in);
+			goto err_dup;
+		}
+	}
+
+	ap->pool_label = t;
+	printf("pool_label = %s\n", ap->pool_label);
+
+	if (pool_only)
+		return 0;
+
+	t = strtok_r(NULL, "/", &saveptr);
+	if (t == NULL) {
+		fprintf(stderr, "Invalid pool/containers label format: %s\n",
+			ap->label_in);
+		goto err_pool_label;
+	}
+
+	ap->cont_label = t;
+	printf("cont_label = %s\n", ap->cont_label);
+	return 0;
+
+err_pool_label:
+	ap->pool_label = NULL;
+err_dup:
+	D_FREE(ap->label_dup);
 	return rc;
 }
 

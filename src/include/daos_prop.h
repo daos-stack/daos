@@ -16,6 +16,8 @@ extern "C" {
 
 #include <daos_types.h>
 
+#define DAOS_LABEL_REGEX "[a-zA-Z0-9:._-]+"
+
 /**
  * DAOS pool property types
  * valid in range (DAOS_PROP_PO_MIN, DAOS_PROP_PO_MAX)

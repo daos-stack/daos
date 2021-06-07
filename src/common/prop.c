@@ -8,6 +8,7 @@
  * not belong to other parts.
  */
 #define D_LOGFAC	DD_FAC(common)
+#include <regex.h>
 
 #include <daos/common.h>
 #include <daos/dtx.h>
@@ -165,7 +166,31 @@ err:
 }
 
 static bool
-daos_prop_str_valid(d_string_t str, const char *prop_name, size_t max_len)
+daos_prop_str_format_valid(d_string_t str, const char *regex)
+{
+	regex_t		regx;
+	int		rc;
+
+	rc = regcomp(&regx, DAOS_LABEL_REGEX, REG_EXTENDED | REG_ICASE);
+	if (rc != 0) {
+		D_ERROR("regcomp() failed, %d\n", rc);
+		return false;
+	}
+	rc = regexec(&regx, str, 0, NULL, 0);
+	regfree(&regx);
+	if (rc == 0) {
+		return true;
+	} else if (rc != REG_NOMATCH) {
+		D_ERROR("regexec() failed, %d\n", rc);
+		return false;
+	} else {
+		return false;
+	}
+}
+
+static bool
+daos_prop_str_valid(d_string_t str, const char *prop_name, size_t max_len,
+		    const char *fmt_regex)
 {
 	size_t len;
 
@@ -180,6 +205,15 @@ daos_prop_str_valid(d_string_t str, const char *prop_name, size_t max_len)
 			prop_name, len, max_len);
 		return false;
 	}
+
+	if (fmt_regex) {
+		if (!daos_prop_str_format_valid(str, fmt_regex)) {
+			D_ERROR("prop %s str=%s, invalid format, "
+				"does not match regex: %s\n",
+				prop_name, str, fmt_regex);
+			return false;
+		}
+	}
 	return true;
 }
 
@@ -188,7 +222,7 @@ daos_prop_owner_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
 	return daos_prop_str_valid(owner, "owner",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN);
+				   DAOS_ACL_MAX_PRINCIPAL_LEN, NULL);
 }
 
 static bool
@@ -196,13 +230,14 @@ daos_prop_owner_group_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
 	return daos_prop_str_valid(owner, "owner-group",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN);
+				   DAOS_ACL_MAX_PRINCIPAL_LEN, NULL);
 }
 
 static bool
 daos_prop_label_valid(d_string_t label)
 {
-	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN);
+	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN,
+				   DAOS_LABEL_REGEX);
 }
 
 /**
