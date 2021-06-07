@@ -139,12 +139,17 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 		return total / uint64(len(req.GetRanks()))
 	}
 
-	req.Tierbytes = make([]uint64, len(req.Tierratio))
+	if len(req.Tierbytes) == 0 {
+		req.Tierbytes = make([]uint64, len(req.Tierratio))
+	} else if len(req.Tierbytes) == 1 {
+		req.Tierbytes = append(req.Tierbytes, 0)
+	}
+
 	switch {
 	case !instances[0].storage.HasBlockDevices():
 		svc.log.Info("config has 0 bdevs; excluding NVMe from pool create request")
 		for tierIdx, _ := range req.Tierbytes {
-			if tierIdx == 0 {
+			if tierIdx == 0 && req.Tierbytes[tierIdx] == 0 {
 				req.Tierbytes[tierIdx] = storagePerRank(req.GetTotalbytes())
 			} else {
 				req.Tierbytes[tierIdx] = 0
