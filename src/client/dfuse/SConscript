@@ -151,6 +151,9 @@ def configure_fuse(cenv):
                                'cache_readdir'):
         cenv.AppendUnique(CPPDEFINES=['-DHAVE_CACHE_READDIR=1'])
 
+    if check.CheckHeader('fuse3/fuse_log.h'):
+        cenv.AppendUnique(CPPDEFINES=['-DHAVE_FUSE_LOG=1'])
+
     if check.CheckFuseIoctl('unsigned int'):
         pass
     elif check.CheckFuseIoctl('int'):

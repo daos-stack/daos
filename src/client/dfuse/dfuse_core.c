@@ -9,6 +9,10 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+#if HAVE_FUSE_LOG
+#include <fuse3/fuse_log.h>
+#endif
+
 /* Async progress thread.
  *
  * This thread is started at launch time with an event queue and blocks
@@ -885,6 +889,47 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 	D_FREE(ie);
 }
 
+#if HAVE_FUSE_LOG
+static void
+dfuse_fuse_log(enum fuse_log_level level,
+	const char *fmt,
+	va_list ap)
+{
+	int mask;
+	int d_level = DLOG_EMIT;
+
+	switch (level) {
+	case FUSE_LOG_EMERG:
+		d_level = DLOG_EMERG;
+		break;
+	case FUSE_LOG_ALERT:
+		d_level = DLOG_ALERT;
+		break;
+	case FUSE_LOG_CRIT:
+		d_level = DLOG_CRIT;
+		break;
+	case FUSE_LOG_ERR:
+		d_level = DLOG_ERR;
+		break;
+	case FUSE_LOG_WARNING:
+		d_level = DLOG_WARN;
+		break;
+	case FUSE_LOG_NOTICE:
+		d_level = DLOG_NOTE;
+		break;
+	case FUSE_LOG_INFO:
+		d_level = DLOG_INFO;
+		break;
+	case FUSE_LOG_DEBUG:
+		d_level = DLOG_DBG;
+		break;
+	}
+
+	mask = d_log_check(d_level | DB_IO | DD_FAC(fuse));
+	d_log(mask, fmt, ap);
+}
+#endif /* HAVE_FUSE_LOG */
+
 int
 dfuse_start(struct dfuse_projection_info *fs_handle,
 	    struct dfuse_cont *dfs)
@@ -930,6 +975,10 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
+
+#if HAVE_FUSE_LOG
+	fuse_set_log_func(dfuse_fuse_log);
+#endif /* HAVE_FUSE_LOG */
 
 	ie->ie_dfs = dfs;
 	ie->ie_root = true;
