@@ -345,7 +345,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			}
 
 			is_ec_obj = (reasb_req != NULL) &&
-				DAOS_OC_IS_EC(reasb_req->orr_oca);
+				daos_oclass_is_ec(reasb_req->orr_oca);
 			if (rc == -DER_CSUM && is_ec_obj) {
 				struct shard_auxi_args	*sa;
 				uint32_t		 tgt_idx;
@@ -663,7 +663,7 @@ dc_shard_update_size(struct rw_cb_args *rw_args)
 
 	reasb_req = rw_args->shard_args->reasb_req;
 	is_ec_obj = (reasb_req != NULL) &&
-		    DAOS_OC_IS_EC(reasb_req->orr_oca);
+		    daos_oclass_is_ec(reasb_req->orr_oca);
 	/* update the sizes in iods */
 	for (i = 0; i < orw->orw_nr; i++) {
 		daos_iod_t	*iod;
@@ -756,7 +756,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 
 	reasb_req = rw_args->shard_args->reasb_req;
-	is_ec_obj = (reasb_req != NULL) && DAOS_OC_IS_EC(reasb_req->orr_oca);
+	is_ec_obj = reasb_req != NULL &&
+		     daos_oclass_is_ec(reasb_req->orr_oca);
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
 			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d may "
@@ -1806,7 +1807,7 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 	uint64_t		 stripe_rec_nr, cell_rec_nr, rx_idx;
 
 	oca = obj_get_oca(cb_args->obj);
-	if (oca == NULL || !DAOS_OC_IS_EC(oca)) {
+	if (oca == NULL || !daos_oclass_is_ec(oca)) {
 		*result_recx = *reply_recx;
 		return;
 	}

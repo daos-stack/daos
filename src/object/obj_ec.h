@@ -623,15 +623,9 @@ obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
 }
 
 static inline bool
-obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr **p_attr)
+obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr *attr)
 {
-	struct daos_oclass_attr *attr;
-	bool is_ec;
-
-	is_ec = daos_oclass_is_ec(oid.id_pub, &attr);
-	if (p_attr != NULL)
-		*p_attr = attr;
-	if (!is_ec)
+	if (!daos_oclass_is_ec(attr))
 		return false;
 
 	if ((oid.id_shard % obj_ec_tgt_nr(attr)) < obj_ec_data_tgt_nr(attr))
