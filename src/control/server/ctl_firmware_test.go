@@ -53,7 +53,8 @@ func getProtoScmModules(t *testing.T, modules storage.ScmModules) []*ctlpb.ScmMo
 	return results
 }
 
-/*func TestCtlSvc_FirmwareQuery(t *testing.T) {
+/* todo_tiering
+func TestCtlSvc_FirmwareQuery(t *testing.T) {
 	testFWInfo := &storage.ScmFirmwareInfo{
 		ActiveVersion:     "MyActiveVersion",
 		StagedVersion:     "MyStagedVersion",
@@ -816,4 +817,6 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			}
 		})
 	}
-}*/
+}
+
+ todo_tiering */

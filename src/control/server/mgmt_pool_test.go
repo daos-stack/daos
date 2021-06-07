@@ -121,7 +121,8 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 // These should be adapted to test whatever the new logic is for calculating
 // per-tier storage allocations.
 
-/*func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
+/* todo_tiering
+func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 	defaultTotal := uint64(10 * humanize.TByte)
 	defaultRatios := []float64{0.06, 0.94}
 	defaultScmBytes := uint64(float64(defaultTotal) * defaultRatio)
@@ -142,7 +143,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 		"auto sizing": {
 			in: &mgmtpb.PoolCreateReq{
 				Totalbytes: defaultTotal,
-				Tierratio:   defaultRatios,
+				Tierratio:  defaultRatios,
 				Ranks:      []uint32{0, 1},
 			},
 			expOut: &mgmtpb.PoolCreateReq{
@@ -452,7 +453,9 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			}
 		})
 	}
-}*/
+}
+
+ todo_tiering */
 
 func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())

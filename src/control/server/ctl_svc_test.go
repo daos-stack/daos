@@ -32,9 +32,11 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 	}
 
 	cs := &ControlService{
-		StorageControlService: *NewStorageControlService(log,
+		StorageControlService: *NewMockStorageControlService(log,
 			cfg.Engines,
-		),
+			scm.NewMockSysProvider(smsc),
+			scm.NewMockProvider(log, smbc, smsc),
+			bdev.NewMockProvider(log, bmbc)),
 		harness: &EngineHarness{
 			log: log,
 		},
@@ -43,7 +45,8 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 	}
 
 	for i, engineCfg := range cfg.Engines {
-		p := storage.DefaultProvider(log, i, &engineCfg.Storage)
+		p := storage.NewProvider(log, i, &engineCfg.Storage,
+			cs.storage.Sys, cs.storage.Scm, cs.storage.Bdev)
 		rCfg := new(engine.TestRunnerConfig)
 		rCfg.Running.SetTrue()
 		runner := engine.NewTestRunner(rCfg, engineCfg)

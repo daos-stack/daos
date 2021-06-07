@@ -7,7 +7,6 @@
 package bdev
 
 // TODO: Pull up into storage package?
-/*
 import (
 	"io/ioutil"
 	"os"
@@ -234,4 +233,4 @@ func TestParseBdev(t *testing.T) {
 		})
 	}
 }
-*/
+

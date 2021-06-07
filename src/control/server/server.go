@@ -203,7 +203,7 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
 
-	// @todo_llasek: Indicate whether VMD devices have been detected and can be used.
+	// todo_tiering: Indicate whether VMD devices have been detected and can be used.
 	/*for _, bc := range cfg.Storage.BdevConfigs() {
 		bc.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
 	}*/

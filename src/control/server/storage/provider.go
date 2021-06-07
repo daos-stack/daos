@@ -307,3 +307,14 @@ func (p *Provider) GenEngineConfig() error {
 
 	return bcp.GenConfigFile()
 }
+
+func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {
+	return &Provider{
+		log:           log,
+		engineIndex:   idx,
+		engineStorage: engineStorage,
+		Sys:           sys,
+		Scm:           scm,
+		Bdev:          bdev,
+	}
+}

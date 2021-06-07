@@ -20,6 +20,7 @@ import (
 // StorageControlService encapsulates the storage part of the control service
 type StorageControlService struct {
 	log             logging.Logger
+	storage         *storage.Provider
 	instanceStorage map[uint32]*storage.Config
 }
 
@@ -31,7 +32,25 @@ func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *
 	}
 
 	return &StorageControlService{
-		log:             log,
+		log: log,
+		storage: storage.DefaultProvider(log, 0, &storage.Config{
+			Tiers: nil,
+		}),
+		instanceStorage: instanceStorage,
+	}
+}
+
+func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Config, sys storage.SystemProvider, scm storage.ScmProvider, bdev storage.BdevProvider) *StorageControlService {
+	instanceStorage := make(map[uint32]*storage.Config)
+	for i, cfg := range engineCfgs {
+		instanceStorage[uint32(i)] = &cfg.Storage
+	}
+
+	return &StorageControlService{
+		log: log,
+		storage: storage.MockProvider(log, 0, &storage.Config{
+			Tiers: nil,
+		}, sys, scm, bdev),
 		instanceStorage: instanceStorage,
 	}
 }
@@ -194,13 +213,13 @@ func (c *StorageControlService) defaultProvider() *storage.Provider {
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) NvmePrepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	return c.defaultProvider().Bdev.Prepare(req)
+	return c.storage.Bdev.Prepare(req)
 }
 
 // GetScmState performs required initialization and returns current state
 // of SCM module preparation.
 func (c *StorageControlService) GetScmState() (storage.ScmState, error) {
-	return c.defaultProvider().Scm.GetPmemState()
+	return c.storage.Scm.GetPmemState()
 }
 
 // ScmPrepare preps locally attached modules and returns need to reboot message,
@@ -209,15 +228,15 @@ func (c *StorageControlService) GetScmState() (storage.ScmState, error) {
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) ScmPrepare(req storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error) {
 	// transition to the next state in SCM preparation
-	return c.defaultProvider().Scm.Prepare(req)
+	return c.storage.Scm.Prepare(req)
 }
 
 // NvmeScan scans locally attached SSDs.
 func (c *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
-	return c.defaultProvider().Bdev.Scan(req)
+	return c.storage.Bdev.Scan(req)
 }
 
 // ScmScan scans locally attached modules, namespaces and state of DCPM config.
 func (c *StorageControlService) ScmScan(req storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
-	return c.defaultProvider().Scm.Scan(req)
+	return c.storage.Scm.Scan(req)
 }

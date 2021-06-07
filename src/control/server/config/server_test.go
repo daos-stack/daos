@@ -710,7 +710,6 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithLogFile(configA().LogFile),
 			expErr: FaultConfigDuplicateLogFile(1, 0),
 		},
-		/* todo_tiering */
 		"duplicate scm_mount": {
 			configA: configA(),
 			configB: configB().
@@ -739,8 +738,6 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				),
 			expErr: FaultConfigDuplicateScmDeviceList(1, 0),
 		},
-		/* todo_tiering */
-		/* todo_tiering */
 		"overlapping bdev_list": {
 			configA: configA().
 				WithStorage(
@@ -771,7 +768,6 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				),
 			expErr: errors.New("bdev_list contains duplicate pci addresses"),
 		},
-		/* todo_tiering */
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

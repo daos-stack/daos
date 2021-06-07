@@ -7,12 +7,29 @@
 package server
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -26,7 +43,7 @@ const (
 
 // TODO: FIX ASAP; critical functionality tested here
 //
-/*func TestServer_Harness_Start(t *testing.T) {
+func TestServer_Harness_Start(t *testing.T) {
 	for name, tc := range map[string]struct {
 		trc              *engine.TestRunnerConfig
 		isAP             bool                     // is first instance an AP/MS replica/bootstrap
@@ -206,7 +223,15 @@ const (
 					}
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
-				provider := storage.DefaultProvider(log, i, &engineCfg.Storage)
+
+				msc := scm.MockSysConfig{IsMountedBool: true}
+				sysp := scm.NewMockSysProvider(&msc)
+				provider := storage.MockProvider(
+					log, 0, &engineCfg.Storage,
+					sysp,
+					scm.NewMockProvider(log, nil, &msc),
+					bdev.NewMockProvider(log, &bdev.MockBackendConfig{}),
+				)
 
 				idx := uint32(i)
 				joinFn := func(_ context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
@@ -398,7 +423,7 @@ const (
 			}
 		})
 	}
-}*/
+}
 
 func TestServer_Harness_WithFaultDomain(t *testing.T) {
 	harness := &EngineHarness{}

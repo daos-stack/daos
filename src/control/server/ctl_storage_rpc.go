@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -332,6 +333,11 @@ func (c *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Scm
 			continue // skip if not running
 		}
 
+		cfg, err := srv.storage.GetScmConfig()
+		if err != nil {
+			return nil, err
+		}
+
 		mount, err := srv.storage.GetScmUsage()
 		if err != nil {
 			return nil, err
@@ -342,7 +348,7 @@ func (c *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Scm
 			nss[idx] = &storage.ScmNamespace{
 				Mount:       mount,
 				BlockDevice: "ramdisk",
-				Size:        mount.TotalBytes,
+				Size:        uint64(humanize.GiByte * cfg.Scm.RamdiskSize),
 			}
 		case storage.ClassDCPM: // update namespace mount info for online storage
 			ns := findPMemInScan(ssr, mount.DeviceList)

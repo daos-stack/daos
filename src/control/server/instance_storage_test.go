@@ -123,7 +123,8 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 	}
 }
 
-/*func TestEngineInstance_NeedsScmFormat(t *testing.T) {
+/* todo_tiering
+func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 	const (
 		goodMountPoint = "/mnt/daos"
 	)
@@ -374,4 +375,6 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 			}
 		})
 	}
-}*/
+}
+
+ todo_tiering */

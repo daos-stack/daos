@@ -406,7 +406,7 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 	}
 }
 
-/*func TestBdevProvider_WithFirmwareForwarder(t *testing.T) {
+func TestBdevProvider_WithFirmwareForwarder(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
@@ -415,4 +415,5 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 	if provider.fwFwd == nil {
 		t.Fatal("forwarder is nil")
 	}
-}*/
+}
+

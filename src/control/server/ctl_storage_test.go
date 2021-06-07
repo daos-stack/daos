@@ -6,7 +6,8 @@
 
 package server
 
-/*func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
+/* todo_tiering
+func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
 	scanAddrs := []string{
 		"0000:90:00.0", "0000:d8:00.0", "5d0505:01:00.0", "0000:8e:00.0",
 		"0000:8a:00.0", "0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0",
@@ -150,4 +151,6 @@ package server
 			}
 		})
 	}
-}*/
+}
+
+ todo_tiering */
