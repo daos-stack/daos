@@ -42,6 +42,9 @@ enum {
 	TS_MODE_DAOS, /* full stack */
 };
 
+bool			 ts_const_akey;
+char			*ts_dkey_prefix;
+uint64_t		 ts_flags;
 int			 ts_mode = TS_MODE_DAOS;
 int			 ts_class = OC_SX;
 
@@ -91,13 +94,6 @@ struct pf_param {
 	/* output parameter */
 	double		pa_duration;
 	union {
-		/* private parameter for rebuild */
-		struct {
-			/* only run rebuild scan */
-			bool	scan;
-			/* run scan + pull, no local write */
-			bool	pull;
-		} pa_rebuild;
 		/* private parameter for iteration */
 		struct {
 			/* nested iterator */
@@ -107,6 +103,10 @@ struct pf_param {
 		struct {
 			bool	verbose;
 		} pa_oit;
+		/* private parameter for query */
+		struct {
+			int	verbose;
+		} pa_query;
 		/* private parameter for update, fetch and verify */
 		struct {
 			/* offset within stride */
@@ -499,7 +499,10 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	recx = &cred->tc_recx;
 
 	/* setup dkey */
-	len = min(strlen(dkey), DTS_KEY_LEN);
+	if (ts_dkey_prefix == NULL)
+		len = sizeof(uint64_t);
+	else
+		len = min(strlen(dkey), DTS_KEY_LEN);
 	memcpy(cred->tc_dbuf, dkey, len);
 	d_iov_set(&cred->tc_dkey, cred->tc_dbuf, len);
 
@@ -569,7 +572,7 @@ static int
 dkey_update_or_fetch(enum ts_op_type op_type, char *dkey, daos_epoch_t *epoch,
 		     struct pf_param *param)
 {
-	char		 akey[DTS_KEY_LEN];
+	char		 akey[DTS_KEY_LEN] = "0";
 	int		 i;
 	int		 j;
 	int		 k;
@@ -582,7 +585,8 @@ dkey_update_or_fetch(enum ts_op_type op_type, char *dkey, daos_epoch_t *epoch,
 	}
 
 	for (i = 0; i < ts_akey_p_dkey; i++) {
-		dts_key_gen(akey, DTS_KEY_LEN, PF_AKEY_PREF);
+		if (!ts_const_akey)
+			dts_key_gen(akey, DTS_KEY_LEN, PF_AKEY_PREF);
 		for (j = 0; j < ts_recx_p_akey; j++) {
 			for (k = 0; k < ts_obj_p_cont; k++) {
 				rc = akey_update_or_fetch(k, op_type, dkey,
@@ -606,7 +610,7 @@ objects_open(void)
 		if (!ts_oid_init) {
 			ts_oids[i] = daos_test_oid_gen(
 				ts_mode == TS_MODE_VOS ? DAOS_HDL_INVAL :
-				ts_ctx.tsc_coh, ts_class, 0, 0,
+				ts_ctx.tsc_coh, ts_class, ts_flags, 0,
 				ts_ctx.tsc_mpi_rank);
 			if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 				ts_oids[i] = dts_oid_set_rank(ts_oids[i],
@@ -664,7 +668,7 @@ objects_update(struct pf_param *param)
 	for (i = 0; i < ts_dkey_p_obj; i++) {
 		char	 dkey[DTS_KEY_LEN];
 
-		dts_key_gen(dkey, DTS_KEY_LEN, PF_DKEY_PREF);
+		dts_key_gen(dkey, DTS_KEY_LEN, ts_dkey_prefix);
 		rc = dkey_update_or_fetch(TS_DO_UPDATE, dkey, &epoch,
 					  param);
 		if (rc)
@@ -695,7 +699,7 @@ objects_fetch(struct pf_param *param)
 	for (i = 0; i < ts_dkey_p_obj; i++) {
 		char	 dkey[DTS_KEY_LEN];
 
-		dts_key_gen(dkey, DTS_KEY_LEN, PF_DKEY_PREF);
+		dts_key_gen(dkey, DTS_KEY_LEN, ts_dkey_prefix);
 		rc = dkey_update_or_fetch(TS_DO_FETCH, dkey, &epoch,
 					  param);
 		if (rc != 0)
@@ -943,101 +947,6 @@ pf_oit(struct pf_test *pf, struct pf_param *param)
 	return rc;
 }
 
-static int
-exclude_server(d_rank_t rank)
-{
-	struct d_tgt_list	targets;
-	int			tgt = -1;
-	int			rc;
-
-	/** exclude from the pool */
-	targets.tl_nr = 1;
-	targets.tl_ranks = &rank;
-	targets.tl_tgts = &tgt;
-	rc = daos_pool_tgt_exclude(ts_ctx.tsc_pool_uuid, NULL,
-				   &targets, NULL);
-
-	return rc;
-}
-
-static int
-reint_server(d_rank_t rank)
-{
-	struct d_tgt_list	targets;
-	int			tgt = -1;
-	int			rc;
-
-	/** exclude from the pool */
-	targets.tl_nr = 1;
-	targets.tl_ranks = &rank;
-	targets.tl_tgts = &tgt;
-	rc = daos_pool_reint_tgt(ts_ctx.tsc_pool_uuid, NULL,
-				 &targets, NULL);
-	return rc;
-}
-
-static void
-wait_rebuild(double *duration)
-{
-	daos_pool_info_t	   pinfo;
-	struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
-	int			   rc = 0;
-	uint64_t		   start = 0;
-
-	TS_TIME_START(duration, start);
-	while (1) {
-		memset(&pinfo, 0, sizeof(pinfo));
-		pinfo.pi_bits = DPI_REBUILD_STATUS;
-		rc = daos_pool_query(ts_ctx.tsc_poh, NULL, &pinfo, NULL, NULL);
-		if (rst->rs_done || rc != 0) {
-			fprintf(stderr, "Rebuild (ver=%d) is done %d/%d\n",
-				rst->rs_version, rc, rst->rs_errno);
-			break;
-		}
-		sleep(2);
-	}
-	TS_TIME_END(duration, start);
-}
-
-static int
-pf_rebuild(struct pf_test *ts, struct pf_param *param)
-{
-	int rc;
-
-	if (ts_mode != TS_MODE_DAOS) {
-		fprintf(stderr, "Can only run in DAOS full stack mode\n");
-		return -1;
-	}
-
-	if (ts_class != DAOS_OC_R2S_SPEC_RANK) {
-		fprintf(stderr, "Please choose R2S_SPEC_RANK\n");
-		return -1;
-	}
-
-	if (param->pa_rebuild.scan) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_REBUILD,
-				     0, NULL);
-	} else if (param->pa_rebuild.pull) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_UPDATE,
-				     0, NULL);
-	}
-
-	rc = exclude_server(RANK_ZERO);
-	if (rc)
-		return rc;
-
-	wait_rebuild(&param->pa_duration);
-
-	rc = reint_server(RANK_ZERO);
-	if (rc)
-		return rc;
-
-	daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
-	return rc;
-}
-
 /* Test command Format: "C;p=x;q D;a;b"
  *
  * The upper-case character is command, e.g. U=update, F=fetch, anything after
@@ -1156,48 +1065,6 @@ pf_parse_rw(char *str, struct pf_param *param, char **strp)
 	return 0;
 }
 
-/**
- * Example: "U;p R;p;o=p"
- * 'U' is update test
- *	'p': parameter of update and it means outputting performance result
- *
- * 'R' is rebuild test
- *	'p' is parameter of rebuild and it means outputting performance result
- *	'o=p' means only run pull (no write) for rebuild.
- */
-static int
-pf_parse_rebuild_cb(char *str, struct pf_param *param, char **strp)
-{
-	switch (*str) {
-	default:
-		str++;
-		break;
-	case 'o':
-		str++;
-		if (*str != PARAM_ASSIGN)
-			return -1;
-
-		str++;
-		if (*str == 's') {
-			/* scan objects only */
-			param->pa_rebuild.scan = true;
-		} else if (*str == 'p') {
-			/* scan objects, read data but no write */
-			param->pa_rebuild.pull = true;
-		}
-		str++;
-		break;
-	}
-	*strp = str;
-	return 0;
-}
-
-static int
-pf_parse_rebuild(char *str, struct pf_param *pa, char **strp)
-{
-	return pf_parse_common(str, pa, pf_parse_rebuild_cb, strp);
-}
-
 static int
 pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 {
@@ -1267,12 +1134,6 @@ struct pf_test pf_tests[] = {
 		.ts_name	= "ITERATE",
 		.ts_parse	= pf_parse_iterate,
 		.ts_func	= pf_iterate,
-	},
-	{
-		.ts_code	= 'R',
-		.ts_name	= "REBUILD",
-		.ts_parse	= pf_parse_rebuild,
-		.ts_func	= pf_rebuild,
 	},
 	{
 		.ts_code	= 'O',
@@ -1609,6 +1470,10 @@ The options are as follows:\n\
 \n\
 -x	run vos perf test in a ABT ult mode.\n\
 \n\
+-i	Use integer dkeys.  Required if running QUERY test.\n\
+\n\
+-I	Use constant akey.  Required for QUERY test.\n\
+\n\
 -p	run vos perf with profile.\n");
 }
 
@@ -1631,6 +1496,8 @@ static struct option ts_ops[] = {
 	{ "dmg_conf",	required_argument,	NULL,	'g' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ "wait",	no_argument,		NULL,	'w' },
+	{ "int_dkey",	no_argument,		NULL,	'i' },
+	{ "const_akey",	no_argument,		NULL,	'I' },
 	{ NULL,		0,			NULL,	0   },
 };
 
@@ -1676,9 +1543,14 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 		double		latency;
 		double		rate;
 
-		total = ts_ctx.tsc_mpi_size * param->pa_iteration *
-			ts_obj_p_cont * ts_dkey_p_obj *
-			ts_akey_p_dkey * ts_recx_p_akey;
+		if (strcmp(test_name, "QUERY") == 0) {
+			total = ts_ctx.tsc_mpi_size * param->pa_iteration *
+				ts_obj_p_cont;
+		} else {
+			total = ts_ctx.tsc_mpi_size * param->pa_iteration *
+				ts_obj_p_cont * ts_dkey_p_obj *
+				ts_akey_p_dkey * ts_recx_p_akey;
+		}
 
 		rate = total / agg_duration;
 		latency = duration_max / total;
@@ -1714,13 +1586,16 @@ main(int argc, char **argv)
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
 	int		rc;
 
+	ts_dkey_prefix = PF_AKEY_PREF;
+	ts_flags = 0;
+
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:n:s:R:g:G:zf:hwxpA::",
+				 "P:N:T:C:c:o:d:a:n:s:R:g:G:zf:hiIwxpA::",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1730,6 +1605,13 @@ main(int argc, char **argv)
 			return -1;
 		case 'w':
 			ts_pause = true;
+			break;
+		case 'i':
+			ts_flags |= DAOS_OF_DKEY_UINT64;
+			ts_dkey_prefix = NULL;
+			break;
+		case 'I':
+			ts_const_akey = true;
 			break;
 		case 'T':
 			if (!strcasecmp(optarg, "echo")) {
@@ -1824,6 +1706,8 @@ main(int argc, char **argv)
 			return 0;
 		}
 	}
+	if (ts_const_akey)
+		ts_akey_p_dkey = 1;
 
 	if (!cmds) {
 		D_PRINT("Please provide command string\n");
@@ -1946,8 +1830,8 @@ main(int argc, char **argv)
 			"\tpool size     : SCM: %u MB, NVMe: %u MB\n"
 			"\tcredits       : %d (sync I/O for -ve)\n"
 			"\tobj_per_cont  : %u x %d (procs)\n"
-			"\tdkey_per_obj  : %u\n"
-			"\takey_per_dkey : %u\n"
+			"\tdkey_per_obj  : %u (%s)\n"
+			"\takey_per_dkey : %u%s\n"
 			"\trecx_per_akey : %u\n"
 			"\tvalue type    : %s\n"
 			"\tstride size   : %u\n"
@@ -1959,8 +1843,8 @@ main(int argc, char **argv)
 			credits,
 			ts_obj_p_cont,
 			ts_ctx.tsc_mpi_size,
-			ts_dkey_p_obj,
-			ts_akey_p_dkey,
+			ts_dkey_p_obj, ts_dkey_prefix == NULL ? "int" : "buf",
+			ts_akey_p_dkey, ts_const_akey ? " (const)" : "",
 			ts_recx_p_akey,
 			ts_val_type(),
 			ts_stride,
