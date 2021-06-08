@@ -59,7 +59,7 @@ class DmDstCreate(DataMoverTestBase):
         pool1.connect(2)
 
         # Create a source cont
-        cont1 = self.create_cont(pool1, cont_type)
+        cont1 = self.create_cont(pool1, cont_type=cont_type)
 
         # Create source data
         src_props = self.write_cont(cont1)
