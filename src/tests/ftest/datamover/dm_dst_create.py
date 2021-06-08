@@ -71,8 +71,7 @@ class DmDstCreate(DataMoverTestBase):
             "DAOS", "/", pool1, cont2_uuid)
         cont2 = self.get_cont(pool1, cont2_uuid)
         cont2.type.update(cont1.type.value, "type")
-	if check_props:
-            self.verify_cont(cont2, True, src_props, api)
+        self.verify_cont(cont2, api, check_props, src_props)
 
         result = self.run_datamover(
             self.test_id + " cont1 to cont3 (same pool) (empty cont)",
@@ -81,8 +80,7 @@ class DmDstCreate(DataMoverTestBase):
         cont3_uuid = self.parse_create_cont_uuid(result.stdout_text)
         cont3 = self.get_cont(pool1, cont3_uuid)
         cont3.type.update(cont1.type.value, "type")
-	if check_props:
-            self.verify_cont(cont3, True, src_props, api)
+        self.verify_cont(cont3, api, check_props, src_props)
 
         # Create another pool
         pool2 = self.create_pool()
@@ -95,8 +93,7 @@ class DmDstCreate(DataMoverTestBase):
             "DAOS", "/", pool2, cont4_uuid)
         cont4 = self.get_cont(pool2, cont4_uuid)
         cont4.type.update(cont1.type.value, "type")
-	if check_props:
-            self.verify_cont(cont4, True, src_props, api)
+        self.verify_cont(cont4, api, check_props, src_props)
 
         result = self.run_datamover(
             self.test_id + " cont1 to cont5 (different pool) (empty cont)",
@@ -105,8 +102,7 @@ class DmDstCreate(DataMoverTestBase):
         cont5_uuid = self.parse_create_cont_uuid(result.stdout_text)
         cont5 = self.get_cont(pool2, cont5_uuid)
         cont5.type.update(cont1.type.value, "type")
-	if check_props:
-            self.verify_cont(cont5, True, src_props, api)
+        self.verify_cont(cont5, api, check_props, src_props)
 
         # Only test POSIX paths with DFS API
         if api == "DFS":
@@ -122,8 +118,7 @@ class DmDstCreate(DataMoverTestBase):
                 "DAOS", "/", pool1, cont6_uuid)
             cont6 = self.get_cont(pool1, cont6_uuid)
             cont6.type.update(cont1.type.value, "type")
-	    if check_props:
-                self.verify_cont(cont6, False, api)
+            self.verify_cont(cont6, api, check_props)
 
             result = self.run_datamover(
                 self.test_id + " posix to cont7 (empty cont)",
@@ -132,8 +127,7 @@ class DmDstCreate(DataMoverTestBase):
             cont7_uuid = self.parse_create_cont_uuid(result.stdout_text)
             cont7 = self.get_cont(pool1, cont7_uuid)
             cont7.type.update(cont1.type.value, "type")
-	    if check_props:
-                self.verify_cont(cont7, False, api)
+            self.verify_cont(cont7, api, check_props)
 
         pool1.disconnect()
         pool2.disconnect()
@@ -164,7 +158,7 @@ class DmDstCreate(DataMoverTestBase):
         # Return existing cont properties
         return self.get_cont_prop(cont)
 
-    def verify_cont(self, cont, check_attr_prop=True, prop_list=None, api):
+    def verify_cont(self, cont, api, check_attr_prop=True, prop_list=None):
         """Read-verify test data using either ior or the obj API.
 
         Args:
@@ -285,7 +279,7 @@ class DmDstCreate(DataMoverTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=datamover,dcp
-        :avocado: tags=dm_dst_create_dcp_posix_dfs
+        :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_dfs
         """
         self.run_dm_dst_create("DCP", "POSIX", "DFS", True)
 
@@ -299,7 +293,7 @@ class DmDstCreate(DataMoverTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=datamover,dcp
-        :avocado: tags=dm_dst_create_dcp_posix_daos
+        :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_daos
         """
         self.run_dm_dst_create("DCP", "POSIX", "DAOS", True)
 
@@ -313,7 +307,7 @@ class DmDstCreate(DataMoverTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=datamover,dcp
-        :avocado: tags=dm_dst_create_dcp_unknown_daos
+        :avocado: tags=dm_dst_create,dm_dst_create_dcp_unknown_daos
         """
         self.run_dm_dst_create("DCP", None, "DAOS", True)
 
@@ -327,6 +321,6 @@ class DmDstCreate(DataMoverTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=datamover,fs_copy
-        :avocado: tags=dm_dst_create_fs_copy_posix_dfs
+        :avocado: tags=dm_dst_create,dm_dst_create_fs_copy_posix_dfs
         """
         self.run_dm_dst_create("FS_COPY", "POSIX", "DFS", False)
