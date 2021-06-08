@@ -59,7 +59,7 @@ class DmDstCreate(DataMoverTestBase):
         pool1.connect(2)
 
         # Create a source cont
-        cont1 = self.create_cont(pool1, cont_type)
+        cont1 = self.create_cont(pool1, cont_type=cont_type)
 
         # Create source data
         src_props = self.write_cont(cont1)
@@ -326,7 +326,7 @@ class DmDstCreate(DataMoverTestBase):
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,fs_copy
         :avocado: tags=dm_dst_create_fs_copy_posix_dfs
         """
         self.run_dm_dst_create("FS_COPY", "POSIX", "DFS", False)
