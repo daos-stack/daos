@@ -817,8 +817,8 @@ Options:\n\
       Boolean set to inhibit collection of NVME health data\n\
   --mem_size=mem_size, -r mem_size\n\
       Allocates mem_size MB for SPDK when using primary process mode\n\
-  --hugepage_size=hugepage_size, -H hugepage_size\n\
-      Passes the configured hugepage size (2MB or 1GB)\n\
+  --hugepage_size = hugepage_size, -H hugepage_size\n\
+      Passes the configured hugepage size(2MB or 1GB)\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
