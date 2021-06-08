@@ -12,7 +12,7 @@ from apricot import TestWithServers
 from general_utils import create_string_buffer
 
 
-class ChecksumContainerValidation(TestWithServers):
+class CsumContainerValidation(TestWithServers):
     """
     Test Class Description: This test is enables
     checksum container properties and performs
