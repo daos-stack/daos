@@ -895,6 +895,7 @@ class DmgCommand(DmgCommandBase):
     def config_generate(self, access_points, num_engines=None, min_ssds=None,
                         net_class=None):
         """Produce a server configuration.
+
         Args:
             access_points (str): Comma separated list of access point addresses.
             num_pmem (int): Number of SCM (pmem) devices required per
@@ -903,24 +904,15 @@ class DmgCommand(DmgCommandBase):
                 host in DAOS system. Defaults to None.
             net_class (str): Network class preferred. Defaults to None.
                 i.e. "best-available"|"ethernet"|"infiniband"
+
         Returns:
-            dict: the contents of the generate config file.
-        Raises:
-            CommandFailure: if the dmg config generate command fails or if YAML
-                parser encounters an error condition while parsing the contents.
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
         """
-        result = self._get_result(
+        return self._get_result(
             ("config", "generate"), access_points=access_points,
             num_engines=num_engines, min_ssds=min_ssds, net_class=net_class)
-
-        try:
-            yaml_data = yaml.safe_load(result.stdout)
-        except yaml.YAMLError as error:
-            raise CommandFailure(
-                "Error loading dmg generated config: {}".format(
-                    error)) from error
-
-        return yaml_data
 
 def check_system_query_status(data):
     """Check if any server crashed.
