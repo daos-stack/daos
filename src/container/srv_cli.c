@@ -56,21 +56,22 @@ out:
 }
 
 static int
-dsc_cont_csummer_init(struct daos_csummer **csummer,
-		      uuid_t pool_uuid, uuid_t cont_uuid)
+dsc_cont_init_props(struct dc_cont *cont, uuid_t pool_uuid, uuid_t cont_uuid)
 {
 	int		 rc;
-	struct cont_props cont_props;
 
-	rc = ds_get_cont_props(&cont_props, pool_uuid, cont_uuid);
+	rc = ds_cont_get_props(&cont->dc_props, pool_uuid, cont_uuid);
+	if (rc)
+		return rc;
 
-	if (rc == 0 &&
-	    daos_cont_csum_prop_is_enabled(cont_props.dcp_csum_type))
-		rc = daos_csummer_init_with_type(csummer,
-			 daos_contprop2hashtype(cont_props.dcp_csum_type),
-			 cont_props.dcp_chunksize,
-			 cont_props.dcp_srv_verify);
+	if (!daos_cont_csum_prop_is_enabled(cont->dc_props.dcp_csum_type))
+		return 0;
 
+	/** destroyed in dsc_cont_close */
+	rc = daos_csummer_init_with_type(&cont->dc_csummer,
+			 daos_contprop2hashtype(cont->dc_props.dcp_csum_type),
+			 cont->dc_props.dcp_chunksize,
+			 cont->dc_props.dcp_srv_verify);
 	return rc;
 }
 
@@ -97,8 +98,7 @@ dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t coh_uuid,
 	if (cont == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/** destroyed in dsc_cont_close */
-	rc = dsc_cont_csummer_init(&cont->dc_csummer, pool->dp_pool, cont_uuid);
+	rc = dsc_cont_init_props(cont, pool->dp_pool, cont_uuid);
 	if (rc != 0) {
 		dc_cont_free(cont);
 		cont = NULL;
@@ -138,4 +138,18 @@ dsc_cont2csummer(daos_handle_t coh)
 	dc_cont_put(cont);
 
 	return csummer;
+}
+
+int
+dsc_cont_get_props(daos_handle_t coh, struct cont_props *props)
+{
+	struct dc_cont *cont = NULL;
+
+	cont = dc_hdl2cont(coh);
+	if (cont == NULL)
+		return -DER_NO_HDL;
+
+	*props = cont->dc_props;
+	dc_cont_put(cont);
+	return 0;
 }

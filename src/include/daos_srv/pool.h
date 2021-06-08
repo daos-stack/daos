@@ -33,6 +33,7 @@ struct ds_pool {
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
+	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_mutex;
