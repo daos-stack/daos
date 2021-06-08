@@ -393,9 +393,10 @@ main(int argc, char **argv)
 		rc = dfuse_pool_connect_by_label(fs_handle,
 						 dfuse_info->di_pool,
 						 &dfp);
-		if (rc != -DER_SUCCESS) {
-			printf("Failed to connect to pool (%d)\n", rc);
-			D_GOTO(out_dfs, 0);
+		if (rc != 0) {
+			printf("Failed to connect to pool (%d) %s\n",
+				rc, strerror(rc));
+			D_GOTO(out_dfs, ret = daos_errno2der(rc));
 		}
 		uuid_copy(pool_uuid, dfp->dfp_pool);
 	}
@@ -405,8 +406,9 @@ main(int argc, char **argv)
 					      dfp,
 					      dfuse_info->di_cont,
 					      &dfs);
-		if (rc != -DER_SUCCESS) {
-			printf("Failed to connect to container (%d)\n", rc);
+		if (rc != 0) {
+			printf("Failed to connect to container (%d) %s\n",
+				rc, strerror(rc));
 			D_GOTO(out_dfs, ret = daos_errno2der(rc));
 		}
 		uuid_copy(cont_uuid, dfs->dfs_cont);
@@ -444,16 +446,18 @@ main(int argc, char **argv)
 	 */
 	if (!have_pool_label) {
 		rc = dfuse_pool_connect(fs_handle, &pool_uuid, &dfp);
-		if (rc != -DER_SUCCESS) {
-			printf("Failed to connect to pool (%d)\n", rc);
-			D_GOTO(out_dfs, 0);
+		if (rc != 0) {
+			printf("Failed to connect to pool (%d) %s\n",
+				rc, strerror(rc));
+			D_GOTO(out_dfs, ret = daos_errno2der(rc));
 		}
 	}
 
 	if (!have_cont_label) {
 		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
-		if (rc != -DER_SUCCESS) {
-			printf("Failed to connect to container (%d)\n", rc);
+		if (rc != 0) {
+			printf("Failed to connect to container (%d) %s\n",
+				rc, strerror(rc));
 			D_GOTO(out_dfs, ret = daos_errno2der(rc));
 		}
 	}
