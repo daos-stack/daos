@@ -209,7 +209,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         """
         start_time = 0
         finish_time = 0
-        while int(finish_time - start_time) > loop_time:
+        while int(finish_time - start_time) < loop_time:
             start_time = time.time()
             output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                    rank)
@@ -217,6 +217,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                        rank)
             self.print_and_assert_on_rebuild_failure(output)
+            finish_time = time.time()
 
     @fail_on(DaosApiError)
     def write_single_object(self):
@@ -417,7 +418,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         else:
             exc = out_queue.get(block=False)
             out_queue.put(exc)
-            raise exc
+            raise CommandFailure(exc)
 
     def cleanup_queue(self, out_queue=None):
         """Cleanup the existing thread queue.
@@ -467,10 +468,8 @@ class OSAUtils(MdtestBase, IorTestBase):
         # Launch the IOR thread
         process.start()
         # Wait for the thread to finish
-        try:
-            process.join()
-        except CommandFailure as err_msg:
-            self.out_queue.put(err_msg)
+        process.join()
+        if not self.out_queue.empty():
             self.assert_on_exception()
 
     def ior_thread(self, pool, oclass, test, flags,
@@ -524,20 +523,22 @@ class OSAUtils(MdtestBase, IorTestBase):
                 self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
             self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
-        try:
-            self.run_ior_with_pool(create_pool=False, create_cont=False,
-                                   fail_on_warning=fail_on_warning)
-        except CommandFailure as err_msg:
-            self.out_queue.put(err_msg)
+        self.run_ior_with_pool(create_pool=False, create_cont=False,
+                               fail_on_warning=fail_on_warning,
+                               out_queue=self.out_queue)
+        if not self.out_queue.empty():
             self.assert_on_exception()
 
-    def run_mdtest_thread(self):
+    def run_mdtest_thread(self, oclass="RP_2G1"):
         """Start mdtest thread and wait until thread completes.
+        Args:
+            oclass (str): IOR object class, container class.
         """
         # Create container only
         self.mdtest_cmd.dfs_destroy = False
         if self.container is None:
             self.add_container(self.pool, create=False)
+            self.mdtest_cmd.dfs_oclass.update(oclass)
             self.set_cont_class_properties(self.mdtest_cmd.dfs_oclass)
             if self.test_with_checksum is False:
                 tmp = self.get_object_replica_value(self.mdtest_cmd.dfs_oclass)
@@ -551,8 +552,6 @@ class OSAUtils(MdtestBase, IorTestBase):
         # Launch the MDtest thread
         process.start()
         # Wait for the thread to finish
-        try:
-            process.join()
-        except CommandFailure as err_msg:
-            self.out_queue.put(err_msg)
+        process.join()
+        if not self.out_queue.empty():
             self.assert_on_exception()
