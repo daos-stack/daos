@@ -31,15 +31,11 @@ class DmDstCreate(DataMoverTestBase):
         self.ior_flags = self.params.get(
             "ior_flags", "/run/ior/*")
         self.test_file = self.ior_cmd.test_file.value
-        self.cont_type = self.params.get(
-            "cont_type", "/run/dcp/*")
-        self.daos_api = self.params.get(
-            "daos_api", "/run/dcp/*")
 
         # For dataset_gen and dataset_verify
         self.obj_list = []
 
-    def run_dm_dst_create(self, tool):
+    def run_dm_dst_create(self, tool, cont_type, api, check_props):
         """
         Test Description:
             Tests Data Mover destination container creation.
@@ -63,7 +59,7 @@ class DmDstCreate(DataMoverTestBase):
         pool1.connect(2)
 
         # Create a source cont
-        cont1 = self.create_cont(pool1, cont_type=self.cont_type)
+        cont1 = self.create_cont(pool1, cont_type)
 
         # Create source data
         src_props = self.write_cont(cont1)
@@ -109,7 +105,7 @@ class DmDstCreate(DataMoverTestBase):
         self.verify_cont(cont5, True, src_props)
 
         # Only test POSIX paths with DFS API
-        if self.daos_api == "DFS":
+        if api == "DFS":
             # Create a posix source path
             posix_path = join(self.new_posix_test_path(), self.test_file)
             self.run_ior_with_params(
@@ -274,14 +270,57 @@ class DmDstCreate(DataMoverTestBase):
                       len(attrs.keys()), attrs.items())
 
     @avocado.fail_on(DaosApiError)
-    def test_dm_dst_create_dcp(self):
+    def test_dm_dst_create_dcp_posix_dfs(self):
         """
         Test Description:
-            Verifies destination container creation, including
+            Verifies destination container creation
+            for DFS API, including
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
         :avocado: tags=datamover,dcp
-        :avocado: tags=dm_dst_create,dm_dst_create_dcp
+        :avocado: tags=dm_dst_create_dcp_posix_dfs
         """
-        self.run_dm_dst_create("DCP")
+        self.run_dm_dst_create("DCP", "POSIX", "DFS", True)
+
+    @avocado.fail_on(DaosApiError)
+    def test_dm_dst_create_dcp_posix_daos(self):
+        """
+        Test Description:
+            Verifies destination container creation
+            for POSIX containers using OBJ API, including
+            container properties and user attributes.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=datamover,dcp
+        :avocado: tags=dm_dst_create_dcp_posix_daos
+        """
+        self.run_dm_dst_create("DCP", "POSIX", "DAOS", True)
+
+    @avocado.fail_on(DaosApiError)
+    def test_dm_dst_create_dcp_unknown_daos(self):
+        """
+        Test Description:
+            Verifies destination container creation
+            when API is unknown, including
+            container properties and user attributes.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=datamover,dcp
+        :avocado: tags=dm_dst_create_dcp_unknown_daos
+        """
+        self.run_dm_dst_create("DCP", None, "DAOS", True)
+
+    @avocado.fail_on(DaosApiError)
+    def test_dm_dst_create_fs_copy_posix_dfs(self):
+        """
+        Test Description:
+            Verifies destination container creation
+            when API is unknown, including
+            container properties and user attributes.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=datamover,dcp
+        :avocado: tags=dm_dst_create_fs_copy_posix_dfs
+        """
+        self.run_dm_dst_create("FS_COPY", "POSIX", "DFS", False)

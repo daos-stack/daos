@@ -2734,6 +2734,13 @@ dm_connect(bool is_posix_copy,
 		}
 	}
 
+    /* set cont_layout to POSIX type if the source is not in DAOS, if the 
+     * destination is DAOS, and no destiantion container exists yet,
+     * then it knows to create a POSIX container
+     */
+    if (src_file_dfs->type == POSIX) 
+	    ca->cont_layout = DAOS_PROP_CO_LAYOUT_POSIX;
+
 	/* only need to query if source is not POSIX, since
 	 * this connect call is used by the filesystem and clone
 	 * tools
@@ -2828,7 +2835,7 @@ dm_connect(bool is_posix_copy,
 				    DAOS_COO_RW, &ca->dst_coh,
 				    dst_cont_info, NULL);
 		if (rc == -DER_NONEXIST) {
-			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
+			if (src_file_dfs->type == POSIX) {
 				rc = dfs_cont_create(ca->dst_poh,
 						     ca->dst_c_uuid,
 						     &attr, NULL, NULL);
@@ -2871,8 +2878,8 @@ dm_connect(bool is_posix_copy,
 			rc = dfs_mount(ca->dst_poh, ca->dst_coh, O_RDWR,
 				       &dst_file_dfs->dfs);
 			if (rc != 0) {
-				fprintf(stderr, "dfs mount on destination "
-				"failed: %d\n", rc);
+		        fprintf(stderr, "dfs mount on destination failed: "
+			            DF_RC"\n", DP_RC(rc));
 				D_GOTO(err_dst, rc);
 			}
 		}
