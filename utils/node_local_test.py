@@ -1298,7 +1298,7 @@ def needs_dfuse(method):
                            self.conf,
                            caching=caching,
                            pool=self.pool.dfuse_mount_name(),
-                           container=self.container_label)
+                           container=self.container)
         self.dfuse.start(v_hint=self.test_name)
         rc = method(self)
         if self.dfuse.stop():
