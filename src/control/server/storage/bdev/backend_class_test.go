@@ -32,9 +32,9 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 
 	tests := map[string]struct {
 		class              storage.BdevClass
+		fileSizeGB         int
 		devList            []string
 		enableVmd          bool
-		fileSize           int // relevant for FILE
 		vosEnv             string
 		expExtraBdevCfgs   []*SpdkSubsystemConfig
 		expExtraSubsystems []*SpdkSubsystem
@@ -104,72 +104,56 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 			},
 			vosEnv: "NVME",
 		},
-		//		"VMD devices": {
-		//			class:     storage.BdevClassNvme,
-		//			enableVmd: true,
-		//			devList:   []string{"5d0505:01:00.0", "5d0505:03:00.0"},
-		//			expCfg: []string{
-		//				`[Vmd]`,
-		//				`    Enable True`,
-		//				``,
-		//				`[Nvme]`,
-		//				`    TransportID "trtype:PCIe traddr:5d0505:01:00.0" Nvme_hostfoo_0`,
-		//				`    TransportID "trtype:PCIe traddr:5d0505:03:00.0" Nvme_hostfoo_1`,
-		//				`    RetryCount 4`,
-		//				`    TimeoutUsec 0`,
-		//				`    ActionOnTimeout None`,
-		//				`    AdminPollRate 100000`,
-		//				`    HotplugEnable No`,
-		//				`    HotplugPollRate 0`,
-		//				``,
-		//			},
-		//			vosEnv: "NVME",
-		//		},
-		//		"multiple VMD and NVMe controllers": {
-		//			class:     storage.BdevClassNvme,
-		//			enableVmd: true,
-		//			devList:   []string{"0000:81:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
-		//			expCfg: []string{
-		//				`[Vmd]`,
-		//				`    Enable True`,
-		//				``,
-		//				`[Nvme]`,
-		//				`    TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme_hostfoo_0`,
-		//				`    TransportID "trtype:PCIe traddr:5d0505:01:00.0" Nvme_hostfoo_1`,
-		//				`    TransportID "trtype:PCIe traddr:5d0505:03:00.0" Nvme_hostfoo_2`,
-		//				`    RetryCount 4`,
-		//				`    TimeoutUsec 0`,
-		//				`    ActionOnTimeout None`,
-		//				`    AdminPollRate 100000`,
-		//				`    HotplugEnable No`,
-		//				`    HotplugPollRate 0`,
-		//				``,
-		//			},
-		//			vosEnv: "NVME",
-		//		},
-		//		"AIO file": {
-		//			class:    storage.BdevClassFile,
-		//			devList:  []string{"myfile", "myotherfile"},
-		//			fileSize: 1, // GB/file
-		//			expCfg: []string{
-		//				`[AIO]`,
-		//				`    AIO myfile AIO_hostfoo_0 4096`,
-		//				`    AIO myotherfile AIO_hostfoo_1 4096`,
-		//				``,
-		//			},
-		//			vosEnv: "AIO",
-		//		},
-		//		"AIO kdev": {
-		//			class:   storage.BdevClassKdev,
-		//			devList: []string{"sdb", "sdc"},
-		//			expCfg: []string{
-		//				`[AIO]`,
-		//				`    AIO sdb AIO_hostfoo_0`,
-		//				`    AIO sdc AIO_hostfoo_1`,
-		//				``,
-		//			},
-		//			vosEnv: "AIO",
-		//		},
+		"AIO file class; multiple files; zero file size": {
+			class:          storage.BdevClassFile,
+			devList:        []string{"/path/to/myfile", "/path/to/myotherfile"},
+			expValidateErr: errors.New("requires non-zero bdev_size"),
+		},
+		"AIO file class; multiple files; non-zero file size": {
+			class:      storage.BdevClassFile,
+			fileSizeGB: 1,
+			devList:    []string{"/path/to/myfile", "/path/to/myotherfile"},
+			expExtraBdevCfgs: []*SpdkSubsystemConfig{
+				{
+					Method: SpdkBdevAioCreate,
+					Params: AioCreateParams{
+						BlockSize:  humanize.KiByte * 4,
+						DeviceName: fmt.Sprintf("AIO_%s_0", host),
+						Filename:   "/path/to/myfile",
+					},
+				},
+				{
+					Method: SpdkBdevAioCreate,
+					Params: AioCreateParams{
+						BlockSize:  humanize.KiByte * 4,
+						DeviceName: fmt.Sprintf("AIO_%s_1", host),
+						Filename:   "/path/to/myotherfile",
+					},
+				},
+			},
+			vosEnv: "AIO",
+		},
+		"AIO kdev class; multiple devices": {
+			class:   storage.BdevClassKdev,
+			devList: []string{"/dev/sdb", "/dev/sdc"},
+			expExtraBdevCfgs: []*SpdkSubsystemConfig{
+				{
+					Method: SpdkBdevAioCreate,
+					Params: AioCreateParams{
+						DeviceName: fmt.Sprintf("AIO_%s_0", host),
+						Filename:   "/dev/sdb",
+					},
+				},
+				{
+					Method: SpdkBdevAioCreate,
+					Params: AioCreateParams{
+						DeviceName: fmt.Sprintf("AIO_%s_1", host),
+						Filename:   "/dev/sdc",
+					},
+				},
+			},
+			vosEnv: "AIO",
+		},
 	}
 
 	for name, tc := range tests {
@@ -177,13 +161,12 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := storage.BdevConfig{DeviceList: tc.devList}
+			cfg := storage.BdevConfig{
+				DeviceList: tc.devList,
+				FileSize:   tc.fileSizeGB,
+			}
 			if tc.class != "" {
 				cfg.Class = tc.class
-			}
-
-			if tc.fileSize != 0 {
-				cfg.FileSize = tc.fileSize
 			}
 
 			engineConfig := engine.NewConfig().
