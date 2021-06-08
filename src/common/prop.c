@@ -639,8 +639,8 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	bool			 policy_alloc = false;
 	struct daos_acl		*acl;
 	d_rank_list_t		*dst_list;
-	struct policy_desc_t	*pd;
-	struct policy_desc_t	*pd_reply;
+	struct policy_desc_t	*pd_dest;
+	struct policy_desc_t	*pd_src;
 	uint32_t		 type;
 	int			 i;
 	int			 rc = 0;
@@ -716,13 +716,13 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 
 			roots_alloc = true;
 		} else if (type == DAOS_PROP_PO_POLICY) {
-			pd = entry_req->dpe_val_ptr;
-			pd_reply = entry_reply->dpe_val_ptr;
-			D_ALLOC(pd, sizeof(*pd_reply));
-			if (pd == NULL)
+			pd_dest = entry_req->dpe_val_ptr;
+			pd_src = entry_reply->dpe_val_ptr;
+			D_ALLOC_PTR(pd_dest);
+			if (pd_dest == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
-			memcpy(pd, pd_reply, sizeof(*pd_reply));
+			memcpy(pd_dest, pd_src, sizeof(*pd_src));
 			policy_alloc = true;
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
