@@ -1342,6 +1342,46 @@ class posix_tests():
 
         destroy_container(self.conf, self.pool, container)
 
+    def test_two_mounts(self):
+        """Create two mounts, and check that a file created in one
+        can be read from the other"""
+
+        dfuse0 = DFuse(self.server,
+                       self.conf,
+                       caching=True,
+                       pool=self.pool,
+                       container=self.container)
+        dfuse0.start(v_hint='two_0')
+
+        dfuse1 = DFuse(self.server,
+                       self.conf,
+                       caching=True,
+                       path=os.path.join(self.conf.dfuse_parent_dir,
+                                         'dfuse_mount_1'),
+                       pool=self.pool,
+                       container=self.container)
+        dfuse1.start(v_hint='two_1')
+
+        file0 = os.path.join(dfuse0.dir, 'file')
+        fd = open(file0, 'w')
+        fd.write('test')
+        fd.close()
+
+        file1 = os.path.join(dfuse1.dir, 'file')
+        fd = open(file1, 'r')
+        data = fd.read()
+        fd.close()
+        print(data)
+
+        fd = open(file0, 'w')
+        fd.write('test')
+        fd.close()
+
+        if dfuse0.stop():
+            self.fatal_errors = True
+        if dfuse1.stop():
+            self.fatal_errors = True
+
     @needs_dfuse
     def test_readdir_25(self):
         """Test reading a directory with 25 entries"""
