@@ -1901,7 +1901,7 @@ dtx_30(void **state)
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
 	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
 	int		 base = 10000;
-	int		 akey_size = 8;
+	int		 akey_size = 32;
 	daos_size_t	 buf_len = DTX_NC_CNT * 2 * akey_size;
 	char		 buf[buf_len];
 	daos_key_desc_t  kds[DTX_NC_CNT * 2];

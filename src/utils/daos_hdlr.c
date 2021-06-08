@@ -118,8 +118,8 @@ pool_decode_props(daos_prop_t *props)
 					"auto" : "manual");
 		if (entry->dpe_val & ~(DAOS_SELF_HEAL_AUTO_EXCLUDE |
 				       DAOS_SELF_HEAL_AUTO_REBUILD))
-			D_PRINT("unknown bits set in self-healing property ("DF_X64")\n",
-				entry->dpe_val);
+			D_PRINT("unknown bits set in self-healing property ("
+				DF_X64")\n", entry->dpe_val);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_RECLAIM);
@@ -147,6 +147,20 @@ pool_decode_props(daos_prop_t *props)
 		default:
 			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 			break;
+		}
+	}
+
+	entry = daos_prop_entry_get(props, DAOS_PROP_PO_EC_CELL_SZ);
+	if (entry == NULL) {
+		fprintf(stderr, "EC cell size not found\n");
+		rc = -DER_INVAL;
+	} else {
+		if (!daos_ec_cs_valid(entry->dpe_val)) {
+			D_PRINT("Invalid EC cell size: %u\n",
+				(uint32_t)entry->dpe_val);
+		} else {
+			D_PRINT("EC cell size = %u\n",
+				(uint32_t)entry->dpe_val);
 		}
 	}
 
@@ -1197,12 +1211,13 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 		rc = -DER_INVAL;
 	} else {
 		D_PRINT("redundancy level:\t");
-		if (entry->dpe_val == DAOS_PROP_CO_REDUN_RACK)
-			D_PRINT("rack\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_REDUN_NODE)
-			D_PRINT("node\n");
+		if (entry->dpe_val == DAOS_PROP_CO_REDUN_RANK)
+			D_PRINT("node (%d)\n", DAOS_PROP_CO_REDUN_RANK);
 		else
-			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
+			/* XXX: should be resolved to string */
+			D_PRINT("rank+"DF_U64" ("DF_U64")\n",
+				entry->dpe_val - DAOS_PROP_CO_REDUN_RANK,
+				entry->dpe_val);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_SNAPSHOT_MAX);
@@ -1249,6 +1264,13 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ);
+	if (entry == NULL) {
+		fprintf(stderr, "EC cell size property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("EC cell size:\t%d\n", (int)entry->dpe_val);
+	}
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID);
 	if (entry == NULL) {
 		fprintf(stderr, "Container allocated oid property not found\n");
@@ -1713,7 +1735,7 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 	return rc;
 }
 
-static int
+int
 parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 {
 	char	*f1 = NULL;

@@ -137,12 +137,14 @@ enum {
 	D_TM_CLOCK_REALTIME		= 0x040,
 	D_TM_CLOCK_PROCESS_CPUTIME	= 0x080,
 	D_TM_CLOCK_THREAD_CPUTIME	= 0x100,
+	D_TM_LINK			= 0x200,
 	D_TM_ALL_NODES			= (D_TM_DIRECTORY | \
 					   D_TM_COUNTER | \
 					   D_TM_TIMESTAMP | \
 					   D_TM_TIMER_SNAPSHOT | \
 					   D_TM_DURATION | \
-					   D_TM_GAUGE)
+					   D_TM_GAUGE | \
+					   D_TM_LINK)
 };
 
 enum {
@@ -205,11 +207,11 @@ struct d_tm_metric_t {
 };
 
 struct d_tm_node_t {
-	struct d_tm_shmem_hdr	*dtn_region; /** head of shmem region */
 	struct d_tm_node_t	*dtn_child; /** first child */
 	struct d_tm_node_t	*dtn_sibling; /** first sibling */
 	char			*dtn_name; /** metric name */
 	int			dtn_type; /** mask of D_TM_ types */
+	key_t			dtn_shmem_key; /** shmem region key */
 	pthread_mutex_t		dtn_lock; /** individual mutex */
 	struct d_tm_metric_t	*dtn_metric; /** values */
 	bool			dtn_protect; /** synchronized access */
@@ -223,6 +225,9 @@ struct d_tm_nodeList_t {
 /** Context for a telemetry instance */
 struct d_tm_context;
 
+key_t d_tm_get_srv_key(int srv_idx);
+struct d_tm_node_t *d_tm_follow_link(struct d_tm_context *ctx,
+				     struct d_tm_node_t *link);
 int d_tm_list_add_node(struct d_tm_node_t *src,
 		       struct d_tm_nodeList_t **nodelist);
 void d_tm_list_free(struct d_tm_nodeList_t *nodeList);

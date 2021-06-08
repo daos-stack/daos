@@ -25,6 +25,10 @@ type Timestamp struct {
 	metricBase
 }
 
+func (t *Timestamp) Type() MetricType {
+	return MetricTypeTimestamp
+}
+
 func (t *Timestamp) Value() time.Time {
 	zero := time.Time{}
 	if t.handle == nil || t.node == nil {
@@ -36,6 +40,11 @@ func (t *Timestamp) Value() time.Time {
 		return time.Unix(int64(clk), 0)
 	}
 	return zero
+}
+
+// FloatValue converts the timestamp to time in seconds since the UNIX epoch.
+func (t *Timestamp) FloatValue() float64 {
+	return float64(t.Value().Unix())
 }
 
 func newTimestamp(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t) *Timestamp {

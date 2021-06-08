@@ -8,7 +8,6 @@ package common
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -51,11 +50,8 @@ func TestUtils_ResolvePath(t *testing.T) {
 }
 
 func TestUtils_FindBinaryInPath(t *testing.T) {
-	testDir, err := ioutil.TempDir("", t.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(testDir)
+	testDir, clean := CreateTestDir(t)
+	defer clean()
 
 	testName := t.Name()
 	testFile, err := os.OpenFile(path.Join(testDir, testName), os.O_RDWR|os.O_CREATE, 0755)
