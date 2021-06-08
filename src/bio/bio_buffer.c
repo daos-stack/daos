@@ -17,7 +17,11 @@ dma_free_chunk(struct bio_dma_chunk *chunk)
 	D_ASSERT(chunk->bdc_ref == 0);
 	D_ASSERT(d_list_empty(&chunk->bdc_link));
 
-	spdk_dma_free(chunk->bdc_ptr);
+	if (bio_nvme_configured())
+		spdk_dma_free(chunk->bdc_ptr);
+	else
+		free(chunk->bdc_ptr);
+
 	D_FREE(chunk);
 }
 
@@ -26,6 +30,7 @@ dma_alloc_chunk(unsigned int cnt)
 {
 	struct bio_dma_chunk *chunk;
 	ssize_t bytes = (ssize_t)cnt << BIO_DMA_PAGE_SHIFT;
+	int rc;
 
 	D_ASSERT(bytes > 0);
 	D_ALLOC_PTR(chunk);
@@ -34,7 +39,14 @@ dma_alloc_chunk(unsigned int cnt)
 		return NULL;
 	}
 
-	chunk->bdc_ptr = spdk_dma_malloc(bytes, BIO_DMA_PAGE_SZ, NULL);
+	if (bio_nvme_configured()) {
+		chunk->bdc_ptr = spdk_dma_malloc(bytes, BIO_DMA_PAGE_SZ, NULL);
+	} else {
+		rc = posix_memalign(&chunk->bdc_ptr, BIO_DMA_PAGE_SZ, bytes);
+		if (rc)
+			chunk->bdc_ptr = NULL;
+	}
+
 	if (chunk->bdc_ptr == NULL) {
 		D_ERROR("Failed to allocate %u pages DMA buffer\n", cnt);
 		D_FREE(chunk);
@@ -44,7 +56,6 @@ dma_alloc_chunk(unsigned int cnt)
 
 	return chunk;
 }
-
 
 static void
 dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
@@ -64,16 +75,13 @@ dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
 	}
 }
 
-static int
+int
 dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt)
 {
 	struct bio_dma_chunk *chunk;
 	int i, rc = 0;
 
-	if ((buf->bdb_tot_cnt + cnt) > bio_chk_cnt_max) {
-		D_ERROR("Exceeding per-xstream DMA buffer size\n");
-		return -DER_OVERFLOW;
-	}
+	D_ASSERT((buf->bdb_tot_cnt + cnt) <= bio_chk_cnt_max);
 
 	for (i = 0; i < cnt; i++) {
 		chunk = dma_alloc_chunk(bio_chk_sz);
@@ -94,6 +102,8 @@ dma_buffer_destroy(struct bio_dma_buffer *buf)
 {
 	D_ASSERT(d_list_empty(&buf->bdb_used_list));
 	D_ASSERT(buf->bdb_active_iods == 0);
+
+	bulk_cache_destroy(buf);
 	dma_buffer_shrink(buf, buf->bdb_tot_cnt);
 
 	D_ASSERT(buf->bdb_tot_cnt == 0);
@@ -127,6 +137,14 @@ dma_buffer_create(unsigned int init_cnt)
 	rc = ABT_cond_create(&buf->bdb_wait_iods);
 	if (rc != ABT_SUCCESS) {
 		ABT_mutex_free(&buf->bdb_mutex);
+		D_FREE(buf);
+		return NULL;
+	}
+
+	rc = bulk_cache_create(buf);
+	if (rc != 0) {
+		ABT_mutex_free(&buf->bdb_mutex);
+		ABT_cond_free(&buf->bdb_wait_iods);
 		D_FREE(buf);
 		return NULL;
 	}
@@ -186,16 +204,11 @@ bio_iod_free(struct bio_desc *biod)
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
+
+	if (biod->bd_bulk_hdls != NULL)
+		D_FREE(biod->bd_bulk_hdls);
+
 	D_FREE(biod);
-}
-
-static inline struct bio_dma_buffer *
-iod_dma_buf(struct bio_desc *biod)
-{
-	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
-	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt->bxc_dma_buf);
-
-	return biod->bd_ctxt->bic_xs_ctxt->bxc_dma_buf;
 }
 
 static inline bool
@@ -215,8 +228,13 @@ iod_release_buffer(struct bio_desc *biod)
 	struct bio_rsrvd_dma *rsrvd_dma = &biod->bd_rsrvd;
 	int i;
 
-	if (rsrvd_dma->brd_chk_max == 0) {
+	/* Release bulk handles */
+	bulk_iod_release(biod);
+
+	/* No reserved DMA regions */
+	if (rsrvd_dma->brd_rg_cnt == 0) {
 		D_ASSERT(rsrvd_dma->brd_rg_max == 0);
+		D_ASSERT(rsrvd_dma->brd_chk_max == 0);
 		biod->bd_buffer_prep = 0;
 		return;
 	}
@@ -226,14 +244,24 @@ iod_release_buffer(struct bio_desc *biod)
 	rsrvd_dma->brd_regions = NULL;
 	rsrvd_dma->brd_rg_max = rsrvd_dma->brd_rg_cnt = 0;
 
-	bdb = iod_dma_buf(biod);
+	/* All DMA chunks are used through cached bulk handle */
+	if (rsrvd_dma->brd_chk_cnt == 0) {
+		D_ASSERT(rsrvd_dma->brd_dma_chks == NULL);
+		D_ASSERT(rsrvd_dma->brd_chk_max == 0);
+		biod->bd_buffer_prep = 0;
+		return;
+	}
+
+	/* Release the DMA chunks not from cached bulk handle */
 	D_ASSERT(rsrvd_dma->brd_dma_chks != NULL);
+	bdb = iod_dma_buf(biod);
 	for (i = 0; i < rsrvd_dma->brd_chk_cnt; i++) {
 		struct bio_dma_chunk *chunk = rsrvd_dma->brd_dma_chks[i];
 
 		D_ASSERT(chunk != NULL);
 		D_ASSERT(chunk->bdc_ref > 0);
 		D_ASSERT(chunk->bdc_type == biod->bd_chk_type);
+		D_ASSERT(chunk->bdc_bulk_grp == NULL);
 		chunk->bdc_ref--;
 
 		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u huge:%d "
@@ -274,553 +302,13 @@ struct bio_copy_args {
 };
 
 static int
-iterate_biov(struct bio_desc *biod,
-	     int (*cb_fn)(struct bio_desc *, struct bio_iov *,
-			  struct bio_copy_args *),
-	     struct bio_copy_args *arg)
+copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 {
-	int i, j, rc = 0;
-
-	for (i = 0; i < biod->bd_sgl_cnt; i++) {
-		struct bio_sglist *bsgl = &biod->bd_sgls[i];
-
-		if (arg != NULL) {
-			D_ASSERT(i < arg->ca_sgl_cnt);
-			arg->ca_sgl_idx = i;
-			arg->ca_iov_idx = 0;
-			arg->ca_iov_off = 0;
-			if (!biod->bd_update)
-				arg->ca_sgls[i].sg_nr_out = 0;
-		}
-
-		if (bsgl->bs_nr_out == 0)
-			continue;
-
-		for (j = 0; j < bsgl->bs_nr_out; j++) {
-			struct bio_iov *biov = &bsgl->bs_iovs[j];
-
-			if (bio_iov2req_len(biov) == 0)
-				continue;
-
-			rc = cb_fn(biod, biov, arg);
-			if (rc)
-				break;
-		}
-		if (rc)
-			break;
-	}
-
-	return rc;
-}
-
-static void *
-chunk_reserve(struct bio_dma_chunk *chk, unsigned int chk_pg_idx,
-	      unsigned int pg_cnt, unsigned int pg_off)
-{
-	D_ASSERT(chk != NULL);
-
-	/* Huge chunk is dedicated for single huge IOV */
-	if (dma_chunk_is_huge(chk))
-		return NULL;
-
-	D_ASSERTF(chk->bdc_pg_idx <= bio_chk_sz, "%u > %u\n",
-		  chk->bdc_pg_idx, bio_chk_sz);
-
-	D_ASSERTF(chk_pg_idx == chk->bdc_pg_idx ||
-		  (chk_pg_idx + 1) == chk->bdc_pg_idx, "%u, %u\n",
-		  chk_pg_idx, chk->bdc_pg_idx);
-
-	/* The chunk doesn't have enough unused pages */
-	if (chk_pg_idx + pg_cnt > bio_chk_sz)
-		return NULL;
-
-	D_DEBUG(DB_TRACE, "Reserved on chunk:%p[%p], idx:%u, cnt:%u, off:%u\n",
-		chk, chk->bdc_ptr, chk_pg_idx, pg_cnt, pg_off);
-
-	chk->bdc_pg_idx = chk_pg_idx + pg_cnt;
-	return chk->bdc_ptr + (chk_pg_idx << BIO_DMA_PAGE_SHIFT) + pg_off;
-}
-
-static inline struct bio_rsrvd_region *
-iod_last_region(struct bio_desc *biod)
-{
-	unsigned int cnt = biod->bd_rsrvd.brd_rg_cnt;
-
-	D_ASSERT(!cnt || cnt <= biod->bd_rsrvd.brd_rg_max);
-	return (cnt != 0) ? &biod->bd_rsrvd.brd_regions[cnt - 1] : NULL;
-}
-
-static struct bio_dma_chunk *
-chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_desc *biod)
-{
-	struct bio_dma_chunk *chk;
-	int rc;
-
-	if (d_list_empty(&bdb->bdb_idle_list)) {
-		if (bdb->bdb_tot_cnt == bio_chk_cnt_max) {
-			D_CRIT("Maximum per-xstream DMA buffer isn't big "
-			       "enough (chk_sz:%u chk_cnt:%u iods:%u "
-			       "used:%u,%u,%u) to sustain the workload.\n",
-			       bio_chk_sz, bio_chk_cnt_max,
-			       bdb->bdb_active_iods,
-			       bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
-			       bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL],
-			       bdb->bdb_used_cnt[BIO_CHK_TYPE_REBUILD]);
-
-			biod->bd_retry = 1;
-			return NULL;
-		}
-
-		rc = dma_buffer_grow(bdb, 1);
-		if (rc != 0)
-			return NULL;
-	}
-
-	D_ASSERT(!d_list_empty(&bdb->bdb_idle_list));
-	chk = d_list_entry(bdb->bdb_idle_list.next, struct bio_dma_chunk,
-			   bdc_link);
-	d_list_move_tail(&chk->bdc_link, &bdb->bdb_used_list);
-
-	return chk;
-}
-
-static int
-iod_add_chunk(struct bio_desc *biod, struct bio_dma_chunk *chk)
-{
-	struct bio_rsrvd_dma *rsrvd_dma = &biod->bd_rsrvd;
-	unsigned int max, cnt;
-
-	max = rsrvd_dma->brd_chk_max;
-	cnt = rsrvd_dma->brd_chk_cnt;
-
-	if (cnt == max) {
-		struct bio_dma_chunk **chunks;
-		int size = sizeof(struct bio_dma_chunk *);
-		unsigned new_cnt = cnt + 10;
-
-		D_ALLOC_ARRAY(chunks, new_cnt);
-		if (chunks == NULL)
-			return -DER_NOMEM;
-
-		if (max != 0) {
-			memcpy(chunks, rsrvd_dma->brd_dma_chks, max * size);
-			D_FREE(rsrvd_dma->brd_dma_chks);
-		}
-
-		rsrvd_dma->brd_dma_chks = chunks;
-		rsrvd_dma->brd_chk_max = new_cnt;
-	}
-
-	chk->bdc_ref++;
-	rsrvd_dma->brd_dma_chks[cnt] = chk;
-	rsrvd_dma->brd_chk_cnt++;
-	return 0;
-}
-
-static int
-iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
-	       unsigned int chk_pg_idx, uint64_t off, uint64_t end)
-{
-	struct bio_rsrvd_dma *rsrvd_dma = &biod->bd_rsrvd;
-	unsigned int max, cnt;
-
-	max = rsrvd_dma->brd_rg_max;
-	cnt = rsrvd_dma->brd_rg_cnt;
-
-	if (cnt == max) {
-		struct bio_rsrvd_region *rgs;
-		int size = sizeof(struct bio_rsrvd_region);
-		unsigned new_cnt = cnt + 20;
-
-		D_ALLOC_ARRAY(rgs, new_cnt);
-		if (rgs == NULL)
-			return -DER_NOMEM;
-
-		if (max != 0) {
-			memcpy(rgs, rsrvd_dma->brd_regions, max * size);
-			D_FREE(rsrvd_dma->brd_regions);
-		}
-
-		rsrvd_dma->brd_regions = rgs;
-		rsrvd_dma->brd_rg_max = new_cnt;
-	}
-
-	rsrvd_dma->brd_regions[cnt].brr_chk = chk;
-	rsrvd_dma->brd_regions[cnt].brr_pg_idx = chk_pg_idx;
-	rsrvd_dma->brd_regions[cnt].brr_off = off;
-	rsrvd_dma->brd_regions[cnt].brr_end = end;
-	rsrvd_dma->brd_rg_cnt++;
-	return 0;
-}
-
-/* Convert offset of @biov into memory pointer */
-static int
-dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
-	    struct bio_copy_args *arg)
-{
-	struct bio_rsrvd_region *last_rg;
-	struct bio_dma_buffer *bdb;
-	struct bio_dma_chunk *chk = NULL, *cur_chk;
-	uint64_t off, end;
-	unsigned int pg_cnt, pg_off, chk_pg_idx;
-	int rc;
-
-	D_ASSERT(arg == NULL);
-	D_ASSERT(biov && bio_iov2raw_len(biov) != 0);
-	D_ASSERT(biod && biod->bd_chk_type < BIO_CHK_TYPE_MAX);
-
-	if (bio_addr_is_hole(&biov->bi_addr)) {
-		bio_iov_set_raw_buf(biov, NULL);
-		return 0;
-	}
-
-	if (biov->bi_addr.ba_type == DAOS_MEDIA_SCM) {
-		struct umem_instance *umem = biod->bd_ctxt->bic_umem;
-		bio_iov_set_raw_buf(biov,
-				    umem_off2ptr(umem, bio_iov2raw_off(biov)));
-		return 0;
-	}
-
-	D_ASSERT(biov->bi_addr.ba_type == DAOS_MEDIA_NVME);
-	bdb = iod_dma_buf(biod);
-	off = bio_iov2raw_off(biov);
-	end = bio_iov2raw_off(biov) + bio_iov2raw_len(biov);
-	pg_cnt = ((end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
-			(off >> BIO_DMA_PAGE_SHIFT);
-	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
-
-	/*
-	 * For huge IOV, we'll bypass our per-xstream DMA buffer cache and
-	 * allocate chunk from the SPDK reserved huge pages directly, this
-	 * kind of huge chunk will be freed immediately on I/O completion.
-	 *
-	 * We assume the contiguous huge IOV is quite rare, so there won't
-	 * be high contention over the SPDK huge page cache.
-	 */
-	if (pg_cnt > bio_chk_sz) {
-		chk = dma_alloc_chunk(pg_cnt);
-		if (chk == NULL)
-			return -DER_NOMEM;
-
-		rc = iod_add_chunk(biod, chk);
-		if (rc) {
-			dma_free_chunk(chk);
-			return rc;
-		}
-		bio_iov_set_raw_buf(biov, chk->bdc_ptr + pg_off);
-		chk_pg_idx = 0;
-
-		D_DEBUG(DB_IO, "Huge chunk:%p[%p], cnt:%u, off:%u\n",
-			chk, chk->bdc_ptr, pg_cnt, pg_off);
-
-		goto add_region;
-	}
-
-	last_rg = iod_last_region(biod);
-
-	/* First, try consecutive reserve from the last reserved region */
-	if (last_rg) {
-		uint64_t cur_pg, prev_pg_start, prev_pg_end;
-
-		D_DEBUG(DB_TRACE, "Last region %p:%d ["DF_U64","DF_U64")\n",
-			last_rg->brr_chk, last_rg->brr_pg_idx,
-			last_rg->brr_off, last_rg->brr_end);
-
-		chk = last_rg->brr_chk;
-		D_ASSERT(biod->bd_chk_type == chk->bdc_type);
-		chk_pg_idx = last_rg->brr_pg_idx;
-		D_ASSERT(chk_pg_idx < bio_chk_sz);
-
-		prev_pg_start = last_rg->brr_off >> BIO_DMA_PAGE_SHIFT;
-		prev_pg_end = last_rg->brr_end >> BIO_DMA_PAGE_SHIFT;
-		cur_pg = off >> BIO_DMA_PAGE_SHIFT;
-		D_ASSERT(prev_pg_start <= prev_pg_end);
-
-		/* Consecutive in page */
-		if (cur_pg == prev_pg_end) {
-			chk_pg_idx += (prev_pg_end - prev_pg_start);
-			bio_iov_set_raw_buf(biov,
-				chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
-			if (bio_iov2raw_buf(biov) != NULL) {
-				D_DEBUG(DB_TRACE, "Consecutive reserve %p.\n",
-					bio_iov2raw_buf(biov));
-				last_rg->brr_end = end;
-				return 0;
-			}
-		}
-	}
-
-	/* Try to reserve from the last DMA chunk in io descriptor */
-	if (chk != NULL) {
-		D_ASSERT(biod->bd_chk_type == chk->bdc_type);
-		chk_pg_idx = chk->bdc_pg_idx;
-		bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx,
-							pg_cnt, pg_off));
-		if (bio_iov2raw_buf(biov) != NULL) {
-			D_DEBUG(DB_IO, "Last chunk reserve %p.\n",
-				bio_iov2raw_buf(biov));
-			goto add_region;
-		}
-	}
-
-	/*
-	 * Try to reserve the DMA buffer from the 'current chunk' of the
-	 * per-xstream DMA buffer. It could be different with the last chunk
-	 * in io descriptor, because dma_map_one() may yield in the future.
-	 */
-	cur_chk = bdb->bdb_cur_chk[biod->bd_chk_type];
-	if (cur_chk != NULL && cur_chk != chk) {
-		chk = cur_chk;
-		chk_pg_idx = chk->bdc_pg_idx;
-		bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx,
-							pg_cnt, pg_off));
-		if (bio_iov2raw_buf(biov) != NULL) {
-			D_DEBUG(DB_IO, "Current chunk reserve %p.\n",
-				bio_iov2raw_buf(biov));
-			goto add_chunk;
-		}
-	}
-
-	/*
-	 * Switch to another idle chunk, if there isn't any idle chunk
-	 * available, grow buffer.
-	 */
-	chk = chunk_get_idle(bdb, biod);
-	if (chk == NULL)
-		return -DER_OVERFLOW;
-
-	chk->bdc_type = biod->bd_chk_type;
-	bdb->bdb_cur_chk[chk->bdc_type] = chk;
-	bdb->bdb_used_cnt[chk->bdc_type] += 1;
-	chk_pg_idx = chk->bdc_pg_idx;
-
-	D_ASSERT(chk_pg_idx == 0);
-	bio_iov_set_raw_buf(biov,
-			    chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
-	if (bio_iov2raw_buf(biov) != NULL) {
-		D_DEBUG(DB_IO, "New chunk reserve %p.\n",
-			bio_iov2raw_buf(biov));
-		goto add_chunk;
-	}
-
-	return -DER_OVERFLOW;
-
-add_chunk:
-	rc = iod_add_chunk(biod, chk);
-	if (rc) {
-		/* Revert the reservation in chunk */
-		D_ASSERT(chk->bdc_pg_idx >= pg_cnt);
-		chk->bdc_pg_idx -= pg_cnt;
-		return rc;
-	}
-add_region:
-	return iod_add_region(biod, chk, chk_pg_idx, off, end);
-}
-
-static void
-rw_completion(void *cb_arg, int err)
-{
-	struct bio_xs_context	*xs_ctxt;
-	struct bio_desc		*biod = cb_arg;
-	struct media_error_msg	*mem = NULL;
-
-	D_ASSERT(biod->bd_inflights > 0);
-	biod->bd_inflights--;
-
-	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
-	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
-	D_ASSERT(xs_ctxt->bxc_blob_rw > 0);
-	xs_ctxt->bxc_blob_rw--;
-
-	/* Induce NVMe Read/Write Error*/
-	if (biod->bd_update)
-		err = DAOS_FAIL_CHECK(DAOS_NVME_WRITE_ERR) ? -EIO : err;
-	else
-		err = DAOS_FAIL_CHECK(DAOS_NVME_READ_ERR) ? -EIO : err;
-
-	/* Return the error value of the first NVMe IO error */
-	if (biod->bd_result == 0 && err != 0)
-		biod->bd_result = daos_errno2der(-err);
-
-	/* Report all NVMe IO errors */
-	if (err != 0) {
-		D_ALLOC_PTR(mem);
-		if (mem == NULL)
-			goto skip_media_error;
-		mem->mem_err_type = biod->bd_update ? MET_WRITE : MET_READ;
-		mem->mem_bs = xs_ctxt->bxc_blobstore;
-		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
-		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
-				     mem);
-	}
-
-skip_media_error:
-	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
-		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
-}
-
-static void
-dma_rw(struct bio_desc *biod, bool prep)
-{
-	struct spdk_io_channel	*channel;
-	struct spdk_blob	*blob;
-	struct bio_rsrvd_dma	*rsrvd_dma = &biod->bd_rsrvd;
-	struct bio_rsrvd_region	*rg;
-	struct bio_xs_context	*xs_ctxt;
-	uint64_t		 pg_idx, pg_cnt, pg_end;
-	void			*payload, *pg_rmw = NULL;
-	bool			 rmw_read = (prep && biod->bd_update);
-	unsigned int		 pg_off;
-	int			 i;
-
-	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
-	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
-	blob = biod->bd_ctxt->bic_blob;
-	channel = xs_ctxt->bxc_io_channel;
-
-	biod->bd_inflights = 0;
-	biod->bd_dma_issued = 0;
-	biod->bd_result = 0;
-
-	/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
-	if (daos_io_bypass & IOBP_NVME)
-		return;
-
-	if (!is_blob_valid(biod->bd_ctxt)) {
-		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
-			blob, biod->bd_ctxt->bic_closing);
-		biod->bd_result = -DER_NO_HDL;
-		return;
-	}
-
-	D_ASSERT(channel != NULL);
-	biod->bd_ctxt->bic_inflight_dmas++;
-
-	D_DEBUG(DB_IO, "DMA start, blob:%p, update:%d, rmw:%d\n",
-		blob, biod->bd_update, rmw_read);
-
-	for (i = 0; i < rsrvd_dma->brd_rg_cnt; i++) {
-		rg = &rsrvd_dma->brd_regions[i];
-
-		D_ASSERT(rg->brr_chk != NULL);
-		pg_idx = rg->brr_off >> BIO_DMA_PAGE_SHIFT;
-		payload = rg->brr_chk->bdc_ptr +
-			(rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
-
-		if (!rmw_read) {
-			pg_cnt = (rg->brr_end + BIO_DMA_PAGE_SZ - 1) >>
-					BIO_DMA_PAGE_SHIFT;
-			D_ASSERT(pg_cnt > pg_idx);
-			pg_cnt -= pg_idx;
-
-			biod->bd_inflights++;
-			xs_ctxt->bxc_blob_rw++;
-			/* NVMe poll needs be scheduled */
-			if (bio_need_nvme_poll(xs_ctxt))
-				bio_yield();
-
-			D_DEBUG(DB_IO, "%s blob:%p payload:%p, "
-				"pg_idx:"DF_U64", pg_cnt:"DF_U64"\n",
-				biod->bd_update ? "Write" : "Read",
-				blob, payload, pg_idx, pg_cnt);
-
-			if (biod->bd_update)
-				spdk_blob_io_write(blob, channel, payload,
-					page2io_unit(biod->bd_ctxt, pg_idx),
-					page2io_unit(biod->bd_ctxt, pg_cnt),
-					rw_completion, biod);
-			else
-				spdk_blob_io_read(blob, channel, payload,
-					page2io_unit(biod->bd_ctxt, pg_idx),
-					page2io_unit(biod->bd_ctxt, pg_cnt),
-					rw_completion, biod);
-			continue;
-		}
-
-		/*
-		 * Since DAOS doesn't support partial overwrite yet, we don't
-		 * do RMW for partial update, only zeroing the page instead.
-		 */
-		pg_off = rg->brr_off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
-
-		if (pg_off != 0 && payload != pg_rmw) {
-			D_DEBUG(DB_IO, "Front partial blob:%p payload:%p, "
-				"pg_idx:"DF_U64" pg_off:%d\n",
-				blob, payload, pg_idx, pg_off);
-
-			memset(payload, 0, BIO_DMA_PAGE_SZ);
-			pg_rmw = payload;
-		}
-
-		pg_end = rg->brr_end >> BIO_DMA_PAGE_SHIFT;
-		D_ASSERT(pg_end >= pg_idx);
-		payload += (pg_end - pg_idx) << BIO_DMA_PAGE_SHIFT;
-		pg_off = rg->brr_end & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
-
-		if (pg_off != 0 && payload != pg_rmw) {
-			D_DEBUG(DB_IO, "Rear partial blob:%p payload:%p, "
-				"pg_idx:"DF_U64" pg_off:%d\n",
-				blob, payload, pg_idx, pg_off);
-
-			memset(payload, 0, BIO_DMA_PAGE_SZ);
-			pg_rmw = payload;
-		}
-	}
-
-	if (xs_ctxt->bxc_tgt_id == -1) {
-		int	rc;
-
-		D_DEBUG(DB_IO, "Self poll completion, blob:%p\n", blob);
-		rc = xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
-		D_ASSERT(rc == 0);
-	} else {
-		biod->bd_dma_issued = 1;
-		if (biod->bd_inflights != 0)
-			ABT_eventual_wait(biod->bd_dma_done, NULL);
-	}
-
-	biod->bd_ctxt->bic_inflight_dmas--;
-	D_DEBUG(DB_IO, "DMA done, blob:%p, update:%d, rmw:%d\n",
-		blob, biod->bd_update, rmw_read);
-}
-
-void
-bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
-	   void *addr, ssize_t n)
-{
-	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
-
-	if (biod->bd_update && media == DAOS_MEDIA_SCM) {
-		/*
-		 * We could do no_drain copy and rely on the tx commit to
-		 * drain controller, however, test shows calling a persistent
-		 * copy and drain controller here is faster.
-		 */
-		if (DAOS_ON_VALGRIND && pmemobj_tx_stage() == TX_STAGE_WORK) {
-			/** Ignore the update to what is reserved block.
-			 *  Ordinarily, this wouldn't be inside a transaction
-			 *  but in MVCC tests, it can happen.
-			 */
-			umem_tx_xadd_ptr(umem, media_addr, n,
-					 POBJ_XADD_NO_SNAPSHOT);
-		}
-		pmemobj_memcpy_persist(umem->umm_pool, media_addr, addr, n);
-	} else {
-		if (biod->bd_update)
-			memcpy(media_addr, addr, n);
-		else
-			memcpy(addr, media_addr, n);
-	}
-}
-
-static int
-copy_one(struct bio_desc *biod, struct bio_iov *biov,
-	 struct bio_copy_args *arg)
-{
-	d_sg_list_t	*sgl;
-	void		*addr = bio_iov2req_buf(biov);
-	ssize_t		 size = bio_iov2req_len(biov);
-	uint16_t	 media = bio_iov2media(biov);
+	struct bio_copy_args	*arg = data;
+	d_sg_list_t		*sgl;
+	void			*addr = bio_iov2req_buf(biov);
+	ssize_t			 size = bio_iov2req_len(biov);
+	uint16_t		 media = bio_iov2media(biov);
 
 	D_ASSERT(arg->ca_sgl_idx < arg->ca_sgl_cnt);
 	sgl = &arg->ca_sgls[arg->ca_sgl_idx];
@@ -886,6 +374,576 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 	return -DER_REC2BIG;
 }
 
+static int
+iterate_biov(struct bio_desc *biod,
+	     int (*cb_fn)(struct bio_desc *, struct bio_iov *, void *data),
+	     void *data)
+{
+	int i, j, rc = 0;
+
+	for (i = 0; i < biod->bd_sgl_cnt; i++) {
+		struct bio_sglist *bsgl = &biod->bd_sgls[i];
+
+		if (data != NULL && cb_fn == copy_one) {
+			struct bio_copy_args *arg = data;
+
+			D_ASSERT(i < arg->ca_sgl_cnt);
+			arg->ca_sgl_idx = i;
+			arg->ca_iov_idx = 0;
+			arg->ca_iov_off = 0;
+			if (!biod->bd_update)
+				arg->ca_sgls[i].sg_nr_out = 0;
+		}
+
+		if (bsgl->bs_nr_out == 0)
+			continue;
+
+		for (j = 0; j < bsgl->bs_nr_out; j++) {
+			struct bio_iov *biov = &bsgl->bs_iovs[j];
+
+			if (bio_iov2req_len(biov) == 0)
+				continue;
+
+			rc = cb_fn(biod, biov, data);
+			if (rc)
+				break;
+		}
+		if (rc)
+			break;
+	}
+
+	return rc;
+}
+
+static void *
+chunk_reserve(struct bio_dma_chunk *chk, unsigned int chk_pg_idx,
+	      unsigned int pg_cnt, unsigned int pg_off)
+{
+	D_ASSERT(chk != NULL);
+
+	/* Huge chunk is dedicated for single huge IOV */
+	if (dma_chunk_is_huge(chk))
+		return NULL;
+
+	D_ASSERTF(chk->bdc_pg_idx <= bio_chk_sz, "%u > %u\n",
+		  chk->bdc_pg_idx, bio_chk_sz);
+
+	D_ASSERTF(chk_pg_idx == chk->bdc_pg_idx ||
+		  (chk_pg_idx + 1) == chk->bdc_pg_idx, "%u, %u\n",
+		  chk_pg_idx, chk->bdc_pg_idx);
+
+	/* The chunk doesn't have enough unused pages */
+	if (chk_pg_idx + pg_cnt > bio_chk_sz)
+		return NULL;
+
+	D_DEBUG(DB_TRACE, "Reserved on chunk:%p[%p], idx:%u, cnt:%u, off:%u\n",
+		chk, chk->bdc_ptr, chk_pg_idx, pg_cnt, pg_off);
+
+	chk->bdc_pg_idx = chk_pg_idx + pg_cnt;
+	return chk->bdc_ptr + (chk_pg_idx << BIO_DMA_PAGE_SHIFT) + pg_off;
+}
+
+static inline struct bio_rsrvd_region *
+iod_last_region(struct bio_desc *biod)
+{
+	unsigned int cnt = biod->bd_rsrvd.brd_rg_cnt;
+
+	D_ASSERT(!cnt || cnt <= biod->bd_rsrvd.brd_rg_max);
+	return (cnt != 0) ? &biod->bd_rsrvd.brd_regions[cnt - 1] : NULL;
+}
+
+static int
+chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_dma_chunk **chk_ptr)
+{
+	struct bio_dma_chunk *chk;
+	int rc;
+
+	if (d_list_empty(&bdb->bdb_idle_list)) {
+		/* Try grow buffer first */
+		if (bdb->bdb_tot_cnt < bio_chk_cnt_max) {
+			rc = dma_buffer_grow(bdb, 1);
+			if (rc != 0)
+				return rc;
+		}
+
+		/* Try to reclaim an unused chunk from bulk groups */
+		rc = bulk_reclaim_chunk(bdb, NULL);
+		if (rc)
+			return rc;
+	}
+
+	D_ASSERT(!d_list_empty(&bdb->bdb_idle_list));
+	chk = d_list_entry(bdb->bdb_idle_list.next, struct bio_dma_chunk,
+			   bdc_link);
+	d_list_move_tail(&chk->bdc_link, &bdb->bdb_used_list);
+	*chk_ptr = chk;
+
+	return 0;
+}
+
+static int
+iod_add_chunk(struct bio_desc *biod, struct bio_dma_chunk *chk)
+{
+	struct bio_rsrvd_dma *rsrvd_dma = &biod->bd_rsrvd;
+	unsigned int max, cnt;
+
+	max = rsrvd_dma->brd_chk_max;
+	cnt = rsrvd_dma->brd_chk_cnt;
+
+	if (cnt == max) {
+		struct bio_dma_chunk **chunks;
+		int size = sizeof(struct bio_dma_chunk *);
+		unsigned new_cnt = cnt + 10;
+
+		D_ALLOC_ARRAY(chunks, new_cnt);
+		if (chunks == NULL)
+			return -DER_NOMEM;
+
+		if (max != 0) {
+			memcpy(chunks, rsrvd_dma->brd_dma_chks, max * size);
+			D_FREE(rsrvd_dma->brd_dma_chks);
+		}
+
+		rsrvd_dma->brd_dma_chks = chunks;
+		rsrvd_dma->brd_chk_max = new_cnt;
+	}
+
+	chk->bdc_ref++;
+	rsrvd_dma->brd_dma_chks[cnt] = chk;
+	rsrvd_dma->brd_chk_cnt++;
+	return 0;
+}
+
+int
+iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
+	       unsigned int chk_pg_idx, uint64_t off, uint64_t end,
+	       uint8_t media)
+{
+	struct bio_rsrvd_dma *rsrvd_dma = &biod->bd_rsrvd;
+	unsigned int max, cnt;
+
+	max = rsrvd_dma->brd_rg_max;
+	cnt = rsrvd_dma->brd_rg_cnt;
+
+	if (cnt == max) {
+		struct bio_rsrvd_region *rgs;
+		int size = sizeof(struct bio_rsrvd_region);
+		unsigned new_cnt = cnt + 20;
+
+		D_ALLOC_ARRAY(rgs, new_cnt);
+		if (rgs == NULL)
+			return -DER_NOMEM;
+
+		if (max != 0) {
+			memcpy(rgs, rsrvd_dma->brd_regions, max * size);
+			D_FREE(rsrvd_dma->brd_regions);
+		}
+
+		rsrvd_dma->brd_regions = rgs;
+		rsrvd_dma->brd_rg_max = new_cnt;
+	}
+
+	rsrvd_dma->brd_regions[cnt].brr_chk = chk;
+	rsrvd_dma->brd_regions[cnt].brr_pg_idx = chk_pg_idx;
+	rsrvd_dma->brd_regions[cnt].brr_off = off;
+	rsrvd_dma->brd_regions[cnt].brr_end = end;
+	rsrvd_dma->brd_regions[cnt].brr_media = media;
+	rsrvd_dma->brd_rg_cnt++;
+	return 0;
+}
+
+static inline bool
+direct_scm_access(struct bio_desc *biod, struct bio_iov *biov)
+{
+	if (bio_iov2media(biov) != DAOS_MEDIA_SCM)
+		return false;
+	/*
+	 * Direct access SCM when:
+	 *
+	 * - It's inline I/O, or;
+	 * - Direct SCM RDMA enabled, or;
+	 * - It's deduped SCM extent;
+	 */
+	if (!biod->bd_rdma || bio_scm_rdma)
+		return true;
+
+	if (BIO_ADDR_IS_DEDUP(&biov->bi_addr)) {
+		D_ASSERT(biod->bd_update);
+		return true;
+	}
+
+	return false;
+}
+
+/* Convert offset of @biov into memory pointer */
+int
+dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
+{
+	struct bio_rsrvd_region *last_rg;
+	struct bio_dma_buffer *bdb;
+	struct bio_dma_chunk *chk = NULL, *cur_chk;
+	uint64_t off, end;
+	unsigned int pg_cnt, pg_off, chk_pg_idx;
+	int rc;
+
+	D_ASSERT(arg == NULL);
+	D_ASSERT(biov && bio_iov2raw_len(biov) != 0);
+	D_ASSERT(biod && biod->bd_chk_type < BIO_CHK_TYPE_MAX);
+
+	if (bio_addr_is_hole(&biov->bi_addr)) {
+		bio_iov_set_raw_buf(biov, NULL);
+		return 0;
+	}
+
+	if (direct_scm_access(biod, biov)) {
+		struct umem_instance *umem = biod->bd_ctxt->bic_umem;
+		bio_iov_set_raw_buf(biov,
+				    umem_off2ptr(umem, bio_iov2raw_off(biov)));
+		return 0;
+	}
+	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
+
+	bdb = iod_dma_buf(biod);
+	off = bio_iov2raw_off(biov);
+	end = bio_iov2raw_off(biov) + bio_iov2raw_len(biov);
+	pg_cnt = ((end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
+			(off >> BIO_DMA_PAGE_SHIFT);
+	D_ASSERT(pg_cnt > 0);
+	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
+
+	/*
+	 * For huge IOV, we'll bypass our per-xstream DMA buffer cache and
+	 * allocate chunk from the SPDK reserved huge pages directly, this
+	 * kind of huge chunk will be freed immediately on I/O completion.
+	 *
+	 * We assume the contiguous huge IOV is quite rare, so there won't
+	 * be high contention over the SPDK huge page cache.
+	 */
+	if (pg_cnt > bio_chk_sz) {
+		chk = dma_alloc_chunk(pg_cnt);
+		if (chk == NULL)
+			return -DER_NOMEM;
+
+		chk->bdc_type = biod->bd_chk_type;
+		rc = iod_add_chunk(biod, chk);
+		if (rc) {
+			dma_free_chunk(chk);
+			return rc;
+		}
+		bio_iov_set_raw_buf(biov, chk->bdc_ptr + pg_off);
+		chk_pg_idx = 0;
+
+		D_DEBUG(DB_IO, "Huge chunk:%p[%p], cnt:%u, off:%u\n",
+			chk, chk->bdc_ptr, pg_cnt, pg_off);
+
+		goto add_region;
+	}
+
+	last_rg = iod_last_region(biod);
+
+	/* First, try consecutive reserve from the last reserved region */
+	if (last_rg && bio_iov2media(biov) != DAOS_MEDIA_SCM &&
+	    bio_iov2media(biov) == last_rg->brr_media) {
+		uint64_t cur_pg, prev_pg_start, prev_pg_end;
+
+		D_DEBUG(DB_TRACE, "Last region %p:%d ["DF_U64","DF_U64")\n",
+			last_rg->brr_chk, last_rg->brr_pg_idx,
+			last_rg->brr_off, last_rg->brr_end);
+
+		chk = last_rg->brr_chk;
+		D_ASSERT(biod->bd_chk_type == chk->bdc_type);
+		chk_pg_idx = last_rg->brr_pg_idx;
+		D_ASSERT(chk_pg_idx < bio_chk_sz);
+
+		prev_pg_start = last_rg->brr_off >> BIO_DMA_PAGE_SHIFT;
+		prev_pg_end = last_rg->brr_end >> BIO_DMA_PAGE_SHIFT;
+		cur_pg = off >> BIO_DMA_PAGE_SHIFT;
+		D_ASSERT(prev_pg_start <= prev_pg_end);
+
+		/* Consecutive in page */
+		if (cur_pg == prev_pg_end) {
+			chk_pg_idx += (prev_pg_end - prev_pg_start);
+			bio_iov_set_raw_buf(biov,
+				chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
+			if (bio_iov2raw_buf(biov) != NULL) {
+				D_DEBUG(DB_TRACE, "Consecutive reserve %p.\n",
+					bio_iov2raw_buf(biov));
+				last_rg->brr_end = end;
+				return 0;
+			}
+		}
+	}
+
+	/* Try to reserve from the last DMA chunk in io descriptor */
+	if (chk != NULL) {
+		D_ASSERT(biod->bd_chk_type == chk->bdc_type);
+		chk_pg_idx = chk->bdc_pg_idx;
+		bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx,
+							pg_cnt, pg_off));
+		if (bio_iov2raw_buf(biov) != NULL) {
+			D_DEBUG(DB_IO, "Last chunk reserve %p.\n",
+				bio_iov2raw_buf(biov));
+			goto add_region;
+		}
+	}
+
+	/*
+	 * Try to reserve the DMA buffer from the 'current chunk' of the
+	 * per-xstream DMA buffer. It could be different with the last chunk
+	 * in io descriptor, because dma_map_one() may yield in the future.
+	 */
+	cur_chk = bdb->bdb_cur_chk[biod->bd_chk_type];
+	if (cur_chk != NULL && cur_chk != chk) {
+		chk = cur_chk;
+		chk_pg_idx = chk->bdc_pg_idx;
+		bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx,
+							pg_cnt, pg_off));
+		if (bio_iov2raw_buf(biov) != NULL) {
+			D_DEBUG(DB_IO, "Current chunk reserve %p.\n",
+				bio_iov2raw_buf(biov));
+			goto add_chunk;
+		}
+	}
+
+	/*
+	 * Switch to another idle chunk, if there isn't any idle chunk
+	 * available, grow buffer.
+	 */
+	rc = chunk_get_idle(bdb, &chk);
+	if (rc) {
+		if (rc == -DER_AGAIN) {
+			D_ERROR("DMA buffer isn't sufficient to sustain "
+				"current IO workload\n");
+			biod->bd_retry = 1;
+		} else {
+			D_ERROR("Failed to get idle chunk. "DF_RC"\n",
+				DP_RC(rc));
+		}
+
+		dump_dma_info(bdb);
+		return rc;
+	}
+
+	D_ASSERT(chk != NULL);
+	chk->bdc_type = biod->bd_chk_type;
+	bdb->bdb_cur_chk[chk->bdc_type] = chk;
+	bdb->bdb_used_cnt[chk->bdc_type] += 1;
+	chk_pg_idx = chk->bdc_pg_idx;
+
+	D_ASSERT(chk_pg_idx == 0);
+	bio_iov_set_raw_buf(biov,
+			    chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
+	if (bio_iov2raw_buf(biov) != NULL) {
+		D_DEBUG(DB_IO, "New chunk reserve %p.\n",
+			bio_iov2raw_buf(biov));
+		goto add_chunk;
+	}
+
+	return -DER_OVERFLOW;
+
+add_chunk:
+	rc = iod_add_chunk(biod, chk);
+	if (rc) {
+		/* Revert the reservation in chunk */
+		D_ASSERT(chk->bdc_pg_idx >= pg_cnt);
+		chk->bdc_pg_idx -= pg_cnt;
+		return rc;
+	}
+add_region:
+	return iod_add_region(biod, chk, chk_pg_idx, off, end,
+			      bio_iov2media(biov));
+}
+
+static void
+rw_completion(void *cb_arg, int err)
+{
+	struct bio_xs_context	*xs_ctxt;
+	struct bio_desc		*biod = cb_arg;
+	struct media_error_msg	*mem = NULL;
+
+	D_ASSERT(biod->bd_inflights > 0);
+	biod->bd_inflights--;
+
+	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
+	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
+	D_ASSERT(xs_ctxt->bxc_blob_rw > 0);
+	xs_ctxt->bxc_blob_rw--;
+
+	/* Induce NVMe Read/Write Error*/
+	if (biod->bd_update)
+		err = DAOS_FAIL_CHECK(DAOS_NVME_WRITE_ERR) ? -EIO : err;
+	else
+		err = DAOS_FAIL_CHECK(DAOS_NVME_READ_ERR) ? -EIO : err;
+
+	/* Return the error value of the first NVMe IO error */
+	if (biod->bd_result == 0 && err != 0)
+		biod->bd_result = daos_errno2der(-err);
+
+	/* Report all NVMe IO errors */
+	if (err != 0) {
+		D_ALLOC_PTR(mem);
+		if (mem == NULL)
+			goto skip_media_error;
+		mem->mem_err_type = biod->bd_update ? MET_WRITE : MET_READ;
+		mem->mem_bs = xs_ctxt->bxc_blobstore;
+		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
+		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
+				     mem);
+	}
+
+skip_media_error:
+	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
+		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
+}
+
+void
+bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
+	   void *addr, ssize_t n)
+{
+	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
+
+	if (biod->bd_update && media == DAOS_MEDIA_SCM) {
+		/*
+		 * We could do no_drain copy and rely on the tx commit to
+		 * drain controller, however, test shows calling a persistent
+		 * copy and drain controller here is faster.
+		 */
+		if (DAOS_ON_VALGRIND && pmemobj_tx_stage() == TX_STAGE_WORK) {
+			/** Ignore the update to what is reserved block.
+			 *  Ordinarily, this wouldn't be inside a transaction
+			 *  but in MVCC tests, it can happen.
+			 */
+			umem_tx_xadd_ptr(umem, media_addr, n,
+					 POBJ_XADD_NO_SNAPSHOT);
+		}
+		pmemobj_memcpy_persist(umem->umm_pool, media_addr, addr, n);
+	} else {
+		if (biod->bd_update)
+			memcpy(media_addr, addr, n);
+		else
+			memcpy(addr, media_addr, n);
+	}
+}
+
+static void
+scm_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
+{
+	struct umem_instance	*umem = biod->bd_ctxt->bic_umem;
+	void			*payload;
+	unsigned int		 pg_off;
+
+	D_ASSERT(biod->bd_rdma);
+	D_ASSERT(!bio_scm_rdma);
+
+	payload = rg->brr_chk->bdc_ptr + (rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
+	pg_off = rg->brr_off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
+	payload += pg_off;
+
+	D_DEBUG(DB_IO, "SCM RDMA, update:%d payload:%p pg_off:%u\n",
+		biod->bd_update, payload, pg_off);
+
+	bio_memcpy(biod, DAOS_MEDIA_SCM, umem_off2ptr(umem, rg->brr_off),
+		   payload, rg->brr_end - rg->brr_off);
+}
+
+static void
+nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
+{
+	struct spdk_io_channel	*channel;
+	struct spdk_blob	*blob;
+	struct bio_xs_context	*xs_ctxt;
+	uint64_t		 pg_idx, pg_cnt;
+	void			*payload;
+
+	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
+	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
+	blob = biod->bd_ctxt->bic_blob;
+	channel = xs_ctxt->bxc_io_channel;
+
+	/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
+	if (daos_io_bypass & IOBP_NVME)
+		return;
+
+	if (!is_blob_valid(biod->bd_ctxt)) {
+		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
+			blob, biod->bd_ctxt->bic_closing);
+		biod->bd_result = -DER_NO_HDL;
+		return;
+	}
+
+	D_ASSERT(channel != NULL);
+	payload = rg->brr_chk->bdc_ptr + (rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
+	pg_idx = rg->brr_off >> BIO_DMA_PAGE_SHIFT;
+	pg_cnt = (rg->brr_end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT;
+	D_ASSERT(pg_cnt > pg_idx);
+	pg_cnt -= pg_idx;
+
+	/* NVMe poll needs be scheduled */
+	if (bio_need_nvme_poll(xs_ctxt))
+		bio_yield();
+
+	biod->bd_inflights++;
+	xs_ctxt->bxc_blob_rw++;
+
+	D_DEBUG(DB_IO, "%s blob:%p payload:%p, pg_idx:"DF_U64", "
+		"pg_cnt:"DF_U64"\n", biod->bd_update ? "Write" : "Read",
+		blob, payload, pg_idx, pg_cnt);
+
+	if (biod->bd_update)
+		spdk_blob_io_write(blob, channel, payload,
+				   page2io_unit(biod->bd_ctxt, pg_idx),
+				   page2io_unit(biod->bd_ctxt, pg_cnt),
+				   rw_completion, biod);
+	else
+		spdk_blob_io_read(blob, channel, payload,
+				  page2io_unit(biod->bd_ctxt, pg_idx),
+				  page2io_unit(biod->bd_ctxt, pg_cnt),
+				  rw_completion, biod);
+}
+
+static void
+dma_rw(struct bio_desc *biod)
+{
+	struct bio_rsrvd_dma	*rsrvd_dma = &biod->bd_rsrvd;
+	struct bio_rsrvd_region	*rg;
+	struct bio_xs_context	*xs_ctxt;
+	int			 i;
+
+	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
+	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
+
+	biod->bd_inflights = 0;
+	biod->bd_dma_issued = 0;
+	biod->bd_result = 0;
+	biod->bd_ctxt->bic_inflight_dmas++;
+
+	D_DEBUG(DB_IO, "DMA start, update:%d\n", biod->bd_update);
+
+	for (i = 0; i < rsrvd_dma->brd_rg_cnt; i++) {
+		rg = &rsrvd_dma->brd_regions[i];
+
+		D_ASSERT(rg->brr_chk != NULL);
+		D_ASSERT(rg->brr_end > rg->brr_off);
+
+		if (rg->brr_media == DAOS_MEDIA_SCM)
+			scm_rw(biod, rg);
+		else
+			nvme_rw(biod, rg);
+	}
+
+	if (xs_ctxt->bxc_tgt_id == -1) {
+		D_DEBUG(DB_IO, "Self poll completion\n");
+		xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
+	} else {
+		biod->bd_dma_issued = 1;
+		if (biod->bd_inflights != 0)
+			ABT_eventual_wait(biod->bd_dma_done, NULL);
+	}
+
+	biod->bd_ctxt->bic_inflight_dmas--;
+	D_DEBUG(DB_IO, "DMA done, update:%d\n", biod->bd_update);
+}
+
 static void
 dma_drop_iod(struct bio_dma_buffer *bdb)
 {
@@ -898,17 +956,27 @@ dma_drop_iod(struct bio_dma_buffer *bdb)
 }
 
 int
-bio_iod_prep(struct bio_desc *biod, unsigned int type)
+bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
+	     unsigned int bulk_perm)
 {
-	struct bio_dma_buffer *bdb;
-	int rc, retry_cnt = 0;
+	struct bio_bulk_args	 bulk_arg;
+	struct bio_dma_buffer	*bdb;
+	void			*arg = NULL;
+	int			 rc, retry_cnt = 0;
 
 	if (biod->bd_buffer_prep)
 		return -DER_INVAL;
 
 	biod->bd_chk_type = type;
+	biod->bd_rdma = (bulk_ctxt != NULL);
+
+	if (bulk_ctxt != NULL && !(daos_io_bypass & IOBP_SRV_BULK_CACHE)) {
+		bulk_arg.ba_bulk_ctxt = bulk_ctxt;
+		bulk_arg.ba_bulk_perm = bulk_perm;
+		arg = &bulk_arg;
+	}
 retry:
-	rc = iterate_biov(biod, dma_map_one, NULL);
+	rc = iterate_biov(biod, arg ? bulk_map_one : dma_map_one, arg);
 	if (rc) {
 		/*
 		 * To avoid deadlock, held buffers need be released
@@ -941,7 +1009,7 @@ retry:
 	}
 	biod->bd_buffer_prep = 1;
 
-	/* All SCM IOVs, no DMA transfer prepared */
+	/* All direct SCM access, no DMA buffer prepared */
 	if (biod->bd_rsrvd.brd_rg_cnt == 0)
 		return 0;
 
@@ -954,7 +1022,12 @@ retry:
 		goto failed;
 	}
 
-	dma_rw(biod, true);
+	/* Load data from media to buffer on read */
+	if (!biod->bd_update)
+		dma_rw(biod);
+	else
+		biod->bd_result = 0;
+
 	if (biod->bd_result) {
 		rc = biod->bd_result;
 		goto failed;
@@ -981,8 +1054,9 @@ bio_iod_post(struct bio_desc *biod)
 		return 0;
 	}
 
+	/* Land data from buffer to media on write */
 	if (biod->bd_update)
-		dma_rw(biod, false);
+		dma_rw(biod);
 	else
 		biod->bd_result = 0;
 
@@ -1011,8 +1085,7 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 }
 
 static int
-flush_one(struct bio_desc *biod, struct bio_iov *biov,
-	  struct bio_copy_args *arg)
+flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 {
 	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 
@@ -1071,7 +1144,7 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 	bsgl->bs_nr_out = bsgl->bs_nr;
 
 	/* map the biov to DMA safe buffer, fill DMA buffer if read operation */
-	rc = bio_iod_prep(biod, BIO_CHK_TYPE_LOCAL);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc)
 		goto out;
 

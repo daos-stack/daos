@@ -70,6 +70,7 @@ const (
 	ScmFormatMissingDevice
 	ScmFormatMissingParam
 	ScmFormatConflictingParam
+	ScmPathAccessDenied
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter

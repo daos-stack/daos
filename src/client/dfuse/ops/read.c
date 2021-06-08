@@ -30,7 +30,6 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 	D_FREE(ev->de_iov.iov_buf);
 }
 
-
 void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	      struct fuse_file_info *fi)
@@ -74,7 +73,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 					pos_ra <= oh->doh_ie->ie_start_off))) {
 			readahead = true;
 		}
-	} else if (oh->doh_ie->ie_dfs->dfs_attr_timeout > 0 &&
+	} else if (oh->doh_caching &&
 		len < (1024 * 1024) &&
 		oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
 		/* Only do readahead if the requested size is less than 1Mb and

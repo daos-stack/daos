@@ -672,14 +672,12 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
-    def pool_extend(self, pool, ranks, scm_size, nvme_size):
+    def pool_extend(self, pool, ranks):
         """Extend the daos_server pool.
 
         Args:
             pool (str): Pool uuid.
             ranks (int): Ranks of the daos_server to extend
-            scm_size (int): SCM pool size to extend
-            nvme_size (int): NVME pool size to extend
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -690,8 +688,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "extend"), pool=pool, ranks=ranks,
-            scm_size=scm_size, nvme_size=nvme_size)
+            ("pool", "extend"), pool=pool, ranks=ranks)
 
     def pool_drain(self, pool, rank, tgt_idx=None):
         """Drain a daos_server from the pool.
@@ -783,7 +780,7 @@ class DmgCommand(DmgCommandBase):
         #     },
         #     {
         #         "addr": "10.8.1.74:10001",
-        #         "state": "evicted",
+        #         "state": "excluded",
         #         "fault_domain": "/wolf-74.wolf.hpdd.intel.com",
         #         "rank": 1,
         #         "uuid": "db36ab28-fdb0-4822-97e6-89547393ed03",
@@ -938,7 +935,7 @@ def check_system_query_status(data):
         bool: True if no server crashed, False otherwise.
 
     """
-    failed_states = ("unknown", "evicted", "errored", "unresponsive")
+    failed_states = ("unknown", "excluded", "errored", "unresponsive")
     failed_rank_list = {}
 
     # Check the state of each rank.

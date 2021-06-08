@@ -118,8 +118,8 @@ pool_decode_props(daos_prop_t *props)
 					"auto" : "manual");
 		if (entry->dpe_val & ~(DAOS_SELF_HEAL_AUTO_EXCLUDE |
 				       DAOS_SELF_HEAL_AUTO_REBUILD))
-			D_PRINT("unknown bits set in self-healing property ("DF_X64")\n",
-				entry->dpe_val);
+			D_PRINT("unknown bits set in self-healing property ("
+				DF_X64")\n", entry->dpe_val);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_RECLAIM);
@@ -147,6 +147,20 @@ pool_decode_props(daos_prop_t *props)
 		default:
 			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 			break;
+		}
+	}
+
+	entry = daos_prop_entry_get(props, DAOS_PROP_PO_EC_CELL_SZ);
+	if (entry == NULL) {
+		fprintf(stderr, "EC cell size not found\n");
+		rc = -DER_INVAL;
+	} else {
+		if (!daos_ec_cs_valid(entry->dpe_val)) {
+			D_PRINT("Invalid EC cell size: %u\n",
+				(uint32_t)entry->dpe_val);
+		} else {
+			D_PRINT("EC cell size = %u\n",
+				(uint32_t)entry->dpe_val);
 		}
 	}
 
@@ -1197,12 +1211,13 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 		rc = -DER_INVAL;
 	} else {
 		D_PRINT("redundancy level:\t");
-		if (entry->dpe_val == DAOS_PROP_CO_REDUN_RACK)
-			D_PRINT("rack\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_REDUN_NODE)
-			D_PRINT("node\n");
+		if (entry->dpe_val == DAOS_PROP_CO_REDUN_RANK)
+			D_PRINT("node (%d)\n", DAOS_PROP_CO_REDUN_RANK);
 		else
-			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
+			/* XXX: should be resolved to string */
+			D_PRINT("rank+"DF_U64" ("DF_U64")\n",
+				entry->dpe_val - DAOS_PROP_CO_REDUN_RANK,
+				entry->dpe_val);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_SNAPSHOT_MAX);
@@ -1249,6 +1264,13 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ);
+	if (entry == NULL) {
+		fprintf(stderr, "EC cell size property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("EC cell size:\t%d\n", (int)entry->dpe_val);
+	}
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID);
 	if (entry == NULL) {
 		fprintf(stderr, "Container allocated oid property not found\n");
@@ -1617,13 +1639,26 @@ cont_query_hdlr(struct cmd_args_s *ap)
 {
 	daos_cont_info_t	cont_info;
 	char			oclass[10], type[10];
+	daos_prop_t		*prop = NULL;
+	uint64_t		cont_type;
 	int			rc;
 
-	rc = daos_cont_query(ap->cont, &cont_info, NULL, NULL);
+	prop = daos_prop_alloc(1);
+	if (prop == NULL) {
+		fprintf(stderr, "Failed to allocate prop");
+		D_GOTO(err_out, rc = -DER_NOMEM);
+	}
+
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+
+	rc = daos_cont_query(ap->cont, &cont_info, prop, NULL);
 	if (rc) {
+		daos_prop_free(prop);
 		fprintf(stderr, "Container query failed, result: %d\n", rc);
 		D_GOTO(err_out, rc);
 	}
+	cont_type = prop->dpp_entries[0].dpe_val;
+	daos_prop_free(prop);
 
 	printf("Pool UUID:\t"DF_UUIDF"\n", DP_UUID(ap->p_uuid));
 	printf("Container UUID:\t"DF_UUIDF"\n", DP_UUID(cont_info.ci_uuid));
@@ -1632,6 +1667,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 		(int)cont_info.ci_lsnapshot);
 	printf("Highest Aggregated Epoch: "DF_U64"\n", cont_info.ci_hae);
 	printf("Container redundancy factor: %d\n", cont_info.ci_redun_fac);
+	daos_unparse_ctype(cont_type, type);
+	printf("Container Type:\t%s\n", type);
 
 	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
 
@@ -1640,46 +1677,33 @@ cont_query_hdlr(struct cmd_args_s *ap)
 			DP_OID(ap->oid));
 	}
 
-	if (ap->path != NULL) {
-		/* cont_op_hdlr() already did resolve_by_path()
-		 * all resulting fields should be populated
-		 */
-		assert(ap->type != DAOS_PROP_CO_LAYOUT_UNKOWN);
+	if (cont_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		dfs_t		*dfs;
+		dfs_attr_t	attr;
 
-		printf("DAOS Unified Namespace Attributes on path %s:\n",
-			ap->path);
-		daos_unparse_ctype(ap->type, type);
-		printf("Container Type:\t%s\n", type);
+		rc = dfs_mount(ap->pool, ap->cont, O_RDONLY, &dfs);
+		if (rc) {
+			fprintf(stderr, "failed to mount container "
+				DF_UUIDF": %s (%d)\n",
+				DP_UUID(ap->c_uuid), strerror(rc), rc);
+			D_GOTO(err_out, rc = daos_errno2der(rc));
+		}
 
-		if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
-			dfs_t		*dfs;
-			dfs_attr_t	attr;
+		dfs_query(dfs, &attr);
+		daos_oclass_id2name(attr.da_oclass_id, oclass);
+		printf("Object Class:\t%s\n", oclass);
+		printf("Chunk Size:\t%zu\n", attr.da_chunk_size);
 
-			rc = dfs_mount(ap->pool, ap->cont, O_RDONLY, &dfs);
-			if (rc) {
-				fprintf(stderr, "failed to mount container "
-					DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->c_uuid), strerror(rc), rc);
-				D_GOTO(err_out, rc = daos_errno2der(rc));
-			}
-
-			dfs_query(dfs, &attr);
-			daos_oclass_id2name(attr.da_oclass_id, oclass);
-			printf("Object Class:\t%s\n", oclass);
-			printf("Chunk Size:\t%zu\n", attr.da_chunk_size);
-
-			rc = dfs_umount(dfs);
-			if (rc) {
-				fprintf(stderr, "failed to unmount container "
-					DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->c_uuid), strerror(rc), rc);
-				D_GOTO(err_out, rc = daos_errno2der(rc));
-			}
+		rc = dfs_umount(dfs);
+		if (rc) {
+			fprintf(stderr, "failed to unmount container "
+				DF_UUIDF": %s (%d)\n",
+				DP_UUID(ap->c_uuid), strerror(rc), rc);
+			D_GOTO(err_out, rc = daos_errno2der(rc));
 		}
 	}
 
 	return 0;
-
 err_out:
 	return rc;
 }
@@ -1711,7 +1735,7 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 	return rc;
 }
 
-static int
+int
 parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 {
 	char	*f1 = NULL;
@@ -2662,7 +2686,7 @@ dm_get_cont_prop(daos_handle_t coh,
 
 	prop = daos_prop_alloc(size);
 	if (prop == NULL) {
-		fprintf(stderr, "Failed to allocate prop (%d)", rc);
+		fprintf(stderr, "Failed to allocate prop");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -2700,7 +2724,7 @@ dm_connect(bool is_posix_copy,
 	int			rc = 0;
 	struct duns_attr_t	dattr = {0};
 	daos_prop_t		*props = NULL;
-	dfs_attr_t		attr;
+	dfs_attr_t		attr = {0};
 	int			size = 2;
 	uint32_t		dpe_types[size];
 	uint64_t		dpe_vals[size];
@@ -2710,7 +2734,7 @@ dm_connect(bool is_posix_copy,
 		rc = daos_pool_connect(ca->src_p_uuid, sysname,
 				       DAOS_PC_RW, &ca->src_poh, NULL, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "failed to connect to destination "
+			fprintf(stderr, "failed to connect to source "
 				"pool: %d\n", rc);
 			D_GOTO(out, rc);
 		}
@@ -2737,9 +2761,19 @@ dm_connect(bool is_posix_copy,
 	 * tools
 	 */
 	if (src_file_dfs->type != POSIX) {
+		/* Need to query source max oid for non-POSIX source
+		 * containers, and the cont type to see if the source
+		 * container is POSIX, and if it is then use dfs_cont_create
+		 * to create the destination container
+		 */
 		dpe_types[0] = ca->cont_prop_layout;
 		dpe_types[1] = ca->cont_prop_oid;
 
+		/* This will be extended to get all props
+		 * from the source container and then
+		 * set them in the destination when
+		 * the --preserve option is added
+		 */
 		rc = dm_get_cont_prop(ca->src_coh, sysname, src_cont_info, size,
 				      dpe_types, dpe_vals);
 		if (rc != 0) {
@@ -2751,18 +2785,15 @@ dm_connect(bool is_posix_copy,
 		ca->cont_layout = dpe_vals[0];
 		ca->cont_oid = dpe_vals[1];
 
-		props = daos_prop_alloc(2);
-		if (props == NULL) {
-			fprintf(stderr, "Failed to allocate prop (%d)", rc);
-			D_GOTO(out, rc);
-		}
-		props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
-		props->dpp_entries[0].dpe_val = ca->cont_layout;
-
-		/* only set max oid on created dest containers
-		 * if this is a non-posix copy
-		 */
 		if (!is_posix_copy) {
+			props = daos_prop_alloc(2);
+			if (props == NULL) {
+				fprintf(stderr, "Failed to allocate prop\n");
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
+			props->dpp_entries[0].dpe_val = ca->cont_layout;
+
 			props->dpp_entries[1].dpe_type = ca->cont_prop_oid;
 			props->dpp_entries[1].dpe_val = ca->cont_oid;
 		}
@@ -2820,10 +2851,6 @@ dm_connect(bool is_posix_copy,
 				    dst_cont_info, NULL);
 		if (rc == -DER_NONEXIST) {
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
-				attr.da_props = props;
-				attr.da_id = 0;
-				attr.da_oclass_id = OC_UNKNOWN;
-				attr.da_chunk_size = 0;
 				rc = dfs_cont_create(ca->dst_poh,
 						     ca->dst_c_uuid,
 						     &attr, NULL, NULL);
@@ -2854,6 +2881,8 @@ dm_connect(bool is_posix_copy,
 					"%d\n", rc);
 				D_GOTO(err_dst_root, rc);
 			}
+			fprintf(stdout, "Successfully created container: "
+				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
 			fprintf(stderr, "failed to open container: "
 				"%d\n", rc);
@@ -3006,7 +3035,8 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		file->type = POSIX;
 	}
 out:
-	D_FREE(dattr.da_rel_path);
+	if (dattr.da_rel_path)
+		free(dattr.da_rel_path);
 	return rc;
 }
 
@@ -3066,6 +3096,10 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
+	/* if container UUID has not been provided generate one */
+	if (uuid_is_null(ca.dst_c_uuid)) {
+		uuid_generate(ca.dst_c_uuid);
+	}
 	rc = dm_connect(is_posix_copy, &src_file_dfs, &dst_file_dfs, &ca,
 			ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
@@ -3488,7 +3522,6 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	size_t			src_str_len = 0;
 	size_t			dst_str_len = 0;
 	daos_epoch_range_t	epr;
-	int			uuid_len = 128;
 
 	set_dm_args_default(&ca);
 	file_set_defaults_dfs(&src_cp_type);
@@ -3515,29 +3548,15 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	}
 	rc = dm_parse_path(&dst_cp_type, dst_str, dst_str_len,
 			   &ca.dst_p_uuid, &ca.dst_c_uuid);
-	/* parse pool uuid if this fails, since it is not in form that
-	 * can be parsed by duns_resolve_path (i.e. dst=/$pool)
-	 */
 	if (rc != 0) {
-		uuid_generate(ca.dst_c_uuid);
-		if (strncmp(ap->dst, "/", 1) == 0) {
-			ap->dst += 1;
-			D_STRNDUP(ca.dst, ap->dst, uuid_len);
-			if (ca.dst == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			uuid_parse(ca.dst, ca.dst_p_uuid);
-			ap->dst -= 1;
-			/* not considered an error yet since this could
-			 * be a UNS path, dm_connect will check this
-			 * when it attempts to do a uns_path_create
-			 */
-			rc = 0;
-		} else {
-			fprintf(stderr, "failed to parse destination path: "
-				"%d\n", rc);
-			D_GOTO(out, rc);
-		}
-	} else {
+		fprintf(stderr, "failed to parse destination path: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	if (!uuid_is_null(ca.dst_c_uuid)) {
+		/* make sure destination container does not already exist
+		 * for object level copies
+		 */
 		rc = daos_pool_connect(ca.dst_p_uuid, ap->sysname,
 				       DAOS_PC_RW, &ca.dst_poh, NULL, NULL);
 		if (rc != 0) {
@@ -3574,6 +3593,9 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 			}
 			D_GOTO(out, rc = 1);
 		}
+	} else {
+		/* if container UUID has not been provided generate one */
+		uuid_generate(ca.dst_c_uuid);
 	}
 
 	rc = dm_connect(is_posix_copy, &dst_cp_type, &src_cp_type,
@@ -3671,9 +3693,8 @@ out_disconnect:
 	}
 out:
 	if (rc == 0) {
-		fprintf(stdout, "\n\nSuccessfully copied to destination "
-			"container "DF_UUIDF "\n\n",
-			DP_UUID(ca.dst_c_uuid));
+		fprintf(stdout, "Successfully copied to destination "
+			"container "DF_UUIDF "\n", DP_UUID(ca.dst_c_uuid));
 	}
 	D_FREE(src_str);
 	D_FREE(dst_str);

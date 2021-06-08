@@ -512,10 +512,36 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 	return 0;
 }
 
+/* translate iod's recxs from unmapped daos extend to mapped vos extents */
+static inline void
+obj_iod_recx_daos2vos(uint32_t iod_nr, daos_iod_t *iods,
+		      struct daos_oclass_attr *oca)
+{
+	daos_iod_t	*iod;
+	daos_recx_t	*recx;
+	uint64_t	 stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
+	uint64_t	 cell_rec_nr = obj_ec_cell_rec_nr(oca);
+	uint32_t	 i, j;
+
+	for (i = 0; i < iod_nr; i++) {
+		iod = &iods[i];
+		if (iod->iod_type == DAOS_IOD_SINGLE)
+			continue;
+
+		for (j = 0; j < iod->iod_nr; j++) {
+			recx = &iod->iod_recxs[j];
+			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) == 0);
+			recx->rx_idx = obj_ec_idx_daos2vos(recx->rx_idx,
+							   stripe_rec_nr,
+							   cell_rec_nr);
+		}
+	}
+}
+
 /* translate iod's recxs from mapped VOS extend to unmapped daos extents */
 static inline int
 obj_iod_recx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
-		     struct daos_oclass_attr *oca)
+		      struct daos_oclass_attr *oca)
 {
 	daos_iod_t	*iod;
 	daos_recx_t	*recx;
@@ -597,15 +623,9 @@ obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
 }
 
 static inline bool
-obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr **p_attr)
+obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr *attr)
 {
-	struct daos_oclass_attr *attr;
-	bool is_ec;
-
-	is_ec = daos_oclass_is_ec(oid.id_pub, &attr);
-	if (p_attr != NULL)
-		*p_attr = attr;
-	if (!is_ec)
+	if (!daos_oclass_is_ec(attr))
 		return false;
 
 	if ((oid.id_shard % obj_ec_tgt_nr(attr)) < obj_ec_data_tgt_nr(attr))
