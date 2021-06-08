@@ -220,6 +220,8 @@ func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter g
 		// Calculate mem_size per I/O engine (in MB)
 		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines)
 		engineCfg.MemSize *= (hugePages.PageSizeKb >> 10)
+		// Pass hugepage size, do not assume 2MB is used
+		engineCfg.HugePageSz = (hugePages.PageSizeKb >> 10)
 		// Warn if hugepages are not enough to sustain average
 		// I/O workload (~1GB)
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {

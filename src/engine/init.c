@@ -62,6 +62,9 @@ int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
 int			dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
+/** NVMe hugepage_size for DPDK/SPDK memory allocation */
+int			dss_nvme_hugepage_size;
+
 /** I/O Engine instance index */
 unsigned int		dss_instance_idx;
 
@@ -814,6 +817,8 @@ Options:\n\
       Boolean set to inhibit collection of NVME health data\n\
   --mem_size=mem_size, -r mem_size\n\
       Allocates mem_size MB for SPDK when using primary process mode\n\
+  --hugepage_size=hugepage_size, -H hugepage_size\n\
+      Passes the configured hugepage size (2MB or 1GB)\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -834,6 +839,7 @@ parse(int argc, char **argv)
 		{ "nvme",		required_argument,	NULL,	'n' },
 		{ "pinned_numa_node",	required_argument,	NULL,	'p' },
 		{ "mem_size",		required_argument,	NULL,	'r' },
+		{ "hugepage_size",	required_argument,	NULL,	'H' },
 		{ "targets",		required_argument,	NULL,	't' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
@@ -846,7 +852,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:b",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:b",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
@@ -896,6 +902,9 @@ parse(int argc, char **argv)
 			break;
 		case 'r':
 			dss_nvme_mem_size = atoi(optarg);
+			break;
+		case 'H':
+			dss_nvme_hugepage_size = atoi(optarg);
 			break;
 		case 'h':
 			usage(argv[0], stdout);

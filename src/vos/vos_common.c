@@ -491,6 +491,7 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_CONF		"/etc/daos_nvme.conf"
 #define VOS_NVME_SHM_ID		DAOS_NVME_SHMID_NONE
 #define VOS_NVME_MEM_SIZE	1024
+#define VOS_NVME_HUGEPAGE_SIZE	2 	/* 2MB */
 #define VOS_NVME_NR_TARGET	1
 
 static int
@@ -506,7 +507,8 @@ vos_self_nvme_init()
 		return rc;
 
 	rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID, VOS_NVME_MEM_SIZE,
-			   VOS_NVME_NR_TARGET, vos_db_get());
+			   VOS_NVME_HUGEPAGE_SIZE, VOS_NVME_NR_TARGET,
+			   vos_db_get());
 	if (rc)
 		return rc;
 

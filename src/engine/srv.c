@@ -1210,7 +1210,7 @@ dss_srv_init(void)
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
 	rc = bio_nvme_init(dss_nvme_conf, dss_nvme_shm_id, dss_nvme_mem_size,
-			   dss_tgt_nr, vos_db_get());
+			   dss_nvme_hugepage_size, dss_tgt_nr, vos_db_get());
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;

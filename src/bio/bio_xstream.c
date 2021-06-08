@@ -341,7 +341,7 @@ bio_spdk_env_init(void)
 
 int
 bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-	      int tgt_nr, struct sys_db *db)
+	      int hugepage_size, int tgt_nr, struct sys_db *db)
 {
 	char		*env;
 	int		rc, fd;
@@ -371,6 +371,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 
 	D_ASSERT(tgt_nr > 0);
 	D_ASSERT(mem_size > 0);
+	D_ASSERT(hugepage_size > 0);
 	/*
 	 * Hugepages are not enough to sustain average I/O workload
 	 * (~1GB per xstream).
@@ -418,6 +419,11 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 
 	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
 	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
+	/*
+	 * Leave a hugepage overhead buffer for DPDK memory management. Reduce
+	 * the DMA upper bound by 200 hugepages per target to account for this.
+	 */
+	bio_chk_cnt_max -= (200 * hugepage_size) / size_mb;
 
 	env = getenv("VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "MALLOC") == 0) {
