@@ -2072,7 +2072,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 		}
 
 		if (daos_handle_is_valid(u_args->th))
-			return 0;
+			D_GOTO(out_tx, rc = 0);
 
 		oh = u_args->oh;
 		th = u_args->th;
@@ -2082,7 +2082,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 		daos_obj_punch_t *p_args = args;
 
 		if (daos_handle_is_valid(p_args->th))
-			return 0;
+			D_GOTO(out_tx, rc = 0);
 
 		oh = p_args->oh;
 		th = p_args->th;
@@ -2101,7 +2101,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 		}
 
 		if (daos_handle_is_valid(p_args->th))
-			return 0;
+			D_GOTO(out_tx, rc = 0);
 
 		oh = p_args->oh;
 		th = p_args->th;
@@ -2131,7 +2131,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 		}
 
 		if (daos_handle_is_valid(p_args->th))
-			return 0;
+			D_GOTO(out_tx, rc = 0);
 
 		oh = p_args->oh;
 		th = p_args->th;
@@ -2227,11 +2227,16 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			D_GOTO(out, rc);
 	}
 
+	*pm_ver = map_ver;
+
+out_tx:
+	D_ASSERT(rc == 0);
+
 	if (p_obj != NULL)
 		*p_obj = obj;
 	else
 		obj_decref(obj);
-	*pm_ver = map_ver;
+
 out:
 	if (rc && obj)
 		obj_decref(obj);
@@ -3736,10 +3741,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 			if (daos_handle_is_valid(obj_auxi->th) &&
 			    !(args->extra_flags & DIOF_CHECK_EXISTENCE) &&
 				 (task->dt_result == 0 ||
-				  task->dt_result == -DER_NONEXIST))
+				  task->dt_result == -DER_NONEXIST)) {
+				obj_addref(obj);
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, DAOS_OBJ_RPC_FETCH,
-					     task);
+				dc_tx_attach(obj_auxi->th, obj,
+					     DAOS_OBJ_RPC_FETCH, task);
+			}
 			break;
 		}
 		case DAOS_OBJ_RPC_PUNCH:
@@ -3753,10 +3760,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 		case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 			if (daos_handle_is_valid(obj_auxi->th) &&
 			    (task->dt_result == 0 ||
-			     task->dt_result == -DER_NONEXIST))
+			     task->dt_result == -DER_NONEXIST)) {
+				obj_addref(obj);
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th,
+				dc_tx_attach(obj_auxi->th, NULL,
 					     obj_auxi->opc, task);
+			}
 			break;
 		case DAOS_OBJ_RPC_ENUMERATE:
 			/* XXX: For list dkey recursively, that is mainly used
@@ -4285,6 +4294,8 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 			      obj_auxi->reasb_req.tgt_bitmap, map_ver, false,
 			      false, obj_auxi);
 	if (rc != 0) {
+		if (rc == -DER_SHARDS_OVERLAP)
+			obj_addref(obj);
 		obj_comp_cb(task, NULL);
 		if (rc != -DER_SHARDS_OVERLAP)
 			goto out_task;
@@ -4293,7 +4304,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		 * VOS target. We will handle such case via internal
 		 * transaction.
 		 */
-		return dc_tx_convert(DAOS_OBJ_RPC_UPDATE, task);
+		return dc_tx_convert(obj, DAOS_OBJ_RPC_UPDATE, task);
 	}
 
 	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
@@ -4348,7 +4359,7 @@ dc_obj_update_task(tse_task_t *task)
 
 	if (daos_handle_is_valid(args->th)) {
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, DAOS_OBJ_RPC_UPDATE, task);
+		rc = dc_tx_attach(args->th, obj, DAOS_OBJ_RPC_UPDATE, task);
 		goto comp;
 	}
 
@@ -4904,26 +4915,19 @@ shard_punch_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 }
 
 static int
-dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
-	     enum obj_rpc_opc opc, daos_obj_punch_t *api_args)
+dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
+	     uint32_t map_ver, enum obj_rpc_opc opc, daos_obj_punch_t *api_args)
 {
 	struct obj_auxi_args	*obj_auxi;
-	struct dc_object	*obj;
 	uint64_t		 dkey_hash;
 	int			 rc;
 
-	obj = obj_hdl2ptr(api_args->oh);
-	D_ASSERT(obj != NULL);
-
-	if (opc == DAOS_OBJ_RPC_PUNCH && obj->cob_grp_nr > 1) {
-		obj_decref(obj);
-
+	if (opc == DAOS_OBJ_RPC_PUNCH && obj->cob_grp_nr > 1)
 		/* The object have multiple redundancy groups, use DAOS
 		 * internal transaction to handle that to guarantee the
 		 * atomicity of punch object.
 		 */
-		return dc_tx_convert(opc, task);
-	}
+		return dc_tx_convert(obj, opc, task);
 
 	obj_task_init_common(task, opc, map_ver, api_args->th, &obj_auxi, obj);
 
@@ -4931,6 +4935,8 @@ dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	rc = obj_req_get_tgts(obj, NULL, api_args->dkey, dkey_hash, NIL_BITMAP,
 			      map_ver, false, false, obj_auxi);
 	if (rc != 0) {
+		if (rc == -DER_SHARDS_OVERLAP)
+			obj_addref(obj);
 		obj_comp_cb(task, NULL);
 		if (rc != -DER_SHARDS_OVERLAP)
 			goto out_task;
@@ -4939,7 +4945,7 @@ dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		 * VOS target. We will handle such case via internal
 		 * transaction.
 		 */
-		return dc_tx_convert(opc, task);
+		return dc_tx_convert(obj, opc, task);
 	}
 
 	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
@@ -4972,20 +4978,21 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 {
 	struct dtx_epoch	 epoch = {0};
 	unsigned int		 map_ver = 0;
+	struct dc_object	*obj = NULL;
 	int			 rc;
 
-	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, NULL);
+	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, &obj);
 	if (rc != 0)
 		goto comp; /* invalid parameters */
 
 	if (daos_handle_is_valid(args->th)) {
 
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, opc, task);
+		rc = dc_tx_attach(args->th, obj, opc, task);
 		goto comp;
 	}
 	/* submit the punch */
-	return dc_obj_punch(task, &epoch, map_ver, opc, args);
+	return dc_obj_punch(task, obj, &epoch, map_ver, opc, args);
 comp:
 	if (rc <= 0)
 		tse_task_complete(task, rc);

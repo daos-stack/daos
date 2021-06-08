@@ -54,22 +54,10 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 	int		num_failed;
 	int		num_allowed_failures;
 	int		redun_fac = daos_cont_prop2redunfac(props);
-	int		redun_lvl = daos_cont_prop2redunlvl(props);
+	uint32_t	redun_lvl = daos_cont_prop2redunlvl(props);
 	int		rc = 0;
 
-	switch (redun_lvl) {
-	case DAOS_PROP_CO_REDUN_RACK:
-		rc = pool_map_get_failed_cnt(pmap,
-					     PO_COMP_TP_RACK);
-		break;
-	case DAOS_PROP_CO_REDUN_NODE:
-		rc = pool_map_get_failed_cnt(pmap,
-					     PO_COMP_TP_NODE);
-		break;
-	default:
-		return -DER_INVAL;
-	}
-
+	rc = pool_map_get_failed_cnt(pmap, redun_lvl);
 	if (rc < 0)
 		return rc;
 

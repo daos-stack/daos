@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.101
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -456,13 +456,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libgurt.so
 %{_libdir}/libcart.so
 %{_libdir}/*.a
-%{_libdir}/*.so
 
 %files firmware
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Wed Jun 02 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.101-3
+- Remove libs from devel package
+
 * Thu May 20 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-101-2
 - Remove client libs from common package
 
