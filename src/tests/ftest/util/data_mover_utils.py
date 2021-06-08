@@ -5,19 +5,141 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-
 from command_utils_base import FormattedParameter
 from command_utils_base import BasicParameter
 from command_utils import ExecutableCommand
 from job_manager_utils import Mpirun
 
+def uuid_from_obj(obj):
+    """Try to get uuid from an object.
 
-class DcpCommand(ExecutableCommand):
+    Args:
+        obj (Object): The object possibly containing uuid.
+
+    Returns:
+        Object: obj.uuid if it exists; otherwise, obj
+
+    """
+    if hasattr(obj, "uuid"):
+        return obj.uuid
+    return obj
+
+def format_daos_path(pool=None, cont=None, path=None):
+    """Format a daos path as daos://<pool>/<cont>/<path>.
+
+    Args:
+        pool (TestPool, optional): the source pool or uuid.
+        cont (TestContainer, optional): the source cont or uuid.
+        path (str, optional): cont path relative to the root.
+
+    Returns:
+        str: the formatted path.
+
+    """
+    daos_path = "daos://"
+    if pool:
+        pool_uuid = uuid_from_obj(pool)
+        daos_path += str(pool_uuid) + "/"
+    if cont:
+        cont_uuid = uuid_from_obj(cont)
+        daos_path += str(cont_uuid) + "/"
+    if path:
+        daos_path += str(path).lstrip("/")
+    return daos_path
+
+class MfuCommandBase(ExecutableCommand):
+    """Base MpiFileUtils command."""
+
+    def __init__(self, namespace, command, hosts, tmp):
+        """Initialize the command object.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command: command (str): string of the command to be executed.
+            hosts (list): list of hosts to specify in the hostfile.
+            tmp (str): path for hostfiles.
+
+        """
+        super().__init__(namespace, command)
+
+        self.hosts = hosts
+        self.tmp = tmp
+
+    def set_params(self, **kwargs):
+        """Set any Parameters for the class.
+
+        Args:
+            kwargs: name, value pairs of class Parameters
+
+        """
+        for a in kwargs:
+            attr = getattr(self, a)
+            attr.update(kwargs[a], a)
+
+    @staticmethod
+    def __param_sort(k):
+        """Key sort for get_param_names. Moves src_path and dst_path
+           to the end of the list.
+
+        Args:
+            k (str): the key
+
+        Returns:
+            int: the sort priority
+
+        """
+        if k in ("dst_path", "dst"):
+            return 3
+        if k in ("src_path", "src"):
+            return 2
+        return 1
+
+    def get_param_names(self):
+        """Override the original get_param_names to sort
+           the src and dst paths.
+
+        Returns:
+            list: the sorted param names.
+
+        """
+        param_names = super().get_param_names()
+        param_names.sort(key=self.__param_sort)
+        return param_names
+
+    def run(self, processes):
+        # pylint: disable=arguments-differ
+        """Run the MpiFileUtils command.
+
+        Args:
+            processes: Number of processes for the command.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: In case run command fails.
+
+        """
+        self.log.info('Starting %s', str(self.command).lower())
+
+        # Get job manager cmd
+        mpirun = Mpirun(self, mpitype="mpich")
+        mpirun.assign_hosts(self.hosts, self.tmp)
+        mpirun.assign_processes(processes)
+        mpirun.exit_status_exception = self.exit_status_exception
+
+        # Run the command
+        out = mpirun.run()
+
+        return out
+
+class DcpCommand(MfuCommandBase):
     """Defines an object representing a dcp command."""
 
-    def __init__(self, namespace, command):
+    def __init__(self, hosts, tmp):
         """Create a dcp Command object."""
-        super().__init__(namespace, command)
+        super().__init__("/run/dcp/*", "dcp", hosts, tmp)
 
         # dcp options
 
@@ -56,85 +178,13 @@ class DcpCommand(ExecutableCommand):
         # destination path
         self.dst_path = BasicParameter(None)
 
-    def get_param_names(self):
-        """Overriding the original get_param_names."""
 
-        param_names = super().get_param_names()
-
-        # move key=dst_path to the end
-        param_names.sort(key='dst_path'.__eq__)
-
-        return param_names
-
-    def set_dcp_params(self, src=None, dst=None,
-                       prefix=None, display=True):
-        """Set common dcp params.
-
-        Args:
-            src (str, optional): The source path formatted as
-                daos://<pool>/<cont>/<path> or <path>
-            dst (str, optional): The destination path formatted as
-                daos://<pool>/<cont>/<path> or <path>
-            prefix (str, optional): prefix for uns path
-            display (bool, optional): print updated params. Defaults to True.
-        """
-        if src:
-            self.src_path.update(src,
-                                 "src_path" if display else None)
-        if dst:
-            self.dst_path.update(dst,
-                                 "dst_path" if display else None)
-        if prefix:
-            self.daos_prefix.update(prefix,
-                                    "daos_prefix" if display else None)
-
-class Dcp(DcpCommand):
-    """Class defining an object of type DcpCommand."""
-
-    def __init__(self, hosts, timeout=30):
-        """Create a dcp object."""
-        super().__init__("/run/dcp/*", "dcp")
-
-        # set params
-        self.timeout = timeout
-        self.hosts = hosts
-
-    def run(self, tmp, processes):
-        # pylint: disable=arguments-differ
-        """Run the dcp command.
-
-        Args:
-            tmp (str): path for hostfiles
-            processes: Number of processes for dcp command
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: In case dcp run command fails
-
-        """
-        self.log.info('Starting dcp')
-
-        # Get job manager cmd
-        mpirun = Mpirun(self, mpitype="mpich")
-        mpirun.assign_hosts(self.hosts, tmp)
-        mpirun.assign_processes(processes)
-        mpirun.exit_status_exception = self.exit_status_exception
-
-        # run dcp
-        out = mpirun.run()
-
-        return out
-
-
-class DsyncCommand(ExecutableCommand):
+class DsyncCommand(MfuCommandBase):
     """Defines an object representing a dsync command."""
 
-    def __init__(self, namespace, command):
+    def __init__(self, hosts, tmp):
         """Create a dsync Command object."""
-        super().__init__(namespace, command)
+        super().__init__("/run/dsync/*", "dsync", hosts, tmp)
 
         # dsync options
 
@@ -177,85 +227,12 @@ class DsyncCommand(ExecutableCommand):
         # destination path
         self.dst_path = BasicParameter(None)
 
-    def get_param_names(self):
-        """Overriding the original get_param_names."""
-
-        param_names = super().get_param_names()
-
-        # move key=dst_path to the end
-        param_names.sort(key='dst_path'.__eq__)
-
-        return param_names
-
-    def set_dsync_params(self, src=None, dst=None,
-                         prefix=None, display=True):
-        """Set common dsync params.
-
-        Args:
-            src (str, optional): The source path formatted as
-                daos://<pool>/<cont>/<path> or <path>
-            dst (str, optional): The destination path formatted as
-                daos://<pool>/<cont>/<path> or <path>
-            prefix (str, optional): prefix for uns path
-            display (bool, optional): print updated params. Defaults to True.
-        """
-        if src:
-            self.src_path.update(src,
-                                 "src_path" if display else None)
-        if dst:
-            self.dst_path.update(dst,
-                                 "dst_path" if display else None)
-        if prefix:
-            self.daos_prefix.update(prefix,
-                                    "daos_prefix" if display else None)
-
-
-class Dsync(DsyncCommand):
-    """Class defining an object of type DsyncCommand."""
-
-    def __init__(self, hosts, timeout=30):
-        """Create a dsync object."""
-        super().__init__("/run/dsync/*", "dsync")
-
-        # set params
-        self.timeout = timeout
-        self.hosts = hosts
-
-    def run(self, tmp, processes):
-        # pylint: disable=arguments-differ
-        """Run the dsync command.
-
-        Args:
-            tmp (str): path for hostfiles
-            processes: Number of processes for dsync command
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: In case dsync run command fails
-
-        """
-        self.log.info('Starting dsync')
-
-        # Get job manager cmd
-        mpirun = Mpirun(self, mpitype="mpich")
-        mpirun.assign_hosts(self.hosts, tmp)
-        mpirun.assign_processes(processes)
-        mpirun.exit_status_exception = self.exit_status_exception
-
-        # run dsync
-        out = mpirun.run()
-
-        return out
-
-class DserializeCommand(ExecutableCommand):
+class DserializeCommand(MfuCommandBase):
     """Defines an object representing a daos-serialize command."""
 
-    def __init__(self, namespace, command):
+    def __init__(self, hosts, tmp):
         """Create a daos-serialize Command object."""
-        super().__init__(namespace, command)
+        super().__init__("/run/dserialize/*", "daos-serialize", hosts, tmp)
 
         # daos-serialize options
 
@@ -270,83 +247,13 @@ class DserializeCommand(ExecutableCommand):
         # source path
         self.src_path = BasicParameter(None)
 
-    def get_param_names(self):
-        """Overriding the original get_param_names."""
 
-        param_names = super().get_param_names()
-
-        # move key=src_path to the end
-        param_names.sort(key='src_path'.__eq__)
-
-        return param_names
-
-    def set_dserialize_params(self, src_path=None, out_path=None,
-                              display=True):
-        """Set common daos-serialize params.
-
-        Args:
-            src_path (str, optional): The source path formatted as
-                daos://<pool>/<cont>
-            out_path (str, optional): The output POSIX path to store
-                the HDF5 file(s)
-            display (bool, optional): print updated params. Defaults to True.
-
-        """
-        if src_path:
-            self.src_path.update(src_path,
-                                 "src_path" if display else None)
-        if out_path:
-            self.output_path.update(out_path,
-                                    "output_path" if display else None)
-
-
-class Dserialize(DserializeCommand):
-    """Class defining an object of type DserializeCommand."""
-
-    def __init__(self, hosts, timeout=30):
-        """Create a daos-serialize object."""
-        super().__init__(
-            "/run/dserialize/*", "daos-serialize")
-
-        # set params
-        self.timeout = timeout
-        self.hosts = hosts
-
-    def run(self, tmp, processes):
-        # pylint: disable=arguments-differ
-        """Run the command.
-
-        Args:
-            tmp (str): path for hostfiles
-            processes: Number of processes for the command
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: In case run command fails
-
-        """
-        self.log.info('Starting daos-serialize')
-
-        # Get job manager cmd
-        mpirun = Mpirun(self, mpitype="mpich")
-        mpirun.assign_hosts(self.hosts, tmp)
-        mpirun.assign_processes(processes)
-        mpirun.exit_status_exception = self.exit_status_exception
-
-        # run the command
-        out = mpirun.run()
-
-        return out
-
-class DdeserializeCommand(ExecutableCommand):
+class DdeserializeCommand(MfuCommandBase):
     """Defines an object representing a daos-deserialize command."""
 
-    def __init__(self, namespace, command):
+    def __init__(self, hosts, tmp):
         """Create a daos-deserialize Command object."""
-        super().__init__(namespace, command)
+        super().__init__("/run/ddeserialize/*", "daos-deserialize", hosts, tmp)
 
         # daos-deserialize options
 
@@ -361,79 +268,12 @@ class DdeserializeCommand(ExecutableCommand):
         # source path
         self.src_path = BasicParameter(None)
 
-    def get_param_names(self):
-        """Overriding the original get_param_names."""
-
-        param_names = super().get_param_names()
-
-        # move key=src_path to the end
-        param_names.sort(key='src_path'.__eq__)
-
-        return param_names
-
-    def set_ddeserialize_params(self, src_path=None, pool=None,
-                                display=True):
-        """Set common daos-deserialize params.
-
-        Args:
-            src_path (str, optional): Either a list of paths to each HDF5
-                file, or the path to the directory containing the file(s).
-            pool (str, optional): The pool uuid.
-            display (bool, optional): print updated params. Defaults to True.
-
-        """
-        if src_path:
-            self.src_path.update(src_path,
-                                 "src_path" if display else None)
-        if pool:
-            self.pool.update(pool,
-                             "pool" if display else None)
-
-class Ddeserialize(DdeserializeCommand):
-    """Class defining an object of type DdeserializeCommand."""
-
-    def __init__(self, hosts, timeout=30):
-        """Create a daos-deserialize object."""
-        super().__init__(
-            "/run/ddeserialize/*", "daos-deserialize")
-
-        # set params
-        self.timeout = timeout
-        self.hosts = hosts
-
-    def run(self, tmp, processes):
-        # pylint: disable=arguments-differ
-        """Run the command.
-
-        Args:
-            tmp (str): path for hostfiles
-            processes: Number of processes for the command
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: In case run command fails
-
-        """
-        self.log.info('Starting daos-deserialize')
-
-        # Get job manager cmd
-        mpirun = Mpirun(self, mpitype="mpich")
-        mpirun.assign_hosts(self.hosts, tmp)
-        mpirun.assign_processes(processes)
-        mpirun.exit_status_exception = self.exit_status_exception
-
-        # run the command
-        out = mpirun.run()
-
-        return out
 
 class FsCopy():
     """Class defining an object of type FsCopy.
        Allows interfacing with daos fs copy in a similar
        manner to DcpCommand.
+
     """
 
     def __init__(self, daos_cmd, log):
