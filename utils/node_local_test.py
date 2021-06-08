@@ -949,8 +949,6 @@ class DFuse():
         if not self.caching:
             cmd.append('--disable-caching')
 
-        cmd.append('--multi-user')
-
         if self.pool:
             cmd.extend(['--pool', self.pool])
         if self.container:
