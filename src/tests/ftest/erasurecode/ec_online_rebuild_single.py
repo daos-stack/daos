@@ -7,7 +7,7 @@
 from ec_utils import ErasureCodeSingle
 from apricot import skipForTicket
 
-class EcOnlineRebuildSingle(ErasureCodeSingle):
+class EcodOnlineRebuildSingle(ErasureCodeSingle):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object single type data
@@ -35,7 +35,7 @@ class EcOnlineRebuildSingle(ErasureCodeSingle):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_single,ec_online_rebuild
+        :avocado: tags=ec,ec_single,ec_online_rebuild,rebuild
         :avocado: tags=ec_online_rebuild_single
         """
         # Kill last server rank
