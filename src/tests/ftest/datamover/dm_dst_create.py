@@ -71,7 +71,8 @@ class DmDstCreate(DataMoverTestBase):
             "DAOS", "/", pool1, cont2_uuid)
         cont2 = self.get_cont(pool1, cont2_uuid)
         cont2.type.update(cont1.type.value, "type")
-        self.verify_cont(cont2, True, src_props)
+	if check_props:
+            self.verify_cont(cont2, True, src_props, api)
 
         result = self.run_datamover(
             self.test_id + " cont1 to cont3 (same pool) (empty cont)",
@@ -80,7 +81,8 @@ class DmDstCreate(DataMoverTestBase):
         cont3_uuid = self.parse_create_cont_uuid(result.stdout_text)
         cont3 = self.get_cont(pool1, cont3_uuid)
         cont3.type.update(cont1.type.value, "type")
-        self.verify_cont(cont3, True, src_props)
+	if check_props:
+            self.verify_cont(cont3, True, src_props, api)
 
         # Create another pool
         pool2 = self.create_pool()
@@ -93,7 +95,8 @@ class DmDstCreate(DataMoverTestBase):
             "DAOS", "/", pool2, cont4_uuid)
         cont4 = self.get_cont(pool2, cont4_uuid)
         cont4.type.update(cont1.type.value, "type")
-        self.verify_cont(cont4, True, src_props)
+	if check_props:
+            self.verify_cont(cont4, True, src_props, api)
 
         result = self.run_datamover(
             self.test_id + " cont1 to cont5 (different pool) (empty cont)",
@@ -102,7 +105,8 @@ class DmDstCreate(DataMoverTestBase):
         cont5_uuid = self.parse_create_cont_uuid(result.stdout_text)
         cont5 = self.get_cont(pool2, cont5_uuid)
         cont5.type.update(cont1.type.value, "type")
-        self.verify_cont(cont5, True, src_props)
+	if check_props:
+            self.verify_cont(cont5, True, src_props, api)
 
         # Only test POSIX paths with DFS API
         if api == "DFS":
@@ -118,7 +122,8 @@ class DmDstCreate(DataMoverTestBase):
                 "DAOS", "/", pool1, cont6_uuid)
             cont6 = self.get_cont(pool1, cont6_uuid)
             cont6.type.update(cont1.type.value, "type")
-            self.verify_cont(cont6, False)
+	    if check_props:
+                self.verify_cont(cont6, False, api)
 
             result = self.run_datamover(
                 self.test_id + " posix to cont7 (empty cont)",
@@ -127,7 +132,8 @@ class DmDstCreate(DataMoverTestBase):
             cont7_uuid = self.parse_create_cont_uuid(result.stdout_text)
             cont7 = self.get_cont(pool1, cont7_uuid)
             cont7.type.update(cont1.type.value, "type")
-            self.verify_cont(cont7, False)
+	    if check_props:
+                self.verify_cont(cont7, False, api)
 
         pool1.disconnect()
         pool2.disconnect()
@@ -158,7 +164,7 @@ class DmDstCreate(DataMoverTestBase):
         # Return existing cont properties
         return self.get_cont_prop(cont)
 
-    def verify_cont(self, cont, check_attr_prop=True, prop_list=None):
+    def verify_cont(self, cont, check_attr_prop=True, prop_list=None, api):
         """Read-verify test data using either ior or the obj API.
 
         Args:
@@ -173,7 +179,7 @@ class DmDstCreate(DataMoverTestBase):
         # mounts DFS the alloc'ed OID might be incremented.
         if check_attr_prop:
             cont.open()
-            self.verify_cont_prop(cont, prop_list)
+            self.verify_cont_prop(cont, prop_list, api)
             self.verify_usr_attr(cont)
             cont.close()
 
@@ -202,7 +208,7 @@ class DmDstCreate(DataMoverTestBase):
         prop_list = prop_text.split('\n')[1:]
         return prop_list
 
-    def verify_cont_prop(self, cont, prop_list):
+    def verify_cont_prop(self, cont, prop_list, api):
         """Verify container properties against an input list.
         Expects the container to be open.
 
@@ -222,7 +228,7 @@ class DmDstCreate(DataMoverTestBase):
         # Make sure each property matches
         for prop_idx, prop in enumerate(prop_list):
             # This one is not set
-            if self.daos_api == "DFS" and "OID" in prop_list[prop_idx]:
+            if api == "DFS" and "OID" in prop_list[prop_idx]:
                 continue
             if prop != actual_list[prop_idx]:
                 self.log.info("Expected\n%s\nbut got\n%s\n",
