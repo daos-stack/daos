@@ -911,7 +911,7 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 
 			se = ec_age2ss(entry) *
 			     (entry->ae_cur_stripe.as_stripenum + 1);
-			if (DAOS_RECX_END(ext->ae_orig_recx) < se) {
+			if (DAOS_RECX_END(ext->ae_orig_recx) <= se) {
 				epoch_range.epr_lo = epoch_range.epr_hi =
 					ext->ae_epoch;
 
@@ -928,7 +928,6 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 					rc = erc;
 			}
 		}
-
 	}
 out:
 	return rc;
@@ -1063,9 +1062,9 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 				   &entry->ae_dkey, 1, &iod, &sgl, NULL,
 				   DIOF_TO_SPEC_SHARD | DIOF_FOR_EC_AGG,
 				   &peer_shard, NULL);
-		D_DEBUG(DB_TRACE, DF_UOID" fetch parity from peer shard %d, "
-			DF_RC".\n", DP_UOID(entry->ae_oid), peer_shard,
-			DP_RC(rc));
+		D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, DF_UOID
+			 " fetch parity from peer shard %d, "DF_RC".\n",
+			 DP_UOID(entry->ae_oid), peer_shard, DP_RC(rc));
 		if (rc)
 			goto out;
 	}
@@ -2167,16 +2166,38 @@ agg_key_compare(daos_key_t key1, daos_key_t key2)
 	return memcmp(key1.iov_buf, key2.iov_buf, key1.iov_len);
 }
 
+static inline void
+agg_reset_pos(vos_iter_type_t type, struct ec_agg_entry *agg_entry)
+{
+	switch (type) {
+	case VOS_ITER_OBJ:
+		memset(&agg_entry->ae_oid, 0, sizeof(agg_entry->ae_oid));
+		break;
+	case VOS_ITER_DKEY:
+		memset(&agg_entry->ae_dkey, 0, sizeof(agg_entry->ae_dkey));
+		break;
+	case VOS_ITER_AKEY:
+		memset(&agg_entry->ae_akey, 0, sizeof(agg_entry->ae_akey));
+		break;
+	default:
+		break;
+	}
+}
+
 /* Handles dkeys returned by the per-object nested iteratior.
 */
 static int
 agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	if (agg_key_compare(agg_entry->ae_dkey, entry->ie_key))
+	if (agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
 		agg_entry->ae_dkey	= entry->ie_key;
-	else
+		agg_reset_pos(VOS_ITER_AKEY, agg_entry);
+	} else {
+		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" ec agg on re-probe\n",
+			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
+	}
 
 	return 0;
 }
@@ -2196,7 +2217,8 @@ agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 		agg_entry->ae_akey = entry->ie_key;
 		agg_entry->ae_thdl = ih;
 	} else {
-		memset(&agg_entry->ae_akey, 0, sizeof(agg_entry->ae_akey));
+		D_DEBUG(DB_EPC, "Skip akey: "DF_KEY" ec agg on re-probe\n",
+			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 
@@ -2244,6 +2266,7 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
+		agg_reset_pos(type, agg_entry);
 		if (ec_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
 			rc = 1;
@@ -2269,8 +2292,8 @@ agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 		dsc_obj_close(agg_entry->ae_obj_hdl);
 		agg_entry->ae_obj_hdl = DAOS_HDL_INVAL;
 	}
-	memset(&agg_entry->ae_dkey, 0, sizeof(agg_entry->ae_dkey));
-	memset(&agg_entry->ae_akey, 0, sizeof(agg_entry->ae_akey));
+	agg_reset_pos(VOS_ITER_DKEY, agg_entry);
+	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 	memset(agg_entry->ae_peer_pshards, 0,
 	       (OBJ_EC_MAX_P) * sizeof(struct daos_shard_loc));
 
@@ -2295,6 +2318,8 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (!daos_unit_oid_compare(agg_param->ap_agg_entry.ae_oid,
 				   entry->ie_oid)) {
+		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" ec agg on re-probe\n",
+			DP_UOID(entry->ie_oid));
 		*acts |= VOS_ITER_CB_SKIP;
 		goto out;
 	}
@@ -2309,6 +2334,8 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (!daos_oclass_is_ec(&oca)) { /* Skip non-EC object */
+		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" non-ec obj\n",
+			DP_UOID(entry->ie_oid));
 		*acts |= VOS_ITER_CB_SKIP;
 		goto out;
 	}
@@ -2317,13 +2344,15 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 				      info->api_pool->sp_map_version, true);
 
 	if (rc == 1 && entry->ie_oid.id_shard >= oca.u.ec.e_k) {
+		D_DEBUG(DB_EPC, "oid:"DF_UOID" ec agg starting\n",
+			DP_UOID(entry->ie_oid));
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, &oca);
 		rc = 0;
 		goto out;
 	} else {
 		if (rc < 0) {
-			D_ERROR("ds_pool_check_leader failed "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("oid:"DF_UOID" ds_pool_check_leader failed "
+				DF_RC"\n", DP_UOID(entry->ie_oid), DP_RC(rc));
 			rc = 0;
 		}
 		*acts |= VOS_ITER_CB_SKIP;
@@ -2598,6 +2627,8 @@ ds_obj_ec_aggregate(void *arg)
 	struct ec_agg_param	agg_param = { 0 };
 	struct agg_param	param = { 0 };
 
+	D_DEBUG(DB_EPC, "start EC aggregation "DF_UUID"\n",
+		DP_UUID(cont->sc_uuid));
 	param.ap_data = &agg_param;
 	param.ap_start_eph_get = cont_ec_agg_start_eph_get;
 	param.ap_cont = cont;

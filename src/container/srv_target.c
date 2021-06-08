@@ -2324,10 +2324,16 @@ cont_ec_eph_reduce(void *agg_arg, void *xs_arg)
 
 		c_eph = lookup_insert_cont_ec_eph(&pool->sp_ec_ephs_list,
 						  x_arg->ephs[i].cont_uuid);
-		if (c_eph->ce_eph == 0 ||
-		    (x_arg->ephs[i].eph != 0 &&
-		     x_arg->ephs[i].eph > c_eph->ce_last_eph))
+		if (c_eph->ce_eph == 0) {
 			c_eph->ce_eph = x_arg->ephs[i].eph;
+			continue;
+		}
+		if (x_arg->ephs[i].eph != 0 &&
+		    x_arg->ephs[i].eph > c_eph->ce_last_eph) {
+			if (c_eph->ce_eph <= c_eph->ce_last_eph ||
+			    x_arg->ephs[i].eph < c_eph->ce_eph)
+				c_eph->ce_eph = x_arg->ephs[i].eph;
+		}
 	}
 }
 
