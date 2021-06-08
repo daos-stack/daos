@@ -199,6 +199,7 @@ func PrintListPoolsResponse(out io.Writer, resp *control.ListPoolsResp) error {
 	for _, pool := range resp.Pools {
 		row := txtfmt.TableRow{uuidTitle: pool.UUID}
 
+		row[labelTitle] = "N/A"
 		if pool.Label != "" {
 			row[labelTitle] = pool.Label
 		}

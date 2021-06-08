@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -54,10 +55,10 @@ func addTestPoolService(t *testing.T, sysdb *system.Database, ps *system.PoolSer
 func addTestPools(t *testing.T, sysdb *system.Database, poolUUIDs ...string) {
 	t.Helper()
 
-	for _, uuidStr := range poolUUIDs {
+	for i, uuidStr := range poolUUIDs {
 		addTestPoolService(t, sysdb, &system.PoolService{
 			PoolUUID:  uuid.MustParse(uuidStr),
-			PoolLabel: uuidStr,
+			PoolLabel: fmt.Sprintf("%d", i),
 			State:     system.PoolServiceStateReady,
 			Replicas:  []system.Rank{0},
 		})
