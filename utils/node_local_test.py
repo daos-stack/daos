@@ -1343,11 +1343,12 @@ def needs_dfuse_with_cache(method):
 class posix_tests():
     """Class for adding standalone unit tests"""
 
-    def __init__(self, server, conf, pool=None, container=None):
+    def __init__(self, server, conf, pool=None):
         self.server = server
         self.conf = conf
         self.pool = pool
-        self.container = container
+        self.container = None
+        self.container_label = None
         self.dfuse = None
         self.fatal_errors = False
 
@@ -1951,7 +1952,10 @@ def run_posix_tests(server, conf, test=None):
             start = time.time()
             print('Calling {}'.format(fn))
             try:
-                pt.container = create_cont(conf, pool.uuid, posix=True, label=fn)
+                pt.container = create_cont(conf,
+                                           pool.uuid,
+                                           posix=True,
+                                           label=fn)
                 pt.container_label = fn
                 rc = obj()
                 destroy_container(conf, pool.uuid, pt.container)
