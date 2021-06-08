@@ -20,7 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func regPromEngineSources(ctx context.Context, log logging.Logger, engines []*EngineInstance) ([]func(), error) {
+func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Engine) ([]func(), error) {
 	numEngines := len(engines)
 	if numEngines == 0 {
 		return []func(){}, nil
@@ -64,7 +64,7 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []*En
 	return cleanupFns, nil
 }
 
-func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, engines []*EngineInstance) (func(), error) {
+func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, engines []Engine) (func(), error) {
 	cleanupFns, err := regPromEngineSources(ctx, log, engines)
 	if err != nil {
 		return nil, err

@@ -138,7 +138,7 @@ func (c *ControlService) StoragePrepare(ctx context.Context, req *ctlpb.StorageP
 	resp := new(ctlpb.StoragePrepareResp)
 
 	for _, ei := range c.harness.Instances() {
-		if ei.isStarted() {
+		if ei.IsStarted() {
 			return nil, errors.Errorf("instance %d: can't prepare storage if running",
 				ei.Index())
 		}
@@ -198,7 +198,7 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 		// scan through control-plane to get up-to-date stats if io
 		// server is not active (and therefore has not claimed the
 		// assigned devices), bypass cache to get fresh health stats
-		if !srv.isReady() {
+		if !srv.IsReady() {
 			bdevReq.NoCache = true
 
 			bsr, err := c.NvmeScan(bdevReq)
@@ -347,13 +347,13 @@ func (c *ControlService) getScmUsage(ssr *scm.ScanResponse) (*scm.ScanResponse, 
 
 	nss := make(storage.ScmNamespaces, len(instances))
 	for idx, srv := range instances {
-		if !srv.isReady() {
+		if !srv.IsReady() {
 			continue // skip if not running
 		}
 
 		cfg := srv.scmConfig()
 
-		mount, err := srv.scmProvider.GetfsUsage(cfg.MountPoint)
+		mount, err := srv.GetScmUsage()
 		if err != nil {
 			return nil, err
 		}
@@ -449,7 +449,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	formatting := 0
 	for _, srv := range instances {
 		formatting++
-		go func(s *EngineInstance) {
+		go func(s Engine) {
 			scmChan <- s.StorageFormatSCM(ctx, req.Reformat)
 		}(srv)
 	}
@@ -492,7 +492,6 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// TODO: supply whitelist of instance.Devs to init() on format.
 	for _, srv := range instances {
 		if instanceErrored[srv.Index()] {
-			srv.log.Errorf(msgFormatErr, srv.Index())
 			continue
 		}
 		srv.NotifyStorageReady()
