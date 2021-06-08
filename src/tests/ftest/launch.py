@@ -1012,7 +1012,7 @@ def run_tests(test_files, tag_filter, args):
                 # Archive remote valgrind log files
                 return_code |= archive_files(
                     "valgrind log files",
-                    os.path.join(valgrind_logs_dir, "latest", "valgrind_logs"),
+                    os.path.join(avocado_logs_dir, "latest", "valgrind_logs"),
                     test_hosts,
                     "{}/valgrind*".format(valgrind_logs_dir),
                     args,
