@@ -377,11 +377,10 @@ def get_base_env(clean=False):
 
 class DaosPool():
     """Class to store data about daos pools"""
-    def __init__(self, server, pool_uuid):
+    def __init__(self, server, pool_uuid, label):
         self._server = server
         self.uuid = pool_uuid
-        self.label = None
-        self._get_label()
+        self.label = label
 
     def dfuse_mount_name(self):
         """Return the string to pass to dfuse mount
@@ -392,25 +391,6 @@ class DaosPool():
         if self.label:
             return self.label
         return self.uuid
-
-    def _get_label(self):
-        """Fetch the pool label"""
-        rc = run_daos_cmd(self._server.conf,
-                          ['pool',
-                           'get-prop',
-                           '--pool',
-                           self.uuid])
-        assert rc.returncode==0
-        output = rc.stdout.decode('utf-8')
-        for line in output.splitlines():
-            try:
-                key, value = line.split(':')
-            except ValueError:
-                continue
-            if key != 'label':
-                continue
-            self.label = value.lstrip('\t')
-            return
 
 class DaosServer():
     """Manage a DAOS server instance"""
@@ -823,20 +803,18 @@ class DaosServer():
         """Query the server and return a list of pool objects"""
         data = self.run_dmg_json(['pool', 'list'])
 
-        uuids = []
         # This should exist but might be 'None' so check for that rather than
         # iterating.
-        if data['response']['pools']:
-            for pool in data['response']['pools']:
-                uuids.append(pool['uuid'])
-
         pools = []
-        for p_uuid in sorted(uuids):
-            pobj = DaosPool(self, p_uuid)
+        if not data['response']['pools']:
+            return pools
+        for pool in data['response']['pools']:
+            pobj = DaosPool(self,
+                            pool['uuid'],
+                            pool.get('label', None))
+            pools.append(pobj)
             if pobj.label == 'NLT':
                 self.test_pool = pobj
-            pools.append(pobj)
-
         return pools
 
     def _make_pool(self):
