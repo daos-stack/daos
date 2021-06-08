@@ -1887,6 +1887,8 @@ def stop_service(hosts, service):
     mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
     check_hosts = NodeSet.fromlist(hosts)
     loop = 1
+    # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
+    # has been resolved
     max_loops = 3
     while check_hosts:
         # Check the status of the service on each host
