@@ -137,6 +137,28 @@ daos_obj_is_srank(daos_obj_id_t oid)
 	       oc == DAOS_OC_EC_K4P1_SPEC_RANK_L32K;
 }
 
+enum {
+	/* smallest cell size */
+	DAOS_EC_CELL_MIN	= (4 << 10),
+	/* default cell size */
+	DAOS_EC_CELL_DEF	= (128 << 10),
+	/* largest cell size */
+	DAOS_EC_CELL_MAX	= (1024 << 10),
+};
+
+static inline bool
+daos_ec_cs_valid(uint32_t cell_sz)
+{
+	if (cell_sz < DAOS_EC_CELL_MIN || cell_sz > DAOS_EC_CELL_MAX)
+		return false;
+
+	/* should be multiplier of the min size */
+	if (cell_sz % DAOS_EC_CELL_MIN != 0)
+		return false;
+
+	return true;
+}
+
 enum daos_io_mode {
 	DIM_DTX_FULL_ENABLED	= 0,	/* by default */
 	DIM_SERVER_DISPATCH	= 1,
@@ -249,7 +271,8 @@ struct pl_obj_layout;
 
 int obj_class_init(void);
 void obj_class_fini(void);
-struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
+struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid,
+					       bool *is_priv);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
@@ -311,21 +334,10 @@ daos_oclass_st_set_tgt(daos_obj_id_t oid, int tgt)
 	return oid;
 }
 
-#define DAOS_OC_IS_EC(oca)	((oca)->ca_resil == DAOS_RES_EC)
-
-/* check if an oid is EC obj class, and return its daos_oclass_attr */
 static inline bool
-daos_oclass_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
+daos_oclass_is_ec(struct daos_oclass_attr *oca)
 {
-	struct daos_oclass_attr	*oca;
-
-	oca = daos_oclass_attr_find(oid);
-	if (attr != NULL)
-		*attr = oca;
-	if (oca == NULL)
-		return false;
-
-	return DAOS_OC_IS_EC(oca);
+	return oca->ca_resil == DAOS_RES_EC;
 }
 
 static inline void
