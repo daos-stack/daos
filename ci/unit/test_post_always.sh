@@ -50,3 +50,6 @@ rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
 # Note that we are taking advantage of the NFS mount here and if that
 # should ever go away, we need to pull run_test.sh/ from $NODE
 python utils/fix_cmocka_xml.py
+
+cp "${mydir}/../../test_results/*.xml" $test_log_dir
+
