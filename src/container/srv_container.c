@@ -407,27 +407,26 @@ cont_existence_check(struct rdb_tx *tx, struct cont_svc *svc,
 	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &svc->cs_uuids, &key, &val);
 	if (rc != -DER_NONEXIST) {
-		if (rc == 0) {
-			/* not found by UUID, but label matched - invalid */
-			if (!may_exist) {
-				D_ERROR(DF_CONT": non-unique label: %s\n",
-					DP_CONT(puuid, cuuid), clabel);
-				return -DER_INVAL;
-			}
-
-			/* found by UUID, and found by label: make sure the
-			 * label lookup returned same UUID as the request UUID.
-			 */
-			if (uuid_compare(cuuid, match_cuuid)) {
-				D_ERROR(DF_CONT": label=%s -> "DF_UUID
-					" (mismatch)\n", DP_CONT(puuid, cuuid),
-					clabel, DP_UUID(match_cuuid));
-				return -DER_INVAL;
-			}
-			return 0;
-		} else {
+		if (rc != 0)
 			return rc;	/* other lookup failure */
+
+		/* not found by UUID, but label matched - invalid */
+		if (!may_exist) {
+			D_ERROR(DF_CONT": non-unique label: %s\n",
+				DP_CONT(puuid, cuuid), clabel);
+			return -DER_INVAL;
 		}
+
+		/* found by UUID, and found by label: make sure the
+		 * label lookup returned same UUID as the request UUID.
+		 */
+		if (uuid_compare(cuuid, match_cuuid)) {
+			D_ERROR(DF_CONT": label=%s -> "DF_UUID" (mismatch)\n",
+				DP_CONT(puuid, cuuid), clabel,
+				DP_UUID(match_cuuid));
+			return -DER_INVAL;
+		}
+		return 0;
 	}
 
 	/* not found by UUID, and not found by label - legitimate "non-exist" */
@@ -762,7 +761,9 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	/* Determine if non-default label property supplied */
 	def_lbl_ent = daos_prop_entry_get(&cont_prop_default,
 					  DAOS_PROP_CO_LABEL);
+	D_ASSERT(def_lbl_ent != NULL);
 	lbl_ent = daos_prop_entry_get(prop_dup, DAOS_PROP_CO_LABEL);
+	D_ASSERT(lbl_ent != NULL);
 	if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
 		    DAOS_PROP_LABEL_MAX_LEN)) {
 		lbl = lbl_ent->dpe_str;
@@ -1643,7 +1644,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" flags="
 		DF_X64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coi_op.ci_uuid), rpc,
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc,
 		DP_UUID(in->coi_op.ci_hdl), in->coi_flags);
 
 	/* See if this container handle already exists. */
@@ -1653,8 +1654,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != -DER_NONEXIST) {
 		D_DEBUG(DF_DSMS, DF_CONT"/"DF_UUID": "
 				 "Container handle already open.\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->coi_op.ci_uuid),
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid),
 			DP_UUID(in->coi_op.ci_hdl));
 		if (rc == 0 && chdl.ch_flags != in->coi_flags) {
 			D_ERROR(DF_CONT": found conflicting container handle\n",
@@ -1724,7 +1724,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* query the container properties from RDB and update to IV */
 	rc = cont_iv_prop_update(pool_hdl->sph_pool->sp_iv_ns,
-				 in->coi_op.ci_uuid, prop);
+				 cont->c_uuid, prop);
 	daos_prop_free(prop);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_iv_prop_update failed %d.\n",
@@ -1734,7 +1734,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* update container capa to IV */
 	rc = cont_iv_capability_update(pool_hdl->sph_pool->sp_iv_ns,
-				       in->coi_op.ci_hdl, in->coi_op.ci_uuid,
+				       in->coi_op.ci_hdl, cont->c_uuid,
 				       in->coi_flags, sec_capas, stat_pm_ver);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_iv_capability_update failed %d.\n",
@@ -1785,7 +1785,7 @@ out:
 					      in->coi_op.ci_hdl,
 					      CRT_IV_SYNC_EAGER);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coi_op.ci_uuid), rpc,
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc,
 		rc);
 	return rc;
 }
