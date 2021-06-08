@@ -55,10 +55,13 @@ trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 IFS=" " read -r -a nodes <<< "${2//,/ }"
 TEST_NODES=$(IFS=","; echo "${nodes[*]:1:8}")
 
-# Optional --nvme argument for launch.py
-NVME_ARG=""
-if [ -n "${3}" ]; then
-    NVME_ARG="-n ${3}"
+# Optional arguments for launch.py
+LAUNCH_OPT_ARGS="${3:-}"
+
+# Add the missing '--nvme' argument identifier for backwards compatibility with
+# the 'auto:Optane' optional argument specified without the identifier.
+if [[ "${LAUNCH_OPT_ARGS}" == "auto:Optane" ]]; then
+    LAUNCH_OPT_ARGS="--nvme=${LAUNCH_OPT_ARGS}"
 fi
 
 # Log size threshold
@@ -147,7 +150,7 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      SETUP_ONLY=\"${SETUP_ONLY:-false}\"
      TEST_TAG_ARG=\"$TEST_TAG_ARG\"
      TEST_NODES=\"$TEST_NODES\"
-     NVME_ARG=\"$NVME_ARG\"
+     LAUNCH_OPT_ARGS=\"$LAUNCH_OPT_ARGS\"
      LOGS_THRESHOLD=\"$LOGS_THRESHOLD\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}

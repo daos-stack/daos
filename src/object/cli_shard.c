@@ -340,12 +340,12 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 					DF_RC"\n",
 					DP_C_UOID_DKEY(orw->orw_oid,
 						     &orw->orw_dkey),
-					shard_idx, DP_RECX(iod->iod_recxs[i]),
+					shard_idx, DP_RECX(iod->iod_recxs[0]),
 					DP_RC(rc));
 			}
 
 			is_ec_obj = (reasb_req != NULL) &&
-				DAOS_OC_IS_EC(reasb_req->orr_oca);
+				daos_oclass_is_ec(reasb_req->orr_oca);
 			if (rc == -DER_CSUM && is_ec_obj) {
 				struct shard_auxi_args	*sa;
 				uint32_t		 tgt_idx;
@@ -416,9 +416,10 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 	uint64_t		 cell_rec_nr = obj_ec_cell_rec_nr(oca);
 	uint64_t		 end, rec_nr;
 	daos_recx_t		 hi, lo, recx, tmpr;
-	daos_recx_t		 recov_hi, recov_lo;
+	daos_recx_t		 recov_hi = { 0 };
+	daos_recx_t		 recov_lo = { 0 };
 	uint32_t		 iom_nr, i;
-	bool			 done, is_data_shard;
+	bool			 done;
 	int			 rc = 0;
 
 	D_ASSERT(tgt_idx < obj_ec_data_tgt_nr(oca));
@@ -426,13 +427,12 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 	if (recov_list != NULL)
 		daos_recx_ep_list_hilo(recov_list, &recov_hi, &recov_lo);
 
-	is_data_shard = (shard % obj_ec_tgt_nr(oca)) < obj_ec_data_tgt_nr(oca);
 	D_SPIN_LOCK(&reasb_req->orr_spin);
 
 	/* merge iom_recx_hi */
 	hi = src->iom_recx_hi;
 	end = DAOS_RECX_END(hi);
-	if (end > 0 && is_data_shard) {
+	if (end > 0) {
 		hi.rx_idx = max(hi.rx_idx, rounddown(end - 1, cell_rec_nr));
 		hi.rx_nr = end - hi.rx_idx;
 		hi.rx_idx = obj_ec_idx_vos2daos(hi.rx_idx, stripe_rec_nr,
@@ -452,7 +452,7 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 	/* merge iom_recx_lo */
 	lo = src->iom_recx_lo;
 	end = DAOS_RECX_END(lo);
-	if (end > 0 && is_data_shard) {
+	if (end > 0) {
 		lo.rx_nr = min(end, roundup(lo.rx_idx + 1, cell_rec_nr)) -
 			   lo.rx_idx;
 		lo.rx_idx = obj_ec_idx_vos2daos(lo.rx_idx, stripe_rec_nr,
@@ -501,23 +501,14 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 		end = DAOS_RECX_END(recx);
 		rec_nr = 0;
 		while (rec_nr < recx.rx_nr) {
-			if (is_data_shard) {
-				tmpr.rx_idx = recx.rx_idx + rec_nr;
-				tmpr.rx_nr = min(roundup(tmpr.rx_idx + 1,
-							 cell_rec_nr), end) -
-						 tmpr.rx_idx;
-				rec_nr += tmpr.rx_nr;
-				tmpr.rx_idx = obj_ec_idx_vos2daos(tmpr.rx_idx,
-								  stripe_rec_nr,
-								  cell_rec_nr,
-								  tgt_idx);
-			} else {
-				/* If it is from parity shard then it is DAOS
-				 * offset already, and need not break to small
-				 * recxs. */
-				tmpr = recx;
-				rec_nr = recx.rx_nr;
-			}
+			tmpr.rx_idx = recx.rx_idx + rec_nr;
+			tmpr.rx_nr = min(roundup(tmpr.rx_idx + 1, cell_rec_nr),
+					 end) - tmpr.rx_idx;
+			rec_nr += tmpr.rx_nr;
+			tmpr.rx_idx = obj_ec_idx_vos2daos(tmpr.rx_idx,
+							  stripe_rec_nr,
+							  cell_rec_nr,
+							  tgt_idx);
 			rc = iom_recx_merge(dst, &tmpr,
 					    reasb_req->orr_iom_realloc);
 			if (rc == -DER_NOMEM)
@@ -672,7 +663,7 @@ dc_shard_update_size(struct rw_cb_args *rw_args)
 
 	reasb_req = rw_args->shard_args->reasb_req;
 	is_ec_obj = (reasb_req != NULL) &&
-		    DAOS_OC_IS_EC(reasb_req->orr_oca);
+		    daos_oclass_is_ec(reasb_req->orr_oca);
 	/* update the sizes in iods */
 	for (i = 0; i < orw->orw_nr; i++) {
 		daos_iod_t	*iod;
@@ -765,7 +756,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 
 	reasb_req = rw_args->shard_args->reasb_req;
-	is_ec_obj = (reasb_req != NULL) && DAOS_OC_IS_EC(reasb_req->orr_oca);
+	is_ec_obj = reasb_req != NULL &&
+		     daos_oclass_is_ec(reasb_req->orr_oca);
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
 			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d may "
@@ -784,7 +776,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * rec2big errors which can be expected.
 		 */
 		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST ||
-		    rc == -DER_EXIST)
+		    rc == -DER_EXIST || rc == -DER_RF)
 			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d"
 				" failed: "DF_RC"\n", rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank,
@@ -1815,7 +1807,7 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 	uint64_t		 stripe_rec_nr, cell_rec_nr, rx_idx;
 
 	oca = obj_get_oca(cb_args->obj);
-	if (oca == NULL || !DAOS_OC_IS_EC(oca)) {
+	if (oca == NULL || !daos_oclass_is_ec(oca)) {
 		*result_recx = *reply_recx;
 		return;
 	}

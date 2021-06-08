@@ -1958,8 +1958,12 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 	bool				 allocated = false;
 
 	dbd = umem_off2ptr(umm, cont_df->cd_dtx_committed_tail);
-	if (dbd != NULL)
+	if (dbd != NULL) {
+		D_ASSERTF(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC,
+			  "Corrupted committed DTX blob %x\n", dbd->dbd_magic);
+
 		slots = dbd->dbd_cap - dbd->dbd_count;
+	}
 
 	if (slots == 0)
 		goto new_blob;
@@ -2621,7 +2625,8 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 	if (dbd == NULL)
 		D_GOTO(out, rc = 1);
 
-	D_ASSERT(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC);
+	D_ASSERTF(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC,
+		  "Corrupted committed DTX blob (2) %x\n", dbd->dbd_magic);
 
 	cont->vc_reindex_cmt_dtx = 1;
 
