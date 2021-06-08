@@ -634,8 +634,11 @@ def cleanup_dfuse(self):
 
     """
     cmd = [
-        "/usr/bin/bash -c 'pkill dfuse",
-        "for dir in /tmp/daos_dfuse*",
+        "/usr/bin/bash -c 'for pid in $(pgrep dfuse)",
+        "do sudo kill $pid",
+        "done'"]
+    cmd2 = [
+        "/usr/bin/bash -c 'for dir in $(find /tmp/daos_dfuse/)",
         "do fusermount3 -uz $dir",
         "rm -rf $dir",
         "done'"]
@@ -646,7 +649,15 @@ def cleanup_dfuse(self):
                     ";".join(cmd)), self.srun_params)
     except slurm_utils.SlurmFailed as error:
         raise SoakTestError(
-            "<<FAILED: Dfuse directories not deleted>>") from error
+            "<<FAILED: Dfuse processes not stopped>>") from error
+    try:
+        slurm_utils.srun(
+            NodeSet.fromlist(
+                self.hostlist_clients), "{}".format(
+                    ";".join(cmd2)), self.srun_params)
+    except slurm_utils.SlurmFailed as error:
+        raise SoakTestError(
+            "<<FAILED: Dfuse mountpoints not deleted>>") from error
 
 
 def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
