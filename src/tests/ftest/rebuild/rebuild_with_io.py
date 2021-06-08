@@ -7,7 +7,7 @@
 from apricot import TestWithServers, skipForTicket
 
 
-class RebuildWithIO(TestWithServers):
+class RbldWithIO(TestWithServers):
     """Test class for pool rebuild during I/O.
 
     Test Class Description:
