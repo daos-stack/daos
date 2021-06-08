@@ -20,4 +20,4 @@ cd build
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
 
 # NLT will mount /mnt/daos itself.
-./utils/node_local_test.py --max-log-size 400MiB --dfuse-dir /localhome/jenkins/ --perf-check all
+./utils/node_local_test.py --max-log-size 500MiB --dfuse-dir /localhome/jenkins/ --perf-check all

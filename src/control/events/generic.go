@@ -52,7 +52,7 @@ func StrInfoToProto(si *StrInfo) (*sharedpb.RASEvent_StrInfo, error) {
 
 // NewGenericEvent returns a generic RAS event with supplied ID.
 func NewGenericEvent(id RASID, sev RASSeverityID, msg, info string) *RASEvent {
-	return New(&RASEvent{
+	return fill(&RASEvent{
 		ID:           id,
 		Type:         RASTypeInfoOnly,
 		Severity:     sev,

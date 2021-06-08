@@ -1086,14 +1086,13 @@ class SubprocessManager():
             command = "systemctl is-active {}".format(
                 self.manager.job.service_name)
         else:
-            command = "prep {}".format(self.manager.job.command)
+            command = "pgrep {}".format(self.manager.job.command)
         results = run_pcmd(self._hosts, command, 30)
         for result in results:
             for node in result["hosts"]:
                 # expecting single line output from run_pcmd
-                data[ranks[node]] = {
-                    "host": node, "uuid": "-",
-                    "state": result["stdout"][-1]}
+                stdout = result["stdout"][-1] if result["stdout"] else "unknown"
+                data[ranks[node]] = {"host": node, "uuid": "-", "state": stdout}
         return data
 
     def update_expected_states(self, ranks, state):

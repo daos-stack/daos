@@ -8,13 +8,11 @@ package io.daos.obj;
 
 import io.daos.BufferAllocator;
 import io.daos.Constants;
+import io.daos.DaosUtils;
 import io.netty.buffer.ByteBuf;
-import org.apache.commons.lang.StringUtils;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * IO description for fetching and updating object records on given dkey. Each record is described in {@link Entry}.
@@ -563,7 +561,7 @@ public class IODataDescSync extends IODataDescBase {
      */
     private SyncEntry(String key, long offset, int dataSize)
         throws IOException {
-      if (StringUtils.isBlank(key)) {
+      if (DaosUtils.isBlankStr(key)) {
         throw new IllegalArgumentException("key is blank");
       }
       this.key = key;
@@ -733,7 +731,7 @@ public class IODataDescSync extends IODataDescBase {
     }
 
     private void setKey(String akey, long offset, ByteBuf buf, int fetchDataSize) throws UnsupportedEncodingException {
-      if (StringUtils.isBlank(akey)) {
+      if (DaosUtils.isBlankStr(akey)) {
         throw new IllegalArgumentException("key is blank");
       }
       if (!akey.equals(this.key)) {

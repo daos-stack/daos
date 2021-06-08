@@ -38,8 +38,6 @@ struct dfuse_info {
 
 struct dfuse_projection_info {
 	struct dfuse_info		*dpi_info;
-	uint32_t			dpi_max_read;
-	uint32_t			dpi_max_write;
 	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table		dpi_iet;
 	/** Hash table of open pools */

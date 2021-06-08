@@ -31,10 +31,10 @@ extern "C" {
  * DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
  * factor/level requirements of the container.
  */
-#define DAOS_COO_RO	(1U << 0)
-#define DAOS_COO_RW	(1U << 1)
-#define DAOS_COO_NOSLIP	(1U << 2)
-#define DAOS_COO_FORCE	(1U << 3)
+#define DAOS_COO_RO		(1U << 0)
+#define DAOS_COO_RW		(1U << 1)
+#define DAOS_COO_NOSLIP		(1U << 2)
+#define DAOS_COO_FORCE		(1U << 3)
 
 #define DAOS_COO_NBITS	(4)
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
@@ -167,6 +167,34 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
 
 /**
+ * Open an existing container identified by label property \a label.
+ * Upon successful completion, \a coh and \a info, both of which shall be
+ * allocated by the caller, return the container handle and the latest
+ * container information respectively.
+ *
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	label	Label property to identify the container.
+ * \param[in]	flags	Open mode, represented by the DAOS_COO_ bits.
+ * \param[out]	coh	Returned open handle.
+ * \param[out]	info	Optional, return container information
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Container is nonexistent
+ *			-DER_RF		#failures exceed RF, data possibly lost
+ */
+int
+daos_cont_open_by_label(daos_handle_t poh, const char *label,
+			unsigned int flags, daos_handle_t *coh,
+			daos_cont_info_t *info, daos_event_t *ev);
+
+/**
  * Close a container handle. Upon successful completion, the container handle's
  * epoch hold (i.e., if LHE < DAOS_EPOCH_MAX) is released, and any uncommitted
  * updates from the container handle are discarded.
@@ -289,6 +317,25 @@ daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
  */
 int
 daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
+
+
+/**
+ * Clear container status, to clear container's DAOS_PROP_CO_STATUS property
+ * from DAOS_PROP_CO_UNCLEAN status to DAOS_PROP_CO_HEALTHY (with same purpose
+ * with "daos cont set-prop --properties=status:healthy --pool= --cont= ".
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ */
+int
+daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev);
 
 /**
  * Overwrites the container ACL with a new one.

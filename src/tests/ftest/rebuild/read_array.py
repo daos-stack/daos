@@ -7,7 +7,7 @@
 from rebuild_test_base import RebuildTestBase
 
 
-class ReadArrayTest(RebuildTestBase):
+class RbldReadArrayTest(RebuildTestBase):
     # pylint: disable=too-many-ancestors
     """Run rebuild tests with DAOS servers and clients.
 
