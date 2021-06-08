@@ -9,7 +9,6 @@ from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
-from apricot import skipForTicket
 
 
 class OSAOfflineReintegration(OSAUtils):
@@ -242,7 +241,6 @@ class OSAOfflineReintegration(OSAUtils):
         self.log.info("Offline Reintegration : Aggregation")
         self.run_offline_reintegration_test(1, data=True)
 
-    @skipForTicket("DAOS-7783,DAOS-7790")
     def test_osa_offline_reintegration_with_rf(self):
         """Test ID: DAOS-6923
         Test Description: Validate Offline Reintegration
