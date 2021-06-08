@@ -488,16 +488,17 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 
 	gm := newGroupMap(db.data.MapVersion)
 	for _, srv := range db.data.Members.Ranks {
-		// Only members that have been evicted or administratively
+		// Only members that have been auto-excluded or administratively
 		// excluded should be omitted from the group map. If a member
 		// is actually down, it will be marked dead by swim and moved
-		// into the evicted state eventually.
+		// into the excluded state eventually.
 		if srv.state&ExcludedMemberFilter != 0 {
 			continue
 		}
 		// Quick sanity-check: Don't include members that somehow have
 		// a nil rank or fabric URI, either.
 		if srv.Rank.Equals(NilRank) || srv.FabricURI == "" {
+			db.log.Errorf("member has invalid rank (%d) or URI (%s)", srv.Rank, srv.FabricURI)
 			continue
 		}
 		gm.RankURIs[srv.Rank] = srv.FabricURI

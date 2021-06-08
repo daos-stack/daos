@@ -79,7 +79,7 @@ simple_put_get(void **state)
 	daos_size_t	buf_size = 1024, size;
 	daos_event_t	ev;
 	const char      *key_fmt = "key%d";
-	char		key[10];
+	char		key[32] = {0};
 	char		*buf;
 	char		*buf_out;
 	int		i, num_keys;

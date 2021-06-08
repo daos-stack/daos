@@ -124,12 +124,12 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "target",
 	},
 	{
-		.td_type	= PO_COMP_TP_NODE,
+		.td_type	= PO_COMP_TP_RANK,
 		.td_abbr	= 'n',
 		.td_name	= "node",
 	},
 	{
-		.td_type	= PO_COMP_TP_RACK,
+		.td_type	= PO_COMP_TP_NODE, /** for testing */
 		.td_abbr	= 'r',
 		.td_name	= "rack",
 	},
@@ -139,14 +139,14 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "root",
 	},
 	{
-		.td_type	= PO_COMP_TP_UNKNOWN,
-		.td_abbr	= 'u',
-		.td_name	= "unknown",
-	},
+		.td_type	= PO_COMP_TP_END,
+		.td_abbr	= 'e',
+		.td_name	= "",
+	}
 };
 
 #define comp_type_for_each(d)		\
-	for (d = &comp_type_dict[0]; d->td_type != PO_COMP_TP_UNKNOWN; d++)
+	for (d = &comp_type_dict[0]; d->td_type != PO_COMP_TP_END; d++)
 
 /**
  * struct used to keep track of failed domain count
@@ -311,7 +311,7 @@ comp_sorter_find_domain(struct pool_comp_sorter *sorter, unsigned int id)
 {
 	int	at;
 
-	D_ASSERT(sorter->cs_type < PO_COMP_TP_TARGET);
+	D_ASSERT(sorter->cs_type > PO_COMP_TP_TARGET);
 	at = daos_array_find(sorter->cs_comps, sorter->cs_nr, id,
 			     &comp_sort_ops);
 	return at < 0 ? NULL :
@@ -398,17 +398,19 @@ pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		struct pool_component *prev;
 
 		prev = nr == 0 ? NULL : &buf->pb_comps[nr - 1];
-		if (prev != NULL && prev->co_type > comps[0].co_type)
+		if (prev != NULL && prev->co_type < comps[0].co_type) {
+			D_ERROR("bad type hierarchy, prev type=%d, "
+				"current=%d\n", prev->co_type,
+				comps[0].co_type);
 			return -DER_INVAL;
+		}
 
 		if (comps[0].co_type == PO_COMP_TP_TARGET)
 			buf->pb_target_nr++;
-		else if (comps[0].co_type == PO_COMP_TP_NODE)
+		else if (comps[0].co_type == PO_COMP_TP_RANK)
 			buf->pb_node_nr++;
-		else if (comps[0].co_type == PO_COMP_TP_RACK)
-			buf->pb_domain_nr++;
 		else
-			D_ASSERTF(0, "invalid type %d\n", comps[0].co_type);
+			buf->pb_domain_nr++;
 
 		buf->pb_comps[nr] = comps[0];
 
@@ -502,9 +504,8 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 		int		       nr = 0;
 
 		*comp = buf->pb_comps[i - 1];
-		if (comp->co_type > PO_COMP_TP_TARGET) {
-			D_DEBUG(DB_MGMT, "Invalid type %d/%d\n",
-				type, comp->co_type);
+		if (comp->co_type >= PO_COMP_TP_ROOT) {
+			D_ERROR("Invalid type %d/%d\n", type, comp->co_type);
 			rc = -DER_INVAL;
 			goto out;
 		}
@@ -770,7 +771,7 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 	D_DEBUG(DB_TRACE, "Sanity check of component buffer\n");
 	pool_tree_count(tree, &cntr);
 	if (cntr.cc_targets == 0) {
-		D_DEBUG(DB_MGMT, "Buffer has no target\n");
+		D_ERROR("Buffer has no target\n");
 		return false;
 	}
 
@@ -780,10 +781,9 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 		int		    child_nr = 0;
 
 		if (parent != NULL &&
-		    parent->do_comp.co_type >= tree[0].do_comp.co_type) {
-			D_DEBUG(DB_MGMT,
-				"Type of parent domain %d(%s) should be "
-				"smaller than child domain %d(%s)\n",
+		    parent->do_comp.co_type <= tree[0].do_comp.co_type) {
+			D_ERROR("Type of parent domain %d(%s) should be "
+				"greater than child domain %d(%s)\n",
 				parent->do_comp.co_type,
 				pool_domain_name(parent),
 				tree[0].do_comp.co_type,
@@ -793,14 +793,13 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 
 		for (i = 0; i < dom_nr; i++) {
 			if (tree[i].do_comp.co_ver > version) {
-				D_DEBUG(DB_MGMT, "Invalid version %u/%u\n",
+				D_ERROR("Invalid version %u/%u\n",
 					tree[i].do_comp.co_ver, version);
 				return false;
 			}
 
 			if (prev->do_comp.co_type != tree[i].do_comp.co_type) {
-				D_DEBUG(DB_MGMT,
-					"Unmatched domain type %d/%d\n",
+				D_ERROR("Unmatched domain type %d/%d\n",
 					tree[i].do_comp.co_type,
 					prev->do_comp.co_type);
 				return false;
@@ -808,19 +807,19 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 
 			if (tree[i].do_targets == NULL ||
 			    tree[i].do_target_nr == 0) {
-				D_DEBUG(DB_MGMT, "No target found\n");
+				D_ERROR("No target found\n");
 				return false; /* always has targets */
 			}
 
 			if ((prev->do_children == NULL) ^
 			    (tree[i].do_children == NULL)) {
-				D_DEBUG(DB_MGMT, "Invalid child tree\n");
+				D_ERROR("Invalid child tree\n");
 				return false;
 			}
 
 			if ((prev->do_targets == NULL) ^
 			    (tree[i].do_targets == NULL)) {
-				D_DEBUG(DB_MGMT, "Invalid target tree\n");
+				D_ERROR("Invalid target tree\n");
 				return false;
 			}
 
@@ -828,7 +827,7 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 			    prev->do_children != NULL &&
 			    prev->do_children + prev->do_child_nr !=
 			    tree[i].do_children) {
-				D_DEBUG(DB_MGMT, "Invalid children pointer\n");
+				D_ERROR("Invalid children pointer\n");
 				return false;
 			}
 
@@ -836,7 +835,7 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 			    prev->do_targets != NULL &&
 			    prev->do_targets + prev->do_target_nr !=
 			    tree[i].do_targets) {
-				D_DEBUG(DB_MGMT, "Invalid children pointer i"
+				D_ERROR("Invalid children pointer i"
 					" %d target nr %d\n", i,
 					prev->do_target_nr);
 				return false;
@@ -853,14 +852,14 @@ pool_tree_sane(struct pool_domain *tree, uint32_t version)
 
 	for (i = 0; i < cntr.cc_targets; i++) {
 		if (targets[i].ta_comp.co_type != PO_COMP_TP_TARGET) {
-			D_DEBUG(DB_MGMT, "Invalid leaf type %d(%s) i %d\n",
+			D_ERROR("Invalid leaf type %d(%s) i %d\n",
 				targets[i].ta_comp.co_type,
 				pool_comp_name(&targets[i].ta_comp), i);
 			return false;
 		}
 
 		if (targets[i].ta_comp.co_ver > version) {
-			D_DEBUG(DB_MGMT, "Invalid version %u/%u i %d\n",
+			D_ERROR("Invalid version %u/%u i %d\n",
 				targets[i].ta_comp.co_ver, version, i);
 			return false;
 		}
@@ -1045,13 +1044,18 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 		return -DER_NO_PERM;
 
 	/* pool_buf_parse should always generate root */
-	if (tree[0].do_comp.co_type != PO_COMP_TP_ROOT)
+	if (tree[0].do_comp.co_type != PO_COMP_TP_ROOT) {
+		D_ERROR("first component (type=%d) is not root\n",
+			tree[0].do_comp.co_type);
 		return -DER_INVAL;
+	}
 
 	rc = pool_map_find_domain(map, tree[1].do_comp.co_type,
 				  PO_COMP_ID_ALL, &doms);
-	if (rc == 0)
+	if (rc == 0) {
+		D_ERROR("failed to find existing domains\n");
 		return -DER_INVAL;
+	}
 
 	if (doms - map->po_tree == 1) {
 		/* the first component is indeed under the root */
@@ -1073,7 +1077,7 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 		int	j;
 
 		if (doms == NULL) {
-			D_DEBUG(DB_MGMT, "tree has more layers than the map\n");
+			D_ERROR("tree has more layers than the map\n");
 			return -DER_INVAL;
 		}
 
@@ -1085,8 +1089,7 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 			bool		       existed;
 
 			if (dc->co_type != doms[0].do_comp.co_type) {
-				D_DEBUG(DB_MGMT,
-					"domain type not match %s(%u) %s(%u)\n",
+				D_ERROR("domain type not match %s(%u) %s(%u)\n",
 					pool_comp_name(dc), dc->co_type,
 					pool_domain_name(&doms[0]),
 					doms[0].do_comp.co_type);
@@ -1095,20 +1098,35 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 
 			existed = domain_exist(map, dc->co_type, dc->co_id);
 			if (dc->co_status == PO_COMP_ST_NEW) {
-				if (parent == NULL)
+				if (parent == NULL) {
+					D_ERROR("null parent not valid for "
+						"new comp\n");
 					return -DER_INVAL;
-				if (existed)
+				}
+				if (existed) {
+					D_ERROR("new component ID %d already "
+						"exists\n", dc->co_id);
 					return -DER_NO_PERM;
+				}
 
 			} else if (dc->co_status == PO_COMP_ST_UPIN) {
-				if (!existed)
+				if (!existed) {
+					D_ERROR("status [UPIN] not valid for "
+						"new comp\n");
 					return -DER_INVAL;
+				}
 
 				D_ASSERT(parent != NULL);
-				if (parent->do_comp.co_status == PO_COMP_ST_NEW)
+				if (parent->do_comp.co_status ==
+				    PO_COMP_ST_NEW) {
+					D_ERROR("invalid parent status [NEW] "
+						"when component status "
+						"[UPIN]\n");
 					return -DER_INVAL;
-
+				}
 			} else {
+				D_ERROR("bad comp status=0x%x\n",
+					dc->co_status);
 				return -DER_INVAL;
 			}
 
@@ -1117,7 +1135,7 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 			} else {
 				/* the last layer domain */
 				if (doms[0].do_children != NULL) {
-					D_DEBUG(DB_MGMT, "unmatched tree\n");
+					D_ERROR("unmatched tree\n");
 					return -DER_INVAL;
 				}
 
@@ -1126,8 +1144,11 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 
 					tc = &tree[i].do_targets[j].ta_comp;
 					if (tc->co_status != PO_COMP_ST_NEW ||
-					    target_exist(map, tc->co_id))
+					    target_exist(map, tc->co_id)) {
+						D_ERROR("invalid component "
+							"status\n");
 						return -DER_INVAL;
+					}
 				}
 			}
 
@@ -1382,7 +1403,7 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
-		num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK,
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
 						 PO_COMP_ID_ALL, NULL);
 	} else {
 		new_status = PO_COMP_ST_UPIN;
@@ -1411,7 +1432,7 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 			break;
 
 		/* TODO DAOS-6353: Use the layer number as type */
-		map_comp.co_type = PO_COMP_TP_RACK;
+		map_comp.co_type = PO_COMP_TP_NODE;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
 		map_comp.co_id = node.fdn_val.dom->fd_id;
@@ -1425,7 +1446,7 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 			int			already_in_map;
 
 			already_in_map = pool_map_find_domain(map,
-							      PO_COMP_TP_RACK,
+							      PO_COMP_TP_NODE,
 							      map_comp.co_id,
 							      &current);
 			if (already_in_map > 0)
@@ -1433,6 +1454,9 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		}
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		if (rc != 0)
+			D_ERROR("failed attaching domain ID %d to pool "
+				"buf\n", node.fdn_val.dom->fd_id);
 		i++;
 	}
 
@@ -1488,7 +1512,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
-		num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_RANK,
 						 PO_COMP_ID_ALL, NULL);
 	} else {
 		new_status = PO_COMP_ST_UPIN;
@@ -1508,19 +1532,23 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		}
 
 		updated = true;
-		map_comp.co_type = PO_COMP_TP_NODE;
+		map_comp.co_type = PO_COMP_TP_RANK;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
 		map_comp.co_id = (p - uuids) + num_comps;
 		map_comp.co_rank = target_addrs->rl_ranks[i];
 		map_comp.co_ver = map_version;
+		map_comp.co_in_ver = map_version;
 		map_comp.co_fseq = 1;
 		map_comp.co_flags = PO_COMPF_NONE;
 		map_comp.co_nr = dss_tgt_nr;
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("failed to attach to pool buf, "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out_map_buf, rc);
+		}
 	}
 
 	if (!updated)
@@ -1542,6 +1570,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
 			map_comp.co_rank = target_addrs->rl_ranks[i];
 			map_comp.co_ver = map_version;
+			map_comp.co_in_ver = map_version;
 			map_comp.co_fseq = 1;
 			map_comp.co_flags = PO_COMPF_NONE;
 			map_comp.co_nr = 1;
@@ -1762,7 +1791,7 @@ int
 pool_map_find_nodes(struct pool_map *map, uint32_t id,
 		    struct pool_domain **domain_pp)
 {
-	return pool_map_find_domain(map, PO_COMP_TP_NODE, id,
+	return pool_map_find_domain(map, PO_COMP_TP_RANK, id,
 				    domain_pp);
 }
 
@@ -2327,10 +2356,12 @@ pmap_comp_failed(struct pool_component *comp)
 }
 
 static bool
-pmap_comp_execlude_out_earlier(struct pool_component *comp, uint32_t ver)
+pmap_comp_failed_earlier(struct pool_component *comp, uint32_t ver)
 {
-	return (comp->co_status == PO_COMP_ST_DOWNOUT &&
-		comp->co_out_ver <= ver);
+	return ((comp->co_status == PO_COMP_ST_DOWNOUT &&
+		 comp->co_out_ver <= ver) ||
+		(comp->co_status == PO_COMP_ST_DOWN &&
+		 comp->co_fseq <= ver));
 }
 
 static int
@@ -2470,7 +2501,7 @@ pmap_node_check(struct pool_domain *node_dom, struct pmap_fail_stat *fstat)
 		tgt = &node_dom->do_targets[i];
 		comp = &tgt->ta_comp;
 		if (!pmap_comp_failed(comp) ||
-		    pmap_comp_execlude_out_earlier(comp, fstat->pf_last_ver))
+		    pmap_comp_failed_earlier(comp, fstat->pf_last_ver))
 			continue;
 		if (fnode == NULL) {
 			fnode = pmap_fail_node_get(fstat);
@@ -2497,9 +2528,9 @@ pmap_node_check(struct pool_domain *node_dom, struct pmap_fail_stat *fstat)
 		fstat->pf_newfail_nr++;
 	if ((fstat->pf_down_nr > fstat->pf_rf) && (fstat->pf_newfail_nr > 0)) {
 		rc = -DER_RF;
-		D_ERROR("RF broken, found %d DOWN node, newly fail %d, rf %d, "
-			DF_RC"\n", fstat->pf_down_nr, fstat->pf_newfail_nr,
-			fstat->pf_rf, DP_RC(rc));
+		D_DEBUG(DB_TRACE, "RF broken, found %d DOWN node, "
+			"newly fail %d, rf %d, "DF_RC"\n", fstat->pf_down_nr,
+			fstat->pf_newfail_nr, fstat->pf_rf, DP_RC(rc));
 	}
 
 	return rc;
@@ -2575,8 +2606,8 @@ pmap_fail_stat_check(struct pmap_fail_stat *fstat)
 
 fail:
 	if (rc == -DER_RF) {
-		D_ERROR("RF broken, found %d fail, DOWN %d, newly fail %d, "
-			"max_overlapped %d, rf %d, "DF_RC"\n",
+		D_DEBUG(DB_TRACE, "RF broken, found %d fail, DOWN %d, newly "
+			"fail %d, max_overlapped %d, rf %d, "DF_RC"\n",
 			fstat->pf_node_nr, fstat->pf_down_nr,
 			fstat->pf_newfail_nr, max_fail_nr,
 			fstat->pf_rf, DP_RC(rc));
@@ -2599,7 +2630,7 @@ pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rf)
 	int			 rc = 0;
 
 	pmap_fail_stat_init(&fstat, last_ver, rf);
-	node_nr = pool_map_find_domain(map, PO_COMP_TP_NODE, PO_COMP_ID_ALL,
+	node_nr = pool_map_find_domain(map, PO_COMP_TP_RANK, PO_COMP_ID_ALL,
 				       &node_doms);
 	D_ASSERT(node_nr >= 0);
 	if (node_nr == 0)
@@ -2813,13 +2844,13 @@ pool_map_set_version(struct pool_map *map, uint32_t version)
 }
 
 int
-pool_map_get_failed_cnt(struct pool_map *map, pool_comp_type_t type)
+pool_map_get_failed_cnt(struct pool_map *map, uint32_t domain)
 {
 	int i;
 	int fail_cnt = -1;
 
 	for (i = 0; i < map->po_domain_layers; ++i) {
-		if (map->po_comp_fail_cnts[i].comp_type == type) {
+		if (map->po_comp_fail_cnts[i].comp_type == domain) {
 			fail_cnt = map->po_comp_fail_cnts[i].fail_cnt;
 			break;
 		}
