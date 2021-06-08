@@ -816,11 +816,7 @@ class DaosServer():
         data = json.loads(rc.stdout.decode('utf-8'))
         assert not data['error']
         assert data['status'] == 0
-        try:
-            assert data['response']['status'] == 0
-        except KeyError:
-            assert data['response']['Status'] == 0
-            print('ERROR: Incorrect json from: {}'.format(' '.join(cmd)))
+        assert data['response']['status'] == 0
         return data
 
     def fetch_pools(self):
