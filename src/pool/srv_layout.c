@@ -98,7 +98,7 @@ ds_pool_prop_default_init(void)
 	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_POLICY);
 	if (entry != NULL) {
 		D_DEBUG(DB_MGMT, "Initializing default policy pool prop\n");
-		D_ALLOC(pd, sizeof(struct policy_desc_t));
+		D_ALLOC_PTR(pd);
 		if (pd == NULL)
 			return -DER_NOMEM;
 		pd->policy = DAOS_MEDIA_POLICY_IO_SIZE;
@@ -125,7 +125,6 @@ ds_pool_prop_default_fini(void)
 
 	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_POLICY);
 	if (entry != NULL) {
-		D_DEBUG(DB_MGMT, "Freeing default policy pool prop\n");
 		D_FREE(entry->dpe_val_ptr);
 	}
 }

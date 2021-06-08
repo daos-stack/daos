@@ -284,12 +284,12 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			pd = iv_prop->pip_policy_desc;
 
 			D_ALLOC(pd_alloc, sizeof(*pd));
-			if (pd_alloc != NULL) {
-				memcpy(pd_alloc, pd, sizeof(*pd));
-				prop_entry->dpe_val_ptr = pd_alloc;
-			} else {
+			if(pd_alloc == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			}
+
+			memcpy(pd_alloc, pd, sizeof(*pd));
+			prop_entry->dpe_val_ptr = pd_alloc;
+
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -306,7 +306,7 @@ out:
 		D_FREE(owner_grp_alloc);
 		if (svc_list)
 			d_rank_list_free(dst_list);
-		if (pd_alloc)
+
 			D_FREE(pd_alloc);
 	}
 	return rc;

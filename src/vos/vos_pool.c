@@ -895,6 +895,7 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 {
 	struct vos_pool		*pool;
 	int			i;
+	struct policy_desc_t 	*p;
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL)
@@ -918,13 +919,13 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 		if (param == NULL)
 			return -DER_INVAL;
 
-		struct policy_desc_t *p = (struct policy_desc_t *)param;
+		p = (struct policy_desc_t *)param;
 
 		pool->vp_policy_desc.policy = p->policy;
 
-		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++) {
+		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
 			pool->vp_policy_desc.params[i] = p->params[i];
-		}
+
 		break;
 	}
 

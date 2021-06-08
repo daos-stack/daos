@@ -287,8 +287,8 @@ create_pool_props_from_req(daos_prop_t **out_prop,
 	}
 
 	D_ALLOC(out_policy_desc, sizeof(struct policy_desc_t));
-		if (out_policy_desc == NULL)
-			D_GOTO(err_out, rc = -DER_NOMEM);
+	if (out_policy_desc == NULL)
+		D_GOTO(err_out, rc = -DER_NOMEM);
 
 	if (req->policyparams != NULL) {
 		if (req->n_policyparams > DAOS_MEDIA_POLICY_PARAMS_MAX)
