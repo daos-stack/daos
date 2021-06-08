@@ -320,7 +320,7 @@ class DmDstCreate(DataMoverTestBase):
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,fs_copy
         :avocado: tags=dm_dst_create_fs_copy_posix_dfs
         """
         self.run_dm_dst_create("FS_COPY", "POSIX", "DFS", False)
