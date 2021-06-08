@@ -224,7 +224,7 @@ show_help(char *name)
 		"\n"
 		"	-m --mountpoint=PATHSTR	Mount point to use\n"
 		"	   --pool=<name>	pool UUID/label\n"
-		"	   --container=UUID	container UUID\n"
+		"	   --container=<name>	container UUID/label\n"
 		"	   --sys-name=STR	DAOS system name context for servers\n"
 		"	-S --singlethreaded	Single threaded\n"
 		"	-t --thread-count=COUNT Number of fuse threads to use\n"
@@ -249,6 +249,7 @@ main(int argc, char **argv)
 	int			rc;
 	bool			have_thread_count = false;
 	bool			have_pool_label = false;
+	bool			have_cont_label = false;
 
 	struct option long_options[] = {
 		{"pool",		required_argument, 0, 'p'},
@@ -365,12 +366,9 @@ main(int argc, char **argv)
 		if (uuid_parse(dfuse_info->di_pool, pool_uuid) < 0)
 			have_pool_label = true;
 
-		if (dfuse_info->di_cont) {
-			if (uuid_parse(dfuse_info->di_cont, cont_uuid) < 0) {
-				printf("Invalid container uuid\n");
-				exit(1);
-			}
-		}
+		if ((dfuse_info->di_cont) &&
+			(uuid_parse(dfuse_info->di_cont, cont_uuid) < 0))
+			have_cont_label = true;
 	}
 
 	if (!dfuse_info->di_foreground) {
@@ -392,13 +390,26 @@ main(int argc, char **argv)
 		D_GOTO(out_debug, ret = rc);
 
 	if (have_pool_label) {
-		rc = dfuse_pool_open_by_label(fs_handle,
-					      dfuse_info->di_pool,
-					      &dfp);
+		rc = dfuse_pool_connect_by_label(fs_handle,
+						 dfuse_info->di_pool,
+						 &dfp);
 		if (rc != -DER_SUCCESS) {
 			printf("Failed to connect to pool (%d)\n", rc);
 			D_GOTO(out_dfs, 0);
 		}
+		uuid_copy(pool_uuid, dfp->dfp_pool);
+	}
+
+	if (have_cont_label) {
+		rc = dfuse_cont_open_by_label(fs_handle,
+					      dfp,
+					      dfuse_info->di_cont,
+					      &dfs);
+		if (rc != -DER_SUCCESS) {
+			printf("Failed to connect to container (%d)\n", rc);
+			D_GOTO(out_dfs, ret = daos_errno2der(rc));
+		}
+		uuid_copy(cont_uuid, dfs->dfs_cont);
 	}
 
 	duns_attr.da_no_reverse_lookup = true;
@@ -432,17 +443,19 @@ main(int argc, char **argv)
 	 * dfp
 	 */
 	if (!have_pool_label) {
-		rc = dfuse_pool_open(fs_handle, &pool_uuid, &dfp);
+		rc = dfuse_pool_connect(fs_handle, &pool_uuid, &dfp);
 		if (rc != -DER_SUCCESS) {
 			printf("Failed to connect to pool (%d)\n", rc);
 			D_GOTO(out_dfs, 0);
 		}
 	}
 
-	rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
-	if (rc != -DER_SUCCESS) {
-		printf("Failed to connect to container (%d)\n", rc);
-		D_GOTO(out_dfs, ret = daos_errno2der(rc));
+	if (!have_cont_label) {
+		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
+		if (rc != -DER_SUCCESS) {
+			printf("Failed to connect to container (%d)\n", rc);
+			D_GOTO(out_dfs, ret = daos_errno2der(rc));
+		}
 	}
 
 	/* The container created by dfuse_cont_open() will have taken a ref

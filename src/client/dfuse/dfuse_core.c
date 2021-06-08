@@ -390,7 +390,7 @@ d_hash_table_ops_t cont_hops = {
  * Return code is a system errno.
  */
 int
-dfuse_pool_open_by_label(struct dfuse_projection_info *fs_handle,
+dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
 			const char *label,
 			struct dfuse_pool **_dfp)
 {
@@ -466,8 +466,8 @@ err:
  * Return code is a system errno.
  */
 int
-dfuse_pool_open(struct dfuse_projection_info *fs_handle, uuid_t *pool,
-		struct dfuse_pool **_dfp)
+dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
+		   struct dfuse_pool **_dfp)
 {
 	struct dfuse_pool	*dfp;
 	d_list_t		*rlink;
@@ -565,8 +565,6 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
  * large.
  */
 #define ATTR_VALUE_LEN 128
-
-static void dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
 
 /* Setup caching attributes for a container.
  *
@@ -707,7 +705,7 @@ out:
  * dentries which represent directories and are therefore referenced much
  * more often during path-walk activities are set to five seconds.
  */
-static void
+void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
 {
 	dfc->dfc_attr_timeout = 1;
@@ -716,6 +714,81 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
 	dfc->dfc_ndentry_timeout = 1;
 	dfc->dfc_data_caching = true;
 	dfc->dfc_direct_io_disable = false;
+}
+
+/* Open a cont by label.
+ *
+ * Only used for command line labels, not for paths in dfuse.
+ */
+int
+dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
+			struct dfuse_pool *dfp,
+			const char *label,
+			struct dfuse_cont **_dfc)
+{
+	struct dfuse_cont *dfc;
+	daos_cont_info_t c_info = {};
+	int rc;
+
+	D_ALLOC_PTR(dfc);
+	if (dfc == NULL)
+		D_GOTO(err_free, rc = ENOMEM);
+
+	rc = daos_cont_open_by_label(dfp->dfp_poh, label, DAOS_COO_RW,
+				     &dfc->dfs_coh, &c_info, NULL);
+	if (rc == -DER_NONEXIST) {
+		DFUSE_TRA_INFO(dfc,
+			"daos_cont_open() failed: "
+			DF_RC, DP_RC(rc));
+		D_GOTO(err_free, rc = daos_der2errno(rc));
+	} else if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(dfc,
+				"daos_cont_open() failed: "
+				DF_RC, DP_RC(rc));
+		D_GOTO(err_free, rc = daos_der2errno(rc));
+	}
+
+	uuid_copy(dfc->dfs_cont, c_info.ci_uuid);
+
+	rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, O_RDWR, &dfc->dfs_ns);
+	if (rc) {
+		DFUSE_TRA_ERROR(dfc,
+				"dfs_mount() failed: (%s)",
+				strerror(rc));
+		D_GOTO(err_close, rc);
+	}
+
+	if (fs_handle->dpi_info->di_caching) {
+		rc = dfuse_cont_get_cache(dfc);
+		if (rc == ENODATA) {
+			/* If there is no container specific
+			 * attributes then use defaults
+			 */
+			DFUSE_TRA_INFO(dfc,
+				"Using default caching values");
+			dfuse_set_default_cont_cache_values(dfc);
+			rc = 0;
+		} else if (rc != 0) {
+			D_GOTO(err_close, rc);
+		}
+	} else {
+		DFUSE_TRA_INFO(dfc,
+			"Caching disabled");
+	}
+
+	rc = dfuse_cont_open(fs_handle, dfp, &c_info.ci_uuid, &dfc);
+	if (rc) {
+		D_FREE(dfc);
+		return rc;
+	}
+	*_dfc = dfc;
+	return 0;
+
+err_close:
+	daos_cont_close(dfc->dfs_coh, NULL);
+err_free:
+	D_FREE(dfc);
+	return rc;
 }
 
 /*
@@ -782,57 +855,55 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		dfc->dfc_dentry_dir_timeout = 5;
 		dfc->dfc_ndentry_timeout = 5;
 
-	} else {
+	} else if (*_dfc == NULL) {
 		dfc->dfs_ops = &dfuse_dfs_ops;
-
 		uuid_copy(dfc->dfs_cont, *cont);
+		rc = daos_cont_open(dfp->dfp_poh, dfc->dfs_cont,
+				    DAOS_COO_RW, &dfc->dfs_coh,
+				    NULL, NULL);
+		if (rc == -DER_NONEXIST) {
+			DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: "DF_RC,
+				       DP_RC(rc));
+			D_GOTO(err_free, rc = daos_der2errno(rc));
+		} else if (rc != -DER_SUCCESS) {
+			DFUSE_TRA_ERROR(dfc, "daos_cont_open() failed: "
+					DF_RC, DP_RC(rc));
+			D_GOTO(err_free, rc = daos_der2errno(rc));
+		}
 
-		if (*_dfc == NULL) {
-			rc = daos_cont_open(dfp->dfp_poh, dfc->dfs_cont,
-					    DAOS_COO_RW, &dfc->dfs_coh,
-					    NULL, NULL);
-			if (rc == -DER_NONEXIST) {
+		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, O_RDWR,
+			       &dfc->dfs_ns);
+		if (rc) {
+			DFUSE_TRA_ERROR(dfc,
+					"dfs_mount() failed: (%s)",
+					strerror(rc));
+			D_GOTO(err_close, rc);
+		}
+
+		if (fs_handle->dpi_info->di_caching) {
+			rc = dfuse_cont_get_cache(dfc);
+			if (rc == ENODATA) {
+				/* If there is no container specific
+				 * attributes then use defaults
+				 */
 				DFUSE_TRA_INFO(dfc,
-					       "daos_cont_open() failed: "
-					       DF_RC, DP_RC(rc));
-				D_GOTO(err_free, rc = daos_der2errno(rc));
-			} else if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(dfc,
-						"daos_cont_open() failed: "
-						DF_RC, DP_RC(rc));
-				D_GOTO(err_free, rc = daos_der2errno(rc));
-			}
-
-			rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh,
-				       O_RDWR, &dfc->dfs_ns);
-			if (rc) {
-				DFUSE_TRA_ERROR(dfc,
-						"dfs_mount() failed: (%s)",
-						strerror(rc));
+					"Using default caching values");
+				dfuse_set_default_cont_cache_values(dfc);
+				rc = 0;
+			} else if (rc != 0) {
 				D_GOTO(err_close, rc);
 			}
-
-			if (fs_handle->dpi_info->di_caching) {
-				rc = dfuse_cont_get_cache(dfc);
-				if (rc == ENODATA) {
-					/* If there is no container specific
-					 * attributes then use defaults
-					 */
-					DFUSE_TRA_INFO(dfc,
-						       "Using default caching values");
-					dfuse_set_default_cont_cache_values(dfc);
-					rc = 0;
-				} else if (rc != 0) {
-					D_GOTO(err_close, rc);
-				}
-			} else {
-				DFUSE_TRA_INFO(dfc,
-					"Caching disabled");
-			}
 		} else {
-			/* Set attributes for containers created via mkdir */
-			dfuse_set_default_cont_cache_values(dfc);
+			DFUSE_TRA_INFO(dfc,
+				"Caching disabled");
 		}
+	} else {
+		/* This is either a container where a label is set on the
+		 * command line, or one created through mkdir, in either case
+		 * the container will be mounted, and caching etc already
+		 * setup.
+		 */
+		dfc->dfs_ops = &dfuse_dfs_ops;
 	}
 
 	dfc->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);

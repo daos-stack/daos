@@ -1240,12 +1240,19 @@ def run_daos_cmd(conf,
     vh.convert_xml()
     return rc
 
-def create_cont(conf, pool, posix=False):
+def create_cont(conf, pool, posix=False, label=None):
     """Create a container and return the uuid"""
+    cmd = ['container',
+           'create',
+           '--pool',
+           pool]
+
+    if label:
+        cmd.extend(['--properties',
+                    'label:{}'.format(label)])
     if posix:
-        cmd = ['container', 'create', '--pool', pool, '--type', 'POSIX']
-    else:
-        cmd = ['container', 'create', '--pool', pool]
+        cmd.extend(['--type', 'POSIX'])
+
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0
@@ -1291,7 +1298,7 @@ def needs_dfuse(method):
                            self.conf,
                            caching=caching,
                            pool=self.pool.dfuse_mount_name(),
-                           container=self.container)
+                           container=self.container_label)
         self.dfuse.start(v_hint=self.test_name)
         rc = method(self)
         if self.dfuse.stop():
@@ -1944,7 +1951,8 @@ def run_posix_tests(server, conf, test=None):
             start = time.time()
             print('Calling {}'.format(fn))
             try:
-                pt.container = create_cont(conf, pool.uuid, posix=True)
+                pt.container = create_cont(conf, pool.uuid, posix=True, label=fn)
+                pt.container_label = fn
                 rc = obj()
                 destroy_container(conf, pool.uuid, pt.container)
                 pt.container = None
