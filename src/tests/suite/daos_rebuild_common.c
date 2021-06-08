@@ -156,9 +156,12 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		test_rebuild_wait(args, args_cnt);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	for (i = 0; i < args_cnt; i++)
+	for (i = 0; i < args_cnt; i++) {
+		daos_cont_status_clear(args[i]->coh, NULL);
+
 		if (args[i]->rebuild_post_cb)
 			args[i]->rebuild_post_cb(args[i]);
+	}
 }
 
 
@@ -559,6 +562,9 @@ rebuild_io_verify(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 	int	rc;
 	int	i;
 
+	rc = daos_cont_status_clear(arg->coh, NULL);
+	assert_rc_equal(rc, 0);
+
 	print_message("rebuild io verify obj %d\n", oids_nr);
 	for (i = 0; i < oids_nr; i++) {
 		/* XXX: skip punch object. */
@@ -825,6 +831,7 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 		idx++;
 	}
 	rebuild_pools_ranks(&arg, 1, ranks, idx, false);
+	daos_cont_status_clear(co_hdl, NULL);
 
 	/* Verify full stripe */
 	d_iov_set(&iov, buf, buf_size);
@@ -914,6 +921,26 @@ get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	return rank;
 }
 
+int
+ec_data_nr_get(daos_obj_id_t oid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(oid, NULL);
+	assert_true(oca->ca_resil == DAOS_RES_EC);
+	return oca->u.ec.e_k;
+}
+
+int
+ec_parity_nr_get(daos_obj_id_t oid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(oid, NULL);
+	assert_true(oca->ca_resil == DAOS_RES_EC);
+	return oca->u.ec.e_p;
+}
+
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 			int parity_nr, d_rank_t *ranks, int *ranks_num)
@@ -922,7 +949,7 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	uint32_t		shard;
 	int			idx = 0;
 
-	oca = daos_oclass_attr_find(oid);
+	oca = daos_oclass_attr_find(oid, NULL);
 	if (oca->ca_resil == DAOS_RES_REPL) {
 		ranks[0] = get_rank_by_oid_shard(arg, oid, 0);
 		if (ranks_num)

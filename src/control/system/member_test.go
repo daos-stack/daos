@@ -26,9 +26,10 @@ func TestSystem_Member_Stringify(t *testing.T) {
 		MemberStateJoined,
 		MemberStateStopping,
 		MemberStateStopped,
-		MemberStateEvicted,
+		MemberStateExcluded,
 		MemberStateErrored,
 		MemberStateUnresponsive,
+		MemberStateAdminExcluded,
 	}
 
 	strs := []string{
@@ -39,9 +40,10 @@ func TestSystem_Member_Stringify(t *testing.T) {
 		"Joined",
 		"Stopping",
 		"Stopped",
-		"Evicted",
+		"Excluded",
 		"Errored",
 		"Unresponsive",
+		"AdminExcluded",
 	}
 
 	for i, state := range states {

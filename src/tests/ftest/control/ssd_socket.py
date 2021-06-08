@@ -6,14 +6,16 @@
 """
 from apricot import TestWithServers
 from general_utils import pcmd, run_pcmd
+from control_test_base import ControlTestBase
 
 
-class SSDSocketTest(TestWithServers):
+class SSDSocketTest(ControlTestBase):
+    # pylint: disable=too-many-ancestors
     """Test Class Description: Verify NVMe NUMA socket values.
 
     This test covers the requirement SRS-10-0034.
-    dmg supports listing of available storage (NVDIMMs, SSD) and netwok adapters
-    and in all cases shows socket affinity
+    dmg supports listing of available storage (NVDIMMs, SSD) and network
+    adapters and in all cases shows socket affinity
 
     Call dmg storage scan --verbose to obtain NUMA socket value (Socket ID) of
     each NVMe disk. Verify against the value in
@@ -57,28 +59,27 @@ class SSDSocketTest(TestWithServers):
             hosts=self.hostlist_servers,
             command="hwloc-ls --whole-io --verbose")
 
-    def test_scan_ssd(self):
-        """
-        JIRA ID: DAOS-3584
+    def verify_ssd_sockets(self, storage_dict):
+        """Main test component.
 
-        Test Description: Verify NVMe NUMA socket values.
+        Args:
+            storage_dict (dict): Dictionary under "storage"
 
-        :avocado: tags=all,small,full_regression,hw,control,ssd_socket
+        Returns:
+            list: List of errors.
         """
-        # Call dmg storage scan --verbose and get the PCI addresses.
-        data = self.get_dmg_command().storage_scan(verbose=True)
-        pci_addrs = list(data[self.hostlist_servers[0]]["nvme"].keys())
-        self.log.info("Testing PCI addresses: %s", pci_addrs)
+        nvme_devices = storage_dict["nvme_devices"]
 
         pci_addr_heads = []
         errors = []
 
         # For every PCI address, verify its Socket ID against its NUMA socket
         # ID.
-        for pci_addr in pci_addrs:
+        for nvme_device in nvme_devices:
+            cmd_socket_id = nvme_device["socket_id"]
+
             # Get the PCI Address Head and construct the path to numa_node.
-            cmd_socket_id = \
-                data[self.hostlist_servers[0]]["nvme"][pci_addr]["socket"]
+            pci_addr = nvme_device["pci_addr"]
             pci_addr_values = pci_addr.split(":")
             pci_addr_head = "{}:{}".format(
                 pci_addr_values[0], pci_addr_values[1])
@@ -96,7 +97,7 @@ class SSDSocketTest(TestWithServers):
             for result in results:
                 # Test that the content is expected.
                 fs_socket_id = result["stdout"][-1]
-                if fs_socket_id != cmd_socket_id:
+                if fs_socket_id != str(cmd_socket_id):
                     errors.append(
                         "Unexpected socket ID! Cmd: {}; FS: {}".format(
                             cmd_socket_id, fs_socket_id))
@@ -106,4 +107,17 @@ class SSDSocketTest(TestWithServers):
             # them in CI, we need some debugging info when the test fails to
             # better understand the result.
             self.debug_numa_node(pci_addr_heads)
-            self.fail("Error found!\n{}".format("\n".join(errors)))
+
+        return errors
+
+    def test_scan_ssd(self):
+        """
+        JIRA ID: DAOS-3584
+
+        Test Description: Verify NVMe NUMA socket values.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=control,ssd_socket
+        """
+        self.verify_dmg_storage_scan(self.verify_ssd_sockets)

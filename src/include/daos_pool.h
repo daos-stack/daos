@@ -214,10 +214,10 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
  *			-DER_NONEXIST	Pool is nonexistent
  */
 int
-daos_pool_connect_bylabel(const char *label, const char *grp,
-			  unsigned int flags,
-			  daos_handle_t *poh, daos_pool_info_t *info,
-			  daos_event_t *ev);
+daos_pool_connect_by_label(const char *label, const char *grp,
+			   unsigned int flags,
+			   daos_handle_t *poh, daos_pool_info_t *info,
+			   daos_event_t *ev);
 
 /**
  * Disconnect from the DAOS pool. It should revoke all the container open

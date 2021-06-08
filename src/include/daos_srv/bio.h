@@ -23,12 +23,19 @@
 #define BIO_ADDR_IS_DEDUP(addr) ((addr)->ba_flags == BIO_FLAG_DEDUP)
 #define BIO_ADDR_SET_DEDUP(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP)
 #define BIO_ADDR_SET_NOT_DEDUP(addr) ((addr)->ba_flags &= ~(BIO_FLAG_DEDUP))
+#define BIO_ADDR_IS_DEDUP_BUF(addr) ((addr)->ba_flags == BIO_FLAG_DEDUP_BUF)
+#define BIO_ADDR_SET_DEDUP_BUF(addr) ((addr)->ba_flags |= BIO_FLAG_DEDUP_BUF)
+#define BIO_ADDR_SET_NOT_DEDUP_BUF(addr)	\
+			((addr)->ba_flags &= ~(BIO_FLAG_DEDUP_BUF))
 
 /* Can support up to 16 flags for a BIO address */
 enum BIO_FLAG {
 	/* The address is a hole */
 	BIO_FLAG_HOLE = (1 << 0),
+	/* The address is a deduped extent */
 	BIO_FLAG_DEDUP = (1 << 1),
+	/* The address is a buffer for dedup verify */
+	BIO_FLAG_DEDUP_BUF = (1 << 2),
 };
 
 typedef struct {
@@ -226,7 +233,7 @@ bio_iov2req_len(const struct bio_iov *biov)
 }
 
 static inline
-uint16_t bio_iov2media(const struct bio_iov *biov)
+uint8_t bio_iov2media(const struct bio_iov *biov)
 {
 	return biov->bi_addr.ba_type;
 }
@@ -263,7 +270,7 @@ bio_sgl_fini(struct bio_sglist *sgl)
  * call d_sgl_fini(sgl, false) to free iovs.
  */
 static inline int
-bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
+bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 {
 	int i, rc;
 
@@ -281,7 +288,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl, bool deduped_skip)
 		d_iov_t	*iov = &sgl->sg_iovs[i];
 
 		/* Skip bulk transfer for deduped extent */
-		if (BIO_ADDR_IS_DEDUP(&biov->bi_addr) && deduped_skip)
+		if (BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 			iov->iov_buf = NULL;
 		else
 			iov->iov_buf = bio_iov2req_buf(biov);
@@ -411,6 +418,11 @@ int bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
  */
 void bio_nvme_fini(void);
 
+/**
+ * Check if NVMe is configured
+ */
+bool bio_nvme_configured(void);
+
 enum {
 	/* Notify BIO that all xsxtream contexts created */
 	BIO_CTL_NOTIFY_STARTED	= 0,
@@ -486,21 +498,23 @@ int bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt);
  * \param[IN] xs_ctxt	Per-xstream NVMe context
  * \param[IN] umem	umem instance
  * \param[IN] uuid	Pool UUID
+ * \param[IN] skip_blob	Skip blob open since no NVMe partition
  *
  * \returns		Zero on success, negative value on error
  */
 int bio_ioctxt_open(struct bio_io_context **pctxt,
 		    struct bio_xs_context *xs_ctxt,
-		    struct umem_instance *umem, uuid_t uuid);
+		    struct umem_instance *umem, uuid_t uuid, bool skip_blob);
 
 /*
  * Finalize per VOS instance I/O context.
  *
  * \param[IN] ctxt	I/O context
+ * \param[IN] skip_blob	Skip blob close since no NVMe partition
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_ioctxt_close(struct bio_io_context *ctxt);
+int bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob);
 
 /*
  * Unmap (TRIM) the extent being freed.

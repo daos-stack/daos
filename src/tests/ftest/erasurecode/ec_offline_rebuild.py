@@ -7,7 +7,7 @@
 from ec_utils import ErasureCodeIor
 from apricot import skipForTicket
 
-class EcOfflineRebuild(ErasureCodeIor):
+class EcodOfflineRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object data after killing
@@ -27,7 +27,7 @@ class EcOfflineRebuild(ErasureCodeIor):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_array,ec_offline_rebuild
+        :avocado: tags=ec,ec_array,ec_offline_rebuild,rebuild
         :avocado: tags=ec_offline_rebuild_array
 
         """

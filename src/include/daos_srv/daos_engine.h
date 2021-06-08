@@ -14,6 +14,7 @@
 #include <daos/common.h>
 #include <daos/drpc.h>
 #include <daos/rpc.h>
+#include <daos/cont_props.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/pool.h>
@@ -668,6 +669,8 @@ int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr,
 		     uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
 		     daos_anchor_t *anchor, daos_anchor_t *dkey_anchor,
 		     daos_anchor_t *akey_anchor, d_iov_t *csum);
+int dsc_obj_id2oc_attr(daos_obj_id_t oid, struct cont_props *prop,
+		       struct daos_oclass_attr *oca);
 
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 			 const d_rank_list_t *svc, struct d_tgt_list *tgts);

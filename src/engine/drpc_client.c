@@ -385,12 +385,18 @@ ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 		D_GOTO(out_resp, rc = frsp->status);
 	}
 
+	rc = uuid_parse(frsp->uuid, pool_uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", frsp->uuid,
+			DP_RC(rc));
+		D_GOTO(out_resp, rc = -DER_IO);
+	}
+
 	ranks = uint32_array_to_rank_list(frsp->svcreps,
 					  frsp->n_svcreps);
 	if (ranks == NULL)
 		D_GOTO(out_resp, rc = -DER_NOMEM);
 	*svc_ranks = ranks;
-	uuid_parse(frsp->uuid, pool_uuid);
 	D_DEBUG(DB_MGMT, "pool %s: UUID="DF_UUID", %u svc replicas\n",
 		frq.label, DP_UUID(pool_uuid), ranks->rl_nr);
 
