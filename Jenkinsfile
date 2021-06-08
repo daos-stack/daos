@@ -74,6 +74,13 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: "",
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestRepeat',
+               defaultValue: "",
+               description: 'Test-repeat to use for this run.  Specifies the ' +
+                            'number of times to repeat each functional test. ' +
+                            'CAUTION: only use in combination with a reduced ' +
+                            'number of tests specified with the TestTag ' +
+                            'parameter.')
     }
 
     stages {

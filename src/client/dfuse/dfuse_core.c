@@ -969,12 +969,13 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
-	if (!dfuse_launch_fuse(fs_handle, fuse_ops, &args)) {
-		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
-		D_GOTO(err_ie_remove, rc = -DER_INVAL);
-	}
-
+	rc = dfuse_launch_fuse(fs_handle, fuse_ops, &args);
 	D_FREE(fuse_ops);
+	if (!rc) {
+		(void)dfuse_fs_fini(fs_handle);
+		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
+		return -DER_INVAL;
+	}
 
 	return -DER_SUCCESS;
 
