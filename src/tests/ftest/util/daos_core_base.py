@@ -60,11 +60,19 @@ class DaosCoreBase(TestWithServers):
         return self.params.get(self.get_test_name(), path, default)
 
     @fail_on(CommandFailure)
-    def start_server_managers(self):
+    def start_server_managers(self, force=False):
         """Start the daos_server processes on each specified list of hosts.
 
         Enable scalable endpoint if requested with a test-specific
         'scalable_endpoint' yaml parameter.
+
+        Args:
+            force (bool, optional): whether or not to force starting the
+                servers. Defaults to False.
+
+        Returns:
+            bool: whether or not to force the starting of the agents
+
         """
         # Enable scalable endpoint (if requested) prior to starting the servers
         scalable_endpoint = self.get_test_param("scalable_endpoint")
@@ -93,7 +101,7 @@ class DaosCoreBase(TestWithServers):
                     )
 
         # Start the servers
-        super().start_server_managers()
+        return super().start_server_managers(force=force)
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
@@ -148,12 +156,13 @@ class DaosCoreBase(TestWithServers):
             # Set each expected rank state to be either stopped or running
             for manager in self.server_managers:
                 manager.update_expected_states(
-                    None, ["Joined", "Stopped", "Evicted"])
+                    None, ["Joined", "Stopped", "Excluded"])
         else:
             # Set the specific expected rank state to stopped
             for rank in stopped_ranks:
                 for manager in self.server_managers:
-                    manager.update_expected_states(rank, ["Stopped", "Evicted"])
+                    manager.update_expected_states(
+                        rank, ["Stopped", "Excluded"])
 
         try:
             process.run(cmd, env=env)

@@ -166,9 +166,9 @@ func (evt *RASEvent) WithRank(rid uint32) *RASEvent {
 	return evt
 }
 
-// New accepts a pointer to a RASEvent and fills in any
+// fill accepts a pointer to a RASEvent and fills in any
 // missing fields before returning the event.
-func New(evt *RASEvent) *RASEvent {
+func fill(evt *RASEvent) *RASEvent {
 	if evt == nil {
 		evt = &RASEvent{}
 	}

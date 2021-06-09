@@ -7,7 +7,7 @@
 from rebuild_test_base import RebuildTestBase
 
 
-class RebuildDeleteObjects(RebuildTestBase):
+class RbldDeleteObjects(RebuildTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for deleting objects during pool rebuild.
 
