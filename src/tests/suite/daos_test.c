@@ -33,7 +33,6 @@ enum {
 	CHECKSUM_ARG_VAL_SERVERVERIFY	= 0x2715,
 };
 
-
 static void
 print_usage(int rank)
 {
@@ -52,7 +51,7 @@ print_usage(int rank)
 	print_message("daos_test -t|--base_dtx\n");
 	print_message("daos_test -T|--dist_dtx\n");
 	print_message("daos_test -i|--io\n");
-	print_message("daos_test -I|--daos_ec_io_tests\n");
+	print_message("daos_test -I|--ec_io\n");
 	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -D|--array\n");
 	print_message("daos_test -A|--obj_array\n");
@@ -454,7 +453,7 @@ main(int argc, char **argv)
 	}
 
 	if (strlen(tests) == 0) {
-		strcpy(tests , all_tests);
+		strcpy(tests, all_tests);
 	}
 
 	if (svc_nreplicas > ARRAY_SIZE(arg->pool.ranks) && rank == 0) {
@@ -520,18 +519,19 @@ main(int argc, char **argv)
 
 	/*Exclude tests mentioned in exclude list*/
 	/* Example: daos_test -E mpc */
-	if(exclude_str != NULL){
-		int old_idx , new_idx=0;
+	if (exclude_str != NULL) {
+		int old_idx, new_idx = 0;
+
 		printf("\n==============");
-		printf("\n Excluding tests %s" , exclude_str);
+		printf("\n Excluding tests %s", exclude_str);
 		printf("\n==============");
-		for (old_idx=0;tests[old_idx]!=0;old_idx++){
-			if (!strchr(exclude_str , tests[old_idx])){
-				tests[new_idx]=tests[old_idx];
+		for (old_idx = 0; tests[old_idx] != 0; old_idx++) {
+			if (!strchr(exclude_str, tests[old_idx])) {
+				tests[new_idx] = tests[old_idx];
 				new_idx++;
 			}
 		}
-		tests[new_idx]='\0';
+		tests[new_idx] = '\0';
 	}
 
 	nr_failed = run_specified_tests(tests, rank, size,

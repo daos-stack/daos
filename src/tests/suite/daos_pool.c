@@ -243,7 +243,7 @@ pool_attribute(void **state)
 				strlen(in_values[0]),
 				strlen(in_values[1])
 	};
-	int			 n = (int) ARRAY_SIZE(names);
+	int			 n = (int)ARRAY_SIZE(names);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
@@ -284,7 +284,7 @@ pool_attribute(void **state)
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
 	assert_string_equal(out_buf, names[1]);
 
-	total_size = 10*BUFSIZE;
+	total_size = 10 * BUFSIZE;
 	rc = daos_pool_list_attr(arg->pool.poh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
@@ -567,6 +567,7 @@ pool_properties(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
+	D_FREE(arg->pool_label);
 	daos_prop_free(prop);
 	daos_prop_free(prop_query);
 	test_teardown((void **)&arg);
@@ -816,7 +817,6 @@ teardown_containers(void **state)
 	lcarg->nconts = 0;
 	D_FREE(lcarg->conts);
 	D_FREE(arg->pool_lc_args);
-	arg->pool_lc_args = NULL;
 
 	return test_case_teardown(state);
 }
@@ -909,6 +909,7 @@ verify_cont_info(void **state, int rc_ret, daos_size_t nconts_in,
 		}
 	}
 }
+
 /* Common function for testing list containers feature.
  * Some tests can only be run when multiple containers have been created,
  * Other tests may run when there are zero or more containers in the pool.
@@ -966,14 +967,12 @@ list_containers_test(void **state)
 
 	/* Teardown for above 2 tests */
 	D_FREE(conts);
-	conts = NULL;
 
 	/***** Test: invalid nconts=NULL *****/
 	rc = daos_pool_list_cont(lcarg->tpool.poh, NULL /* nconts */,
 				  NULL /* conts */, NULL /* ev */);
 	assert_rc_equal(rc, -DER_INVAL);
 	print_message("success t%d: in &nconts NULL, -DER_INVAL\n", tnum++);
-
 
 	/*** Tests that can only run with multiple containers ***/
 	if (lcarg->nconts > 1) {
@@ -993,7 +992,6 @@ list_containers_test(void **state)
 
 		/* Teardown */
 		D_FREE(conts);
-		conts = NULL;
 		print_message("success t%d: conts[] exact length\n", tnum++);
 
 		/***** Test: Under-sized buffer (negative) -DER_TRUNC *****/
@@ -1013,7 +1011,6 @@ list_containers_test(void **state)
 
 		/* Teardown */
 		D_FREE(conts);
-		conts = NULL;
 	} /* if (lcarg->nconts  > 0) */
 
 	print_message("success\n");
