@@ -1569,8 +1569,8 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"container create common optional options:\n"
 			"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
 			"	--mode=FLAG        In case of POSIX type, select consistency mode:\n"
-			"			   relaxed: weaker consistency semantics.\n"
-			"			   balanced (default): stronger consistency semantics.\n"
+			"			   relaxed (default): weaker consistency semantics.\n"
+			"			   balanced: stronger consistency semantics.\n"
 			"	--oclass=OCLSSTR   container object class\n"
 			"			   (");
 			/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */

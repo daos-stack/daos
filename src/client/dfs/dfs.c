@@ -1234,7 +1234,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 		DFS_DEFAULT_CHUNK_SIZE;
 	attr->da_oclass_id = oclass;
 
-	/** DFS_BALANCED (0) by default */
+	/** DFS_RELAXED by default */
 	attr->da_mode = mode;
 
 	return 0;
@@ -1308,7 +1308,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		    (attr->da_mode & MODE_MASK) == DFS_BALANCED)
 			dattr.da_mode = attr->da_mode;
 		else
-			dattr.da_mode = DFS_BALANCED;
+			dattr.da_mode = DFS_RELAXED;
 
 		/** check non default chunk size */
 		if (attr->da_chunk_size != 0)
@@ -1317,7 +1317,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 			dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 	} else {
 		dattr.da_oclass_id = 0;
-		dattr.da_mode = DFS_BALANCED;
+		dattr.da_mode = DFS_RELAXED;
 		dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 	}
 
@@ -1538,12 +1538,12 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			D_GOTO(err_super, rc = EINVAL);
 		}
 
-		if ((flags & MODE_MASK) == DFS_RELAXED) {
-			dfs->use_dtx = false;
-			D_DEBUG(DB_ALL, "DFS mount in Relaxed mode.\n");
-		} else {
+		if ((flags & MODE_MASK) == DFS_BALANCED) {
 			dfs->use_dtx = true;
 			D_DEBUG(DB_ALL, "DFS mount in Balanced mode.\n");
+		} else {
+			dfs->use_dtx = false;
+			D_DEBUG(DB_ALL, "DFS mount in Relaxed mode.\n");
 		}
 	}
 

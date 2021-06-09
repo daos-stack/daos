@@ -47,8 +47,8 @@ typedef struct dfs dfs_t;
  * Reserve bit 3 in the access flags for dfs_mount() - bits 1 and 2 are used
  * for read / write access (O_RDONLY, O_RDRW).
  */
-#define DFS_BALANCED	0 /** DFS operations using a DTX (default mode) */
-#define DFS_RELAXED	4 /** DFS operations do not use a DTX. */
+#define DFS_BALANCED	4 /** DFS operations using a DTX */
+#define DFS_RELAXED	0 /** DFS operations do not use a DTX (default mode). */
 #define DFS_RDONLY	O_RDONLY
 #define DFS_RDWR	O_RDWR
 
@@ -64,8 +64,8 @@ typedef struct {
 	daos_prop_t		*da_props;
 	/*
 	 * Consistency mode for the DFS container: D_RELAXED, D_BALANCED.
-	 * If set to 0 or more generally not set to relaxed explicitly, balanced
-	 * mode will be used.
+	 * If set to 0 or more generally not set to balanced explicitly, relaxed
+	 * mode will be used. In the future, Balanced mode will be the default.
 	 */
 	uint32_t		da_mode;
 } dfs_attr_t;
