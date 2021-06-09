@@ -60,17 +60,48 @@ func (aic *attachInfoCache) loadBalance(numaNode int) int {
 	return deviceIndex
 }
 
+// selectRemote is called when no local network adapters
+// was detected on the local NUMA node and we need to pick
+// one attached to a remote NUMA node. Some balancing is
+// still required here to avoid overloading a specific interface
+func (aic *attachInfoCache) selectRemote() (int, int) {
+	aic.mutex.Lock()
+
+	deviceIndex := invalidIndex
+	// restart from previous NUMA node
+	numaNode := aic.defaultNumaNode
+
+	for i := 0; i < len(aic.numaDeviceMarshResp); i++ {
+		node := (numaNode + i) % len(aic.numaDeviceMarshResp)
+		numDevs := len(aic.numaDeviceMarshResp[node])
+		if numDevs > 0 {
+			numaNode = node
+			deviceIndex = aic.currentNumaDevIdx[numaNode]
+			aic.currentNumaDevIdx[numaNode] = (deviceIndex + 1) % numDevs
+			break
+		}
+	}
+
+	// update the default with the one we finally picked up
+	aic.defaultNumaNode = numaNode
+
+	aic.mutex.Unlock()
+	return numaNode, deviceIndex
+}
+
 func (aic *attachInfoCache) getResponse(numaNode int) ([]byte, error) {
 	deviceIndex := aic.loadBalance(numaNode)
 	// If there is no response available for the client's actual NUMA node,
 	// use the default NUMA node
 	if deviceIndex == invalidIndex {
-		deviceIndex = aic.loadBalance(aic.defaultNumaNode)
+		var numaSel int
+
+		numaSel, deviceIndex = aic.selectRemote()
 		if deviceIndex == invalidIndex {
-			return nil, errors.Errorf("No default response found for the default NUMA node %d", aic.defaultNumaNode)
+			return nil, errors.Errorf("No fallback network device found")
 		}
-		aic.log.Infof("No network devices bound to client NUMA node %d.  Using response from NUMA %d", numaNode, aic.defaultNumaNode)
-		numaNode = aic.defaultNumaNode
+		aic.log.Infof("No network devices bound to client NUMA node %d.  Using response from NUMA %d", numaNode, numaSel)
+		numaNode = numaSel
 	}
 
 	aic.mutex.Lock()
