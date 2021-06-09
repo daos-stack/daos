@@ -83,7 +83,6 @@ static const char * const bypass_status[] = {
 static void
 ioil_shrink_pool(struct ioil_pool *pool)
 {
-
 	if (daos_handle_is_valid(pool->iop_poh)) {
 		int rc;
 
@@ -143,7 +142,6 @@ entry_array_close(void *arg) {
 
 	DFUSE_LOG_DEBUG("entry %p closing array fd_count %d",
 			entry, entry->fd_cont->ioc_open_count);
-
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
 	dfs_release(entry->fd_dfsoh);
@@ -251,9 +249,8 @@ ioil_init(void)
 	D_INIT_LIST_HEAD(&ioil_iog.iog_pools_head);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc) {
+	if (rc)
 		ioil_iog.iog_no_daos = true;
-	}
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 
@@ -1405,20 +1402,40 @@ do_real_fclose:
 }
 
 DFUSE_PUBLIC int
-dfuse_fstatfs(int fd, struct stat *buf)
+dfuse___fxstat(int ver, int fd, struct stat *buf)
 {
 	struct fd_entry *entry = NULL;
 	int rc;
 
-	DFUSE_TRA_INFO(entry, "fstat() returned %d", fd);
-
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
 		goto do_real_fstat;
+
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "fstat() %d", fd);
+
+	/* fstat needs to return both the device magic number and the inode
+	 * neither of which can change over time, but they're also not known
+	 * at this point.  For the first call to fstat do the real call
+	 * through the kernel, then save these two entries for next time.
+	 */
+	if (entry->fd_dev == 0) {
+		rc =  __real___fxstat(ver, fd, buf);
+		if (rc) {
+			vector_decref(&fd_table, entry);
+			return rc;
+		}
+		entry->fd_dev = buf->st_dev;
+		entry->fd_ino = buf->st_ino;
+		vector_decref(&fd_table, entry);
+		return 0;
+	}
 
 	rc = dfs_ostat(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, buf);
 
-	DFUSE_TRA_INFO(entry, "fstat() returned %d", rc);
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "fstat() returned %d", rc);
+
+	buf->st_ino = entry->fd_ino;
+	buf->st_dev = entry->fd_dev;
 
 	vector_decref(&fd_table, entry);
 
@@ -1429,38 +1446,8 @@ dfuse_fstatfs(int fd, struct stat *buf)
 
 	return 0;
 do_real_fstat:
-	return __real_fstatfs(fd, buf);
+	return __real___fxstat(ver, fd, buf);
 }
-
-#if 0
-DFUSE_PUBLIC int
-dfuse_fstatfs64(int fd, struct stat64 *buf)
-{
-	struct fd_entry *entry = NULL;
-	int rc;
-
-	DFUSE_TRA_INFO(entry, "fstat() returned %d", fd);
-
-	rc = vector_get(&fd_table, fd, &entry);
-	if (rc != 0)
-		goto do_real_fstat;
-
-	rc = dfs_ostat(entry->fd_dfs, entry->fd_dfsoh, buf);
-
-	DFUSE_TRA_INFO(entry, "fstat() returned %d", rc);
-
-	vector_decref(&fd_table, entry);
-
-	if (rc) {
-		errno = rc;
-		return -1;
-	}
-
-	return 0;
-do_real_fstat:
-	return __real_fstatfs64(fd, buf);
-}
-#endif
 
 DFUSE_PUBLIC int
 dfuse_get_bypass_status(int fd)
