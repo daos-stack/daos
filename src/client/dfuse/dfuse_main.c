@@ -479,9 +479,8 @@ main(int argc, char **argv)
 	if (uuid_is_null(dfp->dfp_pool))
 		dfs->dfs_ops = &dfuse_pool_ops;
 
-	if (dfuse_info->di_multi_user) {
+	if (dfuse_info->di_multi_user)
 		dfs->dfs_multi_user = true;
-	}
 
 	rc = dfuse_start(fs_handle, dfs);
 	if (rc != -DER_SUCCESS)
@@ -497,7 +496,6 @@ out_dfs:
 	DFUSE_TRA_DOWN(dfuse_info);
 	daos_fini();
 out_debug:
-
 	D_FREE(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	daos_debug_fini();
