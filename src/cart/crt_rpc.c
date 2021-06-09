@@ -774,17 +774,20 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 
 	ul_in = crt_req_get(lookup_rpc);
 	if (cb_info->cci_rc != 0) {
-		RPC_ERROR(chained_rpc_priv,
-			  "URI_LOOKUP rpc completed with rc="DF_RC"\n",
-			  DP_RC(cb_info->cci_rc));
+		if (cb_info->cci_rc != -DER_GRPVER)
+			RPC_ERROR(chained_rpc_priv,
+				  "URI_LOOKUP rpc completed with rc="DF_RC"\n",
+				  DP_RC(cb_info->cci_rc));
 		D_GOTO(retry, rc = cb_info->cci_rc);
 	}
 
 	ul_out = crt_reply_get(lookup_rpc);
 
 	if (ul_out->ul_rc != 0) {
-		RPC_ERROR(chained_rpc_priv, "URI_LOOKUP returned rc="DF_RC"\n",
-			  DP_RC(ul_out->ul_rc));
+		if (ul_out->ul_rc != -DER_GRPVER)
+			RPC_ERROR(chained_rpc_priv,
+				  "URI_LOOKUP returned rc="DF_RC"\n",
+				  DP_RC(ul_out->ul_rc));
 		D_GOTO(retry, rc = ul_out->ul_rc);
 	}
 
@@ -1206,9 +1209,10 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	rpc_priv->crp_hg_addr = hg_addr;
 	rc = crt_req_send_internal(rpc_priv);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_req_send_internal() failed, rc %d\n",
-			  rc);
+		if (rc != -DER_GRPVER)
+			RPC_ERROR(rpc_priv,
+				  "crt_req_send_internal() failed, rc %d\n",
+				  rc);
 		D_GOTO(finish_rpc, rc);
 	}
 
@@ -1245,10 +1249,9 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	/* set state ahead to avoid race with completion cb */
 	rpc_priv->crp_state = RPC_STATE_REQ_SENT;
 	rc = crt_hg_req_send(rpc_priv);
-	if (rc != DER_SUCCESS) {
+	if (rc != DER_SUCCESS && rc != -DER_GRPVER)
 		RPC_ERROR(rpc_priv,
 			  "crt_hg_req_send failed, rc: %d\n", rc);
-	}
 out:
 	return rc;
 }

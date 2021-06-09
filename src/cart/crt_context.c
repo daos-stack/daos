@@ -335,7 +335,7 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 		if (cbinfo.cci_rc == 0)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 
-		if (cbinfo.cci_rc != 0)
+		if (cbinfo.cci_rc != 0 && cbinfo.cci_rc != -DER_GRPVER)
 			RPC_ERROR(rpc_priv, "failed, " DF_RC "\n",
 				  DP_RC(cbinfo.cci_rc));
 
