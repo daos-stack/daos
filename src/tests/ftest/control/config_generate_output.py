@@ -7,7 +7,7 @@
 from collections import defaultdict
 import yaml
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from command_utils import CommandFailure
 from dmg_utils import DmgCommand
 
@@ -222,20 +222,12 @@ class ConfigGenerateOutput(TestWithServers):
 
         self.check_errors(errors)
 
-    def test_access_points(self):
-        """Test --access-points.
-
-        1. Single AP. Should pass.
-        2. Single AP with a valid port. Should pass.
-        3. Odd AP. Should pass.
-        4. Odd AP with port. Should pass.
-        5. Even AP. Should fail.
-        6. Single AP with an invalid port. Should fail.
-        7. Same APs repeated. Should fail.
+    def test_access_points_single(self):
+        """Test --access-points with single AP with and without port.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,access_points
+        :avocado: tags=control,config_generate_entries,access_points,ap_single
         """
         errors = []
 
@@ -245,13 +237,36 @@ class ConfigGenerateOutput(TestWithServers):
         # Single AP with a valid port.
         errors.extend(self.verify_access_point("wolf-a:12345"))
 
-        # Odd AP. Uncomment when DAOS-7792 is fixed.
-        # errors.extend(self.verify_access_point("wolf-a,wolf-b,wolf-c"))
+        self.check_errors(errors)
 
-        # Odd AP with port. DAOS-7792
-        # errors.extend(
-        #     self.verify_access_point(
-        #         "wolf-a:12345,wolf-b:12345,wolf-c:12345"))
+    @skipForTicket("DAOS-7792")
+    def test_access_points_odd(self):
+        """Test --access-points with odd number of APs.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=control,config_generate_entries,access_points,ap_odd
+        """
+        errors = []
+
+        # Odd AP.
+        errors.extend(self.verify_access_point("wolf-a,wolf-b,wolf-c"))
+
+        # Odd AP with port.
+        errors.extend(
+            self.verify_access_point(
+                "wolf-a:12345,wolf-b:12345,wolf-c:12345"))
+
+        self.check_errors(errors)
+
+    def test_access_points_invalid(self):
+        """Test --access-points with invalid port.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=control,config_generate_entries,access_points,ap_invalid
+        """
+        errors = []
 
         # Even AP.
         errors.extend(self.verify_access_point("wolf-a,wolf-b", "non-odd"))
@@ -267,7 +282,17 @@ class ConfigGenerateOutput(TestWithServers):
                 "wolf-a:12345,wolf-b:12345,wolf-c:abcd",
                 "invalid access point port"))
 
-        # Same APs repeated.
+        self.check_errors(errors)
+
+    def test_access_points_same_ap_repeated(self):
+        """Test --access-points with the same APs repeated.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=control,config_generate_entries,access_points,ap_repeated
+        """
+        errors = []
+
         errors.extend(
             self.verify_access_point(
                 "wolf-a,wolf-a,wolf-a", "duplicate access points"))
