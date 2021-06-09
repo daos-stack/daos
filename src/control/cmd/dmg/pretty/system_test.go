@@ -522,3 +522,67 @@ Unknown 3 hosts: foo[7-9]
 		})
 	}
 }
+
+func TestPretty_PrintListPoolsResponse(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp        *control.ListPoolsResp
+		expPrintStr string
+	}{
+		"empty response": {
+			resp: &control.ListPoolsResp{},
+			expPrintStr: `
+no pools in system
+`,
+		},
+		"one labeled, one not": {
+			resp: &control.ListPoolsResp{
+				Pools: []*common.PoolDiscovery{
+					{
+						UUID:        common.MockUUID(0),
+						SvcReplicas: []uint32{0, 1, 2},
+					},
+					{
+						UUID:        common.MockUUID(1),
+						Label:       "one",
+						SvcReplicas: []uint32{3, 4, 5},
+					},
+				},
+			},
+			expPrintStr: `
+UUID                                 Label Svc Replicas 
+----                                 ----- ------------ 
+00000000-0000-0000-0000-000000000000 N/A   [0-2]        
+00000001-0001-0001-0001-000000000001 one   [3-5]        
+
+`,
+		},
+		"zero svc replicas": {
+			resp: &control.ListPoolsResp{
+				Pools: []*common.PoolDiscovery{
+					{
+						UUID: common.MockUUID(0),
+					},
+				},
+			},
+			expPrintStr: `
+UUID                                 Label Svc Replicas 
+----                                 ----- ------------ 
+00000000-0000-0000-0000-000000000000 N/A   None         
+
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			// pass the same io writer to standard and error stream
+			// parameters to mimic combined output seen on terminal
+			if err := PrintListPoolsResponse(&bld, tc.resp); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

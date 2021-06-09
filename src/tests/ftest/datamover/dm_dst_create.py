@@ -9,7 +9,7 @@ from os.path import join
 from pydaos.raw import DaosApiError
 import avocado
 
-class DmDstCreate(DataMoverTestBase):
+class DmvrDstCreate(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Data Mover validation for destination container create logic.
 
