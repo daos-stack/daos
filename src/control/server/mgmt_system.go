@@ -791,7 +791,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 	// wipe SCM rather than removing things piecemeal.
 	if !svc.sysdb.IsLeader() {
 		for _, engine := range svc.harness.Instances() {
-			if err := engine.Stop(unix.SIGKILL); err != nil {
+			if err := engine.Stop(unix.SIGINT); err != nil {
 				svc.log.Errorf("instance %d failed to stop: %s", engine.Index(), err)
 			}
 			if err := engine.RemoveSuperblock(); err != nil {

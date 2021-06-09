@@ -3130,6 +3130,12 @@ def main():
     if server.stop(wf_server) != 0:
         fatal_errors.fail()
 
+    if args.mode == 'all':
+        server = DaosServer(conf)
+        server.start()
+        if server.stop(wf_server) != 0:
+            fatal_errors.fail()
+
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do list-containers, then
     # exit again.
