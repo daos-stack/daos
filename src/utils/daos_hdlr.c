@@ -2757,7 +2757,7 @@ dm_connect(bool is_posix_copy,
 	}
 
 	/* set cont_layout to POSIX type if the source is not in DAOS, if the
-	 * destination is DAOS, and no destiantion container exists yet,
+	 * destination is DAOS, and no destination container exists yet,
 	 * then it knows to create a POSIX container
 	 */
 	if (src_file_dfs->type == POSIX)
