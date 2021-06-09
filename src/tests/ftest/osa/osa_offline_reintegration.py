@@ -89,7 +89,10 @@ class OSAOfflineReintegration(OSAUtils):
                     output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                            rank[val])
                     # Check the IOR data after exclude
-                    if data:
+                    # Just read or the first exclude alone. With
+                    # RF set to different values, more than
+                    # rank exclude reports IOR failure due to RF.
+                    if data and (val == 0):
                         self.run_ior_thread("Read", oclass, test_seq)
                 else:
                     output = self.dmg_command.system_stop(ranks=rank[val],

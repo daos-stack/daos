@@ -86,7 +86,7 @@ class OSAOfflineDrain(OSAUtils):
 
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
-                self.run_mdtest_thread()
+                self.run_mdtest_thread(oclass)
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
 
@@ -132,7 +132,7 @@ class OSAOfflineDrain(OSAUtils):
             pool[val].display_pool_daos_space(display_string)
             if data:
                 self.run_ior_thread("Read", oclass, test_seq)
-                self.run_mdtest_thread()
+                self.run_mdtest_thread(oclass)
                 self.container = self.pool_cont_dict[self.pool][0]
                 kwargs = {"pool": self.pool.uuid,
                           "cont": self.container.uuid}
