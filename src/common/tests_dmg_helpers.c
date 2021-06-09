@@ -178,7 +178,6 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	if (obj == NULL) {
 		enum json_tokener_error jerr = json_tokener_get_error(tok);
 		int fail_off = json_tokener_get_parse_end(tok);
-		char *aterr = &jbuf[fail_off];
 
 		D_ERROR("failed to parse JSON at offset %d: %s\n",
 			fail_off, json_tokener_error_desc(jerr));
