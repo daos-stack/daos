@@ -611,14 +611,21 @@ class DaosServer():
         }
 
         cmd = error_resolutions['storage_format'][1]
+        prev_cmd = None
         while True:
-            try:
-                self._sp.wait(timeout=5)
-                res = 'daos server died waiting for start'
-                self._add_test_case('format', failure=res)
-                raise Exception(res)
-            except subprocess.TimeoutExpired:
-                pass
+            # Wait between commands, but only if running the same command as
+            # before.  If the command is different then just run it.
+            # The intention here is to not flood the server/logs with failing
+            # commands in a loop.
+            if cmd == prev_cmd:
+                try:
+                    self._sp.wait(timeout=0.5)
+                    res = 'daos server died waiting for start'
+                    self._add_test_case('format', failure=res)
+                    raise Exception(res)
+                except subprocess.TimeoutExpired:
+                    pass
+            prev_cmd = cmd
             rc = self.run_dmg(cmd)
 
             data = json.loads(rc.stdout.decode('utf-8'))
