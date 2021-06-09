@@ -80,8 +80,8 @@ func TestIOEngineInstance_exit(t *testing.T) {
 				tc.expExPid = uint64(os.Getpid())
 			}
 
-			engine.OnInstanceExit(publishInstanceExitFn(fakePublish,
-				hostname()))
+			hn, _ := os.Hostname()
+			engine.OnInstanceExit(publishInstanceExitFn(fakePublish, hn))
 
 			engine.exit(context.Background(), exitErr)
 

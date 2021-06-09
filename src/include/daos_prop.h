@@ -66,6 +66,7 @@ enum daos_pool_props {
 	 * The pool svc rank list.
 	 */
 	DAOS_PROP_PO_SVC_LIST,
+	DAOS_PROP_PO_EC_CELL_SZ,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -131,7 +132,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_REDUN_FAC,
 	/**
 	 * Redundancy level: default fault domain level for placement.
-	 * default = rack (DAOS_PROP_CO_REDUN_RACK)
+	 * default = 1 (rank level)
 	 */
 	DAOS_PROP_CO_REDUN_LVL,
 	/**
@@ -192,6 +193,8 @@ enum daos_cont_props {
 	DAOS_PROP_CO_STATUS,
 	/** OID value to start allocation from */
 	DAOS_PROP_CO_ALLOCED_OID,
+	/** EC cell size, it can overwrite DAOS_PROP_EC_CELL_SZ of pool */
+	DAOS_PROP_CO_EC_CELL_SZ,
 	DAOS_PROP_CO_MAX,
 };
 
@@ -271,10 +274,14 @@ enum {
 	DAOS_PROP_CO_REDUN_RF4,
 };
 
-/** container redundancy level */
+/**
+ * Level of fault-domain to use for object allocation
+ * rank is hardcoded to 1, [2-254] are defined by the admin
+ */
 enum {
-	DAOS_PROP_CO_REDUN_RACK,
-	DAOS_PROP_CO_REDUN_NODE,
+	DAOS_PROP_CO_REDUN_MIN	= 1,
+	DAOS_PROP_CO_REDUN_RANK	= 1, /** hard-coded */
+	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
 
 /** container status flag */
@@ -289,26 +296,35 @@ enum {
 	DAOS_PROP_CO_UNCLEAN,
 };
 
+/** clear the UNCLEAN status */
+#define DAOS_PROP_CO_CLEAR	(0x1)
 struct daos_co_status {
 	/* DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
-	uint32_t	dcs_status;
+	uint16_t	dcs_status;
+	/* flags for DAOS internal usage, DAOS_PROP_CO_CLEAR */
+	uint16_t	dcs_flags;
 	/* pool map version when setting the dcs_status */
 	uint32_t	dcs_pm_ver;
 };
 
-#define DAOS_PROP_CO_STATUS_VAL(status, pm_ver)				\
-	((((uint64_t)(status)) << 32) | ((uint64_t)(pm_ver)))
+#define DAOS_PROP_CO_STATUS_VAL(status, flag, pm_ver)			\
+	((((uint64_t)(flag)) << 48)		|			\
+	 (((uint64_t)(status) & 0xFFFF) << 32)	|			\
+	 ((uint64_t)(pm_ver)))
+
 static inline uint64_t
 daos_prop_co_status_2_val(struct daos_co_status *co_status)
 {
 	return DAOS_PROP_CO_STATUS_VAL(co_status->dcs_status,
+				       co_status->dcs_flags,
 				       co_status->dcs_pm_ver);
 }
 
 static inline void
 daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
 {
-	co_status->dcs_status = (uint32_t)(val >> 32);
+	co_status->dcs_flags = (uint16_t)(val >> 48);
+	co_status->dcs_status = (uint16_t)((val >> 32) & 0xFFFF);
 	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
 }
 

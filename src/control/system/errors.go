@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	ErrEmptyGroupMap = errors.New("empty GroupMap")
+	ErrEmptyGroupMap = errors.New("empty group map (all ranks excluded?)")
 	ErrRaftUnavail   = errors.New("raft service unavailable (not started yet?)")
 )
 
