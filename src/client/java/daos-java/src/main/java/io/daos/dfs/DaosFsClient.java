@@ -13,7 +13,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import io.daos.*;
-import org.apache.commons.lang.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1074,7 +1073,12 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
     public DaosFsClient build() throws IOException {
       String poolId = getPoolId();
       String contId = getContId();
-      DaosFsClientBuilder builder = (DaosFsClientBuilder) ObjectUtils.clone(this);
+      DaosFsClientBuilder builder;
+      try {
+        builder = clone();
+      } catch (CloneNotSupportedException e) {
+        throw new IllegalStateException("clone not supported.", e);
+      }
       DaosFsClient fsClient;
       if (!builder.shareFsClient) {
         fsClient = new DaosFsClient(poolId, contId, builder);

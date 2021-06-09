@@ -21,6 +21,7 @@ struct cont_props {
 	uint16_t	 dcp_csum_type;
 	uint16_t	 dcp_encrypt_type;
 	uint32_t	 dcp_redun_fac;
+	uint32_t	 dcp_ec_cell_sz;
 	uint32_t	 dcp_csum_enabled:1,
 			 dcp_srv_verify:1,
 			 dcp_dedup_enabled:1,
@@ -93,6 +94,9 @@ daos_cont_prop2redunlvl(daos_prop_t *props);
 
 int
 daos_cont_rf2allowedfailures(int rf);
+
+uint32_t
+daos_cont_prop2ec_cell_sz(daos_prop_t *props);
 
 /*
  * alloc'ed oid property

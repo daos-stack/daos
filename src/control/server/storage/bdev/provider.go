@@ -8,8 +8,10 @@ package bdev
 
 import (
 	"fmt"
+	"os"
 	"sync"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -24,8 +26,8 @@ type (
 	ScanRequest struct {
 		pbin.ForwardableRequest
 		DeviceList []string
-		DisableVMD bool
 		NoCache    bool
+		DisableVMD bool // set by provider during request forwarding
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -42,8 +44,8 @@ type (
 		PCIBlocklist          string
 		TargetUser            string
 		ResetOnly             bool
+		DisableVMD            bool // set by caller
 		DisableVFIO           bool
-		DisableVMD            bool
 	}
 
 	// PrepareResponse contains the results of a successful Prepare operation.
@@ -54,10 +56,15 @@ type (
 	// FormatRequest defines the parameters for a Format operation.
 	FormatRequest struct {
 		pbin.ForwardableRequest
-		Class      storage.BdevClass
-		DeviceList []string
-		MemSize    int // size MiB memory to be used by SPDK proc
-		DisableVMD bool
+		ConfigPath     string
+		Class          storage.BdevClass
+		DeviceList     []string
+		DeviceFileSize uint64 // size in bytes for NVMe device emulation
+		MemSize        int    // size MiB memory to be used by SPDK proc
+		Hostname       string
+		OwnerUID       int
+		OwnerGID       int
+		DisableVMD     bool // set by provider during request forwarding
 	}
 
 	// DeviceFormatRequest designs the parameters for a device-specific format.
@@ -257,13 +264,32 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	return p.backend.Prepare(req)
 }
 
+// FormatRequestFromConfig returns a format request populated from a bdev
+// storage configuration.
+func FormatRequestFromConfig(log logging.Logger, cfg *storage.BdevConfig) FormatRequest {
+	fr := FormatRequest{
+		ConfigPath: cfg.OutputPath,
+		Class:      cfg.Class,
+		DeviceList: cfg.DeviceList,
+		// cfg size in nr GiBytes
+		DeviceFileSize: uint64(humanize.GiByte * cfg.FileSize),
+		OwnerUID:       os.Geteuid(),
+		OwnerGID:       os.Getegid(),
+	}
+
+	hn, err := os.Hostname()
+	if err != nil {
+		log.Errorf("get hostname: %s", err)
+		return fr
+	}
+	fr.Hostname = hn
+
+	return fr
+}
+
 // Format attempts to initialize NVMe devices for use by DAOS.
 // Note that this is a no-op for non-NVMe devices.
 func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
-	if len(req.DeviceList) == 0 {
-		return nil, errors.New("empty DeviceList in FormatRequest")
-	}
-
 	if p.shouldForward(req) {
 		req.DisableVMD = p.IsVMDDisabled()
 		return p.fwd.Format(req)

@@ -367,6 +367,7 @@ static int
 check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 		   d_rank_t *pl_rank)
 {
+	struct ds_pool_child	*pool_child;
 	struct ds_pool		*pool;
 	struct pool_target	*target = NULL;
 	d_rank_t		 rank = dss_self_rank();
@@ -374,11 +375,24 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	int			 i, nr, rc = 0;
 
 	/* Get pool map to check the target status */
-	pool = ds_pool_lookup(pool_id);
-	if (pool == NULL) {
+	pool_child = ds_pool_child_lookup(pool_id);
+	if (pool_child == NULL) {
 		D_ERROR(DF_UUID": Pool cache not found\n", DP_UUID(pool_id));
-		return -DER_UNINIT;
+		/*
+		 * The SMD pool info could be inconsistent with global pool
+		 * info when pool creation/destroy partially succeed or fail.
+		 * For example: If a pool destroy happened after a blobstore
+		 * is torndown for faulty SSD, the blob and SMD info for the
+		 * affected pool targets will be left behind.
+		 *
+		 * SSD faulty/reint reaction should tolerate such kind of
+		 * inconsistency, otherwise, state transition for the SSD
+		 * won't be able to moving forward.
+		 */
+		return 0;
 	}
+	pool = pool_child->spc_pool;
+	D_ASSERT(pool != NULL);
 
 	nr_downout = nr_down = nr_upin = nr_up = 0;
 	ABT_rwlock_rdlock(pool->sp_lock);
@@ -420,7 +434,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	}
 
 	ABT_rwlock_unlock(pool->sp_lock);
-	ds_pool_put(pool);
+	ds_pool_child_put(pool_child);
 
 	if (rc)
 		return rc;
