@@ -35,6 +35,7 @@ mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
+env
 if $TEST_RPMS; then
     # shellcheck disable=SC2029
     ssh -i ci_key -l jenkins "${first_node}" \
@@ -43,6 +44,5 @@ if $TEST_RPMS; then
        FTEST_ARG=\"$FTEST_ARG\"                      \
        $(cat ci/functional/test_main_node.sh)"
 else
-    env
     ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
 fi
