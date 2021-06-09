@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -61,7 +62,7 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 	}
 }
 
-func TestBdev_Backend_Scan(t *testing.T) {
+func TestBackend_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 
 	for name, tc := range map[string]struct {
@@ -110,10 +111,13 @@ func TestBdev_Backend_Scan(t *testing.T) {
 	}
 }
 
-func TestBdev_Backend_Format(t *testing.T) {
+func TestBackend_Format(t *testing.T) {
 	pci1 := storage.MockNvmeController(1).PciAddr
 	pci2 := storage.MockNvmeController(2).PciAddr
 	pci3 := storage.MockNvmeController(3).PciAddr
+
+	testDir, clean := common.CreateTestDir(t)
+	defer clean()
 
 	for name, tc := range map[string]struct {
 		req     FormatRequest
@@ -122,32 +126,12 @@ func TestBdev_Backend_Format(t *testing.T) {
 		expResp *FormatResponse
 		expErr  error
 	}{
-		"empty device list": {
-			req: FormatRequest{
-				Class: storage.BdevClassNvme,
-			},
-			expErr: errors.New("empty pci address list in nvme format request"),
-		},
 		"unknown device class": {
 			req: FormatRequest{
 				Class:      storage.BdevClass("whoops"),
 				DeviceList: []string{pci1},
 			},
 			expErr: FaultFormatUnknownClass("whoops"),
-		},
-		"aio malloc device class": {
-			mec: spdk.MockEnvCfg{
-				InitErr: errors.New("spdk backend init should not be called for non-nvme class"),
-			},
-			mnc: spdk.MockNvmeCfg{
-				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
-			},
-			req: FormatRequest{
-				Class: storage.BdevClassMalloc,
-			},
-			expResp: &FormatResponse{
-				DeviceResponses: map[string]*DeviceFormatResponse{},
-			},
 		},
 		"aio file device class": {
 			mec: spdk.MockEnvCfg{
@@ -157,12 +141,13 @@ func TestBdev_Backend_Format(t *testing.T) {
 				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
 			},
 			req: FormatRequest{
-				Class:      storage.BdevClassFile,
-				DeviceList: []string{"/tmp/daos-bdev"},
+				Class:          storage.BdevClassFile,
+				DeviceList:     []string{filepath.Join(testDir, "daos-bdev")},
+				DeviceFileSize: humanize.MiByte,
 			},
 			expResp: &FormatResponse{
 				DeviceResponses: map[string]*DeviceFormatResponse{
-					"/tmp/daos-bdev": new(DeviceFormatResponse),
+					filepath.Join(testDir, "daos-bdev"): new(DeviceFormatResponse),
 				},
 			},
 		},
@@ -349,6 +334,11 @@ func TestBdev_Backend_Format(t *testing.T) {
 
 			b := backendWithMockBinding(log, tc.mec, tc.mnc)
 
+			// output path would be set during config validate
+			tc.req.ConfigPath = filepath.Join(testDir, storage.BdevOutConfName)
+			tc.req.OwnerUID = os.Geteuid()
+			tc.req.OwnerGID = os.Getegid()
+
 			gotResp, gotErr := b.Format(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
@@ -358,11 +348,22 @@ func TestBdev_Backend_Format(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
+
+			if tc.req.Class != storage.BdevClassFile {
+				return
+			}
+
+			// verify empty files created for AIO class
+			for _, testFile := range tc.req.DeviceList {
+				if _, err := os.Stat(testFile); err != nil {
+					t.Fatal(err)
+				}
+			}
 		})
 	}
 }
 
-func TestBdev_Backend_Update(t *testing.T) {
+func TestBackend_Update(t *testing.T) {
 	numCtrlrs := 4
 	controllers := make(storage.NvmeControllers, 0, numCtrlrs)
 	for i := 0; i < numCtrlrs; i++ {
@@ -455,19 +456,19 @@ type testWalkInput struct {
 	expErr error
 }
 
-func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
+func TestBackend_cleanHugePagesFn(t *testing.T) {
 	testDir := "/wherever"
 
 	for name, tc := range map[string]struct {
 		prefix     string
-		tgtUid     string
+		tgtUID     string
 		testInputs []*testWalkInput
 		removeErr  error
 		expRemoved []string
 	}{
 		"ignore subdirectory": {
 			prefix: "prefix1",
-			tgtUid: "42",
+			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
 					path: filepath.Join(testDir, "prefix1_foo"),
@@ -506,7 +507,7 @@ func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
 		},
 		"nil file stat": {
 			prefix: "prefix1",
-			tgtUid: "42",
+			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
 					path: filepath.Join(testDir, "prefix1_foo"),
@@ -521,7 +522,7 @@ func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
 		},
 		"prefix matching": {
 			prefix: "prefix1",
-			tgtUid: "42",
+			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
 					path: filepath.Join(testDir, "prefix2_foo"),
@@ -536,7 +537,7 @@ func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
 		},
 		"uid matching": {
 			prefix: "prefix1",
-			tgtUid: "42",
+			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
 					path: filepath.Join(testDir, "prefix1_foo"),
@@ -551,7 +552,7 @@ func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
 		},
 		"remove fails": {
 			prefix: "prefix1",
-			tgtUid: "42",
+			tgtUID: "42",
 			testInputs: []*testWalkInput{
 				{
 					path:   filepath.Join(testDir, "prefix1_foo"),
@@ -572,7 +573,7 @@ func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
 				return tc.removeErr
 			}
 
-			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUid, removeFn)
+			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUID, removeFn)
 			for _, ti := range tc.testInputs {
 				gotErr := testFn(ti.path, ti.info, ti.err)
 				common.CmpErr(t, ti.expErr, gotErr)

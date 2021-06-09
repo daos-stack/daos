@@ -90,6 +90,8 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 	arg->rebuild_cb = NULL;
 	arg->rebuild_cb_arg = NULL;
 
+#if 0
+	/* Disable it due to DAOS-7420 */
 	if (oid == NULL) {
 		int rc;
 
@@ -97,6 +99,7 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 		if (rc != 0)
 			assert_rc_equal(rc, -DER_NOSYS);
 	}
+#endif
 }
 
 static void
@@ -120,7 +123,7 @@ rebuild_dkeys(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      KEY_NR, DP_OID(oid));
 	for (i = 0; i < 5; i++) {
-		char	key[16];
+		char	key[32] = {0};
 		daos_recx_t recx;
 		char	data[DATA_SIZE];
 
@@ -174,7 +177,7 @@ rebuild_akeys(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      KEY_NR, DP_OID(oid));
 	for (i = 0; i < KEY_NR; i++) {
-		char		key[16];
+		char		key[32] = {0};
 		daos_recx_t	recx;
 		char		data[DATA_SIZE];
 
@@ -229,7 +232,7 @@ rebuild_indexes(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      2000, DP_OID(oid));
 	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
+		char	key[32] = {0};
 
 		sprintf(key, "dkey_2_%d", i);
 		for (j = 0; j < 20; j++)
@@ -656,11 +659,11 @@ rebuild_multiple(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      1000, DP_OID(oid));
 	for (i = 0; i < 10; i++) {
-		char	dkey[16];
+		char	dkey[32] = {0};
 
 		sprintf(dkey, "dkey_3_%d", i);
 		for (j = 0; j < 10; j++) {
-			char	akey[16];
+			char	akey[32] = {0};
 
 			sprintf(akey, "akey_%d", j);
 			for (k = 0; k < 10; k++)
@@ -702,7 +705,7 @@ rebuild_large_rec(void **state)
 		      KEY_NR, DP_OID(oid));
 	memset(buffer, 'a', LARGE_BUFFER_SIZE);
 	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
+		char	key[32] = {0};
 		const char *lakey = "a_key_L";
 		daos_size_t iod_size = 1;
 		int	rx_nr = LARGE_BUFFER_SIZE;
@@ -1034,10 +1037,10 @@ rebuild_multiple_group(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      KEY_NR, DP_OID(oid));
 	for (i = 0; i < 50; i++) {
-		char	key[16];
+		char	key[32] = {0};
 		daos_recx_t recx;
 		char	data[10];
-		char	akey[16];
+		char	akey[32] = {0};
 		int	j;
 
 		sprintf(key, "dkey_0_%d", i);

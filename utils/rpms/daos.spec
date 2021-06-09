@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.101
-Release:       1%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -84,7 +84,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel >= 0.7.3
+BuildRequires: daos-raft-devel = 0.7.3
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -338,14 +338,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{conf_dir}
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
-%{_libdir}/libdaos_common.so
-%{_libdir}/*.so.*
-# TODO: this should move from daos_srv to daos
-%{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
 %dir %{_libdir}/%{name}
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
+%{_libdir}/libcart.so.*
+%{_libdir}/libgurt.so.*
 %doc
 
 %files server
@@ -372,6 +370,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos_size.so
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
+%{_libdir}/daos_srv/libplacement.so
 %{_libdir}/libdaos_common_pmem.so
 %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
@@ -386,6 +385,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_unitdir}/%{server_svc_name}
 
 %files client
+%{_libdir}/libdaos_common.so
+%{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg
@@ -452,14 +453,21 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files devel
 %{_includedir}/*
 %{_libdir}/libdaos.so
+%{_libdir}/libgurt.so
+%{_libdir}/libcart.so
 %{_libdir}/*.a
-%{_libdir}/*.so
 
 %files firmware
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Wed Jun 02 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.101-3
+- Remove libs from devel package
+
+* Thu May 20 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-101-2
+- Remove client libs from common package
+
 * Wed May 19 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.101-1
 - Version bump to 1.3.101 for 2.0 test build 1
 
