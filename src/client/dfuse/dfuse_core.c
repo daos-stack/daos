@@ -55,6 +55,7 @@ dfuse_progress_thread(void *arg)
 	return NULL;
 }
 
+#if 0
 /* Parse a string to a time, used for reading container attributes info
  * timeouts.
  */
@@ -90,6 +91,7 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 	*_out = out;
 	return 0;
 }
+#endif
 
 /* Inode entry hash table operations */
 
@@ -490,6 +492,8 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
  */
 #define ATTR_VALUE_LEN 128
 
+static void dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
+
 /* Setup caching attributes for a container.
  *
  * These are read from pool attributes, or can be overwritten on the command
@@ -502,6 +506,13 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
 static int
 dfuse_cont_get_cache(struct dfuse_cont *dfc)
 {
+#if 1
+	/**
+	 * XXX use default cache value until DAOS-7671 is fixed
+	 */
+	dfuse_set_default_cont_cache_values(dfc);
+	return 0;
+#else
 	size_t		size;
 	char		*buff;
 	int		rc;
@@ -606,6 +617,7 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 out:
 	D_FREE(buff);
 	return rc;
+#endif
 }
 
 /* Set default cache values for a container.
@@ -801,12 +813,6 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 
 	fs_handle->dpi_info = dfuse_info;
 
-	/* Max read and max write are handled differently because of the way
-	 * the interception library handles reads vs writes
-	 */
-	fs_handle->dpi_max_read = 1024 * 1024 * 4;
-	fs_handle->dpi_max_write = 1024 * 1024;
-
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
 					 3, fs_handle, &pool_hops,
 					 &fs_handle->dpi_pool_table);
@@ -888,7 +894,7 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	args.argc = 5;
+	args.argc = 4;
 
 	/* These allocations are freed later by libfuse so do not use the
 	 * standard allocation macros
@@ -910,12 +916,8 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	if (!args.argv[2])
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	rc = asprintf(&args.argv[3], "-omax_read=%u", fs_handle->dpi_max_read);
-	if (rc < 0 || !args.argv[3])
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	args.argv[4] = strdup("-odefault_permissions");
-	if (!args.argv[4])
+	args.argv[3] = strdup("-odefault_permissions");
+	if (!args.argv[3])
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	fuse_ops = dfuse_get_fuse_ops();
@@ -967,12 +969,13 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
-	if (!dfuse_launch_fuse(fs_handle, fuse_ops, &args)) {
-		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
-		D_GOTO(err_ie_remove, rc = -DER_INVAL);
-	}
-
+	rc = dfuse_launch_fuse(fs_handle, fuse_ops, &args);
 	D_FREE(fuse_ops);
+	if (!rc) {
+		(void)dfuse_fs_fini(fs_handle);
+		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
+		return -DER_INVAL;
+	}
 
 	return -DER_SUCCESS;
 

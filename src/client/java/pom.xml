@@ -34,6 +34,16 @@
     </license>
   </licenses>
 
+  <developers>
+    <developer>
+      <id>jiafuzha</id>
+      <name>Jiafu Zhang</name>
+      <email>jiafu.zhang@intel.com</email>
+      <organization>Intel</organization>
+      <organizationUrl>http://www.intel.com/</organizationUrl>
+    </developer>
+  </developers>
+
   <scm>
     <connection>scm:git:git://github.com/daos-stack/daos.git</connection>
     <developerConnection>scm:git:ssh://github.com:daos-stack/daos.git</developerConnection>
@@ -287,11 +297,6 @@
         <groupId>org.apache.logging.log4j</groupId>
         <artifactId>log4j-core</artifactId>
         <version>${log4j.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>commons-lang</groupId>
-        <artifactId>commons-lang</artifactId>
-        <version>2.6</version>
       </dependency>
       <dependency>
         <groupId>com.google.code.findbugs</groupId>

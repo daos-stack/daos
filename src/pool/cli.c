@@ -622,7 +622,7 @@ out_task:
 int
 dc_pool_connect_lbl(tse_task_t *task)
 {
-	daos_pool_connect_lbl_t *args;
+	daos_pool_connect_t	*args;
 	struct dc_pool		*pool = NULL;
 	uuid_t			 null_uuid;
 	int			 rc;
@@ -851,8 +851,9 @@ swap_pool_buf(struct pool_buf *pb)
 
 	for (i = 0; i < pb->pb_nr; i++) {
 		pool_comp = &pb->pb_comps[i];
-		D_SWAP16S(&pool_comp->co_type);
+		/* skip pool_comp->co_type (uint8_t) */
 		/* skip pool_comp->co_status (uint8_t) */
+		/* skip pool_comp->co_index (uint8_t) */
 		/* skip pool_comp->co_padding (uint8_t) */
 		D_SWAP32S(&pool_comp->co_id);
 		D_SWAP32S(&pool_comp->co_rank);
@@ -1662,8 +1663,8 @@ pool_query_target_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	/** TODO Return pool target space usage and other tgt info */
 	arg->dqa_info->ta_state = out->pqio_state;
+	arg->dqa_info->ta_space = out->pqio_space;
 
 out:
 	crt_req_decref(arg->rpc);

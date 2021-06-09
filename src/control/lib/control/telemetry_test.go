@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/url"
@@ -572,6 +573,79 @@ func TestControl_MetricsQuery(t *testing.T) {
 			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_Metric_JSON(t *testing.T) {
+	testLabelMap := map[string]string{
+		"label1": "val1",
+		"label2": "val2",
+	}
+
+	for name, tc := range map[string]struct {
+		metric Metric
+	}{
+		"nil": {},
+		"simple": {
+			metric: newSimpleMetric(testLabelMap, 123),
+		},
+		"summary": {
+			metric: &SummaryMetric{
+				Labels:      testLabelMap,
+				SampleSum:   5678.9,
+				SampleCount: 42,
+				Quantiles: QuantileMap{
+					0.25: 50,
+					0.5:  42,
+				},
+			},
+		},
+		"histogram": {
+			metric: &HistogramMetric{
+				Labels:      testLabelMap,
+				SampleSum:   9876,
+				SampleCount: 120,
+				Buckets: []*MetricBucket{
+					{
+						CumulativeCount: 55,
+						UpperBound:      500,
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			marshaled, err := json.Marshal(tc.metric)
+			if err != nil {
+				t.Fatalf("expected to marshal, got %q", err)
+			}
+
+			var unmarshaled Metric
+			switch tc.metric.(type) {
+			case *SimpleMetric:
+				unmarshaled = new(SimpleMetric)
+			case *SummaryMetric:
+				unmarshaled = new(SummaryMetric)
+			case *HistogramMetric:
+				unmarshaled = new(HistogramMetric)
+			default:
+				unmarshaled = new(SimpleMetric)
+			}
+
+			err = json.Unmarshal(marshaled, unmarshaled)
+			if err != nil {
+				t.Fatalf("expected to unmarshal, got %q", err)
+			}
+
+			expResult := tc.metric
+			if tc.metric == nil {
+				expResult = &SimpleMetric{}
+			}
+
+			if diff := cmp.Diff(expResult, unmarshaled); diff != "" {
+				t.Fatalf("unmarshaled different from original (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

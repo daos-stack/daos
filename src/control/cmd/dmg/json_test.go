@@ -91,7 +91,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "pool set-prop":
 				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "-n", "foo", "-v", "bar"}...)
 			case "pool extend":
-				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "--ranks", "0", "-s", "1TB"}...)
+				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "--ranks", "0"}...)
 			case "pool exclude", "pool drain", "pool reintegrate":
 				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "--rank", "0"}...)
 			case "cont set-owner":

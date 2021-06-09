@@ -79,8 +79,6 @@ class NvmePoolExtend(OSAUtils):
                 thrd.start()
                 time.sleep(1)
 
-            scm_pool_size = self.pool.scm_size
-            nvme_pool_size = self.pool.nvme_size
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
 
@@ -100,9 +98,7 @@ class NvmePoolExtend(OSAUtils):
             # Extend ranks (4,5), (6,7), (8,9)
             ranks_extended = "{},{}".format((val * 2) + 4, (val * 2) + 5)
             output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                  ranks_extended,
-                                                  scm_pool_size,
-                                                  nvme_pool_size)
+                                                  ranks_extended)
             self.print_and_assert_on_rebuild_failure(output)
             pver_extend = self.get_pool_version()
             self.log.info("Pool Version after extend %s", pver_extend)

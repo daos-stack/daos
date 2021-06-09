@@ -55,7 +55,8 @@ func (svc *mgmtSvc) makePoolServiceCall(ctx context.Context, method drpc.Method,
 	return svc.harness.CallDrpc(ctx, method, req)
 }
 
-func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
+// getPoolService returns the pool service entry for the given UUID.
+func (svc *mgmtSvc) getPoolService(uuidStr string) (*system.PoolService, error) {
 	uuid, err := uuid.Parse(uuidStr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to parse request uuid %q", uuidStr)
@@ -68,6 +69,28 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 
 	if ps.State != system.PoolServiceStateReady {
 		return nil, drpc.DaosTryAgain
+	}
+
+	return ps, nil
+}
+
+// getPoolServiceStorage returns a slice of values representing the
+// per-rank allocation on each storage tier.
+func (svc *mgmtSvc) getPoolServiceStorage(uuidStr string) ([]uint64, error) {
+	ps, err := svc.getPoolService(uuidStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return []uint64{ps.Storage.ScmPerRank, ps.Storage.NVMePerRank}, nil
+}
+
+// getPoolServiceRanks returns a slice of ranks designated as the
+// pool service hosts.
+func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
+	ps, err := svc.getPoolService(uuidStr)
+	if err != nil {
+		return nil, err
 	}
 
 	readyRanks := make([]system.Rank, 0, len(ps.Replicas))
@@ -83,7 +106,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 	}
 
 	if len(readyRanks) == 0 {
-		return nil, errors.Errorf("unable to find any available service ranks for pool %s", uuid)
+		return nil, errors.Errorf("unable to find any available service ranks for pool %s", uuidStr)
 	}
 
 	return system.RanksToUint32(readyRanks), nil
@@ -509,6 +532,15 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 	}
 	req.FaultDomains = fdTree
 
+	// Look up the pool service record to find the storage allocations
+	// used at creation.
+	ps, err := svc.getPoolService(req.GetUuid())
+	if err != nil {
+		return nil, err
+	}
+	req.Scmbytes = ps.Storage.ScmPerRank
+	req.Nvmebytes = ps.Storage.NVMePerRank
+
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 
 	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolExtend, req)
@@ -829,6 +861,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 	for _, ps := range psList {
 		resp.Pools = append(resp.Pools, &mgmtpb.ListPoolsResp_Pool{
 			Uuid:    ps.PoolUUID.String(),
+			Label:   ps.PoolLabel,
 			SvcReps: system.RanksToUint32(ps.Replicas),
 		})
 	}
