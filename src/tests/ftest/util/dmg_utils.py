@@ -617,20 +617,44 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of pool UUID keys and svc replica values
 
         """
-        self._get_result(("pool", "list"))
+        # Sample JSON Output:
+        #{
+        #    "response": {
+        #        "status": 0,
+        #        "pools": [
+        #        {
+        #            "uuid": "3dd3f313-6e37-4890-9e64-93a34d04e9f5",
+        #            "label": "foobar",
+        #            "svc_reps": [
+        #            0
+        #            ]
+        #        },
+        #        {
+        #            "uuid": "6871d543-9a12-4530-b704-d937197c131c",
+        #            "label": "foobaz",
+        #            "svc_reps": [
+        #            0
+        #            ]
+        #        },
+        #        {
+        #            "uuid": "aa503e26-e974-4634-ac5a-738ee00f0c39",
+        #            "svc_reps": [
+        #            0
+        #            ]
+        #        }
+        #        ]
+        #    },
+        #    "error": null,
+        #    "status": 0
+        #}
+        output = self._get_json_result(("pool", "list"))
 
-        # Populate a dictionary with svc replicas for each pool UUID key listed
-        # Sample dmg pool list output:
-        #    Pool UUID                            Svc Replicas
-        #    ---------                            ------------
-        #    43bf2fe8-cb92-46ec-b9e9-9b056725092a 0
-        #    98736dfe-cb92-12cd-de45-9b09875092cd 1
         data = {}
-        match = re.findall(
-            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\W+([0-9][0-9,-]*))",
-            self.result.stdout_text)
-        for info in match:
-            data[info[0]] = get_numeric_list(info[1])
+        if output["response"] is None:
+            return data
+
+        for pool in output["response"]["pools"]:
+            data[pool["uuid"]] = pool["svc_reps"]
         return data
 
     def pool_set_prop(self, pool, name, value):
