@@ -52,6 +52,7 @@ mdtest:
   bytes: 4096
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
+  disable_caching: True
 dcp:
   client_processes:
     np: 16

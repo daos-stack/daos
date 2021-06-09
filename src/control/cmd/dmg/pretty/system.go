@@ -189,15 +189,20 @@ func PrintListPoolsResponse(out io.Writer, resp *control.ListPoolsResp) error {
 		return nil
 	}
 
-	uuidTitle := "Pool UUID"
+	uuidTitle := "UUID"
+	labelTitle := "Label"
 	svcRepTitle := "Svc Replicas"
 
-	formatter := txtfmt.NewTableFormatter(uuidTitle, svcRepTitle)
+	formatter := txtfmt.NewTableFormatter(uuidTitle, labelTitle, svcRepTitle)
 	var table []txtfmt.TableRow
 
 	for _, pool := range resp.Pools {
 		row := txtfmt.TableRow{uuidTitle: pool.UUID}
 
+		row[labelTitle] = "N/A"
+		if pool.Label != "" {
+			row[labelTitle] = pool.Label
+		}
 		if len(pool.SvcReplicas) != 0 {
 			row[svcRepTitle] = formatRanks(pool.SvcReplicas)
 		}

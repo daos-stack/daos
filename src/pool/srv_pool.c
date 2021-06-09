@@ -318,6 +318,7 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_PO_SPACE_RB:
 		case DAOS_PROP_PO_SELF_HEAL:
 		case DAOS_PROP_PO_RECLAIM:
+		case DAOS_PROP_PO_EC_CELL_SZ:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_ACL:
@@ -340,7 +341,8 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 }
 
 static int
-pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
+pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
+		bool create)
 {
 	struct daos_prop_entry	*entry;
 	d_iov_t			 value;
@@ -352,6 +354,14 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
+		if (!create &&
+		    (entry->dpe_type == DAOS_PROP_PO_EC_CELL_SZ)) {
+			D_ERROR("Can't change immutable property=%d\n",
+				entry->dpe_type);
+			rc = -DER_NO_PERM;
+			break;
+		}
+
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			if (entry->dpe_str == NULL ||
@@ -364,24 +374,18 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_label,
 					   &value);
-			if (rc)
-				return rc;
 			break;
 		case DAOS_PROP_PO_OWNER:
 			d_iov_set(&value, entry->dpe_str,
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_owner,
 					   &value);
-			if (rc)
-				return rc;
 			break;
 		case DAOS_PROP_PO_OWNER_GROUP:
 			d_iov_set(&value, entry->dpe_str,
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_owner_group,
 					   &value);
-			if (rc)
-				return rc;
 			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
@@ -391,8 +395,6 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				d_iov_set(&value, acl, daos_acl_get_size(acl));
 				rc = rdb_tx_update(tx, kvs, &ds_pool_prop_acl,
 						   &value);
-				if (rc)
-					return rc;
 			}
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
@@ -400,24 +402,24 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_space_rb,
 					   &value);
-			if (rc)
-				return rc;
 			break;
 		case DAOS_PROP_PO_SELF_HEAL:
 			d_iov_set(&value, &entry->dpe_val,
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_self_heal,
 					   &value);
-			if (rc)
-				return rc;
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			d_iov_set(&value, &entry->dpe_val,
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_reclaim,
 					   &value);
-			if (rc)
-				return rc;
+			break;
+		case DAOS_PROP_PO_EC_CELL_SZ:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_ec_cell_sz,
+					   &value);
 			break;
 		case DAOS_PROP_PO_SVC_LIST:
 			break;
@@ -425,8 +427,12 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
 			return -DER_INVAL;
 		}
+		if (rc) {
+			D_ERROR("Failed to update entry type=%d, rc="DF_RC"\n",
+				entry->dpe_type, DP_RC(rc));
+			break;
+		}
 	}
-
 	return rc;
 }
 
@@ -450,52 +456,72 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	/* Initialize the layout version. */
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_version, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to update version, "DF_RC"\n", DP_RC(rc));
 		goto out;
+	}
 
 	/* Generate the pool buffer. */
 	rc = gen_pool_buf(NULL, &map_buf, map_version, ndomains, nnodes,
 			ntargets, domains, target_uuids, target_addrs, &uuids,
 			dss_tgt_nr);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to generate pool buf, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_map_buf, rc);
+	}
 
 	/* Initialize the pool map properties. */
 	rc = write_map_buf(tx, kvs, map_buf, map_version);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to write map properties, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 	d_iov_set(&value, uuids, sizeof(uuid_t) * nnodes);
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_map_uuids, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to update map UUIDs, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Write the optional properties. */
-	rc = pool_prop_write(tx, kvs, prop);
-	if (rc != 0)
+	rc = pool_prop_write(tx, kvs, prop, true);
+	if (rc != 0) {
+		D_ERROR("failed to write props, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Write connectable property */
 	connectable = 1;
 	d_iov_set(&value, &connectable, sizeof(connectable));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_connectable, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to write connectable prop, "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Write the handle properties. */
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_nhandles, &value);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to update handle props, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_prop_handles, &attr);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to create handle prop KVS, "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 	/* Create pool user attributes KVS */
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_attr_user, &attr);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to create user attr KVS, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_uuids, rc);
+	}
 
 out_uuids:
 	D_FREE(uuids);
@@ -932,7 +958,8 @@ ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	int			rc = 0;
 
 	/* Only used for exclude the rank for the moment */
-	if (src != CRT_EVS_GRPMOD || type != CRT_EVT_DEAD ||
+	if ((src != CRT_EVS_GRPMOD && src != CRT_EVS_SWIM) ||
+	    type != CRT_EVT_DEAD ||
 	    pool_disable_exclude) {
 		D_DEBUG(DB_MGMT, "ignore src/type/exclude %u/%u/%d\n",
 			src, type, pool_disable_exclude);
@@ -1142,7 +1169,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	for (i = 0; i < doms_cnt; i++) {
 		struct swim_member_state state;
 
-		/* Only check if UPIN server is excluded for now */
+		/* Only check if UPIN server is excluded or dead for now */
 		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
 			continue;
 
@@ -1154,10 +1181,15 @@ pool_svc_check_node_status(struct pool_svc *svc)
 			break;
 		}
 
+		/* Since there is a big chance the INACTIVE node will become
+		 * ACTIVE soon, let's only evict the DEAD node rank for the
+		 * moment.
+		 */
 		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
 			doms[i].do_comp.co_rank,
 			rc == -DER_NONEXIST ? -1 : state.sms_status);
-		if (rc == -DER_NONEXIST) {
+		if (rc == -DER_NONEXIST ||
+		    state.sms_status == SWIM_MEMBER_DEAD) {
 			rc = pool_exclude_rank(svc, doms[i].do_comp.co_rank);
 			if (rc) {
 				D_ERROR("failed to exclude rank %u: %d\n",
@@ -1596,6 +1628,8 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		nr++;
 	if (bits & DAOS_PO_QUERY_PROP_SVC_LIST)
 		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_EC_CELL_SZ)
+		nr++;
 	if (nr == 0)
 		return 0;
 
@@ -1652,6 +1686,17 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			return rc;
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_RECLAIM;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_EC_CELL_SZ) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_ec_cell_sz,
+				   &value);
+		if (rc != 0)
+			return rc;
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_EC_CELL_SZ;
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
@@ -2810,6 +2855,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 			case DAOS_PROP_PO_SPACE_RB:
 			case DAOS_PROP_PO_SELF_HEAL:
 			case DAOS_PROP_PO_RECLAIM:
+			case DAOS_PROP_PO_EC_CELL_SZ:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -2891,6 +2937,53 @@ enum_pool_comp_state_to_tgt_state(int tgt_state)
 	return DAOS_TS_UNKNOWN;
 }
 
+static int
+pool_query_tgt_space(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
+		     d_rank_t rank, uint32_t tgt_idx, struct daos_space *ds)
+{
+	struct pool_tgt_query_in	*in;
+	struct pool_tgt_query_out	*out;
+	crt_rpc_t			*rpc;
+	crt_endpoint_t			 tgt_ep = { 0 };
+	crt_opcode_t			 opcode;
+	int				 rc;
+
+	D_DEBUG(DB_MD, DF_UUID": query target for rank:%u tgt:%u\n",
+		DP_UUID(svc->ps_uuid), rank, tgt_idx);
+
+	tgt_ep.ep_rank = rank;
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, tgt_idx);
+	opcode = DAOS_RPC_OPCODE(POOL_TGT_QUERY, DAOS_POOL_MODULE,
+				 DAOS_POOL_VERSION);
+	rc = crt_req_create(ctx, &tgt_ep, opcode, &rpc);
+	if (rc) {
+		D_ERROR("crt_req_create failed: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
+	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		goto out_rpc;
+
+	out = crt_reply_get(rpc);
+	rc = out->tqo_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to query rank:%u, tgt:%u, "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), rank, tgt_idx, DP_RC(rc));
+	} else {
+		D_ASSERT(ds != NULL);
+		*ds = out->tqo_space.ps_space;
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+	return rc;
+}
+
 void
 ds_pool_query_info_handler(crt_rpc_t *rpc)
 {
@@ -2919,8 +3012,9 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 		D_ERROR(DF_UUID": Failed to get rank:%u, idx:%d\n, rc:%d",
 			DP_UUID(in->pqii_op.pi_uuid), in->pqii_rank,
 			in->pqii_tgt, rc);
-		D_GOTO(out, rc = -DER_NONEXIST);
-	 } else {
+		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+		D_GOTO(out_svc, rc = -DER_NONEXIST);
+	} else {
 		rc = 0;
 	}
 
@@ -2928,13 +3022,24 @@ ds_pool_query_info_handler(crt_rpc_t *rpc)
 
 	tgt_state = target->ta_comp.co_status;
 	out->pqio_state = enum_pool_comp_state_to_tgt_state(tgt_state);
-
-	/**
-	 * TODO (DAOS-3625): Send pool tgt query RPC (server->server) to
-	 * return pool target space info (including fragmentation).
-	 */
+	out->pqio_op.po_map_version =
+			pool_map_get_version(svc->ps_pool->sp_map);
 
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+
+	if (tgt_state == PO_COMP_ST_UPIN) {
+		rc = pool_query_tgt_space(rpc->cr_ctx, svc, in->pqii_op.pi_hdl,
+					  in->pqii_rank, in->pqii_tgt,
+					  &out->pqio_space);
+		if (rc)
+			D_ERROR(DF_UUID": Failed to query rank:%u, tgt:%d, "
+				""DF_RC"\n", DP_UUID(in->pqii_op.pi_uuid),
+				in->pqii_rank, in->pqii_tgt, DP_RC(rc));
+	} else {
+		memset(&out->pqio_space, 0, sizeof(out->pqio_space));
+	}
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqio_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
 	out->pqio_op.po_rc = rc;
@@ -3401,7 +3506,7 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = pool_prop_write(&tx, &svc->ps_root, in->psi_prop);
+	rc = pool_prop_write(&tx, &svc->ps_root, in->psi_prop, false);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to write prop for pool: %d\n",
 			DP_UUID(in->psi_op.pi_uuid), rc);
@@ -3596,7 +3701,7 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 		D_GOTO(out_prop, rc);
 	}
 
-	rc = pool_prop_write(&tx, &svc->ps_root, prop);
+	rc = pool_prop_write(&tx, &svc->ps_root, prop, false);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to write updated ACL for pool: %d\n",
 			DP_UUID(in->pui_op.pi_uuid), rc);
@@ -3746,7 +3851,7 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 		D_GOTO(out_prop, rc);
 	}
 
-	rc = pool_prop_write(&tx, &svc->ps_root, prop);
+	rc = pool_prop_write(&tx, &svc->ps_root, prop, false);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to write updated ACL for pool: %d\n",
 			DP_UUID(in->pdi_op.pi_uuid), rc);
@@ -4056,21 +4161,6 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
 	replace_failed_replicas(svc, map);
-
-	if (opc == POOL_ADD_IN) {
-		/*
-		 * If we are setting ranks from UP -> UPIN, schedule a reclaim
-		 * operation to garbage collect any unreachable data moved
-		 * during reintegration/addition
-		 */
-		rc = ds_rebuild_schedule(svc->ps_pool, map_version, tgts,
-					 RB_OP_RECLAIM, 0);
-		if (rc != 0) {
-			D_ERROR("failed to schedule reclaim rc: "DF_RC"\n",
-				DP_RC(rc));
-			goto out_map_buf;
-		}
-	}
 
 out_map_buf:
 	pool_buf_free(map_buf);
@@ -5544,7 +5634,7 @@ out:
 
 int
 ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version)
+			 uint32_t version, int *tgt_id)
 {
 	struct pl_map		*map;
 	struct pl_obj_layout	*layout;
@@ -5565,7 +5655,7 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 		goto out;
 
 	rc = pl_select_leader(oid->id_pub, oid->id_shard / layout->ol_grp_size,
-			      layout->ol_grp_size, true,
+			      layout->ol_grp_size, tgt_id,
 			      pl_obj_get_shard, layout);
 	pl_obj_layout_free(layout);
 	if (rc < 0)
@@ -5587,24 +5677,27 @@ out:
  * \param [IN]	version		The pool map version
  *
  * \return			+1 if leader is on current server.
- * \return			Zero if the leader resides on another server.
+ * \return			Zero if the leader resides on another server,
+ *				or the oid->id_shard is not the leader shard.
  * \return			Negative value if error.
  */
 int
 ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version)
+			 uint32_t version, bool check_shard)
 {
 	struct pool_target	*target;
 	d_rank_t		 myrank;
-	int			 leader;
+	int			 leader_tgt;
+	int			 leader_shard;
 	int			 rc;
 
-	leader = ds_pool_elect_dtx_leader(pool, oid, version);
-	if (leader < 0)
-		return leader;
+	rc = ds_pool_elect_dtx_leader(pool, oid, version, &leader_tgt);
+	if (rc < 0)
+		return rc;
+	leader_shard = rc;
 
-	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader);
-	rc = pool_map_find_target(pool->sp_map, leader, &target);
+	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader_tgt);
+	rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
 	if (rc < 0)
 		return rc;
 
@@ -5615,10 +5708,13 @@ ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc < 0)
 		return rc;
 
-	if (myrank != target->ta_comp.co_rank)
+	if (myrank != target->ta_comp.co_rank) {
 		rc = 0;
-	else
+	} else {
 		rc = 1;
+		if (check_shard && oid->id_shard != leader_shard)
+			rc = 0;
+	}
 
 	return rc;
 }

@@ -120,6 +120,7 @@ dfs_test_lookup(void **state)
 	char			*filename_sym2 = "sym2";
 	char			*path_sym2 = "/dir1/sym2";
 	mode_t			create_mode = S_IWUSR | S_IRUSR;
+	struct stat		stbuf;
 	int			create_flags = O_RDWR | O_CREAT | O_EXCL;
 	int			rc;
 
@@ -130,6 +131,11 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
 		      create_flags, 0, 0, NULL, &obj);
 	assert_int_equal(rc, 0);
+
+	/** try chmod to a dir, should fail */
+	rc = dfs_chmod(dfs_mt, NULL, filename_file1, S_IFDIR);
+	assert_int_equal(rc, EINVAL);
+
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
 
@@ -150,6 +156,19 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, NULL, filename_dir1, create_mode | S_IFDIR,
 		      create_flags, 0, 0, NULL, &dir);
 	assert_int_equal(rc, 0);
+
+	/** try chmod to a symlink, should fail (since chmod resolves link) */
+	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, S_IFLNK);
+	assert_int_equal(rc, EINVAL);
+
+	/** chmod + IXUSR to dir1 */
+	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, create_mode | S_IXUSR);
+	assert_int_equal(rc, 0);
+
+	/** verify mode */
+	rc = dfs_stat(dfs_mt, NULL, filename_dir1, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mode, S_IFDIR | create_mode | S_IXUSR);
 
 	dfs_test_lookup_hlpr(path_dir1, S_IFDIR);
 	dfs_test_lookup_rel_hlpr(NULL, filename_dir1, S_IFDIR);
@@ -373,6 +392,7 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 	daos_size_t	buf_size = 128 * 1024;
 	daos_size_t	io_size;
 	daos_size_t	size = 0;
+	struct stat	stbuf;
 	int		rc = 0;
 
 	D_ALLOC(buf, buf_size);
@@ -386,6 +406,25 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 	rc = dfs_open(dfs_mt, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
 		      O_RDWR | O_CREAT, OC_S1, chunk_size, NULL, &obj);
 	assert_int_equal(rc, 0);
+
+	rc = dfs_punch(dfs_mt, obj, 10, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 10);
+
+	/** test for overflow */
+	rc = dfs_punch(dfs_mt, obj, 9, DFS_MAX_FSIZE-1);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 9);
+
+	rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
 
 	while (size < file_size) {
 		io_size = file_size - size;
@@ -412,8 +451,8 @@ dfs_test_rm(const char *name)
 	assert_int_equal(rc, 0);
 }
 
-int dfs_test_thread_nr		= 32;
-#define DFS_TEST_MAX_THREAD_NR	(64)
+int dfs_test_thread_nr		= 8;
+#define DFS_TEST_MAX_THREAD_NR	(16)
 pthread_t dfs_test_tid[DFS_TEST_MAX_THREAD_NR];
 
 struct dfs_test_thread_arg {

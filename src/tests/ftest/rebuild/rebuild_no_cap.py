@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -8,7 +8,7 @@ from apricot import TestWithServers, skipForTicket
 from test_utils_pool import TestPool
 
 
-class RebuildNoCap(TestWithServers):
+class RbldNoCapacity(TestWithServers):
     """Test class for failed pool rebuild.
 
     Test Class Description:

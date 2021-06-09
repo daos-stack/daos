@@ -51,6 +51,7 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	struct dss_module_info	*dmi = get_module_info();
 	struct timeval		 tv;
 	struct tm		*tm;
+	char			 zone[6]; /* ±0000\0 */
 	int			 rc;
 
 	/* Populate mandatory RAS fields. */
@@ -58,12 +59,18 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	(void)gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
 	if (tm == NULL) {
-		D_ERROR("unable to generate timestamp\n");
+		D_ERROR("localtime() failed\n");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
-	D_ASPRINTF(evt->timestamp, "%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
+	strftime(zone, 6, "%z", tm);
+	/* NB: Timestamp should be in ISO8601 format. */
+	D_ASPRINTF(evt->timestamp, "%04d-%02d-%02dT%02d:%02d:%02d.%03ld%s",
 		   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour,
-		   tm->tm_min, tm->tm_sec, (long)tv.tv_usec / 10000);
+		   tm->tm_min, tm->tm_sec, (long)tv.tv_usec / 10000, zone);
+	if (evt->timestamp == NULL) {
+		D_ERROR("failed to generate timestamp string\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
 
 	evt->id = (uint32_t)id;
 	evt->type = (uint32_t)type;
@@ -172,7 +179,7 @@ log_event(Shared__RASEvent *evt)
 
 out:
 	fclose(stream);
-	D_DEBUG(DB_MGMT, "&&& RAS EVENT%s", buf);
+	D_INFO("&&& RAS EVENT%s\n", buf);
 	D_FREE(buf);
 }
 
@@ -332,8 +339,7 @@ ds_notify_swim_rank_dead(d_rank_t rank)
 {
 	Shared__RASEvent	evt = SHARED__RASEVENT__INIT;
 
-	return raise_ras(RAS_SWIM_RANK_DEAD,
-			 "SWIM marked rank as dead.",
+	return raise_ras(RAS_SWIM_RANK_DEAD, "SWIM marked rank as dead.",
 			 RAS_TYPE_STATE_CHANGE, RAS_SEV_NOTICE, NULL /* hwid */,
 			 &rank /* rank */, NULL /* jobid */, NULL /* pool */,
 			 NULL /* cont */, NULL /* objid */, NULL /* ctlop */,

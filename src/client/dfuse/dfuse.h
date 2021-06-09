@@ -32,14 +32,12 @@ struct dfuse_info {
 	uint32_t			di_thread_count;
 	bool				di_threaded;
 	bool				di_foreground;
-	bool				di_direct_io;
 	bool				di_caching;
+	bool				di_wb_cache;
 };
 
 struct dfuse_projection_info {
 	struct dfuse_info		*dpi_info;
-	uint32_t			dpi_max_read;
-	uint32_t			dpi_max_write;
 	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table		dpi_iet;
 	/** Hash table of open pools */
@@ -86,6 +84,9 @@ struct dfuse_obj_hdl {
 	dfs_obj_t			*doh_obj;
 	/** the inode entry for the file */
 	struct dfuse_inode_entry	*doh_ie;
+
+	/** True if caching is enabled for this file. */
+	bool				doh_caching;
 
 	/* Below here is only used for directories */
 	/** an anchor to track listing in readdir */
@@ -205,18 +206,37 @@ struct dfuse_cont {
 	/** Inode number of the root of this container */
 	ino_t			dfs_ino;
 
-	/** Caching data */
-	double			dfs_attr_timeout;
+	/** Caching information */
+	double			dfc_attr_timeout;
+	double			dfc_dentry_timeout;
+	double			dfc_dentry_dir_timeout;
+	double			dfc_ndentry_timeout;
+	bool			dfc_data_caching;
+	bool			dfc_direct_io_disable;
 	pthread_mutex_t		dfs_read_mutex;
 };
 
+void
+dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
+
+int
+dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
+			 struct dfuse_pool *dfp,
+			 const char *label,
+			 struct dfuse_cont **_dfs);
+
 int
 dfuse_cont_open(struct dfuse_projection_info *fs_handle,
-		struct dfuse_pool *dfp,	uuid_t *cont,
+		struct dfuse_pool *dfp, uuid_t *cont,
 		struct dfuse_cont **_dfs);
 
 int
-dfuse_pool_open(struct dfuse_projection_info *fs_handle, uuid_t *pool,
+dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
+			const char *label,
+			struct dfuse_pool **_dfp);
+
+int
+dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 		struct dfuse_pool **_dfp);
 
 /* Xattr namespace used by dfuse.
@@ -350,7 +370,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 				(attr)->st_ino,				\
 				(attr)->st_mode);			\
 		__rc = fuse_reply_attr(req, attr,			\
-				(ie)->ie_dfs->dfs_attr_timeout);	\
+				(ie)->ie_dfs->dfc_attr_timeout);	\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_attr returned %d:%s", \
@@ -391,30 +411,11 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#if HAVE_CACHE_READDIR
-
 #define DFUSE_REPLY_OPEN(oh, req, _fi)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(oh, "Returning open");		\
-		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
-			(_fi)->keep_cache = 1;				\
-			(_fi)->cache_readdir = 1;			\
-		}							\
-		__rc = fuse_reply_open(req, _fi);			\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(oh,				\
-					"fuse_reply_open returned %d:%s", \
-					__rc, strerror(-__rc));		\
-	} while (0)
-
-#else
-
-#define DFUSE_REPLY_OPEN(oh, req, _fi)					\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(oh, "Returning open");		\
-		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
+		DFUSE_TRA_DEBUG(oh, "Returning open");			\
+		if ((oh)->doh_ie->ie_dfs->dfc_data_caching) {		\
 			(_fi)->keep_cache = 1;				\
 		}							\
 		__rc = fuse_reply_open(req, _fi);			\
@@ -423,8 +424,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"fuse_reply_open returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
-
-#endif
 
 #define DFUSE_REPLY_CREATE(desc, req, entry, fi)			\
 	do {								\

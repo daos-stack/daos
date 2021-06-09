@@ -157,109 +157,9 @@ class DaosPool():
         self.handle = local_handle
         return local_handle
 
-    def exclude(self, rank_list, tgt=-1, cb_func=None):
-        """Exclude a set of storage targets from a pool.
-
-        Args:
-            rank_list:  server rank
-            tl_tgts:    Xstream targets on rank(server)
-                        Default -1, it means it will exclude all targets on the
-                        rank.
-            cb_func:    Command to run non-blocking mode if it's True
-        """
-        tl_ranks = DaosPool.__pylist_to_array(rank_list)
-        tl_tgts = ctypes.c_int32(tgt)
-        tl_nr = ctypes.c_uint32(1)
-        c_tgts = ctypes.pointer(
-            daos_cref.DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
-
-        func = self.context.get_function('exclude-target')
-
-        if cb_func is None:
-            ret = func(self.uuid, self.group, c_tgts, None)
-            if ret != 0:
-                raise DaosApiError("Pool exclude returned non-zero. RC: {0}"
-                                   .format(ret))
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(c_tgts), event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
-
     def extend(self):
         """Extend the pool to more targets."""
         raise NotImplementedError("Extend not implemented in C API yet.")
-
-    def tgt_reint(self, rank_list, tgt=-1, cb_func=None):
-        """Reintegrate a set of storage targets to a pool that had previously
-           failed.
-
-        Args:
-            rank_list:  server rank
-            tl_tgts:    Xstream targets on rank(server)
-                        Default -1 means it will reint all targets on the rank
-            cb_func:    Command to run non-blocking mode if it's True
-        """
-        tl_ranks = DaosPool.__pylist_to_array(rank_list)
-        tl_tgts = ctypes.c_int32(tgt)
-        tl_nr = ctypes.c_uint32(1)
-        c_tgts = ctypes.pointer(
-            daos_cref.DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
-        func = self.context.get_function("reint-target")
-
-        if cb_func is None:
-            ret = func(self.uuid, self.group, ctypes.byref(c_tgts), None)
-            if ret != 0:
-                raise DaosApiError("Pool tgt_reint returned non-zero. RC: {0}"
-                                   .format(ret))
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(c_tgts), event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
-
-    def exclude_out(self, rank_list, tgt=-1, cb_func=None):
-        """Exclude completely a set of storage targets from a pool.
-
-        Args:
-            rank_list:  server rank
-            tl_tgts:    Xstream targets on rank(server).
-                        Default -1 it means it will exclude out all targets on
-                        the rank.
-            cb_func:    Command to run non-blocking mode if it's True
-        """
-        tl_ranks = DaosPool.__pylist_to_array(rank_list)
-        tl_tgts = ctypes.c_int32(tgt)
-        tl_nr = ctypes.c_uint32(1)
-        c_tgts = ctypes.pointer(
-            daos_cref.DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
-
-        func = self.context.get_function('kill-target')
-        if cb_func is None:
-            ret = func(self.uuid, self.group, ctypes.byref(c_tgts), None)
-            if ret != 0:
-                raise DaosApiError(
-                    "Pool exclude_out returned non-zero. RC: {0}".format(ret))
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, ctypes.byref(c_tgts), event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
 
     def pool_svc_stop(self, cb_func=None):
         """Stop the current pool service leader."""
@@ -310,32 +210,6 @@ class DaosPool():
     def target_query(self, tgt):
         """Query information of storage targets within a DAOS pool."""
         raise NotImplementedError("Target_query not yet implemented in C API.")
-
-    def destroy(self, force, cb_func=None):
-        """Destroy DAOS pool."""
-        if not len(self.uuid) == 16 or self.attached == 0:
-            raise DaosApiError("No existing UUID for pool.")
-
-        c_force = ctypes.c_uint(force)
-        func = self.context.get_function('destroy-pool')
-
-        if cb_func is None:
-            ret = func(self.uuid, self.group, c_force, None)
-            if ret != 0:
-                raise DaosApiError("Pool destroy returned non-zero. RC: {0}"
-                                   .format(ret))
-            else:
-                self.attached = 0
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, c_force, event]
-
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func, self))
-            thread.start()
 
     def set_svc(self, rank):
         """Set svc.
@@ -2179,7 +2053,6 @@ class DaosContext():
                                    mode=ctypes.DEFAULT_MODE)
         # Note: action-subject format
         self.ftable = {
-            'reint-target':    self.libdaos.daos_pool_reint_tgt,
             'close-cont':      self.libdaos.daos_cont_close,
             'close-obj':       self.libdaos.daos_obj_close,
             'close-tx':        self.libdaos.daos_tx_close,
@@ -2198,14 +2071,12 @@ class DaosContext():
             'destroy-snap':    self.libdaos.daos_cont_destroy_snap,
             'destroy-tx':      self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
-            'exclude-target':  self.libdaos.daos_pool_tgt_exclude,
             'fetch-obj':       self.libdaos.daos_obj_fetch,
             'generate-oid':    self.libdaos.daos_obj_generate_oid,
             'get-cont-attr':   self.libdaos.daos_cont_get_attr,
             'get-pool-attr':   self.libdaos.daos_pool_get_attr,
             'get-layout':      self.libdaos.daos_obj_layout_get,
             'init-event':      self.libdaos.daos_event_init,
-            'kill-target':     self.libdaos.daos_pool_tgt_exclude_out,
             'list-attr':       self.libdaos.daos_cont_list_attr,
             'list-cont-attr':  self.libdaos.daos_cont_list_attr,
             'list-pool-attr':  self.libdaos.daos_pool_list_attr,

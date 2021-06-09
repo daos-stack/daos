@@ -29,6 +29,20 @@ enum {
 	EC_SPECIFIED,
 };
 
+static bool
+oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(oid, NULL);
+	if (attr != NULL)
+		*attr = oca;
+	if (oca == NULL)
+		return false;
+
+	return daos_oclass_is_ec(oca);
+}
+
 /** easily setup an iov and allocate */
 static void
 iov_alloc(d_iov_t *iov, size_t len)
@@ -148,7 +162,7 @@ ec_setup_punch_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 		return;
 	/* else set databytes based on oclass */
 
-	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
+	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	len = oca->u.ec.e_len;
 	iov_alloc_str(&ctx->dkey, "dkey");
 	if (switch_akey == 1)
@@ -198,7 +212,7 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 		return;
 	/* else set databytes based on oclass */
 
-	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
+	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	len = oca->u.ec.e_len;
 	k = oca->u.ec.e_k;
 	iov_alloc_str(&ctx->dkey, "dkey");
@@ -286,7 +300,7 @@ test_filled_stripe(struct ec_agg_test_ctx *ctx)
 
 	dts_ec_agg_oc = DAOS_OC_EC_K2P1_L32K;
 	ec_setup_cont_obj(ctx, dts_ec_agg_oc);
-	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
+	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
 	len = oca->u.ec.e_len;
 
@@ -325,7 +339,7 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 		ec_setup_obj(ctx, ec_agg_oc, 3);
 	else
 		ec_setup_obj(ctx, ec_agg_oc, 1);
-	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
+	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	len = oca->u.ec.e_len;
 	k = oca->u.ec.e_k;
 	p = oca->u.ec.e_p;
@@ -407,7 +421,7 @@ test_half_stripe(struct ec_agg_test_ctx *ctx)
 
 	dts_ec_agg_oc = DAOS_OC_EC_K2P2_L32K;
 	ec_setup_obj(ctx, dts_ec_agg_oc, 2);
-	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
+	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
 	len = oca->u.ec.e_len;
 
@@ -454,7 +468,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 	int			 i, j, rc;
 
 	ec_setup_obj(ctx, ec_agg_oc, 2);
-	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
+	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
 	len = oca->u.ec.e_len;
 	k = oca->u.ec.e_k;
@@ -572,7 +586,7 @@ test_partial_stripe(struct ec_agg_test_ctx *ctx)
 
 	dts_ec_agg_oc = DAOS_OC_EC_K4P1_L32K;
 	ec_setup_obj(ctx, dts_ec_agg_oc, 3);
-	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
+	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	len = oca->u.ec.e_len;
 
 	for (j = 0; j < NUM_KEYS; j++)
@@ -614,7 +628,7 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 
 	dts_ec_agg_oc = DAOS_OC_EC_K4P1_L32K;
 	ec_setup_obj(ctx, dts_ec_agg_oc, 4);
-	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
+	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	len = oca->u.ec.e_len;
 	k = oca->u.ec.e_k;
 	for (j = 0; j < NUM_KEYS; j++)
@@ -669,7 +683,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 
 	ec_setup_obj(ctx, ec_agg_oc, 4);
 
-	assert_int_equal(daos_oclass_is_ec(ctx->oid, &oca), true);
+	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	len = oca->u.ec.e_len;
 	k = oca->u.ec.e_k;
 

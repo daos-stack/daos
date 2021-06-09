@@ -1,4 +1,4 @@
-.TH dmg 1 "12 April 2021"
+.TH dmg 1 "26 May 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -113,8 +113,8 @@ DAOS pool to be owned by given group, format name@domain
 \fB\fB\-u\fR, \fB\-\-user\fR\fP
 DAOS pool to be owned by given user, format name@domain
 .TP
-\fB\fB\-p\fR, \fB\-\-name\fR\fP
-Unique name for pool (set as label)
+\fB\fB\-p\fR, \fB\-\-label\fR\fP
+Unique label for pool
 .TP
 \fB\fB\-a\fR, \fB\-\-acl-file\fR\fP
 Access Control List file path for DAOS pool
@@ -226,12 +226,6 @@ Unique ID of DAOS pool
 .TP
 \fB\fB\-\-ranks\fR (\fIrequired\fR)\fP
 Comma-separated list of ranks to add to the pool
-.TP
-\fB\fB\-s\fR, \fB\-\-scm-size\fR (\fIrequired\fR)\fP
-Size of SCM component of the original DAOS pool being extended
-.TP
-\fB\fB\-n\fR, \fB\-\-nvme-size\fR\fP
-Size of NVMe component of the original DAOS pool being extended, or none if not originally supplied to pool create.
 .SS pool get-acl
 Get a DAOS pool's Access Control List
 

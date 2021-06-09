@@ -1,13 +1,13 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers, skipForTicket
+from daos_utils import DaosCommand
 
-
-class RebuildTests(TestWithServers):
+class RbldBasic(TestWithServers):
     """Test class for rebuild tests.
 
     Test Class Description:
@@ -15,6 +15,10 @@ class RebuildTests(TestWithServers):
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.daos_cmd = None
 
     def run_rebuild_test(self, pool_quantity):
         """Run the rebuild test for the specified number of pools.
@@ -25,6 +29,7 @@ class RebuildTests(TestWithServers):
         # Get the test parameters
         self.pool = []
         self.container = []
+        self.daos_cmd = DaosCommand(self.bin)
         for _ in range(pool_quantity):
             self.pool.append(self.get_pool(create=False))
             self.container.append(
@@ -112,6 +117,11 @@ class RebuildTests(TestWithServers):
 
         # Verify the data after rebuild
         for index in range(pool_quantity):
+            self.daos_cmd.container_set_prop(
+                          pool=self.pool[index].uuid,
+                          cont=self.container[index].uuid,
+                          prop="status",
+                          value="healthy")
             if self.container[index].object_qty.value != 0:
                 self.assertTrue(
                     self.container[index].read_objects(),

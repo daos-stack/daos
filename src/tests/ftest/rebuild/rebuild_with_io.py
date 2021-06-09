@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -7,7 +7,7 @@
 from apricot import TestWithServers, skipForTicket
 
 
-class RebuildWithIO(TestWithServers):
+class RbldWithIO(TestWithServers):
     """Test class for pool rebuild during I/O.
 
     Test Class Description:

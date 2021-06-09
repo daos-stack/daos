@@ -50,7 +50,7 @@ type PoolCreateCmd struct {
 	jsonOutputCmd
 	GroupName  string  `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
 	UserName   string  `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
-	PoolName   string  `short:"p" long:"name" description:"Unique name for pool (set as label)"`
+	PoolLabel  string  `short:"p" long:"label" description:"Unique label for pool"`
 	ACLFile    string  `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
 	Size       string  `short:"z" long:"size" description:"Total size of DAOS pool (auto)"`
 	ScmRatio   float64 `short:"t" long:"scm-ratio" default:"6" description:"Percentage of SCM:NVMe for pool storage (auto)"`
@@ -74,7 +74,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	req := &control.PoolCreateReq{
 		User:       cmd.UserName,
 		UserGroup:  cmd.GroupName,
-		Name:       cmd.PoolName,
+		Label:      cmd.PoolLabel,
 		NumSvcReps: cmd.NumSvcReps,
 	}
 
@@ -351,10 +351,6 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 type PoolExtendCmd struct {
 	poolCmd
 	RankList string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
-	// Everything after this needs to be removed when pool info can be fetched
-	ScmSize  string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of the original DAOS pool being extended"`
-	NVMeSize string `short:"n" long:"nvme-size" description:"Size of NVMe component of the original DAOS pool being extended, or none if not originally supplied to pool create."`
-	// END TEMPORARY SECTION
 }
 
 // Execute is run when PoolExtendCmd subcommand is activated
@@ -371,26 +367,9 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 		return err
 	}
 
-	// Everything below this needs to be removed once Pool Info can be fetched
-
-	scmBytes, err := humanize.ParseBytes(cmd.ScmSize)
-	if err != nil {
-		return errors.Wrap(err, "pool SCM size")
-	}
-
-	var nvmeBytes uint64
-	if cmd.NVMeSize != "" {
-		nvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
-		if err != nil {
-			return errors.Wrap(err, "pool NVMe size")
-		}
-	}
-
 	req := &control.PoolExtendReq{
 		UUID: cmd.UUID, Ranks: ranks,
-		ScmBytes: scmBytes, NvmeBytes: nvmeBytes,
 	}
-	// END TEMP SECTION
 
 	err = control.PoolExtend(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
