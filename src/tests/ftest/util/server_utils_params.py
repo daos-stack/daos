@@ -164,13 +164,13 @@ class DaosServerYamlParameters(YamlParameters):
         yaml_data.pop("engines_per_host", None)
 
         # Add the per-engine yaml parameters
-        yaml_data["servers"] = []
+        yaml_data["engines"] = []
         for index in range(len(self.engine_params)):
-            yaml_data["servers"].append({})
+            yaml_data["engines"].append({})
             for name in self.engine_params[index].get_param_names():
                 value = getattr(self.engine_params[index], name).value
                 if value is not None and value is not False:
-                    yaml_data["servers"][index][name] = value
+                    yaml_data["engines"][index][name] = value
 
         return yaml_data
 

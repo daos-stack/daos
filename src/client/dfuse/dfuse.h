@@ -219,13 +219,27 @@ struct dfuse_cont {
 	bool			dfs_multi_user;
 };
 
+void
+dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
+
+int
+dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
+			 struct dfuse_pool *dfp,
+			 const char *label,
+			 struct dfuse_cont **_dfs);
+
 int
 dfuse_cont_open(struct dfuse_projection_info *fs_handle,
-		struct dfuse_pool *dfp,	uuid_t *cont,
+		struct dfuse_pool *dfp, uuid_t *cont,
 		struct dfuse_cont **_dfs);
 
 int
-dfuse_pool_open(struct dfuse_projection_info *fs_handle, uuid_t *pool,
+dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
+			const char *label,
+			struct dfuse_pool **_dfp);
+
+int
+dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 		struct dfuse_pool **_dfp);
 
 /* Xattr namespace used by dfuse.
