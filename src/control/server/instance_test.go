@@ -7,6 +7,7 @@
 package server
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,12 +16,23 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
+	commonpb "github.com/daos-stack/daos/src/control/common/proto"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/system"
+)
+
+var (
+	_ Engine = (*MockInstance)(nil)
 )
 
 func getTestEngineInstance(logger logging.Logger) *EngineInstance {
@@ -157,4 +169,133 @@ func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
 			}
 		})
 	}
+}
+
+type (
+	MockInstanceConfig struct {
+		CallDrpcResp        *drpc.Response
+		CallDrpcErr         error
+		GetRankResp         system.Rank
+		GetRankErr          error
+		TargetCount         int
+		Index               uint32
+		Started             atm.Bool
+		Ready               atm.Bool
+		LocalState          system.MemberState
+		RemoveSuperblockErr error
+		SetupRankErr        error
+		StopErr             error
+	}
+
+	MockInstance struct {
+		cfg MockInstanceConfig
+	}
+)
+
+func NewMockInstance(cfg *MockInstanceConfig) *MockInstance {
+	if cfg == nil {
+		cfg = &MockInstanceConfig{}
+	}
+
+	return &MockInstance{
+		cfg: *cfg,
+	}
+}
+
+func DefaultMockInstance() *MockInstance {
+	return NewMockInstance(nil)
+}
+
+func (mi *MockInstance) CallDrpc(_ context.Context, _ drpc.Method, _ proto.Message) (*drpc.Response, error) {
+	return mi.cfg.CallDrpcResp, mi.cfg.CallDrpcErr
+}
+
+func (mi *MockInstance) GetRank() (system.Rank, error) {
+	return mi.cfg.GetRankResp, mi.cfg.GetRankErr
+}
+
+func (mi *MockInstance) GetTargetCount() int {
+	return mi.cfg.TargetCount
+}
+
+func (mi *MockInstance) Index() uint32 {
+	return mi.cfg.Index
+}
+
+func (mi *MockInstance) IsStarted() bool {
+	return mi.cfg.Started.Load()
+}
+
+func (mi *MockInstance) IsReady() bool {
+	return mi.cfg.Ready.Load()
+}
+
+func (mi *MockInstance) LocalState() system.MemberState {
+	return mi.cfg.LocalState
+}
+
+func (mi *MockInstance) RemoveSuperblock() error {
+	return mi.cfg.RemoveSuperblockErr
+}
+
+func (mi *MockInstance) Run(_ context.Context, _ bool) {}
+
+func (mi *MockInstance) SetupRank(_ context.Context, _ system.Rank) error {
+	return mi.cfg.SetupRankErr
+}
+
+func (mi *MockInstance) Stop(os.Signal) error {
+	return mi.cfg.StopErr
+}
+
+// The rest of these methods are only to implement the interface and
+// should be removed. Please do not write any new tests that rely on them.
+func (mi *MockInstance) newCret(_ string, _ error) *ctlpb.NvmeControllerResult {
+	return nil
+}
+
+func (mi *MockInstance) bdevConfig() storage.BdevConfig {
+	return storage.BdevConfig{}
+}
+
+func (mi *MockInstance) scmConfig() storage.ScmConfig {
+	return storage.ScmConfig{}
+}
+
+func (mi *MockInstance) tryDrpc(_ context.Context, _ drpc.Method) *system.MemberResult {
+	return nil
+}
+
+func (mi *MockInstance) requestStart(_ context.Context) {}
+
+func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ map[string]*storage.NvmeController) error {
+	return nil
+}
+
+func (mi *MockInstance) isAwaitingFormat() bool {
+	return false
+}
+
+func (mi *MockInstance) NotifyDrpcReady(_ *srvpb.NotifyReadyReq) {}
+func (mi *MockInstance) NotifyStorageReady()                     {}
+func (mi *MockInstance) BioErrorNotify(_ *srvpb.BioErrorReq)     {}
+
+func (mi *MockInstance) GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+	return nil, nil
+}
+
+func (mi *MockInstance) GetScmUsage() (*storage.ScmMountPoint, error) {
+	return nil, nil
+}
+
+func (mi *MockInstance) ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
+	return nil, nil
+}
+
+func (mi *MockInstance) StorageFormatNVMe(*bdev.Provider) commonpb.NvmeControllerResults {
+	return nil
+}
+
+func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult {
+	return nil
 }
