@@ -57,8 +57,8 @@ cont_scrub_hdlr(struct cmd_args_s *ap)
 
 	assert(ap != NULL);
 	assert(ap->c_op == CONT_SCRUB);
-
 	assert(ap->scrub_level != NULL);
+
 	level = daos_cont_scrub_lvl_name2val(ap->scrub_level);
 	if (level == NULL) {
 		fprintf(ap->errstream,
@@ -115,10 +115,22 @@ func (cmd *containerScrubCmd) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
-	// This will automatically free any C-based memory allocated
+	// This will automatically free most C-based memory allocated
 	// along the way, and is always invoked regardless of error
 	// status.
 	defer freeArgs()
+
+	// Note that in Go, accessing a field is always done via
+	// "." regardless of whether or not the receiver is a pointer.
+	//
+	// Also note that Go strings are a distinct type and are not
+	// NUL-terminated, so we need to create a C-style string for
+	// cmd_args_s.
+	ap.scrub_level = C.CString(cmd.Level)
+	// The freeArgs() closure only frees fields used with all
+	// handlers. It's up to the handler implementor to free
+	// C memory allocated in the handler.
+	defer freeString(ap.scrub_level)
 
 	// Now attempt to connect to the pool/container, populating
 	// the handle/uuid fields in ap:
