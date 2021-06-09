@@ -488,6 +488,8 @@ dmg_pool_create(const char *dmg_config_file,
 		if (entry != NULL) {
 			args = cmd_push_arg(args, &argcount, "--label=%s ",
 					    entry->dpe_str);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
 		}
 	}
 
