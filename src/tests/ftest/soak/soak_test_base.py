@@ -25,7 +25,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
-    create_mdtest_cmdline, reserved_file_copy
+    create_mdtest_cmdline, reserved_file_copy, cleanup_dfuse
 
 
 class SoakTestBase(TestWithServers):
@@ -151,11 +151,10 @@ class SoakTestBase(TestWithServers):
         if self.check_errors:
             errors.extend(self.check_errors)
         # Check if any dfuse mount points need to be cleaned
-        if self.dfuse:
-            try:
-                cleanup_dfuse(self)
-            except SoakTestError as error:
-                self.log.info("Dfuse cleanup failed with %s", error)
+        try:
+            cleanup_dfuse(self)
+        except SoakTestError as error:
+            self.log.info("Dfuse cleanup failed with %s", error)
 
         # daos_agent is always started on this node when start agent is false
         if not self.setup_start_agents:
@@ -588,6 +587,8 @@ class SoakTestBase(TestWithServers):
             # Check space after jobs done
             for pool in self.pool:
                 self.dmg_command.pool_query(pool.uuid)
+            # Cleanup any dfuse mounts before destroying containers
+            cleanup_dfuse(self)
             self.soak_errors.extend(self.destroy_containers(self.container))
             self.container = []
             # Remove the test pools from self.pool; preserving reserved pool
