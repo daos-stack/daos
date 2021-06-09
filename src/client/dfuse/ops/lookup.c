@@ -154,7 +154,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
 		return ENOTSUP;
 
-	rc = dfuse_pool_open(fs_handle, &dattr.da_puuid, &dfp);
+	rc = dfuse_pool_connect(fs_handle, &dattr.da_puuid, &dfp);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_err, rc);
 
