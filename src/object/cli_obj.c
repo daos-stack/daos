@@ -3788,11 +3788,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 		 * are some other cases we need to retry the RPC with current
 		 * shard, such as -DER_TIMEDOUT or daos_crt_network_error().
 		 */
-		/* It needs to retry for INPROGRESS and TX_BUSY anyway */
-		if (!obj_auxi->no_retry &&
-		    (!obj_auxi->spec_shard || task->dt_result == -DER_INPROGRESS ||
-					      task->dt_result == -DER_TX_BUSY))
-			obj_auxi->io_retry = 1;
+		obj_auxi->io_retry = 1;
+		if (obj_auxi->no_retry ||
+		    (obj_auxi->spec_shard && (task->dt_result == -DER_INPROGRESS ||
+		     task->dt_result == -DER_TX_BUSY || task->dt_result == -DER_EXCLUDED ||
+		     task->dt_result == -DER_CSUM)))
+			obj_auxi->io_retry = 0;
 
 		if (task->dt_result == -DER_CSUM ||
 		    task->dt_result == -DER_TX_UNCERTAIN) {
@@ -3844,7 +3845,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		rc = obj_retry_cb(task, obj, obj_auxi, pm_stale, obj_auxi->map_ver_reply);
 		if (rc) {
 			D_ERROR(DF_OID "retry io failed: %d\n", DP_OID(obj->cob_md.omd_id), rc);
-			obj_bulk_fini(obj_auxi);
+			D_ASSERT(obj_auxi->io_retry == 0);
 		}
 	}
 
