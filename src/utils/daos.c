@@ -464,6 +464,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		if (!strcmp(value, "healthy")) {
 			entry->dpe_val =
 				DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
+							DAOS_PROP_CO_CLEAR,
 							0);
 		} else {
 			fprintf(stderr, "status prop value can only be "
@@ -471,6 +472,15 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_STATUS;
+
+	} else if (!strcmp(name, "ec_cell")) {
+		entry->dpe_val = strtol(value, NULL, 0);
+		if (!daos_ec_cs_valid(entry->dpe_val)) {
+			fprintf(stderr, "Invalid EC cell size = %u\n",
+				(uint32_t)entry->dpe_val);
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	} else {
 		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/dedup/dedup_th/rf\n");
 		return -DER_INVAL;

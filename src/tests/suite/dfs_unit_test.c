@@ -392,6 +392,7 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 	daos_size_t	buf_size = 128 * 1024;
 	daos_size_t	io_size;
 	daos_size_t	size = 0;
+	struct stat	stbuf;
 	int		rc = 0;
 
 	D_ALLOC(buf, buf_size);
@@ -405,6 +406,25 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 	rc = dfs_open(dfs_mt, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
 		      O_RDWR | O_CREAT, OC_S1, chunk_size, NULL, &obj);
 	assert_int_equal(rc, 0);
+
+	rc = dfs_punch(dfs_mt, obj, 10, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 10);
+
+	/** test for overflow */
+	rc = dfs_punch(dfs_mt, obj, 9, DFS_MAX_FSIZE-1);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 9);
+
+	rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
 
 	while (size < file_size) {
 		io_size = file_size - size;
@@ -431,8 +451,8 @@ dfs_test_rm(const char *name)
 	assert_int_equal(rc, 0);
 }
 
-int dfs_test_thread_nr		= 32;
-#define DFS_TEST_MAX_THREAD_NR	(64)
+int dfs_test_thread_nr		= 8;
+#define DFS_TEST_MAX_THREAD_NR	(16)
 pthread_t dfs_test_tid[DFS_TEST_MAX_THREAD_NR];
 
 struct dfs_test_thread_arg {

@@ -33,6 +33,7 @@ struct ds_pool {
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
+	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_mutex;
@@ -237,6 +238,8 @@ int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
+extern bool ec_agg_disabled;
+
 int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
 			  d_rank_list_t **ranks);
 
@@ -253,10 +256,11 @@ int dsc_pool_close(daos_handle_t ph);
 static inline int
 ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
 {
-	int	rc;
+	int	rc = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
-	rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
+	if (last_ver < pool_map_get_version(pool->sp_map))
+		rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return rc;

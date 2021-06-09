@@ -112,6 +112,8 @@ message PoolExtendReq {
 // PoolExtendResp returns resultant state of Extend operation.
 message PoolExtendResp {
 	int32 status = 1; // DAOS error code
+	uint64 scm_bytes = 2; // SCM allocated on rank(s)
+	uint64 nvme_bytes = 3; // NVMe allocated on rank(s)
 }
 
 // PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
@@ -137,7 +139,8 @@ message ListPoolsReq {
 message ListPoolsResp {
 	message Pool {
 		string uuid = 1; // uuid of pool
-		repeated uint32 svc_reps = 2; // pool service replica ranks
+		string label = 2; // pool label
+		repeated uint32 svc_reps = 3; // pool service replica ranks
 	}
 	int32 status = 1; // DAOS error code
 	repeated Pool pools = 2; // pools list
@@ -205,15 +208,16 @@ message PoolRebuildStatus {
 message PoolQueryResp {
 	int32 status = 1; // DAOS error code
 	string uuid = 2; // pool uuid
-	uint32 total_targets = 3; // total targets in pool
-	uint32 active_targets = 4; // active targets in pool
-	uint32 disabled_targets = 5; // number of disabled targets in pool
-	PoolRebuildStatus rebuild = 6; // pool rebuild status
-	StorageUsageStats scm = 7; // SCM storage usage stats
-	StorageUsageStats nvme = 8; // NVMe storage usage stats
-	uint32 total_nodes = 9; // total nodes in pool
-	uint32 version = 10; // latest pool map version
-	uint32 leader = 11; // current raft leader
+	string label = 3; // pool label
+	uint32 total_targets = 4; // total targets in pool
+	uint32 active_targets = 5; // active targets in pool
+	uint32 disabled_targets = 6; // number of disabled targets in pool
+	PoolRebuildStatus rebuild = 7; // pool rebuild status
+	StorageUsageStats scm = 8; // SCM storage usage stats
+	StorageUsageStats nvme = 9; // NVMe storage usage stats
+	uint32 total_nodes = 10; // total nodes in pool
+	uint32 version = 11; // latest pool map version
+	uint32 leader = 12; // current raft leader
 }
 
 // PoolSetPropReq represents a request to set a pool property.

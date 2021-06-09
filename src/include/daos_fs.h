@@ -392,9 +392,8 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size);
 
 /**
  * Punch a hole in the file starting at offset to len. If len is set to
- * DFS_MAX_FSIZE, this will be a truncate operation to punch all bytes in the
- * file above offset. If the file size is smaller than offset, the file is
- * extended to offset and len is ignored.
+ * DFS_MAX_FSIZE, this will be equivalent to a truncate operation to shrink or
+ * extend the file to \a offset bytes depending on the file size.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.

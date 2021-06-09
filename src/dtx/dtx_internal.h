@@ -20,7 +20,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_DTX_VERSION	1
+#define DAOS_DTX_VERSION	2
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
@@ -48,6 +48,7 @@ enum dtx_operation {
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
 	((int32_t)		(do_status)		CRT_VAR)	\
+	((int32_t)		(do_pad)		CRT_VAR)	\
 	((int32_t)		(do_sub_rets)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
