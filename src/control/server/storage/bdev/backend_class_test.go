@@ -27,7 +27,7 @@ import (
 // TestBackend_writeJsonConfig verifies config parameters for bdev get
 // converted into nvme config files that can be consumed by spdk.
 func TestBackend_writeJsonConfig(t *testing.T) {
-	mockMntpt := "/mnt/daos"
+	mockMntpt := "/mock/mnt/daos"
 	host, _ := os.Hostname()
 
 	tests := map[string]struct {

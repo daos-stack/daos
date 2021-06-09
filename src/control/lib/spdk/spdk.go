@@ -26,7 +26,7 @@ package spdk
 #include "include/nvme_control.h"
 #include "include/nvme_control_common.h"
 
-static char **makeCharArray(int size) {
+static char **makeCStringArray(int size) {
         return calloc(sizeof(char*), size);
 }
 
@@ -34,7 +34,7 @@ static void setArrayString(char **a, char *s, int n) {
         a[n] = s;
 }
 
-static void freeCharArray(char **a, int size) {
+static void freeCStringArray(char **a, int size) {
         int i;
         for (i = 0; i < size; i++)
                 free(a[i]);
@@ -136,8 +136,8 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	}
 
 	// Build C array in Go from opts.PciAllowList []string
-	cAllowList := C.makeCharArray(C.int(len(opts.PciAllowList)))
-	defer C.freeCharArray(cAllowList, C.int(len(opts.PciAllowList)))
+	cAllowList := C.makeCStringArray(C.int(len(opts.PciAllowList)))
+	defer C.freeCStringArray(cAllowList, C.int(len(opts.PciAllowList)))
 
 	for i, s := range opts.PciAllowList {
 		C.setArrayString(cAllowList, C.CString(s), C.int(i))
