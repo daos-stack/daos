@@ -1377,6 +1377,7 @@ class posix_tests():
         data = fd.read()
         fd.close()
         print(data)
+        assert data == 'test'
 
         fd = open(file0, 'w')
         fd.write('test')
