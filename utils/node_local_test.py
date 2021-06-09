@@ -1531,7 +1531,6 @@ class posix_tests():
                  stat.S_IRUSR]
 
         for mode in modes:
-            print(os.stat(fname))
             os.chmod(fname, mode)
             attr = os.stat(fname)
             assert stat.S_IMODE(attr.st_mode) == mode
@@ -2413,6 +2412,9 @@ def run_in_fg(server, conf):
 
     pool=pools[0]
 
+    dfuse = DFuse(server, conf, pool=pool)
+    dfuse.start()
+
     container = create_cont(conf, pool, posix=True)
 
     run_daos_cmd(conf,
@@ -2421,10 +2423,7 @@ def run_in_fg(server, conf):
                   '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
                  show_stdout=True)
 
-    dfuse = DFuse(server, conf, pool=pool, container=container)
-    dfuse.start()
-
-    t_dir = dfuse.dir
+    t_dir = os.path.join(dfuse.dir, container)
 
     print('Running at {}'.format(t_dir))
     print('daos container create --type POSIX ' \

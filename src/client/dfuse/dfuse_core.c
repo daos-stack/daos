@@ -924,8 +924,8 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	if (dfs->dfs_multi_user) {
-		args.argv[5] = strndup("-oallow_other", 32);
-		if (!args.argv[5])
+		args.argv[4] = strndup("-oallow_other", 32);
+		if (!args.argv[4])
 			D_GOTO(err, rc = -DER_NOMEM);
 	}
 
