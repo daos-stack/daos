@@ -4,6 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
+
 from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
@@ -937,6 +939,62 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("config", "generate"), access_points=access_points,
             num_engines=num_engines, min_ssds=min_ssds, net_class=net_class)
+
+    def telemetry_metrics_list(self, host):
+        """List telemetry metrics.
+
+        Args:
+            host (str): Server host from which to obtain the metrics
+
+        Raises:
+            CommandFailure: if the dmg system query command fails.
+
+        Returns:
+            dict: dictionary of output in JSON format
+
+        """
+        return self._get_json_result(
+            ("telemetry", "metrics", "list"), host=host)
+
+    def telemetry_metrics_query(self, host, metrics=None):
+        """Query telemetry metrics.
+
+        Args:
+            host (str): Server host from which to obtain the metrics
+            metrics (str, None): Comma-separated list of metric names to query.
+                Defaults to None which will query all metric names.
+
+        Raises:
+            CommandFailure: if the dmg system query command fails.
+
+        Returns:
+            dict: dictionary of output in JSON format
+
+        """
+        # Sample output (metric="process_start_time_seconds"):
+        # {
+        # "response": {
+        #   "metric_sets": [
+        #     {
+        #       "name": "process_start_time_seconds",
+        #       "description": "Start time of the process since unix epoch in
+        #                       seconds.",
+        #       "type": 3,
+        #       "metrics": [
+        #         {
+        #           "labels": {},
+        #           "value": 1622576326.6
+        #         }
+        #       ]
+        #     }
+        #   ]
+        # },
+        # "error": null,
+        # "status": 0
+        # }
+        return self._get_json_result(
+            ("telemetry", "metrics", "query"), host=host, metrics=metrics)
+
 
 def check_system_query_status(data):
     """Check if any server crashed.
