@@ -1546,6 +1546,7 @@ class posix_tests():
 
     @needs_dfuse
     def test_il_cat(self):
+        """Quick check for the interception library"""
 
         fname = os.path.join(self.dfuse.dir, 'file')
         ofd = open(fname, 'w')
