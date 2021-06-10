@@ -139,6 +139,10 @@ struct ec_agg_stripe_ud {
 	unsigned int		 asu_cell_cnt;  /* Count of cells        */
 	bool			 asu_recalc;    /* Should recalc parity  */
 	bool			 asu_write_par; /* Should write parity   */
+	struct daos_csummer	*asu_csummer;
+	daos_iod_t		 asu_iod;
+	d_iov_t			 asu_csum_iov;
+	struct dcs_iod_csums	*asu_iod_csums; /* iod csums */
 	ABT_eventual		 asu_eventual;  /* Eventual for offload  */
 };
 
@@ -1621,12 +1625,15 @@ out:
 	return rc;
 }
 
+#define EC_CSUM_BUF_SIZE	(256)
 static void
 agg_process_holes_ult(void *arg)
 {
-	daos_iod_t		 iod = { 0 };
 	crt_endpoint_t		 tgt_ep = { 0 };
 	struct ec_agg_stripe_ud	*stripe_ud = (struct ec_agg_stripe_ud *)arg;
+	daos_iod_t		*iod = &stripe_ud->asu_iod;
+	d_iov_t			*csum_iov_fetch = &stripe_ud->asu_csum_iov;
+	d_iov_t			 tmp_csum_iov;
 	struct ec_agg_entry	*entry = stripe_ud->asu_agg_entry;
 	struct ec_agg_extent	*agg_extent, *ext_tmp;
 	struct pool_target	*targets;
@@ -1682,23 +1689,73 @@ agg_process_holes_ult(void *arg)
 		ext_tot_len += stripe_ud->asu_recxs[ext_cnt++].rx_nr;
 	}
 	stripe_ud->asu_cell_cnt = ext_cnt;
-	iod.iod_name = entry->ae_akey;
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_size = entry->ae_rsize;
-	iod.iod_nr = ext_cnt;
-	iod.iod_recxs = stripe_ud->asu_recxs;
+	iod->iod_name = entry->ae_akey;
+	iod->iod_type = DAOS_IOD_ARRAY;
+	iod->iod_size = entry->ae_rsize;
+	iod->iod_nr = ext_cnt;
+	iod->iod_recxs = stripe_ud->asu_recxs;
 	entry->ae_sgl.sg_nr = 1;
 	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len = ext_tot_len *
 						      entry->ae_rsize;
 	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len <= k * cell_b);
 	/* Pull data via dsc_obj_fetch */
 	if (ext_cnt) {
+		bool	retried = false;
+
+		rc = daos_iov_alloc(csum_iov_fetch, EC_CSUM_BUF_SIZE, false);
+		if (rc != 0)
+			goto out;
+
+fetch_again:
 		rc = dsc_obj_fetch(entry->ae_obj_hdl,
 				   entry->ae_cur_stripe.as_hi_epoch,
-				   &entry->ae_dkey, 1, &iod, &entry->ae_sgl,
-				   NULL, DIOF_FOR_EC_AGG, NULL, NULL);
+				   &entry->ae_dkey, 1, iod, &entry->ae_sgl,
+				   NULL, DIOF_FOR_EC_AGG, NULL, csum_iov_fetch);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
+
+		if (retried)
+			D_ASSERT(csum_iov_fetch->iov_len == 0 ||
+				 csum_iov_fetch->iov_len <=
+				 csum_iov_fetch->iov_buf_len);
+
+		if (csum_iov_fetch->iov_len > csum_iov_fetch->iov_buf_len &&
+		    !retried) {
+			/** retry dsc_obj_fetch with appropriate csum_iov
+			 * buf length
+			 */
+			void *tmp_ptr;
+
+			D_REALLOC(tmp_ptr, csum_iov_fetch->iov_buf,
+				  csum_iov_fetch->iov_buf_len,
+				  csum_iov_fetch->iov_len);
+			if (tmp_ptr == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			csum_iov_fetch->iov_buf_len = csum_iov_fetch->iov_len;
+			csum_iov_fetch->iov_len = 0;
+			csum_iov_fetch->iov_buf = tmp_ptr;
+			retried = true;
+			goto fetch_again;
+		}
+
+		rc = daos_csummer_csum_init_with_packed(&stripe_ud->asu_csummer,
+							csum_iov_fetch);
+		if (rc) {
+			D_ERROR("daos_csummer_csum_init_with_packed failed: "
+				DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
+
+		tmp_csum_iov = *csum_iov_fetch;
+		rc = daos_csummer_alloc_iods_csums_with_packed(
+			stripe_ud->asu_csummer, iod, 1, &tmp_csum_iov,
+			&stripe_ud->asu_iod_csums);
+		if (rc != 0) {
+			D_ERROR("setting up iods csums failed: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 	}
@@ -1765,7 +1822,10 @@ agg_process_holes_ult(void *arg)
 		ec_rep_in->er_oid = entry->ae_oid;
 		ec_rep_in->er_oid.id_shard--;
 		ec_rep_in->er_dkey = entry->ae_dkey;
-		ec_rep_in->er_iod = iod;
+		ec_rep_in->er_iod = *iod;
+		ec_rep_in->er_iod_csums.ca_arrays = stripe_ud->asu_iod_csums;
+		ec_rep_in->er_iod_csums.ca_count =
+			stripe_ud->asu_iod_csums == NULL ? 0 : 1;
 		ec_rep_in->er_stripenum = entry->ae_cur_stripe.as_stripenum;
 		ec_rep_in->er_epoch = entry->ae_cur_stripe.as_hi_epoch;
 		ec_rep_in->er_map_ver =
@@ -1801,7 +1861,7 @@ static int
 agg_process_holes(struct ec_agg_entry *entry)
 {
 	struct ec_agg_stripe_ud	 stripe_ud = { 0 };
-	daos_iod_t		 iod = { 0 };
+	daos_iod_t		*iod = &stripe_ud.asu_iod;
 	daos_recx_t		 recx = { 0 };
 	daos_epoch_range_t	 epoch_range = { 0 };
 	struct ec_agg_param	*agg_param;
@@ -1843,20 +1903,15 @@ agg_process_holes(struct ec_agg_entry *entry)
 		D_GOTO(ev_out, rc = *status);
 
 	/* Update local vos with replicate */
-	iod.iod_name = entry->ae_akey;
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_size = entry->ae_rsize;
-	iod.iod_nr = stripe_ud.asu_cell_cnt;
-	iod.iod_recxs = stripe_ud.asu_recxs;
-
 	entry->ae_sgl.sg_nr = 1;
 	agg_param = container_of(entry, struct ec_agg_param,
 				 ap_agg_entry);
-	if (iod.iod_nr) {
+	if (iod->iod_nr) {
 		/* write the reps to vos */
 		rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
 				    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
-				    &entry->ae_dkey, 1, &iod, NULL,
+				    &entry->ae_dkey, 1, iod,
+				    stripe_ud.asu_iod_csums,
 				    &entry->ae_sgl);
 		if (rc) {
 			D_ERROR("vos_update_begin failed: "DF_RC"\n",
@@ -1880,6 +1935,10 @@ ev_out:
 
 out:
 	D_FREE(stripe_ud.asu_recxs);
+	daos_csummer_free_ic(stripe_ud.asu_csummer, &stripe_ud.asu_iod_csums);
+	if (stripe_ud.asu_csum_iov.iov_buf)
+		D_FREE(stripe_ud.asu_csum_iov.iov_buf);
+	daos_csummer_destroy(&stripe_ud.asu_csummer);
 	return rc;
 }
 
