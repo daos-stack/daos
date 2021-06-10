@@ -207,12 +207,13 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 
 	nvme_glb.bd_shm_id = shm_id;
 	nvme_glb.bd_mem_size = mem_size;
+	nvme_glb.bd_nvme_conf = nvme_conf;
 
 	rc = bio_spdk_env_init();
-	if (rc)
+	if (rc) {
+		nvme_glb.bd_nvme_conf = NULL;
 		goto fini_smd;
-
-	nvme_glb.bd_nvme_conf = nvme_conf;
+	}
 
 	return 0;
 
