@@ -3026,12 +3026,7 @@ def test_alloc_fail_copy(server, conf, wf):
     Check output of the command itself.  This probably just needs enabling.
     """
 
-    pools = get_pool_list(server)
-
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
+    pool = server.get_test_pool()
 
     container = create_cont(conf, pool, posix=True)
 
