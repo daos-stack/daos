@@ -59,7 +59,7 @@ class CartCtlCommand(ExecutableCommand):
         self.add_log_msg = BasicParameter("add_log_msg")
         self.sub_command_class = None
         self.group_name = FormattedParameter("--group-name {}")
-        self.cfg_path = FormattedParameter("--loadfile {}")
+        self.cfg_path = FormattedParameter("--cfg_path {}")
         self.directory = FormattedParameter("--directory {}")
         self.rank = FormattedParameter("--rank {}")
         self.l = FormattedParameter("-l {}")

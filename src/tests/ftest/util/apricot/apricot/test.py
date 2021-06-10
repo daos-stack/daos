@@ -732,9 +732,6 @@ class TestWithServers(TestWithoutServers):
         finally:
             file1.close()
 
-        print('DEBUG log:735, attachinfo_file_name=', attachinfo_file_name)
-        print('DEBUG log:736, attach_info_contents= ', attach_info_contents)
-
         cp_command = "sudo cp {} {}".format(attachinfo_file_name, ".")
         run_command(cp_command, verbose=True, raise_exception=False)
 
@@ -742,11 +739,11 @@ class TestWithServers(TestWithoutServers):
         cart_ctl = CartCtl()
         cart_ctl.add_log_msg.value = "add_log_msg"
         cart_ctl.rank.value = 0
+        cart_ctl.cfg_path.value = "."
         cart_ctl.group_name.value = "daos_server"
         cart_ctl.m.value = s
 
         cart_ctl.n.value = None
-        cart_ctl.sudo_E = True
         cart_ctl.run()
 
         # Mark the end of setup
