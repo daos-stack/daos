@@ -7,8 +7,6 @@
 
 import time
 
-from apricot import skipForTicket
-
 from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
 
@@ -25,7 +23,6 @@ class CrashIor(IorTestBase):
         super().setUp()
         self.dmg = self.get_dmg_command()
 
-    @skipForTicket("DAOS-5928")
     def test_crashior(self):
         """Jira ID: DAOS-4332.
 

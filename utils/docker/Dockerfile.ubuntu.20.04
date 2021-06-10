@@ -9,17 +9,62 @@
 FROM ubuntu:20.04
 LABEL maintainer="daos@daos.groups.io"
 
+# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+ARG CB0
+
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install basic tools
-RUN apt-get update &&							\
-    DEBIAN_FRONTEND=noninteractive apt-get install -y			\
-	build-essential scons python3-distro python3-distutils valgrind	\
-	autoconf libtool-bin locales pkg-config pandoc clang cmake	\
-	libcmocka-dev libnuma-dev patchelf libhwloc-dev libboost-dev	\
-	uuid-dev libssl-dev fuse3 libfuse3-dev curl libjson-c-dev 	\
-	liblz4-dev libibverbs-dev librdmacm-dev libaio-dev yasm		\
-	python3-dev golang-go git libyaml-dev python3-tabulate		\
-	python3-pyxattr openjdk-8-jdk maven libipmctl-dev 		\
-	libcunit1-dev libopenmpi-dev numactl doxygen libunwind-dev && 	\
+RUN apt-get -y update && \
+    apt-get -y install apt-utils && \
+    apt-get -y upgrade && \
+    apt-get -y install \
+        autoconf \
+        build-essential \
+        clang \
+        cmake \
+        curl \
+        doxygen \
+        fuse3 \
+        git \
+        golang-go \
+        kmod \
+        libaio-dev \
+        libboost-dev \
+        libcmocka-dev \
+        libcunit1-dev \
+        libfuse3-dev \
+        libhwloc-dev \
+        libibverbs-dev \
+        libipmctl-dev \
+        libjson-c-dev \
+        liblz4-dev \
+        libnuma-dev \
+        libopenmpi-dev \
+        librdmacm-dev \
+        libssl-dev \
+        libtool-bin \
+        libunwind-dev \
+        libyaml-dev \
+        locales \
+        maven \
+        numactl \
+        openjdk-8-jdk \
+        pandoc \
+        patchelf \
+        pciutils \
+        pkg-config \
+        python3-dev \
+        python3-distro \
+        python3-distutils \
+        python3-junit.xml \
+        python3-pyxattr \
+        python3-tabulate \
+        scons \
+        sudo \
+        uuid-dev \
+        valgrind \
+        yasm && \
     apt-get clean all
 
 # hack the default shell to bash instead of dash
@@ -28,36 +73,23 @@ RUN rm /bin/sh && ln -s bash /bin/sh
 RUN locale-gen en_US.UTF-8
 
 # use Java 8 instead of default Java 11
-RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+RUN update-alternatives --set \
+    java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
 
 ARG UID=1000
 
 # Add DAOS users
-RUN useradd --uid $UID --user-group --create-home --shell /bin/bash --home /home/daos daos_server
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
+            --home /home/daos daos_server
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
+RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos && chown -R daos_server.daos_server /opt/daos
-RUN mkdir /mnt/daos && chown daos_server.daos_server /mnt/daos
-RUN mkdir /var/run/daos_server && chown daos_server.daos_server /var/run/daos_server
-RUN mkdir /var/run/daos_agent && chown daos_agent.daos_agent /var/run/daos_agent
-
-ARG CACHEBUST=1
-RUN apt-get -y upgrade && apt-get clean all
-
-# Control what to build.  By default Dockerfiles build everything to allow for
-# ease-of-use for users, however in CI everything is turned off and then
-# selectively enabled.  Turning off any step disables all future steps.
-ARG DAOS_DEPS_BUILD=yes
-ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-# Legacy, NOBUILD should be set to any string to disable all three.
-ARG NOBUILD=no
-
-# select compiler to use
-ARG COMPILER=gcc
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
+    chown daos_agent.daos_agent /var/run/daos_agent
 
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few
@@ -70,9 +102,33 @@ RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
+# Control what to build.  By default Dockerfiles build everything to allow for
+# ease-of-use for users, however in CI everything is turned off and then
+# selectively enabled.  Turning off any step disables all future steps.
+ARG DAOS_DEPS_BUILD=yes
+
+# Now do an update to ensure software is up to date for the deps build.  If the
+# src hasn't changed then this won't do anything, but if it has then we want to
+# ensure that latest dependencies are used.
+USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    (scons --build-deps=yes install PREFIX=/opt/daos --deps-only && \
-    /bin/rm -rf build *.gz)
+    { apt-get update && apt-get -y upgrade && apt-get clean all; }
+USER daos_server:daos_server
+
+ARG DEPS_JOBS=1
+
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
+    /bin/rm -rf build *.gz; }
+
+USER root:root
+ARG CACHEBUST
+RUN apt-get update && apt-get -y upgrade && apt-get clean all
+USER daos_server:daos_server
+
+# Set a label.  This is useful for searching for DAOS images, but is also used
+# in github-actions to prune elements of the dockerfile below this point.
+LABEL DAOS=stage1
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -83,16 +139,24 @@ RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
 RUN ln -s utils/sl site_scons
 
+# select compiler to use
+ARG COMPILER=gcc
+ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
+
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    (scons -j 4 install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
     /bin/rm -rf build && \
-    cp -r utils/config/examples /opt/daos)
+    cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/opt/daos/lib:/opt/daos/lib64:$LD_LIBRARY_PATH
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
+
+USER root:root
+LABEL DAOS=true
+USER daos_server:daos_server
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/daos/src/client/java
@@ -108,6 +172,8 @@ RUN echo -e "<settings>\n\
                 </mirror>\n\
         </mirrors>\n\
 </settings>" > /home/daos/.m2/settings.xml
+
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
