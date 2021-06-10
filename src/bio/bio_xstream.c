@@ -38,6 +38,8 @@
 /* Schedule a NVMe poll when so many blob IOs queued for an io channel */
 #define BIO_BS_POLL_WATERMARK	(2048)
 
+#define DAOS_HUGEPAGE_SIZE_2MB	2	/* 2MB */
+
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
@@ -371,6 +373,24 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		goto free_mutex;
 	}
 
+	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
+	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
+
+	if (nvme_conf == NULL || strlen(nvme_conf) == 0) {
+		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
+		nvme_glb.bd_nvme_conf = NULL;
+		return 0;
+	}
+
+	fd = open(nvme_conf, O_RDONLY, 0600);
+	if (fd < 0) {
+		D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
+		       nvme_conf, DP_RC(daos_errno2der(errno)));
+		nvme_glb.bd_nvme_conf = NULL;
+		return 0;
+	}
+	close(fd);
+
 	D_ASSERT(tgt_nr > 0);
 	D_ASSERT(mem_size > 0);
 	D_ASSERT(hugepage_size > 0);
@@ -390,27 +410,13 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	/*
 	 * Leave a hugepage overhead buffer for DPDK memory management. Reduce
 	 * the DMA upper bound by 200 hugepages per target to account for this.
+	 * Only necessary gfor 2MB hugepage size.
 	 */
-	bio_chk_cnt_max -= (200 * hugepage_size) / size_mb;
+	if (hugepage_size <= DAOS_HUGEPAGE_SIZE_2MB) {
+		D_ASSERT(bio_chk_cnt_max > ((200 * hugepage_size) / size_mb));
+		bio_chk_cnt_max -= (200 * hugepage_size) / size_mb;
+	}
 	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
-
-	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
-	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
-
-	if (nvme_conf == NULL || strlen(nvme_conf) == 0) {
-		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
-		nvme_glb.bd_nvme_conf = NULL;
-		return 0;
-	}
-
-	fd = open(nvme_conf, O_RDONLY, 0600);
-	if (fd < 0) {
-		D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
-		       nvme_conf, DP_RC(daos_errno2der(errno)));
-		nvme_glb.bd_nvme_conf = NULL;
-		return 0;
-	}
-	close(fd);
 
 	rc = smd_init(db);
 	if (rc != 0) {
