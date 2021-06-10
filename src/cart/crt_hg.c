@@ -368,9 +368,21 @@ crt_provider_ip_str_get(int provider)
 	return prov_data->cpg_na_ofi_config.noc_ip_str;
 }
 
+static bool
+crt_provider_is_block_mode(int provider)
+{
+	if (provider == CRT_NA_OFI_PSM2)
+		return false;
+
+	return true;
+}
+
 bool
 crt_provider_is_contig_ep(int provider)
 {
+	if (provider == CRT_NA_OFI_PSM2)
+		return false;
+
 	return crt_na_dict[provider].nad_port_bind;
 }
 
@@ -427,7 +439,7 @@ d_list_t
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return &prov_data->cpg_ctx_list;
+	return &(prov_data->cpg_ctx_list);
 }
 
 static int
@@ -562,7 +574,10 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	init_info.na_init_info.progress_mode = 0;
+	if (crt_provider_is_block_mode(provider))
+		init_info.na_init_info.progress_mode = 0;
+	else
+		init_info.na_init_info.progress_mode = NA_NO_BLOCK;
 
 	if (crt_provider_is_sep(provider))
 		init_info.na_init_info.max_contexts =

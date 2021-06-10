@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [ubuntu.21.04, ubuntu.20.04, centos.8]
+        distro: [ubuntu.20.04, centos.8]
     steps:
     - uses: actions/checkout@v2
     - uses: satackey/action-docker-layer-caching@v0.0.11
@@ -51,7 +51,7 @@ jobs:
       fail-fast: false
       matrix:
         # Only run on Ubuntu for now, centos 8 just isn't very stable.
-        distro: [ubuntu.21.04]
+        distro: [ubuntu.20.04]
         # ubuntu/gcc is broken right now DAOS-7601
         compiler: [clang]
     env:
