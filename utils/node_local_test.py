@@ -622,7 +622,6 @@ class DaosServer():
                 break
 
             if 'running system' in data['error']:
-                print('Good to go')
                 break
 
             self._check_timing('format', start, max_start_time)
