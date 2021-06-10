@@ -30,6 +30,7 @@
 /* DMA buffer parameters */
 #define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	32	/* Per-xstream init chunks */
+#define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks */
 #define DAOS_DMA_MIN_UB_BUF_MB	1024	/* 1GB min upper bound DMA buffer */
 #define DAOS_NVME_MAX_CTRLRS	1024	/* Max read from nvme_conf */
 
@@ -373,6 +374,10 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		goto free_mutex;
 	}
 
+	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
+	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
+	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
+
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
@@ -405,7 +410,6 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		return -DER_INVAL;
 	}
 
-	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
 	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
 	/*
 	 * Leave a hugepage overhead buffer for DPDK memory management. Reduce
@@ -416,7 +420,6 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		D_ASSERT(bio_chk_cnt_max > ((200 * hugepage_size) / size_mb));
 		bio_chk_cnt_max -= (200 * hugepage_size) / size_mb;
 	}
-	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
 	rc = smd_init(db);
 	if (rc != 0) {
