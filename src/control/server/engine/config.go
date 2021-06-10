@@ -400,3 +400,15 @@ func (c *Config) WithLogMask(logMask string) *Config {
 	c.LogMask = logMask
 	return c
 }
+
+// WithMemSize sets the NVMe memory size for SPDK memory allocation on this instance.
+func (c *Config) WithMemSize(memsize int) *Config {
+	c.MemSize = memsize
+	return c
+}
+
+// WithHugePageSize sets the configured hugepage size on this instance.
+func (c *Config) WithHugePageSize(hugepagesz int) *Config {
+	c.HugePageSz = hugepagesz
+	return c
+}
