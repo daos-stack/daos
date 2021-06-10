@@ -226,16 +226,17 @@ class IorCommand(ExecutableCommand):
                 env["DAOS_POOL"] = self.dfs_pool.value
                 env["DAOS_CONT"] = self.dfs_cont.value
                 env["DAOS_BYPASS_DUNS"] = "1"
-                env["IOR_HINT__MPI__romio_daos_obj_class"] = \
-                    self.dfs_oclass.value
+                if self.dfs_oclass.value is not None:
+                    env["IOR_HINT__MPI__romio_daos_obj_class"] = \
+                        self.dfs_oclass.value
         return env
 
     @staticmethod
     def get_ior_metrics(cmdresult):
         """Get the ior command read and write metrics.
 
-        Parse the CmdResult (output of the test) and look for the ior stdout and
-        get the read and write metrics.
+        Parse the CmdResult (output of the test) and look for the ior stdout
+        and get the read and write metrics.
 
         Args:
             cmdresult (CmdResult): output of job manager
