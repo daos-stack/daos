@@ -94,7 +94,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, int provider,
 	prov_data->cpg_contig_ports = true;
 	prov_data->cpg_ctx_max_num = max_ctx_num;
 
-	D_INIT_LIST_HEAD(&(prov_data->cpg_ctx_list));
+	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
 }
 
 /* first step init - for initializing crt_gdata */
@@ -192,7 +192,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	}
 	crt_gdata.cg_credit_ep_ctx = credits;
 	D_ASSERT(crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
-
 
 	/** Enable statistics only for the server side and if requested */
 	if (opt && opt->cio_use_sensors && server) {
@@ -465,8 +464,8 @@ do_init:
 		}
 
 		if (prov == CRT_NA_OFI_PSM2) {
-			setenv("FI_PSM2_NAME_SERVER", "1", true);
-			D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
+			D_ERROR("PSM2 is not supported\n");
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 		if (crt_na_type_is_ofi(prov)) {
 			rc = crt_na_ofi_config_init(prov);
@@ -584,7 +583,7 @@ crt_finalize(void)
 		crt_self_test_fini();
 
 		/* TODO: Needs to happen for every initialized provider */
-		prov_data = &(crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov]);
+		prov_data = &crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov];
 
 		if (prov_data->cpg_ctx_num > 0) {
 			D_ASSERT(!crt_context_empty(crt_gdata.cg_init_prov,
@@ -649,7 +648,6 @@ direct_out:
 	return rc;
 }
 
-
 static inline na_bool_t is_integer_str(char *str)
 {
 	char *p;
@@ -668,19 +666,6 @@ static inline na_bool_t is_integer_str(char *str)
 	}
 
 	return NA_TRUE;
-}
-
-static inline int
-crt_get_port_psm2(int *port)
-{
-	int		rc = 0;
-	uint16_t	pid;
-
-	pid = getpid();
-	*port = (pid << 8);
-	D_DEBUG(DB_ALL, "got a port: %d.\n", *port);
-
-	return rc;
 }
 
 #define PORT_RANGE_STR_SIZE 32
@@ -840,16 +825,8 @@ int crt_na_ofi_config_init(int provider)
 
 			crt_port_range_verify(port);
 
-			if (provider == CRT_NA_OFI_PSM2)
-				port = (uint16_t)port << 8;
 			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service "
 					"port.\n", port);
-		}
-	} else if (provider == CRT_NA_OFI_PSM2) {
-		rc = crt_get_port_psm2(&port);
-		if (rc != 0) {
-			D_ERROR("crt_get_port failed, rc: %d.\n", rc);
-			D_GOTO(out, rc);
 		}
 	}
 	na_ofi_cfg->noc_port = port;
