@@ -218,20 +218,63 @@ cleanup:
 }
 
 static void
+show_version(char *name)
+{
+	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n",
+		name, DAOS_VERSION, DAOS_API_VERSION_MAJOR,
+		DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
+	fprintf(stdout, "Using fuse %s\n", fuse_pkgversion());
+};
+
+static void
 show_help(char *name)
 {
-	printf("usage: %s -m=PATHSTR -s=RANKS\n"
+	printf("usage: %s -m mountpoint\n"
+		"Options:\n"
 		"\n"
-		"	-m --mountpoint=PATHSTR	Mount point to use\n"
-		"	   --pool=<name>	pool UUID/label\n"
-		"	   --container=<name>	container UUID/label\n"
+		"	-m --mountpoint=<path>	Mount point to use\n"
+		"\n"
+		"	   --pool=label		pool UUID/label\n"
+		"	   --container=label	container UUID/label\n"
 		"	   --sys-name=STR	DAOS system name context for servers\n"
-		"	-S --singlethreaded	Single threaded\n"
-		"	-t --thread-count=COUNT Number of fuse threads to use\n"
+		"\n"
+		"	-S --singlethread	Single threaded\n"
+		"	-t --thread-count=count	Number of fuse threads to use\n"
 		"	-f --foreground		Run in foreground\n"
-		"          --disable-caching    Disable all caching\n"
-		"          --disable-wb-cache   Use write-through rather than write-back cache\n",
-		name);
+		"	   --disable-caching	Disable all caching\n"
+		"	   --disable-wb-cache	Use write-through rather than write-back cache\n"
+		"\n"
+		"	-h --help		Show this help\n"
+		"	-v --version		Show version\n"
+		"\n"
+		"Specifying pool and container are optional, if not set then dfuse can connect to\n"
+		"many using the uuids as leading components of the path.\n"
+		"Pools and containers can be specified using either uuids or labels.\n"
+		"\n"
+		"If the mount directory has Unified Namespace xattrs set then pool and container\n"
+		"from there will be used.\n"
+		"\n"
+		"The default thread count is one per available core to allow maximum throughput,\n"
+		"this can be modified by running dfuse in a cpuset via numactl or similar tools.\n"
+		"One thread will be started for asynchronous I/O handling so at least two threads\n"
+		"must be specified in all cases\n"
+		"Singlethreaded mode will use the libfuse loop to handle requests rather than the\n"
+		"threading logic in dfuse."
+		"\n"
+		"If dfuse is running in background mode (the default unless launched via mpirun)\n"
+		"then it will stay in the foreground until the mount is registered with the\n"
+		"kernel to allow appropriate error reporting.\n"
+		"\n"
+		"Caching is on by default with short metadata timeouts and write-back data cache,\n"
+		"this can be disabled entirely for the mount by the use of command line options.\n"
+		"Further settings can be set on a per-container basis via the use of container\n"
+		"attributes.  If the --disable-caching option is given then no caching will be\n"
+		"performed and the container attributes are not used, if --disable-wb-cache is\n"
+		"given the data caching for the whole mount is performed in write-back mode and\n."
+		"the container attributes are still used\n"
+		"\n"
+		"version: %s\n",
+		name, DAOS_VERSION);
 }
 
 int
@@ -252,15 +295,16 @@ main(int argc, char **argv)
 	bool			have_cont_label = false;
 
 	struct option long_options[] = {
+		{"mountpoint",		required_argument, 0, 'm'},
 		{"pool",		required_argument, 0, 'p'},
 		{"container",		required_argument, 0, 'c'},
 		{"sys-name",		required_argument, 0, 'G'},
-		{"mountpoint",		required_argument, 0, 'm'},
-		{"thread-count",	required_argument, 0, 't'},
 		{"singlethread",	no_argument,	   0, 'S'},
+		{"thread-count",	required_argument, 0, 't'},
+		{"foreground",		no_argument,	   0, 'f'},
 		{"disable-caching",	no_argument,	   0, 'A'},
 		{"disable-wb-cache",	no_argument,	   0, 'B'},
-		{"foreground",		no_argument,	   0, 'f'},
+		{"version",		no_argument,	   0, 'v'},
 		{"help",		no_argument,	   0, 'h'},
 		{0, 0, 0, 0}
 	};
@@ -278,7 +322,7 @@ main(int argc, char **argv)
 	dfuse_info->di_wb_cache = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "m:Sfh",
+		c = getopt_long(argc, argv, "m:Stfhv",
 				long_options, NULL);
 
 		if (c == -1)
@@ -320,11 +364,16 @@ main(int argc, char **argv)
 			break;
 		case 'h':
 			show_help(argv[0]);
-			exit(0);
+			D_GOTO(out_debug, ret = -DER_SUCCESS);
+			break;
+		case 'v':
+			show_version(argv[0]);
+
+			D_GOTO(out_debug, ret = -DER_SUCCESS);
 			break;
 		case '?':
 			show_help(argv[0]);
-			exit(1);
+			D_GOTO(out_debug, ret = -DER_INVAL);
 			break;
 		}
 	}
@@ -338,7 +387,7 @@ main(int argc, char **argv)
 	if (!dfuse_info->di_mountpoint) {
 		printf("Mountpoint is required\n");
 		show_help(argv[0]);
-		D_GOTO(out_debug, ret = -DER_NO_HDL);
+		D_GOTO(out_debug, ret = -DER_INVAL);
 	}
 
 	if (dfuse_info->di_threaded && !have_thread_count) {
@@ -347,7 +396,7 @@ main(int argc, char **argv)
 		rc = sched_getaffinity(0, sizeof(cpuset), &cpuset);
 		if (rc != 0) {
 			printf("Failed to get cpuset information\n");
-			exit(1);
+			D_GOTO(out_debug, ret = -DER_INVAL);
 		}
 
 		dfuse_info->di_thread_count = CPU_COUNT(&cpuset);
@@ -355,7 +404,7 @@ main(int argc, char **argv)
 
 	if (dfuse_info->di_thread_count < 2) {
 		printf("Dfuse needs at least two threads.\n");
-		exit(1);
+		D_GOTO(out_debug, ret = -DER_INVAL);
 	}
 
 	/* Reserve one CPU thread for the daos event queue */
@@ -375,7 +424,7 @@ main(int argc, char **argv)
 		rc = dfuse_bg(dfuse_info);
 		if (rc != 0) {
 			printf("Failed to background\n");
-			return 2;
+			exit(2);
 		}
 	}
 
