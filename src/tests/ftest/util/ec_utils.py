@@ -34,6 +34,27 @@ def get_data_parity_number(log, oclass):
     tmp = re.findall(r'\d+', oclass)
     return {'data': tmp[0], 'parity': tmp[1]}
 
+def check_aggregation_status(pool):
+    """EC Aggregation triggered status.
+    Args:
+        pool: pool object to get the query.
+
+    return:
+        result: Aggregation started status True/False.
+    """
+    pool.connect()
+    initial_usage = pool.pool_percentage_used()
+    print("pool_percentage during Aggregation = {}".format(initial_usage))
+
+    for _tmp in range(8):
+        current_usage = pool.pool_percentage_used()
+        print("pool_percentage during Aggregation = {}".format(current_usage))
+        if current_usage['scm'] > initial_usage['scm']:
+            print("Aggregation Started.....")
+            return True
+        time.sleep(5)
+    return False
+
 class ErasureCodeIor(ServerFillUp):
     # pylint: disable=too-many-ancestors
     """
@@ -98,28 +119,53 @@ class ErasureCodeIor(ServerFillUp):
         self.ior_cmd.dfs_dir_oclass.update(oclass[0])
         self.ior_cmd.dfs_chunk.update(sizes[0])
 
-    def ior_write_dataset(self):
+    def ior_write_single_dataset(self, oclass, sizes, percent=1):
+        """Write IOR single data set with EC object.
+
+        Args:
+            oclass(list): list of the obj class to use with IOR
+            sizes(list): Update Transfer, Chunk and Block sizes
+            percent(int): %of storage to be filled. Default it will use the
+                          given parameters in yaml file.
+        """
+        self.ior_param_update(oclass, sizes)
+
+        # Create the new container with correct redundancy factor for EC
+        self.ec_container_create(oclass[0])
+        self.update_ior_cmd_with_pool(create_cont=False)
+
+        # Start IOR Write
+        self.container.uuid = self.ec_container.uuid
+        self.start_ior_load(operation="WriteRead", percent=percent,
+                            create_cont=False)
+        self.cont_uuid.append(self.ior_cmd.dfs_cont.value)
+
+    def ior_write_dataset(self, percent=1):
         """Write IOR data set with different EC object and different sizes."""
         for oclass in self.obj_class:
             for sizes in self.ior_chu_trs_blk_size:
-                # Skip the object type if server count does not meet the minimum
-                # EC object server count
+                # Skip the object type if server count does not meet the
+                # minimum EC object server count
                 if oclass[1] > self.server_count:
                     continue
-                self.ior_param_update(oclass, sizes)
+                self.ior_write_single_dataset(oclass, sizes, percent)
 
-                # Create the new container with correct redundancy factor
-                # for EC object type
-                self.ec_container_create(oclass[0])
-                self.update_ior_cmd_with_pool(create_cont=False)
-                # Start IOR Write
-                self.container.uuid = self.ec_container.uuid
-                self.start_ior_load(operation="WriteRead", percent=1,
-                                    create_cont=False)
-                self.cont_uuid.append(self.ior_cmd.dfs_cont.value)
+    def ior_read_single_dataset(self, oclass, sizes, percent=1):
+        """Read IOR single data set with EC object.
+
+        Args:
+            oclass(list): list of the obj class to use with IOR
+            sizes(list): Update Transfer, Chunk and Block sizes
+            percent(int): %of storage to be filled. Default it will use the
+                          given parameters in yaml file
+        """
+        self.ior_param_update(oclass, sizes)
+        # Start IOR Read
+        self.start_ior_load(operation='Read', percent=percent,
+			    create_cont=False)
 
     def ior_read_dataset(self, parity=1):
-        """Read IOR data and verify for different EC object and different sizes.
+        """Read IOR data and verify for different EC object and different sizes
 
         Args:
            data_parity(str): object parity type for reading, default All.
@@ -127,8 +173,8 @@ class ErasureCodeIor(ServerFillUp):
         con_count = 0
         for oclass in self.obj_class:
             for sizes in self.ior_chu_trs_blk_size:
-                # Skip the object type if server count does not meet the minimum
-                # EC object server count
+                # Skip the object type if server count does not meet the
+                # minimum EC object server count.
                 if oclass[1] > self.server_count:
                     continue
                 parity_set = "P{}".format(parity)
@@ -138,11 +184,8 @@ class ErasureCodeIor(ServerFillUp):
                           .format(oclass[0]))
                     con_count += 1
                     continue
-                self.ior_param_update(oclass, sizes)
                 self.container.uuid = self.cont_uuid[con_count]
-                # Start IOR Read
-                self.start_ior_load(operation='Read', percent=1,
-                                    create_cont=False)
+                self.ior_read_single_dataset(oclass, sizes, parity)
                 con_count += 1
 
 class ErasureCodeSingle(TestWithServers):
