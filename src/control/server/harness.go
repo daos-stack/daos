@@ -46,6 +46,7 @@ type Engine interface {
 	tryDrpc(context.Context, drpc.Method) *system.MemberResult
 	requestStart(context.Context)
 	updateInUseBdevs(context.Context, map[string]*storage.NvmeController) error
+	isAwaitingFormat() bool
 
 	// These methods should probably be replaced by callbacks.
 	NotifyDrpcReady(*srvpb.NotifyReadyReq)
@@ -240,6 +241,7 @@ func (h *EngineHarness) readyRanks() []system.Rank {
 			rank, err := ei.GetRank()
 			if err != nil {
 				h.log.Errorf("instance %d: no rank (%s)", idx, err)
+				continue
 			}
 			ranks = append(ranks, rank)
 		}

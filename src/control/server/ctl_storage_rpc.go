@@ -492,6 +492,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// TODO: supply whitelist of instance.Devs to init() on format.
 	for _, srv := range instances {
 		if instanceErrored[srv.Index()] {
+			c.log.Errorf(msgFormatErr, srv.Index())
 			continue
 		}
 		srv.NotifyStorageReady()

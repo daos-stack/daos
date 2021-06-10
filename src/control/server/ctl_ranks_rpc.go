@@ -316,11 +316,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 
 	// ignore poll results as we gather state immediately after
 	if _, err = pollInstanceState(ctx, instances, func(e Engine) bool {
-		ei, ok := e.(*EngineInstance)
-		if !ok {
-			return false
-		}
-		return ei.isAwaitingFormat()
+		return e.isAwaitingFormat()
 	},
 		svc.harness.rankStartTimeout); err != nil {
 
