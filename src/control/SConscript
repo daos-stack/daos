@@ -57,6 +57,13 @@ def get_build_flags(benv):
         flags += "-race"
     return flags
 
+def install_go_manpage(env, bin, name):
+    """
+    Dynamically generate a manpage for a tool.
+    """
+    manpath = join(env.subst("$PREFIX"), "man/man8", name+'.8')
+    env.Command(manpath, bin, '%s manpage -o %s' % (bin, manpath))
+
 #pylint: disable=too-many-arguments
 def install_go_bin(denv, gosrc, libs, name, install_name):
     """
@@ -259,6 +266,9 @@ def scons():
         fwbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_firmware",
                                "daos_firmware")
         AlwaysBuild([fwbin])
+
+    install_go_manpage(denv, dmgbin, "dmg")
+    install_go_manpage(denv, daosbin, "daos")
 
 if __name__ == "SCons.Script":
     scons()
