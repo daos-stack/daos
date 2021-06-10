@@ -113,6 +113,9 @@ ior_stress:
         - '64k'
     dfs_oclass:
         - 'SX'
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/ior/"
+        disable_caching: True
 mdtest_stress:
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
@@ -137,3 +140,6 @@ mdtest_stress:
     dfs_oclass: 'SX'
     dfs_dir_oclass: 'S1'
     dfs_destroy: False
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/mdtest/"
+        disable_caching: True
