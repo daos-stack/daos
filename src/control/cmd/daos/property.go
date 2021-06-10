@@ -656,17 +656,12 @@ func allocProps(numProps int) (props *C.daos_prop_t, entries propSlice, err erro
 	return
 }
 
-func getContainerProperties(hdl C.daos_handle_t, props *C.daos_prop_t, names ...string) (out []*property, err error) {
-	var entries propSlice
-	if props == nil {
-		props, entries, err = allocProps(len(names))
-		if err != nil {
-			return
-		}
-		defer C.daos_prop_free(props)
-	} else {
-		entries = createPropSlice(props, len(names))
+func getContainerProperties(hdl C.daos_handle_t, names ...string) (out []*property, cleanup func(), err error) {
+	props, entries, err := allocProps(len(names))
+	if err != nil {
+		return nil, func() {}, err
 	}
+	cleanup = func() { C.daos_prop_free(props) }
 
 	for _, name := range names {
 		var hdlr *propHdlr
@@ -688,7 +683,7 @@ func getContainerProperties(hdl C.daos_handle_t, props *C.daos_prop_t, names ...
 
 	rc := C.daos_cont_query(hdl, nil, props, nil)
 	if err = daosError(rc); err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
 
 	return

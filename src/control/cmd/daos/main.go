@@ -114,6 +114,7 @@ type cliOptions struct {
 	Container  containerCmd `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
 	Pool       poolCmd      `command:"pool" description:"perform tasks related to DAOS pools"`
 	Filesystem fsCmd        `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
+	Object     objectCmd    `command:"object" alias:"obj" description:"DAOS object operations"`
 	Version    versionCmd   `command:"version" description:"print daos version"`
 }
 

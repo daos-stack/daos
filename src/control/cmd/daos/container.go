@@ -334,9 +334,34 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 
 type containerListObjectsCmd struct {
 	existingContainerCmd
+
+	Epoch uint64 `long:"epc" short:"e" description:"container epoch"`
 }
 
 func (cmd *containerListObjectsCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	if cmd.Epoch > 0 {
+		ap.epc = C.uint64_t(cmd.Epoch)
+	}
+
+	// TODO: Build a Go slice so that we can JSON-format the list.
+	rc := C.cont_list_objs_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to list objects in container %s", cmd.ContainerID())
+	}
+
 	return nil
 }
 
@@ -692,7 +717,8 @@ func (cmd *containerGetPropertyCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	props, err := getContainerProperties(cmd.cContHandle, nil, cmd.Properties.names...)
+	props, freeProps, err := getContainerProperties(cmd.cContHandle, cmd.Properties.names...)
+	defer freeProps()
 	if err != nil {
 		return errors.Wrapf(err,
 			"failed to fetch properties for container %s",

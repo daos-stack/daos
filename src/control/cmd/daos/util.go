@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/dustin/go-humanize"
@@ -360,6 +362,38 @@ func (oc *objectClass) UnmarshalFlag(fv string) error {
 			fv)
 	}
 	oc.set = true
+
+	return nil
+}
+
+type oidFlag struct {
+	set bool
+	oid C.daos_obj_id_t
+}
+
+func (f *oidFlag) String() string {
+	return fmt.Sprintf("%d.%d", f.oid.hi, f.oid.lo)
+}
+
+func (f *oidFlag) UnmarshalFlag(fv string) error {
+	parseErr := fmt.Sprintf("failed to parse %q as OID (expected HI.LO)", fv)
+	comps := strings.Split(fv, ".")
+	if len(comps) != 2 {
+		return errors.New(parseErr)
+	}
+
+	val, err := strconv.ParseUint(comps[0], 10, 64)
+	if err != nil {
+		return errors.Wrap(err, parseErr)
+	}
+	f.oid.hi = C.uint64_t(val)
+	val, err = strconv.ParseUint(comps[1], 10, 64)
+	if err != nil {
+		return errors.Wrap(err, parseErr)
+	}
+	f.oid.lo = C.uint64_t(val)
+
+	f.set = true
 
 	return nil
 }
