@@ -71,7 +71,7 @@ func (aic *attachInfoCache) selectRemote() (int, int) {
 	// restart from previous NUMA node
 	numaNode := aic.defaultNumaNode
 
-	for i := 0; i < len(aic.numaDeviceMarshResp); i++ {
+	for i := 1; i <= len(aic.numaDeviceMarshResp); i++ {
 		node := (numaNode + i) % len(aic.numaDeviceMarshResp)
 		numDevs := len(aic.numaDeviceMarshResp[node])
 		if numDevs > 0 {
