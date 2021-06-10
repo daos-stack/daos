@@ -66,12 +66,18 @@ func (aic *attachInfoCache) loadBalance(numaNode int) int {
 // still required here to avoid overloading a specific interface
 func (aic *attachInfoCache) selectRemote() (int, int) {
 	aic.mutex.Lock()
+	defer aic.mutex.Unlock()
 
 	deviceIndex := invalidIndex
 	// restart from previous NUMA node
 	numaNode := aic.defaultNumaNode
 
-	for i := 0; i < len(aic.numaDeviceMarshResp); i++ {
+	if len(aic.numaDeviceMarshResp) == 0 {
+		aic.log.Infof("No network device available")
+		return numaNode, deviceIndex
+	}
+
+	for i := 1; i <= len(aic.numaDeviceMarshResp); i++ {
 		node := (numaNode + i) % len(aic.numaDeviceMarshResp)
 		numDevs := len(aic.numaDeviceMarshResp[node])
 		if numDevs > 0 {
@@ -82,10 +88,9 @@ func (aic *attachInfoCache) selectRemote() (int, int) {
 		}
 	}
 
-	// update the default with the one we finally picked up
+	// update the default with the one we finally picked
 	aic.defaultNumaNode = numaNode
 
-	aic.mutex.Unlock()
 	return numaNode, deviceIndex
 }
 
