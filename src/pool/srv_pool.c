@@ -332,17 +332,6 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 				memcpy(entry_def->dpe_val_ptr, pd, sizeof(*pd));
 			}
 			break;
-		case DAOS_PROP_PO_POLICY:
-			if (entry->dpe_val_ptr != NULL) {
-				struct policy_desc_t *pd = entry->dpe_val_ptr;
-
-				D_ALLOC(entry_def->dpe_val_ptr, sizeof(*pd));
-				if (entry_def->dpe_val_ptr == NULL)
-					return -DER_NOMEM;
-
-				memcpy(entry_def->dpe_val_ptr, pd, sizeof(*pd));
-			}
-			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
 				struct daos_acl *acl = entry->dpe_val_ptr;
@@ -448,19 +437,6 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_ec_cell_sz,
 					   &value);
-			break;
-		case DAOS_PROP_PO_POLICY:
-			if (entry->dpe_val_ptr != NULL) {
-				struct policy_desc_t *pd;
-
-				pd = entry->dpe_val_ptr;
-				d_iov_set(&value, pd, sizeof(*pd));
-				rc = rdb_tx_update(tx, kvs,
-						   &ds_pool_prop_policy,
-						   &value);
-				if (rc)
-					return rc;
-			}
 			break;
 		case DAOS_PROP_PO_POLICY:
 			if (entry->dpe_val_ptr != NULL) {
