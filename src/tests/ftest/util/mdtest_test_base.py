@@ -44,7 +44,7 @@ class MdtestBase(DfuseTestBase):
     def execute_mdtest(self, out_queue=None):
         """Runner method for Mdtest.
         Args:
-            out_queue (queue, optional): Pass any exceptions in a queue. 
+            out_queue (queue, optional): Pass any exceptions in a queue.
                                          Defaults to None.
         """
         # Create a pool if one does not already exist

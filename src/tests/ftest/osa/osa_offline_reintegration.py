@@ -86,12 +86,20 @@ class OSAOfflineReintegration(OSAUtils):
                     if self.test_during_aggregation is True:
                         self.delete_extra_container(self.pool)
                         self.simple_exclude_reintegrate_loop(rank[val])
-                    output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                           rank[val])
+                    # For redundancy factor testing, just exclude only
+                    # one target on a rank. Don't exclude a rank(s).
+                    if (self.test_with_rf is True and val == 0):
+                        output = self.dmg_command.pool_exclude(self.pool.uuid,
+                                                               rank[val], "2")
+                    elif (self.test_with_rf is True and val > 0):
+                        continue
+                    else:
+                        output = self.dmg_command.pool_exclude(self.pool.uuid,
+                                                               rank[val])
                     # Check the IOR data after exclude
-                    # Just read or the first exclude alone. With
-                    # RF set to different values, more than
-                    # rank exclude reports IOR failure due to RF.
+                    # Just read the first exclude alone. With
+                    # RF set to different values, excluding more than
+                    # one rank reports IOR failure due to RF.
                     if data and (val == 0):
                         self.run_ior_thread("Read", oclass, test_seq)
                 else:
@@ -126,6 +134,11 @@ class OSAOfflineReintegration(OSAUtils):
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                rank[val],
                                                                "0,2")
+                elif (self.test_with_rf is True and val == 0):
+                    output = self.dmg_command.pool_exclude(self.pool.uuid,
+                                                           rank[val], "2")
+                elif (self.test_with_rf is True and val > 0):
+                    continue
                 else:
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                rank[val])
