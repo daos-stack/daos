@@ -12,8 +12,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 func TestTelemetry_GetCounter(t *testing.T) {
