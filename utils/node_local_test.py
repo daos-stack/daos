@@ -301,7 +301,7 @@ class WarningsFactory():
         """Reset the pending list
 
         Should be called before iterating on each new file, so errors
-        from previous files aren't attribured to new files.
+        from previous files aren't attributed to new files.
         """
         self.pending = []
 
@@ -604,24 +604,36 @@ class DaosServer():
         # This code supports three modes of operation:
         # /mnt/daos is not mounted.  It will be mounted and formatted.
         # /mnt/daos is mounted but empty.  It will be remounted and formatted
-        # /mnt/daos exists and has data in.  It will be used as is.
+        # /mnt/daos exists and has data in.  It will be used as is unless the
+        # "clean" parameter has been set to True, in which case the system
+        # will be erased and restarted with a fresh mountpoint.
         start = time.time()
         max_start_time = 120
 
+        # This map contains resolutions for various states, with each
+        # tuple containing an error message to be matched and a command
+        # to be used to resolve the error. For example, if the
+        # command `dmg storage format` receives an error containing
+        # the message "storage format invoked on a running system",
+        # the resolution is to erase the system in order to restart
+        # the control plane with a fresh SCM mountpoint.
         error_resolutions = {
+            'storage_format': ( # starting state, no error
+                [], ['storage', 'format', '--json'],
+            ),
+            'storage_force_format': (
+                ['already-formatted', 'raft service unavailable'],
+                ['storage', 'format', '--force', '--json']
+            ),
             'system_erase': (
                 ['running system'], ['system', 'erase', '--json'],
             ),
             'system_stop': (
                 ['to be stopped'], ['system', 'stop', '--json'],
-            ),
-            'storage_force_format': (
-                ['already-formatted', 'raft service unavailable'],
-                ['storage', 'format', '--force', '--json']
             )
         }
 
-        cmd = ['storage', 'format', '--json']
+        cmd = error_resolutions['storage_format'][1]
         prev_cmd = None
         while True:
             # Wait between commands, but only if running the same command as
@@ -643,11 +655,15 @@ class DaosServer():
             print('cmd: {} data: {}'.format(cmd, data))
 
             if data['error'] is not None:
+                # When we've encountered an error, attempt to resolve
+                # it by picking through the defined set of resolutions
+                # for that error.
                 resolved = False
                 for res in error_resolutions.values():
                     for err_msg in res[0]:
                         if err_msg in data['error']:
                             cmd = res[1]
+                            print('resolving "{}" by `{}`'.format(err_msg, cmd))
                             resolved = True
                             break
                     if resolved:
@@ -656,24 +672,23 @@ class DaosServer():
                 # If we don't need to start from a clean slate and the system is
                 # already running, just move on.
                 if not clean and cmd == error_resolutions['system_erase'][1]:
+                    print('clean=False; not erasing running system')
                     break
             else:
-                if data['response'] is not None and \
-                    'host_errors' in data['response']:
-                    if len(data['response']['host_errors']) == 0:
-                        break
-
-                    host_err = list(data['response']['host_errors'])[0]
-                    for err_msg in error_resolutions['storage_force_format'][0]:
-                        if err_msg in host_err:
-                            cmd = error_resolutions['storage_force_format'][1]
-                            break
+                # Walk through the states here, choosing the next command
+                # to run based on the previous command run.
+                if cmd == error_resolutions['storage_format'][1]:
+                    # The storage format worked right away; nothing else to do.
+                    break
                 elif cmd == error_resolutions['system_stop'][1]:
                     cmd = error_resolutions['system_erase'][1]
                 elif cmd == error_resolutions['system_erase'][1]:
                     cmd = error_resolutions['storage_force_format'][1]
                 elif cmd == error_resolutions['storage_force_format'][1]:
+                    # The last command run was a `storage format --force`,
+                    # so we're finished with walking through the state machine.
                     break
+                print('progressing to `{}`'.format(cmd))
 
             self._check_timing('format', start, max_start_time)
         duration = time.time() - start
@@ -743,7 +758,7 @@ class DaosServer():
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'NORMAL'
             message = 'Incorrect number of engines running ({} vs {})'\
-                      .format(len(procs), 1)
+                      .format(len(procs), self.engines)
             entry['message'] = message
             self.conf.wf.issues.append(entry)
         rc = self.run_dmg(['system', 'stop'])
@@ -1034,13 +1049,16 @@ class DFuse():
 
         cmd.extend(self.valgrind.get_cmd_prefix())
 
-        cmd.extend([dfuse_bin, '-m', self.dir, '-f'])
+        cmd.extend([dfuse_bin,
+                    '--mountpoint',
+                    self.dir,
+                    '--foreground'])
 
         if self.multi_user:
             cmd.append('--multi-user')
 
         if single_threaded:
-            cmd.append('-S')
+            cmd.append('--singlethread')
 
         if not self.caching:
             cmd.append('--disable-caching')
@@ -1063,6 +1081,7 @@ class DFuse():
                 self._sp = None
                 if os.path.exists(self.log_file):
                     log_test(self.conf, self.log_file)
+                os.rmdir(self.dir)
                 raise Exception('dfuse died waiting for start')
             except subprocess.TimeoutExpired:
                 pass
@@ -1169,7 +1188,7 @@ def import_daos(server, conf):
 def run_daos_cmd(conf,
                  cmd,
                  show_stdout=False,
-                 valgrind=True):
+                 valgrind=False):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
@@ -1244,7 +1263,7 @@ def create_cont(conf, pool, posix=False, label=None):
 
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
     return rc.stdout.decode().split(' ')[-1].rstrip()
 
 def destroy_container(conf, pool, container):
@@ -1252,7 +1271,7 @@ def destroy_container(conf, pool, container):
     cmd = ['container', 'destroy', '--pool', pool, '--cont', container]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
     return rc.stdout.decode('utf-8').strip()
 
 def check_dfs_tool_output(output, oclass, csize):
@@ -2904,7 +2923,7 @@ class AllocFailTestRun():
                                 'code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
-        if not stderr.endswith("Out of memory (-1009)") and \
+        if not stderr.endswith("(-1009): Out of memory") and \
            'error parsing command line arguments' not in stderr and \
            self.stdout != self.aft.expected_stdout:
             if self.stdout != b'':
