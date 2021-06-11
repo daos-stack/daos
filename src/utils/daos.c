@@ -258,7 +258,6 @@ tobytes(const char *str)
 	return size;
 }
 
-
 static int
 epoch_range_parse(struct cmd_args_s *ap)
 {
@@ -306,7 +305,7 @@ daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 	if (*end != '.')
 		return -1;
 
-	ptr = end+1;
+	ptr = end + 1;
 
 	lo = strtoull(ptr, &end, 10);
 	if (ptr[0] == '-')
@@ -341,7 +340,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_LABEL;
-		entry->dpe_str = strdup(value);
+		D_STRNDUP(entry->dpe_str, value, len);
 	} else if (!strcmp(name, "cksum")) {
 		int csum_type = daos_str2csumcontprop(value);
 
@@ -1527,7 +1526,6 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	fprintf(stream, "daos command (v%s), libdaos %d.%d.%d\n",
 		DAOS_VERSION, DAOS_API_VERSION_MAJOR,
 		DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
-
 
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();

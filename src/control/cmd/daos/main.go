@@ -136,16 +136,22 @@ func exitWithError(log logging.Logger, err error) {
 	os.Exit(1)
 }
 
+func writeManPage(wr io.Writer) {
+	var opts cliOptions
+	p := flags.NewParser(&opts, flags.Default)
+	p.Name = "daos"
+	p.ShortDescription = "Command to manage DAOS pool/container/object"
+	p.Usage = "[OPTIONS] [COMMAND] [SUBCOMMAND]"
+	p.LongDescription = `daos  can  be  used  to  manage/query  a  pool  content,
+	create/query/manage/destroy a container inside a pool or
+	query/manage an object inside a container.`
+
+	p.WriteManPage(wr)
+}
+
 func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
 	var wroteJSON atm.Bool
 	p := flags.NewParser(opts, flags.Default)
-	p.Name = "daos"
-	p.ShortDescription = "Command to manage DAOS pool/container/object"
-	p.Usage = "RESOURCE COMMAND [OPTIONS]"
-	p.LongDescription = `daos is a tool that can be used to manage/query pool content,
-create/query/manage/destroy a container inside a pool, copy data
-between a POSIX container and a POSIX filesystem, clone a DAOS container,
-or query/manage an object inside a container.`
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
 		if cmd == nil {
