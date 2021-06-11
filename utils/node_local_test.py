@@ -301,7 +301,7 @@ class WarningsFactory():
         """Reset the pending list
 
         Should be called before iterating on each new file, so errors
-        from previous files aren't attribured to new files.
+        from previous files aren't attributed to new files.
         """
         self.pending = []
 
@@ -738,7 +738,7 @@ class DaosServer():
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'NORMAL'
             message = 'Incorrect number of engines running ({} vs {})'\
-                      .format(len(procs), 1)
+                      .format(len(procs), self.engines)
             entry['message'] = message
             self.conf.wf.issues.append(entry)
         rc = self.run_dmg(['system', 'stop'])
@@ -1025,10 +1025,13 @@ class DFuse():
 
         cmd.extend(self.valgrind.get_cmd_prefix())
 
-        cmd.extend([dfuse_bin, '-m', self.dir, '-f'])
+        cmd.extend([dfuse_bin,
+                    '--mountpoint',
+                    self.dir,
+                    '--foreground'])
 
         if single_threaded:
-            cmd.append('-S')
+            cmd.append('--singlethread')
 
         if not self.caching:
             cmd.append('--disable-caching')
@@ -1051,6 +1054,7 @@ class DFuse():
                 self._sp = None
                 if os.path.exists(self.log_file):
                     log_test(self.conf, self.log_file)
+                os.rmdir(self.dir)
                 raise Exception('dfuse died waiting for start')
             except subprocess.TimeoutExpired:
                 pass
