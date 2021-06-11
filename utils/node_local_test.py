@@ -301,7 +301,7 @@ class WarningsFactory():
         """Reset the pending list
 
         Should be called before iterating on each new file, so errors
-        from previous files aren't attribured to new files.
+        from previous files aren't attributed to new files.
         """
         self.pending = []
 
