@@ -169,12 +169,6 @@ degrade_full_partial_fail_2data(void **state)
 {
 	int shards[2];
 
-	/*
-	 * Skipping test because of DAOS-6755, which seems to be related to EC
-	 * aggregation
-	 */
-	skip();
-
 	shards[0] = 0;
 	shards[1] = 3;
 	degrade_ec_internal(state, shards, 2, FULL_PARTIAL_UPDATE);
@@ -383,6 +377,7 @@ degrade_multi_conts_agg(void **state)
 			goto out;
 		}
 
+		daos_pool_set_prop(args[i]->pool.pool_uuid, "reclaim", "time");
 		args[i]->index = arg->index;
 		assert_int_equal(args[i]->pool.slave, 1);
 		/* XXX to temporarily workaround DAOS-7350, we need better
@@ -407,8 +402,8 @@ degrade_multi_conts_agg(void **state)
 	}
 
 	/* sleep a while to make aggregation triggered */
-	print_message("sleep about 25 second to wait aggregation ...\n");
-	sleep(25);
+	print_message("sleep about 5 seconds to wait aggregation ...\n");
+	trigger_and_wait_ec_aggreation(arg, oids, CONT_PER_POOL);
 
 	for (i = 0; i < shards_nr; i++)
 		fail_ranks[i] = get_rank_by_oid_shard(args[0], oids[0],
