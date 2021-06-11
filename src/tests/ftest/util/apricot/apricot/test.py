@@ -738,7 +738,7 @@ class TestWithServers(TestWithoutServers):
         # Compose and run cart_ctl command
         cart_ctl = CartCtl()
         cart_ctl.add_log_msg.value = "add_log_msg"
-        cart_ctl.rank.value = 0
+        cart_ctl.rank.value = "all"
         cart_ctl.cfg_path.value = "."
         cart_ctl.group_name.value = "daos_server"
         cart_ctl.m.value = s
