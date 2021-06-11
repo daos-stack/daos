@@ -85,7 +85,7 @@ class OSAOfflineReintegration(OSAUtils):
                         self.print_and_assert_on_rebuild_failure(output)
                     if self.test_during_aggregation is True:
                         self.delete_extra_container(self.pool)
-                        self.simple_exclude_reintegrate_loop(rank[val])
+                        self.simple_osa_reintegrate_loop(rank[val])
                     # For redundancy factor testing, just exclude only
                     # one target on a rank. Don't exclude a rank(s).
                     if (self.test_with_rf is True and val == 0):

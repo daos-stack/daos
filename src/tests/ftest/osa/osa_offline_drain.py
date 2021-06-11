@@ -34,26 +34,6 @@ class OSAOfflineDrain(OSAUtils):
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
 
-    def simple_drain_reintegrate_loop(self, rank, loop_time=100):
-        """This method performs drain and reintegration on a rank,
-        for a certain amount of time.
-        Args:
-            rank (int): daos server rank.
-            loop_time: Total time to perform drain/reintegrate
-                       operation in a loop. (Default : 100 secs)
-        """
-        start_time = 0
-        finish_time = 0
-        while int(finish_time - start_time) < loop_time:
-            start_time = time.time()
-            output = self.dmg_command.pool_drain(self.pool.uuid,
-                                                 rank)
-            self.print_and_assert_on_rebuild_failure(output)
-            output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                       rank)
-            self.print_and_assert_on_rebuild_failure(output)
-            finish_time = time.time()
-
     def run_offline_drain_test(self, num_pool, data=False,
                                oclass=None):
         """Run the offline drain without data.
@@ -103,7 +83,7 @@ class OSAOfflineDrain(OSAUtils):
                 if self.test_during_aggregation is True and index == 0:
                     self.pool.set_property("reclaim", "time")
                     self.delete_extra_container(self.pool)
-                    self.simple_drain_reintegrate_loop(rank)
+                    self.simple_osa_reintegrate_loop(rank=rank, action="drain")
                 if (self.test_during_rebuild is True and val == 0):
                     # Exclude rank 3
                     output = self.dmg_command.pool_exclude(self.pool.uuid, "3")
