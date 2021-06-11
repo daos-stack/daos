@@ -21,19 +21,20 @@ extern "C" {
 /**
  * DAOS_COO_RO opens the container for reading only. This flag conflicts with
  * DAOS_COO_RW.
- *
- * DAOS_COO_RW opens the container for reading and writing. This flag conflicts
- * with DAOS_COO_RO.
- *
- * DAOS_COO_NOSLIP disables the automatic epoch slip at epoch commit time. See
- * daos_epoch_commit().
- *
- * DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
- * factor/level requirements of the container.
  */
 #define DAOS_COO_RO		(1U << 0)
+/**
+ * DAOS_COO_RW opens the container for reading and writing. This flag conflicts
+ * with DAOS_COO_RO.
+ */
 #define DAOS_COO_RW		(1U << 1)
+/** DAOS_COO_NOSLIP disables the automatic epoch slip at epoch commit time. See
+ * daos_epoch_commit().
+ */
 #define DAOS_COO_NOSLIP		(1U << 2)
+/** DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
+ * factor/level requirements of the container.
+ */
 #define DAOS_COO_FORCE		(1U << 3)
 
 #define DAOS_COO_NBITS	(4)
@@ -55,7 +56,6 @@ typedef struct {
 	daos_epoch_t		ci_hae;
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
-
 
 /**
  * Generate a rank list from a string with a separator argument. This is a
@@ -317,7 +317,6 @@ daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
  */
 int
 daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
-
 
 /**
  * Clear container status, to clear container's DAOS_PROP_CO_STATUS property

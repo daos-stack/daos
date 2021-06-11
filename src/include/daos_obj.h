@@ -134,14 +134,6 @@ enum {
 	DAOS_OO_IO_SEQ         = (1 << 5),
 };
 
-struct daos_oid_list {
-	/** Input/output number of oids */
-	uint32_t		 ol_nr;
-	uint32_t		 ol_nr_out;
-	/** OID buffer */
-	daos_obj_id_t		*ol_oids;
-};
-
 /**
  * Record
  *
