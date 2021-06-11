@@ -239,6 +239,8 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(agg_param != NULL);
 	if (daos_unit_oid_compare(agg_param->ap_oid, entry->ie_oid)) {
 		if (need_aggregate(agg_param, entry)) {
+			D_DEBUG(DB_EPC, "oid:"DF_UOID" vos agg starting\n",
+				DP_UOID(entry->ie_oid));
 			agg_param->ap_oid = entry->ie_oid;
 			reset_agg_pos(VOS_ITER_DKEY, agg_param);
 			reset_agg_pos(VOS_ITER_AKEY, agg_param);

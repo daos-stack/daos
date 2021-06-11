@@ -14,7 +14,7 @@ to access DAOS from Hadoop and Spark.
 
 1. Linux OS
 2. Java 8
-3. Hadoop 3.2 or later
+3. Hadoop 2.7 or later
 4. Spark 3.1 or later
 5. DAOS Readiness
 We assume that the DAOS servers and agents have already been deployed in the
