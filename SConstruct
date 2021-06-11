@@ -457,7 +457,6 @@ def scons(): # pylint: disable=too-many-locals
     build_misc()
 
     Default(build_prefix)
-    Depends('install', build_prefix)
 
     # an "rpms" target
     env.Command('rpms', '', 'make -C utils/rpms rpms')
