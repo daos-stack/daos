@@ -75,32 +75,6 @@ jobs:
     - name: Run
       run: ./utils/run_in_ga_wrapper.sh
 
-  Doxygen:
-    name: Run doxygen
-    needs: Prepare
-    runs-on: ubuntu-20.04
-    strategy:
-      fail-fast: false
-      matrix:
-        # Only run on Ubuntu for now, centos 8 just isn't very stable.
-        distro: [ubuntu.20.04]
-    env:
-      COMPILER: ${{ matrix.compiler }}
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-      with:
-        submodules: true
-    # https://github.com/marketplace/actions/docker-layer-caching
-    - uses: satackey/action-docker-layer-caching@v0.0.11
-      continue-on-error: true
-      with:
-        key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-{hash}
-        restore-keys: docker-${{ matrix.distro }}-
-        skip-save: true
-    - name: Run
-      run: doxygen Doxyfile
-
   Build:
     name: Build DAOS
     needs: Prepare

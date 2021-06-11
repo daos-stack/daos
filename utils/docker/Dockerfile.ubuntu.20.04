@@ -130,7 +130,7 @@ USER daos_server:daos_server
 LABEL DAOS=stage1
 
 WORKDIR /home/daos/daos/
-COPY VERSION LICENSE ftest.sh SConstruct Doxyfile ./
+COPY VERSION LICENSE ftest.sh SConstruct ./
 COPY site_scons site_scons
 COPY utils utils
 COPY src src
