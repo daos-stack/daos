@@ -6,6 +6,9 @@ def scons():
     """Execute build"""
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
 
+    Import('env', 'API_VERSION')
+    env.AppendUnique(LIBPATH=[Dir('.')])
+
     denv = env.Clone()
 
     # Build self test
@@ -24,14 +27,21 @@ def scons():
     # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
+    daos_hdlrs_src = ['daos_hdlr.c', 'daos_autotest.c', 'daos_dfs_hdlr.c']
+    daos_hdlrs_lib = daos_build.library(denv, 'daos_cmd_hdlrs',
+                                        daos_hdlrs_src,
+                                        LIBS=libs)
+    env.Install('$PREFIX/lib64/', daos_hdlrs_lib)
+    libs += ['daos_cmd_hdlrs']
+
+    Export('daos_hdlrs_lib')
+
     Import('cmd_parser', 'dc_credit')
     daos_obj = [cmd_parser, dc_credit]
-    daos_src = ['daos.c', 'daos_obj_ctl.c', 'daos_hdlr.c', 'daos_dfs_hdlr.c',
-                'daos_autotest.c']
+    daos_src = ['daos.c', 'daos_obj_ctl.c']
 
-    daos = daos_build.program(denv, 'daos', [daos_src, daos_obj], LIBS=libs)
+    daos = daos_build.program(denv, 'daos_old', [daos_src, daos_obj], LIBS=libs)
     denv.Install('$PREFIX/bin/', daos)
-
 
 if __name__ == "SCons.Script":
     scons()

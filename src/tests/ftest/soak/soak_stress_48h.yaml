@@ -116,12 +116,15 @@ ior_stress:
         - 'SX'
     dfs_dir_oclass:
         - 'SX'
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/ior/"
+        disable_caching: True
 fio_stress:
   names:
     - global
     - test
   global:
-    directory: "/tmp/daos_dfuse/"
+    directory: "/tmp/daos_dfuse/fio/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -142,6 +145,9 @@ fio_stress:
         - 'randrw'
     oclass:
         - 'SX'
+  dfuse:
+    mount_dir: "/tmp/daos_dfuse/fio/"
+    disable_wb_caching: True
 daos_racer:
     runtime: 120
     container:
@@ -175,8 +181,9 @@ mdtest_stress:
     dfs_oclass: 'SX'
     dfs_dir_oclass: 'S1'
     dfs_destroy: False
-dfuse:
-    mount_dir: "/tmp/daos_dfuse/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/mdtest/"
+        disable_caching: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
 events:
