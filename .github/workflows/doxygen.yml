@@ -1,4 +1,4 @@
-name: Build
+name: Doxygen
 
 on:
    push:
@@ -17,6 +17,6 @@ jobs:
       with:
         submodules: true
     - name: Install software
-      run: apt-get install doxygen
+      run: sudo apt-get install doxygen
     - name: Run
       run: doxygen Doxyfile
