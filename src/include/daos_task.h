@@ -616,7 +616,7 @@ typedef struct {
 	daos_handle_t		oh;
 } daos_obj_close_t;
 
-/*
+/**
  * Object & Object Key Punch args.
  * NB:
  * - If @dkey is NULL, it is parameter for object punch.

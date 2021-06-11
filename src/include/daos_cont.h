@@ -243,7 +243,8 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 /**
  * Query container information.
  *
- * \param[in]	coh	Container open handle.
+ * \param[in]	container
+ *			Container open handle.
  * \param[out]	info	Returned container information.
  *			If \a info::ci_snapshots is not NULL, epochs of
  *			snapshots will be stored in it.
