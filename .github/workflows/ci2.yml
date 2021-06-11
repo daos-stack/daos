@@ -25,6 +25,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - uses: satackey/action-docker-layer-caching@v0.0.11
+      continue-on-error: true
       with:
         key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-{hash}
         restore-keys: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-

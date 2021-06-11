@@ -282,6 +282,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			}
 			break;
 		case DAOS_PROP_PO_SELF_HEAL:
+		case DAOS_PROP_PO_EC_CELL_SZ:
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			val = prop->dpp_entries[i].dpe_val;
@@ -429,8 +430,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
-			break;
 		case DAOS_PROP_CO_ROOTS:
+		case DAOS_PROP_CO_EC_CELL_SZ:
 			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);

@@ -1525,9 +1525,10 @@ class TestWithServers(TestWithoutServers):
                 bytes_to_human(available_storage[1]), nvme_ratio, adjusted)
 
             # Determine the minimum number of targets configured per engine
-            targets = min(
+            current_targets = min(
                 self.server_managers[index].manager.job.get_engine_values(
                     "targets"))
+            targets = current_targets
             while targets >= min_targets and pool_args["size"] is None:
                 # The I/O Engine allocates NVMe storage on targets in multiples
                 # of 1GiB per target.  A server with 8 targets will have a
@@ -1554,6 +1555,15 @@ class TestWithServers(TestWithoutServers):
                     "  - NVMe pool size with %s targets: %s (%s)",
                     targets, nvme_size, bytes_to_human(nvme_size))
                 pool_args["size"] = nvme_size
+
+            # Update the servers if a reduced target count is required
+            if targets < current_targets:
+                self.log.info(
+                    "Updating server targets: %s -> %s",
+                    current_targets, targets)
+                self.server_managers[index].set_config_value("targets", targets)
+                self.server_managers[index].stop()
+                self.server_managers[index].start()
 
             # Verify that the scm_ratio of the calculated nvme_ratio will not
             # exceed the available SCM storage - very unlikely

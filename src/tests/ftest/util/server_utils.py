@@ -640,6 +640,21 @@ class DaosServerManager(SubprocessManager):
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
 
+    def get_host(self, rank):
+        """Get the host name that matches the specified rank.
+
+        Args:
+            rank (int): server rank number
+
+        Returns:
+            str: host name matching the specified rank
+
+        """
+        host = None
+        if rank in self._expected_states:
+            host = self._expected_states[rank]["host"]
+        return host
+
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.
 
@@ -779,7 +794,7 @@ class DaosServerManager(SubprocessManager):
         return data
 
     def get_storage_capacity(self):
-        """Get the total configured SCM and NVMe storage per server host.
+        """Get the configured SCM and NVMe storage per server engine.
 
         Only sums up capacities of devices that have been specified in the
         server configuration file.
@@ -867,7 +882,7 @@ class DaosServerManager(SubprocessManager):
         return storage_capacity
 
     def get_available_storage(self):
-        """Get the maximum available SCM and NVMe storage common to all servers.
+        """Get the largest available SCM and NVMe storage common to all servers.
 
         Raises:
             ServerFailed: if output from the dmg storage scan is missing or
