@@ -544,13 +544,7 @@ err:
 
 #define ATTR_COUNT 6
 
-char const *const
-cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
-			       "dfuse-dentry-time",
-			       "dfuse-dentry-dir-time",
-			       "dfuse-ndentry-time",
-			       "dfuse-data-cache",
-			       "dfuse-direct-io-disable"};
+char const *cont_attr_names[ATTR_COUNT];
 
 #define ATTR_TIME_INDEX		0
 #define ATTR_DENTRY_INDEX	1
@@ -563,6 +557,42 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
  * large.
  */
 #define ATTR_VALUE_LEN 128
+
+/* Manage attributes names table this way to prevent names/strings to be
+ * stored in the text/code region and thus avoid EFAULT errors during
+ * memory registration for RDMA xfer to the server
+ */
+static void
+fini_cont_attr_names()
+{
+	int i;
+
+	for (i = 0; i < ATTR_COUNT; i++)
+		if (cont_attr_names[i] != NULL)
+			free((void *)cont_attr_names[i]);
+}
+
+static int
+init_cont_attr_names()
+{
+	int i;
+
+	cont_attr_names[ATTR_TIME_INDEX] = strdup("dfuse-attr-time");
+	cont_attr_names[ATTR_DENTRY_INDEX] = strdup("dfuse-dentry-time");
+	cont_attr_names[ATTR_DENTRY_DIR_INDEX] =
+					strdup("dfuse-dentry-dir-time");
+	cont_attr_names[ATTR_NDENTRY_INDEX] = strdup("dfuse-ndentry-time");
+	cont_attr_names[ATTR_DATA_CACHE_INDEX] = strdup("dfuse-data-cache");
+	cont_attr_names[ATTR_DIRECT_IO_DISABLE_INDEX] = 
+					strdup("dfuse-direct-io-disable");
+
+	for (i = 0; i < ATTR_COUNT; i++)
+		if (cont_attr_names[i] == NULL) {
+			fini_cont_attr_names();
+			return ENOMEM;
+		}
+	return 0;
+}
 
 /* Setup caching attributes for a container.
  *
@@ -940,6 +970,10 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 	struct dfuse_projection_info	*fs_handle;
 	int				rc;
 
+	rc = init_cont_attr_names();
+	if (rc != 0)
+		return rc;
+
 	D_ALLOC_PTR(fs_handle);
 	if (!fs_handle)
 		return -DER_NOMEM;
@@ -1287,6 +1321,8 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close pools");
 		rcp = EINVAL;
 	}
+
+	fini_cont_attr_names();
 
 	return rcp;
 }
