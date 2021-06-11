@@ -280,8 +280,9 @@ daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
 /**
  * Query the container Access Control List and ownership properties.
  *
- * \param[in]	coh	Container open handle.
-
+ * \param[in]	container
+ *			Container open handle.
+ *
  * \param[out]	acl_prop
  *			Newly allocated daos_prop_t containing the ACL, owner,
  *			and owner-group properties of the container.

@@ -53,8 +53,8 @@ typedef enum {
 	DAOS_ANCHOR_TYPE_EOF	= 3,
 } daos_anchor_type_t;
 
-/** Iteration Anchor */
 #define DAOS_ANCHOR_BUF_MAX	104
+/** Iteration Anchor */
 typedef struct {
 	uint16_t	da_type; /** daos_anchor_type_t */
 	uint16_t	da_shard;
