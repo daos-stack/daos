@@ -1,0 +1,22 @@
+name: Build
+
+on:
+   push:
+     branches:
+       - master
+   pull_request:
+
+jobs:
+
+  Doxygen:
+    name: Run doxygen
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: Install software
+      run: apt-get install doxygen
+    - name: Run
+      run: doxygen Doxyfile
