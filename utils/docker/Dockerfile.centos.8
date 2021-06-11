@@ -227,8 +227,11 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     { scons-3 --jobs $JOBS server install PREFIX=/opt/daos COMPILER=$COMPILER && \
     utils/check.sh /opt/daos/bin/daos_engine && \
     utils/check.sh -n /opt/daos/bin/vos_tests; }
+# Workaround missing SCons patch (https://github.com/SCons/scons/pull/3116) on
+# Centos 8 by not setting --jobs option for tests build.  It consistently
+# triggers this internal error in SCons.
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons-3 --jobs $JOBS test install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    { scons-3 test install PREFIX=/opt/daos COMPILER=$COMPILER && \
     utils/check.sh /opt/daos/bin/vos_tests && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos; }

@@ -102,6 +102,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
                   get_build_tags(denv), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
+    denv.Requires(build_bin, ['gurt_lib'])
     denv.InstallAs(install_bin, build_bin)
     return install_bin
 #pylint: enable=too-many-arguments
@@ -221,7 +222,7 @@ def scons():
              " -lspdk_blob -lspdk_nvme -lspdk_util -lspdk_json" + \
              " -lspdk_jsonrpc -lspdk_rpc -lspdk_trace" + \
              " -lspdk_sock -lspdk_log -lspdk_notify" + \
-             " -lspdk_blob_bdev -lspdk_vmd -lnuma -ldl"
+             " -lspdk_blob_bdev -lspdk_vmd -lnuma -ldl -lgurt"
 
     senv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
