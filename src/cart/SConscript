@@ -59,7 +59,7 @@ def scons():
     # Generate the common libraries used by everyone
     SConscript('swim/SConscript')
 
-    Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
+    Import('env', 'prereqs', 'swim_targets', 'CART_VERSION')
     Import('conf_dir')
 
     env.Alias('install', '$PREFIX')

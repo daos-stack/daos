@@ -98,7 +98,7 @@ def scons():
     benv = tenv.Clone()
 
     benv.AppendUnique(CFLAGS=['-std=gnu99', '-pedantic'])
-    basic_target = daos_build.test(tenv, BASIC_SRC)
+    daos_build.test(tenv, BASIC_SRC)
 
     # Call scons on unit test directory
     SConscript('utest/SConscript')
