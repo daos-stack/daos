@@ -14,7 +14,7 @@ storage:
   scm_list:
   - /dev/a
   - /dev/b
-- class: malloc
+- class: kdev
   bdev_list:
   - /dev/c
   - /dev/d

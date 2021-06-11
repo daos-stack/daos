@@ -1468,9 +1468,9 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 							WithScmRamdiskSize(uint(tc.sSize)).
 							WithScmDeviceList(tc.sDevs[idx]),
 						storage.NewTierConfig().
-										WithBdevClass(tc.bClass.String()).
-										WithBdevFileSize(tc.bSize).
-										WithBdevDeviceList(tc.bDevs[idx]...),
+							WithBdevClass(tc.bClass.String()).
+							WithBdevFileSize(tc.bSize).
+							WithBdevDeviceList(tc.bDevs[idx]...),
 					)
 				config.Engines = append(config.Engines, engine)
 			}
@@ -1614,4 +1614,3 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		})
 	}
 }
-

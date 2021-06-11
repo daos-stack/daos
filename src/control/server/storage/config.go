@@ -7,6 +7,8 @@
 package storage
 
 import (
+	"path/filepath"
+
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -24,6 +26,12 @@ const (
 	// DefaultScmToNVMeRatio defines the default ratio of
 	// SCM to NVMe.
 	DefaultScmToNVMeRatio = 0.06
+
+	// BdevOutConfName defines the name of the output file to contain details
+	// of bdevs to be used by a DAOS engine.
+	BdevOutConfName = "daos_nvme.conf"
+
+	maxScmDeviceLen = 1
 )
 
 type Class string
@@ -37,7 +45,7 @@ func (c *Class) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	class := Class(tmp)
 	switch class {
 	case ClassDCPM, ClassRAM,
-		ClassNvme, ClassFile, ClassKdev, ClassMalloc:
+		ClassNvme, ClassFile, ClassKdev:
 		*c = class
 	default:
 		return errors.Errorf("unsupported storage class %q", tmp)
@@ -50,13 +58,12 @@ func (s Class) String() string {
 }
 
 const (
-	ClassNone   Class = ""
-	ClassDCPM   Class = "dcpm"
-	ClassRAM    Class = "ram"
-	ClassNvme   Class = "nvme"
-	ClassMalloc Class = "malloc"
-	ClassKdev   Class = "kdev"
-	ClassFile   Class = "file"
+	ClassNone Class = ""
+	ClassDCPM Class = "dcpm"
+	ClassRAM  Class = "ram"
+	ClassNvme Class = "nvme"
+	ClassKdev Class = "kdev"
+	ClassFile Class = "file"
 )
 
 type TierConfig struct {
@@ -81,7 +88,7 @@ func (c *TierConfig) IsSCM() bool {
 
 func (c *TierConfig) IsBdev() bool {
 	switch c.Class {
-	case ClassNvme, ClassFile, ClassKdev, ClassMalloc:
+	case ClassNvme, ClassFile, ClassKdev:
 		return true
 	default:
 		return false
@@ -153,13 +160,43 @@ func (c *TierConfig) WithBdevFileSize(size int) *TierConfig {
 	return c
 }
 
-// WithBdevHostname sets the hostname to be used when generating NVMe configurations.
-func (c *TierConfig) WithBdevHostname(name string) *TierConfig {
-	c.Bdev.Hostname = name
-	return c
+type TierConfigs []*TierConfig
+
+func (sc *Config) Validate() error {
+	if err := sc.Tiers.Validate(); err != nil {
+		return errors.Wrap(err, "storage config validation failed")
+	}
+
+	// set persistent location for engine bdev config file to be consumed by
+	// provider backend, set to empty when no devices specified
+	sc.ConfigOutputPath = ""
+	scmCfgs := sc.Tiers.ScmConfigs()
+	bdevCfgs := sc.Tiers.BdevConfigs()
+	if len(scmCfgs) > 0 && sc.Tiers.CfgHasBdevs() {
+		sc.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+	}
+
+	// set the VOS env:
+	if len(bdevCfgs) > 0 {
+		switch bdevCfgs[0].Class {
+		case ClassFile, ClassKdev:
+			sc.VosEnv = "AIO"
+		case ClassNvme:
+			sc.VosEnv = "NVME"
+		}
+	}
+
+	return nil
 }
 
-type TierConfigs []*TierConfig
+func (c TierConfigs) CfgHasBdevs() bool {
+	for _, bc := range c.BdevConfigs() {
+		if len(bc.Bdev.DeviceList) > 0 {
+			return true
+		}
+	}
+	return false
+}
 
 func (c TierConfigs) Validate() error {
 	for _, cfg := range c {
@@ -205,10 +242,6 @@ func (c *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-const (
-	maxScmDeviceLen = 1
-)
-
 // ScmConfig represents a SCM (Storage Class Memory) configuration entry.
 type ScmConfig struct {
 	MountPoint  string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
@@ -220,6 +253,9 @@ type ScmConfig struct {
 func (sc *ScmConfig) Validate(class Class) error {
 	if sc.MountPoint == "" {
 		return errors.New("no scm_mount set")
+	}
+	if sc.RamdiskSize < 0 {
+		return errors.New("negative scm_size")
 	}
 
 	switch class {
@@ -251,10 +287,9 @@ type BdevConfig struct {
 	VmdDisabled bool     `yaml:"-"` // set during start-up
 	DeviceCount int      `yaml:"bdev_number,omitempty"`
 	FileSize    int      `yaml:"bdev_size,omitempty"`
-	Hostname    string   `yaml:"-"` // used when generating templates
 }
 
-func (bc *BdevConfig) checkNonZeroFileSize(class Class) error {
+func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
 	if bc.FileSize == 0 {
 		return errors.Errorf("bdev_class %s requires non-zero bdev_size",
 			class)
@@ -263,29 +298,35 @@ func (bc *BdevConfig) checkNonZeroFileSize(class Class) error {
 	return nil
 }
 
-// Validate sanity checks engine bdev config parameters.
+func (bc *BdevConfig) checkNonEmptyDevList(class Class) error {
+	if len(bc.DeviceList) == 0 {
+		return errors.Errorf("bdev_class %s requires non-empty bdev_list",
+			class)
+	}
+
+	return nil
+}
+
+// Validate sanity checks engine bdev config parameters and update VOS env.
 func (bc *BdevConfig) Validate(class Class) error {
 	if common.StringSliceHasDuplicates(bc.DeviceList) {
 		return errors.New("bdev_list contains duplicate pci addresses")
 	}
+	if bc.FileSize < 0 {
+		return errors.New("negative bdev_size")
+	}
 
 	switch class {
 	case ClassFile:
-		if err := bc.checkNonZeroFileSize(class); err != nil {
+		if err := bc.checkNonEmptyDevList(class); err != nil {
 			return err
 		}
-	case ClassMalloc:
-		if err := bc.checkNonZeroFileSize(class); err != nil {
+		if err := bc.checkNonZeroDevFileSize(class); err != nil {
 			return err
-		}
-		if bc.DeviceCount == 0 {
-			return errors.Errorf("bdev_class %s requires non-zero bdev_number",
-				class)
 		}
 	case ClassKdev:
-		if len(bc.DeviceList) == 0 {
-			return errors.Errorf("bdev_class %s requires non-empty bdev_list",
-				class)
+		if err := bc.checkNonEmptyDevList(class); err != nil {
+			return err
 		}
 	case ClassNvme:
 		for _, pci := range bc.DeviceList {
@@ -294,14 +335,16 @@ func (bc *BdevConfig) Validate(class Class) error {
 				return errors.Wrapf(err, "parse pci address %s", pci)
 			}
 		}
+	default:
+		return errors.Errorf("bdev_class value %q not supported (valid: nvme/kdev/file)", class)
 	}
 
 	return nil
 }
 
 type Config struct {
-	Tiers      TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
-	ConfigPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	MemSize    int         `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
-	VosEnv     string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
+	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	MemSize          int         `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
+	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 }

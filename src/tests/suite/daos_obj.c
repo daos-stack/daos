@@ -1217,7 +1217,6 @@ io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 	/** Lookup */
 	memset(fetch_buf, 0, size);
 	lookup_single(dkey, akey, 0, fetch_buf, size, DAOS_TX_NONE, &req);
-	print_message("\tsize: %lu\n", req.iod[0].iod_size);
 
 	/** Verify data consistency */
 	if (!daos_obj_is_echo(oid)) {
@@ -4141,7 +4140,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	assert_rc_equal(rc, 0);
 
 	cid = daos_obj_id2class(oid);
-	attr = daos_oclass_attr_find(oid);
+	attr = daos_oclass_attr_find(oid, NULL);
 
 	daos_oclass_id2name(cid, name);
 	printf("%s\n", name);

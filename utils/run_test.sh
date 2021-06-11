@@ -92,12 +92,6 @@ if [ -d "/mnt/daos" ]; then
         fi
         COMP="UTEST_control"
         run_test src/control/run_go_tests.sh
-        COMP="UTEST_vos"
-        export DAOS_IO_BYPASS=pm
-        run_test "${SL_PREFIX}/bin/vos_tests" -A 50
-        export DAOS_IO_BYPASS=pm_snap
-        run_test "${SL_PREFIX}/bin/vos_tests" -A 50
-        unset DAOS_IO_BYPASS
         COMP="UTEST_common"
         run_test src/common/tests/btree.sh perf -s 20000
         run_test src/common/tests/btree.sh perf direct -s 20000
@@ -175,6 +169,8 @@ if [ -d "/mnt/daos" ]; then
              -a 5 -n 10
     run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
              -a 5 -n 10 -A
+    run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U Q;p V"' -o 5 -d 5 \
+             -n 10 -A -i -I
     run_test "${SL_PREFIX}/bin/jump_pl_map"
 
     # Tests launched by scripts

@@ -16,7 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func TestBdev_ScanResponse_filter(t *testing.T) {
+func TestProvider_ScanResponse_filter(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 	ctrlr2 := storage.MockNvmeController(2)
 	ctrlr3 := storage.MockNvmeController(3)
@@ -208,7 +208,7 @@ func TestBdev_forwardScan(t *testing.T) {
 	}
 }
 
-func TestBdevScan(t *testing.T) {
+func TestProvider_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 	ctrlr2 := storage.MockNvmeController(2)
 	ctrlr3 := storage.MockNvmeController(3)
@@ -301,7 +301,7 @@ func TestBdevScan(t *testing.T) {
 	}
 }
 
-func TestBdevPrepare(t *testing.T) {
+func TestProvider_Prepare(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req           storage.BdevPrepareRequest
 		shouldForward bool
@@ -370,10 +370,38 @@ func TestBdevFormat(t *testing.T) {
 			req:    storage.BdevFormatRequest{},
 			expErr: errors.New("empty DeviceList"),
 		},
+		"NVMe failure": {
+			req: storage.BdevFormatRequest{
+				Properties: storage.BdevTierProperties{
+					Class:      storage.ClassNvme,
+					DeviceList: []string{mockSingle.PciAddr},
+				},
+			},
+			mbc: &MockBackendConfig{
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockSingle.PciAddr: &storage.BdevDeviceFormatResponse{
+							Error: FaultFormatError(mockSingle.PciAddr,
+								errors.New("foobared")),
+						},
+					},
+				},
+			},
+			expRes: &storage.BdevFormatResponse{
+				DeviceResponses: storage.BdevDeviceFormatResponses{
+					mockSingle.PciAddr: &storage.BdevDeviceFormatResponse{
+						Error: FaultFormatError(mockSingle.PciAddr,
+							errors.New("foobared")),
+					},
+				},
+			},
+		},
 		"NVMe success": {
 			req: storage.BdevFormatRequest{
-				Class:      storage.ClassNvme,
-				DeviceList: []string{mockSingle.PciAddr},
+				Properties: storage.BdevTierProperties{
+					Class:      storage.ClassNvme,
+					DeviceList: []string{mockSingle.PciAddr},
+				},
 			},
 			mbc: &MockBackendConfig{
 				FormatRes: &storage.BdevFormatResponse{

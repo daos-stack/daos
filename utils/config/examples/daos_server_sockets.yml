@@ -67,14 +67,6 @@ engines:
     class: nvme
     bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
 
-    # If emulating NVMe SSD with malloc devices.
-    # class: malloc          # map to VOS_BDEV_CLASS=MALLOC
-    # bdev_size: 4                # malloc size of each device in GB.
-    # bdev_number: 1              # generate nvme.conf as follows:
-                # [Malloc]
-                #   NumberOfLuns 1
-                #   LunSizeInMB 4000
-
     # If emulating NVMe SSD over kernel block device.
     # class: kdev            # map to VOS_BDEV_CLASS=AIO
     # bdev_list: [/dev/sdc]       # generate nvme.conf as follows:

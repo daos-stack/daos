@@ -41,8 +41,6 @@ const (
 	maxEngines         = 2
 )
 
-// TODO: FIX ASAP; critical functionality tested here
-//
 func TestServer_Harness_Start(t *testing.T) {
 	for name, tc := range map[string]struct {
 		trc              *engine.TestRunnerConfig

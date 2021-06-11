@@ -947,6 +947,9 @@ func TestProvider_Format(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
+			testDir, clean := common.CreateTestDir(t)
+			defer clean()
+
 			mbc := &MockBackendConfig{
 				DiscoverErr:         tc.discoverErr,
 				DiscoverRes:         storage.ScmModules{defaultModule},
@@ -968,12 +971,6 @@ func TestProvider_Format(t *testing.T) {
 					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 				}
 			}
-
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(testDir)
 
 			req := tc.request
 			if req == nil {

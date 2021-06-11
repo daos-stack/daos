@@ -182,7 +182,7 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
 
-	if err := c.Storage.Tiers.Validate(); err != nil {
+	if err := c.Storage.Validate(); err != nil {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
@@ -286,9 +286,9 @@ func (c *Config) AppendStorage(cfgs ...*storage.TierConfig) *Config {
 	return c
 }
 
-// WithStorageConfigPath sets the path to the generated NVMe config file used by SPDK.
-func (c *Config) WithStorageConfigPath(cfgPath string) *Config {
-	c.Storage.ConfigPath = cfgPath
+// WithStorageConfigOutputPath sets the path to the generated NVMe config file used by SPDK.
+func (c *Config) WithStorageConfigOutputPath(cfgPath string) *Config {
+	c.Storage.ConfigOutputPath = cfgPath
 	return c
 }
 

@@ -58,6 +58,8 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 type server struct {
 	log         *logging.LeveledLogger
 	cfg         *config.Server
+	hostname    string
+	runningUser string
 	faultDomain *system.FaultDomain
 	ctlAddr     *net.TCPAddr
 	netDevClass uint32
@@ -78,15 +80,23 @@ type server struct {
 }
 
 func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
-	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, errors.Wrap(err, "get hostname")
+	}
 
-	// Create storage subsystem providers.
-	/*scmProvider := scm.DefaultProvider(log)
-	bdevProvider := bdev.DefaultProvider(log)*/
+	cu, err := user.Current()
+	if err != nil {
+		return nil, errors.Wrap(err, "get username")
+	}
+
+	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
 	return &server{
 		log:         log,
 		cfg:         cfg,
+		hostname:    hostname,
+		runningUser: cu.Username,
 		faultDomain: faultDomain,
 		harness:     harness,
 	}, nil
@@ -181,12 +191,7 @@ func (srv *server) initNetwork(ctx context.Context) error {
 func (srv *server) initStorage() error {
 	defer srv.logDuration(track("time to init storage"))
 
-	runningUser, err := user.Current()
-	if err != nil {
-		return errors.Wrap(err, "unable to lookup current user")
-	}
-
-	if err := prepBdevStorage(srv, runningUser, iommuDetected(), getHugePageInfo); err != nil {
+	if err := prepBdevStorage(srv, iommuDetected(), getHugePageInfo); err != nil {
 		return err
 	}
 
@@ -229,7 +234,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 			return err
 		}
 
-		registerEngineCallbacks(engine, srv.pubSub, &allStarted)
+		registerEngineEventCallbacks(engine, srv.hostname, srv.pubSub, &allStarted)
 
 		if err := srv.harness.AddInstance(engine); err != nil {
 			return err
@@ -283,13 +288,13 @@ func (srv *server) registerEvents() {
 	registerFollowerSubscriptions(srv)
 
 	srv.sysdb.OnLeadershipGained(func(ctx context.Context) error {
-		srv.log.Infof("MS leader running on %s", hostname())
+		srv.log.Infof("MS leader running on %s", srv.hostname)
 		srv.mgmtSvc.startJoinLoop(ctx)
 		registerLeaderSubscriptions(srv)
 		return nil
 	})
 	srv.sysdb.OnLeadershipLost(func() error {
-		srv.log.Infof("MS leader no longer running on %s", hostname())
+		srv.log.Infof("MS leader no longer running on %s", srv.hostname)
 		registerFollowerSubscriptions(srv)
 		return nil
 	})

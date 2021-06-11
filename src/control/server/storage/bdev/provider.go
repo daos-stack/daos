@@ -28,6 +28,7 @@ type (
 		DisableVMD()
 		IsVMDDisabled() bool
 		UpdateFirmware(pciAddr string, path string, slot int32) error
+		WriteNvmeConfig(storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error)
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -165,7 +166,7 @@ func (p *Provider) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepare
 // Format attempts to initialize NVMe devices for use by DAOS.
 // Note that this is a no-op for non-NVMe devices.
 func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	if len(req.DeviceList) == 0 {
+	if len(req.Properties.DeviceList) == 0 {
 		return nil, errors.New("empty DeviceList in FormatRequest")
 	}
 
@@ -179,4 +180,8 @@ func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatRes
 	}
 
 	return p.backend.Format(req)
+}
+
+func (p *Provider) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error) {
+	return p.backend.WriteNvmeConfig(req)
 }

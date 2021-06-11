@@ -281,10 +281,9 @@
 #    # Backend block device type. Force a SPDK driver to be used by this engine
 #    # instance.
 #    # Options are:
-#    # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
-#    # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
-#    # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
-#    # - "kdev" to use a kernel block device, bdev_{size,number} ignored
+#    # - "nvme" for NVMe SSDs (preferred option), bdev_size ignored
+#    # - "file" to emulate a NVMe SSD with a regular file
+#    # - "kdev" to use a kernel block device, bdev_size ignored
 #    # Immutable after reformat.
 #
 #    class: nvme
@@ -386,16 +385,9 @@
 #    # instance.
 #    # Options are:
 #    # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
-#    # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
 #    # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
 #    # - "kdev" to use a kernel block device, bdev_{size,number} ignored
 #    # Immutable after reformat.
-#
-#    # When class is set to malloc, bdev_number is the number of devices
-#    # to allocate and bdev_size is the size in GB of each LUN/device.
-#    class: malloc
-#    bdev_number: 1
-#    bdev_size: 4
 #
 #    # When class is set to file, Linux AIO will be used to emulate NVMe.
 #    # The size of file that will be created is specified by bdev_size in GB units.

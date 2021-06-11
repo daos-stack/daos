@@ -660,7 +660,6 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			accessPoints:   []string{"hostX"},
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
-			numaSSDs:       nil,
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10001").WithEngines(
 				defaultEngineCfg(0).
@@ -674,6 +673,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 					).
+					// out path blank if bdev_list empty
+					WithStorageConfigOutputPath("").
 					WithHelperStreamCount(7)),
 		},
 		"access point with valid port": {
@@ -681,7 +682,6 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			accessPoints:   []string{"hostX:10002"},
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
-			numaSSDs:       nil,
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithEngines(
 				defaultEngineCfg(0).
@@ -695,6 +695,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 					).
+					WithStorageConfigOutputPath("").
 					WithHelperStreamCount(7)),
 		},
 		"access point with invalid port": {
@@ -702,7 +703,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			accessPoints:   []string{"hostX:-10001"},
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
-			numaSSDs:       nil,
+			numaSSDs:       numaSSDsMap{0: []string{}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expErr:         config.FaultConfigBadControlPort,
 		},
@@ -711,7 +712,6 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			accessPoints:   []string{"192.168.1.1:10002"},
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
-			numaSSDs:       nil,
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("192.168.1.1:10002").WithEngines(
 				defaultEngineCfg(0).
@@ -725,6 +725,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 					).
+					WithStorageConfigOutputPath("").
 					WithHelperStreamCount(7)),
 		},
 		"access point ip with invalid port": {
@@ -732,7 +733,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			accessPoints:   []string{"192.168.1.1:-10001"},
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
-			numaSSDs:       nil,
+			numaSSDs:       numaSSDsMap{0: []string{}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expErr:         config.FaultConfigBadControlPort,
 		},
@@ -758,6 +759,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithBdevClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(common.MockPCIAddr(1)),
 					).
+					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
+					WithStorageVosEnv("NVME").
 					WithHelperStreamCount(7)),
 		},
 		"dual pmem dual ssd": {
@@ -786,6 +789,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithBdevClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...),
 					).
+					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
+					WithStorageVosEnv("NVME").
 					WithHelperStreamCount(7),
 				defaultEngineCfg(1).
 					WithFabricInterface("ib1").
@@ -802,6 +807,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithBdevClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
 					).
+					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
+					WithStorageVosEnv("NVME").
 					WithTargetCount(15).
 					WithHelperStreamCount(6)),
 		},

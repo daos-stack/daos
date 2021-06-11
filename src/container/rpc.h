@@ -38,6 +38,9 @@
 	X(CONT_OPEN,							\
 		0, &CQF_cont_open,					\
 		ds_cont_op_handler, NULL),				\
+	X(CONT_OPEN_BYLABEL,						\
+		0, &CQF_cont_open_bylabel,				\
+		ds_cont_op_handler, NULL),				\
 	X(CONT_CLOSE,							\
 		0, &CQF_cont_close,					\
 		ds_cont_op_handler, NULL),				\
@@ -164,6 +167,25 @@ CRT_RPC_DECLARE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
 
 CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
 
+/* Container open bylabel input
+ * Must begin with what DAOS_ISEQ_CONT_OPEN has, for reusing cont_open_in
+ * in the common code. coi_op.ci_uuid is ignored.
+ */
+#define DAOS_ISEQ_CONT_OPEN_BYLABEL	/* input fields */	 \
+	DAOS_ISEQ_CONT_OPEN					 \
+	((d_const_string_t)	(coli_label)		CRT_VAR)
+
+/* Container open bylabel output
+ * Must begin with what DAOS_OSEQ_CONT_OPEN has, for reusing cont_open_out
+ * in the common code.
+ */
+#define DAOS_OSEQ_CONT_OPEN_BYLABEL	/* output fields */	 \
+	DAOS_OSEQ_CONT_OPEN					 \
+	((uuid_t)		(colo_uuid)		CRT_VAR)
+
+CRT_RPC_DECLARE(cont_open_bylabel, DAOS_ISEQ_CONT_OPEN_BYLABEL,
+		DAOS_OSEQ_CONT_OPEN_BYLABEL)
+
 #define DAOS_ISEQ_CONT_CLOSE	/* input fields */		 \
 	((struct cont_op_in)	(cci_op)		CRT_VAR)
 
@@ -192,8 +214,9 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_ROOTS		(1ULL << 16)
 #define DAOS_CO_QUERY_PROP_CO_STATUS		(1ULL << 17)
 #define DAOS_CO_QUERY_PROP_ALLOCED_OID		(1ULL << 18)
+#define DAOS_CO_QUERY_PROP_EC_CELL_SZ		(1ULL << 19)
 
-#define DAOS_CO_QUERY_PROP_BITS_NR		(19)
+#define DAOS_CO_QUERY_PROP_BITS_NR		(20)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
 

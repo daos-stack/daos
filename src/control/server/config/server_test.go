@@ -67,14 +67,14 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 		}
 		key := fields[0]
 
-		// If we're in a server or storage config, reset the
+		// If we're in a server or a storage tier config, reset the
 		// seen map to allow the same params in different
 		// server configs.
-		if line == "-" || line == "  -" {
+		lineTmp := strings.TrimLeft(line, " ")
+		if lineTmp == "-" {
 			seenKeys = make(map[string]struct{})
 		}
 		if _, seen := seenKeys[key]; seen && strings.HasSuffix(key, ":") {
-			t.Logf("skipping duplicate key %q", key)
 			continue
 		}
 		seenKeys[key] = struct{}{}
@@ -86,7 +86,8 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 	}
 }
 
-// supply mock external interface, populates config from given file path
+// mockConfigFromFile returns a populated server config file from the
+// file at the given path.
 func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
 	t.Helper()
 	c := DefaultServer().
@@ -264,10 +265,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 						WithScmClass("dcpm").
 						WithScmDeviceList("/dev/pmem0"),
 					storage.NewTierConfig().
-						WithBdevClass("malloc").
+						WithBdevClass("file").
 						WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-						WithBdevDeviceCount(1).
-						WithBdevFileSize(4),
+						WithBdevFileSize(16),
 				).
 				WithFabricInterface("qib1").
 				WithFabricInterfacePort(20000).
@@ -743,13 +743,13 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithBdevClass(storage.ClassNvme.String()).
-						WithBdevDeviceList("0000:00:01.0"),
+						WithBdevDeviceList(MockPCIAddr(1)),
 				),
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
 						WithBdevClass(storage.ClassNvme.String()).
-						WithBdevDeviceList("0000:00:01.1", "0000:00:01.0"),
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
 				),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
 		},

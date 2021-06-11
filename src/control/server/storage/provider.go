@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
@@ -202,6 +203,61 @@ func (p *Provider) HasBlockDevices() bool {
 	return false
 }
 
+func BdevTierPropertiesFromConfig(cfg *TierConfig) BdevTierProperties {
+	return BdevTierProperties{
+		Class:      cfg.Class,
+		DeviceList: cfg.Bdev.DeviceList,
+		// cfg size in nr GiBytes
+		DeviceFileSize: uint64(humanize.GiByte * cfg.Bdev.FileSize),
+		Tier:           cfg.Tier,
+	}
+}
+
+// todo_tiering: merge ret error
+// FormatRequestFromConfig returns a format request populated from a bdev
+// storage configuration.
+func BdevFormatRequestFromConfig(log logging.Logger, cfg *TierConfig) (BdevFormatRequest, error) {
+	fr := BdevFormatRequest{
+		Properties: BdevTierPropertiesFromConfig(cfg),
+		OwnerUID:   os.Geteuid(),
+		OwnerGID:   os.Getegid(),
+	}
+
+	hn, err := os.Hostname()
+	if err != nil {
+		log.Errorf("get hostname: %s", err)
+		return fr, err
+	}
+	fr.Properties.Hostname = hn
+
+	return fr, nil
+}
+
+// todo_tiering: merge ret error
+func BdevWriteNvmeConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWriteNvmeConfigRequest, error) {
+	bdevTiers := cfg.Tiers.BdevConfigs()
+	req := BdevWriteNvmeConfigRequest{
+		ConfigOutputPath: cfg.ConfigOutputPath,
+		OwnerUID:         os.Geteuid(),
+		OwnerGID:         os.Getegid(),
+	}
+
+	hn, err := os.Hostname()
+	if err != nil {
+		log.Errorf("get hostname: %s", err)
+		return req, err
+	}
+
+	req.TierProps = make([]BdevTierProperties, 0, len(bdevTiers))
+	for _, tier := range bdevTiers {
+		tierProps := BdevTierPropertiesFromConfig(tier)
+		tierProps.Hostname = hn
+		req.TierProps = append(req.TierProps, tierProps)
+	}
+
+	return req, nil
+}
+
 type BdevTierFormatResult struct {
 	Tier   int
 	Error  error
@@ -222,11 +278,15 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 			p.engineIndex, cfg.Class, cfg.Bdev.DeviceList)
 
 		results[i].Tier = cfg.Tier
-		results[i].Result, results[i].Error = p.Bdev.Format(BdevFormatRequest{
-			Class:      cfg.Class,
-			DeviceList: cfg.Bdev.DeviceList,
-			MemSize:    p.engineStorage.MemSize,
-		})
+		req, err := BdevFormatRequestFromConfig(p.log, cfg)
+		if err != nil {
+			results[i].Error = err
+			p.log.Errorf("Instance %d: format failed (%s)", err)
+			continue
+		}
+
+		req.MemSize = p.engineStorage.MemSize
+		results[i].Result, results[i].Error = p.Bdev.Format(req)
 
 		if err := results[i].Error; err != nil {
 			p.log.Errorf("Instance %d: format failed (%s)", err)
@@ -238,6 +298,16 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 	}
 
 	return
+}
+
+func (p *Provider) WriteNvmeConfig() error {
+	req, err := BdevWriteNvmeConfigRequestFromConfig(p.log, p.engineStorage)
+	if err != nil {
+		return err
+	}
+
+	_, err = p.Bdev.WriteNvmeConfig(req)
+	return err
 }
 
 type BdevTierScanResult struct {
@@ -292,20 +362,6 @@ func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err
 	}
 
 	return
-}
-
-func (p *Provider) GenEngineConfig() error {
-	cfgScm, err := p.GetScmConfig()
-	if err != nil {
-		return err
-	}
-
-	bcp, err := NewClassProvider(p.log, cfgScm.Scm.MountPoint, p.engineStorage)
-	if err != nil {
-		return err
-	}
-
-	return bcp.GenConfigFile()
 }
 
 func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -61,7 +62,7 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 	}
 }
 
-func TestBdev_Backend_Scan(t *testing.T) {
+func TestBackend_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 
 	for name, tc := range map[string]struct {
@@ -110,10 +111,13 @@ func TestBdev_Backend_Scan(t *testing.T) {
 	}
 }
 
-func TestBdev_Backend_Format(t *testing.T) {
+func TestBackend_Format(t *testing.T) {
 	pci1 := storage.MockNvmeController(1).PciAddr
 	pci2 := storage.MockNvmeController(2).PciAddr
 	pci3 := storage.MockNvmeController(3).PciAddr
+
+	testDir, clean := common.CreateTestDir(t)
+	defer clean()
 
 	for name, tc := range map[string]struct {
 		req     storage.BdevFormatRequest
@@ -122,33 +126,16 @@ func TestBdev_Backend_Format(t *testing.T) {
 		expResp *storage.BdevFormatResponse
 		expErr  error
 	}{
-		"empty device list": {
-			req: storage.BdevFormatRequest{
-				Class: storage.ClassNvme,
-			},
-			expErr: errors.New("empty pci address list in nvme format request"),
-		},
 		"unknown device class": {
 			req: storage.BdevFormatRequest{
-				Class:      storage.Class("whoops"),
-				DeviceList: []string{pci1},
+				Properties: storage.BdevTierProperties{
+					Class:      storage.Class("whoops"),
+					DeviceList: []string{pci1},
+				},
 			},
 			expErr: FaultFormatUnknownClass("whoops"),
 		},
-		"aio malloc device class": {
-			mec: spdk.MockEnvCfg{
-				InitErr: errors.New("spdk backend init should not be called for non-nvme class"),
-			},
-			mnc: spdk.MockNvmeCfg{
-				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
-			},
-			req: storage.BdevFormatRequest{
-				Class: storage.ClassMalloc,
-			},
-			expResp: &storage.BdevFormatResponse{
-				DeviceResponses: map[string]*storage.BdevDeviceFormatResponse{},
-			},
-		},
+
 		"aio file device class": {
 			mec: spdk.MockEnvCfg{
 				InitErr: errors.New("spdk backend init should not be called for non-nvme class"),
@@ -157,12 +144,15 @@ func TestBdev_Backend_Format(t *testing.T) {
 				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
 			},
 			req: storage.BdevFormatRequest{
-				Class:      storage.ClassFile,
-				DeviceList: []string{"/tmp/daos-bdev"},
+				Properties: storage.BdevTierProperties{
+					Class:          storage.ClassFile,
+					DeviceList:     []string{filepath.Join(testDir, "daos-bdev")},
+					DeviceFileSize: humanize.MiByte,
+				},
 			},
 			expResp: &storage.BdevFormatResponse{
 				DeviceResponses: map[string]*storage.BdevDeviceFormatResponse{
-					"/tmp/daos-bdev": new(storage.BdevDeviceFormatResponse),
+					filepath.Join(testDir, "daos-bdev"): new(storage.BdevDeviceFormatResponse),
 				},
 			},
 		},
@@ -174,8 +164,10 @@ func TestBdev_Backend_Format(t *testing.T) {
 				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
 			},
 			req: storage.BdevFormatRequest{
-				Class:      storage.ClassKdev,
-				DeviceList: []string{"/dev/sdc", "/dev/sdd"},
+				Properties: storage.BdevTierProperties{
+					Class:      storage.ClassKdev,
+					DeviceList: []string{"/dev/sdc", "/dev/sdd"},
+				},
 			},
 			expResp: &storage.BdevFormatResponse{
 				DeviceResponses: map[string]*storage.BdevDeviceFormatResponse{
@@ -189,15 +181,19 @@ func TestBdev_Backend_Format(t *testing.T) {
 				FormatErr: errors.New("spdk says no"),
 			},
 			req: storage.BdevFormatRequest{
-				Class:      storage.ClassNvme,
-				DeviceList: []string{pci1},
+				Properties: storage.BdevTierProperties{
+					Class:      storage.ClassNvme,
+					DeviceList: []string{pci1},
+				},
 			},
 			expErr: errors.New("spdk says no"),
 		},
 		"empty results from binding": {
 			req: storage.BdevFormatRequest{
-				Class:      storage.ClassNvme,
-				DeviceList: []string{pci1},
+				Properties: storage.BdevTierProperties{
+					Class:      storage.ClassNvme,
+					DeviceList: []string{pci1},
+				},
 			},
 			expErr: errors.New("empty results from spdk binding format request"),
 		},
@@ -208,8 +204,10 @@ func TestBdev_Backend_Format(t *testing.T) {
 				},
 			},
 			req: storage.BdevFormatRequest{
-				Class:      storage.ClassNvme,
-				DeviceList: []string{pci1},
+				Properties: storage.BdevTierProperties{
+					Class:      storage.ClassNvme,
+					DeviceList: []string{pci1},
+				},
 			},
 			expResp: &storage.BdevFormatResponse{
 				DeviceResponses: map[string]*storage.BdevDeviceFormatResponse{
@@ -231,8 +229,10 @@ func TestBdev_Backend_Format(t *testing.T) {
 				},
 			},
 			req: storage.BdevFormatRequest{
-				Class:      storage.ClassNvme,
-				DeviceList: []string{pci1, pci2, pci3},
+				Properties: storage.BdevTierProperties{
+					Class:      storage.ClassNvme,
+					DeviceList: []string{pci1, pci2, pci3},
+				},
 			},
 			expResp: &storage.BdevFormatResponse{
 				DeviceResponses: storage.BdevDeviceFormatResponses{
@@ -263,8 +263,10 @@ func TestBdev_Backend_Format(t *testing.T) {
 				},
 			},
 			req: storage.BdevFormatRequest{
-				Class:      storage.ClassNvme,
-				DeviceList: []string{pci1, pci2, pci3},
+				Properties: storage.BdevTierProperties{
+					Class:      storage.ClassNvme,
+					DeviceList: []string{pci1, pci2, pci3},
+				},
 			},
 			expResp: &storage.BdevFormatResponse{
 				DeviceResponses: storage.BdevDeviceFormatResponses{
@@ -294,8 +296,10 @@ func TestBdev_Backend_Format(t *testing.T) {
 				},
 			},
 			req: storage.BdevFormatRequest{
-				Class:      storage.ClassNvme,
-				DeviceList: []string{pci1},
+				Properties: storage.BdevTierProperties{
+					Class:      storage.ClassNvme,
+					DeviceList: []string{pci1},
+				},
 			},
 			expResp: &storage.BdevFormatResponse{
 				DeviceResponses: storage.BdevDeviceFormatResponses{
@@ -327,8 +331,10 @@ func TestBdev_Backend_Format(t *testing.T) {
 				},
 			},
 			req: storage.BdevFormatRequest{
-				Class:      storage.ClassNvme,
-				DeviceList: []string{pci1},
+				Properties: storage.BdevTierProperties{
+					Class:      storage.ClassNvme,
+					DeviceList: []string{pci1},
+				},
 			},
 			expResp: &storage.BdevFormatResponse{
 				DeviceResponses: storage.BdevDeviceFormatResponses{
@@ -349,6 +355,10 @@ func TestBdev_Backend_Format(t *testing.T) {
 
 			b := backendWithMockBinding(log, tc.mec, tc.mnc)
 
+			// output path would be set during config validate
+			tc.req.OwnerUID = os.Geteuid()
+			tc.req.OwnerGID = os.Getegid()
+
 			gotResp, gotErr := b.Format(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
@@ -358,11 +368,22 @@ func TestBdev_Backend_Format(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
+
+			if tc.req.Properties.Class != storage.ClassFile {
+				return
+			}
+
+			// verify empty files created for AIO class
+			for _, testFile := range tc.req.Properties.DeviceList {
+				if _, err := os.Stat(testFile); err != nil {
+					t.Fatal(err)
+				}
+			}
 		})
 	}
 }
 
-func TestBdev_Backend_Update(t *testing.T) {
+func TestBackend_Update(t *testing.T) {
 	numCtrlrs := 4
 	controllers := make(storage.NvmeControllers, 0, numCtrlrs)
 	for i := 0; i < numCtrlrs; i++ {
@@ -455,7 +476,7 @@ type testWalkInput struct {
 	expErr error
 }
 
-func TestBdev_Backend_cleanHugePagesFn(t *testing.T) {
+func TestBackend_cleanHugePagesFn(t *testing.T) {
 	testDir := "/wherever"
 
 	for name, tc := range map[string]struct {

@@ -486,8 +486,10 @@ func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
 func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 	bdevFormatReqPayload, err := json.Marshal(storage.BdevFormatRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
-		Class:              storage.ClassNvme,
-		DeviceList:         []string{"foo"},
+		Properties: storage.BdevTierProperties{
+			Class:      storage.ClassNvme,
+			DeviceList: []string{"foo"},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)

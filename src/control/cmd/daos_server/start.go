@@ -65,16 +65,7 @@ func (cmd *startCmd) setCLIOverrides() error {
 	}
 	cmd.config.RecreateSuperblocks = cmd.RecreateSuperblocks
 
-	host, err := os.Hostname()
-	if err != nil {
-		return err
-	}
-
 	for _, srv := range cmd.config.Engines {
-		for _, storageCfg := range srv.Storage.Tiers {
-			storageCfg.Bdev.Hostname = host
-		}
-
 		if cmd.Targets > 0 {
 			srv.WithTargetCount(int(cmd.Targets))
 		}

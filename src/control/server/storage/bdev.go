@@ -197,6 +197,7 @@ type (
 		Format(BdevFormatRequest) (*BdevFormatResponse, error)
 		QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error)
 		UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error)
+		WriteNvmeConfig(BdevWriteNvmeConfigRequest) (*BdevWriteNvmeConfigResponse, error)
 	}
 
 	// BdevScanRequest defines the parameters for a Scan operation.
@@ -230,13 +231,36 @@ type (
 		VmdDetected bool
 	}
 
+	// BdevTierProperties contains basic configuration properties of a bdev tier.
+	BdevTierProperties struct {
+		Class          Class
+		DeviceList     []string
+		DeviceFileSize uint64 // size in bytes for NVMe device emulation
+		Hostname       string
+		Tier           int
+	}
+
 	// BdevFormatRequest defines the parameters for a Format operation.
 	BdevFormatRequest struct {
 		pbin.ForwardableRequest
-		Class      Class
-		DeviceList []string
+		Properties BdevTierProperties
 		MemSize    int // size MiB memory to be used by SPDK proc
+		OwnerUID   int
+		OwnerGID   int
 		DisableVMD bool
+	}
+
+	// BdevWriteNvmeConfigRequest defines the parameters for a WriteConfig operation.
+	BdevWriteNvmeConfigRequest struct {
+		pbin.ForwardableRequest
+		ConfigOutputPath string
+		OwnerUID         int
+		OwnerGID         int
+		TierProps        []BdevTierProperties
+	}
+
+	// BdevWriteNvmeConfigResponse contains the result of a WriteConfig operation.
+	BdevWriteNvmeConfigResponse struct {
 	}
 
 	// BdevDeviceFormatRequest designs the parameters for a device-specific format.
@@ -355,6 +379,15 @@ func (f *BdevAdminForwarder) Format(req BdevFormatRequest) (*BdevFormatResponse,
 		return nil, err
 	}
 
+	return res, nil
+}
+
+func (f *BdevAdminForwarder) WriteNvmeConfig(req BdevWriteNvmeConfigRequest) (*BdevWriteNvmeConfigResponse, error) {
+	req.Forwarded = true
+	res := new(BdevWriteNvmeConfigResponse)
+	if err := f.SendReq("BdevWriteNvmeConfig", req, res); err != nil {
+		return nil, err
+	}
 	return res, nil
 }
 

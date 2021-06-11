@@ -110,6 +110,10 @@ func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {
 	return mb.cfg.UpdateErr
 }
 
+func (mb *MockBackend) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error) {
+	return &storage.BdevWriteNvmeConfigResponse{}, nil
+}
+
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {
 	return NewProvider(log, NewMockBackend(mbc))
 }
