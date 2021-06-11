@@ -526,8 +526,9 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expParseErr: errors.New("field engine not found"),
 		},
 		"use legacy servers conf directive rather than engines": {
-			inTxt:  "engines:",
-			outTxt: "servers:",
+			inTxt:          "engines:",
+			outTxt:         "servers:",
+			expValidateErr: errors.New("use \"engines\" instead"),
 		},
 		"specify legacy servers conf directive in addition to engines": {
 			inTxt:  "engines:",
@@ -536,7 +537,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 				var nilEngineConfig *engine.Config
 				return c.WithEngines(nilEngineConfig)
 			},
-			expValidateErr: errors.New("cannot specify both"),
+			expValidateErr: errors.New("use \"engines\" instead"),
 		},
 		"duplicates in bdev_list from config": {
 			extraConfig: func(c *Server) *Server {

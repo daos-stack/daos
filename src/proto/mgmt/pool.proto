@@ -135,7 +135,8 @@ message ListPoolsReq {
 message ListPoolsResp {
 	message Pool {
 		string uuid = 1; // uuid of pool
-		repeated uint32 svc_reps = 2; // pool service replica ranks
+		string label = 2; // pool label
+		repeated uint32 svc_reps = 3; // pool service replica ranks
 	}
 	int32 status = 1; // DAOS error code
 	repeated Pool pools = 2; // pools list
@@ -203,14 +204,15 @@ message PoolRebuildStatus {
 message PoolQueryResp {
 	int32 status = 1; // DAOS error code
 	string uuid = 2; // pool uuid
-	uint32 total_targets = 3; // total targets in pool
-	uint32 active_targets = 4; // active targets in pool
-	uint32 disabled_targets = 5; // number of disabled targets in pool
-	PoolRebuildStatus rebuild = 6; // pool rebuild status
-	repeated StorageUsageStats tier_stats = 7; // storage tiers usage stats
-	uint32 total_nodes = 8; // total nodes in pool
-	uint32 version = 9; // latest pool map version
-	uint32 leader = 10; // current raft leader
+	string label = 3; // pool label
+	uint32 total_targets = 4; // total targets in pool
+	uint32 active_targets = 5; // active targets in pool
+	uint32 disabled_targets = 6; // number of disabled targets in pool
+	PoolRebuildStatus rebuild = 7; // pool rebuild status
+	repeated StorageUsageStats tier_stats = 8; // storage tiers usage stats
+	uint32 total_nodes = 9; // total nodes in pool
+	uint32 version = 10; // latest pool map version
+	uint32 leader = 11; // current raft leader
 }
 
 // PoolSetPropReq represents a request to set a pool property.

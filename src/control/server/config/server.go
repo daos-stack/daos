@@ -54,8 +54,8 @@ type Server struct {
 	// control-specific
 	ControlPort     int                       `yaml:"port"`
 	TransportConfig *security.TransportConfig `yaml:"transport_config"`
-	// support both "engines:" and "servers:" for backward compatibility
-	Servers             []*engine.Config `yaml:"servers"`
+	// Detect outdated "servers" config, to direct users to change their config file
+	Servers             []*engine.Config `yaml:"servers,omitempty"`
 	Engines             []*engine.Config `yaml:"engines"`
 	BdevInclude         []string         `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string         `yaml:"bdev_exclude,omitempty"`
@@ -441,17 +441,10 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}()
 
-	// For backwards compatibility, allow specifying "servers" rather than
-	// "engines" in the server config file.
+	// The config file format no longer supports "servers"
 	if len(cfg.Servers) > 0 {
-		log.Info("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
-		if len(cfg.Engines) > 0 {
-			return errors.New("cannot specify both servers and engines")
-		}
-		// replace and update engine configs
-		cfg = cfg.WithEngines(cfg.Servers...)
+		return errors.New("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
 	}
-	cfg.Servers = nil
 
 	for idx, ec := range cfg.Engines {
 		if ec.LegacyStorage.WasDefined() {

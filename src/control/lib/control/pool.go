@@ -34,14 +34,16 @@ type (
 	// Pool contains a unified representation of a DAOS Storage Pool.
 	Pool struct {
 		// UUID uniquely identifies a pool within the system.
-		UUID string
+		UUID string `json:"uuid"`
+		// Label is an optional human-friendly identifier for a pool.
+		Label string `json:"label,omitempty"`
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
-		ServiceReplicas []system.Rank
+		ServiceReplicas []system.Rank `json:"svc_replicas"`
 
 		// Info contains information about the pool learned from a
 		// query operation.
-		Info PoolInfo
+		Info PoolInfo `json:"info"`
 	}
 )
 

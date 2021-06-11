@@ -880,6 +880,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 	for _, ps := range psList {
 		resp.Pools = append(resp.Pools, &mgmtpb.ListPoolsResp_Pool{
 			Uuid:    ps.PoolUUID.String(),
+			Label:   ps.PoolLabel,
 			SvcReps: system.RanksToUint32(ps.Replicas),
 		})
 	}
