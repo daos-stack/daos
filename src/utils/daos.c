@@ -258,7 +258,6 @@ tobytes(const char *str)
 	return size;
 }
 
-
 static int
 epoch_range_parse(struct cmd_args_s *ap)
 {
@@ -306,7 +305,7 @@ daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 	if (*end != '.')
 		return -1;
 
-	ptr = end+1;
+	ptr = end + 1;
 
 	lo = strtoull(ptr, &end, 10);
 	if (ptr[0] == '-')
@@ -341,7 +340,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_LABEL;
-		entry->dpe_str = strdup(value);
+		D_STRNDUP(entry->dpe_str, value, len);
 	} else if (!strcmp(name, "cksum")) {
 		int csum_type = daos_str2csumcontprop(value);
 
@@ -635,6 +634,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
 		return RC_NO_HELP;
+
+	ap->outstream = stdout;
+	ap->errstream = stderr;
 
 	if ((strcmp(argv[1], "container") == 0) ||
 	    (strcmp(argv[1], "cont") == 0)) {
@@ -996,7 +998,7 @@ fs_op_hdlr(struct cmd_args_s *ap)
 {
 	enum fs_op	op;
 	char		*name = NULL, *dir_name = NULL;
-	int		rc = 0;
+	int		rc = 0, rc2 = 0;
 
 	assert(ap != NULL);
 	op = ap->fs_op;
@@ -1067,6 +1069,26 @@ fs_op_hdlr(struct cmd_args_s *ap)
 			ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 			ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
 		}
+
+		rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
+				&ap->pool, NULL, NULL);
+		if (rc != 0) {
+			fprintf(stderr,
+				"failed to connect to pool "DF_UUIDF": %s (%d)\n",
+				DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+			return rc;
+		}
+
+		rc = daos_cont_open(ap->pool, ap->c_uuid,
+				    DAOS_COO_RW | DAOS_COO_FORCE,
+				    &ap->cont, NULL, NULL);
+		if (rc != 0) {
+			fprintf(stderr,
+				"failed to open container "DF_UUIDF ": %s (%d)\n",
+				DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			D_GOTO(out_disconnect, rc);
+		}
+
 		rc = fs_dfs_hdlr(ap);
 		if (rc)
 			D_GOTO(out, rc);
@@ -1075,6 +1097,14 @@ fs_op_hdlr(struct cmd_args_s *ap)
 		break;
 	}
 
+out_disconnect:
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr,
+			"failed to disconnect from pool "DF_UUIDF": %s (%d)\n",
+			DP_UUID(ap->p_uuid), d_errdesc(rc2), rc2);
+	if (rc == 0)
+		rc = rc2;
 out:
 	D_FREE(dir_name);
 	D_FREE(name);
@@ -1238,7 +1268,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_create_snap_hdlr(ap);
 		break;
 	case CONT_LIST_SNAPS:
-		rc = cont_list_snaps_hdlr(ap, NULL, NULL);
+		ap->snapname_str = NULL;
+		ap->epc = 0;
+		rc = cont_list_snaps_hdlr(ap);
 		break;
 	case CONT_DESTROY_SNAP:
 		rc = cont_destroy_snap_hdlr(ap);
@@ -1494,7 +1526,6 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	fprintf(stream, "daos command (v%s), libdaos %d.%d.%d\n",
 		DAOS_VERSION, DAOS_API_VERSION_MAJOR,
 		DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
-
 
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();

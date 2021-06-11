@@ -2098,6 +2098,10 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 	case DAOS_OBJ_RPC_PUNCH: {
 		daos_obj_punch_t *p_args = args;
 
+		obj = obj_hdl2ptr(p_args->oh);
+		if (obj == NULL)
+			D_GOTO(out, rc = -DER_NO_HDL);
+
 		if (daos_handle_is_valid(p_args->th))
 			D_GOTO(out_tx, rc = 0);
 
