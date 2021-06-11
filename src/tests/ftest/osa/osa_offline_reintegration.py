@@ -96,19 +96,10 @@ class OSAOfflineReintegration(OSAUtils):
                     else:
                         output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                                rank[val])
-                    # Check the IOR data after exclude
-                    # Just read the first exclude alone. With
-                    # RF set to different values, excluding more than
-                    # one rank reports IOR failure due to RF.
-                    if data and (val == 0):
-                        self.run_ior_thread("Read", oclass, test_seq)
                 else:
                     output = self.dmg_command.system_stop(ranks=rank[val],
                                                           force=True)
                     self.print_and_assert_on_rebuild_failure(output)
-                    # Check the IOR data after system stop
-                    if data and (val == 0):
-                        self.run_ior_thread("Read", oclass, test_seq)
                     output = self.dmg_command.system_start(ranks=rank[val])
                 # Just try to reintegrate rank 5
                 if (self.test_during_rebuild is True and val == 2):
@@ -121,8 +112,8 @@ class OSAOfflineReintegration(OSAUtils):
                 self.log.info("Pool Version after exclude %s", pver_exclude)
                 # Check pool version incremented after pool exclude
                 # pver_exclude should be greater than
-                # pver_begin + 3 (2 targets + exclude)
-                self.assertTrue(pver_exclude > (pver_begin + 3),
+                # pver_begin + 2 (1 target + exclude)
+                self.assertTrue(pver_exclude > (pver_begin + 1),
                                 "Pool Version Error: After exclude")
 
             # Reintegrate the ranks which was excluded
