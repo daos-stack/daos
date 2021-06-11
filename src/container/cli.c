@@ -2211,13 +2211,8 @@ dc_cont_list_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
-	rc = daos_rpc_send(cb_args.cra_rpc, task);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	return daos_rpc_send(cb_args.cra_rpc, task);
 
-	return rc;
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to list container attributes: "DF_RC"\n",
@@ -2369,13 +2364,8 @@ dc_cont_get_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
-	rc = daos_rpc_send(cb_args.cra_rpc, task);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	return daos_rpc_send(cb_args.cra_rpc, task);
 
-	return rc;
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to get container attributes: "DF_RC"\n",
@@ -2428,13 +2418,8 @@ dc_cont_set_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
-	rc = daos_rpc_send(cb_args.cra_rpc, task);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	return daos_rpc_send(cb_args.cra_rpc, task);
 
-	return rc;
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to set container attributes: "DF_RC"\n",
@@ -2471,23 +2456,22 @@ dc_cont_del_attr(tse_task_t *task)
 	in->cadi_count = args->n;
 	rc = attr_bulk_create(args->n, (char **)args->names, NULL, NULL,
 			      daos_task2ctx(task), CRT_BULK_RO, &in->cadi_bulk);
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	if (rc != 0) {
+		cont_req_cleanup(CLEANUP_RPC, &cb_args);
+		D_GOTO(out, rc);
+	}
 
 	cb_args.cra_bulk = in->cadi_bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	if (rc != 0) {
+		cont_req_cleanup(CLEANUP_BULK, &cb_args);
+		D_GOTO(out, rc);
+	}
 
 	crt_req_addref(cb_args.cra_rpc);
-	rc = daos_rpc_send(cb_args.cra_rpc, task);
-	if (rc != 0)
-		D_GOTO(cleanup, rc);
+	return daos_rpc_send(cb_args.cra_rpc, task);
 
-	return rc;
-cleanup:
-	cont_req_cleanup(CLEANUP_BULK, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to del container attributes: "DF_RC"\n",
@@ -2553,17 +2537,13 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	rc = tse_task_register_comp_cb(task, cont_epoch_op_req_complete,
 				       &arg, sizeof(arg));
 	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &arg.eoa_req);
+		cont_req_cleanup(CLEANUP_RPC, &arg.eoa_req);
 		goto out;
 	}
 
 	crt_req_addref(arg.eoa_req.cra_rpc);
-	rc = daos_rpc_send(arg.eoa_req.cra_rpc, task);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &arg.eoa_req);
-		goto out;
-	}
-	return rc;
+	return daos_rpc_send(arg.eoa_req.cra_rpc, task);
+
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc, *epoch, rc);
@@ -2730,13 +2710,8 @@ dc_cont_list_snap(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
-	rc = daos_rpc_send(cb_args.cra_rpc, task);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	return daos_rpc_send(cb_args.cra_rpc, task);
 
-	return rc;
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to list container snapshots: "DF_RC"\n",

@@ -591,8 +591,8 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 		D_ASSERTF((RPC)->crp_refcount != 0,			\
 			  "%p decref from zero\n", (RPC));		\
 		__ref = --(RPC)->crp_refcount;				\
-		RPC_TRACE(DB_NET, RPC, "decref to %d.\n", __ref);	\
 		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
+		RPC_TRACE(DB_NET, RPC, "decref to %d.\n", __ref);	\
 		if (__ref == 0)						\
 			crt_req_destroy(RPC);				\
 	} while (0)
