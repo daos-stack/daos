@@ -249,7 +249,8 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "scan"), verbose=verbose)
 
-    def storage_format(self, reformat=False, timeout=30, verbose=False):
+    def storage_format(self, reformat=False, timeout=30, verbose=False,
+                       force=False):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -261,6 +262,9 @@ class DmgCommand(DmgCommandBase):
                 times out.
             verbose (bool): show results of each SCM & NVMe device format
                 operation.
+            force (bool, optional): force storage format on a host, stopping any
+                running engines (CAUTION: destructive operation). Defaults to
+                False.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -273,7 +277,8 @@ class DmgCommand(DmgCommandBase):
         saved_timeout = self.timeout
         self.timeout = timeout
         self._get_result(
-            ("storage", "format"), reformat=reformat, verbose=verbose)
+            ("storage", "format"), reformat=reformat, verbose=verbose,
+            force=force)
         self.timeout = saved_timeout
         return self.result
 
@@ -400,7 +405,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("storage", "scan"), nvme_health=True)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
-                    target_list=None, svcn=None, acl_file=None):
+                    target_list=None, svcn=None, acl_file=None, size=None,
+                    scm_ratio=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -430,6 +436,8 @@ class DmgCommand(DmgCommandBase):
         kwargs = {
             "user": getpwuid(uid).pw_name if isinstance(uid, int) else uid,
             "group": getgrgid(gid).gr_name if isinstance(gid, int) else gid,
+            "size": size,
+            "scm_ratio": scm_ratio,
             "scm_size": scm_size,
             "nvme_size": nvme_size,
             "nsvc": svcn,
@@ -797,7 +805,7 @@ class DmgCommand(DmgCommandBase):
             ("system", "query"), ranks=ranks, verbose=verbose)
 
     def system_leader_query(self):
-        """Query system to obtain the MS leader and replica information.
+        """Erase the system to obtain the MS leader and replica information.
 
         Raises:
             CommandFailure: if the dmg system query command fails.
@@ -818,6 +826,18 @@ class DmgCommand(DmgCommandBase):
         #   "status": 0
         # }
         return self._get_json_result(("system", "leader-query"))
+
+    def system_erase(self):
+        """Erase system metadata prior to reformat.
+
+        Raises:
+            CommandFailure: if the dmg system erase command fails.
+
+        Returns:
+            dict: dictionary of output in JSON format.
+
+        """
+        return self._get_json_result(("system", "erase"))
 
     def system_start(self, ranks=None):
         """Start the system.
@@ -895,6 +915,7 @@ class DmgCommand(DmgCommandBase):
     def config_generate(self, access_points, num_engines=None, min_ssds=None,
                         net_class=None):
         """Produce a server configuration.
+
         Args:
             access_points (str): Comma separated list of access point addresses.
             num_pmem (int): Number of SCM (pmem) devices required per
@@ -903,11 +924,14 @@ class DmgCommand(DmgCommandBase):
                 host in DAOS system. Defaults to None.
             net_class (str): Network class preferred. Defaults to None.
                 i.e. "best-available"|"ethernet"|"infiniband"
+
         Returns:
             dict: the contents of the generate config file.
+
         Raises:
             CommandFailure: if the dmg config generate command fails or if YAML
                 parser encounters an error condition while parsing the contents.
+
         """
         result = self._get_result(
             ("config", "generate"), access_points=access_points,
@@ -921,6 +945,7 @@ class DmgCommand(DmgCommandBase):
                     error)) from error
 
         return yaml_data
+
 
 def check_system_query_status(data):
     """Check if any server crashed.

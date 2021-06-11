@@ -216,6 +216,22 @@ class DaosServerYamlParameters(YamlParameters):
 
         return value
 
+    def get_engine_values(self, name):
+        """Get the value of the specified attribute name for each engine.
+
+        Args:
+            name (str): name of the attribute from which to get the value
+
+        Returns:
+            list: a list of the value of each matching configuration attribute
+                name per engine
+
+        """
+        engine_values = []
+        for engine_params in self.engine_params:
+            engine_values.append(engine_params.get_value(name))
+        return engine_values
+
     @property
     def using_nvme(self):
         """Is the configuration file setup to use NVMe devices.

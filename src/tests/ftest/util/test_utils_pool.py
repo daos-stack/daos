@@ -45,6 +45,8 @@ class TestPool(TestDaosApiBase):
         self.name = BasicParameter(None)            # server group name
         self.svcn = BasicParameter(None)
         self.target_list = BasicParameter(None)
+        self.size = BasicParameter(None)
+        self.scm_ratio = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)       # name of property to be set
@@ -94,6 +96,8 @@ class TestPool(TestDaosApiBase):
         kwargs = {
             "uid": self.uid,
             "gid": self.gid,
+            "size": self.size.value,
+            "scm_ratio": self.scm_ratio.value,
             "scm_size": self.scm_size.value,
         }
         for key in ("target_list", "svcn", "nvme_size"):
@@ -205,8 +209,8 @@ class TestPool(TestDaosApiBase):
 
                 if self.control_method.value == self.USE_API:
                     raise CommandFailure(
-                        "Error: control method {} not supported for create()"\
-                            .format(self.control_method.value))
+                        "Error: control method {} not supported for "
+                        "create()".format(self.control_method.value))
 
                 elif self.control_method.value == self.USE_DMG and self.dmg:
                     # Destroy the pool with the dmg command
@@ -266,8 +270,7 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(CommandFailure)
     def evict(self):
-        """Evict all pool connections to a DAOS pool"""
-
+        """Evict all pool connections to a DAOS pool."""
         if self.pool:
             self.log.info("Evict all pool connections for pool: %s", self.uuid)
 
