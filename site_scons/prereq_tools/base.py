@@ -680,8 +680,8 @@ class PreReqComponent():
         self.__opts.Add('USE_INSTALLED',
                         'Comma separated list of preinstalled dependencies',
                         'none')
-        self.add_opts(ListVariable('EXCLUDE', "Components to skip building",
-                                   'none', ['psm2']))
+        self.add_opts(ListVariable('INCLUDE', "Optional components to build",
+                                   'none', ['psm2', 'psm3']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
@@ -704,7 +704,7 @@ class PreReqComponent():
             self.configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
-        self.exclude = env.subst("$EXCLUDE").split(",")
+        self.include = env.subst("$INCLUDE").split(" ")
 
     def has_source(self, env, *comps, **kw):
         """Check if source exists for a component"""
