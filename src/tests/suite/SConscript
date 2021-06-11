@@ -77,11 +77,13 @@ def configure_cmocka(nenv):
 #
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'prereqs')
 
-    libraries = ['daos', 'dfs', 'daos_tests', 'gurt',
-                 'cart']
+    libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid', 'dfs', 'cmocka', 'pthread', 'isal']
+    libraries += ['tbbmalloc_proxy']
+
+    prereqs.require(denv, 'tbbmalloc')
 
     denv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
 

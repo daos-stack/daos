@@ -99,6 +99,7 @@ RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
     scons \
     sg3_utils \
     sudo \
+    tbb-devel \
     valgrind-devel \
     which \
     yasm && \

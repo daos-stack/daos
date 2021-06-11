@@ -14,8 +14,9 @@ def scons():
     libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv']
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
     libraries += ['hwloc', 'pmemobj', 'protobuf-c', 'isal']
+    libraries += ['tbbmalloc_proxy']
 
-    prereqs.require(denv, 'hwloc', 'argobots', 'protobufc', 'pmdk', 'isal')
+    prereqs.require(denv, 'hwloc', 'argobots', 'protobufc', 'pmdk', 'isal', 'tbbmalloc')
 
     # the "-rdynamic" is to allow other dll to refer symbol defined in
     # daos_engine such as dss_tls_key etc.

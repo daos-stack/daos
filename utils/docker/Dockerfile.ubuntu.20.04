@@ -43,6 +43,7 @@ RUN apt-get -y update && \
         libopenmpi-dev \
         librdmacm-dev \
         libssl-dev \
+        libtbb-dev \
         libtool-bin \
         libunwind-dev \
         libyaml-dev \

@@ -17,7 +17,7 @@ pkgs="gotestsum openmpi3                 \
       python36-junit_xml                 \
       python36-tabulate numactl          \
       libyaml-devel                      \
-      valgrind-devel patchelf"
+      valgrind-devel patchelf tbb"
 
 if $quick_build; then
     read -r mercury_version < "$distro"-required-mercury-rpm-version
