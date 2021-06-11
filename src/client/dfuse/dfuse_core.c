@@ -55,7 +55,6 @@ dfuse_progress_thread(void *arg)
 	return NULL;
 }
 
-#if 0
 /* Parse a string to a time, used for reading container attributes info
  * timeouts.
  */
@@ -91,7 +90,6 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 	*_out = out;
 	return 0;
 }
-#endif
 
 /* Inode entry hash table operations */
 
@@ -578,13 +576,6 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
 static int
 dfuse_cont_get_cache(struct dfuse_cont *dfc)
 {
-#if 1
-	/**
-	 * XXX use default cache value until DAOS-7671 is fixed
-	 */
-	dfuse_set_default_cont_cache_values(dfc);
-	return 0;
-#else
 	size_t		size;
 	char		*buff;
 	int		rc;
@@ -689,7 +680,6 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 out:
 	D_FREE(buff);
 	return rc;
-#endif
 }
 
 /* Set default cache values for a container.
