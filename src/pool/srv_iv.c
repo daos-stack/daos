@@ -136,6 +136,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_RECLAIM:
 			iv_prop->pip_reclaim = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_EC_CELL_SZ:
+			iv_prop->pip_ec_cell_sz = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_PO_ACL:
 			acl = prop_entry->dpe_val_ptr;
 			if (acl != NULL) {
@@ -229,6 +232,9 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			prop_entry->dpe_val = iv_prop->pip_reclaim;
+			break;
+		case DAOS_PROP_PO_EC_CELL_SZ:
+			prop_entry->dpe_val = iv_prop->pip_ec_cell_sz;
 			break;
 		case DAOS_PROP_PO_ACL:
 			iv_prop->pip_acl =
@@ -537,7 +543,7 @@ pool_iv_map_ent_fetch(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 	dst_pbuf_size = dst_sgl->sg_iovs[0].iov_buf_len -
 		  sizeof(struct pool_iv_map) + sizeof(struct pool_buf);
 
-	if (src_pbuf_size >= dst_pbuf_size) {
+	if (src_pbuf_size <= dst_pbuf_size) {
 		memcpy(&dst_iv->piv_map.piv_pool_buf,
 		       &src_iv->piv_map.piv_pool_buf, src_pbuf_size);
 		dst_sgl->sg_iovs[0].iov_len = pool_iv_map_ent_size(pb_nr);
