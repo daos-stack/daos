@@ -5288,7 +5288,8 @@ dc_obj_query_key(tse_task_t *api_task)
 			 * retry because some potential 'prepared' DTX.
 			 */
 			shard = obj_grp_leader_get(obj, i, map_ver);
-			if (shard < 0) {
+			if (shard < 0 ||
+			    unlikely(DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
 				if (!is_ec_obj) {
 					rc = shard;
 					D_ERROR(DF_OID" no valid shard, rc "
