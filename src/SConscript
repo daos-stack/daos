@@ -1,6 +1,6 @@
 """Build DAOS components"""
 
-import os, sys
+import os
 
 HEADERS = ['daos.h', 'daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
            'daos_event.h', 'daos_mgmt.h', 'daos_types.h', 'daos_array.h',
