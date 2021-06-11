@@ -4,6 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
+
 from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
@@ -617,20 +619,44 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of pool UUID keys and svc replica values
 
         """
-        self._get_result(("pool", "list"))
+        # Sample JSON Output:
+        #{
+        #    "response": {
+        #        "status": 0,
+        #        "pools": [
+        #        {
+        #            "uuid": "3dd3f313-6e37-4890-9e64-93a34d04e9f5",
+        #            "label": "foobar",
+        #            "svc_reps": [
+        #            0
+        #            ]
+        #        },
+        #        {
+        #            "uuid": "6871d543-9a12-4530-b704-d937197c131c",
+        #            "label": "foobaz",
+        #            "svc_reps": [
+        #            0
+        #            ]
+        #        },
+        #        {
+        #            "uuid": "aa503e26-e974-4634-ac5a-738ee00f0c39",
+        #            "svc_reps": [
+        #            0
+        #            ]
+        #        }
+        #        ]
+        #    },
+        #    "error": null,
+        #    "status": 0
+        #}
+        output = self._get_json_result(("pool", "list"))
 
-        # Populate a dictionary with svc replicas for each pool UUID key listed
-        # Sample dmg pool list output:
-        #    Pool UUID                            Svc Replicas
-        #    ---------                            ------------
-        #    43bf2fe8-cb92-46ec-b9e9-9b056725092a 0
-        #    98736dfe-cb92-12cd-de45-9b09875092cd 1
         data = {}
-        match = re.findall(
-            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\W+([0-9][0-9,-]*))",
-            self.result.stdout_text)
-        for info in match:
-            data[info[0]] = get_numeric_list(info[1])
+        if output["response"] is None:
+            return data
+
+        for pool in output["response"]["pools"]:
+            data[pool["uuid"]] = pool["svc_reps"]
         return data
 
     def pool_set_prop(self, pool, name, value):
@@ -895,6 +921,7 @@ class DmgCommand(DmgCommandBase):
     def config_generate(self, access_points, num_engines=None, min_ssds=None,
                         net_class=None):
         """Produce a server configuration.
+
         Args:
             access_points (str): Comma separated list of access point addresses.
             num_pmem (int): Number of SCM (pmem) devices required per
@@ -903,11 +930,14 @@ class DmgCommand(DmgCommandBase):
                 host in DAOS system. Defaults to None.
             net_class (str): Network class preferred. Defaults to None.
                 i.e. "best-available"|"ethernet"|"infiniband"
+
         Returns:
             dict: the contents of the generate config file.
+
         Raises:
             CommandFailure: if the dmg config generate command fails or if YAML
                 parser encounters an error condition while parsing the contents.
+
         """
         result = self._get_result(
             ("config", "generate"), access_points=access_points,
@@ -921,6 +951,62 @@ class DmgCommand(DmgCommandBase):
                     error)) from error
 
         return yaml_data
+
+    def telemetry_metrics_list(self, host):
+        """List telemetry metrics.
+
+        Args:
+            host (str): Server host from which to obtain the metrics
+
+        Raises:
+            CommandFailure: if the dmg system query command fails.
+
+        Returns:
+            dict: dictionary of output in JSON format
+
+        """
+        return self._get_json_result(
+            ("telemetry", "metrics", "list"), host=host)
+
+    def telemetry_metrics_query(self, host, metrics=None):
+        """Query telemetry metrics.
+
+        Args:
+            host (str): Server host from which to obtain the metrics
+            metrics (str, None): Comma-separated list of metric names to query.
+                Defaults to None which will query all metric names.
+
+        Raises:
+            CommandFailure: if the dmg system query command fails.
+
+        Returns:
+            dict: dictionary of output in JSON format
+
+        """
+        # Sample output (metric="process_start_time_seconds"):
+        # {
+        # "response": {
+        #   "metric_sets": [
+        #     {
+        #       "name": "process_start_time_seconds",
+        #       "description": "Start time of the process since unix epoch in
+        #                       seconds.",
+        #       "type": 3,
+        #       "metrics": [
+        #         {
+        #           "labels": {},
+        #           "value": 1622576326.6
+        #         }
+        #       ]
+        #     }
+        #   ]
+        # },
+        # "error": null,
+        # "status": 0
+        # }
+        return self._get_json_result(
+            ("telemetry", "metrics", "query"), host=host, metrics=metrics)
+
 
 def check_system_query_status(data):
     """Check if any server crashed.
