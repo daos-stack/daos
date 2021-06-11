@@ -205,7 +205,7 @@ class OSAUtils(MdtestBase, IorTestBase):
 
     def simple_osa_reintegrate_loop(self, rank, action="exclude",
                                     loop_time=100):
-        """This method performs exclude or drain and 
+        """This method performs exclude or drain and
         reintegration on a rank for a certain amount of time.
         Args:
             rank (int): daos server rank.
@@ -220,10 +220,10 @@ class OSAUtils(MdtestBase, IorTestBase):
         while int(finish_time - start_time) < loop_time:
             if action == "exclude":
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                       rank).
+                                                       rank)
             else:
                 output = self.dmg_command.pool_drain(self.pool.uuid,
-                                                     rank).                
+                                                     rank)               
             self.print_and_assert_on_rebuild_failure(output)
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                        rank)
