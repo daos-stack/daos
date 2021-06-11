@@ -21,7 +21,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// todo_tiering: merge tiering
 const (
 	clsNvmeTemplate = `[Nvme]
 {{ $host := .Hostname }}{{ $tier := .Tier }}{{ range $i, $e := .DeviceList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}_{{$tier}}

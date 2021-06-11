@@ -213,7 +213,6 @@ func BdevTierPropertiesFromConfig(cfg *TierConfig) BdevTierProperties {
 	}
 }
 
-// todo_tiering: merge ret error
 // FormatRequestFromConfig returns a format request populated from a bdev
 // storage configuration.
 func BdevFormatRequestFromConfig(log logging.Logger, cfg *TierConfig) (BdevFormatRequest, error) {
@@ -233,7 +232,6 @@ func BdevFormatRequestFromConfig(log logging.Logger, cfg *TierConfig) (BdevForma
 	return fr, nil
 }
 
-// todo_tiering: merge ret error
 func BdevWriteNvmeConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWriteNvmeConfigRequest, error) {
 	bdevTiers := cfg.Tiers.BdevConfigs()
 	req := BdevWriteNvmeConfigRequest{
