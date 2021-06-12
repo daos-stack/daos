@@ -33,7 +33,6 @@ pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 int
 vos_pool_settings_init(void)
 {
-#if 0
 	int					rc;
 	enum pobj_arenas_assignment_type	atype;
 
@@ -45,8 +44,6 @@ vos_pool_settings_init(void)
 			strerror(errno));
 
 	return rc;
-#endif
-	return 0;
 }
 
 static inline PMEMobjpool *
