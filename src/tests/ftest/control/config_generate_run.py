@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -52,9 +52,19 @@ class ConfigGenerateRun(TestWithServers):
 
         # Call dmg config generate. AP is always the first server host.
         server_host = self.hostlist_servers[0]
-        generated_yaml = self.get_dmg_command().config_generate(
+        result = self.get_dmg_command().config_generate(
             access_points=server_host, num_engines=num_engines,
             min_ssds=min_ssds, net_class=net_class)
+
+        try:
+            generated_yaml = yaml.safe_load(result.stdout)
+        except yaml.YAMLError as error:
+            raise CommandFailure(
+                "Error loading dmg generated config: {}".format(
+                    error)) from error
+
+        # Remove this line when DAOS-7861 is fixed.
+        generated_yaml["nr_hugepages"] = 4096
 
         # Create a temporary file in self.test_dir and write the generated
         # config.
@@ -81,41 +91,43 @@ class ConfigGenerateRun(TestWithServers):
         # Stop and restart daos_server. self.start_server_managers() has the
         # server startup check built into it, so if there's something wrong,
         # it'll throw an error.
-        self.log.debug("## Stopping servers")
+        self.log.info("Stopping servers")
         self.stop_servers()
 
         # We don't need agent for this test. However, when we stop the server,
         # agent is also stopped. Then the harness checks that the agent is
         # running during the teardown. If agent isn't running at that point, it
         # would cause an error, so start it here.
-        self.log.debug("## Restarting agents")
+        self.log.info("Restarting agents")
         self.start_agent_managers()
 
         # Before restarting daos_server, we need to clear SCM. Unmount the mount
         # point, wipefs the disks, etc. This clearing step is built into the
         # server start steps. It'll look at the engine_params of the
         # server_manager and clear the SCM set there, so we need to overwrite it
-        # before starting. Set the values from the generated config.
-        self.log.debug("## Resetting engine_params")
+        # before starting to the values from the generated config.
+        self.log.info("Resetting engine_params")
         self.server_managers[0].manager.job.yaml.engine_params = []
         engines = generated_yaml["engines"]
         for i, engine in enumerate(engines):
-            self.log.debug("## engine {}".format(i))
+            self.log.info("engine %d", i)
+            self.log.info("scm_mount = %s", engine["scm_mount"])
+            self.log.info("scm_class = %s", engine["scm_class"])
+            self.log.info("scm_list = %s", engine["scm_list"])
+
             per_engine_yaml_parameters =\
                 DaosServerYamlParameters.PerEngineYamlParameters(i)
-            self.log.debug("## scm_mount = {}".format(engine["scm_mount"]))
             per_engine_yaml_parameters.scm_mount.update(engine["scm_mount"])
-            self.log.debug("## scm_class = {}".format(engine["scm_class"]))
             per_engine_yaml_parameters.scm_class.update(engine["scm_class"])
             per_engine_yaml_parameters.scm_size.update(None)
-            self.log.debug("## scm_list = {}".format(engine["scm_list"]))
             per_engine_yaml_parameters.scm_list.update(engine["scm_list"])
+
             self.server_managers[0].manager.job.yaml.engine_params.append(
                 per_engine_yaml_parameters)
 
         # Start server with the generated config.
-        self.log.debug("## Restarting servers")
+        self.log.info("Restarting server with the generated config")
         try:
             self.start_server_managers()
         except ServerFailed as error:
-            self.log.info("## Restarting server failed! %s", error)
+            self.fail("Restarting server failed! %s", error)
