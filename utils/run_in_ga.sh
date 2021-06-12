@@ -15,8 +15,8 @@ $SCONS PREFIX=/opt/daos --build-deps=yes --deps-only
 echo ::endgroup::
 
 echo ::group::Test client only debug build
-$SCONS --jobs 10 PREFIX=/opt/daos COMPILER="$COMPILER" BUILD_TYPE=debug -c \
-       install
+$SCONS --jobs 10 PREFIX=/opt/daos COMPILER="$COMPILER" BUILD_TYPE=debug \
+       TARGET_TYPE=release -c install
 utils/check.sh -n /opt/daos/bin/dmg
 $SCONS --jobs 10 client install
 utils/check.sh -n /opt/daos/bin/daos_engine
