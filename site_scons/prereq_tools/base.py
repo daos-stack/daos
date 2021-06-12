@@ -714,6 +714,7 @@ class PreReqComponent():
         self.__env.Alias('server', build_dir)
         self.__env.Alias('test', build_dir)
         self._build_targets = []
+        BUILD_TARGETS.append(build_dir)
         if 'client' in BUILD_TARGETS:
             self._build_targets.extend(['client'])
         elif 'server' in BUILD_TARGETS:
