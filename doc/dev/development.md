@@ -76,6 +76,42 @@ If needed, `ALT_PREFIX` can be set to a colon separated prefix path where to
 look for already built components.  If set, the build will check these
 paths for components before proceeding to build.
 
+### Building Optional Components
+
+There are a few optional components that can be included into the DAOS build.
+For instance, to include the `psm2` provider. Run the following `scons`
+command:
+
+```bash
+$ scons PREFIX=${daos_prefix_path}
+      INCLUDE=psm2
+      install
+      --build-deps=yes
+      --config=force
+```
+
+Refer to the built-in `scons` help command to get a full list of all the
+optional components under the `INCLUDE` optional parameter.
+
+```bash
+$ scons -h
+scons: Reading SConscript files ...
+
+INCLUDE: Optional components to build
+    (all|none|comma-separated list of names)
+    allowed names: psm2 psm3
+    default: none
+    actual:
+```
+
+The version of the components can be changed by editing the
+[utils/build.config][1] file.
+
+>**_NOTE_**
+>
+>The support of the optional components is not guarantee and can be removed
+>without further notification.
+
 ## Go dependencies
 
 Developers contributing Go code may need to change the external dependencies
@@ -198,3 +234,5 @@ $ git status
 
 After verifying that the generated C/Go files are correct, add and commit them
 as you would any other file.
+
+[1]: <../../utils/build.config> (build.config)
