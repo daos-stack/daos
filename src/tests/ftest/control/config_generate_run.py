@@ -16,7 +16,7 @@ from server_utils_params import DaosServerYamlParameters
 
 
 class ConfigGenerateRun(TestWithServers):
-    """Test ID: DAOS-5986
+    """JIRA ID: DAOS-5986
 
     Verify dmg config generate by running daos_server with generated config
     file.
