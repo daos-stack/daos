@@ -58,7 +58,7 @@ If all the software dependencies listed previously are already satisfied, then
 type the following command in the top source directory to build the DAOS stack:
 
 ```bash
-$ scons --config=force install
+ scons --config=force install
 ```
 
 If you are a developer of DAOS, we recommend following the instructions in the
@@ -69,7 +69,7 @@ Otherwise, the missing dependencies can be built automatically by invoking scons
 with the following parameters:
 
 ```bash
-$ scons --config=force --build-deps=yes install
+ scons --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under ${daospath}/install.

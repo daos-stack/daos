@@ -13,17 +13,16 @@ away from an I/O model designed for block-based and high-latency storage
 to one that inherently supports fine-grained data access and unlocks the
 performance of the next-generation storage technologies.
 
-Unlike traditional Burst Buffers, DAOS is a high-performant independent
-and fault-tolerant storage tier that does not rely on a third-party tier
-to manage metadata and data resilience.
+DAOS is a high-performant independent, fault-tolerant storage tier that
+does not rely on a third-party tier to manage metadata and data resilience.
 
 ## DAOS Features
 
-DAOS relies on OFI for low-latency communications and stores data on
+DAOS relies on [Open Fabric Interface](https://openfabrics.org/downloads/ofiwg/Industry_presentations/2015_HotI23/paper.pdf) (OFI) for low-latency communications and stores data on
 both storage-class memory (SCM) and NVMe storage. DAOS presents a native
 key-array-value storage interface that offers a unified storage model
-over which domain-specific data models are ported, such as HDF5, MPI-IO,
-and Apache Arrow. A POSIX I/O emulation layer implementing files and
+over which domain-specific data models are ported, such as [HDF5](../../user/hdf5), [MPI-IO](../../user/mpi-io),
+and Apache [Hadoop](../../user/spark). A [POSIX](../../user/posix) I/O emulation layer implementing files and
 directories over the native DAOS API is also available.
 
 DAOS I/O operations are logged and then inserted into a persistent index
@@ -105,7 +104,7 @@ run one DAOS *server* instance per node, which in turn starts one
 DAOS *Engine* process per physical socket. Membership of the DAOS
 servers is recorded into the system map, that assigns a unique integer
 *rank* to each *Engine* process. Two different DAOS systems comprise
-two disjoint sets of DAOS servers, and do not coordinate with each other.
+two disjointed sets of DAOS servers, and do not coordinate with each other.
 
 The DAOS *server* is a multi-tenant daemon running on a Linux instance
 (either natively on the physical node or in a VM or container) of each
