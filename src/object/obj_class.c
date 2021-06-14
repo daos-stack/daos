@@ -23,9 +23,13 @@ static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id);
 static struct daos_obj_class  *oclass_scale2cl(struct daos_oclass_attr *ca);
 static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
 
-/** find the object class attributes for the provided @oid */
+/**
+ * Find the object class attributes for the provided @oid.
+ * NB: Because ec.e_len can be overwritten by pool/container property,
+ * please don't directly use ec.e_len.
+ */
 struct daos_oclass_attr *
-daos_oclass_attr_find(daos_obj_id_t oid)
+daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv)
 {
 	struct daos_obj_class	*oc;
 
@@ -38,6 +42,8 @@ daos_oclass_attr_find(daos_obj_id_t oid)
 	}
 	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
 		oc->oc_name, DP_OID(oid));
+	if (is_priv)
+		*is_priv = oc->oc_private;
 	return &oc->oc_attr;
 }
 
@@ -338,7 +344,7 @@ obj_ec_codec_fini(void)
 		return;
 
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (DAOS_OC_IS_EC(&oc->oc_attr))
+		if (daos_oclass_is_ec(&oc->oc_attr))
 			ocnr++;
 	}
 	D_ASSERTF(oc_ec_codec_nr == ocnr,
@@ -374,7 +380,7 @@ obj_ec_codec_init()
 
 	ocnr = 0;
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (DAOS_OC_IS_EC(&oc->oc_attr))
+		if (daos_oclass_is_ec(&oc->oc_attr))
 			ocnr++;
 	}
 	if (ocnr == 0)
@@ -387,7 +393,7 @@ obj_ec_codec_init()
 
 	i = 0;
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (!DAOS_OC_IS_EC(&oc->oc_attr))
+		if (!daos_oclass_is_ec(&oc->oc_attr))
 			continue;
 
 		oc_ec_codecs[i].ec_oc_id = oc->oc_id;
@@ -454,82 +460,6 @@ obj_ec_codec_get(daos_oclass_id_t oc_id)
 	}
 
 	return NULL;
-}
-
-/**
- * Encode (using ISA-L) a full stripe from the submitted scatter-gather list.
- *
- * oid		[IN]		The object id of the object undergoing encode.
- * sgl		[IN]		The SGL containing the user data.
- * sg_idx	[IN|OUT]	Index of sg_iov entry in array.
- * sg_off	[IN|OUT]	Offset into sg_iovs' io_buf.
- * parity	[IN|OUT]	Struct containing parity buffers.
- * p_idx	[IN]		Index into parity p_bufs array.
- */
-int
-obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl, uint32_t *sg_idx,
-		       size_t *sg_off, struct obj_ec_parity *parity,
-		       uint32_t p_idx)
-{
-	struct obj_ec_codec		*codec = obj_ec_codec_get(
-							daos_obj_id2class(oid));
-	struct daos_oclass_attr		*oca = daos_oclass_attr_find(oid);
-	unsigned int			 len = oca->ca_ec_cell;
-	unsigned int			 k = oca->ca_ec_k;
-	unsigned int			 p = oca->ca_ec_p;
-	unsigned char			*data[k];
-	unsigned char			*ldata[k];
-	int				 i, lcnt = 0;
-	int				 rc = 0;
-
-	for (i = 0; i < k; i++) {
-		if (sgl->sg_iovs[*sg_idx].iov_len - *sg_off >= len) {
-			unsigned char *from =
-				(unsigned char *)sgl->sg_iovs[*sg_idx].iov_buf;
-
-			data[i] = &from[*sg_off];
-			*sg_off += len;
-			if (*sg_off == sgl->sg_iovs[*sg_idx].iov_len) {
-				*sg_off = 0;
-				(*sg_idx)++;
-			}
-		} else {
-			int cp_cnt = 0;
-
-			D_ALLOC(ldata[lcnt], len);
-			if (ldata[lcnt] == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			while (cp_cnt < len) {
-				int cp_amt =
-					sgl->sg_iovs[*sg_idx].iov_len-*sg_off <
-					len - cp_cnt ?
-					sgl->sg_iovs[*sg_idx].iov_len-*sg_off :
-					len - cp_cnt;
-				unsigned char *from =
-					sgl->sg_iovs[*sg_idx].iov_buf;
-
-				memcpy(&ldata[lcnt][cp_cnt], &from[*sg_off],
-				       cp_amt);
-				if (sgl->sg_iovs[*sg_idx].iov_len - *sg_off <=
-					len - cp_cnt) {
-					*sg_off = 0;
-					(*sg_idx)++;
-				} else
-					*sg_off += cp_amt;
-				cp_cnt += cp_amt;
-				if (cp_cnt < len && *sg_idx >= sgl->sg_nr)
-					D_GOTO(out, rc = -DER_INVAL);
-			}
-			data[i] = ldata[lcnt++];
-		}
-	}
-
-	ec_encode_data(len, k, p, codec->ec_gftbls, data,
-		       &parity->p_bufs[p_idx]);
-out:
-	for (i = 0; i < lcnt; i++)
-		D_FREE(ldata[i]);
-	return rc;
 }
 
 static void

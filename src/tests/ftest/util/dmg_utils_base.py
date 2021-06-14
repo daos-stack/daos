@@ -82,8 +82,43 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.SystemSubCommand()
         elif self.sub_command.value == "cont":
             self.sub_command_class = self.ContSubCommand()
+        elif self.sub_command.value == "config":
+            self.sub_command_class = self.ConfigSubCommand()
+        elif self.sub_command.value == "telemetry":
+            self.sub_command_class = self.TelemetrySubCommand()
         else:
             self.sub_command_class = None
+
+    class ConfigSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg config sub command."""
+
+        def __init__(self):
+            """Create a dmg config subcommand object."""
+            super(DmgCommandBase.ConfigSubCommand, self).__init__(
+                "run/dmg/config/*", "config")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the dmg config sub command object."""
+            if self.sub_command.value == "generate":
+                self.sub_command_class = self.GenerateSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class GenerateSubCommand(CommandWithParameters):
+            """Defines an object for the dmg config generate command."""
+
+            def __init__(self):
+                """Create a dmg config generate object."""
+                super(
+                    DmgCommandBase.ConfigSubCommand.GenerateSubCommand,
+                    self).__init__(
+                        "/run/dmg/config/generate/*", "generate")
+                self.access_points = FormattedParameter(
+                    "--access-points={}", None)
+                self.num_engines = FormattedParameter("--num-engines={}", None)
+                self.min_ssds = FormattedParameter("--min-ssds={}", None)
+                self.net_class = FormattedParameter("--net-class={}", None)
 
     class ContSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg cont sub command."""
@@ -133,7 +168,6 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg network scan command object."""
                 super().__init__("/run/dmg/network/scan/*", "scan")
                 self.provider = FormattedParameter("-p {}", None)
-                self.all = FormattedParameter("-a", False)
 
     class PoolSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg pool sub command."""
@@ -209,8 +243,6 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/pool/extend/*", "extend")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.ranks = FormattedParameter("--ranks={}", None)
-                self.scm_size = FormattedParameter("--scm-size={}", None)
-                self.nvme_size = FormattedParameter("--nvme-size={}", None)
 
         class DrainSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool drain command."""
@@ -524,3 +556,56 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/system/stop/*", "stop")
                 self.force = FormattedParameter("--force", False)
                 self.ranks = FormattedParameter("--ranks={}")
+
+    class TelemetrySubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg telemetry sub command."""
+
+        def __init__(self):
+            """Create a dmg telemetry subcommand object."""
+            super().__init__("/run/dmg/telemetry/*", "telemetry")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the dmg telemetry sub command object."""
+            if self.sub_command.value == "metrics":
+                self.sub_command_class = self.MetricsSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class MetricsSubCommand(CommandWithSubCommand):
+            """Defines an object for the dmg telemetry metrics command."""
+
+            def __init__(self):
+                """Create a dmg telemetry metrics command object."""
+                super().__init__("/run/dmg/telemetry/metrics/*", "metrics")
+
+            def get_sub_command_class(self):
+                # pylint: disable=redefined-variable-type
+                """Get the dmg telemetry metrics sub command object."""
+                if self.sub_command.value == "list":
+                    self.sub_command_class = self.ListSubCommand()
+                elif self.sub_command.value == "query":
+                    self.sub_command_class = self.QuerySubCommand()
+                else:
+                    self.sub_command_class = None
+
+            class ListSubCommand(CommandWithParameters):
+                """Defines a dmg telemetry metrics list object."""
+
+                def __init__(self):
+                    """Create a dmg telemetry metrics list object."""
+                    super().__init__(
+                        "/run/dmg/telemetry/metrics/list/*", "list")
+                    self.host = FormattedParameter("--host={}", None)
+                    self.port = FormattedParameter("--port={}", None)
+
+            class QuerySubCommand(CommandWithParameters):
+                """Defines a dmg telemetry metrics query object."""
+
+                def __init__(self):
+                    """Create a dmg telemetry metrics query object."""
+                    super().__init__(
+                        "/run/dmg/telemetry/metrics/query/*", "query")
+                    self.host = FormattedParameter("--host={}", None)
+                    self.port = FormattedParameter("--port={}", None)
+                    self.metrics = FormattedParameter("--metrics={}", None)

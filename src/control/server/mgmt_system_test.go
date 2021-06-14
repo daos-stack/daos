@@ -415,7 +415,7 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	state := map[string]system.MemberState{
 		"awaitformat":  system.MemberStateAwaitFormat,
 		"errored":      system.MemberStateErrored,
-		"evicted":      system.MemberStateEvicted,
+		"excluded":     system.MemberStateExcluded,
 		"joined":       system.MemberStateJoined,
 		"ready":        system.MemberStateReady,
 		"starting":     system.MemberStateStarting,

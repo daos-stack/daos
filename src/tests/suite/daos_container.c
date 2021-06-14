@@ -301,6 +301,8 @@ co_properties(void **state)
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	char			*label = "test_cont_properties";
+	char			*label2 = "test_cont_prop_label2";
+	uuid_t			 cuuid2;
 	uint64_t		 snapshot_max = 128;
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
@@ -320,6 +322,7 @@ co_properties(void **state)
 	prop->dpp_entries[0].dpe_str = strdup(label);
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
 	prop->dpp_entries[1].dpe_val = snapshot_max;
+	D_STRNDUP(arg->cont_label, label, DAOS_PROP_LABEL_MAX_LEN);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
@@ -404,9 +407,45 @@ co_properties(void **state)
 	}
 	D_FREE(exp_owner_grp);
 
-	if (arg->myrank == 0)
+	if (arg->myrank == 0) {
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
+
+		/* Create container: different UUID, same label - fail */
+		print_message("Checking create: different UUID same label\n");
+		uuid_generate(cuuid2);
+		rc = daos_cont_create(arg->pool.poh, cuuid2, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* Create container: same UUID, different label - fail */
+		print_message("Checking create: same UUID, different label\n");
+		free(prop->dpp_entries[0].dpe_str);
+		prop->dpp_entries[0].dpe_str = strdup(label2);
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* Create container: same UUID, no label - pass (idempotent) */
+		print_message("Checking create: same UUID, no label\n");
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Create container: different UUID, different label - pass */
+		print_message("Checking create: different UUID and label\n");
+		rc = daos_cont_create(arg->pool.poh, cuuid2, prop, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Create container: same UUID, different label - fail
+		 * uuid matches first container, label matches second container
+		 */
+		print_message("Checking create: same UUID, different label\n");
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* destroy the second container */
+		rc = daos_cont_destroy(arg->pool.poh, cuuid2, 0 /* force */,
+				       NULL);
+		assert_rc_equal(rc, 0);
+	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_prop_free(prop);
@@ -2084,6 +2123,7 @@ co_open_fail_destroy(void **state)
 static void
 co_rf_simple(void **state)
 {
+#define STACK_BUF_LEN	(128)
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	daos_obj_id_t		 oid;
@@ -2093,6 +2133,14 @@ co_rf_simple(void **state)
 	struct daos_prop_entry	*entry;
 	struct daos_co_status	 stat = { 0 };
 	daos_cont_info_t	 info = { 0 };
+	daos_obj_id_t		 io_oid;
+	daos_handle_t		 io_oh;
+	d_iov_t			 dkey;
+	char			 stack_buf[STACK_BUF_LEN];
+	d_sg_list_t		 sgl;
+	d_iov_t			 sg_iov;
+	daos_iod_t		 iod;
+	daos_recx_t		 recx;
 	int			 rc;
 
 	/* needs 3 alive nodes after excluding 3 */
@@ -2171,6 +2219,29 @@ co_rf_simple(void **state)
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 
+	/* IO testing */
+	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+	dts_buf_render(stack_buf, STACK_BUF_LEN);
+	d_iov_set(&sg_iov, stack_buf, STACK_BUF_LEN);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 1;
+	sgl.sg_iovs	= &sg_iov;
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	recx.rx_idx = 0;
+	recx.rx_nr  = STACK_BUF_LEN;
+	iod.iod_size	= 1;
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	print_message("obj update should success before RF broken\n");
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
 	if (arg->myrank == 0)
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, 3);
@@ -2182,6 +2253,14 @@ co_rf_simple(void **state)
 	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_UNCLEAN);
 	rc = daos_cont_open(arg->pool.poh, arg->co_uuid, arg->cont_open_flags,
 			    &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_RF);
+	print_message("obj update should fail after RF broken\n");
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, -DER_RF);
+	print_message("obj fetch should fail after RF broken\n");
+	rc = daos_obj_fetch(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
 	assert_rc_equal(rc, -DER_RF);
 
 	if (arg->myrank == 0) {
@@ -2197,11 +2276,13 @@ co_rf_simple(void **state)
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
+	print_message("obj update should success after re-integrate\n");
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
 	/* clear the UNCLEAN status */
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_STATUS;
-	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_STATUS_VAL(
-						DAOS_PROP_CO_HEALTHY, 0);
-	rc = daos_cont_set_prop(arg->coh, prop, NULL);
+	rc = daos_cont_status_clear(arg->coh, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
@@ -2225,6 +2306,9 @@ co_rf_simple(void **state)
 	rc = daos_cont_close(coh_g2l, NULL);
 	assert_int_equal(rc, 0);
 	free(ghdl.iov_buf);
+
+	rc = daos_obj_close(io_oh, NULL);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);

@@ -25,7 +25,7 @@ class DfuseCommand(ExecutableCommand):
         self.cuuid = FormattedParameter("--container {}")
         self.mount_dir = FormattedParameter("--mountpoint {}")
         self.sys_name = FormattedParameter("--sys-name {}")
-        self.singlethreaded = FormattedParameter("--singlethreaded", False)
+        self.singlethreaded = FormattedParameter("--singlethread", False)
         self.foreground = FormattedParameter("--foreground", False)
         self.disable_caching = FormattedParameter("--disable-caching", False)
         self.disable_wb_caching = FormattedParameter("--disable-wb-cache",
