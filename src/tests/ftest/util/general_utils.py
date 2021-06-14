@@ -682,7 +682,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
         ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
 
     if hosts is not None:
-        if dump_ult_stacks is True:
+        if dump_ult_stacks is True and "daos_engine" in pattern:
             commands_part1 = [
                 "rc=0",
                 "if " + ps_cmd,

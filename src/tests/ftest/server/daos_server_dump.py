@@ -25,33 +25,17 @@ class DaosServerDumpTest(TestWithServers):
         super().__init__(*args, **kwargs)
         self.start_servers_once = False
         self.setup_start_agents = False
-        self.setup_start_servers = False
 
     def test_daos_server_dump_basic(self):
         """JIRA ID: DAOS-1452.
 
         Test Description: Test engine ULT stacks dump.
 
-        :avocado: tags=all,hw,large,control,daily_regression,server_start,basic
-        :avocado: tags=test_daos_server_dump_basic
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,server_start,basic
+        :avocado: tags=daos_server_dump_test,test_daos_server_dump_basic
         """
-        # Setup the servers
-        self.add_server_manager()
-        self.configure_manager(
-            "server", self.server_managers[0], self.hostlist_servers,
-            self.hostfile_servers_slots)
-
-        try:
-            self.server_managers[0].start()
-            exception = None
-        except ServerFailed as err:
-            exception = err
-
-        # Verify
-        if exception is not None:
-            self.log.error("Server was expected to start")
-            self.fail(
-                "Server start failed when it was expected to complete")
 
         ret_codes = stop_processes(self.hostlist_servers, r"daos_engine",
                            added_filter=r"'\<(grep|defunct)\>'",
@@ -81,4 +65,4 @@ class DaosServerDumpTest(TestWithServers):
 
         # set stopped servers state to make teardown happy
         self.server_managers[0].update_expected_states(
-            None, ["Joined", "Errored"])
+            None, ["stopped", "excluded"])
