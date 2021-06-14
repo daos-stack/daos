@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Script for running NLT in a docker container.  This is called from Jenkinsfile
 # where needed, and is a cheat way of running setup_daos_admin under sudo
