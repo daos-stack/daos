@@ -15,10 +15,10 @@ def scons():
     Import('env', 'prereqs', 'CART_VERSION')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     denv.AppendUnique(LIBS=['pthread', 'yaml', 'm'])
     prereqs.require(denv, 'uuid')
 
@@ -28,8 +28,7 @@ def scons():
     denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib,
                              SHLIBVERSION=CART_VERSION)
 
-    Default(gurt_lib)
-    Export('gurt_lib', 'gurt_targets')
+    Export('gurt_targets', 'gurt_lib')
 
     SConscript('examples/SConscript')
     SConscript('tests/SConscript')
