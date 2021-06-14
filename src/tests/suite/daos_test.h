@@ -129,6 +129,7 @@ typedef struct {
 	struct test_pool	pool;
 	char			*pool_label;
 	uuid_t			co_uuid;
+	char			*cont_label;
 	unsigned int		uid;
 	unsigned int		gid;
 	daos_handle_t		eq;
@@ -469,6 +470,8 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 				   char *expected_state);
 void save_group_state(void **state);
+void trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
+				    int oids_nr);
 
 enum op_type {
 	PARTIAL_UPDATE	=	1,

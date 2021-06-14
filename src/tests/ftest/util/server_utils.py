@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 from getpass import getuser
 import os
 import socket
@@ -180,6 +181,22 @@ class DaosServerCommand(YamlCommand):
             value = self.yaml.using_dcpm
         return value
 
+    def get_engine_values(self, name):
+        """Get the value of the specified attribute name for each engine.
+
+        Args:
+            name (str): name of the attribute from which to get the value
+
+        Returns:
+            list: a list of the value of each matching configuration attribute
+                name per engine
+
+        """
+        engine_values = []
+        if self.yaml is not None and hasattr(self.yaml, "get_engine_values"):
+            engine_values = self.yaml.get_engine_values(name)
+        return engine_values
+
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
 
@@ -354,10 +371,10 @@ class DaosServerManager(SubprocessManager):
         self._states = {
             "all": [
                 "awaitformat", "starting", "ready", "joined", "stopping",
-                "stopped", "evicted", "errored", "unresponsive", "unknown"],
+                "stopped", "excluded", "errored", "unresponsive", "unknown"],
             "running": ["ready", "joined"],
             "stopped": [
-                "stopping", "stopped", "evicted", "errored", "unresponsive",
+                "stopping", "stopped", "excluded", "errored", "unresponsive",
                 "unknown"],
             "errored": ["errored"],
         }
@@ -854,6 +871,7 @@ class DaosServerManager(SubprocessManager):
             Returns:
                 dict: a dictionary of total storage size in device_names per
                     host rank
+
             """
             # The hosts can be a single host such as wolf-1, or multiple
             # hosts such as wolf-[1-7].
@@ -1017,5 +1035,20 @@ class DaosServerManager(SubprocessManager):
         # Stop desired ranks using dmg
         self.dmg.system_stop(ranks=convert_list(value=ranks), force=force)
 
-        # Update the expected status of the stopped/evicted ranks
-        self.update_expected_states(ranks, ["stopped", "evicted"])
+        # Update the expected status of the stopped/excluded ranks
+        self.update_expected_states(ranks, ["stopped", "excluded"])
+
+    def get_host(self, rank):
+        """Get the host name that matches the specified rank.
+
+        Args:
+            rank (int): server rank number
+
+        Returns:
+            str: host name matching the specified rank
+
+        """
+        host = None
+        if rank in self._expected_states:
+            host = self._expected_states[rank]["host"]
+        return host

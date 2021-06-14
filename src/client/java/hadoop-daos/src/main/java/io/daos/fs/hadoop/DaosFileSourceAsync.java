@@ -1,3 +1,9 @@
+/*
+ * (C) Copyright 2018-2021 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+
 package io.daos.fs.hadoop;
 
 import io.daos.DaosEventQueue;
@@ -79,19 +85,21 @@ public class DaosFileSourceAsync extends DaosFileSource {
     limit = limit < 3 ? 3 : limit;
     int cnt = 0;
     int nbr;
-    while((nbr = eq.pollCompleted(completed, 1, TIMEOUT_MS)) == 0) {
+    do {
+      nbr = eq.pollCompleted(completed, 1, TIMEOUT_MS);
       cnt++;
       if (cnt > limit) {
         break;
       }
-    }
+      if (nbr > 0 && completed.get(0) != desc) { // discard unexpected return
+        nbr = 0;
+        limit++;
+      }
+    } while (nbr == 0);
     if (nbr != 1) {
-      throw new DaosIOException("failed to complete DAOS async op after " + (limit * TIMEOUT_MS) + "ms, desc: " + desc);
-    }
-    if (completed.get(0) != desc) {
-      throw new DaosIOException("unexpected attachment returned expect: " + desc +
-          ", \nbut actual: " + completed.get(0));
+      throw new DaosIOException("failed to get expected return after trying " + limit + " times");
     }
     completed.clear();
   }
 }
+

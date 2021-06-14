@@ -533,8 +533,8 @@ codec_get(struct obj_reasb_req *reasb_req, daos_obj_id_t oid)
  * struct obj_ec_recx_array::oer_pbufs.
  */
 static int
-obj_ec_recx_encode(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
-		   struct daos_oclass_attr *oca, struct obj_ec_codec *codec,
+obj_ec_recx_encode(struct obj_ec_codec *codec, struct daos_oclass_attr *oca,
+		   daos_iod_t *iod, d_sg_list_t *sgl,
 		   struct obj_ec_recx_array *recx_array)
 {
 	struct obj_ec_recx	*ec_recx;
@@ -562,14 +562,6 @@ obj_ec_recx_encode(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 		recx_nr = recx_array->oer_nr;
 	}
 	stripe_bytes = cell_bytes * oca->u.ec.e_k;
-	if (codec == NULL) {
-		codec = obj_ec_codec_get(daos_obj_id2class(oid));
-		if (codec == NULL) {
-			D_ERROR(DF_OID" failed to get ec codec.\n",
-				DP_OID(oid));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-	}
 
 	/* calculate EC parity for each full_stripe */
 	for (i = 0; i < recx_nr; i++) {
@@ -1321,11 +1313,11 @@ obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 }
 
 int
-obj_ec_singv_split(daos_obj_id_t oid, uint32_t shard, daos_size_t iod_size,
-		   struct daos_oclass_attr *oca, d_sg_list_t *sgl)
+obj_ec_singv_split(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
+		   daos_size_t iod_size, d_sg_list_t *sgl)
 {
 	uint64_t c_bytes = obj_ec_singv_cell_bytes(iod_size, oca);
-	uint32_t shard_idx = shard % obj_ec_data_tgt_nr(oca);
+	uint32_t shard_idx = oid.id_shard % obj_ec_data_tgt_nr(oca);
 	char	*data = sgl->sg_iovs[0].iov_buf;
 
 	D_ASSERT(iod_size != DAOS_REC_ANY);
@@ -1333,14 +1325,12 @@ obj_ec_singv_split(daos_obj_id_t oid, uint32_t shard, daos_size_t iod_size,
 		memmove(data, data + shard_idx * c_bytes, c_bytes);
 
 	sgl->sg_iovs[0].iov_len = c_bytes;
-
 	return 0;
 }
 
 static int
-obj_ec_singv_encode(daos_obj_id_t oid, daos_iod_t *iod,
-		    struct daos_oclass_attr *oca,
-		    struct obj_ec_codec *codec, d_sg_list_t *sgl,
+obj_ec_singv_encode(struct obj_ec_codec *codec, struct daos_oclass_attr *oca,
+		    daos_iod_t *iod, d_sg_list_t *sgl,
 		    struct obj_ec_recx_array *recxs)
 {
 	uint64_t c_bytes;
@@ -1352,23 +1342,22 @@ obj_ec_singv_encode(daos_obj_id_t oid, daos_iod_t *iod,
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = obj_ec_recx_encode(oid, iod, sgl, oca, codec, recxs);
+	rc = obj_ec_recx_encode(codec, oca, iod, sgl, recxs);
 	if (rc) {
-		D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
-			DP_OID(oid), rc);
+		D_ERROR("obj_ec_recx_encode failed %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-
 out:
 	return rc;
 }
 
 int
-obj_ec_singv_encode_buf(daos_obj_id_t oid, int p_shard, daos_iod_t *iod,
-			struct daos_oclass_attr *oca,
-			d_sg_list_t *sgl, d_iov_t *e_iov)
+obj_ec_singv_encode_buf(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
+			daos_iod_t *iod, d_sg_list_t *sgl, d_iov_t *e_iov)
 {
 	struct obj_ec_recx_array recxs = { 0 };
+	struct obj_ec_codec *codec;
+	int p_shard; /* parity shard */
 	int idx;
 	int rc;
 
@@ -1380,11 +1369,13 @@ obj_ec_singv_encode_buf(daos_obj_id_t oid, int p_shard, daos_iod_t *iod,
 	recxs.oer_k = obj_ec_data_tgt_nr(oca);
 	recxs.oer_p = obj_ec_parity_tgt_nr(oca);
 	recxs.oer_stripe_total = 1;
-	rc = obj_ec_singv_encode(oid, iod, oca, NULL, sgl, &recxs);
+
+	codec = obj_ec_codec_get(daos_obj_id2class(oid.id_pub));
+	rc = obj_ec_singv_encode(codec, oca, iod, sgl, &recxs);
 	if (rc)
 		D_GOTO(out, rc);
 
-	p_shard = p_shard % obj_ec_tgt_nr(oca);
+	p_shard = oid.id_shard % obj_ec_tgt_nr(oca);
 	D_ASSERT(p_shard >= obj_ec_data_tgt_nr(oca));
 	idx = p_shard - obj_ec_data_tgt_nr(oca);
 	D_ASSERT(e_iov->iov_buf_len >=
@@ -1506,8 +1497,7 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
-		rc = obj_ec_singv_encode(oid, iod, oca, codec, sgl,
-					 ec_recx_array);
+		rc = obj_ec_singv_encode(codec, oca, iod, sgl, ec_recx_array);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -1562,11 +1552,10 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 	}
 
 	for (i = 0; i < reasb_req->orr_iod_nr; i++) {
-		rc = obj_ec_recx_encode(reasb_req->orr_oid,
+		rc = obj_ec_recx_encode(codec,
+					reasb_req->orr_oca,
 					&reasb_req->orr_uiods[i],
 					&reasb_req->orr_usgls[i],
-					reasb_req->orr_oca,
-					codec,
 					&reasb_req->orr_recxs[i]);
 		if (rc) {
 			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
