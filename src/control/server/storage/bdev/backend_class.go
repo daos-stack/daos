@@ -105,6 +105,9 @@ func appendConf(log logging.Logger, templ string, tier *storage.BdevTierProperti
 // writeNvmeConf generates nvme config file for given bdev type to be consumed
 // by spdk.
 func (sb *spdkBackend) writeNvmeConfig(req *storage.BdevWriteNvmeConfigRequest) error {
+	if len(req.TierProps) == 0 {
+		return nil
+	}
 	if req.ConfigOutputPath == "" {
 		return errors.New("no output config directory set in request")
 	}
