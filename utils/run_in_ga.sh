@@ -19,7 +19,9 @@ $SCONS --jobs 10 PREFIX=/opt/daos COMPILER="$COMPILER" TARGET_TYPE=release \
        BUILD_TYPE=debug
 echo ::endgroup::
 
+echo ::group::Config file
 cat daos.conf
+echo ::endgroup::
 
 echo ::group::Install debug
 $SCONS install
