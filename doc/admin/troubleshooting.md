@@ -291,7 +291,7 @@ sudo ipcrm -M 0x10242049
 
 ### Server Start Issues
 1. Read the log located in the `control_log_file`.
-1. Verify that the daos_server process is not currently running.
+1. Verify that the `daos_server` process is not currently running.
 1. Check the SCM device path in /dev.
 1. Verify the PCI addresses using `dmg storage scan`.
 
@@ -304,18 +304,21 @@ sudo ipcrm -M 0x10242049
 1. Try starting with `allow_insecure: true`. This will rule out the credential certificate issue.
 1. Verify that the `access_points` host is accessible and the port is not used.
 1. Check the `provider` entry. See the "Network Scan and Configuration" section of the admin guide for determining the right provider to use.
-1. Check `fabric_iface` in `servers`. They should be available and enabled.
+1. Check `fabric_iface` in `engines`. They should be available and enabled.
 1. Check that `socket_dir` is writeable by the daos_server.
+
 ### Errors creating a Pool
-1. Check which server rank you want to create a pool in with `dmg system query --verbose` and verify their State is Joined.
+1. Check which engine rank you want to create a pool in with `dmg system query --verbose` and verify their State is Joined.
 1. `DER_NOSPACE(-1007)` appears: Check the size of the NVMe and PMEM. Next, check the size of the existing pool. Then check that this new pool being created will fit into the remaining disk space.
+
 ### Problems creating a container
 1. Check that the path to daos is your intended binary. It's usually `/usr/bin/daos`.
-1. When the server configuration is changed, it's better to restart the agent.
+1. When the server configuration is changed, it's necessary to restart the agent.
 1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMEM and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server storage scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
 1. Check the interface used in the server config (`fabric_iface`) also exists in the client and can communicate with the server.
 1. Check the access_points of the agent config points to the correct server host.
 1. Call `daos pool query` and check that the pool exists and has free space.
+
 ### Applications run slow
 Verify if you're using Infiniband for `fabric_iface`: in the server config. The IO will be significantly slower with Ethernet.
 
