@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.101
-Release:       4%{?relval}%{?dist}
+Version:       1.3.102
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -462,8 +462,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Fri Jun 11 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.101-4
+* Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
 - Update to pmdk 1.11.0-rc1
+
+* Fri Jun 11 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.102-1
+- Version bump to 1.3.102 for 2.0 test build 2
 
 * Wed Jun 02 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.101-3
 - Remove libs from devel package
