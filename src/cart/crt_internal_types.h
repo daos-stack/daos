@@ -35,7 +35,7 @@ struct crt_na_ofi_config {
 };
 
 struct crt_prov_gdata {
-	/** NA pluging type */
+	/** NA plugin type */
 	int			cpg_provider;
 
 	struct crt_na_ofi_config cpg_na_ofi_config;
