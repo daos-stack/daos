@@ -29,6 +29,7 @@
 # pylint: disable=too-many-statements
 # pylint: disable=too-many-lines
 from __future__ import absolute_import, division, print_function
+from future.utils import raise_from
 import os
 import traceback
 import hashlib
@@ -467,7 +468,7 @@ class WebRetriever():
                     raise ExtractionError(subdir)
             except (IOError, tarfile.TarError) as io_error:
                 print(traceback.format_exc())
-                raise ExtractionError(subdir) from io_error
+                raise_from(ExtractionError(subdir), io_error)
         else:
             raise UnsupportedCompression(subdir)
 
@@ -1011,7 +1012,7 @@ class PreReqComponent():
             #pylint: enable=import-outside-toplevel
             define_components(self)
         except Exception as old:
-            raise BadScript("components", traceback.format_exc()) from old
+            raise_from(BadScript("components", traceback.format_exc()), old)
 
         # Go ahead and prebuild some components
 

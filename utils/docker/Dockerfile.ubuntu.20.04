@@ -60,6 +60,7 @@ RUN apt-get -y update && \
         python3-junit.xml \
         python3-pyxattr \
         python3-tabulate \
+        python3-future \
         scons \
         sudo \
         uuid-dev \
