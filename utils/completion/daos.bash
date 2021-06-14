@@ -38,24 +38,16 @@
 
 _daos_control_comp()
 {
-	COMPREPLY=($(GO_FLAGS_COMPLETION=1 ${COMP_WORDS[0]} "${args[@]}"))
-	local cur
-	local words
-	local cword
-	_get_comp_words_by_ref -n : cur words cword
-	args=("${words[@]:1:$cword}")
+	args=("${COMP_WORDS[@]:1:$COMP_CWORD}")
 
 	local IFS=$'\n'
 
 	COMPREPLY=($(GO_FLAGS_COMPLETION=1 ${COMP_WORDS[0]} "${args[@]}"))
-	__ltrim_colon_completions "$cur"
-
 	return 0
 }
 
 # these commands take advantage of automatic completion
 complete -F _daos_control_comp dmg
-complete -F _daos_control_comp daos_new -o nospace
 complete -F _daos_control_comp daos_agent
 complete -F _daos_control_comp daos_server
 

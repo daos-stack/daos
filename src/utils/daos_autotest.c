@@ -64,13 +64,13 @@ step_print(const char *status, const char *comment, va_list ap)
 	int	i;
 
 	end = clock();
-	fprintf(autotest_ap->outstream, "  %s    ", status);
+	printf("  %s    ", status);
 	sprintf(timing, "%03.3f", duration());
 	for (i = strlen(timing); i < 7; i++)
 		printf(" ");
-	fprintf(autotest_ap->outstream, "%s  ", timing);
+	printf("%s  ", timing);
 	vprintf(comment, ap);
-	fprintf(autotest_ap->outstream, "\n");
+	printf("\n");
 }
 
 static inline void
@@ -98,9 +98,9 @@ step_new(int step, char *msg)
 {
 	int i;
 
-	fprintf(autotest_ap->outstream, "%3d  %s", step, msg);
+	printf("%3d  %s", step, msg);
 	for (i = strlen(msg); i < 25; i++)
-		fprintf(autotest_ap->outstream, " ");
+		printf(" ");
 	fflush(stdout);
 	start = clock();
 }
@@ -108,9 +108,8 @@ step_new(int step, char *msg)
 static inline void
 step_init(void)
 {
-	fprintf(autotest_ap->outstream,
-		"\033[1;35mStep Operation               ");
-	fprintf(autotest_ap->outstream, "Status Time(sec) Comment\033[0m\n");
+	printf("\033[1;35mStep Operation               ");
+	printf("Status Time(sec) Comment\033[0m\n");
 }
 
 static int
@@ -821,12 +820,10 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 	}
 
 	if (force) {
-		fprintf(ap->outstream,
-			"\nSome steps \033[0;31mfailed\033[0m.\n");
+		printf("\nSome steps \033[0;31mfailed\033[0m.\n");
 		rc = 1;
 	} else {
-		fprintf(ap->outstream,
-			"\nAll steps \033[0;32mpassed\033[0m.\n");
+		printf("\nAll steps \033[0;32mpassed\033[0m.\n");
 		rc = 0;
 	}
 

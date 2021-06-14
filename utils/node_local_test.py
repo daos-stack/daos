@@ -1116,7 +1116,7 @@ def import_daos(server, conf):
 def run_daos_cmd(conf,
                  cmd,
                  show_stdout=False,
-                 valgrind=False):
+                 valgrind=True):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
@@ -1191,7 +1191,7 @@ def create_cont(conf, pool, posix=False, label=None):
 
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
+    assert rc.returncode == 0
     return rc.stdout.decode().split(' ')[-1].rstrip()
 
 def destroy_container(conf, pool, container):
@@ -1199,7 +1199,7 @@ def destroy_container(conf, pool, container):
     cmd = ['container', 'destroy', '--pool', pool, '--cont', container]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
+    assert rc.returncode == 0
     return rc.stdout.decode('utf-8').strip()
 
 def check_dfs_tool_output(output, oclass, csize):
@@ -2846,7 +2846,7 @@ class AllocFailTestRun():
                                 'code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
-        if not stderr.endswith("(-1009): Out of memory") and \
+        if not stderr.endswith("Out of memory (-1009)") and \
            'error parsing command line arguments' not in stderr and \
            self.stdout != self.aft.expected_stdout:
             if self.stdout != b'':

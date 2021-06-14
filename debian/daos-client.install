@@ -4,7 +4,6 @@ usr/bin/dmg
 usr/bin/daos_agent
 usr/bin/dfuse
 usr/bin/daos
-usr/bin/daos_old
 usr/lib64/libdfs.so
 usr/lib64/daos/API_VERSION
 usr/lib64/libduns.so
@@ -13,7 +12,6 @@ usr/lib64/libioil.so
 usr/lib64/libdaos_common.so
 usr/lib64/libdaos.so.*
 usr/lib64/libdfs_internal.so
-usr/lib64/libdaos_cmd_hdlrs.so
 usr/lib64/python3/site-packages/pydaos/*.py
 usr/lib64/python3/site-packages/pydaos/pydaos_shim.so
 usr/lib64/python3/site-packages/pydaos/raw/*.py
