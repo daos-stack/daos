@@ -456,9 +456,8 @@ test_disable_swim_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("tier1 disable_swim input - rank: %d.\n",
 		  e_req->rank);
 
-	crt_rank_abort_all(NULL);
 	crt_swim_disable_all();
-	crt_swim_fini();
+	crt_rank_abort_all(NULL);
 
 	e_reply = crt_reply_get(rpc_req);
 
