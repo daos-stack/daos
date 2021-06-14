@@ -419,9 +419,6 @@ test_shutdown_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("tier1 shutdown input - rank: %d.\n",
 		  e_req->rank);
 
-	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
-	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
-
 	e_reply = crt_reply_get(rpc_req);
 
 	/* If we got past the previous assert, then we've succeeded */
