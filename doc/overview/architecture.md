@@ -104,7 +104,7 @@ run one DAOS *server* instance per node, which in turn starts one
 DAOS *Engine* process per physical socket. Membership of the DAOS
 servers is recorded into the system map, that assigns a unique integer
 *rank* to each *Engine* process. Two different DAOS systems comprise
-two disjointed sets of DAOS servers, and do not coordinate with each other.
+two disjoint sets of DAOS servers, and do not coordinate with each other.
 
 The DAOS *server* is a multi-tenant daemon running on a Linux instance
 (either natively on the physical node or in a VM or container) of each
