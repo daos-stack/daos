@@ -223,7 +223,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                                                        rank)
             else:
                 output = self.dmg_command.pool_drain(self.pool.uuid,
-                                                     rank)               
+                                                     rank)
             self.print_and_assert_on_rebuild_failure(output)
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                        rank)
