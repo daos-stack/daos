@@ -59,7 +59,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmem-devel >= 1.11, libpmemobj-devel >= 1.11
+BuildRequires: libpmemobj-devel >= 1.11
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -158,10 +158,10 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
-Requires: libpmem1 >= 1.11, libpmemobj1 >= 1.11
+Requires: libpmemobj1 >= 1.11
 %else
 Requires: ipmctl > 02.00.00.3816
-Requires: libpmem >= 1.11, libpmemobj >= 1.11
+Requires: libpmemobj >= 1.11
 %endif
 Requires: hwloc
 Requires: mercury = %{mercury_version}
@@ -464,6 +464,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %changelog
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
 - Update to pmdk 1.11.0-rc1
+- Remove dependence on libpmem since we use libpmemobj directly
 
 * Fri Jun 11 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.102-1
 - Version bump to 1.3.102 for 2.0 test build 2
