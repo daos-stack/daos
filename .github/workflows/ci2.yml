@@ -117,3 +117,15 @@ jobs:
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg DEPS_JOBS=10
                           --build-arg COMPILER=${{ matrix.compiler }}
+    - name: Build debug in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_JAVA_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --build-arg DAOS_BUILD_TYPE=debug
+                          --build-arg COMPILER=${{ matrix.compiler }}
+    - name: Build devel in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_JAVA_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --build-arg DAOS_BUILD_TYPE=dev
+                          --build-arg COMPILER=${{ matrix.compiler }}
