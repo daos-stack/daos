@@ -553,7 +553,7 @@ class DaosServer():
             scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
 
         ref_engine = copy.deepcopy(scyaml['engines'][0])
-        ref_engine['scm_size'] = int(ref_engine['scm_size'] / self.engines)
+        ref_engine['storage'][0]['scm_size'] = int(ref_engine['storage'][0]['scm_size'] / self.engines)
         scyaml['engines'] = []
         server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
         for idx in range(self.engines):
@@ -561,7 +561,7 @@ class DaosServer():
             engine['log_file'] = self.server_logs[idx].name
             engine['first_core'] = ref_engine['targets'] * idx
             engine['fabric_iface_port'] += server_port_count * idx
-            engine['scm_mount'] = '{}_{}'.format(ref_engine['scm_mount'], idx)
+            engine['storage'][0]['scm_mount'] = '{}_{}'.format(ref_engine['storage'][0]['scm_mount'], idx)
             scyaml['engines'].append(engine)
         self._yaml_file = tempfile.NamedTemporaryFile(
             prefix='nlt-server-config-',
