@@ -240,10 +240,10 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
-	// testLog, _ := logging.NewTestLogger(t.Name())
-	// missingSB := newTestMgmtSvc(t, testLog)
-	// missingSB.harness.instances[0]._superblock = nil
-	// notAP := newTestMgmtSvc(t, testLog)
+	testLog, _ := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, testLog)
+	missingSB.harness.instances[0]._superblock = nil
+	notAP := newTestMgmtSvc(t, testLog)
 
 	for name, tc := range map[string]struct {
 		mgmtSvc       *mgmtSvc
@@ -261,25 +261,24 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			req:    &mgmtpb.PoolCreateReq{Uuid: mockUUID, Sys: "bad"},
 			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
-		// todo_tiering
-		// "missing superblock": {
-		// 	mgmtSvc:     missingSB,
-		// 	targetCount: 8,
-		// 	req: &mgmtpb.PoolCreateReq{
-		// 		Uuid:      common.MockUUID(0),
-		// 		Tierbytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-		// 	},
-		// 	expErr: errors.New("not an access point"),
-		// },
-		// "not access point": {
-		// 	mgmtSvc:     notAP,
-		// 	targetCount: 8,
-		// 	req: &mgmtpb.PoolCreateReq{
-		// 		Uuid:      common.MockUUID(0),
-		// 		Tierbytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-		// 	},
-		// 	expErr: errors.New("not an access point"),
-		// },
+		"missing superblock": {
+			mgmtSvc:     missingSB,
+			targetCount: 8,
+			req: &mgmtpb.PoolCreateReq{
+				Uuid:      common.MockUUID(0),
+				Tierbytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+			},
+			expErr: errors.New("not an access point"),
+		},
+		"not access point": {
+			mgmtSvc:     notAP,
+			targetCount: 8,
+			req: &mgmtpb.PoolCreateReq{
+				Uuid:      common.MockUUID(0),
+				Tierbytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+			},
+			expErr: errors.New("not an access point"),
+		},
 		"dRPC send fails": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
@@ -395,11 +394,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				// msc := scm.MockSysConfig{}
-				// mbc := scm.MockBackendConfig{}
 				mp := storage.NewProvider(log, 0, &engineCfg.Storage,
-					// scm.NewMockSysProvider(&msc),
-					// scm.NewMockProvider(log, &mbc, &msc),
 					nil, nil, nil)
 				srv := NewEngineInstance(log, mp, nil, r)
 				srv.ready.SetTrue()

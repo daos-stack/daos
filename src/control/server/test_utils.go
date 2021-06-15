@@ -159,7 +159,14 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 // newTestEngine returns an EngineInstance configured for testing.
 func newTestEngine(log logging.Logger, isAP bool, engineCfg ...*engine.Config) *EngineInstance {
 	if len(engineCfg) == 0 {
-		engineCfg = append(engineCfg, engine.NewConfig().WithTargetCount(1))
+		engineCfg = append(engineCfg, engine.NewConfig().
+			WithTargetCount(1).
+			WithStorage(
+				storage.NewTierConfig().
+					WithBdevClass("nvme").
+					WithBdevDeviceList("foo", "bar"),
+			),
+		)
 	}
 	rCfg := new(engine.TestRunnerConfig)
 	rCfg.Running.SetTrue()
