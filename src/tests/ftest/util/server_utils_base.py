@@ -6,8 +6,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
-from avocado import fail_on
-
 from command_utils_base import FormattedParameter, CommandWithParameters
 from command_utils import YamlCommand, CommandWithSubCommand
 

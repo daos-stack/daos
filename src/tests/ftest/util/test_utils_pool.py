@@ -13,8 +13,7 @@ from test_utils_base import TestDaosApiBase
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
-from general_utils import (check_pool_files, DaosTestError, run_command,
-                           create_string_buffer)
+from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 
 
@@ -212,7 +211,7 @@ class TestPool(TestDaosApiBase):
                         "Error: control method {} not supported for "
                         "create()".format(self.control_method.value))
 
-                elif self.control_method.value == self.USE_DMG and self.dmg:
+                if self.control_method.value == self.USE_DMG and self.dmg:
                     # Destroy the pool with the dmg command
                     self.dmg.pool_destroy(pool=self.uuid, force=force)
                     status = True

@@ -1481,6 +1481,38 @@ class TestWithServers(TestWithoutServers):
 
         return pool_params
 
+    def add_pool_with_params(self, pool_params, quantity=1):
+        """Add TestPools to the pool list with the specified parameters.
+
+        Args:
+            pool_params (dict): a dictionary of TestPool parameter name keys and
+                values
+            quantity (int, optional): number of pools to create with the same
+                parameters. Defaults to 1.
+
+        Raises:
+            TestFail: if multiple pools are being added and self.pool is not
+                defined as a list.
+
+        """
+        if quantity > 1 and not isinstance(self.pool, list):
+            self.fail(
+                "add_pool_with_params(): self.pool must be a list when adding "
+                "{} pools.".format(quantity))
+        for _ in range(quantity):
+            if quantity == 1 and not isinstance(self.pool, list):
+                # Define a single pool
+                self.pool = self.get_pool(create=False)
+                for name in pool_params:
+                    pool_param = getattr(self.pool, name)
+                    pool_param.update(pool_params[name])
+            else:
+                # Append the new pool to the existing pool list
+                self.pool.append(self.get_pool(create=False))
+                for name in pool_params:
+                    pool_param = getattr(self.pool[-1], name)
+                    pool_param.update(pool_params[name])
+
     def get_container(self, pool, namespace=None, create=True):
         """Get a test container object.
 

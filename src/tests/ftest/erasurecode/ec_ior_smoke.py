@@ -35,7 +35,7 @@ class EcodIor(IorTestBase):
         for oclass in obj_class:
             self.ior_cmd.dfs_oclass.update(oclass)
             self.ior_cmd.dfs_dir_oclass.update(oclass)
-            self.add_autosized_pools()
+            self.add_pool_with_params(self.get_pool_params())
             self.create_cont()
             self.ior_cmd.set_daos_params(
                 self.server_group, self.pool, self.container.uuid)

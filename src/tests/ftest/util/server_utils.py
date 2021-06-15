@@ -684,7 +684,7 @@ class DaosServerManager(SubprocessManager):
         """
         try:
             self.information["storage"] = self.dmg.storage_scan()
-        except CommandFailure as error:
+        except CommandFailure:
             self.information["storage"] = {}
 
     def collect_network_information(self):
@@ -694,7 +694,7 @@ class DaosServerManager(SubprocessManager):
         """
         try:
             self.information["network"] = self.dmg.network_scan()
-        except CommandFailure as error:
+        except CommandFailure:
             self.information["network"] = {}
 
     def _check_information(self, key, section, retry=True):
@@ -764,8 +764,7 @@ class DaosServerManager(SubprocessManager):
                             device["numa_node"]
         except KeyError as error:
             raise ServerFailed(
-                "ServerInformation: Error obtaining storage data: {}".format(
-                    error))
+                "ServerInformation: Error obtaining storage data") from error
 
         return data
 
@@ -795,8 +794,7 @@ class DaosServerManager(SubprocessManager):
                         data[hosts][device["Device"]].append(device["Provider"])
         except KeyError as error:
             raise ServerFailed(
-                "ServerInformation: Error obtaining network data: {}".format(
-                    error))
+                "ServerInformation: Error obtaining network data") from error
 
         return data
 
@@ -845,8 +843,7 @@ class DaosServerManager(SubprocessManager):
 
         except KeyError as error:
             raise ServerFailed(
-                "ServerInformation: Error obtaining storage data: {}".format(
-                    error))
+                "ServerInformation: Error obtaining storage data") from error
 
         self.log.info("Detected device capacities:")
         for category in sorted(device_capacity):
