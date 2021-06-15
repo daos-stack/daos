@@ -30,7 +30,7 @@ ior:
   block_size: 16m
   segment_count: 16
   transfer_size: 16m
-  dfs_oclass: RP_3GX
+  dfs_oclass: RP_3G1
 test:
   loop_quantity: !mux
     one_loop:
@@ -46,5 +46,5 @@ test:
     last_rank:
       rank: 4
   containers: 70
-  container_obj_class: "OC_RP_3GX"
+  container_obj_class: "OC_RP_3G1"
   use_ior: True
