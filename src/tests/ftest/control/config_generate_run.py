@@ -9,8 +9,6 @@ import yaml
 
 from apricot import TestWithServers
 from command_utils import CommandFailure
-from general_utils import get_default_config_file, distribute_files,\
-    DaosTestError
 from server_utils import ServerFailed
 from server_utils_params import DaosServerYamlParameters
 
@@ -66,68 +64,29 @@ class ConfigGenerateRun(TestWithServers):
         # Remove this line when DAOS-7861 is fixed.
         generated_yaml["nr_hugepages"] = 4096
 
-        # Create a temporary file in self.test_dir and write the generated
-        # config.
-        temp_file_path = os.path.join(self.test_dir, "temp_server.yml")
-        try:
-            with open(temp_file_path, 'w') as write_file:
-                yaml.dump(generated_yaml, write_file, default_flow_style=False)
-        except Exception as error:
-            raise CommandFailure(
-                "Error writing the yaml file! {}: {}".format(
-                    temp_file_path, error)) from error
-
-        # Copy the config from temp dir to /etc/daos of the server node.
-        default_server_config = get_default_config_file("server")
-        try:
-            distribute_files(
-                self.hostlist_servers, temp_file_path, default_server_config,
-                verbose=False, sudo=True)
-        except DaosTestError as error:
-            raise CommandFailure(
-                "ERROR: Copying yaml configuration file to {}: "
-                "{}".format(server_host, error)) from error
-
         # Stop and restart daos_server. self.start_server_managers() has the
         # server startup check built into it, so if there's something wrong,
         # it'll throw an error.
         self.log.info("Stopping servers")
         self.stop_servers()
 
+        # Create a new server config from generated_yaml and update SCM-related
+        # data in engine_params so that the cleanup before the server start
+        # works.
+        self.log.info("Copy config to /etc/daos and update engine_params")
+        self.server_managers[0].update_config_file_from_file(
+            self.hostlist_servers, self.test_dir, generated_yaml)
+
+        # Start server with the generated config.
+        self.log.info("Restarting server with the generated config")
+        try:
+            agent_force = self.start_server_managers(force=True)
+        except ServerFailed as error:
+            self.fail("Restarting server failed! %s", error)
+
         # We don't need agent for this test. However, when we stop the server,
         # agent is also stopped. Then the harness checks that the agent is
         # running during the teardown. If agent isn't running at that point, it
         # would cause an error, so start it here.
         self.log.info("Restarting agents")
-        self.start_agent_managers()
-
-        # Before restarting daos_server, we need to clear SCM. Unmount the mount
-        # point, wipefs the disks, etc. This clearing step is built into the
-        # server start steps. It'll look at the engine_params of the
-        # server_manager and clear the SCM set there, so we need to overwrite it
-        # before starting to the values from the generated config.
-        self.log.info("Resetting engine_params")
-        self.server_managers[0].manager.job.yaml.engine_params = []
-        engines = generated_yaml["engines"]
-        for i, engine in enumerate(engines):
-            self.log.info("engine %d", i)
-            self.log.info("scm_mount = %s", engine["scm_mount"])
-            self.log.info("scm_class = %s", engine["scm_class"])
-            self.log.info("scm_list = %s", engine["scm_list"])
-
-            per_engine_yaml_parameters =\
-                DaosServerYamlParameters.PerEngineYamlParameters(i)
-            per_engine_yaml_parameters.scm_mount.update(engine["scm_mount"])
-            per_engine_yaml_parameters.scm_class.update(engine["scm_class"])
-            per_engine_yaml_parameters.scm_size.update(None)
-            per_engine_yaml_parameters.scm_list.update(engine["scm_list"])
-
-            self.server_managers[0].manager.job.yaml.engine_params.append(
-                per_engine_yaml_parameters)
-
-        # Start server with the generated config.
-        self.log.info("Restarting server with the generated config")
-        try:
-            self.start_server_managers()
-        except ServerFailed as error:
-            self.fail("Restarting server failed! %s", error)
+        self.start_agent_managers(force=agent_force)
