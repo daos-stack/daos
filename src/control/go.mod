@@ -7,7 +7,6 @@ require (
 	github.com/armon/go-metrics v0.3.6 // indirect
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.10.0 // indirect
-	github.com/golang/protobuf v1.5.2
 	github.com/google/go-cmp v0.5.5
 	github.com/google/uuid v1.1.2
 	github.com/hashicorp/go-hclog v0.16.0
