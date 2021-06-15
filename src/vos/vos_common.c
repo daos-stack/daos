@@ -557,6 +557,12 @@ vos_self_init(const char *db_path)
 		D_GOTO(out, rc);
 	}
 
+	rc = vos_pool_settings_init();
+	if (rc != 0) {
+		D_MUTEX_UNLOCK(&self_mode.self_lock);
+		return rc;
+	}
+
 	rc = ABT_init(0, NULL);
 	if (rc != 0) {
 		D_MUTEX_UNLOCK(&self_mode.self_lock);
