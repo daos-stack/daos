@@ -1043,7 +1043,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	int				 rc = 0;
 
 	oca = obj_get_oca(obj);
-	if (DAOS_OC_IS_EC(oca)) {
+	if (daos_oclass_is_ec(oca)) {
 		struct obj_reasb_req	*reasb_req;
 
 		D_ALLOC_PTR(reasb_req);
@@ -1177,7 +1177,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
-			if (DAOS_OC_IS_EC(oca) && !all) {
+			if (daos_oclass_is_ec(oca) && !all) {
 				if (idx >= start + obj->cob_grp_size -
 							oca->u.ec.e_p)
 					skipped_parity++;
@@ -1333,7 +1333,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	if (read)
 		dtr->dtr_group.drg_flags = DGF_RDONLY;
 
-	if (DAOS_OC_IS_EC(oca) && !all) {
+	if (daos_oclass_is_ec(oca) && !all) {
 		dtr->dtr_group.drg_redundancy = oca->u.ec.e_p + 1;
 		D_ASSERT(dtr->dtr_group.drg_redundancy <= obj->cob_grp_size);
 	} else {
