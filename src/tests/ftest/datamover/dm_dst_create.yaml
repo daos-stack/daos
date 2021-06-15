@@ -37,5 +37,3 @@ dcp:
             daos_api: DAOS
     client_processes:
         np: 3
-dfuse:
-    mount_dir: "/tmp/daos_dfuse"

@@ -6,7 +6,7 @@
 '''
 from ior_test_base import IorTestBase
 
-class ErasureCodeIor(IorTestBase):
+class EcodIor(IorTestBase):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object type classes.
