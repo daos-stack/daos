@@ -543,7 +543,7 @@ pool_iv_map_ent_fetch(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 	dst_pbuf_size = dst_sgl->sg_iovs[0].iov_buf_len -
 		  sizeof(struct pool_iv_map) + sizeof(struct pool_buf);
 
-	if (src_pbuf_size >= dst_pbuf_size) {
+	if (src_pbuf_size <= dst_pbuf_size) {
 		memcpy(&dst_iv->piv_map.piv_pool_buf,
 		       &src_iv->piv_map.piv_pool_buf, src_pbuf_size);
 		dst_sgl->sg_iovs[0].iov_len = pool_iv_map_ent_size(pb_nr);
