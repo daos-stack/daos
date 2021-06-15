@@ -58,7 +58,7 @@ class WrapScript():
             if match:
                 if not scons_header:
                     scons_header = True
-                    self.write_header(outfile)
+                    new_lineno += self.write_header(outfile)
                 variables = []
                 for var in match.group(2).split():
                     newvar = var.strip("\",     '")
@@ -196,8 +196,8 @@ def create_rc(src_name):
     with open(name, "w") as tmp:
         tmp.write("[MASTER]\n")
         tmp.write("init-hook='import sys; ")
-        tmp.write("sys.path.insert(0, \"%s\"); " % root)
-        tmp.write("sys.path.insert(0, \"%s/fake_scons\")'\n" % root)
+        tmp.write("sys.path.insert(0, \"%s/fake_scons\"); " % root)
+        tmp.write("sys.path.insert(0, \"%s/../../site_scons\")'\n" % root)
         with open(src_path, "r") as src:
             for line in src.readlines():
                 tmp.write(line)

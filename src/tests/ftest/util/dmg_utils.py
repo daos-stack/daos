@@ -11,12 +11,10 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 import json
-import yaml
 
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
-from command_utils import CommandFailure
 
 
 def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
