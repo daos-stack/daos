@@ -30,6 +30,22 @@
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 
+int
+vos_pool_settings_init(void)
+{
+	int					rc;
+	enum pobj_arenas_assignment_type	atype;
+
+	atype = POBJ_ARENAS_ASSIGNMENT_GLOBAL;
+
+	rc = pmemobj_ctl_set(NULL, "heap.arenas_assignment_type", &atype);
+	if (rc != 0)
+		D_ERROR("Could not configure PMDK for global arena: %s\n",
+			strerror(errno));
+
+	return rc;
+}
+
 static inline PMEMobjpool *
 vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
 		   mode_t mode)
