@@ -1582,12 +1582,11 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 			for (i = 0; i < failed_tgts_cnt; i++) {
 				if (targets[i].ta_comp.co_rank ==
 				    peer_loc->sd_rank) {
-					D_ERROR(DF_UOID" peer parity tgt "
-						"failed rank %d, tgt_idx %d.\n",
-						DP_UOID(entry->ae_oid),
+					D_DEBUG(DB_EPC, DF_UOID" peer parity "
+						"tgt failed rank %d, tgt_idx "
+						"%d.\n", DP_UOID(entry->ae_oid),
 						peer_loc->sd_rank,
 						peer_loc->sd_tgt_idx);
-					rc = -1;
 					goto out;
 				}
 			}
@@ -2411,6 +2410,7 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc == 1 && entry->ie_oid.id_shard >= oca.u.ec.e_k) {
 		D_DEBUG(DB_EPC, "oid:"DF_UOID" ec agg starting\n",
 			DP_UOID(entry->ie_oid));
+
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, &oca);
 		rc = 0;
 		goto out;
