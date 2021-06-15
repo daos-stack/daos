@@ -48,7 +48,7 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 }
 
 func (svc *ControlService) querySCMFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.ScmFirmwareQueryResp, error) {
-	queryResp, err := svc.defaultProvider().Scm.QueryFirmware(storage.ScmFirmwareQueryRequest{
+	queryResp, err := svc.storage.Scm.QueryFirmware(storage.ScmFirmwareQueryRequest{
 		FirmwareRev: pbReq.FirmwareRev,
 		ModelID:     pbReq.ModelID,
 		DeviceUIDs:  pbReq.DeviceIDs,
@@ -77,7 +77,7 @@ func (svc *ControlService) querySCMFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*c
 }
 
 func (svc *ControlService) queryNVMeFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.NvmeFirmwareQueryResp, error) {
-	queryResp, err := svc.defaultProvider().Bdev.QueryFirmware(storage.NVMeFirmwareQueryRequest{
+	queryResp, err := svc.storage.Bdev.QueryFirmware(storage.NVMeFirmwareQueryRequest{
 		FirmwareRev: pbReq.FirmwareRev,
 		ModelID:     pbReq.ModelID,
 		DeviceAddrs: pbReq.DeviceIDs,
@@ -137,7 +137,7 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 }
 
 func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
-	updateResp, err := svc.defaultProvider().Scm.UpdateFirmware(storage.ScmFirmwareUpdateRequest{
+	updateResp, err := svc.storage.Scm.UpdateFirmware(storage.ScmFirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
 		FirmwareRev:  pbReq.FirmwareRev,
 		ModelID:      pbReq.ModelID,
@@ -160,7 +160,7 @@ func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctl
 }
 
 func (svc *ControlService) updateNVMe(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
-	updateResp, err := svc.defaultProvider().Bdev.UpdateFirmware(storage.NVMeFirmwareUpdateRequest{
+	updateResp, err := svc.storage.Bdev.UpdateFirmware(storage.NVMeFirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
 		FirmwareRev:  pbReq.FirmwareRev,
 		ModelID:      pbReq.ModelID,

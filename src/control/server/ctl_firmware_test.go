@@ -7,11 +7,21 @@
 package server
 
 import (
+	"context"
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 )
 
 func getPBNvmeQueryResults(t *testing.T, devs storage.NvmeControllers) []*ctlpb.NvmeFirmwareQueryResp {
@@ -53,7 +63,6 @@ func getProtoScmModules(t *testing.T, modules storage.ScmModules) []*ctlpb.ScmMo
 	return results
 }
 
-/* todo_tiering
 func TestCtlSvc_FirmwareQuery(t *testing.T) {
 	testFWInfo := &storage.ScmFirmwareInfo{
 		ActiveVersion:     "MyActiveVersion",
@@ -797,7 +806,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				rCfg := new(engine.TestRunnerConfig)
 				rCfg.Running.Store(tc.enginesRunning)
 				runner := engine.NewTestRunner(rCfg, engine.NewConfig())
-				instance := NewEngineInstance(log, nil, nil, nil, runner)
+				instance := NewEngineInstance(log, nil, nil, runner)
 				if !tc.noRankEngines {
 					instance._superblock = &Superblock{}
 					instance._superblock.ValidRank = true
@@ -818,5 +827,3 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 		})
 	}
 }
-
- todo_tiering */
