@@ -27,7 +27,7 @@ class IorLarge(IorTestBase):
             1K/4K/32K/128K/512K/1M transfersize.
 
         :avocado: tags=all
-        :avocado: tags=hw,large,dfuse
+        :avocado: tags=hw,large
         :avocado: tags=daosio
         :avocado: tags=iorlarge_sequential,iorlarge
         """
@@ -48,7 +48,7 @@ class IorLarge(IorTestBase):
 
         :avocado: tags=all
         :avocado: tags=hw,large
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=daosio
         :avocado: tags=iorlarge_random,iorlarge
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/random/")
@@ -68,7 +68,7 @@ class IorLarge(IorTestBase):
 
         :avocado: tags=all
         :avocado: tags=hw,large
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=daosio
         :avocado: tags=iorlarge_fpp,iorlarge
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/fpp/")
