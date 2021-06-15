@@ -234,8 +234,9 @@ show_help(char *name)
 		"\n"
 		"	-m --mountpoint=<path>	Mount point to use\n"
 		"\n"
-		"	   --pool=label		pool UUID/label\n"
-		"	   --container=label	container UUID/label\n"
+		"	   --pool=name		pool UUID/label\n"
+		"	   --container=name	container UUID/label\n"
+		"	   --path=<path>	Path to load UNS pool/container data\n"
 		"	   --sys-name=STR	DAOS system name context for servers\n"
 		"\n"
 		"	-S --singlethread	Single threaded\n"
@@ -251,8 +252,9 @@ show_help(char *name)
 		"many using the uuids as leading components of the path.\n"
 		"Pools and containers can be specified using either uuids or labels.\n"
 		"\n"
-		"If the mount directory has Unified Namespace xattrs set then pool and container\n"
-		"from there will be used.\n"
+		"The path option can be use to set a filesystem path from with Namespace attributes\n"
+		"will be loaded, or if path is not set then the mount directory will also be\n"
+		"checked.  Only one way of setting pool and container data should be used.\n"
 		"\n"
 		"The default thread count is one per available core to allow maximum throughput,\n"
 		"this can be modified by running dfuse in a cpuset via numactl or similar tools.\n"
@@ -284,18 +286,20 @@ main(int argc, char **argv)
 	struct dfuse_info	*dfuse_info = NULL;
 	struct dfuse_pool	*dfp = NULL;
 	struct dfuse_cont	*dfs = NULL;
+	struct duns_attr_t	path_attr = {};
 	struct duns_attr_t	duns_attr = {};
 	uuid_t			cont_uuid = {};
 	uuid_t			pool_uuid = {};
+	char			*pool_name = NULL;
+	char			*cont_name = NULL;
 	char			c;
-	int			ret = -DER_SUCCESS;
 	int			rc;
+	char			*path = NULL;
 	bool			have_thread_count = false;
-	bool			have_pool_label = false;
-	bool			have_cont_label = false;
 
 	struct option long_options[] = {
 		{"mountpoint",		required_argument, 0, 'm'},
+		{"path",		required_argument, 0, 'P'},
 		{"pool",		required_argument, 0, 'p'},
 		{"container",		required_argument, 0, 'c'},
 		{"sys-name",		required_argument, 0, 'G'},
@@ -311,18 +315,18 @@ main(int argc, char **argv)
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
-		D_GOTO(out, ret = rc);
+		D_GOTO(out, rc);
 
 	D_ALLOC_PTR(dfuse_info);
-	if (!dfuse_info)
-		D_GOTO(out_debug, ret = -DER_NOMEM);
+	if (dfuse_info == NULL)
+		D_GOTO(out_debug, rc = -DER_NOMEM);
 
 	dfuse_info->di_threaded = true;
 	dfuse_info->di_caching = true;
 	dfuse_info->di_wb_cache = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "m:Stfhv",
+		c = getopt_long(argc, argv, "m:St:fhv",
 				long_options, NULL);
 
 		if (c == -1)
@@ -330,10 +334,10 @@ main(int argc, char **argv)
 
 		switch (c) {
 		case 'p':
-			dfuse_info->di_pool = optarg;
+			pool_name = optarg;
 			break;
 		case 'c':
-			dfuse_info->di_cont = optarg;
+			cont_name = optarg;
 			break;
 		case 'G':
 			dfuse_info->di_group = optarg;
@@ -347,6 +351,9 @@ main(int argc, char **argv)
 			break;
 		case 'm':
 			dfuse_info->di_mountpoint = optarg;
+			break;
+		case 'P':
+			path = optarg;
 			break;
 		case 'S':
 			/* Set it to be single threaded, but allow an extra one
@@ -364,16 +371,16 @@ main(int argc, char **argv)
 			break;
 		case 'h':
 			show_help(argv[0]);
-			D_GOTO(out_debug, ret = -DER_SUCCESS);
+			D_GOTO(out_debug, rc = -DER_SUCCESS);
 			break;
 		case 'v':
 			show_version(argv[0]);
 
-			D_GOTO(out_debug, ret = -DER_SUCCESS);
+			D_GOTO(out_debug, rc = -DER_SUCCESS);
 			break;
 		case '?':
 			show_help(argv[0]);
-			D_GOTO(out_debug, ret = -DER_INVAL);
+			D_GOTO(out_debug, rc = -DER_INVAL);
 			break;
 		}
 	}
@@ -387,7 +394,7 @@ main(int argc, char **argv)
 	if (!dfuse_info->di_mountpoint) {
 		printf("Mountpoint is required\n");
 		show_help(argv[0]);
-		D_GOTO(out_debug, ret = -DER_INVAL);
+		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 
 	if (dfuse_info->di_threaded && !have_thread_count) {
@@ -396,7 +403,7 @@ main(int argc, char **argv)
 		rc = sched_getaffinity(0, sizeof(cpuset), &cpuset);
 		if (rc != 0) {
 			printf("Failed to get cpuset information\n");
-			D_GOTO(out_debug, ret = -DER_INVAL);
+			D_GOTO(out_debug, rc = -DER_INVAL);
 		}
 
 		dfuse_info->di_thread_count = CPU_COUNT(&cpuset);
@@ -404,21 +411,11 @@ main(int argc, char **argv)
 
 	if (dfuse_info->di_thread_count < 2) {
 		printf("Dfuse needs at least two threads.\n");
-		D_GOTO(out_debug, ret = -DER_INVAL);
+		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 
 	/* Reserve one CPU thread for the daos event queue */
 	dfuse_info->di_thread_count -= 1;
-
-	if (dfuse_info->di_pool) {
-		/* Check pool uuid here, but do not abort */
-		if (uuid_parse(dfuse_info->di_pool, pool_uuid) < 0)
-			have_pool_label = true;
-
-		if ((dfuse_info->di_cont) &&
-			(uuid_parse(dfuse_info->di_cont, cont_uuid) < 0))
-			have_cont_label = true;
-	}
 
 	if (!dfuse_info->di_foreground) {
 		rc = dfuse_bg(dfuse_info);
@@ -428,87 +425,107 @@ main(int argc, char **argv)
 		}
 	}
 
+	if (cont_name && !pool_name) {
+		printf("Container name specified without pool\n");
+		D_GOTO(out_debug, rc = -DER_INVAL);
+	}
+
 	rc = daos_init();
 	if (rc != -DER_SUCCESS)
-		D_GOTO(out_debug, ret = rc);
+		D_GOTO(out_debug, rc = rc);
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
 	rc = dfuse_fs_init(dfuse_info, &fs_handle);
 	if (rc != 0)
-		D_GOTO(out_debug, ret = rc);
+		D_GOTO(out_debug, rc = rc);
 
-	if (have_pool_label) {
-		rc = dfuse_pool_connect_by_label(fs_handle,
-						 dfuse_info->di_pool,
-						 &dfp);
-		if (rc != 0) {
-			printf("Failed to connect to pool (%d) %s\n",
-				rc, strerror(rc));
-			D_GOTO(out_dfs, ret = daos_errno2der(rc));
+	/* Firsly check for attributes on the path.  If this option is set then
+	 * it is expected to work.
+	 */
+	if (path) {
+		if (pool_name) {
+			printf("Pool specified multiple ways");
+			D_GOTO(out_daos, rc = -DER_INVAL);
 		}
-		uuid_copy(pool_uuid, dfp->dfp_pool);
+
+		path_attr.da_no_reverse_lookup = true;
+		rc = duns_resolve_path(path, &path_attr);
+		DFUSE_TRA_INFO(dfuse_info,
+			       "duns_resolve_path() on path returned %d %s",
+			       rc, strerror(rc));
+		if (rc == ENOENT) {
+			printf("Attr path does not exist\n");
+			D_GOTO(out_daos, rc = daos_errno2der(rc));
+		} else {
+			/* Abort on all errors here, even ENODATA or ENOTSUP
+			 * because the path is supposed to provide
+			 * pool/container details and it's an error if it can't.
+			 */
+			D_GOTO(out_daos, rc = daos_errno2der(rc));
+		}
+		uuid_copy(pool_uuid, path_attr.da_puuid);
 	}
 
-	if (have_cont_label) {
-		rc = dfuse_cont_open_by_label(fs_handle,
-					      dfp,
-					      dfuse_info->di_cont,
-					      &dfs);
-		if (rc != 0) {
-			printf("Failed to connect to container (%d) %s\n",
-				rc, strerror(rc));
-			D_GOTO(out_dfs, ret = daos_errno2der(rc));
-		}
-		uuid_copy(cont_uuid, dfs->dfs_cont);
-	}
-
+	/* Check for attributes on the mount point itself to use.
+	 * Abort if path exists and mountpoint has attrs as both should not be
+	 * set, but if nothing exists on the mountpoint then this is not an
+	 * error so keep going.
+	 */
 	duns_attr.da_no_reverse_lookup = true;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
-	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s",
+	DFUSE_TRA_INFO(dfuse_info,
+		       "duns_resolve_path() on mountpoint returned %d %s",
 		       rc, strerror(rc));
 	if (rc == 0) {
-		if (dfuse_info->di_pool &&
-		    (uuid_compare(duns_attr.da_puuid, pool_uuid))) {
-			printf("Pools uuids do not match\n");
-			D_GOTO(out_dfs, rc = -DER_INVAL);
+		if (pool_name) {
+			printf("Pool specified multiple ways\n");
+			D_GOTO(out_daos, rc = -DER_INVAL);
 		}
-
-		if (dfuse_info->di_cont &&
-		    (uuid_compare(duns_attr.da_cuuid, cont_uuid))) {
-			printf("Container uuids do not match\n");
-			D_GOTO(out_dfs, rc = -DER_INVAL);
+		/* If path was set, and is different to mountpoint then abort.
+		 */
+		if (path && (strcmp(path, dfuse_info->di_mountpoint) == 0)) {
+			printf("Attributes set on both path and mountpoint\n");
+			D_GOTO(out_daos, rc = -DER_INVAL);
 		}
-
 		uuid_copy(pool_uuid, duns_attr.da_puuid);
 		uuid_copy(cont_uuid, duns_attr.da_cuuid);
 	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
-		D_GOTO(out_dfs, ret = daos_errno2der(rc));
+		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	} else if (rc != ENODATA && rc != ENOTSUP) {
 		/* Other errors from DUNS, it should have logged them already */
-		D_GOTO(out_dfs, ret = daos_errno2der(rc));
+		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	/* Connect to DAOS pool, uuid may be null here but we still allocate a
-	 * dfp
+	/* Connect to a pool.
+	 * At this point if a pool is chosen by another means then pool_uuid
+	 * is already set, so try and parse pool_name, if that's not a uuid
+	 * then try it as a label, else try it as a uuid.
 	 */
-	if (!have_pool_label) {
+	if (pool_name && (uuid_parse(pool_name, pool_uuid) < 0))
+		rc = dfuse_pool_connect_by_label(fs_handle,
+						 pool_name,
+						 &dfp);
+	else
 		rc = dfuse_pool_connect(fs_handle, &pool_uuid, &dfp);
-		if (rc != 0) {
-			printf("Failed to connect to pool (%d) %s\n",
-				rc, strerror(rc));
-			D_GOTO(out_dfs, ret = daos_errno2der(rc));
-		}
+	if (rc != 0) {
+		printf("Failed to connect to pool (%d) %s\n",
+			rc, strerror(rc));
+		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	if (!have_cont_label) {
+	if (cont_name && (uuid_parse(cont_name, cont_uuid) < 0))
+		rc = dfuse_cont_open_by_label(fs_handle,
+					      dfp,
+					      cont_name,
+					      &dfs);
+	else
 		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
-		if (rc != 0) {
-			printf("Failed to connect to container (%d) %s\n",
-				rc, strerror(rc));
-			D_GOTO(out_dfs, ret = daos_errno2der(rc));
-		}
+	if (rc != 0) {
+		printf("Failed to connect to container (%d) %s\n",
+			rc, strerror(rc));
+		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
 	/* The container created by dfuse_cont_open() will have taken a ref
@@ -521,31 +538,30 @@ main(int argc, char **argv)
 
 	rc = dfuse_start(fs_handle, dfs);
 	if (rc != -DER_SUCCESS)
-		D_GOTO(out_dfs, ret = rc);
+		D_GOTO(out_daos, rc);
 
 	/* Remove all inodes from the hash tables */
-	ret = dfuse_fs_fini(fs_handle);
+	rc = dfuse_fs_fini(fs_handle);
 
 	fuse_session_destroy(dfuse_info->di_session);
 
-out_dfs:
-
+out_daos:
 	DFUSE_TRA_DOWN(dfuse_info);
 	daos_fini();
 out_debug:
 	D_FREE(dfuse_info);
-	DFUSE_LOG_INFO("Exiting with status %d", ret);
+	DFUSE_LOG_INFO("Exiting with status %d", rc);
 	daos_debug_fini();
 out:
-	dfuse_send_to_fg(ret);
+	dfuse_send_to_fg(rc);
 
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not
 	 * DAOS error numbers.
 	 */
 
-	if (ret)
-		return -(ret + DER_ERR_GURT_BASE);
+	if (rc)
+		return -(rc + DER_ERR_GURT_BASE);
 	else
 		return 0;
 }
