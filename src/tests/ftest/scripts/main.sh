@@ -237,7 +237,6 @@ fi
 
 # now run it!
 # shellcheck disable=SC2086
-env
 if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
                  -ts "${TEST_NODES}" ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
