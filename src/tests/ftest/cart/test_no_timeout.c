@@ -83,6 +83,51 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	}
 }
 
+void test_shutdown_handler(crt_rpc_t *rpc_req)
+{
+	DBG_PRINT("tier1 test_srver received shutdown request, opc: %#x.\n",
+		  rpc_req->cr_opc);
+
+	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
+	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
+
+	tc_progress_stop();
+	DBG_PRINT("tier1 test_srver set shutdown flag.\n");
+}
+
+/* The ordering here must match the opcode ordering in test_group_rpc.h */
+static struct crt_proto_rpc_format my_proto_rpc_fmt_test_no_timeout[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
+		.prf_req_fmt	= &CQF_crt_test_ping_delay,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_test_no_timeout = {
+	.cpf_name = "my-proto-test-no_timeout",
+	.cpf_ver = TEST_NO_TIMEOUT_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_test_no_timeout),
+	.cpf_prf = &my_proto_rpc_fmt_test_no_timeout[0],
+	.cpf_base = TEST_NO_TIMEOUT_BASE,
+};
+
 static void
 ping_delay_reply(crt_group_t *remote_group, int rank, int tag, uint32_t delay)
 {
@@ -156,7 +201,7 @@ test_run(void)
 	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 
 	/* register RPCs */
-	rc = crt_proto_register(&my_proto_fmt_test_group1);
+	rc = crt_proto_register(&my_proto_fmt_test_no_timeout);
 	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n", rc);
 
 	rc = tc_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
@@ -183,13 +228,24 @@ test_run(void)
 	}
 
 	if (test_g.t_my_rank == 0) {
-
-		/* Shutdown all ranks or those specified by --rank option */
+		/* client rank 0 tells all servers to shut down */
 		for (i = 0; i < rank_list->rl_nr; i++) {
-			DBG_PRINT("Shutting down rank %d.\n",
-				  rank_list->rl_ranks[i]);
-			server_ep.ep_rank = rank_list->rl_ranks[i];
-			send_rpc_shutdown(server_ep, rpc_req);
+			rank = rank_list->rl_ranks[i];
+
+			server_ep.ep_grp = grp;
+			server_ep.ep_rank = rank;
+
+			rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
+					    TEST_OPC_SHUTDOWN, &rpc_req);
+			D_ASSERTF(rc == 0 && rpc_req != NULL,
+				  "crt_req_create() failed. "
+				  "rc: %d, rpc_req: %p\n", rc, rpc_req);
+			rc = crt_req_send(rpc_req, client_cb_common, NULL);
+			D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
+				  rc);
+
+			tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
+					   __LINE__);
 		}
 	}
 
