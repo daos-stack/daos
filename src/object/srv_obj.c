@@ -12,6 +12,8 @@
 #define D_LOGFAC	DD_FAC(object)
 
 #include <uuid/uuid.h>
+#include <sys/syscall.h>
+#include <math.h>
 
 #include <abt.h>
 #include <daos/rpc.h>
@@ -1847,10 +1849,28 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 	obj_ioc_fini(ioc);
 }
 
+enum {
+	ECCS_16K,
+	ECCS_32K,
+	ECCS_64K,
+	ECCS_128K,
+	ECCS_256K,
+	ECCS_512K,
+	ECCS_1024K,
+	ECCS_ALL,
+};
+
+__thread uint64_t	eccs_stats[ECCS_ALL];
+__thread int		eccs_log_idx;
+__thread unsigned long	eccs_log_sec;
+
+#define ECCS_LOG_INTV		10
+
 static int
 obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
+	struct timeval		 tv;
 	bool			 priv;
 
 	oca = daos_oclass_attr_find(oid, &priv);
@@ -1859,10 +1879,41 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 
 	ioc->ioc_oca = *oca;
 	if (daos_oclass_is_ec(oca) && !priv) {
+		int		idx;
+
 		/* don't ovewrite cell size of private class */
 		D_ASSERT(ioc->ioc_coc != NULL);
 		ioc->ioc_oca.u.ec.e_len = ioc->ioc_coc->sc_props.dcp_ec_cell_sz;
 		D_ASSERT(ioc->ioc_oca.u.ec.e_len != 0);
+
+		idx = ioc->ioc_oca.u.ec.e_len >> 14; /* shift for 16K */
+		idx = (int)log2(idx);
+		D_ASSERTF(idx >= ECCS_16K && idx <= ECCS_1024K,
+			  "idx=%d, cell_sz=%d\n", idx,
+			  (int)ioc->ioc_oca.u.ec.e_len);
+		eccs_stats[idx]++;
+	}
+	gettimeofday(&tv, NULL);
+	if (eccs_log_sec + ECCS_LOG_INTV < tv.tv_sec) {
+		eccs_log_sec = tv.tv_sec;
+		eccs_log_idx++;
+		D_DEBUG(DB_ST, "EC CELLS[%d:%d]: "
+			       "16K="DF_U64", "
+			       "32K="DF_U64", "
+			       "64K="DF_U64", "
+			       "128K="DF_U64", "
+			       "256K="DF_U64", "
+			       "512K="DF_U64", "
+			       "1024K="DF_U64"\n",
+			       (int)syscall(SYS_gettid),
+			       eccs_log_idx,
+			       eccs_stats[ECCS_16K],
+			       eccs_stats[ECCS_32K],
+			       eccs_stats[ECCS_64K],
+			       eccs_stats[ECCS_128K],
+			       eccs_stats[ECCS_256K],
+			       eccs_stats[ECCS_512K],
+			       eccs_stats[ECCS_1024K]);
 	}
 	return 0;
 }

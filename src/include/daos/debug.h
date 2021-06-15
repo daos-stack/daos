@@ -67,7 +67,9 @@
 	/** checksum */						\
 	ACTION(DB_CSUM,	   csum,    checksum,	    0, arg)	\
 	/** daos management */					\
-	ACTION(DB_DSMS,	   dsms,    service,	    0, arg)
+	ACTION(DB_DSMS,	   dsms,    service,	    0, arg)	\
+	ACTION(DB_ST,	   st,	    stats,	    0, arg)
+
 
 DAOS_FOREACH_DB(D_LOG_DECLARE_DB, D_NOOP);
 DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
