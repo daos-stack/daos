@@ -160,7 +160,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Container is nonexistent
- *			-DER_RF		#failures exceed RF, data possibly lost
+ *			-DER_RF		failures exceed RF, data possibly lost
  */
 int
 daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
@@ -187,7 +187,7 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Container is nonexistent
- *			-DER_RF		#failures exceed RF, data possibly lost
+ *			-DER_RF		failures exceed RF, data possibly lost
  */
 int
 daos_cont_open_by_label(daos_handle_t poh, const char *label,
