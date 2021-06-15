@@ -68,24 +68,6 @@ struct test_t test_g = { .t_hold_time = 0,
 			 .t_roomno = 1082 };
 
 /* input fields */
-#define CRT_ISEQ_TEST_PING_DELAY				 \
-	((int32_t)		(age)			CRT_VAR) \
-	((int32_t)		(days)			CRT_VAR) \
-	((d_string_t)		(name)			CRT_VAR) \
-	((uint32_t)		(delay)			CRT_VAR)
-
-/* output fields */
-#define CRT_OSEQ_TEST_PING_DELAY				 \
-	((int32_t)		(ret)			CRT_VAR) \
-	((uint32_t)		(room_no)		CRT_VAR)
-
-
-CRT_RPC_DECLARE(crt_test_ping_delay,
-		CRT_ISEQ_TEST_PING_DELAY, CRT_OSEQ_TEST_PING_DELAY)
-CRT_RPC_DEFINE(crt_test_ping_delay,
-		CRT_ISEQ_TEST_PING_DELAY, CRT_OSEQ_TEST_PING_DELAY)
-
-/* input fields */
 #define CRT_ISEQ_TEST_PING_CHECK				 \
 	((uint32_t)		(age)			CRT_VAR) \
 	((uint32_t)		(days)			CRT_VAR) \
