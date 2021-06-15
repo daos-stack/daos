@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from getpass import getuser
+import math
 import os
 import socket
 import time
@@ -14,7 +15,7 @@ from avocado import fail_on
 from command_utils_base import CommandFailure, CommonConfig
 from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
-    convert_list
+    convert_list, get_display_size
 from dmg_utils import get_dmg_command
 from server_utils_base import ServerFailed, DaosServerCommand
 from server_utils_params import \
@@ -696,12 +697,15 @@ class DaosServerManager(SubprocessManager):
         except CommandFailure as error:
             self.information["network"] = {}
 
-    def _check_information(self, key, section):
+    def _check_information(self, key, section, retry=True):
         """Check that the information dictionary is populated with data.
 
         Args:
-            key (str): [description]
-            section (str): [description]
+            key (str): the information section to verify, e.g. "storage" or
+                "network"
+            section (str): The "response" key/section to verify
+            retry (bool): if set attempt to collect the server storage and
+                network information and call the method again. Defaults to True.
 
         Raises:
             ServerFailed: if output from the dmg command is missing or not in
@@ -711,8 +715,11 @@ class DaosServerManager(SubprocessManager):
         msg = ""
         if key not in self.information:
             msg = "Internal error: invalid information key: {}".format(key)
-        elif self.information[key] is None:
-            msg = "No information data set - was collect_information() called?"
+        elif not self.information[key]:
+            self.log.info("Server storage/network information not collected")
+            if retry:
+                self.collect_information()
+                self._check_information(key, section, retry=False)
         elif "status" not in self.information[key]:
             msg = "Missing information status - verify dmg command output"
         elif "response" not in self.information[key]:
@@ -844,9 +851,12 @@ class DaosServerManager(SubprocessManager):
         self.log.info("Detected device capacities:")
         for category in sorted(device_capacity):
             for device in sorted(device_capacity[category]):
+                sizes = [
+                    get_display_size(size)
+                    for size in device_capacity[category][device]]
                 self.log.info(
                     "  %s capacities for %s: %s",
-                    category.upper(), device, device_capacity[category][device])
+                    category.upper(), device, sizes)
 
         # Determine what storage is currently configured for each engine
         storage_capacity = {"scm": [], "nvme": []}
@@ -875,9 +885,9 @@ class DaosServerManager(SubprocessManager):
 
         self.log.info("Detected engine capacities:")
         for category in sorted(storage_capacity):
-            self.log.info(
-                "  %s engine capacities: %s",
-                category.upper(), storage_capacity[category])
+            sizes = [
+                get_display_size(size) for size in storage_capacity[category]]
+            self.log.info("  %s engine capacities: %s", category.upper(), sizes)
 
         return storage_capacity
 
@@ -902,8 +912,7 @@ class DaosServerManager(SubprocessManager):
                 # Use the minimum storage across all engines
                 storage.append(min(storage_capacity[key]))
                 self.log.info(
-                    "  %-4s:  %s (%s)", key.upper(), storage[-1],
-                    bytes_to_human(storage[-1], binary=False))
+                    "  %-4s:  %s", key.upper(), get_display_size(storage[-1]))
         return storage
 
     def get_min_pool_nvme_size(self, target_qty=None):
@@ -922,3 +931,160 @@ class DaosServerManager(SubprocessManager):
             target_list = self.manager.job.get_engine_values("targets")
             target_qty = min(target_list)
         return human_to_bytes("{}GiB".format(target_qty))
+
+    def autosize_pool_params(self, scm_ratio=6, nvme_ratio=90, min_targets=1,
+                             quantity=1):
+        """Get a test pool object configured to fit the current server config.
+
+        The TestPool parameters returned by this method will be configure a
+        TestPool object with a size (SCM or SCM + NVMe) that does not exceed the
+        specified requirements (scm_ratio, nvme_ratio, and the pool quantity):
+            nvme_ratio > 0:
+                - the pool is configured with both SCM and NVMe
+                - the pool NVMe size equal to the largest 1GiB increment * the
+                  number of targets per engine that does not exceed the
+                  nvme_ratio of the smallest total NVMe capacity of each engine.
+                - if needed the number of targets per engine will be reduced to
+                  meet this size requirement, down to min_targets.
+                - the pool SCM size will be defined by the scm_ratio - as a
+                  precentage of the NVMe size
+            nvme_ratio == 0:
+                - the pool is configured with SCM only
+                - the pool SCM size is set to the scm_ratio of the smallest
+                  total SCM capacity of each engine
+
+        Args:
+            scm_ratio (int, optional): when creating a pool with NVMe
+                (nvme_ratio > 0) this defines the pool SCM size as a percentage
+                of the pool NVMe size. When creating a pool without NVMe
+                (nvme_ratio == 0) this defines the pool SCM size as a percentage
+                of the available SCM storage. Defaults to 6.
+            nvme_ratio (int, optional): this defines the pool NVMe size as a
+                percentage of the available NVMe storage, e.g. 80. If set to 0
+                the pool is created with SCM only. Defaults to 90.
+            min_targets (int, optional): the minimum number of targets per
+                engine that can be configured. Defaults to 1.
+            quantity (int, optional): Number of pools to account for in the size
+                calculations. The pool size returned is only for a single pool.
+                Defaults to 1.
+
+        Raises:
+            ServerFailed: if there was a problem obtaining auto-sized TestPool
+                parameters.
+
+        Returns:
+            dict: the parameters for a TestPool object.
+
+        """
+        # Use the default scm_ratio if one is not provided
+        if scm_ratio is None:
+            scm_ratio = 6
+
+        pool_msg = "{} pool{}".format(quantity, "s" if quantity > 1 else "")
+        self.log.info(
+            "Autosizing TestPool parameters for %s with a %s%% "
+            "scm_ratio and a %s%% nvme_ratio:", pool_msg, scm_ratio, nvme_ratio)
+
+        # Determine the largest SCM and NVMe pool sizes can be used with this
+        # server configuration with an optionally applied ratio.
+        try:
+            available_storage = self.get_available_storage()
+        except ServerFailed as error:
+            raise ServerFailed(
+                "Pool Autosizing: error obtaining available storage: {}".format(
+                    error))
+
+        pool_params = {
+            "size": None,
+            "scm_ratio": None,
+            "scm_size": None,
+            "nvme_size": None,
+        }
+        if nvme_ratio:
+            # Apply the ratio to the available NVMe size per engine
+            adjusted_nvme = available_storage[1] * float(nvme_ratio / 100)
+            adjusted_nvme /= quantity
+            self.log.info(
+                "  - NVMe storage adjusted by %.2f%% for %s: %s",
+                nvme_ratio, pool_msg, get_display_size(adjusted_nvme))
+
+            # Determine the largest supported NVMe size based upon the SCM ratio
+            scm_reduction = max(90, nvme_ratio)
+            adjusted_scm = available_storage[0] * float(scm_reduction / 100)
+            adjusted_scm /= quantity
+            self.log.info(
+                "  - SCM storage adjusted by %.2f%% for %s: %s",
+                scm_reduction, pool_msg, get_display_size(adjusted_scm))
+            max_nvme_scm = adjusted_scm / float(scm_ratio / 100)
+            self.log.info(
+                "  - Max NVMe size supported by %.2f%% of the available SCM "
+                "for %s: %s",
+                scm_ratio, pool_msg, get_display_size(max_nvme_scm))
+
+            # The largest NVMe size supported is the smallest of the two limits
+            max_nvme_size = min([max_nvme_scm, adjusted_nvme])
+            self.log.info(
+                    "  - Max NVMe size supported for %s: %s",
+                    pool_msg, get_display_size(max_nvme_size))
+
+            # Determine the minimum number of targets configured per engine
+            current_targets = min(self.manager.job.get_engine_values("targets"))
+            targets = current_targets
+            while targets >= min_targets and pool_params["size"] is None:
+                # The I/O Engine allocates NVMe storage on targets in multiples
+                # of 1GiB per target.  Determine the smallest NVMe pool size
+                # that is supported by the current number of targets.
+                nvme_size = self.get_min_pool_nvme_size(targets)
+                self.log.info(
+                    "  - Minimum NVMe pool size with %s targets: %s",
+                    targets, get_display_size(nvme_size))
+
+                # If the current number of targets results in a pool NVMe size
+                # that is too large, attempt the calculation with less targets
+                if nvme_size > max_nvme_size:
+                    self.log.info(
+                        "  - NVMe pool size with %s targets is too large: %s",
+                        targets, get_display_size(nvme_size))
+                    targets -= 1
+                    continue
+
+                # Determine the largest NVMe size can be configured
+                nvme_size *= math.floor(max_nvme_size / nvme_size)
+                self.log.info(
+                    "  - NVMe pool size with %s targets: %s",
+                    targets, get_display_size(nvme_size))
+                pool_params["size"] = bytes_to_human(nvme_size, binary=True)
+                pool_params["scm_ratio"] = scm_ratio
+
+            # Cancel the target count cannot be reduced far enough to meet the
+            # ratio requirements
+            if pool_params["size"] is None:
+                raise ServerFailed(
+                    "Pool Autosizing: a server target count lower than {} is "
+                    "required to support a {}% scm_ratio and a {}% "
+                    "nvme_ratio.".format(min_targets, scm_ratio, nvme_ratio))
+
+            # Update the servers if a reduced target count is required
+            if targets < current_targets:
+                self.log.info(
+                    "Updating server targets: %s -> %s",
+                    current_targets, targets)
+                self.set_config_value("targets", targets)
+                self.stop()
+                self.start()
+
+        elif scm_ratio:
+            # Apply the ratio to the available SCM size per engine
+            scm_size = available_storage[0] * float(scm_ratio / 100)
+            self.log.info(
+                "  - SCM storage adjusted by %.2f%%: %s",
+                scm_ratio, get_display_size(scm_size))
+            # pool_params["scm_size"] = scm_size
+            pool_params["scm_size"] = bytes_to_human(scm_size, binary=True)
+
+        else:
+            raise ServerFailed(
+                "Pool Autosizing: invalid scm_ratio ({}) and nvme_ratio ({}) "
+                "combination specified".format(scm_ratio, nvme_ratio))
+
+        return pool_params

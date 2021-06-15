@@ -29,17 +29,13 @@ class DmgSystemReformatTest(PoolTestBase):
         :avocado: tags=control,dmg_system_reformat,dmg
         """
         # Create pool using 90% of the available NVMe capacity
-        self.pool = []
-        self.pool.append(
-            self.get_autosized_pools(create=True, scm_ratio=1, nvme_ratio=90))
-        # self.pool = self.get_pool_list(1, None, 0.9)
-        # self.pool[-1].create()
+        pool_params = self.get_pool_params(nvme_ratio=90)
+        self.add_pool_with_params(pool_params)
+        self.pool[-1].create()
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
         self.get_dmg_command().exit_status_exception = False
-        self.pool.append(
-            self.get_autosized_pools(create=False, scm_ratio=1, nvme_ratio=90))
-        # self.pool.extend(self.get_pool_list(1, None, 0.9))
+        self.add_pool_with_params(pool_params)
         try:
             self.pool[-1].create()
         except TestFail as error:
@@ -86,10 +82,8 @@ class DmgSystemReformatTest(PoolTestBase):
                 self.get_dmg_command().result.stdout_text))
 
         # Create last pool now that memory has been wiped.
-        self.pool.append(
-            self.get_autosized_pools(create=True, scm_ratio=1, nvme_ratio=90))
-        # self.pool.extend(self.get_pool_list(1, None, 0.9))
-        # self.pool[-1].create()
+        self.add_pool_with_params(pool_params)
+        self.pool[-1].create()
 
         # Lastly, verify that last created pool is in the list
         pool_info = self.get_dmg_command().pool_list()

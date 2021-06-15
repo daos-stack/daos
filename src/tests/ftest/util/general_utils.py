@@ -1199,3 +1199,18 @@ def create_string_buffer(value, size=None):
     if isinstance(value, str):
         value = value.encode("utf-8")
     return ctypes.create_string_buffer(value, size)
+
+
+def get_display_size(size):
+    """Get a string of the provided size in bytes and human-readable sizes.
+
+    Args:
+        size (int): size in bytes
+
+    Returns:
+        str: the size represented in bytes and human-readable sizes
+
+    """
+    return "{} ({}) ({})".format(
+        size, bytes_to_human(size, binary=True),
+        bytes_to_human(size, binary=False))

@@ -9,6 +9,7 @@
 # Some useful test classes inherited from avocado.Test
 import os
 import json
+import math
 import re
 
 from avocado import Test as avocadoTest
@@ -26,7 +27,8 @@ from daos_utils import DaosCommand
 from server_utils import DaosServerManager, ServerFailed
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing, bytes_to_human
+    get_default_config_file, pcmd, get_file_listing, bytes_to_human, \
+    get_display_size
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -1441,39 +1443,15 @@ class TestWithServers(TestWithoutServers):
         """
         self.pool = self.get_pool(namespace, create, connect, index)
 
-    def get_autosized_pools(self, namespace=None, create=True, connect=True,
-                            index=0, scm_ratio=6, nvme_ratio=90, min_targets=1,
-                            svcn=None, targets=None):
-        """Get a test pool object configured to fit the current server config.
+    def get_pool_params(self, index=0, scm_ratio=6, nvme_ratio=90,
+                        min_targets=1, quantity=1):
+        """Get TestPool params configured to fit the current server config.
 
-        The TestPool object returned by this method will be configured with a
-        size (SCM or SCM + NVMe) that does not exceed the specified requirements
-        (scm_ratio & nvme_ratio):
-            nvme_ratio > 0:
-                - the pool is configured with both SCM and NVMe
-                - the pool NVMe size equal to the largest 1GiB increment * the
-                  number of targets per engine that does not exceed the
-                  nvme_ratio of the smallest total NVMe capacity of each engine.
-                - if needed the number of targets per engine will be reduced to
-                  meet this size requirement, down to min_targets.
-                - the pool SCM size will be defined by the scm_ratio - as a
-                  precentage of the NVMe size
-            nvme_ratio == 0:
-                - the pool is configured with SCM only
-                - the pool SCM size is set to the scm_ratio of the smallest
-                  total SCM capacity of each engine
-
-        The test case will be canceled if the server configuration cannot
-        support the specified numbers of pools.
+        The test case will be canceled if parameters cannot be configured for a
+        TestPool object that can create a pool within the server configuration.
 
         Args:
-            namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
-            create (bool, optional): should the pool be created. Defaults to
-                True.
-            connect (bool, optional): should the pool be connected. Defaults to
-                True.
-            index (int, optional): Server index for dmg command. Defaults to 0.
+            index (int, optional): Server manager list index. Defaults to 0.
             scm_ratio (int, optional): when creating a pool with NVMe
                 (nvme_ratio > 0) this defines the pool SCM size as a percentage
                 of the pool NVMe size. When creating a pool without NVMe
@@ -1484,162 +1462,24 @@ class TestWithServers(TestWithoutServers):
                 the pool is created with SCM only. Defaults to 90.
             min_targets (int, optional): the minimum number of targets per
                 engine that can be configured. Defaults to 1.
-            svcn (int, optional): Number of pool service replicas. Defaults to
-                None.
-            targets (list, optional): the target_list of rank numbers to use
-                when creating the pool. Defaults to None which will use all
-                server ranks.
+            quantity (int, optional): Number of pools to account for in the size
+                calculations. The pool size returned is only for a single pool.
+                Defaults to 1.
 
         Returns:
-            TestPool: the created test pool object.
+            dict: the parameters for a TestPool object.
 
         """
+        # Get the TestPool parameters to autosize the pool
         self.log.info("-" * 100)
-        self.log.info(
-            "Autosizing a pool with a %s%% scm_ratio and a %s%% nvme_ratio:",
-            scm_ratio, nvme_ratio)
-
-        # Determine the largest SCM and NVMe pool sizes can be used with this
-        # server configuration with an optionally applied ratio.
         try:
-            available_storage = \
-                self.server_managers[index].get_available_storage()
+            pool_params = self.server_managers[index].autosize_pool_params(
+                scm_ratio, nvme_ratio, min_targets, quantity)
         except ServerFailed as error:
-            self.cancel(
-                "Pool Autosizing: error obtaining available storage: {}".format(
-                    error))
-
-        pool_args = {
-            "size": None,
-            "scm_ratio": None,
-            "scm_size": None,
-            "nvme_size": None,
-            "svcn": svcn,
-            "target_list": targets,
-        }
-        if nvme_ratio:
-            # Apply the ratio to the available NVMe size per engine
-            adjusted = available_storage[1] * float(nvme_ratio / 100)
-            self.log.info(
-                "  - NVMe storage %s adjusted by %.2f%%: %s",
-                bytes_to_human(available_storage[1]), nvme_ratio, adjusted)
-
-            # Determine the minimum number of targets configured per engine
-            current_targets = min(
-                self.server_managers[index].manager.job.get_engine_values(
-                    "targets"))
-            targets = current_targets
-            while targets >= min_targets and pool_args["size"] is None:
-                # The I/O Engine allocates NVMe storage on targets in multiples
-                # of 1GiB per target.  A server with 8 targets will have a
-                # minimum NVMe size of 8 GiB.  Specify the largest NVMe size in
-                # GiB that can be used with the configured number of targets and
-                # specified capacity in GiB.
-                increment = self.server_managers[index].get_min_pool_nvme_size(
-                    targets)
-                nvme_size = increment
-                while nvme_size + increment <= adjusted:
-                    nvme_size += increment
-
-                # If the current number of targets results in a pool NVMe size
-                # that is too large, attempt the calculation with less targets
-                if nvme_size > adjusted:
-                    self.log.info(
-                        "  - NVMe pool size with %s targets is too large: %s "
-                        "(%s)", targets, nvme_size, bytes_to_human(nvme_size))
-                    targets -= 1
-                    continue
-
-                # A supported NVMe pool size has been found
-                self.log.info(
-                    "  - NVMe pool size with %s targets: %s (%s)",
-                    targets, nvme_size, bytes_to_human(nvme_size))
-                pool_args["size"] = nvme_size
-
-            # Update the servers if a reduced target count is required
-            if targets < current_targets:
-                self.log.info(
-                    "Updating server targets: %s -> %s",
-                    current_targets, targets)
-                self.server_managers[index].set_config_value("targets", targets)
-                self.server_managers[index].stop()
-                self.server_managers[index].start()
-
-            # Verify that the scm_ratio of the calculated nvme_ratio will not
-            # exceed the available SCM storage - very unlikely
-            if scm_ratio is not None:
-                scm_size = pool_args["size"] * float(scm_ratio / 100)
-                self.log.info(
-                    "  - SCM ratio of %.2f%% of pool size %s: %s",
-                    scm_ratio, pool_args["size"], bytes_to_human(scm_size))
-                if scm_size > available_storage[0]:
-                    self.cancel(
-                        "Pool Autosizing: insufficient SCM storage per engine "
-                        "{} to support SCM + NVMe pool".format(
-                            bytes_to_human(available_storage[0])))
-                pool_args["scm_ratio"] = scm_ratio
-
-            # Update the pool 'size' argument
-            if pool_args["size"]:
-                pool_args["size"] = bytes_to_human(nvme_size)
-
-        elif scm_ratio:
-            # Apply the ratio to the available SCM size per engine
-            scm_size = available_storage[0] * float(scm_ratio / 100)
-            self.log.info(
-                "  - SCM storage %s adjusted by %.2f%%: %s",
-                bytes_to_human(available_storage[0]), scm_ratio, scm_size)
-            pool_args["scm_size"] = bytes_to_human(scm_size)
-
-        else:
-            self.cancel(
-                "Pool Autosizing: invalid scm_ratio ({}) and nvme_ratio ({}) "
-                "combination specified".format(scm_ratio, nvme_ratio))
-
-        # Create and configure the requested TestPool object
-        pool = self.get_pool(namespace=namespace, create=False, index=index)
-        for name in pool_args:
-            pool_arg = getattr(pool, name)
-            pool_arg.update(pool_args[name])
-        if create:
-            pool.create()
-        if connect:
-            pool.connect()
+            self.cancel(error)
         self.log.info("-" * 100)
-        return pool
 
-    def add_autosized_pools(self, namespace=None, create=True, connect=True,
-                            index=0, scm_ratio=6, nvme_ratio=90, min_targets=1,
-                            svcn=None, targets=None):
-        """Add a test pool object configured to fit the current server config.
-
-        Args:
-            namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
-            create (bool, optional): should the pool be created. Defaults to
-                True.
-            connect (bool, optional): should the pool be connected. Defaults to
-                True.
-            index (int, optional): Server index for dmg command. Defaults to 0.
-            scm_ratio (int, optional): when creating a pool with NVMe
-                (nvme_ratio > 0) this defines the pool SCM size as a percentage
-                of the pool NVMe size. When creating a pool without NVMe
-                (nvme_ratio == 0) this defines the pool SCM size as a percentage
-                of the available SCM storage. Defaults to 6.
-            nvme_ratio (int, optional): this defines the pool NVMe size as a
-                percentage of the available NVMe storage, e.g. 80. If set to 0
-                the pool is created with SCM only. Defaults to 90.
-            min_targets (int, optional): the minimum number of targets per
-                engine that can be configured. Defaults to 1.
-            svcn (int, optional): Number of pool service replicas. Defaults to
-                None.
-            targets (list, optional): the target_list of rank numbers to use
-                when creating the pool. Defaults to None which will use all
-                server ranks.
-        """
-        self.pool = self.get_autosized_pools(
-            namespace, create, connect, index, scm_ratio, nvme_ratio,
-            min_targets, svcn, targets)
+        return pool_params
 
     def get_container(self, pool, namespace=None, create=True):
         """Get a test container object.

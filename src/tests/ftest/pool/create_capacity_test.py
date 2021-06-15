@@ -37,11 +37,7 @@ class PoolCreateTests(PoolTestBase):
         # Create some number of pools each using a equal amount of 60% of the
         # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
-        ratio = 60 / quantity
-        self.pool = []
-        for _ in range(quantity):
-            self.pool.append(
-                self.get_autosized_pools(create=False, nvme_ratio=ratio))
+        self.add_autosized_pool(nvme_ratio=60, quantity=quantity, svcn=1)
 
         # ratio = 0.6 / quantity
         # self.pool = self.get_pool_list(quantity, ratio, ratio, 1)

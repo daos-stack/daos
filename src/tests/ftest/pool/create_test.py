@@ -31,10 +31,7 @@ class PoolCreateTests(PoolTestBase):
         :avocado: tags=pool_create_tests,create_max_pool_scm_only
         """
         # Create 1 pool using 90% of the available SCM capacity (no NVMe)
-        self.pool = [
-            self.get_autosized_pools(
-                create=False, scm_ratio=90, nvme_ratio=0, svcn=1)]
-        # self.pool = self.get_pool_list(1, 0.9, None, 1)
+        self.add_autosized_pool(scm_ratio=90, nvme_ratio=0, quantity=1, svcn=1)
         self.check_pool_creation(60)
 
     def test_create_max_pool(self):
@@ -51,9 +48,7 @@ class PoolCreateTests(PoolTestBase):
         :avocado: tags=pool_create_tests,create_max_pool
         """
         # Create 1 pool using 90% of the available capacity
-        self.pool = [
-            self.get_autosized_pools(create=False, nvme_ratio=90, svcn=1)]
-        # self.pool = self.get_pool_list(1, 0.9, 0.9, 1)
+        self.add_autosized_pool(nvme_ratio=90, quantity=1, svcn=1)
         self.check_pool_creation(120)
 
     def test_create_no_space(self):
@@ -75,17 +70,12 @@ class PoolCreateTests(PoolTestBase):
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
+        pool_params = self.get_pool_params(nvme_ratio=90, quantity=1, svcn=1)
+        self.add_pool_with_params(pool_params, 3)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
-        self.pool =[]
-        for targets in (ranks[:1], ranks, ranks[1:]):
-            self.pool.append(
-                self.get_autosized_pools(
-                    create=False, nvme_ratio=90, svcn=1, targets=targets))
-        # self.pool = self.get_pool_list(3, 0.9, 0.9, 1)
-        # ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
-        # self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
-        # self.pool[1].target_list.update(ranks, "pool[1].target_list")
-        # self.pool[2].target_list.update(ranks[1:], "pool[2].target_list")
+        self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
+        self.pool[1].target_list.update(ranks, "pool[1].target_list")
+        self.pool[2].target_list.update(ranks[1:], "pool[2].target_list")
 
         # Disable failing the test if a pool create fails
         self.dmg.exit_status_exception = False
@@ -134,17 +124,12 @@ class PoolCreateTests(PoolTestBase):
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
+        pool_params = self.get_pool_params(nvme_ratio=90, quantity=1, svcn=1)
+        self.add_pool_with_params(pool_params, 3)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
-        self.pool =[]
-        for targets in (ranks[:1], ranks, ranks[1:]):
-            self.pool.append(
-                self.get_autosized_pools(
-                    create=False, nvme_ratio=90, svcn=1, targets=targets))
-        # self.pool = self.get_pool_list(3, 0.9, 0.9, 1)
-        # ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
-        # self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
-        # self.pool[1].target_list.update(ranks, "pool[1].target_list")
-        # self.pool[2].target_list.update(ranks[1:], "pool[2].target_list")
+        self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
+        self.pool[1].target_list.update(ranks, "pool[1].target_list")
+        self.pool[2].target_list.update(ranks[1:], "pool[2].target_list")
 
         # Disable failing the test if a pool create fails
         self.dmg.exit_status_exception = False
