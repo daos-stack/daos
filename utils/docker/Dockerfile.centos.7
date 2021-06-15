@@ -247,11 +247,13 @@ USER daos_server:daos_server
 # select compiler to use
 ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD_TYPE=release
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
+    { scons-3 --jobs $JOBS install PREFIX=/opt/daos \
+	COMPILER=$COMPILER BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=release && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos; }
 
