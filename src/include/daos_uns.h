@@ -22,11 +22,11 @@ extern "C" {
 
 /** struct that has the values to make the connection from the UNS to DAOS */
 struct duns_attr_t {
-	/** IN: Pool uuid of the container. */
+	/** IN/OUT: Pool uuid of the container. */
 	uuid_t			da_puuid;
-	/** IN: Container uuid that is created for the path. */
+	/** IN/OUT: Container uuid that is created for the path. */
 	uuid_t			da_cuuid;
-	/** IN: Container layout (POSIX, HDF5) */
+	/** IN/OUT: Container layout (POSIX, HDF5) */
 	daos_cont_layout_t	da_type;
 	/** IN: (Optional) Object Class for all objects in the container */
 	daos_oclass_id_t	da_oclass_id;
@@ -52,6 +52,33 @@ struct duns_attr_t {
 	 * This is usually set to false.
 	 */
 	bool			da_no_prefix;
+	/** IN: check only for direct path.
+	 *
+	 * Do not attempt to get the extended attribute of the path, and assume
+	 * the path is a direct path that is either of format:
+	 *   - /puuid/cuuid/xyz
+	 *   - /pool_label/container_label/xyz
+	 * This is usually set to false.
+	 */
+	bool			da_no_check_path;
+	/** OUT: Pool label returned with a direct path.
+	 *
+	 * If the path is a direct path, we parse the first entry (pool) as
+	 * either a uuid or a label. If the format is not a uuid, then it's
+	 * returned as a label. The string buffer for the label is allocated
+	 * internally and returned here, but the user is responsible for freeing
+	 * the buffer.
+	 */
+	char			*da_pool_label;
+	/** OUT: Container label returned with a direct path.
+	 *
+	 * If the path is a direct path, we parse the second entry (cont) as
+	 * either a uuid or a label. If the format is not a uuid, then it's
+	 * returned as a label. The string buffer for the label is allocated
+	 * internally and returned here, but the user is responsible for freeing
+	 * the buffer.
+	 */
+	char			*da_cont_label;
 	/** IN: look only at the last entry in the path for duns_resolve_path */
 	bool			da_no_reverse_lookup;
 };
@@ -64,10 +91,14 @@ struct duns_attr_t {
 /**
  * Create a special directory (POSIX) or file (HDF5) depending on the container
  * type, and create a new DAOS container in the pool that is passed in \a
- * attr.da_puuid. The uuid of the container is returned in \a attr.da_cuuid. Set
- * extended attributes on the dir/file created that points to pool uuid,
- * container uuid. This is to be used in a unified namespace solution to be able
- * to map a path in the unified namespace to a location in the DAOS tier.
+ * attrp->da_puuid. The uuid of the container can be either passed in \a
+ * attrp->da_cuuid or generated and returned in that field if it was set to uuid
+ * on input.
+ * The extended attributes are set on the dir/file created that points to pool
+ * uuid, container uuid. This is to be used in a unified namespace solution to
+ * be able to map a path in the unified namespace to a location in the DAOS
+ * tier.  The container and pool can have labels, but the UNS stores the uuids
+ * only and so labels are ignored in \a attrp.
  *
  * \param[in]	poh	Pool handle
  * \param[in]	path	Valid path in an existing namespace.

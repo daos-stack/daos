@@ -246,9 +246,10 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 #endif
 
 #define UUID_REGEX "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}){1}"
-#define DAOS_FORMAT "^daos://"UUID_REGEX"/"UUID_REGEX"[/]?"
-#define DAOS_FORMAT_NO_PREFIX "^[/]+"UUID_REGEX"/"UUID_REGEX"[/]?"
-#define DAOS_FORMAT_NO_CONT "^daos://"UUID_REGEX"[/]?$"
+#define LABEL_REGEX "([a-zA-Z0-9._:]{1,256})"
+#define DAOS_FORMAT "^daos://("UUID_REGEX"|"LABEL_REGEX")/("UUID_REGEX"|"LABEL_REGEX")(/.*)?$"
+#define DAOS_FORMAT_NO_PREFIX "^[/]+("UUID_REGEX"|"LABEL_REGEX")/("UUID_REGEX"|"LABEL_REGEX")(/.*)?$"
+#define DAOS_FORMAT_NO_CONT "^daos://("UUID_REGEX"|"LABEL_REGEX")[/]?$"
 
 static int
 check_direct_format(const char *path, bool no_prefix, bool *pool_only)
@@ -345,7 +346,17 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	size_t		rel_len = 0;
 	int		rc;
 
-	rc = check_direct_format(path, attr->da_no_prefix, &pool_only);
+	if (path == NULL || strlen(path) == 0)
+		return EINVAL;
+
+	/**
+	 * If caller requested to not check the file system path, we do the
+	 * direct format parsing right away regardless of the format.
+	 */
+	if (attr->da_no_check_path)
+		rc = 0;
+	else
+		rc = check_direct_format(path, attr->da_no_prefix, &pool_only);
 	if (rc == 0) {
 		char	*dir;
 		char	*saveptr, *t;
@@ -375,9 +386,11 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		/** parse the pool uuid */
 		rc = uuid_parse(t, attr->da_puuid);
 		if (rc) {
-			D_ERROR("Invalid format: pool UUID cannot be parsed\n");
-			D_FREE(dir);
-			return EINVAL;
+			attr->da_pool_label = strdup(t);
+			if (attr->da_pool_label == NULL)
+				return ENOMEM;
+		} else {
+			attr->da_pool_label = NULL;
 		}
 
 		if (pool_only) {
@@ -395,9 +408,11 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		/** parse the container uuid */
 		rc = uuid_parse(t, attr->da_cuuid);
 		if (rc) {
-			D_ERROR("Invalid format: cont UUID cannot be parsed\n");
-			D_FREE(dir);
-			return EINVAL;
+			attr->da_cont_label = strdup(t);
+			if (attr->da_cont_label == NULL)
+				return ENOMEM;
+		} else {
+			attr->da_cont_label = NULL;
 		}
 
 		/** if there is a relative path, parse it out */
@@ -413,6 +428,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		D_FREE(dir);
 		return 0;
 	}
+
+	/** no match for direct format, do the UNS fs check */
 
 	rc = statfs(path, &fs);
 	if (rc == -1) {
