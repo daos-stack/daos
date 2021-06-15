@@ -2948,6 +2948,10 @@ class AllocFailTest():
         self.expected_stdout = None
         self.use_il = False
         self.wf = conf.wf
+        # Should failures be re-run under valgrind for improved diagnostics?
+        # Defaults to on but can be disabled, for example if the code being
+        # tested does not work with valgrind.
+        self.rerun_under_valgrind = True
 
     def launch(self):
         """Run all tests for this command"""
@@ -3005,10 +3009,11 @@ class AllocFailTest():
         print('Completed, fid {}'.format(fid))
         print('Max in flight {}'.format(max_count))
 
-        for fid in to_rerun:
-            rerun = self._run_cmd(fid, valgrind=True)
-            print(rerun)
-            rerun.wait()
+        if self.rerun_under_valgrind:
+            for fid in to_rerun:
+                rerun = self._run_cmd(fid, valgrind=True)
+                print(rerun)
+                rerun.wait()
 
         return fatal_errors
 
@@ -3085,6 +3090,7 @@ def test_alloc_fail(server, conf):
     # the command works.
     container = create_cont(conf, pool)
     test_cmd.check_stderr = True
+    test_cmd.rerun_under_valgrind = False
 
     rc = test_cmd.launch()
     destroy_container(conf, pool, container)

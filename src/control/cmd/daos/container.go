@@ -113,9 +113,10 @@ type containerCreateCmd struct {
 	UUID        string         `long:"cont" short:"c" description:"container UUID (optional)"`
 	Type        string         `long:"type" short:"t" description:"container type" choice:"POSIX" choice:"HDF5" default:"POSIX"`
 	Path        string         `long:"path" short:"d" description:"container namespace path"`
-	ChunkSize   chunkSize      `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass objectClass    `long:"oclass" short:"o" description:"default object class"`
+	ChunkSize   chunkSizeFlag  `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass objClassFlag   `long:"oclass" short:"o" description:"default object class"`
 	Properties  PropertiesFlag `long:"properties" description:"container properties"`
+	Mode        consModeFlag   `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile     string         `long:"acl-file" short:"A" description:"input file containing ACL"`
 	User        string         `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
 	Group       string         `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
@@ -180,6 +181,9 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		}
 		if cmd.ObjectClass.set {
 			ap.oclass = cmd.ObjectClass.class
+		}
+		if cmd.Mode.set {
+			ap.mode = cmd.Mode.mode
 		}
 	case "HDF5":
 		ap._type = C.DAOS_PROP_CO_LAYOUT_HDF5
@@ -822,7 +826,7 @@ func parsePoolFlag() *poolFlagCmd {
 }
 
 type ContainerID struct {
-	labelOrUUID
+	labelOrUUIDFlag
 }
 
 // Implement the completion handler to provide a list of container IDs

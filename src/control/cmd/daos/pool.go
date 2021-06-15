@@ -30,7 +30,7 @@ import (
 import "C"
 
 type PoolID struct {
-	labelOrUUID
+	labelOrUUIDFlag
 }
 
 type poolBaseCmd struct {

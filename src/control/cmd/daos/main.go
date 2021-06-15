@@ -189,7 +189,16 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 		return nil
 	}
 
-	_, err := p.ParseArgs(args)
+	// Initialize the daos debug system first so that
+	// any allocations made as part of argument parsing
+	// are logged when running under NLT.
+	debugFini, err := initDaosDebug()
+	if err != nil {
+		exitWithError(log, err)
+	}
+	defer debugFini()
+
+	_, err = p.ParseArgs(args)
 	if opts.JSON && wroteJSON.IsFalse() {
 		return errorJSON(err)
 	}
@@ -199,15 +208,6 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 func main() {
 	var opts cliOptions
 	log := logging.NewCommandLineLogger()
-
-	// Initialize the daos debug system first so that
-	// any allocations made as part of argument parsing
-	// are logged when running under NLT.
-	debugFini, err := initDaosDebug()
-	if err != nil {
-		exitWithError(log, err)
-	}
-	defer debugFini()
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {

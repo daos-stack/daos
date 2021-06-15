@@ -61,8 +61,8 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 type fsAttrCmd struct {
 	existingContainerCmd
 
-	ChunkSize   chunkSize   `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass objectClass `long:"oclass" short:"o" description:"default object class"`
+	ChunkSize   chunkSizeFlag `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass objClassFlag  `long:"oclass" short:"o" description:"default object class"`
 }
 
 func (cmd *fsAttrCmd) Execute(_ []string) error {
