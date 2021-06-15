@@ -112,6 +112,25 @@ The version of the components can be changed by editing the
 >The support of the optional components is not guarantee and can be removed
 >without further notification.
 
+### Custom build targets
+
+The DAOS build also supports build targets to customize what parts of DAOS are
+built.  At present, just three such targets are defined, `client`, `server`, and
+`test`.
+
+To build only client libraries and tools, use the following command:
+
+```bash
+$ scons [args] client install
+```
+
+To build the server instead, substitute `server` for `client` in the above
+command.
+
+Note that such targets need to be specified each time you build as the default
+is equivalent to specifying `client server test` on the command line.  The
+`test` target is, at present, dependent on `client` and `server` as well.
+
 ## Go dependencies
 
 Developers contributing Go code may need to change the external dependencies

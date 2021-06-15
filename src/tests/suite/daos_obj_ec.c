@@ -289,23 +289,48 @@ void
 trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
 			       int oids_nr)
 {
-	d_rank_t  ec_agg_rank;
+	d_rank_t  ec_agg_ranks[10];
 	int i;
 
 	for (i = 0; i < oids_nr; i++) {
-		get_killing_rank_by_oid(arg, oids[i], 0, 1, &ec_agg_rank, NULL);
-		daos_debug_set_params(arg->group, ec_agg_rank, DMG_KEY_FAIL_LOC,
-				      DAOS_FORCE_EC_AGG | DAOS_FAIL_ALWAYS,
-				      0, NULL);
+		struct daos_oclass_attr *oca;
+		int parity_nr;
+		int j;
+
+		assert_true(oid_is_ec(oids[i], &oca));
+		parity_nr = oca->u.ec.e_p;
+		assert_true(parity_nr < 10);
+
+		get_killing_rank_by_oid(arg, oids[i], 0, parity_nr,
+					ec_agg_ranks, NULL);
+		for (j = 0; j < parity_nr; j++)
+			daos_debug_set_params(arg->group, ec_agg_ranks[j],
+					      DMG_KEY_FAIL_LOC,
+					      DAOS_FORCE_EC_AGG |
+					      DAOS_FAIL_ALWAYS, 0, NULL);
 	}
 
 	print_message("wait for 5 seconds for EC aggregation.\n");
 	sleep(5);
-	daos_debug_set_params(arg->group, ec_agg_rank, DMG_KEY_FAIL_LOC,
-			      0, 0, NULL);
+
+	for (i = 0; i < oids_nr; i++) {
+		struct daos_oclass_attr *oca;
+		int parity_nr;
+		int j;
+
+		assert_true(oid_is_ec(oids[i], &oca));
+		parity_nr = oca->u.ec.e_p;
+		assert_true(parity_nr < 10);
+
+		get_killing_rank_by_oid(arg, oids[i], 0, parity_nr,
+					ec_agg_ranks, NULL);
+		for (j = 0; j < parity_nr; j++)
+			daos_debug_set_params(arg->group, ec_agg_ranks[j],
+					      DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	}
 }
 
-static void
+void
 ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 		      daos_off_t offset, daos_size_t size,
 		      char *verify_data)
