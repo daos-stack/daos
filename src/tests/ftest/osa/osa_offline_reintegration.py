@@ -113,7 +113,7 @@ class OSAOfflineReintegration(OSAUtils):
                 self.log.info("Pool Version after exclude %s", pver_exclude)
                 # Check pool version incremented after pool exclude
                 # pver_exclude should be greater than
-                # pver_begin + 2 (1 target + exclude)
+                # pver_begin + 1 (1 target + exclude)
                 self.assertTrue(pver_exclude > (pver_begin + 1),
                                 "Pool Version Error: After exclude")
 
@@ -127,8 +127,8 @@ class OSAOfflineReintegration(OSAUtils):
                                                                rank[val],
                                                                "0,2")
                 elif (self.test_with_rf is True and val == 0):
-                    output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                           rank[val], "2")
+                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
+                                                               rank[val], "2")
                 elif (self.test_with_rf is True and val > 0):
                     continue
                 else:
@@ -139,7 +139,7 @@ class OSAOfflineReintegration(OSAUtils):
                 pver_reint = self.get_pool_version()
                 self.log.info("Pool Version after reintegrate %d", pver_reint)
                 # Check pool version incremented after pool reintegrate
-                self.assertTrue(pver_reint > (pver_exclude + 1),
+                self.assertTrue(pver_reint > pver_exclude,
                                 "Pool Version Error:  After reintegrate")
 
             display_string = "Pool{} space at the End".format(random_pool)
