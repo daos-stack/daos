@@ -1910,6 +1910,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	struct obj_ec_rep_out	*oero = crt_reply_get(rpc);
 	daos_key_t		*dkey;
 	daos_iod_t		*iod;
+	struct dcs_iod_csums	*iod_csums;
 	struct bio_desc		*biod;
 	daos_recx_t		 recx = { 0 };
 	daos_epoch_range_t	 epoch_range = { 0 };
@@ -1936,8 +1937,9 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
+	iod_csums = oer->er_iod_csums.ca_arrays;
 	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid,
-			      oer->er_epoch, 0, dkey, 1, iod, NULL,
+			      oer->er_epoch, 0, dkey, 1, iod, iod_csums,
 			      NULL, 0, &ioh, NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
