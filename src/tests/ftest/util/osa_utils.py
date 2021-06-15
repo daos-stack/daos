@@ -414,7 +414,6 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
             self.container.oclass.update(None)
 
-
     def assert_on_exception(self, out_queue=None):
         """Assert on exception while executing an application.
 

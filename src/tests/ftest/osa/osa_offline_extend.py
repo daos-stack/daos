@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
