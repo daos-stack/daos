@@ -347,7 +347,7 @@ struct daos_prop_entry {
 /** Allowed max number of property entries in daos_prop_t */
 #define DAOS_PROP_ENTRIES_MAX_NR	(128)
 /** max length for pool/container label */
-#define DAOS_PROP_LABEL_MAX_LEN		(256)
+#define DAOS_PROP_LABEL_MAX_LEN		(127)
 
 /** daos properties, for pool or container */
 typedef struct {

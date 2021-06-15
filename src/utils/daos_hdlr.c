@@ -549,7 +549,8 @@ pool_list_containers_hdlr(struct cmd_args_s *ap)
 	}
 
 	for (i = 0; i < ncont; i++) {
-		D_PRINT(DF_UUIDF"\n", DP_UUID(conts[i].pci_uuid));
+		D_PRINT(DF_UUIDF" %s\n", DP_UUID(conts[i].pci_uuid),
+			conts[i].pci_label);
 	}
 
 out_free:
