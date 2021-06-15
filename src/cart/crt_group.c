@@ -239,8 +239,7 @@ crt_ui_destroy(struct crt_uri_item *ui)
 	D_ASSERT(ui->ui_initialized == 1);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		if (ui->ui_uri[i])
-			D_FREE(ui->ui_uri[i]);
+		D_FREE(ui->ui_uri[i]);
 
 	D_FREE(ui);
 }
@@ -500,7 +499,9 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 			rc = rc ? rc : rc2;
 		}
 	}
+#if 0
 	D_FREE(grp_priv->gp_lookup_cache);
+#endif
 
 	rc2 = d_hash_table_destroy_inplace(&grp_priv->gp_uri_lookup_cache,
 					   true /* force */);
@@ -1035,7 +1036,6 @@ out_grp_priv:
 out:
 	return rc;
 }
-
 
 void
 crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
