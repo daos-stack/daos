@@ -550,7 +550,10 @@ def get_test_list(tags):
         if not test_list:
             test_list = ["./"]
         version = float(get_output(["avocado", "-v"]).split()[-1])
-        if version >= 82.0:
+        print("Running with Avocado {}".format(version))
+        if version >= 83.0:
+            command = ["avocado", "list"]
+        elif version >= 82.0:
             command = ["avocado", "--paginator=off", "list"]
         else:
             command = ["avocado", "list", "--paginator=off"]
@@ -885,8 +888,11 @@ def run_tests(test_files, tag_filter, args):
         command_list.append("--ignore-missing-references")
     else:
         command_list.extend(["--ignore-missing-references", "on"])
-    command_list.extend(["--html-job-result", "on"])
-    command_list.extend(["--tap-job-result", "off"])
+    if version >= 83.0:
+        command_list.append("--disable-tap-job-result")
+    else:
+        command_list.extend(["--html-job-result", "on"])
+        command_list.extend(["--tap-job-result", "off"])
     if not args.sparse and version < 82.0:
         command_list.append("--show-job-log")
     if tag_filter:
@@ -1882,36 +1888,43 @@ def stop_service(hosts, service):
     """Stop any daos_server.service running on the hosts running servers.
 
     Args:
-        host_list (list): list of hosts on which to stop the service.
+        hosts (list): list of hosts on which to stop the service.
         service (str): name of the service
 
     Returns:
         int: status code: 0 = success, 512 = failure
 
     """
-    status, stop_hosts, disable_hosts = get_service_status(hosts, service)
-    if stop_hosts:
-        print("Stopping {} on {}".format(service, stop_hosts))
-        command = "sudo systemctl stop {}".format(service)
-        get_remote_output(str(stop_hosts), command)
-    if disable_hosts:
-        print("Disabling {} on {}".format(service, stop_hosts))
-        command = "sudo systemctl disable {}".format(service)
-        get_remote_output(str(disable_hosts), command)
-    if stop_hosts or disable_hosts:
-        check_hosts = NodeSet()
-        check_hosts.add(stop_hosts)
-        check_hosts.add(disable_hosts)
+    result = {"status": 0}
+    status_keys = ["reset-failed", "stop", "disable"]
+    mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
+    check_hosts = NodeSet.fromlist(hosts)
+    loop = 1
+    # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
+    # has been resolved
+    max_loops = 3
+    while check_hosts:
+        # Check the status of the service on each host
         result = get_service_status(check_hosts, service)
-        if result[1]:
-            print("Error {} still active on {}".format(service, result[1]))
-            status = 512
-        if result[2]:
-            print("Error {} still enabled on {}".format(service, result[2]))
-            status = 512
-        if result[0] != 0:
-            status = 512
-    return status
+        check_hosts = NodeSet()
+        for key in status_keys:
+            if result[key]:
+                if loop == max_loops:
+                    # Exit the while loop if the service is still running
+                    print(
+                        " - Error {} still {} on {}".format(
+                            service, mapping[key], result[key]))
+                    result["status"] = 512
+                else:
+                    # Issue the appropriate systemctl command to remedy the
+                    # detected state, e.g. 'stop' for 'active'.
+                    command = "sudo systemctl {} {}".format(key, service)
+                    get_remote_output(str(result[key]), command)
+
+                    # Run the status check again on this group of hosts
+                    check_hosts.add(result[key])
+        loop += 1
+    return result["status"]
 
 
 def get_service_status(host_list, service):
@@ -1922,35 +1935,41 @@ def get_service_status(host_list, service):
         service (str): name of the service
 
     Returns:
-        tuple: a tuple containing:
-            - (int): status code: 0 = success, 512 = failure
-            - (NodeSet): hosts with an active daos_server.service
-            - (NodeSet): hosts with a loaded daos_server.service
+        dict: a dictionary with the following keys:
+            - "status":       status code: 0 = success, 512 = failure
+            - "stop":         NodeSet where to stop the daos_server.service
+            - "disable":      NodeSet where to disable the daos_server.service
+            - "reset-failed": NodeSet where to reset the daos_server.service
 
     """
-    status = 0
-    hosts = {"stop": NodeSet(), "disable": NodeSet()}
-    # Possible states:
-    #   active, inactive, activating, deactivating, failed, unknown
-    states_requiring_stop = ["active", "activating", "deactivating"]
-    states_requiring_disable = states_requiring_stop + ["failed"]
+    status = {
+        "status": 0,
+        "stop": NodeSet(),
+        "disable": NodeSet(),
+        "reset-failed": NodeSet()}
+    status_states = {
+        "stop": ["active", "activating", "deactivating"],
+        "disable": ["active", "activating", "deactivating"],
+        "reset-failed": ["failed"]}
     command = "systemctl is-active {}".format(service)
     task = get_remote_output(host_list, command)
     for output, nodelist in task.iter_buffers():
-        output_str = "\n".join([line.decode("utf-8") for line in output])
+        output_lines = [line.decode("utf-8") for line in output]
         nodeset = NodeSet.fromlist(nodelist)
-        if output_str in states_requiring_stop:
-            hosts["stop"].add(nodeset)
-        if output_str in states_requiring_disable:
-            hosts["disable"].add(nodeset)
-        print("  {}: {}".format(nodeset, output_str))
+        print(" {}: {}".format(nodeset, "\n".join(output_lines)))
+        for key in status_states:
+            for line in output_lines:
+                if line in status_states[key]:
+                    status[key].add(nodeset)
+                    break
     if task.num_timeout() > 0:
-        status = 512
-        hosts["stop"].add(nodeset)
-        hosts["disable"].add(nodeset)
         nodeset = NodeSet.fromlist(task.iter_keys_timeout())
+        status["status"] = 512
+        status["stop"].add(nodeset)
+        status["disable"].add(nodeset)
+        status["reset-failed"].add(nodeset)
         print("  {}: TIMEOUT".format(nodeset))
-    return status, hosts["stop"], hosts["disable"]
+    return status
 
 
 def indent_text(indent, text):
