@@ -378,7 +378,7 @@ def get_base_env(clean=False):
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
     # Helpful on crash, but does come with a performance impact.
-    # env['D_LOG_FLUSH'] = 'DEBUG'
+    env['D_LOG_FLUSH'] = 'DEBUG'
     return env
 
 class DaosPool():
