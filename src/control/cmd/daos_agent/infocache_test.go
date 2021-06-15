@@ -219,25 +219,37 @@ func TestInfoCacheGetResponse(t *testing.T) {
 	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
 	defer cleanupFn(netCtx)
 
+	devList := func(devs ...string) []string {
+		return devs
+	}
+
 	for name, tc := range map[string]struct {
-		numaNode   int
-		deviceName string
+		numaNode       int
+		allowedDevices []string
 	}{
 		"info cache response for numa 0": {
-			numaNode:   0,
-			deviceName: "eth0",
+			numaNode:       0,
+			allowedDevices: devList("eth0"),
 		},
 		"info cache response for numa 1": {
-			numaNode:   1,
-			deviceName: "eth1",
+			numaNode:       1,
+			allowedDevices: devList("eth1"),
 		},
 		"info cache response for numa 2": {
-			numaNode:   2,
-			deviceName: "eth2",
+			numaNode:       2,
+			allowedDevices: devList("eth2"),
 		},
-		"info cache response for numa 3 with no devices": {
-			numaNode:   3,
-			deviceName: "eth0",
+		"info cache response one for numa 3 with no devices": {
+			numaNode:       3,
+			allowedDevices: devList("eth0", "eth1", "eth2"),
+		},
+		"info cache response two for numa 3 with no devices": {
+			numaNode:       3,
+			allowedDevices: devList("eth0", "eth1", "eth2"),
+		},
+		"info cache response three for numa 3 with no devices": {
+			numaNode:       3,
+			allowedDevices: devList("eth0", "eth1", "eth2"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -248,7 +260,13 @@ func TestInfoCacheGetResponse(t *testing.T) {
 			if err = proto.Unmarshal(res, resp); err != nil {
 				t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
 			}
-			common.AssertTrue(t, resp.GetInterface() == tc.deviceName, fmt.Sprintf("Expected: %s, got %s", tc.deviceName, resp.GetInterface()))
+
+			for _, dev := range tc.allowedDevices {
+				if resp.GetInterface() == dev {
+					return
+				}
+			}
+			t.Fatalf("response device %s was not in list of allowed devices (%+v)", resp.GetInterface(), tc.allowedDevices)
 		})
 	}
 }
