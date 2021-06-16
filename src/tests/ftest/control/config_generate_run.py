@@ -57,9 +57,7 @@ class ConfigGenerateRun(TestWithServers):
         try:
             generated_yaml = yaml.safe_load(result.stdout)
         except yaml.YAMLError as error:
-            raise CommandFailure(
-                "Error loading dmg generated config: {}".format(
-                    error)) from error
+            raise CommandFailure("Error loading dmg generated config!")
 
         # Remove this line when DAOS-7861 is fixed.
         generated_yaml["nr_hugepages"] = 4096
