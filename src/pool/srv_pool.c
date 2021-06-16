@@ -1953,96 +1953,6 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	return 0;
 }
 
-/*
- * Transfer the pool map to "remote_bulk". If the remote bulk buffer is too
- * small, then return -DER_TRUNC and set "required_buf_size" to the local pool
- * map buffer size.
- * If the map_buf_bulk is non-NULL, then the created local bulk handle for
- * pool_buf will be returned and caller needs to do crt_bulk_free later.
- * If the map_buf_bulk is NULL then the internally created local bulk handle
- * will be freed within this function.
- */
-static int
-transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
-		 struct pool_svc *svc, crt_rpc_t *rpc,
-		 crt_bulk_t remote_bulk, uint32_t *required_buf_size)
-{
-	size_t			map_buf_size;
-	daos_size_t		remote_bulk_size;
-	d_iov_t			map_iov;
-	d_sg_list_t		map_sgl;
-	crt_bulk_t		bulk = CRT_BULK_NULL;
-	struct crt_bulk_desc	map_desc;
-	crt_bulk_opid_t		map_opid;
-	ABT_eventual		eventual;
-	uint32_t		pm_ver;
-	int		       *status;
-	int			rc;
-
-	pm_ver = ds_pool_get_version(svc->ps_pool);
-	if (map_version != pm_ver) {
-		D_ERROR(DF_UUID": found different cached and persistent pool "
-			"map versions: cached=%u persistent=%u\n",
-			DP_UUID(svc->ps_uuid), pm_ver, map_version);
-		D_GOTO(out, rc = -DER_IO);
-	}
-
-	map_buf_size = pool_buf_size(map_buf->pb_nr);
-
-	/* Check if the client bulk buffer is large enough. */
-	rc = crt_bulk_get_len(remote_bulk, &remote_bulk_size);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	if (remote_bulk_size < map_buf_size) {
-		D_ERROR(DF_UUID": remote pool map buffer ("DF_U64") < required "
-			"(%lu)\n", DP_UUID(svc->ps_uuid), remote_bulk_size,
-			map_buf_size);
-		*required_buf_size = map_buf_size;
-		D_GOTO(out, rc = -DER_TRUNC);
-	}
-
-	d_iov_set(&map_iov, map_buf, map_buf_size);
-	map_sgl.sg_nr = 1;
-	map_sgl.sg_nr_out = 0;
-	map_sgl.sg_iovs = &map_iov;
-
-	rc = crt_bulk_create(rpc->cr_ctx, &map_sgl, CRT_BULK_RO, &bulk);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	/* Prepare "map_desc" for crt_bulk_transfer(). */
-	map_desc.bd_rpc = rpc;
-	map_desc.bd_bulk_op = CRT_BULK_PUT;
-	map_desc.bd_remote_hdl = remote_bulk;
-	map_desc.bd_remote_off = 0;
-	map_desc.bd_local_hdl = bulk;
-	map_desc.bd_local_off = 0;
-	map_desc.bd_len = map_iov.iov_len;
-
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_bulk, rc = dss_abterr2der(rc));
-
-	rc = crt_bulk_transfer(&map_desc, bulk_cb, &eventual, &map_opid);
-	if (rc != 0)
-		D_GOTO(out_eventual, rc);
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-
-	if (*status != 0)
-		D_GOTO(out_eventual, rc = *status);
-
-out_eventual:
-	ABT_eventual_free(&eventual);
-out_bulk:
-	if (bulk != CRT_BULK_NULL)
-		crt_bulk_free(bulk);
-out:
-	return rc;
-}
-
 void
 ds_pool_connect_handler(crt_rpc_t *rpc)
 {
@@ -2174,6 +2084,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	}
 
 	d_tm_inc_gauge(metrics->open_hdl_gauge, 1);
+
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
@@ -2188,8 +2099,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
-	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pci_map_bulk,
-			      &out->pco_map_buf_size);
+	rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc,
+				      in->pci_map_bulk, &out->pco_map_buf_size);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
@@ -2898,8 +2809,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc);
 	}
 
-	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pqi_map_bulk,
-			      &out->pqo_map_buf_size);
+	rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc,
+				      in->pqi_map_bulk, &out->pqo_map_buf_size);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 

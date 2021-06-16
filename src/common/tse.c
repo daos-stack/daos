@@ -869,6 +869,11 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	struct tse_task_private  *dep_dtp = tse_task2priv(dep);
 	struct tse_task_link	  *tlink;
 
+	if (task == dep) {
+		D_ERROR("Adding a dependency on oneself\n");
+		return -DER_INVAL;
+	}
+
 	if (dtp->dtp_sched != dep_dtp->dtp_sched) {
 		D_ERROR("Two tasks should belong to the same scheduler.\n");
 		return -DER_NO_PERM;
