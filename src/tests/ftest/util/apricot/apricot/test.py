@@ -23,7 +23,7 @@ from command_utils_base import CommandFailure, EnvironmentVariables
 from agent_utils import DaosAgentManager, include_local_host
 from dmg_utils import get_dmg_command
 from daos_utils import DaosCommand
-from server_utils import DaosServerManager, ServerFailed
+from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
     get_default_config_file, pcmd, get_file_listing

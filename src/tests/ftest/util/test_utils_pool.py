@@ -83,6 +83,7 @@ class TestPool(TestDaosApiBase):
         super().get_params(test)
 
         # Autosize any size/scm_size/nvme_size parameters
+        # pylint: disable=too-many-boolean-expressions
         if ((self.size.value is not None and str(self.size.value).endswith("%"))
                 or (self.scm_size.value is not None
                     and str(self.scm_size.value).endswith("%"))
@@ -104,8 +105,9 @@ class TestPool(TestDaosApiBase):
                 test_pool_param.update(params[name], name)
 
                 # Cache the autosized value so we do not calculate it again
-                id = (name, self.namespace, test_pool_param._default)
-                test.params._cache[id] = params[name]
+                # pylint: disable=protected-access
+                cache_id = (name, self.namespace, test_pool_param._default)
+                test.params._cache[cache_id] = params[name]
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)

@@ -734,53 +734,69 @@ class DaosServerManager(SubprocessManager):
             self.log.error(msg)
             raise ServerFailed("ServerInformation: {}".format(msg))
 
-    def get_scan_info(self, host):
-        """Determine what storage and network scan info is for this host.
+    def get_storage_scan_info(self, host):
+        """Get the storage scan information is for this host.
 
         Args:
-            host (str): host for which to get the storage and network info
+            host (str): host for which to get the storage information
 
         Raises:
-            ServerFailed: if output from the dmg storage/network scan is missing
-                or not in the expected format
+            ServerFailed: if output from the dmg storage scan is missing or not
+                in the expected format
 
         Returns:
-            dict: a dictionary of storage and network information for the
-                specified server host, e.g.
+            dict: a dictionary of storage information for the host, e.g.
                     {
-                        "storage": {
-                            "bdev_list": ["0000:13:00.0"],
-                            "scm_list": ["pmem0"]},
-                        "network": {
-                            1: {"fabric_iface": ib0, "provider": "ofi+psm2"},
-                            2: {"fabric_iface": ib0, "provider": "ofi+verbs"},
-                            3: {"fabric_iface": ib0, "provider": "ofi+tcp"}}
+                        "bdev_list": ["0000:13:00.0"],
+                        "scm_list": ["pmem0"],
                     }
 
         """
         self._check_information("storage", "HostStorage")
-        self._check_information("network", "HostFabrics")
 
-        data = {"storage": {}, "network": {}}
+        data = {}
         try:
             _info = self.information["storage"]["response"]["HostStorage"]
             for entry in _info.values():
                 if host in NodeSet(entry["hosts"].split(":")[0]):
                     if entry["storage"]["nvme_devices"]:
                         for device in entry["storage"]["nvme_devices"]:
-                            if "bdev_list" not in data["storage"]:
-                                data["storage"]["bdev_list"] = []
-                            data["storage"]["bdev_list"].append(
-                                device["pci_addr"])
+                            if "bdev_list" not in data:
+                                data["bdev_list"] = []
+                            data["bdev_list"].append(device["pci_addr"])
                     if entry["storage"]["scm_namespaces"]:
                         for device in entry["storage"]["scm_namespaces"]:
-                            if "scm_list" not in data["storage"]:
-                                data["storage"]["scm_list"] = []
-                            data["storage"]["scm_list"].append(
-                                device["blockdev"])
+                            if "scm_list" not in data:
+                                data["scm_list"] = []
+                            data["scm_list"].append(device["blockdev"])
         except KeyError as error:
             raise ServerFailed(
                 "ServerInformation: Error obtaining storage data") from error
+
+        return data
+
+    def get_network_scan_info(self, host):
+        """Get the network scan information is for this host.
+
+        Args:
+            host (str): host for which to get the network information
+
+        Raises:
+            ServerFailed: if output from the dmg network scan is missing or not
+                in the expected format
+
+        Returns:
+            dict: a dictionary of network information for the host, e.g.
+                    {
+                        1: {"fabric_iface": ib0, "provider": "ofi+psm2"},
+                        2: {"fabric_iface": ib0, "provider": "ofi+verbs"},
+                        3: {"fabric_iface": ib0, "provider": "ofi+tcp"},
+                    }
+
+        """
+        self._check_information("network", "HostFabrics")
+
+        data = {}
         try:
             _info = self.information["network"]["response"]["HostFabrics"]
             for entry in _info.values():
@@ -788,7 +804,7 @@ class DaosServerManager(SubprocessManager):
                     if entry["HostFabric"]["Interfaces"]:
                         for device in entry["HostFabric"]["Interfaces"]:
                             # List each device/provider combo under its priority
-                            data["network"][device["Priority"]] = {
+                            data[device["Priority"]] = {
                                 "fabric_iface": device["Device"],
                                 "provider": device["Provider"],
                                 "numa": device["NumaNode"]}
@@ -1112,7 +1128,7 @@ class DaosServerManager(SubprocessManager):
                     get_display_size(adjusted_scm))
                 if adjusted_scm > available_storage[0]:
                     raise ServerFailed(
-                        "Insufficient SCM for %.2f%% of autosized NVMe "
+                        "Insufficient SCM for {}% of autosized NVMe "
                         "storage".format(scm_ratio))
                 params["scm_ratio"] = scm_ratio
 
