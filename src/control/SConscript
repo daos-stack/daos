@@ -102,6 +102,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
                   get_build_tags(denv), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
+    denv.Requires(build_bin, ['gurt_lib'])
     denv.InstallAs(install_bin, build_bin)
     return install_bin
 #pylint: enable=too-many-arguments
@@ -178,26 +179,35 @@ def scons():
     # Version-controlled DAOS Go source directory src/control
     gosrc = Dir('.').srcnode().abspath
 
-    prereqs.require(denv, 'ofi', 'hwloc', 'spdk')
-
+    prereqs.require(denv, 'ofi', 'hwloc')
     old_cgold = denv["ENV"].get("CGO_LDFLAGS", "")
     # Sets CGO_LDFLAGS for rpath options
     daos_build.add_rpaths(denv, "..", True, True)
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
+    if prereqs.client_requested():
+        agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
+        dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
+        if prereqs.test_requested():
+            drpcbin = install_go_bin(denv, gosrc, None, "drpc_test",
+                                     "hello_drpc")
+            AlwaysBuild(drpcbin)
 
-    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
-                       sep=" ")
+        AlwaysBuild([agentbin, dmgbin])
 
-    agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
-    dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
-    drpcbin = install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
+    if not prereqs.server_requested():
+        return
 
-    AlwaysBuild([agentbin, dmgbin, drpcbin])
+    senv = denv.Clone()
+    denv = senv
+    prereqs.require(denv, 'spdk')
+
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
 
     SConscript('lib/spdk/SConscript', exports='denv')
 
-    senv = denv.Clone()
     denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    daos_build.add_rpaths(denv, "..", True, True)
 
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/gurt "
@@ -213,7 +223,7 @@ def scons():
              " -lspdk_blob -lspdk_nvme -lspdk_util -lspdk_json" + \
              " -lspdk_jsonrpc -lspdk_rpc -lspdk_trace" + \
              " -lspdk_sock -lspdk_log -lspdk_notify" + \
-             " -lspdk_blob_bdev -lspdk_vmd -lnuma -ldl"
+             " -lspdk_blob_bdev -lspdk_vmd -lnuma -ldl -lgurt"
 
     senv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
