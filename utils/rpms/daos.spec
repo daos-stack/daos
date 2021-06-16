@@ -317,7 +317,9 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
+cp %{buildroot}/%{_libdir}/libdaos_serialize.so %{_libdir}/libdaos_serialize.so
 ls -l %{_libdir}/
+ls -l %{buildroot}/%{_libdir}/libdaos_serialize.so
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
