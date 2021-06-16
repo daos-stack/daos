@@ -1,12 +1,20 @@
 """Build DAOS"""
-import sys
 import os
+import sys
 import platform
 import subprocess
 import time
 import errno
 import SCons.Warnings
 from SCons.Script import BUILD_TARGETS
+
+if sys.version_info.major < 3:
+    print(""""Python 2.7 is no longer supported in the DAOS build.
+Install python3 version of SCons.   On some platforms this package does not
+install the scons binary so your command may need to use scons-3 instead of
+scons or you will need to create an alias or script by the same name to
+wrap scons-3.""")
+    Exit(1)
 
 SCons.Warnings.warningAsException()
 
@@ -15,10 +23,8 @@ try:
 except NameError:
     pass
 
-sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
 import daos_build
 from prereq_tools import PreReqComponent
-
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -65,7 +71,7 @@ def get_version():
 
 API_VERSION_MAJOR = "1"
 API_VERSION_MINOR = "2"
-API_VERSION_FIX = "0"
+API_VERSION_FIX = "2"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
 
@@ -168,15 +174,19 @@ def set_defaults(env, daos_version):
     if env.get('BUILD_TYPE') != 'release':
         env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
 
-def preload_prereqs(prereqs):
-    """Preload prereqs specific to platform"""
+def build_misc():
+    """Build miscellaneous items"""
+    # install the configuration files
+    SConscript('utils/config/SConscript')
 
-    prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
-    reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
-            'uuid', 'crypto', 'fuse', 'protobufc', 'json-c', 'lz4']
-    if not is_platform_arm():
-        reqs.extend(['spdk', 'isal', 'isal_crypto'])
-    prereqs.load_definitions(prebuild=reqs)
+    # install certificate generation files
+    SConscript('utils/certs/SConscript')
+
+    # install man pages
+    try:
+        SConscript('doc/man/SConscript', must_exist=0)
+    except SCons.Warnings.MissingSConscriptWarning as _warn:
+        print("Missing doc/man/SConscript...")
 
 def scons(): # pylint: disable=too-many-locals
     """Execute build"""
@@ -380,10 +390,14 @@ def scons(): # pylint: disable=too-many-locals
     if not os.path.exists(commits_file):
         commits_file = None
 
+    platform_arm = is_platform_arm()
+
     prereqs = PreReqComponent(env, opts, commits_file)
     if not GetOption('help') and not GetOption('clean'):
         daos_build.load_mpi_path(env)
-    preload_prereqs(prereqs)
+    build_prefix = prereqs.get_src_build_dir()
+    prereqs.init_build_targets(build_prefix)
+    prereqs.load_defaults(platform_arm)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
 
@@ -413,7 +427,6 @@ def scons(): # pylint: disable=too-many-locals
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
     env.Alias('install', '$PREFIX')
-    platform_arm = is_platform_arm()
     daos_version = get_version()
     # Export() is handled specially by pylint so do not merge these two lines.
     Export('daos_version', 'API_VERSION', 'env', 'il_env', 'prereqs')
@@ -425,8 +438,6 @@ def scons(): # pylint: disable=too-many-locals
 
     set_defaults(env, daos_version)
 
-    build_prefix = prereqs.get_src_build_dir()
-
     # generate targets in specific build dir to avoid polluting the source code
     VariantDir(build_prefix, '.', duplicate=0)
     SConscript('{}/src/SConscript'.format(build_prefix))
@@ -435,30 +446,26 @@ def scons(): # pylint: disable=too-many-locals
     buildinfo.gen_script('.build_vars.sh')
     buildinfo.save('.build_vars.json')
     # also install to $PREFIX/lib to work with existing avocado test code
-    daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
+    if prereqs.test_requested():
+        daos_build.install(env, "lib/daos/",
+                           ['.build_vars.sh', '.build_vars.json'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
+                    ['site_scons/env_modules.py'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/',
+                    ['ftest.sh'])
+
     env.Install("$PREFIX/lib64/daos", "VERSION")
 
+    if prereqs.client_requested():
+        api_version = env.Command("%s/API_VERSION" % build_prefix,
+                                  "%s/SConstruct" % build_prefix,
+                                  "echo %s > $TARGET" % (API_VERSION))
+        env.Install("$PREFIX/lib64/daos", api_version)
     env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
-    env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
-                ['utils/sl/env_modules.py'])
-    env.Install('$PREFIX/lib/daos/TESTING/ftest/',
-                ['ftest.sh'])
-    api_version = env.Command("%s/API_VERSION" % build_prefix,
-                              "%s/SConstruct" % build_prefix,
-                              "echo %s > $TARGET" % (API_VERSION))
-    env.Install("$PREFIX/lib64/daos", api_version)
 
-    # install the configuration files
-    SConscript('utils/config/SConscript')
-
-    # install certificate generation files
-    SConscript('utils/certs/SConscript')
-
-    # install man pages
-    SConscript('doc/man/SConscript')
+    build_misc()
 
     Default(build_prefix)
-    Depends('install', build_prefix)
 
     # an "rpms" target
     env.Command('rpms', '', 'make -C utils/rpms rpms')

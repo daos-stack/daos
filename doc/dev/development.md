@@ -33,7 +33,7 @@ Installing the components into separate directories allow upgrading the
 components individually by replacing `--build-deps=yes` with
 `--update-prereq={component\_name}`. This requires a change to the environment
 configuration from before. For automated environment setup, source
-`utils/sl/utils/setup_local.sh`.
+`utils/sl/setup_local.sh`.
 
 The install path should be relocatable with the exception that `daos_admin`
 will not be able to find the new location of daos and dependencies. All other
@@ -75,6 +75,25 @@ so setting the values on subsequent builds is not necessary.
 If needed, `ALT_PREFIX` can be set to a colon separated prefix path where to
 look for already built components.  If set, the build will check these
 paths for components before proceeding to build.
+
+### Custom build targets
+
+The DAOS build also supports build targets to customize what parts of DAOS are
+built.  At present, just three such targets are defined, `client`, `server`, and
+`test`.
+
+To build only client libraries and tools, use the following command:
+
+```bash
+$ scons [args] client install
+```
+
+To build the server instead, substitute `server` for `client` in the above
+command.
+
+Note that such targets need to be specified each time you build as the default
+is equivalent to specifying `client server test` on the command line.  The
+`test` target is, at present, dependent on `client` and `server` as well.
 
 ## Go dependencies
 

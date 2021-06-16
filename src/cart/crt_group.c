@@ -303,7 +303,8 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		ui->ui_initialized = 1;
 		ui->ui_rank = li->li_rank;
 
-		if (crt_provider_is_contig_ep(crt_gdata.cg_na_plugin)) {
+		/* TODO: Derive provider instead of using default one */
+		if (crt_provider_is_contig_ep(crt_gdata.cg_init_prov)) {
 			char tmp_uri[CRT_ADDR_STR_MAX_LEN];
 
 			strncpy(tmp_uri, uri, CRT_ADDR_STR_MAX_LEN - 1);
@@ -366,7 +367,8 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		if (rc != 0) {
 			D_ERROR("Entry already present\n");
 
-			if (crt_provider_is_contig_ep(crt_gdata.cg_na_plugin)) {
+			/* TODO: Derive rprovider from context */
+			if (crt_provider_is_contig_ep(crt_gdata.cg_init_prov)) {
 				for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 					D_FREE(ui->ui_uri[i]);
 			} else {
@@ -797,7 +799,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 
 	D_ASSERT(crt_ctx != NULL);
 
-	if (crt_gdata.cg_sep_mode == true)
+	if (crt_provider_is_sep(crt_ctx->cc_hg_ctx.chc_provider))
 		tag = 0;
 
 	grp_priv = passed_grp_priv;
@@ -865,7 +867,8 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	D_ASSERT(uri != NULL || hg_addr != NULL);
 	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
-	if (crt_gdata.cg_sep_mode == true)
+	/* TODO: Derive from context */
+	if (crt_provider_is_sep(crt_gdata.cg_init_prov))
 		tag = 0;
 
 	default_grp_priv = grp_priv;
@@ -1376,7 +1379,7 @@ crt_group_version_set(crt_group_t *grp, uint32_t version)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	grp_priv->gp_membs_ver = version;
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
@@ -1833,7 +1836,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	rank = grp_priv->gp_self;
 
 	/* TODO: Per provider address needs to be stored in future */
-	addr = crt_gdata.cg_addr;
+	addr = crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov].cpg_addr;
 
 	grpid = grp_priv->gp_pub.cg_grpid;
 	filename = crt_grp_attach_info_filename(grp_priv);
@@ -2430,6 +2433,7 @@ crt_rank_self_set(d_rank_t rank)
 	hg_size_t		size = CRT_ADDR_STR_MAX_LEN;
 	struct crt_context	*ctx;
 	char			uri_addr[CRT_ADDR_STR_MAX_LEN] = {'\0'};
+	d_list_t		*ctx_list;
 
 	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
@@ -2457,7 +2461,10 @@ crt_rank_self_set(d_rank_t rank)
 	}
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
+
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+
+	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		hg_class =  ctx->cc_hg_ctx.chc_hgcla;
 
 		rc = crt_hg_get_addr(hg_class, uri_addr, &size);

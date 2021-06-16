@@ -52,9 +52,7 @@ struct dtx_req_args {
 	uuid_t				 dra_po_uuid;
 	/* container UUID */
 	uuid_t				 dra_co_uuid;
-	/* Pointer to the global list head for all the dtx_req_rec. */
-	d_list_t			*dra_list;
-	/* The length of aobve global list. */
+	/* The count of sub requests. */
 	int				 dra_length;
 	/* The collective RPC result. */
 	int				 dra_result;
@@ -223,7 +221,7 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = drr->drr_rank;
-	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_DTX, drr->drr_tag);
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, drr->drr_tag);
 	opc = DAOS_RPC_OPCODE(dra->dra_opc, DAOS_DTX_MODULE, DAOS_DTX_VERSION);
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
@@ -273,8 +271,8 @@ dtx_req_list_cb(void **args)
 					"on %d/%d.\n", DP_DTI(drr->drr_dti),
 					drr->drr_rank, drr->drr_tag);
 				return;
-			case -DER_EVICTED:
-				/* If non-leader is evicted, handle it
+			case -DER_EXCLUDED:
+				/* If non-leader is excluded, handle it
 				 * as 'prepared'. If other non-leaders
 				 * also 'prepared' then related DTX is
 				 * committable. Fall through.
@@ -348,7 +346,6 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 	dra->dra_opc = opc;
 	uuid_copy(dra->dra_po_uuid, po_uuid);
 	uuid_copy(dra->dra_co_uuid, co_uuid);
-	dra->dra_list = head;
 	dra->dra_length = len;
 	dra->dra_result = 0;
 	dra->dra_cont = cont;
@@ -585,6 +582,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	   int count, bool drop_cos)
 {
 	struct dtx_req_args	 dra;
+	struct dtx_req_rec	*drr;
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct dtx_id		*dti = NULL;
 	struct dtx_cos_key	*dcks = NULL;
@@ -658,7 +656,12 @@ out:
 	if (daos_handle_is_valid(tree_hdl))
 		dbtree_destroy(tree_hdl, NULL);
 
-	D_ASSERT(d_list_empty(&head));
+	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec,
+				       drr_link)) != NULL) {
+		D_FREE(drr->drr_cb_args);
+		D_FREE(drr->drr_dti);
+		D_FREE(drr);
+	}
 
 	return rc < 0 ? rc : (rc1 < 0 ? rc1 : (rc2 < 0 ? rc2 : 0));
 }
@@ -668,6 +671,7 @@ dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
 	  struct dtx_entry **dtes, int count)
 {
 	struct dtx_req_args	 dra;
+	struct dtx_req_rec	*drr;
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct dtx_id		*dti = NULL;
 	struct umem_attr	 uma;
@@ -718,7 +722,12 @@ out:
 	if (daos_handle_is_valid(tree_hdl))
 		dbtree_destroy(tree_hdl, NULL);
 
-	D_ASSERT(d_list_empty(&head));
+	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec,
+				       drr_link)) != NULL) {
+		D_FREE(drr->drr_cb_args);
+		D_FREE(drr->drr_dti);
+		D_FREE(drr);
+	}
 
 	return rc < 0 ? rc : 0;
 }

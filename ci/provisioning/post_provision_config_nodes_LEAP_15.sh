@@ -52,6 +52,8 @@ post_provision_config_nodes() {
     time dnf repolist
     # the group repo is always on the test image
     #add_group_repo
+    # in fact is's on the Leap image twice so remove one
+    rm -f $REPOS_DIR/daos-stack-ext-opensuse-15-stable-group.repo
     add_local_repo
     time dnf repolist
 

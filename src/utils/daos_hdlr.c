@@ -118,8 +118,8 @@ pool_decode_props(daos_prop_t *props)
 					"auto" : "manual");
 		if (entry->dpe_val & ~(DAOS_SELF_HEAL_AUTO_EXCLUDE |
 				       DAOS_SELF_HEAL_AUTO_REBUILD))
-			D_PRINT("unknown bits set in self-healing property ("DF_X64")\n",
-				entry->dpe_val);
+			D_PRINT("unknown bits set in self-healing property ("
+				DF_X64")\n", entry->dpe_val);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_RECLAIM);
@@ -147,6 +147,20 @@ pool_decode_props(daos_prop_t *props)
 		default:
 			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 			break;
+		}
+	}
+
+	entry = daos_prop_entry_get(props, DAOS_PROP_PO_EC_CELL_SZ);
+	if (entry == NULL) {
+		fprintf(stderr, "EC cell size not found\n");
+		rc = -DER_INVAL;
+	} else {
+		if (!daos_ec_cs_valid(entry->dpe_val)) {
+			D_PRINT("Invalid EC cell size: %u\n",
+				(uint32_t)entry->dpe_val);
+		} else {
+			D_PRINT("EC cell size = %u\n",
+				(uint32_t)entry->dpe_val);
 		}
 	}
 
@@ -1197,12 +1211,13 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 		rc = -DER_INVAL;
 	} else {
 		D_PRINT("redundancy level:\t");
-		if (entry->dpe_val == DAOS_PROP_CO_REDUN_RACK)
-			D_PRINT("rack\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_REDUN_NODE)
-			D_PRINT("node\n");
+		if (entry->dpe_val == DAOS_PROP_CO_REDUN_RANK)
+			D_PRINT("node (%d)\n", DAOS_PROP_CO_REDUN_RANK);
 		else
-			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
+			/* XXX: should be resolved to string */
+			D_PRINT("rank+"DF_U64" ("DF_U64")\n",
+				entry->dpe_val - DAOS_PROP_CO_REDUN_RANK,
+				entry->dpe_val);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_SNAPSHOT_MAX);
@@ -1249,6 +1264,13 @@ cont_decode_props(daos_prop_t *props, daos_prop_t *prop_acl)
 			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ);
+	if (entry == NULL) {
+		fprintf(stderr, "EC cell size property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("EC cell size:\t%d\n", (int)entry->dpe_val);
+	}
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID);
 	if (entry == NULL) {
 		fprintf(stderr, "Container allocated oid property not found\n");
@@ -1713,7 +1735,7 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 	return rc;
 }
 
-static int
+int
 parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 {
 	char	*f1 = NULL;
@@ -1724,52 +1746,42 @@ parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 	int	rc = 0;
 
 	if (path == NULL || _obj_name == NULL || _cont_name == NULL)
-		return -EINVAL;
+		return EINVAL;
 	path_len = strlen(path) + 1;
 
 	if (strcmp(path, "/") == 0) {
 		D_STRNDUP(*_cont_name, "/", 2);
 		if (*_cont_name == NULL)
-			return -ENOMEM;
+			return ENOMEM;
 		*_obj_name = NULL;
 		return 0;
 	}
 	D_STRNDUP(f1, path, path_len);
-	if (f1 == NULL) {
-		rc = -ENOMEM;
-		goto out;
-	}
+	if (f1 == NULL)
+		D_GOTO(out, rc = ENOMEM);
 
 	D_STRNDUP(f2, path, path_len);
-	if (f2 == NULL) {
-		rc = -ENOMEM;
-		goto out;
-	}
+	if (f2 == NULL)
+		D_GOTO(out, rc = ENOMEM);
 	fname = basename(f1);
 	cont_name = dirname(f2);
 
 	if (cont_name[0] != '/') {
 		char cwd[1024];
 
-		if (getcwd(cwd, 1024) == NULL) {
-			rc = -ENOMEM;
-			goto out;
-		}
+		if (getcwd(cwd, 1024) == NULL)
+			D_GOTO(out, rc = ENOMEM);
 
 		if (strcmp(cont_name, ".") == 0) {
 			D_STRNDUP(cont_name, cwd, 1024);
-			if (cont_name == NULL) {
-				rc = -ENOMEM;
-				goto out;
-			}
+			if (cont_name == NULL)
+				D_GOTO(out, rc = ENOMEM);
 		} else {
 			char *new_dir = calloc(strlen(cwd) + strlen(cont_name)
 						+ 1, sizeof(char));
 
-			if (new_dir == NULL) {
-				rc = -ENOMEM;
-				goto out;
-			}
+			if (new_dir == NULL)
+				D_GOTO(out, rc = ENOMEM);
 
 			strcpy(new_dir, cwd);
 			if (cont_name[0] == '.') {
@@ -1784,16 +1796,13 @@ parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 	} else {
 		D_STRNDUP(*_cont_name, cont_name,
 			  strlen(cont_name) + 1);
-		if (*_cont_name == NULL) {
-			rc = -ENOMEM;
-			goto out;
-		}
+		if (*_cont_name == NULL)
+			D_GOTO(out, rc = ENOMEM);
 	}
 	D_STRNDUP(*_obj_name, fname, strlen(fname) + 1);
 	if (*_obj_name == NULL) {
 		D_FREE(*_cont_name);
-		rc = -ENOMEM;
-		goto out;
+		D_GOTO(out, rc = ENOMEM);
 	}
 out:
 	D_FREE(f1);
@@ -1856,8 +1865,10 @@ open_dfs(struct file_dfs *file_dfs, const char *file, int flags, mode_t mode)
 	char		*name = NULL;
 	char		*dir_name = NULL;
 
-	parse_filename_dfs(file, &name, &dir_name);
-	assert(dir_name);
+	rc = parse_filename_dfs(file, &name, &dir_name);
+	if (rc != 0)
+		return rc;
+
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
 	if (parent == NULL) {
 		fprintf(stderr, "dfs_lookup %s failed with error %d\n",
@@ -1935,7 +1946,9 @@ mkdir_dfs(struct file_dfs *file_dfs, const char *path, mode_t *mode)
 	char		*name = NULL;
 	char		*dname = NULL;
 
-	parse_filename_dfs(path, &name, &dname);
+	rc = parse_filename_dfs(path, &name, &dname);
+	if (rc != 0)
+		return rc;
 
 	/* if the "/" path is given to DAOS the dfs_mkdir fails with
 	 * INVALID argument, so skip creation of that in DAOS since
@@ -2097,8 +2110,10 @@ stat_dfs(struct file_dfs *file_dfs, const char *path, struct stat *buf)
 	char		*name = NULL;
 	char		*dir_name = NULL;
 
-	parse_filename_dfs(path, &name, &dir_name);
-	assert(dir_name);
+	rc = parse_filename_dfs(path, &name, &dir_name);
+	if (rc != 0)
+		return rc;
+
 	/* Lookup the parent directory */
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
 	if (parent == NULL) {
@@ -2289,8 +2304,10 @@ chmod_dfs(struct file_dfs *file_dfs, const char *file, mode_t mode)
 	char		*name = NULL;
 	char		*dir_name = NULL;
 
-	parse_filename_dfs(file, &name, &dir_name);
-	assert(dir_name);
+	rc = parse_filename_dfs(file, &name, &dir_name);
+	if (rc != 0)
+		return rc;
+
 	/* Lookup the parent directory */
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
 	if (parent == NULL) {
@@ -2588,10 +2605,10 @@ fs_copy(struct file_dfs *src_file_dfs,
 
 	if (copy_into_dst) {
 		/* Get the dirname and basename */
-		parse_filename_dfs(src_path, &tmp_name, &tmp_dir);
-		if (tmp_dir == NULL) {
+		rc = parse_filename_dfs(src_path, &tmp_name, &tmp_dir);
+		if (rc != 0) {
 			printf("Failed to parse path %s\n", src_path);
-			D_GOTO(out, rc = EINVAL);
+			D_GOTO(out, rc);
 		}
 
 		/* Build the destination path */
@@ -2702,7 +2719,7 @@ dm_connect(bool is_posix_copy,
 	int			rc = 0;
 	struct duns_attr_t	dattr = {0};
 	daos_prop_t		*props = NULL;
-	dfs_attr_t		attr;
+	dfs_attr_t		attr = {0};
 	int			size = 2;
 	uint32_t		dpe_types[size];
 	uint64_t		dpe_vals[size];
@@ -2739,9 +2756,19 @@ dm_connect(bool is_posix_copy,
 	 * tools
 	 */
 	if (src_file_dfs->type != POSIX) {
+		/* Need to query source max oid for non-POSIX source
+		 * containers, and the cont type to see if the source
+		 * container is POSIX, and if it is then use dfs_cont_create
+		 * to create the destination container
+		 */
 		dpe_types[0] = ca->cont_prop_layout;
 		dpe_types[1] = ca->cont_prop_oid;
 
+		/* This will be extended to get all props
+		 * from the source container and then
+		 * set them in the destination when
+		 * the --preserve option is added
+		 */
 		rc = dm_get_cont_prop(ca->src_coh, sysname, src_cont_info, size,
 				      dpe_types, dpe_vals);
 		if (rc != 0) {
@@ -2753,18 +2780,15 @@ dm_connect(bool is_posix_copy,
 		ca->cont_layout = dpe_vals[0];
 		ca->cont_oid = dpe_vals[1];
 
-		props = daos_prop_alloc(2);
-		if (props == NULL) {
-			fprintf(stderr, "Failed to allocate prop (%d)", rc);
-			D_GOTO(out, rc);
-		}
-		props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
-		props->dpp_entries[0].dpe_val = ca->cont_layout;
-
-		/* only set max oid on created dest containers
-		 * if this is a non-posix copy
-		 */
 		if (!is_posix_copy) {
+			props = daos_prop_alloc(2);
+			if (props == NULL) {
+				fprintf(stderr, "Failed to allocate prop\n");
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
+			props->dpp_entries[0].dpe_val = ca->cont_layout;
+
 			props->dpp_entries[1].dpe_type = ca->cont_prop_oid;
 			props->dpp_entries[1].dpe_val = ca->cont_oid;
 		}
@@ -2822,10 +2846,6 @@ dm_connect(bool is_posix_copy,
 				    dst_cont_info, NULL);
 		if (rc == -DER_NONEXIST) {
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
-				attr.da_props = props;
-				attr.da_id = 0;
-				attr.da_oclass_id = OC_UNKNOWN;
-				attr.da_chunk_size = 0;
 				rc = dfs_cont_create(ca->dst_poh,
 						     ca->dst_c_uuid,
 						     &attr, NULL, NULL);
@@ -2856,6 +2876,8 @@ dm_connect(bool is_posix_copy,
 					"%d\n", rc);
 				D_GOTO(err_dst_root, rc);
 			}
+			fprintf(stdout, "Successfully created container: "
+				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
 			fprintf(stderr, "failed to open container: "
 				"%d\n", rc);
@@ -3069,6 +3091,10 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
+	/* if container UUID has not been provided generate one */
+	if (uuid_is_null(ca.dst_c_uuid)) {
+		uuid_generate(ca.dst_c_uuid);
+	}
 	rc = dm_connect(is_posix_copy, &src_file_dfs, &dst_file_dfs, &ca,
 			ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
@@ -3491,7 +3517,6 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	size_t			src_str_len = 0;
 	size_t			dst_str_len = 0;
 	daos_epoch_range_t	epr;
-	int			uuid_len = 128;
 
 	set_dm_args_default(&ca);
 	file_set_defaults_dfs(&src_cp_type);
@@ -3518,29 +3543,15 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	}
 	rc = dm_parse_path(&dst_cp_type, dst_str, dst_str_len,
 			   &ca.dst_p_uuid, &ca.dst_c_uuid);
-	/* parse pool uuid if this fails, since it is not in form that
-	 * can be parsed by duns_resolve_path (i.e. dst=/$pool)
-	 */
 	if (rc != 0) {
-		uuid_generate(ca.dst_c_uuid);
-		if (strncmp(ap->dst, "/", 1) == 0) {
-			ap->dst += 1;
-			D_STRNDUP(ca.dst, ap->dst, uuid_len);
-			if (ca.dst == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			uuid_parse(ca.dst, ca.dst_p_uuid);
-			ap->dst -= 1;
-			/* not considered an error yet since this could
-			 * be a UNS path, dm_connect will check this
-			 * when it attempts to do a uns_path_create
-			 */
-			rc = 0;
-		} else {
-			fprintf(stderr, "failed to parse destination path: "
-				"%d\n", rc);
-			D_GOTO(out, rc);
-		}
-	} else {
+		fprintf(stderr, "failed to parse destination path: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	if (!uuid_is_null(ca.dst_c_uuid)) {
+		/* make sure destination container does not already exist
+		 * for object level copies
+		 */
 		rc = daos_pool_connect(ca.dst_p_uuid, ap->sysname,
 				       DAOS_PC_RW, &ca.dst_poh, NULL, NULL);
 		if (rc != 0) {
@@ -3577,6 +3588,9 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 			}
 			D_GOTO(out, rc = 1);
 		}
+	} else {
+		/* if container UUID has not been provided generate one */
+		uuid_generate(ca.dst_c_uuid);
 	}
 
 	rc = dm_connect(is_posix_copy, &dst_cp_type, &src_cp_type,
@@ -3674,9 +3688,8 @@ out_disconnect:
 	}
 out:
 	if (rc == 0) {
-		fprintf(stdout, "\n\nSuccessfully copied to destination "
-			"container "DF_UUIDF "\n\n",
-			DP_UUID(ca.dst_c_uuid));
+		fprintf(stdout, "Successfully copied to destination "
+			"container "DF_UUIDF "\n", DP_UUID(ca.dst_c_uuid));
 	}
 	D_FREE(src_str);
 	D_FREE(dst_str);

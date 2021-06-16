@@ -24,7 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func mockEngineDiedEvt(t *testing.T, r uint32) *events.RASEvent {
+func mockEvtEngineDied(t *testing.T, r uint32) *events.RASEvent {
 	t.Helper()
 	return events.NewEngineDiedEvent("foo", 0, r, common.NormalExit, 1234)
 }
@@ -241,7 +241,7 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 	members := Members{
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
-		MockMember(t, 3, MemberStateEvicted),
+		MockMember(t, 3, MemberStateExcluded),
 		NewMember(Rank(4), MockUUID(4), addr1.String(), addr1, MemberStateStopped), // second host rank
 	}
 
@@ -331,7 +331,7 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 		MockMember(t, 0, MemberStateJoined),
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
-		MockMember(t, 3, MemberStateEvicted),
+		MockMember(t, 3, MemberStateExcluded),
 		NewMember(Rank(4), common.MockUUID(4), "", addr1, MemberStateStopped), // second host rank
 	}
 
@@ -419,7 +419,7 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 	members := Members{
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
-		MockMember(t, 3, MemberStateEvicted),
+		MockMember(t, 3, MemberStateExcluded),
 		MockMember(t, 4, MemberStateJoined),
 		MockMember(t, 5, MemberStateJoined),
 		NewMember(Rank(6), common.MockUUID(6), "", addr1, MemberStateStopped), // second host rank
@@ -575,7 +575,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			members: Members{
 				MockMember(t, 1, MemberStateJoined),
 				MockMember(t, 2, MemberStateStopped),
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 				MockMember(t, 4, MemberStateStopped),
 				MockMember(t, 5, MemberStateJoined),
 				MockMember(t, 6, MemberStateJoined),
@@ -590,7 +590,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			expMembers: Members{
 				MockMember(t, 1, MemberStateStopped),
 				MockMember(t, 2, MemberStateStopped), // errored results don't change member state
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 				MockMember(t, 4, MemberStateReady),
 				MockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
 				MockMember(t, 6, MemberStateStopped, "exit 1"),
@@ -600,7 +600,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			members: Members{
 				MockMember(t, 1, MemberStateJoined),
 				MockMember(t, 2, MemberStateStopped),
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 				MockMember(t, 4, MemberStateStopped),
 				MockMember(t, 5, MemberStateJoined),
 				MockMember(t, 6, MemberStateStopped),
@@ -615,7 +615,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			expMembers: Members{
 				MockMember(t, 1, MemberStateStopped),
 				MockMember(t, 2, MemberStateErrored, "can't stop"),
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 				MockMember(t, 4, MemberStateReady),
 				MockMember(t, 5, MemberStateJoined),
 				MockMember(t, 6, MemberStateStopped),
@@ -625,7 +625,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			members: Members{
 				MockMember(t, 1, MemberStateJoined),
 				MockMember(t, 2, MemberStateStopped),
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
@@ -848,7 +848,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 		MockMember(t, 0, MemberStateJoined),
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
-		MockMember(t, 3, MemberStateEvicted),
+		MockMember(t, 3, MemberStateExcluded),
 	}
 
 	for name, tc := range map[string]struct {
@@ -863,19 +863,19 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 		},
 		"event on unrecognized rank": {
 			members:    members,
-			event:      mockEngineDiedEvt(t, 4),
+			event:      mockEvtEngineDied(t, 4),
 			expMembers: members,
 		},
 		"state updated on unscheduled exit": {
 			members: members,
-			event:   mockEngineDiedEvt(t, 1),
+			event:   mockEvtEngineDied(t, 1),
 			expMembers: Members{
 				MockMember(t, 0, MemberStateJoined),
 				MockMember(t, 1, MemberStateErrored).WithInfo(
 					errors.Wrap(common.NormalExit,
 						"DAOS engine 0 exited unexpectedly").Error()),
 				MockMember(t, 2, MemberStateStopped),
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 			},
 		},
 	} {

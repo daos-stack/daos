@@ -1,9 +1,13 @@
 """Build DAOS utilities"""
 import daos_build
-Import('env')
+Import('env', 'prereqs')
 
 def scons():
     """Execute build"""
+
+    if not prereqs.client_requested():
+        return
+
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
 
     denv = env.Clone()
@@ -12,21 +16,23 @@ def scons():
     SConscript('self_test/SConscript')
     Default('self_test')
 
-    # Build crt_launch
-    SConscript('crt_launch/SConscript')
+    if prereqs.test_requested():
+        # Build crt_launch
+        SConscript('crt_launch/SConscript')
+
+        # Build daos_metrics
+        SConscript('daos_metrics/SConscript')
 
     # Build cart_ctl
     SConscript('ctl/SConscript')
-
-    # Build daos_metrics
-    SConscript('daos_metrics/SConscript')
 
     # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
     Import('cmd_parser', 'dc_credit')
     daos_obj = [cmd_parser, dc_credit]
-    daos_src = ['daos.c', 'daos_obj_ctl.c', 'daos_hdlr.c', 'daos_autotest.c']
+    daos_src = ['daos.c', 'daos_obj_ctl.c', 'daos_hdlr.c', 'daos_dfs_hdlr.c',
+                'daos_autotest.c']
 
     daos = daos_build.program(denv, 'daos', [daos_src, daos_obj], LIBS=libs)
     denv.Install('$PREFIX/bin/', daos)
