@@ -81,14 +81,13 @@ def scons():
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('../gurt').srcnode()])
-
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
                     os.path.join('../include', 'cart', header))
 
     prereqs.require(env, 'mercury', headers_only=True)
 
-    denv = env.Clone()
+    denv = env.Clone(LIBS=[])
 
     # Generate cart utility shared objects
     build_utility_shared_obj(denv)

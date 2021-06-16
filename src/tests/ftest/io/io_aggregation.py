@@ -74,7 +74,9 @@ class IoAggregation(IorTestBase):
             ior write, then pass otherwise fail the test after waiting
             for 4 attempts.
 
-        :avocado: tags=all,daosio,hw,small,full_regression,ioaggregation
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=daosio,ioaggregation,tx
         """
         # update ior signature option
         self.ior_cmd.signature.update("123")

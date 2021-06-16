@@ -851,8 +851,9 @@ swap_pool_buf(struct pool_buf *pb)
 
 	for (i = 0; i < pb->pb_nr; i++) {
 		pool_comp = &pb->pb_comps[i];
-		D_SWAP16S(&pool_comp->co_type);
+		/* skip pool_comp->co_type (uint8_t) */
 		/* skip pool_comp->co_status (uint8_t) */
+		/* skip pool_comp->co_index (uint8_t) */
 		/* skip pool_comp->co_padding (uint8_t) */
 		D_SWAP32S(&pool_comp->co_id);
 		D_SWAP32S(&pool_comp->co_rank);

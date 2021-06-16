@@ -3,10 +3,12 @@ import os
 
 def scons():
     """Execute build"""
-    Import('env', 'conf_dir')
+    Import('env', 'conf_dir', 'prereqs')
 
-    env.Install(conf_dir, ['daos_server.yml', 'daos_control.yml',
-                           'daos_agent.yml'])
+    if prereqs.server_requested():
+        env.Install(conf_dir, ['daos_server.yml'])
+    if prereqs.client_requested():
+        env.Install(conf_dir, ['daos_control.yml', 'daos_agent.yml'])
 
 if __name__ == "SCons.Script":
     scons()
