@@ -258,13 +258,11 @@ agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 
 	if (end_stripe > start_stripe) {
 		D_ASSERTF(end_stripe - start_stripe == 1,
-			  "IDX="DF_U64", SS="DF_U64", ES="DF_U64
+			  DF_UOID ", recx "DF_RECX" SS="DF_U64", ES="DF_U64
 			  ", EC_OCA(k=%d, p=%d, cs=%d)\n",
-			  agg_extent->ae_recx.rx_idx,
-			  start_stripe, end_stripe,
-			  entry->ae_oca.u.ec.e_k,
-			  entry->ae_oca.u.ec.e_p,
-			  entry->ae_oca.u.ec.e_len);
+			  DP_UOID(entry->ae_oid), DP_RECX(agg_extent->ae_recx),
+			  start_stripe, end_stripe, entry->ae_oca.u.ec.e_k,
+			  entry->ae_oca.u.ec.e_p, entry->ae_oca.u.ec.e_len);
 
 		tail_size = DAOS_RECX_END(agg_extent->ae_recx) -
 			    end_stripe * stripe_size;
@@ -1809,6 +1807,11 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	 * parity ext epoch if exist.
 	 */
 	iter_param.ip_hdl		= DAOS_HDL_INVAL;
+	/* set epr_lo as zero to pass-through possibly existed snapshot
+	 * between agg_param->ap_epr.epr_lo and .epr_hi.
+	 */
+	iter_param.ip_epr.epr_lo	= 0;
+	iter_param.ip_epr.epr_hi	= agg_param->ap_epr.epr_hi;
 	iter_param.ip_ih		= entry->ae_thdl;
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE |
 					  VOS_IT_SKIP_REMOVED;
