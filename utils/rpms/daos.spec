@@ -249,6 +249,7 @@ This is the package needed to manage server storage firmware on DAOS servers.
 %package daos_serialize
 Summary: DAOS serialization library that uses HDF5
 BuildRequires: hdf5-devel
+Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: hdf5
 
 %description daos_serialize
