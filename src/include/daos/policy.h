@@ -29,4 +29,7 @@ struct policy_desc_t {
 	uint32_t		params[DAOS_MEDIA_POLICY_PARAMS_MAX];
 };
 
+bool daos_policy_try_parse(const char * policy_str,
+			   struct policy_desc_t *out_pd);
+
 #endif

@@ -1371,8 +1371,13 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
 	pool->sp_reclaim = iv_prop->pip_reclaim;
-	pool->sp_policy_desc = *iv_prop->pip_policy_desc;
 
+	if (!daos_policy_try_parse(iv_prop->pip_policy_str,
+				   &pool->sp_policy_desc)) {
+		D_ERROR("Failed to parse policy string: %s\n",
+			iv_prop->pip_policy_str);
+		return -DER_MISMATCH;
+	}
 	int ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
 
 	return ret;

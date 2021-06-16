@@ -402,6 +402,9 @@ daos_label_is_valid(const char *label)
 	return true;
 }
 
+/** max length of the policy string */
+#define DAOS_PROP_POLICYSTR_MAX_LEN	(128)
+
 /** daos properties, for pool or container */
 typedef struct {
 	/** number of entries */

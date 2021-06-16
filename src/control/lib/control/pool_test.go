@@ -246,21 +246,21 @@ func TestControl_PoolCreate(t *testing.T) {
 		expErr  error
 	}{
 		"local failure": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "io_size"},
+			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
 			},
 			expErr: errors.New("local failed"),
 		},
 		"remote failure": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "io_size"},
+			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
 		},
 		"non-retryable failure": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "io_size"},
+			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosIOError, nil),
@@ -286,34 +286,40 @@ func TestControl_PoolCreate(t *testing.T) {
 			expErr: errors.New("invalid label"),
 		},
 		"create -DER_TIMEDOUT is retried": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "io_size"},
+			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosTimedOut, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
 				},
 			},
-			expResp: &PoolCreateResp{},
+			expResp: &PoolCreateResp{
+				Policy: "type=io_size",
+			},
 		},
 		"create -DER_GRPVER is retried": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "io_size"},
+			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosGroupVersionMismatch, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
 				},
 			},
-			expResp: &PoolCreateResp{},
+			expResp: &PoolCreateResp{
+				Policy: "type=io_size",
+			},
 		},
 		"create -DER_AGAIN is retried": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "io_size"},
+			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosTryAgain, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
 				},
 			},
-			expResp: &PoolCreateResp{},
+			expResp: &PoolCreateResp{
+				Policy: "type=io_size",
+			},
 		},
 		"success": {
 			req: &PoolCreateReq{
@@ -340,7 +346,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 		},
 		"success no props": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "io_size"},
+			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolCreateResp{
@@ -352,6 +358,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			expResp: &PoolCreateResp{
 				SvcReps:  []uint32{0, 1, 2},
 				TgtRanks: []uint32{0, 1, 2},
+				Policy:   "type=io_size",
 			},
 		},
 	} {
