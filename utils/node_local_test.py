@@ -1377,7 +1377,7 @@ class posix_tests():
         dfuse0 = DFuse(self.server,
                        self.conf,
                        caching=True,
-                       pool=self.pool,
+                       pool=self.pool.uuid,
                        container=self.container)
         dfuse0.start(v_hint='two_0')
 
@@ -1386,7 +1386,7 @@ class posix_tests():
                        caching=True,
                        path=os.path.join(self.conf.dfuse_parent_dir,
                                          'dfuse_mount_1'),
-                       pool=self.pool,
+                       pool=self.pool.uuid,
                        container=self.container)
         dfuse1.start(v_hint='two_1')
 
