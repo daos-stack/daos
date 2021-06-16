@@ -146,7 +146,7 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	envCtx := C.CString("--log-level=lib.eal:4")
 	defer C.free(unsafe.Pointer(envCtx))
 
-	retPtr := C.daos_spdk_init(C.int(opts.MemSize), envCtx,
+	retPtr := C.daos_spdk_init(0, envCtx,
 		C.ulong(len(opts.PciAllowList)), cAllowList)
 	if err := checkRet(retPtr, "daos_spdk_init()"); err != nil {
 		return err

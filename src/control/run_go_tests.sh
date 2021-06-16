@@ -99,11 +99,14 @@ function setup_environment()
 	LD_LIBRARY_PATH=${SL_PREFIX+${SL_PREFIX}/lib}
 	LD_LIBRARY_PATH+="${SL_PREFIX+:${SL_PREFIX}/lib64}"
 	LD_LIBRARY_PATH+="${SL_SPDK_PREFIX+:${SL_SPDK_PREFIX}/lib}"
+	LD_LIBRARY_PATH+=":/usr/share/dpdk/lib"
 	CGO_LDFLAGS=${SL_PREFIX+-L${SL_PREFIX}/lib}
 	CGO_LDFLAGS+="${SL_PREFIX+ -L${SL_PREFIX}/lib64}"
 	CGO_LDFLAGS+="${SL_SPDK_PREFIX+ -L${SL_SPDK_PREFIX}/lib}"
+	CGO_LDFLAGS+=" -L/usr/share/dpdk/lib"
 	CGO_CFLAGS=${SL_PREFIX+-I${SL_PREFIX}/include}
 	CGO_CFLAGS+="${SL_SPDK_PREFIX+ -I${SL_SPDK_PREFIX}/include}"
+	CGO_CFLAGS+=" -I/usr/share/dpdk/include"
 
 	src_include="$(dirname "$build_source")/src/include"
 	if [ -d "$src_include" ]; then

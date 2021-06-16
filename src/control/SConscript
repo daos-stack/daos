@@ -153,6 +153,8 @@ def configure_go(denv):
 def scons():
     """Execute build"""
     env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(LIBPATH=[Dir('/usr/share/dpdk/lib')])
+    env.AppendUnique(RPATH_FULL=['/usr/share/dpdk/lib'])
 
     denv = env.Clone()
 
@@ -219,25 +221,30 @@ def scons():
 
     SConscript('lib/spdk/SConscript', exports='denv')
 
-    denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
+    senv.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=/usr/share/dpdk/lib"])
+    senv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
-    daos_build.add_rpaths(denv, "..", True, True)
+    daos_build.add_rpaths(senv, '..', True, True)
 
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/gurt "
                             "-L$BUILD_DIR/src/cart "
                             "-L$SPDK_PREFIX/lib "
+                            "-L/usr/share/dpdk/lib "
                             "-L$OFI_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access
     ldopts = cgolibdirs +                                                     \
              " -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool" +        \
              " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lnuma -ldl"
     senv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
-
     senv.AppendENVPath("CGO_CFLAGS",
                        senv.subst("-I$SPDK_PREFIX/include "
+                                  "-I/usr/share/dpdk/include "
                                   "-I$OFI_PREFIX/include"),
                        sep=" ")
+    print("daos_server CGO_LDFLAGS: " + senv["ENV"]["CGO_LDFLAGS"])
+    print("daos_server CGO_CFLAGS: " + senv["ENV"]["CGO_CFLAGS"])
+    #print("daos_server LIBPATH: " + senv["ENV"]["LIBPATH"])
 
     # Copy setup_spdk.sh script to be executed at daos_server runtime.
     senv.Install(join('$PREFIX', 'share/daos/control'),
@@ -253,6 +260,12 @@ def scons():
     # Sets CGO_LDFLAGS for rpath
     daos_build.add_rpaths(aenv, None, True, True)
     aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
+    aenv.AppendUnique(LIBPATH=[Dir('/usr/share/dpdk/lib')])
+    aenv.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=/usr/share/dpdk/lib"])
+    print("daos_admin CGO_LDFLAGS: " + aenv["ENV"]["CGO_LDFLAGS"])
+    print("daos_admin CGO_CFLAGS: " + aenv["ENV"]["CGO_CFLAGS"])
+    #print("daos_server LIBPATH: " + aenv["ENV"]["LIBPATH"])
+
     adminbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_admin",
                               "daos_admin")
 

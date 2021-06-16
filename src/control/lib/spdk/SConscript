@@ -7,12 +7,16 @@ def scons():
     Import('denv', 'prereqs', 'control_tgts')
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
+    denv.AppendUnique(LIBPATH=[Dir('/usr/share/dpdk/lib')])
 
     senv = denv.Clone()
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
     senv.AppendUnique(OBJPREFIX='s_')
+    senv.AppendUnique(RPATH_FULL=['/usr/share/dpdk/lib'])
+    denv.AppendUnique(CPPPATH=[Dir('/usr/share/dpdk/include')])
+    denv.AppendUnique(RPATH_FULL=['/usr/share/dpdk/lib'])
 
     # Explicitly link RTE & SPDK libs for CGO access
     libs = ['spdk_env_dpdk', 'spdk_nvme', 'spdk_vmd', 'rte_mempool']
@@ -21,10 +25,11 @@ def scons():
     # Other libs
     libs += ['numa', 'dl']
 
-    senv.nc = senv.Object("src/nvme_control.c")
-    senv.ncc = senv.Object("src/nvme_control_common.c")
+    nc = senv.Object("src/nvme_control.c")
+    ncc = senv.Object("src/nvme_control_common.c")
+    ctgt = senv.Object(control_tgts)
     denv.nvmecontrol = senv.StaticLibrary("nvme_control",
-                                          [senv.nc, senv.ncc] + control_tgts,
+                                          [ctgt, nc, ncc],
                                           LIBS=libs)
 
     senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)

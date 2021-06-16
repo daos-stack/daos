@@ -312,7 +312,11 @@ def define_components(reqs):
                           'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
-                libs=['rte_bus_pci'], patch_rpath=['lib'])
+                # TODO: add lib check when spdk symbol deps fixed
+                #libs=['spdk_init'],
+                extra_lib_path = ["share/dpdk/lib"],
+                headers=[os.path.join('spdk', 'nvme.h')],
+                patch_rpath=['lib', 'share/dpdk/lib'])
 
     retriever = GitRepoRetriever("https://github.com/protobuf-c/protobuf-c.git")
     reqs.define('protobufc',
@@ -324,4 +328,3 @@ def define_components(reqs):
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'])
 
-__all__ = ['define_components']

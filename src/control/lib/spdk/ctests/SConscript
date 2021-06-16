@@ -11,6 +11,7 @@ def scons():
     prereqs.require(unit_env, 'pmdk', 'spdk', 'isal', 'hwloc', 'cmocka')
 
     unit_env.AppendUnique(OBJPREFIX='c_')
+    unit_env.AppendUnique(LIBPATH=[Dir('/usr/share/dpdk/lib')])
 
     spdk_src = prereqs.get_src_path("spdk")
     nvme_lib_src = os.path.join(spdk_src, 'lib', 'nvme')
