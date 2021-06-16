@@ -414,6 +414,8 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,
 
 d_rank_t
 get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
+uint32_t
+get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
 
 void
 trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oid, int oid_nr);
