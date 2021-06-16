@@ -245,11 +245,11 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 			/* fake crt_sgl_valid() */
 			iovs[j].iov_buf = (void *)(-1);
 
-			D_DEBUG(DB_ANY, "%s: failed to lookup attribute '"DF_KEY"': "DF_RC"\n",
+			D_DEBUG(DB_ANY, "%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
 				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			nonexist++;
 		} else if (rc != 0) {
-			D_ERROR("%s: failed to lookup attribute '"DF_KEY"': "DF_RC"\n",
+			D_ERROR("%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
 				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_iovs;
 		} else {
