@@ -652,7 +652,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaIfaces:     numaNetIfaceMap{0: ib0},
 			numaSSDs:       numaSSDsMap{0: []string{}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10001").WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10001").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -672,7 +672,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaIfaces:     numaNetIfaceMap{0: ib0},
 			numaSSDs:       numaSSDsMap{0: []string{}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -700,7 +700,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaIfaces:     numaNetIfaceMap{0: ib0},
 			numaSSDs:       numaSSDsMap{0: []string{}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("192.168.1.1:10002").WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("192.168.1.1:10002").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -728,7 +728,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaIfaces:     numaNetIfaceMap{0: ib0},
 			numaSSDs:       numaSSDsMap{0: []string{common.MockPCIAddr(1)}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -752,7 +752,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{
 				0: &coreCounts{16, 7}, 1: &coreCounts{15, 6},
 			},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
