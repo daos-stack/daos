@@ -710,18 +710,20 @@ class PreReqComponent():
 
     def init_build_targets(self, build_dir):
         """Setup default build targets"""
+        targets = ['test', 'server', 'client']
         self.__env.Alias('client', build_dir)
         self.__env.Alias('server', build_dir)
         self.__env.Alias('test', build_dir)
         self._build_targets = []
-        BUILD_TARGETS.append(build_dir)
-        if 'client' in BUILD_TARGETS:
-            self._build_targets.extend(['client'])
-        elif 'server' in BUILD_TARGETS:
-            self._build_targets.extend(['server'])
-        else:
-            # either test or default
+        check = any(item in BUILD_TARGETS for item in targets)
+        if not check or 'test' in BUILD_TARGETS:
             self._build_targets.extend(['client', 'server', 'test'])
+        else:
+            if 'client' in BUILD_TARGETS:
+                self._build_targets.extend(['client'])
+            if 'server' in BUILD_TARGETS:
+                self._build_targets.extend(['server'])
+        BUILD_TARGETS.append(build_dir)
 
     def has_source(self, env, *comps, **kw):
         """Check if source exists for a component"""
