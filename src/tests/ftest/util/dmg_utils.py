@@ -423,6 +423,10 @@ class DmgCommand(DmgCommandBase):
             svcn (str, optional): Number of pool service replicas. Defaults to
                 None, in which case the default value is set by the server.
             acl_file (str, optional): ACL file. Defaults to None.
+            size (str, optional): NVMe pool size to create with scm_ratio.
+                Defaults to None.
+            scm_ratio (str, optional): SCM pool size to create as a ratio of
+                size. Defaults to None.
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -829,7 +833,7 @@ class DmgCommand(DmgCommandBase):
             ("system", "query"), ranks=ranks, verbose=verbose)
 
     def system_leader_query(self):
-        """Erase the system to obtain the MS leader and replica information.
+        """Query system to obtain the MS leader and replica information.
 
         Raises:
             CommandFailure: if the dmg system query command fails.

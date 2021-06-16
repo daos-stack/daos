@@ -758,17 +758,18 @@ class DaosServerManager(SubprocessManager):
         try:
             _info = self.information["storage"]["response"]["HostStorage"]
             for entry in _info.values():
-                if host in NodeSet(entry["hosts"].split(":")[0]):
-                    if entry["storage"]["nvme_devices"]:
-                        for device in entry["storage"]["nvme_devices"]:
-                            if "bdev_list" not in data:
-                                data["bdev_list"] = []
-                            data["bdev_list"].append(device["pci_addr"])
-                    if entry["storage"]["scm_namespaces"]:
-                        for device in entry["storage"]["scm_namespaces"]:
-                            if "scm_list" not in data:
-                                data["scm_list"] = []
-                            data["scm_list"].append(device["blockdev"])
+                if host not in NodeSet(entry["hosts"].split(":")[0]):
+                    continue
+                if entry["storage"]["nvme_devices"]:
+                    for device in entry["storage"]["nvme_devices"]:
+                        if "bdev_list" not in data:
+                            data["bdev_list"] = []
+                        data["bdev_list"].append(device["pci_addr"])
+                if entry["storage"]["scm_namespaces"]:
+                    for device in entry["storage"]["scm_namespaces"]:
+                        if "scm_list" not in data:
+                            data["scm_list"] = []
+                        data["scm_list"].append(device["blockdev"])
         except KeyError as error:
             raise ServerFailed(
                 "ServerInformation: Error obtaining storage data") from error
