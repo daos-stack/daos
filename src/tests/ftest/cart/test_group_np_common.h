@@ -14,13 +14,6 @@
 #define TEST_GROUP_BASE					0x010000000
 #define TEST_GROUP_VER					 0
 
-/* Set array indices into my_proto_fmt_test_group arrays */
-#define TEST_OPC_CHECKIN	CRT_PROTO_OPC(0x010000000, 0, 0)
-#define TEST_OPC_PING_DELAY	CRT_PROTO_OPC(0x010000000, 0, 3)
-#define TEST_OPC_SWIM_STATUS	CRT_PROTO_OPC(0x010000000, 0, 2)
-#define TEST_OPC_SHUTDOWN	CRT_PROTO_OPC(0x010000000, 0, 1)
-#define TEST_OPC_DISABLE_SWIM	CRT_PROTO_OPC(0x010000000, 0, 4)
-
 #define MAX_NUM_RANKS		1024
 #define MAX_SWIM_STATUSES	1024
 #define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
@@ -61,6 +54,11 @@ struct test_t {
 	int			 t_roomno;
 	struct d_fault_attr_t	*t_fault_attr_1000;
 	struct d_fault_attr_t	*t_fault_attr_5000;
+
+	crt_group_t		*t_local_group;
+	crt_group_t		*t_remote_group;
+	uint32_t		t_remote_group_size;
+	d_rank_t		t_my_rank;
 };
 
 struct test_t test_g = { .t_hold_time = 0,
@@ -291,6 +289,9 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	struct test_shutdown_in		*shutdown_rpc_req_input;
 	struct test_shutdown_out	*shutdown_rpc_req_output;
 
+	struct crt_test_ping_delay_in	*ping_delay_rpc_req_input;
+	struct crt_test_ping_delay_out	*ping_delay_rpc_req_output;
+	
 	rpc_req = cb_info->cci_rpc;
 
 	if (cb_info->cci_arg != NULL) {
@@ -381,8 +382,30 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		sem_post(&test_g.t_token_to_proceed);
 		D_ASSERT(disable_swim_rpc_req_output->bool_val == true);
 		break;
+
+	case TEST_OPC_PING_DELAY:
+		ping_delay_rpc_req_input = crt_req_get(rpc_req);
+		if (ping_delay_rpc_req_input == NULL)
+			return;
+		ping_delay_rpc_req_output = crt_reply_get(rpc_req);
+		if (ping_delay_rpc_req_output == NULL)
+			return;
+		if (cb_info->cci_rc != 0) {
+			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
+				rpc_req->cr_opc, cb_info->cci_rc);
+			D_FREE(ping_delay_rpc_req_input->name);
+			break;
+		}
+		printf("%s ping result - ret: %d, room_no: %d.\n",
+		       ping_delay_rpc_req_input->name, ping_delay_rpc_req_output->ret,
+		       ping_delay_rpc_req_output->room_no);
+		D_FREE(ping_delay_rpc_req_input->name);
+		sem_post(&test_g.t_token_to_proceed);
+		break;
+
 	default:
-		DBG_PRINT("Received unregistered opcode.\n");
+		DBG_PRINT("Received unregistered opcode (opc: %#x)\n",
+			  rpc_req->cr_opc);
 		break;
 	}
 }
