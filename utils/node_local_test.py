@@ -2883,9 +2883,11 @@ class AllocFailTestRun():
             # It's not possible to log these as warnings, because there is
             # no src line to log them against, so simply assert.
             assert self.returncode == 0
-            assert self.stderr == b''
-            if self.aft.expected_stdout is not None:
-                assert self.stdout == self.aft.expected_stdout
+
+            if self.aft.check_post_stdout:
+                assert self.stderr == b''
+                if self.aft.expected_stdout is not None:
+                    assert self.stdout == self.aft.expected_stdout
             self.fault_injected = False
         if self.vh:
             self.vh.convert_xml()
@@ -2924,7 +2926,10 @@ class AllocFailTest():
         self.conf = conf
         self.cmd = cmd
         self.prefix = True
+        # Check stderr from commands where faults were injected.
         self.check_stderr = False
+        # Check stdout/error from commands where faults were not injected
+        self.check_post_stdout = True
         self.expected_stdout = None
         self.use_il = False
         self.wf = conf.wf
@@ -3016,6 +3021,51 @@ class AllocFailTest():
         aftf.start()
 
         return aftf
+
+def test_alloc_fail_copy(server, conf, wf):
+    """Run container (filesystem) copy under fault injection.
+
+    TODO: Complete this test and resolve some issues:
+    Each copy will be to the same container, so in a lot of them the destination
+    will exist.  Two options here are either to run in serial, or create a
+    container per iteration, neither of which are ideal.  Another option might
+    be to copy from a container to a posix directory, as creating a target
+    directory per iteration would be cheap.  If container copy can work with
+    subdirs and create them automatically this would be preferred.
+
+    Handle stderr from the command when it runs with no faults.  This is
+    currently logging "file exists", see above.
+
+    Remove the container when complete.
+
+    Check output of the command itself.  This probably just needs enabling.
+    """
+
+    pool = server.get_test_pool()
+
+    container = create_cont(conf, pool, posix=True)
+
+    src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
+    ofd = open(os.path.join(src_dir.name, 'file'), 'w')
+    ofd.write('hello')
+    ofd.close()
+
+    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+           'filesystem',
+           'copy',
+           '--src',
+           src_dir.name,
+           '--dst',
+           'daos://{}/{}'.format(pool, container)]
+
+    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd.wf = wf
+    # TODO: Remove this setting once test is updated to use new container for
+    # each iteration.
+    test_cmd.check_post_stdout = False
+
+    rc = test_cmd.launch()
+    return rc
 
 def test_alloc_fail_cat(server, conf, wf):
     """Run the Interception library with fault injection
@@ -3189,6 +3239,8 @@ def main():
         server = DaosServer(conf, test_class='no-debug')
         server.start()
         if fi_test:
+#            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
+#                                                         wf_client))
             fatal_errors.add_result(test_alloc_fail_cat(server,
                                                         conf, wf_client))
             fatal_errors.add_result(test_alloc_fail(server, conf))
