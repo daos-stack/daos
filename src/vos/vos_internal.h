@@ -1277,5 +1277,7 @@ void
 vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 		   struct vos_akey_data *ad);
 
+int
+vos_pool_settings_init(void);
 
 #endif /* __VOS_INTERNAL_H__ */

@@ -449,6 +449,8 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		bypass          = true
 		crtCtxShareAddr = uint32(1)
 		crtTimeout      = uint32(30)
+		memSize         = 8192
+		hugepageSz      = 2
 	)
 	cfg := NewConfig().
 		WithScmMountPoint(mountPoint).
@@ -467,7 +469,9 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithBdevOutputConfigPath(cfgPath).
 		WithSystemName(systemName).
 		WithCrtCtxShareAddr(crtCtxShareAddr).
-		WithCrtTimeout(crtTimeout)
+		WithCrtTimeout(crtTimeout).
+		WithMemSize(memSize).
+		WithHugePageSize(hugepageSz)
 
 	cfg.Index = uint32(index)
 
@@ -483,6 +487,8 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"-I", strconv.Itoa(index),
 		"-p", strconv.FormatUint(uint64(pinnedNumaNode), 10),
 		"-b",
+		"-r", strconv.Itoa(memSize),
+		"-H", strconv.Itoa(hugepageSz),
 	}
 	wantEnv := []string{
 		"OFI_INTERFACE=" + interfaceName,
