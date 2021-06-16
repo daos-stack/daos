@@ -509,7 +509,7 @@ class DaosServer():
                 return False
         return True
 
-    def start(self, clean=True):
+    def start(self):
         """Start a DAOS server"""
 
         server_env = get_base_env(clean=True)
@@ -605,77 +605,31 @@ class DaosServer():
         # already mounted, so let it do that.
         # This code supports three modes of operation:
         # /mnt/daos is not mounted.  It will be mounted and formatted.
-        # /mnt/daos is mounted but empty.  It will be remounted and formatted
         # /mnt/daos exists and has data in.  It will be used as is.
+        # /mnt/daos is mounted but empty.  It will be used-as is.
+        # In this last case the --no-root option must be used.
         start = time.time()
         max_start_time = 120
 
-        error_resolutions = {
-            'system_erase': (
-                ['running system'], ['system', 'erase', '--json'],
-            ),
-            'system_stop': (
-                ['to be stopped'], ['system', 'stop', '--json'],
-            ),
-            'storage_force_format': (
-                ['already-formatted', 'raft service unavailable'],
-                ['storage', 'format', '--force', '--json']
-            )
-        }
-
         cmd = ['storage', 'format', '--json']
-        prev_cmd = None
         while True:
-            # Wait between commands, but only if running the same command as
-            # before.  If the command is different then just run it.
-            # The intention here is to not flood the server/logs with failing
-            # commands in a loop.
-            if cmd == prev_cmd:
-                try:
-                    self._sp.wait(timeout=0.5)
-                    res = 'daos server died waiting for start'
-                    self._add_test_case('format', failure=res)
-                    raise Exception(res)
-                except subprocess.TimeoutExpired:
-                    pass
-            prev_cmd = cmd
+            try:
+                self._sp.wait(timeout=0.5)
+                res = 'daos server died waiting for start'
+                self._add_test_case('format', failure=res)
+                raise Exception(res)
+            except subprocess.TimeoutExpired:
+                pass
             rc = self.run_dmg(cmd)
 
             data = json.loads(rc.stdout.decode('utf-8'))
             print('cmd: {} data: {}'.format(cmd, data))
 
-            if data['error'] is not None:
-                resolved = False
-                for res in error_resolutions.values():
-                    for err_msg in res[0]:
-                        if err_msg in data['error']:
-                            cmd = res[1]
-                            resolved = True
-                            break
-                    if resolved:
-                        break
+            if data['error'] is None:
+                break
 
-                # If we don't need to start from a clean slate and the system is
-                # already running, just move on.
-                if not clean and cmd == error_resolutions['system_erase'][1]:
-                    break
-            else:
-                if data['response'] is not None and \
-                    'host_errors' in data['response']:
-                    if len(data['response']['host_errors']) == 0:
-                        break
-
-                    host_err = list(data['response']['host_errors'])[0]
-                    for err_msg in error_resolutions['storage_force_format'][0]:
-                        if err_msg in host_err:
-                            cmd = error_resolutions['storage_force_format'][1]
-                            break
-                elif cmd == error_resolutions['system_stop'][1]:
-                    cmd = error_resolutions['system_erase'][1]
-                elif cmd == error_resolutions['system_erase'][1]:
-                    cmd = error_resolutions['storage_force_format'][1]
-                elif cmd == error_resolutions['storage_force_format'][1]:
-                    break
+            if 'running system' in data['error']:
+                break
 
             self._check_timing('format', start, max_start_time)
         duration = time.time() - start
@@ -1423,7 +1377,7 @@ class posix_tests():
         dfuse0 = DFuse(self.server,
                        self.conf,
                        caching=True,
-                       pool=self.pool,
+                       pool=self.pool.uuid,
                        container=self.container)
         dfuse0.start(v_hint='two_0')
 
@@ -1432,7 +1386,7 @@ class posix_tests():
                        caching=True,
                        path=os.path.join(self.conf.dfuse_parent_dir,
                                          'dfuse_mount_1'),
-                       pool=self.pool,
+                       pool=self.pool.uuid,
                        container=self.container)
         dfuse1.start(v_hint='two_1')
 
@@ -3169,10 +3123,7 @@ def main():
     setup_log_test(conf)
 
     server = DaosServer(conf, test_class='first')
-    clean=True
-    if args.no_root:
-        clean=False
-    server.start(clean=clean)
+    server.start()
 
     fatal_errors = BoolRatchet()
     fi_test = False
@@ -3210,12 +3161,18 @@ def main():
     if server.stop(wf_server) != 0:
         fatal_errors.fail()
 
+    if args.mode == 'all':
+        server = DaosServer(conf)
+        server.start()
+        if server.stop(wf_server) != 0:
+            fatal_errors.fail()
+
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do list-containers, then
     # exit again.
     if args.mode == 'server-valgrind':
         server = DaosServer(conf, valgrind=True, test_class='valgrind')
-        server.start(clean=False)
+        server.start()
         pools = server.fetch_pools()
         for pool in pools:
             cmd = ['pool', 'list-containers', '--pool', pool.uuid]
@@ -3231,7 +3188,7 @@ def main():
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
         server = DaosServer(conf, test_class='no-debug')
-        server.start(clean=False)
+        server.start()
         if fi_test:
             fatal_errors.add_result(test_alloc_fail_cat(server,
                                                         conf, wf_client))
