@@ -53,6 +53,7 @@ class TestPool(TestDaosApiBase):
         self.pool_query_timeout = BasicParameter(None)
 
         self.pool = None
+        self.label = None
         self.uuid = None
         self.info = None
         self.svc_ranks = None
@@ -95,6 +96,7 @@ class TestPool(TestDaosApiBase):
             "uid": self.uid,
             "gid": self.gid,
             "scm_size": self.scm_size.value,
+            "label": self.label
         }
         for key in ("target_list", "svcn", "nvme_size"):
             value = getattr(self, key).value
@@ -209,8 +211,12 @@ class TestPool(TestDaosApiBase):
                             .format(self.control_method.value))
 
                 elif self.control_method.value == self.USE_DMG and self.dmg:
-                    # Destroy the pool with the dmg command
-                    self.dmg.pool_destroy(pool=self.uuid, force=force)
+                    # Destroy the pool with the dmg command. Use label if the
+                    # pool was created with it.
+                    if self.label is None:
+                        self.dmg.pool_destroy(pool=self.uuid, force=force)
+                    else:
+                        self.dmg.pool_destroy(pool=self.label, force=force)
                     status = True
 
                 elif self.control_method.value == self.USE_DMG:
@@ -223,6 +229,7 @@ class TestPool(TestDaosApiBase):
 
             self.pool = None
             self.uuid = None
+            self.label = None
             self.info = None
             self.svc_ranks = None
 

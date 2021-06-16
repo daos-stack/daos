@@ -400,7 +400,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("storage", "scan"), nvme_health=True)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
-                    target_list=None, svcn=None, acl_file=None):
+                    target_list=None, svcn=None, acl_file=None, label=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -433,7 +433,8 @@ class DmgCommand(DmgCommandBase):
             "scm_size": scm_size,
             "nvme_size": nvme_size,
             "nsvc": svcn,
-            "acl_file": acl_file
+            "acl_file": acl_file,
+            "label": label
         }
         if target_list is not None:
             kwargs["ranks"] = ",".join([str(target) for target in target_list])

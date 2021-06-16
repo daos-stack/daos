@@ -550,6 +550,7 @@ class TestWithServers(TestWithoutServers):
         # self.debug = False
         # self.config = None
         self.job_manager = None
+        self.pool_labels = []
 
     def setUp(self):
         """Set up each test case."""
@@ -1419,6 +1420,11 @@ class TestWithServers(TestWithoutServers):
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)
+
+        new_label = "\"Test Label {}\"".format(len(self.pool_labels))
+        pool.label = new_label
+        self.pool_labels.append(new_label)
+
         if create:
             pool.create()
         if create and connect:
