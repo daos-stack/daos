@@ -301,6 +301,11 @@ co_properties(void **state)
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	char			*label = "test_cont_properties";
+	char			*label2 = "test_cont_prop_label2";
+	char			*label2_v2 = "test_cont_prop_label2_version2";
+	uuid_t			 cuuid2;
+	daos_handle_t		 coh2;
+	uuid_t			 cuuid3;
 	uint64_t		 snapshot_max = 128;
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
@@ -405,9 +410,93 @@ co_properties(void **state)
 	}
 	D_FREE(exp_owner_grp);
 
-	if (arg->myrank == 0)
+	if (arg->myrank == 0) {
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
+
+		/* Create container: different UUID, same label - fail */
+		print_message("Checking create: different UUID same label "
+			      "(will fail)\n");
+		uuid_generate(cuuid2);
+		rc = daos_cont_create(arg->pool.poh, cuuid2, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* Create container: same UUID, different label - fail */
+		print_message("Checking create: same UUID, different label "
+			      "(will fail)\n");
+		free(prop->dpp_entries[0].dpe_str);
+		prop->dpp_entries[0].dpe_str = strdup(label2);
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* Create container: same UUID, no label - pass (idempotent) */
+		print_message("Checking create: same UUID, no label\n");
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Create container: different UUID, different label - pass */
+		print_message("Checking create: different UUID and label\n");
+		rc = daos_cont_create(arg->pool.poh, cuuid2, prop, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Create container: same UUID, different label - fail
+		 * uuid matches first container, label matches second container
+		 */
+		print_message("Checking create: same UUID, different label "
+			      "(will fail)\n");
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* destroy the second container (will re-create it next) */
+		rc = daos_cont_destroy(arg->pool.poh, cuuid2, 0 /* force */,
+				       NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Create container 2 without label, set-label label2,
+		 * Create container 3 with label2  - fail.
+		 */
+		print_message("Checking set-prop and create label conflict "
+			      "(will fail)\n");
+		print_message("step1: create C2 no label\n");
+		rc = daos_cont_create(arg->pool.poh, cuuid2, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_cont_open(arg->pool.poh, cuuid2, DAOS_COO_RW, &coh2,
+				    NULL, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("step2: C2 set-prop label: %s\n",
+			      prop->dpp_entries[0].dpe_str);
+		rc = daos_cont_set_prop(coh2, prop, NULL);
+		assert_rc_equal(rc, 0);
+		uuid_generate(cuuid3);
+		print_message("step3: create C3 with label: %s (will fail)\n",
+			      prop->dpp_entries[0].dpe_str);
+		rc = daos_cont_create(arg->pool.poh, cuuid3, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* Container 2 set-prop label2_v2,
+		 * container 1 set-prop label2 - pass
+		 */
+		print_message("Checking label rename and reuse\n");
+		free(prop->dpp_entries[0].dpe_str);
+		prop->dpp_entries[0].dpe_str = strdup(label2_v2);
+		print_message("step: C2 set-prop change FROM %s TO %s\n",
+			      label2, label2_v2);
+		rc = daos_cont_set_prop(coh2, prop, NULL);
+		assert_rc_equal(rc, 0);
+		free(prop->dpp_entries[0].dpe_str);
+		prop->dpp_entries[0].dpe_str = strdup(label2);
+		print_message("step: C1 set-prop change FROM %s TO %s\n",
+			      label, label2);
+		rc = daos_cont_set_prop(arg->coh, prop, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* destroy the second container */
+		rc = daos_cont_close(coh2, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_cont_destroy(arg->pool.poh, cuuid2, 0 /* force */,
+				       NULL);
+		assert_rc_equal(rc, 0);
+	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_prop_free(prop);
