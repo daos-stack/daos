@@ -80,7 +80,7 @@ class EcodAggregationOff(ErasureCodeIor):
 
         Test Description: Test Erasure code object aggregation time mode
                           with IOR.
-        Use Case: Create the pool, Set aggregation as time mode.
+        Use Case: Create the pool,Set aggregation as time mode.
                   run IOR with supported EC object type classes.
                   Verify the Aggregation gets triggered in parallel and space
                   is getting reclaimed. Verify the IOR read data at the end.
