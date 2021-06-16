@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 from getpass import getuser
 import math
 import os
@@ -11,6 +12,7 @@ import socket
 import time
 
 from avocado import fail_on
+from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommandFailure, CommonConfig
 from command_utils import SubprocessManager
@@ -732,66 +734,64 @@ class DaosServerManager(SubprocessManager):
             self.log.error(msg)
             raise ServerFailed("ServerInformation: {}".format(msg))
 
-    def get_numa_node_info(self):
-        """Determine what NVMe and SCM storage is available per socket.
+    def get_scan_info(self, host):
+        """Determine what storage and network scan info is for this host.
+
+        Args:
+            host (str): host for which to get the storage and network info
 
         Raises:
-            ServerFailed: if output from the dmg storage scan is missing or
-                not in the expected format
+            ServerFailed: if output from the dmg storage/network scan is missing
+                or not in the expected format
 
         Returns:
-            dict: [description]
+            dict: a dictionary of storage and network information for the
+                specified server host, e.g.
+                    {
+                        "storage": {
+                            "bdev_list": ["0000:13:00.0"],
+                            "scm_list": ["pmem0"]},
+                        "network": {
+                            1: {"fabric_iface": ib0, "provider": "ofi+psm2"},
+                            2: {"fabric_iface": ib0, "provider": "ofi+verbs"},
+                            3: {"fabric_iface": ib0, "provider": "ofi+tcp"}}
+                    }
 
         """
         self._check_information("storage", "HostStorage")
         self._check_information("network", "HostFabrics")
 
-        data = {}
+        data = {"storage": {}, "network": {}}
         try:
             _info = self.information["storage"]["response"]["HostStorage"]
             for entry in _info.values():
-                hosts = entry["hosts"].split(":")[0]
-                data[hosts] = {}
-                if entry["storage"]["nvme_devices"]:
-                    data[hosts] = {"nvme": {}}
-                    for device in entry["storage"]["nvme_devices"]:
-                        data[hosts]["nvme"][device["pci_addr"]] = \
-                            device["socket_id"]
-                if entry["storage"]["scm_namespaces"]:
-                    data[hosts] = {"scm": {}}
-                    for device in entry["storage"]["scm_namespaces"]:
-                        data[hosts]["scm"][device["blockdev"]] = \
-                            device["numa_node"]
+                if host in NodeSet(entry["hosts"].split(":")[0]):
+                    if entry["storage"]["nvme_devices"]:
+                        for device in entry["storage"]["nvme_devices"]:
+                            if "bdev_list" not in data["storage"]:
+                                data["storage"]["bdev_list"] = []
+                            data["storage"]["bdev_list"].append(
+                                device["pci_addr"])
+                    if entry["storage"]["scm_namespaces"]:
+                        for device in entry["storage"]["scm_namespaces"]:
+                            if "scm_list" not in data["storage"]:
+                                data["storage"]["scm_list"] = []
+                            data["storage"]["scm_list"].append(
+                                device["blockdev"])
         except KeyError as error:
             raise ServerFailed(
                 "ServerInformation: Error obtaining storage data") from error
-
-        return data
-
-    def get_interface_providers(self):
-        """Determine what interfaces are available with each provider.
-
-        Raises:
-            ServerFailed: if output from the dmg network scan is missing or
-                not in the expected format
-
-        Returns:
-            [type]: [description]
-
-        """
-        self._check_information("network", "HostFabrics")
-
-        data = {}
         try:
             _info = self.information["network"]["response"]["HostFabrics"]
             for entry in _info.values():
-                hosts = entry["HostSet"].split(":")[0]
-                data[hosts] = {}
-                if entry["HostFabric"]["Interfaces"]:
-                    for device in entry["HostFabric"]["Interfaces"]:
-                        if device["Device"] not in data[hosts]:
-                            data[hosts][device["Device"]] = []
-                        data[hosts][device["Device"]].append(device["Provider"])
+                if host in NodeSet(entry["HostSet"].split(":")[0]):
+                    if entry["HostFabric"]["Interfaces"]:
+                        for device in entry["HostFabric"]["Interfaces"]:
+                            # List each device/provider combo under its priority
+                            data["network"][device["Priority"]] = {
+                                "fabric_iface": device["Device"],
+                                "provider": device["Provider"],
+                                "numa": device["NumaNode"]}
         except KeyError as error:
             raise ServerFailed(
                 "ServerInformation: Error obtaining network data") from error
@@ -988,8 +988,7 @@ class DaosServerManager(SubprocessManager):
             available_storage = self.get_available_storage()
         except ServerFailed as error:
             raise ServerFailed(
-                "Pool Autosizing: error obtaining available storage: {}".format(
-                    error))
+                "Pool Autosizing: error obtaining available storage") from error
 
         pool_params = {
             "size": None,
@@ -1005,24 +1004,21 @@ class DaosServerManager(SubprocessManager):
                 "  - NVMe storage adjusted by %.2f%% for %s: %s",
                 nvme_ratio, pool_msg, get_display_size(adjusted_nvme))
 
-            # Determine the largest supported NVMe size based upon the SCM ratio
-            scm_reduction = max(90, nvme_ratio)
-            adjusted_scm = available_storage[0] * float(scm_reduction / 100)
-            adjusted_scm /= quantity
-            self.log.info(
-                "  - SCM storage adjusted by %.2f%% for %s: %s",
-                scm_reduction, pool_msg, get_display_size(adjusted_scm))
-            max_nvme_scm = adjusted_scm / float(scm_ratio / 100)
-            self.log.info(
-                "  - Max NVMe size supported by %.2f%% of the available SCM "
-                "for %s: %s",
-                scm_ratio, pool_msg, get_display_size(max_nvme_scm))
+            # # Determine the largest supported NVMe size based upon the SCM ratio
+            # scm_reduction = max(90, nvme_ratio)
+            # adjusted_scm = available_storage[0] * float(scm_reduction / 100)
+            # adjusted_scm /= quantity
+            # max_nvme_scm = adjusted_scm / float(scm_ratio / 100)
+            # self.log.info(
+            #     "  - Max NVMe size supported by %.2f%% of the available SCM "
+            #     "for %s: %s",
+            #     scm_ratio, pool_msg, get_display_size(max_nvme_scm))
 
-            # The largest NVMe size supported is the smallest of the two limits
-            max_nvme_size = min([max_nvme_scm, adjusted_nvme])
-            self.log.info(
-                    "  - Max NVMe size supported for %s: %s",
-                    pool_msg, get_display_size(max_nvme_size))
+            # # The largest NVMe size supported is the smallest of the two limits
+            # max_nvme_size = min([max_nvme_scm, adjusted_nvme])
+            # self.log.info(
+            #         "  - Max NVMe size supported for %s: %s",
+            #         pool_msg, get_display_size(max_nvme_size))
 
             # Determine the minimum number of targets configured per engine
             current_targets = min(self.manager.job.get_engine_values("targets"))
@@ -1038,7 +1034,8 @@ class DaosServerManager(SubprocessManager):
 
                 # If the current number of targets results in a pool NVMe size
                 # that is too large, attempt the calculation with less targets
-                if nvme_size > max_nvme_size:
+                # if nvme_size > max_nvme_size:
+                if nvme_size > adjusted_nvme:
                     self.log.info(
                         "  - NVMe pool size with %s targets is too large: %s",
                         targets, get_display_size(nvme_size))
@@ -1046,12 +1043,13 @@ class DaosServerManager(SubprocessManager):
                     continue
 
                 # Determine the largest NVMe size can be configured
-                nvme_size *= math.floor(max_nvme_size / nvme_size)
+                # nvme_size *= math.floor(max_nvme_size / nvme_size)
+                nvme_size *= math.floor(adjusted_nvme / nvme_size)
                 self.log.info(
                     "  - NVMe pool size with %s targets: %s",
                     targets, get_display_size(nvme_size))
                 pool_params["size"] = bytes_to_human(nvme_size, binary=True)
-                pool_params["scm_ratio"] = scm_ratio
+                # pool_params["scm_ratio"] = scm_ratio
 
             # Cancel the target count cannot be reduced far enough to meet the
             # ratio requirements
@@ -1069,6 +1067,14 @@ class DaosServerManager(SubprocessManager):
                 self.set_config_value("targets", targets)
                 self.stop()
                 self.start()
+
+            # Apply the ratio to the available SCM size per engine
+            adjusted_scm = available_storage[0] * float(scm_ratio / 100)
+            adjusted_scm /= quantity
+            self.log.info(
+                "  - SCM storage adjusted by %.2f%% for %s: %s",
+                scm_ratio, pool_msg, get_display_size(adjusted_scm))
+            pool_params["scm_size"] = bytes_to_human(adjusted_scm, binary=True)
 
         elif scm_ratio:
             # Apply the ratio to the available SCM size per engine

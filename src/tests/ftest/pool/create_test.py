@@ -48,7 +48,7 @@ class PoolCreateTests(PoolTestBase):
         :avocado: tags=pool_create_tests,create_max_pool
         """
         # Create 1 pool using 90% of the available capacity
-        self.add_autosized_pool(nvme_ratio=90, quantity=1, svcn=1)
+        self.add_autosized_pool(scm_ratio=90, nvme_ratio=90, quantity=1, svcn=1)
         self.check_pool_creation(120)
 
     def test_create_no_space(self):
@@ -70,7 +70,8 @@ class PoolCreateTests(PoolTestBase):
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
-        pool_params = self.get_pool_params(nvme_ratio=90, quantity=1, svcn=1)
+        pool_params = self.get_pool_params(
+            scm_ratio=90, nvme_ratio=90, quantity=1, svcn=1)
         self.add_pool_with_params(pool_params, 3)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
@@ -124,7 +125,8 @@ class PoolCreateTests(PoolTestBase):
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
-        pool_params = self.get_pool_params(nvme_ratio=90, quantity=1, svcn=1)
+        pool_params = self.get_pool_params(
+            scm_ratio=90, nvme_ratio=90, quantity=1, svcn=1)
         self.add_pool_with_params(pool_params, 3)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")

@@ -9,7 +9,6 @@
 # Some useful test classes inherited from avocado.Test
 import os
 import json
-import math
 import re
 
 from avocado import Test as avocadoTest
@@ -27,8 +26,7 @@ from daos_utils import DaosCommand
 from server_utils import DaosServerManager, ServerFailed
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing, bytes_to_human, \
-    get_display_size
+    get_default_config_file, pcmd, get_file_listing
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
