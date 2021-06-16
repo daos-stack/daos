@@ -79,20 +79,22 @@ def scons():
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
     build_daos_common(denv, True, prereqs)
-    build_daos_common(denv, False, prereqs)
 
-
-    prereqs.require(env, 'pmdk')
     control_tgts = [File('control.c')]
     Export('control_tgts')
-
-    tlib_env = denv.Clone()
-    tlib_env.AppendUnique(LIBS=['json-c'])
 
     cmd_parser = denv.SharedObject(['cmd_parser.c'])
     Export('cmd_parser')
     dc_credit = denv.SharedObject(['credit.c'])
     Export('dc_credit')
+
+    if prereqs.server_requested():
+        build_daos_common(denv, False, prereqs)
+
+    if not prereqs.test_requested():
+        return
+    tlib_env = denv.Clone()
+    tlib_env.AppendUnique(LIBS=['json-c'])
 
     prereqs.require(tlib_env, 'argobots')
 

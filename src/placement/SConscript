@@ -16,6 +16,12 @@ def scons():
     # Common placement code
     common_tgts = denv.SharedObject(['pl_map.c', 'ring_map.c',
                                      'jump_map.c', 'pl_map_common.c'])
+    # placement client library
+    dc_placement_tgts = common_tgts
+    Export("dc_placement_tgts")
+
+    if not prereqs.server_requested():
+        return
 
     # generate server module
     print("libs = %s" % denv.subst("$LIBS"))
@@ -23,12 +29,9 @@ def scons():
                              install_off="../..", LIBS=libraries)
     denv.Install('$PREFIX/lib64/daos_srv', srv)
 
-    # placement client library
-    dc_placement_tgts = common_tgts
-    Export("dc_placement_tgts")
-
-    # Build tests
-    SConscript('tests/SConscript', exports=['denv', 'common_tgts'])
+    if prereqs.test_requested():
+        # Build tests
+        SConscript('tests/SConscript', exports=['denv', 'common_tgts'])
 
 if __name__ == "SCons.Script":
     scons()
