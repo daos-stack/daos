@@ -1009,7 +1009,7 @@ def run_tests(test_files, tag_filter, args):
                     args,
                     avocado_logs_dir,
                     get_test_category(test_file["py"]))
- 
+
                 # Archive remote cart log files
                 return_code |= archive_files(
                     "cart log files",

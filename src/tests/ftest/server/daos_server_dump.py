@@ -7,7 +7,6 @@
 from __future__ import print_function
 
 from apricot import TestWithServers
-from server_utils import ServerFailed
 from general_utils import pcmd, stop_processes
 
 

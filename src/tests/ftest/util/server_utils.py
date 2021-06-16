@@ -1041,7 +1041,7 @@ class DaosServerManager(SubprocessManager):
     def kill(self):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
-        """Try to dump all server's ULTs stacks before kill."""
+        # Try to dump all server's ULTs stacks before kill.
         result = stop_processes(self._hosts, regex, dump_ult_stacks=True)
         if 0 in result and len(result) == 1:
             print(
@@ -1052,7 +1052,7 @@ class DaosServerManager(SubprocessManager):
                 "***At least one remote {} server process needed to be killed! "
                 "Please investigate/report.***".format(regex))
         # set stopped servers state to make teardown happy
-        self.server_managers[0].update_expected_states(
+        self.update_expected_states(
             None, ["stopped", "excluded"])
 
     def get_host(self, rank):
