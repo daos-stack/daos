@@ -473,7 +473,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %files daos_serialize
-ls -l /builddir/build/BUILDROOT/daos-1.3.102-3.6540.ge3950fb3.el7.x86_64/usr/lib64
+%dir %{_prefix}/lib/daos
 %{_libdir}/libdaos_serialize.so
 
 %changelog
