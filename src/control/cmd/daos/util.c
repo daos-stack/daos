@@ -3,8 +3,6 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(client)
-
 #include "util.h"
 
 static int
@@ -58,7 +56,7 @@ resolve_duns_path(struct cmd_args_s *ap)
 		} else if (rc == ENOENT && ap->fs_op == FS_SET_ATTR) {
 			/** we could be creating a new file, so try dirname */
 			parse_filename_dfs(ap->path, &name,
-				&dir_name);
+					   &dir_name);
 
 			rc = duns_resolve_path(dir_name, &dattr);
 			if (rc == 0) {
@@ -71,9 +69,9 @@ resolve_duns_path(struct cmd_args_s *ap)
 
 	if (rc != 0) {
 		fprintf(ap->errstream, "could not resolve "
-		"pool, container by "
-		"path: %d %s %s\n",
-		rc, strerror(rc), ap->path);
+			"pool, container by "
+			"path: %d %s %s\n",
+			rc, strerror(rc), ap->path);
 
 		D_GOTO(out, rc);
 	}
@@ -83,7 +81,6 @@ resolve_duns_path(struct cmd_args_s *ap)
 			if (dattr.da_rel_path) {
 				D_ASPRINTF(ap->dfs_path, "%s/%s",
 						dattr.da_rel_path, name);
-				free(dattr.da_rel_path);
 			} else {
 				D_ASPRINTF(ap->dfs_path, "/%s", name);
 			}
@@ -91,7 +88,6 @@ resolve_duns_path(struct cmd_args_s *ap)
 			if (dattr.da_rel_path) {
 				D_STRNDUP(ap->dfs_path,
 						dattr.da_rel_path, PATH_MAX);
-				free(dattr.da_rel_path);
 			} else {
 				D_STRNDUP(ap->dfs_path, "/", 1);
 			}
@@ -101,6 +97,7 @@ resolve_duns_path(struct cmd_args_s *ap)
 	}
 
 out:
+	free(dattr.da_rel_path);
 	D_FREE(dir_name);
 	D_FREE(name);
 	return rc;

@@ -386,15 +386,19 @@ class DaosPool():
         self.uuid = pool_uuid
         self.label = label
 
+    def id(self):
+        """Return the pool ID (label if set; UUID otherwise)"""
+        if self.label:
+            return self.label
+        return self.uuid
+
     def dfuse_mount_name(self):
         """Return the string to pass to dfuse mount
 
         This should be a label if set, otherwise just the
         uuid.
         """
-        if self.label:
-            return self.label
-        return self.uuid
+        return self.id()
 
 class DaosServer():
     """Manage a DAOS server instance"""
@@ -1201,7 +1205,6 @@ def create_cont(conf, pool, cont=None, posix=False, label=None, path=None):
     """Create a container and return the uuid"""
     cmd = ['container',
            'create',
-           '--pool',
            pool]
 
     if label:
@@ -1223,7 +1226,7 @@ def create_cont(conf, pool, cont=None, posix=False, label=None, path=None):
 
 def destroy_container(conf, pool, container):
     """Destroy a container"""
-    cmd = ['container', 'destroy', '--pool', pool, '--cont', container]
+    cmd = ['container', 'destroy', pool, container]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
@@ -1333,39 +1336,39 @@ class posix_tests():
     def test_cache(self):
         """Test with caching enabled"""
 
-        container = create_cont(self.conf, self.pool.uuid, posix=True)
+        container = create_cont(self.conf, self.pool.id(), posix=True)
         run_daos_cmd(self.conf,
                      ['container', 'query',
-                      '--pool', self.pool.uuid, '--cont', container],
+                      self.pool.id(), container],
                      show_stdout=True)
 
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
-                      '--pool', self.pool.uuid, '--cont', container,
+                      self.pool.id(), container,
                       '--attr', 'dfuse-attr-time', '--value', '2'],
                      show_stdout=True)
 
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
-                      '--pool', self.pool.uuid, '--cont', container,
+                      self.pool.id(), container,
                       '--attr', 'dfuse-dentry-time', '--value', '100s'],
                      show_stdout=True)
 
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
-                      '--pool', self.pool.uuid, '--cont', container,
+                      self.pool.id(), container,
                       '--attr', 'dfuse-dentry-time-dir', '--value', '100s'],
                      show_stdout=True)
 
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
-                      '--pool', self.pool.uuid, '--cont', container,
+                      self.pool.id(), container,
                       '--attr', 'dfuse-ndentry-time', '--value', '100s'],
                      show_stdout=True)
 
         run_daos_cmd(self.conf,
                      ['container', 'list-attrs',
-                      '--pool', self.pool.uuid, '--cont', container],
+                      self.pool.id(), container],
                      show_stdout=True)
 
         dfuse = DFuse(self.server,
@@ -1379,7 +1382,7 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
-        destroy_container(self.conf, self.pool.uuid, container)
+        destroy_container(self.conf, self.pool.id(), container)
 
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one
@@ -1771,7 +1774,7 @@ class posix_tests():
 
         run_daos_cmd(self.conf,
                      ['container', 'set-attr',
-                      '--pool', self.pool.uuid, '--cont', self.container,
+                      self.pool.id(), self.container,
                       '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
                      show_stdout=True)
         dfuse = DFuse(self.server,
@@ -1942,7 +1945,7 @@ class posix_tests():
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
-        destroy_container(self.conf, self.pool.uuid, container)
+        destroy_container(self.conf, self.pool.id(), container)
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests
@@ -1960,12 +1963,12 @@ def run_posix_tests(server, conf, test=None):
             print('Calling {}'.format(fn))
             try:
                 pt.container = create_cont(conf,
-                                           pool.uuid,
+                                           pool.id(),
                                            posix=True,
                                            label=fn)
                 pt.container_label = fn
                 rc = obj()
-                destroy_container(conf, pool.uuid, pt.container)
+                destroy_container(conf, pool.id(), pt.container_label)
                 pt.container = None
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
@@ -2474,7 +2477,7 @@ def run_in_fg(server, conf):
 
     run_daos_cmd(conf,
                  ['container', 'set-attr',
-                  '--pool', pool, '--cont', container,
+                  pool, container,
                   '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
                  show_stdout=True)
 
@@ -2482,11 +2485,11 @@ def run_in_fg(server, conf):
 
     print('Running at {}'.format(t_dir))
     print('daos container create --type POSIX ' \
-          '--pool {} --path {}/uns-link'.format(
+          '{} --path {}/uns-link'.format(
               pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers --pool {}'.format(pool))
+    print('daos pool list-containers {}'.format(pool))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
@@ -2674,9 +2677,7 @@ def check_readdir_perf(server, conf):
 
     run_daos_cmd(conf, ['container',
                         'destroy',
-                        '--pool',
                         pool,
-                        '--cont',
                         container])
     print_results()
 
@@ -3116,7 +3117,6 @@ def test_alloc_fail(server, conf):
     cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
            'pool',
            'list-containers',
-           '--pool',
            pool]
     test_cmd = AllocFailTest(conf, cmd)
 
@@ -3234,7 +3234,7 @@ def main():
         server.start()
         pools = server.fetch_pools()
         for pool in pools:
-            cmd = ['pool', 'list-containers', '--pool', pool.uuid]
+            cmd = ['pool', 'list-containers', pool.id()]
             run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop(wf_server) != 0:
             fatal_errors.add_result(True)
