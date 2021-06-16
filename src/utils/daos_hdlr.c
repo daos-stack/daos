@@ -98,25 +98,11 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_POLICY);
-	if (entry == NULL) {
+	if (entry == NULL || entry->dpe_str == NULL) {
 		fprintf(stderr, "policy property not found\n");
 		rc = -DER_INVAL;
 	} else {
-		struct policy_desc_t *pd;
-
-		pd = entry->dpe_val_ptr;
-		D_PRINT("policy:\t\t\t");
-		switch (pd->policy) {
-		case DAOS_MEDIA_POLICY_IO_SIZE:
-			D_PRINT("IO size\n");
-			break;
-		case DAOS_MEDIA_POLICY_WRITE_INTENSIVITY:
-			D_PRINT("write intensivity\n");
-			break;
-		default:
-			D_PRINT("<unknown value> (%d)\n", pd->policy);
-			break;
-		}
+		D_PRINT("policy:\t\t\t%s\n", entry->dpe_str);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_SPACE_RB);

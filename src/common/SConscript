@@ -8,7 +8,8 @@ COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                 'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
                 'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
                 'compression_qat.c', 'multihash.c', 'multihash_isal.c',
-                'cipher.c', 'cipher_isal.c', 'qat.c', 'fault_domain.c']
+                'cipher.c', 'cipher_isal.c', 'qat.c', 'fault_domain.c',
+		'policy.c']
 
 
 def build_daos_common(env, client, prereqs):

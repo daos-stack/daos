@@ -107,7 +107,6 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 	struct daos_prop_entry	*prop_entry;
 	struct daos_acl		*acl;
 	d_rank_list_t		*svc_list;
-	struct policy_desc_t	*pd;
 	unsigned int		offset = 0;
 	int			i;
 
@@ -172,16 +171,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 			}
 			break;
 		case DAOS_PROP_PO_POLICY:
-			pd = prop_entry->dpe_val_ptr;
-			if (pd != NULL) {
-				iv_prop->pip_policy_desc = (void *)
-							 (iv_prop->pip_iv_buf +
-							 roundup(offset, 8));
-				iv_prop->pip_policy_desc_offset = offset;
-				memcpy(iv_prop->pip_policy_desc, pd,
-				       sizeof(*pd));
-				offset += roundup(sizeof(*pd), 8);
-			}
+			D_ASSERT(strlen(prop_entry->dpe_str) <=
+				 DAOS_PROP_POLICYSTR_MAX_LEN);
+			strcpy(iv_prop->pip_policy_str, prop_entry->dpe_str);
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -195,12 +187,11 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*prop_entry;
 	struct daos_acl		*acl;
-	struct policy_desc_t	*pd;
 	void			*label_alloc = NULL;
 	void			*owner_alloc = NULL;
 	void			*owner_grp_alloc = NULL;
 	void			*acl_alloc = NULL;
-	void			*pd_alloc = NULL;
+	void			*policy_str_alloc = NULL;
 	d_rank_list_t		*svc_list = NULL;
 	d_rank_list_t		*dst_list;
 	int			i;
@@ -278,18 +269,14 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			}
 			break;
 		case DAOS_PROP_PO_POLICY:
-			iv_prop->pip_policy_desc = (void *)
-				(iv_prop->pip_iv_buf +
-				roundup(iv_prop->pip_policy_desc_offset, 8));
-			pd = iv_prop->pip_policy_desc;
-
-			D_ALLOC(pd_alloc, sizeof(*pd));
-			if(pd_alloc == NULL)
+			D_ASSERT(strlen(iv_prop->pip_policy_str) <=
+				 DAOS_PROP_POLICYSTR_MAX_LEN);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_policy_str,
+				  DAOS_PROP_POLICYSTR_MAX_LEN);
+			if (prop_entry->dpe_str)
+				policy_str_alloc = prop_entry->dpe_str;
+			else
 				D_GOTO(out, rc = -DER_NOMEM);
-
-			memcpy(pd_alloc, pd, sizeof(*pd));
-			prop_entry->dpe_val_ptr = pd_alloc;
-
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -306,8 +293,8 @@ out:
 		D_FREE(owner_grp_alloc);
 		if (svc_list)
 			d_rank_list_free(dst_list);
-
-			D_FREE(pd_alloc);
+		if (policy_str_alloc)
+			D_FREE(policy_str_alloc);
 	}
 	return rc;
 }

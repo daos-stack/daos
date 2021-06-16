@@ -70,7 +70,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_val	= DAOS_EC_CELL_MAX,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_POLICY,
-		.dpe_val_ptr	= NULL,
+		.dpe_str	= "type=io_size",
 	}
 };
 
@@ -83,8 +83,6 @@ int
 ds_pool_prop_default_init(void)
 {
 	struct daos_prop_entry	*entry;
-	struct policy_desc_t	*pd;
-	int			i;
 
 	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_ACL);
 	if (entry != NULL) {
@@ -94,21 +92,6 @@ ds_pool_prop_default_init(void)
 		if (entry->dpe_val_ptr == NULL)
 			return -DER_NOMEM;
 	}
-
-	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_POLICY);
-	if (entry != NULL) {
-		D_DEBUG(DB_MGMT, "Initializing default policy pool prop\n");
-		D_ALLOC_PTR(pd);
-		if (pd == NULL)
-			return -DER_NOMEM;
-		pd->policy = DAOS_MEDIA_POLICY_IO_SIZE;
-		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++) {
-			pd->params[i] = 0;
-		}
-
-		entry->dpe_val_ptr = pd;
-	}
-
 	return 0;
 }
 
@@ -120,11 +103,6 @@ ds_pool_prop_default_fini(void)
 	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_ACL);
 	if (entry != NULL) {
 		D_DEBUG(DB_MGMT, "Freeing default ACL pool prop\n");
-		D_FREE(entry->dpe_val_ptr);
-	}
-
-	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_POLICY);
-	if (entry != NULL) {
 		D_FREE(entry->dpe_val_ptr);
 	}
 }

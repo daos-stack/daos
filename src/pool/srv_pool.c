@@ -322,15 +322,11 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_POLICY:
-			if (entry->dpe_val_ptr != NULL) {
-				struct policy_desc_t *pd = entry->dpe_val_ptr;
-
-				D_ALLOC(entry_def->dpe_val_ptr, sizeof(*pd));
-				if (entry_def->dpe_val_ptr == NULL)
-					return -DER_NOMEM;
-
-				memcpy(entry_def->dpe_val_ptr, pd, sizeof(*pd));
-			}
+			D_FREE(entry_def->dpe_str);
+			D_STRNDUP(entry_def->dpe_str, entry->dpe_str,
+				  DAOS_PROP_POLICYSTR_MAX_LEN);
+			if (entry_def->dpe_str == NULL)
+				return -DER_NOMEM;
 			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
@@ -439,17 +435,10 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 					   &value);
 			break;
 		case DAOS_PROP_PO_POLICY:
-			if (entry->dpe_val_ptr != NULL) {
-				struct policy_desc_t *pd;
-
-				pd = entry->dpe_val_ptr;
-				d_iov_set(&value, pd, sizeof(*pd));
-				rc = rdb_tx_update(tx, kvs,
-						   &ds_pool_prop_policy,
-						   &value);
-				if (rc)
-					return rc;
-			}
+			d_iov_set(&value, entry->dpe_str,
+				     strlen(entry->dpe_str));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_policy,
+					   &value);
 			break;
 		case DAOS_PROP_PO_SVC_LIST:
 			break;
@@ -1805,13 +1794,17 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 				   &value);
 		if (rc != 0)
 			return rc;
+		if (value.iov_len > DAOS_PROP_POLICYSTR_MAX_LEN) {
+			D_ERROR("bad policy string length %zu (> %d).\n", value.iov_len,
+				DAOS_PROP_POLICYSTR_MAX_LEN);
+			return -DER_IO;
+		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POLICY;
-		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
-		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
 			return -DER_NOMEM;
-		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
-		       value.iov_buf_len);
 		idx++;
 	}
 
@@ -2810,8 +2803,6 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	d_iov_t			value;
 	struct pool_hdl		hdl;
 	int			rc;
-	int			result;
-	struct policy_desc_t	*pd;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_UUID(in->pqi_op.pi_hdl));
@@ -2916,11 +2907,13 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 					}
 				break;
 			case DAOS_PROP_PO_POLICY:
-				pd = entry->dpe_val_ptr;
-				result = memcmp(pd, iv_entry->dpe_val_ptr,
-						sizeof(*pd));
-				if (result != 0) {
-					D_ERROR("policy mismatch!\n");
+				D_ASSERT(strlen(entry->dpe_str) <=
+					 DAOS_PROP_POLICYSTR_MAX_LEN);
+				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
+					    DAOS_PROP_POLICYSTR_MAX_LEN) != 0) {
+					D_ERROR("mismatch %s - %s.\n",
+						entry->dpe_str,
+						iv_entry->dpe_str);
 					rc = -DER_IO;
 				}
 				break;

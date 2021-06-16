@@ -246,12 +246,11 @@ create_pool_props_from_req(daos_prop_t **out_prop,
 	char			*out_owner_grp = NULL;
 	char			*out_label = NULL;
 	struct daos_acl		*out_acl = NULL;
-	struct policy_desc_t	*out_policy_desc = NULL;
+	char			*out_policy = NULL;
 	daos_prop_t		*new_prop = NULL;
 	uint32_t		entries = 0;
 	uint32_t		idx = 0;
 	int			rc = 0;
-	int			i;
 
 	if (req->acl != NULL && req->n_acl > 0) {
 		rc = daos_acl_from_strs((const char **)req->acl, req->n_acl,
@@ -286,22 +285,13 @@ create_pool_props_from_req(daos_prop_t **out_prop,
 		entries++;
 	}
 
-	D_ALLOC(out_policy_desc, sizeof(struct policy_desc_t));
-	if (out_policy_desc == NULL)
-		D_GOTO(err_out, rc = -DER_NOMEM);
+	if (req->policy != NULL && *req->policy != '\0') {
+		D_ASPRINTF(out_policy, "%s", req->policy);
+		if (out_policy == NULL)
+			D_GOTO(err_out, rc = -DER_NOMEM);
 
-	if (req->policyparams != NULL) {
-		if (req->n_policyparams > DAOS_MEDIA_POLICY_PARAMS_MAX)
-			D_GOTO(err_out, rc = -DER_INVAL);
-
-		for (i = 0; i < req->n_policyparams; i++)
-			out_policy_desc->params[i] = req->policyparams[i];
-	} else {
-		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
-			out_policy_desc->params[i] = 0;
+		entries++;
 	}
-	out_policy_desc->policy = req->policy;
-	entries++;
 
 	if (entries == 0) {
 		D_ERROR("No prop entries provided, aborting!\n");
@@ -326,7 +316,7 @@ create_pool_props_from_req(daos_prop_t **out_prop,
 
 	if (out_label != NULL) {
 		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_LABEL;
-		new_prop->dpp_entries[idx].dpe_val_ptr = out_label;
+		new_prop->dpp_entries[idx].dpe_str = out_label;
 		idx++;
 	}
 
@@ -336,9 +326,10 @@ create_pool_props_from_req(daos_prop_t **out_prop,
 		idx++;
 	}
 
-	/* pool tiering policy */
-	new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POLICY;
-	new_prop->dpp_entries[idx].dpe_val_ptr = out_policy_desc;
+	if (out_policy != NULL) {
+		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POLICY;
+		new_prop->dpp_entries[idx].dpe_str = out_policy;
+	}
 
 	*out_prop = new_prop;
 
@@ -350,7 +341,7 @@ err_out:
 	D_FREE(out_label);
 	D_FREE(out_owner_grp);
 	D_FREE(out_owner);
-	D_FREE(out_policy_desc);
+	D_FREE(out_policy);
 	return rc;
 }
 
