@@ -1109,6 +1109,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	/* All container operations require a pool handle, connect
 	 * here. Take specified pool UUID or look up through unified
 	 * namespace.
+	 * For container create only then lookup the pool only though
+	 * the parent directory, as the path itself will not exist at
+	 * this point.
 	 */
 	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
@@ -1145,6 +1148,27 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			if (dattr.da_rel_path)
 				free(dattr.da_rel_path);
 		}
+	} else if (op == CONT_CREATE && ap->path && uuid_is_null(ap->p_uuid)) {
+		struct dfuse_il_reply	il_reply = {0};
+		char			*dir;
+		char			*path;
+
+		D_STRNDUP(path, ap->path, strlen(ap->path));
+		if (path == NULL)
+			D_GOTO(out, rc = RC_NO_HELP);
+		dir = dirname(path);
+
+		/* For container create try and copy the existing pool if
+		 * possible.  If there are any errors then fail back to the
+		 * normal error message/code path.
+		 */
+		rc = call_dfuse_ioctl(dir, &il_reply);
+		D_FREE(path);
+		if (rc != 0)
+			ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
+
+		uuid_copy(ap->p_uuid, il_reply.fir_pool);
+
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}

@@ -1678,9 +1678,10 @@ class posix_tests():
         """Simple test to create a container using a path in dfuse"""
         path = os.path.join(self.dfuse.dir, 'mycont')
         cmd = ['container', 'create',
-               '--pool', self.pool.uuid, '--path', path,
+               '--path', path,
                '--type', 'POSIX']
         rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
         assert rc.returncode == 0
         stbuf = os.stat(path)
         print(stbuf)
