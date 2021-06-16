@@ -1139,8 +1139,17 @@ fetch_value:
 			}
 		}
 
-		if (vos_dtx_hit_inprogress())
+		if (vos_dtx_hit_inprogress()) {
+			D_DEBUG(DB_IO, "inprogress %d: idx %lu, nr %lu rsize "
+				DF_U64"\n", i,
+				(unsigned long)iod->iod_recxs[i].rx_idx,
+				(unsigned long)iod->iod_recxs[i].rx_nr, rsize);
 			continue;
+		}
+
+		D_DEBUG(DB_IO, "read IOD at %d: idx %lu, nr %lu rsize "
+			DF_U64"\n", i, (unsigned long)iod->iod_recxs[i].rx_idx,
+			(unsigned long)iod->iod_recxs[i].rx_nr, rsize);
 
 		/*
 		 * Empty tree or all holes, DAOS array API relies on zero
