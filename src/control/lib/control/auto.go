@@ -342,6 +342,13 @@ func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, c
 
 	storageSet := scanResp.HostStorage[scanResp.HostStorage.Keys()[0]]
 
+	if storageSet.HostStorage.ScmNamespaces == nil {
+		return nil, nil, errors.New("nil scm namespaces")
+	}
+	if storageSet.HostStorage.NvmeDevices == nil {
+		return nil, nil, errors.New("nil nvme devices")
+	}
+
 	log.Debugf("Storage hardware is consistent for hosts %s:\n\t%s\n\t%s",
 		storageSet.HostSet.String(), storageSet.HostStorage.ScmNamespaces.Summary(),
 		storageSet.HostStorage.NvmeDevices.Summary())
@@ -356,9 +363,9 @@ type numaPMemsMap map[int]sort.StringSlice
 // mapPMems maps NUMA node ID to pmem block device paths, sort paths to attempt
 // selection of desired devices if named appropriately in the case that multiple
 // devices exist for a given NUMA node.
-func mapPMems(nss storage.ScmNamespaces) numaPMemsMap {
+func mapPMems(nss *storage.ScmNamespaces) numaPMemsMap {
 	npms := make(numaPMemsMap)
-	for _, ns := range nss {
+	for _, ns := range *nss {
 		nn := int(ns.NumaNode)
 		npms[nn] = append(npms[nn], fmt.Sprintf("%s/%s", scmBdevDir, ns.BlockDevice))
 	}
@@ -374,9 +381,9 @@ func mapPMems(nss storage.ScmNamespaces) numaPMemsMap {
 type numaSSDsMap map[int]sort.StringSlice
 
 // mapSSDs maps NUMA node ID to NVMe SSD PCI addresses, sort addresses.
-func mapSSDs(ssds storage.NvmeControllers) numaSSDsMap {
+func mapSSDs(ssds *storage.NvmeControllers) numaSSDsMap {
 	nssds := make(numaSSDsMap)
-	for _, ssd := range ssds {
+	for _, ssd := range *ssds {
 		nn := int(ssd.SocketID)
 		nssds[nn] = append(nssds[nn], ssd.PciAddr)
 	}

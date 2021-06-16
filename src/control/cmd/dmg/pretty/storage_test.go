@@ -39,7 +39,7 @@ func mockHostStorageMap(t *testing.T, hosts ...*mockHostStorage) control.HostSto
 	return hsm
 }
 
-func TestControl_PrintStorageScanResponse(t *testing.T) {
+func TestPretty_PrintStorageScanResponse(t *testing.T) {
 	var (
 		standard   = control.MockServerScanResp(t, "standard")
 		pmemSingle = control.MockServerScanResp(t, "pmemSingle")
@@ -399,7 +399,7 @@ host[2,4] 3.2 TB (2 namespaces) 2.0 TB (1 controller)
 			if err := PrintResponseErrors(resp, &bld); err != nil {
 				t.Fatal(err)
 			}
-			if err := PrintHostStorageMap(resp.HostStorage, &bld); err != nil {
+			if err := PrintStorageScanMap(resp.HostStorage, &bld); err != nil {
 				t.Fatal(err)
 			}
 
@@ -410,7 +410,7 @@ host[2,4] 3.2 TB (2 namespaces) 2.0 TB (1 controller)
 	}
 }
 
-func TestControl_PrintStorageScanResponseVerbose(t *testing.T) {
+func TestPretty_PrintStorageScanResponseVerbose(t *testing.T) {
 	var (
 		standard   = control.MockServerScanResp(t, "standard")
 		pmemSingle = control.MockServerScanResp(t, "pmemSingle")
@@ -839,7 +839,7 @@ NVMe PCI     Model FW Revision Socket ID Capacity
 			if err := PrintResponseErrors(resp, &bld); err != nil {
 				t.Fatal(err)
 			}
-			if err := PrintHostStorageMap(resp.HostStorage, &bld, PrintWithVerboseOutput(true)); err != nil {
+			if err := PrintStorageScanMap(resp.HostStorage, &bld, PrintWithVerboseOutput(true)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -850,7 +850,7 @@ NVMe PCI     Model FW Revision Socket ID Capacity
 	}
 }
 
-func TestControl_PrintStorageUsageScanResponse(t *testing.T) {
+func TestPretty_PrintStorageUsageScanResponse(t *testing.T) {
 	var (
 		withSpaceUsage = control.MockServerScanResp(t, "withSpaceUsage")
 		noStorage      = control.MockServerScanResp(t, "noStorage")
@@ -974,7 +974,100 @@ host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %
 	}
 }
 
-func TestControl_PrintStorageFormatResponse(t *testing.T) {
+func TestPretty_PrintStoragePrepareResponse(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp        *control.StoragePrepareResp
+		expPrintStr string
+	}{
+		"empty response": {
+			resp: &control.StoragePrepareResp{},
+		},
+		"server error": {
+			resp: &control.StoragePrepareResp{
+				HostErrorsResp: control.MockHostErrorsResp(t,
+					&control.MockHostError{Hosts: "host1", Error: "failed"}),
+			},
+			expPrintStr: `
+Errors:
+  Hosts Error  
+  ----- -----  
+  host1 failed 
+
+`,
+		},
+		"successful response": {
+			resp: control.MockPrepareResp(t, control.MockPrepareConf{
+				Hosts:         2,
+				ScmNssPerHost: 2,
+			}),
+			expPrintStr: `
+Storage Prepare:
+  Hosts     SCM Namespaces        Reboot Required NVMe Result 
+  -----     --------------        --------------- ----------- 
+  host[1-2] 3.0 TB (2 namespaces) false           OK          
+`,
+		},
+		"no nvme results": {
+			resp: control.MockPrepareResp(t, control.MockPrepareConf{
+				Hosts:         2,
+				ScmNssPerHost: 2,
+				NoNvme:        true,
+			}),
+			expPrintStr: `
+Storage Prepare:
+  Hosts     SCM Namespaces        Reboot Required NVMe Result 
+  -----     --------------        --------------- ----------- 
+  host[1-2] 3.0 TB (2 namespaces) false           N/A         
+`,
+		},
+		"no scm results": {
+			resp: control.MockPrepareResp(t, control.MockPrepareConf{
+				Hosts:         2,
+				ScmNssPerHost: 2,
+				NoScm:         true,
+			}),
+			expPrintStr: `
+Storage Prepare:
+  Hosts     SCM Namespaces Reboot Required NVMe Result 
+  -----     -------------- --------------- ----------- 
+  host[1-2] N/A            false           OK          
+`,
+		},
+		"nvme fail": {
+			resp: control.MockPrepareResp(t, control.MockPrepareConf{
+				Hosts:         2,
+				ScmNssPerHost: 2,
+				NvmeFailures:  control.MockFailureMap(1),
+			}),
+			expPrintStr: `
+Errors:
+  Hosts Error                
+  ----- -----                
+  host2 nvme: prepare failed 
+
+Storage Prepare:
+  Hosts SCM Namespaces        Reboot Required NVMe Result 
+  ----- --------------        --------------- ----------- 
+  host1 3.0 TB (2 namespaces) false           OK          
+  host2 3.0 TB (2 namespaces) false           N/A         
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			if err := PrintResponseErrors(tc.resp, &bld); err != nil {
+				t.Fatal(err)
+			}
+			PrintStoragePrepareMap(tc.resp.HostStorage, &bld)
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintStorageFormatResponse(t *testing.T) {
 	for name, tc := range map[string]struct {
 		resp        *control.StorageFormatResp
 		expPrintStr string
@@ -1097,7 +1190,7 @@ Format Summary:
 	}
 }
 
-func TestControl_PrintStorageFormatResponseVerbose(t *testing.T) {
+func TestPretty_PrintStorageFormatResponseVerbose(t *testing.T) {
 	for name, tc := range map[string]struct {
 		resp        *control.StorageFormatResp
 		expPrintStr string

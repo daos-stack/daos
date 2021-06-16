@@ -409,24 +409,23 @@ storage nodes via the dmg utility.
 This section addresses how to verify that PMem (Intel(R) Optane(TM) persistent
 memory) modules are correctly installed on the storage nodes and how to
 configure in interleaved mode to be used by DAOS.
-Instructions for other types of SCM may be covered in the future.
 
 Provisioning the SCM occurs by configuring PMem modules in interleaved memory
 regions (interleaved mode) in groups of modules local to a specific socket
 (NUMA), and resultant nvdimm namespaces are defined by a device identifier
 (e.g., /dev/pmem0).
 
-PMem preparation is required once per DAOS installation.
+PMem preparation is required at minimum once per DAOS installation.
 
-This step requires a reboot to enable PMem resource allocation changes to be
-read by BIOS.
+PMem preparation requires reboots to enable PMem resource allocation changes to
+be read by BIOS.
 
 PMem preparation can be performed with `daos_server storage prepare --scm-only`.
 
 The first time the command is run, the SCM interleaved regions will be created
 as resource allocations on any available PMem modules (one region per NUMA
-node/socket). The regions are activated after BIOS reads the new resource
-allocations.
+node/socket).
+The regions are activated after BIOS reads the new resource allocations.
 Upon completion, the storage prepare command will prompt the admin to reboot
 the storage node(s) in order for the BIOS to activate the new storage
 allocations.
@@ -461,10 +460,6 @@ resetting modules into "MemoryMode" through resource allocations.
 
 Note that undefined behavior may result if the namespaces/pmem kernel
 devices are mounted before running reset (as per the printed warning).
-
-A subsequent reboot is required for BIOS to read the new resource
-allocations.
-
 
 ### Storage Selection
 

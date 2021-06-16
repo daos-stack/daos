@@ -84,13 +84,9 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		cmd.log.Error(outErr.String())
 	}
 
-	if prepScm {
-		var out strings.Builder
-		if err := pretty.PrintScmPrepareMap(resp.HostStorage, &out); err != nil {
-			return err
-		}
-		cmd.log.Info(out.String())
-	}
+	var out strings.Builder
+	pretty.PrintStoragePrepareMap(resp.HostStorage, &out)
+	cmd.log.Info(out.String())
 
 	return resp.Errors()
 }
@@ -153,7 +149,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 		}
 	default:
 		verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
-		if err := pretty.PrintHostStorageMap(resp.HostStorage, &out, verbose); err != nil {
+		if err := pretty.PrintStorageScanMap(resp.HostStorage, &out, verbose); err != nil {
 			return err
 		}
 	}

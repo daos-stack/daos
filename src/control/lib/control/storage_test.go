@@ -39,12 +39,12 @@ func TestControl_StorageMap(t *testing.T) {
 		"matching empty values": {
 			hss: []*HostStorage{
 				{
-					NvmeDevices:   storage.NvmeControllers{},
-					ScmNamespaces: storage.ScmNamespaces{},
+					NvmeDevices:   &storage.NvmeControllers{},
+					ScmNamespaces: &storage.ScmNamespaces{},
 				},
 				{
-					NvmeDevices:   storage.NvmeControllers{},
-					ScmNamespaces: storage.ScmNamespaces{},
+					NvmeDevices:   &storage.NvmeControllers{},
+					ScmNamespaces: &storage.ScmNamespaces{},
 				},
 			},
 			expHsmLen: 1,
@@ -52,41 +52,39 @@ func TestControl_StorageMap(t *testing.T) {
 		"mismatch non-empty nvme devices": {
 			hss: []*HostStorage{
 				{
-					NvmeDevices:   storage.NvmeControllers{},
-					ScmNamespaces: storage.ScmNamespaces{},
+					NvmeDevices:   &storage.NvmeControllers{},
+					ScmNamespaces: &storage.ScmNamespaces{},
 				},
 				{
-					NvmeDevices:   storage.NvmeControllers{},
-					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
+					NvmeDevices:   &storage.NvmeControllers{},
+					ScmNamespaces: &storage.ScmNamespaces{storage.MockScmNamespace()},
 				},
 			},
 			expHsmLen: 2,
 		},
-		// NOTE: current implementation does not distinguish between nil
-		//       and empty slices when hashing during HostStorageMap.Add
-		// "mismatch nil and empty nvme devices": {
-		// 	hss: []*HostStorage{
-		// 		{
-		// 			NvmeDevices:   storage.NvmeControllers{},
-		// 			ScmNamespaces: storage.ScmNamespaces{},
-		// 		},
-		// 		{
-		// 			NvmeDevices:   nil,
-		// 			ScmNamespaces: storage.ScmNamespaces{},
-		// 		},
-		// 	},
-		// 	expHsmLen: 2,
-		// },
+		"mismatch nil and empty nvme devices": {
+			hss: []*HostStorage{
+				{
+					NvmeDevices:   &storage.NvmeControllers{},
+					ScmNamespaces: &storage.ScmNamespaces{},
+				},
+				{
+					NvmeDevices:   nil,
+					ScmNamespaces: &storage.ScmNamespaces{},
+				},
+			},
+			expHsmLen: 2,
+		},
 		"mismatch reboot required": {
 			hss: []*HostStorage{
 				{
-					NvmeDevices:    storage.NvmeControllers{},
-					ScmNamespaces:  storage.ScmNamespaces{storage.MockScmNamespace(0)},
+					NvmeDevices:    &storage.NvmeControllers{},
+					ScmNamespaces:  &storage.ScmNamespaces{storage.MockScmNamespace(0)},
 					RebootRequired: false,
 				},
 				{
-					NvmeDevices:    storage.NvmeControllers{},
-					ScmNamespaces:  storage.ScmNamespaces{storage.MockScmNamespace(0)},
+					NvmeDevices:    &storage.NvmeControllers{},
+					ScmNamespaces:  &storage.ScmNamespaces{storage.MockScmNamespace(0)},
 					RebootRequired: true,
 				},
 			},
@@ -95,7 +93,7 @@ func TestControl_StorageMap(t *testing.T) {
 		"mismatch nvme capacity": {
 			hss: []*HostStorage{
 				{
-					NvmeDevices: storage.NvmeControllers{
+					NvmeDevices: &storage.NvmeControllers{
 						&storage.NvmeController{
 							Namespaces: []*storage.NvmeNamespace{
 								{
@@ -104,10 +102,10 @@ func TestControl_StorageMap(t *testing.T) {
 							},
 						},
 					},
-					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+					ScmNamespaces: &storage.ScmNamespaces{storage.MockScmNamespace(0)},
 				},
 				{
-					NvmeDevices: storage.NvmeControllers{
+					NvmeDevices: &storage.NvmeControllers{
 						&storage.NvmeController{
 							Namespaces: []*storage.NvmeNamespace{
 								{
@@ -116,7 +114,7 @@ func TestControl_StorageMap(t *testing.T) {
 							},
 						},
 					},
-					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+					ScmNamespaces: &storage.ScmNamespaces{storage.MockScmNamespace(0)},
 				},
 			},
 			expHsmLen: 2,
@@ -415,6 +413,187 @@ func TestControl_StorageScan(t *testing.T) {
 			mi := NewMockInvoker(log, tc.mic)
 
 			gotResponse, gotErr := StorageScan(ctx, mi, &StorageScanReq{})
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResponse, gotResponse, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_StoragePrepare(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic         *MockInvokerConfig
+		reformat    bool
+		expResponse *StoragePrepareResp
+		expErr      error
+	}{
+		"empty response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{},
+			},
+			expResponse: new(StoragePrepareResp),
+		},
+		"nil message": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr: "host1",
+						},
+					},
+				},
+			},
+			expErr: errors.New("unpack"),
+		},
+		"bad host addr": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr:    ",",
+							Message: MockServerPrepareResp(t, "noStorage"),
+						},
+					},
+				},
+			},
+			expErr: errors.New("invalid hostname"),
+		},
+		"bad host addr with error": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr:  ",",
+							Error: errors.New("banana"),
+						},
+					},
+				},
+			},
+			expErr: errors.New("invalid hostname"),
+		},
+		"invoke fails": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("failed"),
+			},
+			expErr: errors.New("failed"),
+		},
+		"server error": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr:  "host1",
+							Error: errors.New("failed"),
+						},
+					},
+				},
+			},
+			expResponse: &StoragePrepareResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "failed"}),
+				HostStorage:    nil,
+			},
+		},
+		"no storage": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr:    "host1",
+							Message: MockServerPrepareResp(t, "noStorage"),
+						},
+					},
+				},
+			},
+			expResponse: MockPrepareResp(t, MockPrepareConf{
+				Hosts: 1,
+			}),
+		},
+		"no nvme response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr:    "host1",
+							Message: MockServerPrepareResp(t, "noNvmeResp"),
+						},
+					},
+				},
+			},
+			expResponse: MockPrepareResp(t, MockPrepareConf{
+				Hosts:  1,
+				NoNvme: true,
+			}),
+		},
+		"no scm response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr:    "host1",
+							Message: MockServerPrepareResp(t, "noScmResp"),
+						},
+					},
+				},
+			},
+			expResponse: MockPrepareResp(t, MockPrepareConf{
+				Hosts: 1,
+				NoScm: true,
+			}),
+		},
+		"multiple scm namespaces": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr:    "host1",
+							Message: MockServerPrepareResp(t, "multiNss"),
+						},
+						{
+							Addr:    "host2",
+							Message: MockServerPrepareResp(t, "multiNss"),
+						},
+					},
+				},
+			},
+			expResponse: MockPrepareResp(t, MockPrepareConf{
+				Hosts:         2,
+				ScmNssPerHost: 2,
+			}),
+		},
+		"nvme fail on single host": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr:    "host1",
+							Message: MockServerPrepareResp(t, "multiNss"),
+						},
+						{
+							Addr:    "host2",
+							Message: MockServerPrepareResp(t, "failNvme"),
+						},
+					},
+				},
+			},
+			expResponse: MockPrepareResp(t, MockPrepareConf{
+				Hosts:         2,
+				ScmNssPerHost: 2,
+				NvmeFailures:  MockFailureMap(1),
+			}),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			gotResponse, gotErr := StoragePrepare(context.TODO(), NewMockInvoker(log, tc.mic),
+				&StoragePrepareReq{})
+
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

@@ -162,6 +162,8 @@ type MockHostError struct {
 }
 
 func mockHostErrorsMap(t *testing.T, hostErrors ...*MockHostError) HostErrorsMap {
+	t.Helper()
+
 	hem := make(HostErrorsMap)
 
 	for _, he := range hostErrors {
@@ -183,6 +185,8 @@ func mockHostErrorsMap(t *testing.T, hostErrors ...*MockHostError) HostErrorsMap
 // MockHostErrorsResp returns HostErrorsResp when provided with MockHostErrors
 // from different hostsets.
 func MockHostErrorsResp(t *testing.T, hostErrors ...*MockHostError) HostErrorsResp {
+	t.Helper()
+
 	if len(hostErrors) == 0 {
 		return HostErrorsResp{}
 	}
@@ -192,6 +196,8 @@ func MockHostErrorsResp(t *testing.T, hostErrors ...*MockHostError) HostErrorsRe
 }
 
 func mockHostSet(t *testing.T, hosts string) *hostlist.HostSet {
+	t.Helper()
+
 	hs, err := hostlist.CreateSet(hosts)
 	if err != nil {
 		t.Fatal(err)
@@ -200,6 +206,8 @@ func mockHostSet(t *testing.T, hosts string) *hostlist.HostSet {
 }
 
 func mockHostStorageSet(t *testing.T, hosts string, pbResp *ctlpb.StorageScanResp) *HostStorageSet {
+	t.Helper()
+
 	hss := &HostStorageSet{
 		HostStorage: &HostStorage{},
 		HostSet:     mockHostSet(t, hosts),
@@ -208,11 +216,20 @@ func mockHostStorageSet(t *testing.T, hosts string, pbResp *ctlpb.StorageScanRes
 	if err := convert.Types(pbResp.GetNvme().GetCtrlrs(), &hss.HostStorage.NvmeDevices); err != nil {
 		t.Fatal(err)
 	}
+	if hss.HostStorage.NvmeDevices == nil {
+		hss.HostStorage.NvmeDevices = &storage.NvmeControllers{}
+	}
 	if err := convert.Types(pbResp.GetScm().GetModules(), &hss.HostStorage.ScmModules); err != nil {
 		t.Fatal(err)
 	}
+	if hss.HostStorage.ScmModules == nil {
+		hss.HostStorage.ScmModules = &storage.ScmModules{}
+	}
 	if err := convert.Types(pbResp.GetScm().GetNamespaces(), &hss.HostStorage.ScmNamespaces); err != nil {
 		t.Fatal(err)
+	}
+	if hss.HostStorage.ScmNamespaces == nil {
+		hss.HostStorage.ScmNamespaces = &storage.ScmNamespaces{}
 	}
 
 	return hss
@@ -227,6 +244,8 @@ type MockStorageScan struct {
 // MockHostStorageMap returns HostStorageMap when provided with mock storage
 // scan results from different hostsets.
 func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap {
+	t.Helper()
+
 	hsm := make(HostStorageMap)
 
 	for _, scan := range scans {
@@ -242,6 +261,8 @@ func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap 
 }
 
 func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
+	t.Helper()
+
 	pbSsr := &ctlpb.StorageScanResp{
 		Nvme: &ctlpb.ScanNvmeResp{},
 		Scm:  &ctlpb.ScanScmResp{},
@@ -262,9 +283,11 @@ func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 	return pbSsr
 }
 
-// MocMockServerScanResp returns protobuf storage scan response with contents
+// MockServerScanResp returns protobuf storage scan response with contents
 // defined by the variant input string parameter.
 func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
+	t.Helper()
+
 	ssr := standardServerScanResponse(t)
 	nss := func(idxs ...int) storage.ScmNamespaces {
 		nss := make(storage.ScmNamespaces, 0, len(idxs))
@@ -420,6 +443,8 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 
 // MockHostResponses returns mock host responses.
 func MockHostResponses(t *testing.T, count int, fmtStr string, respMsg proto.Message) []*HostResponse {
+	t.Helper()
+
 	hrs := make([]*HostResponse, count)
 	for i := 0; i < count; i++ {
 		hrs[i] = &HostResponse{
@@ -450,11 +475,15 @@ type MockFormatConf struct {
 
 // MockFormatResp returns a populated StorageFormatResp based on input config.
 func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
+	t.Helper()
+
 	hem := make(HostErrorsMap)
 	hsm := make(HostStorageMap)
 
 	for i := 0; i < mfc.Hosts; i++ {
 		hs := &HostStorage{}
+		hs.ScmMountPoints = &storage.ScmMountPoints{}
+		hs.NvmeDevices = &storage.NvmeControllers{}
 		hostName := fmt.Sprintf("host%d", i+1)
 
 		for j := 0; j < mfc.ScmPerHost; j++ {
@@ -464,7 +493,7 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 				}
 				continue
 			}
-			hs.ScmMountPoints = append(hs.ScmMountPoints, &storage.ScmMountPoint{
+			*hs.ScmMountPoints = append(*hs.ScmMountPoints, &storage.ScmMountPoint{
 				Info: ctlpb.ResponseStatus_CTL_SUCCESS.String(),
 				Path: fmt.Sprintf("/mnt/%d", j+1),
 			})
@@ -483,7 +512,7 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 			if _, failed := mfc.ScmFailures[j]; failed {
 				continue
 			}
-			hs.NvmeDevices = append(hs.NvmeDevices, &storage.NvmeController{
+			*hs.NvmeDevices = append(*hs.NvmeDevices, &storage.NvmeController{
 				Info:    ctlpb.ResponseStatus_CTL_SUCCESS.String(),
 				PciAddr: fmt.Sprintf("%d", j+1),
 			})
@@ -502,4 +531,115 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 		},
 		HostStorage: hsm,
 	}
+}
+
+// MockPrepareConf configures the contents of a StoragePrepareResp.
+type MockPrepareConf struct {
+	Hosts         int
+	ScmNssPerHost int
+	ScmFailures   map[int]struct{}
+	NvmeFailures  map[int]struct{}
+	NoNvme        bool
+	NoScm         bool
+}
+
+// MockPrepareResp returns a populated StoragePrepareResp based on input config.
+func MockPrepareResp(t *testing.T, mfc MockPrepareConf) *StoragePrepareResp {
+	t.Helper()
+
+	hem := make(HostErrorsMap)
+	hsm := make(HostStorageMap)
+
+	for i := 0; i < mfc.Hosts; i++ {
+		hs := &HostStorage{}
+		hostName := fmt.Sprintf("host%d", i+1)
+
+		_, scmFailed := mfc.ScmFailures[i]
+		switch {
+		case mfc.NoScm:
+			hs.ScmNamespaces = nil
+		case scmFailed:
+			if err := hem.Add(hostName, errors.New("scm: prepare failed")); err != nil {
+				t.Fatal(err)
+			}
+		default:
+			hs.ScmNamespaces = &storage.ScmNamespaces{}
+			for j := 0; j < mfc.ScmNssPerHost; j++ {
+				*hs.ScmNamespaces = append(*hs.ScmNamespaces,
+					storage.MockScmNamespace(int32(j)))
+			}
+		}
+
+		_, nvmeFailed := mfc.NvmeFailures[i]
+		switch {
+		case mfc.NoNvme:
+			hs.NvmeDevices = nil
+		case nvmeFailed:
+			if err := hem.Add(hostName, errors.New("nvme: prepare failed")); err != nil {
+				t.Fatal(err)
+			}
+		default:
+			hs.NvmeDevices = &storage.NvmeControllers{}
+		}
+
+		if err := hsm.Add(hostName, hs); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for k, v := range hsm {
+		t.Logf("k: %v, v: %v", k, *v)
+	}
+	if len(hem) == 0 {
+		hem = nil
+	}
+	return &StoragePrepareResp{
+		HostErrorsResp: HostErrorsResp{
+			HostErrors: hem,
+		},
+		HostStorage: hsm,
+	}
+}
+
+// MockServerPrepareResp returns protobuf storage prepare response with contents
+// defined by the variant input string parameter.
+func MockServerPrepareResp(t *testing.T, variant string) *ctlpb.StoragePrepareResp {
+	t.Helper()
+
+	spr := &ctlpb.StoragePrepareResp{
+		Nvme: &ctlpb.PrepareNvmeResp{
+			State: &ctlpb.ResponseState{},
+		},
+		Scm: &ctlpb.PrepareScmResp{
+			State: &ctlpb.ResponseState{},
+		},
+	}
+	switch variant {
+	case "noNvmeResp":
+		spr.Nvme = nil
+	case "noScmResp":
+		spr.Scm = nil
+	case "multiNss":
+		scmNamespaces := storage.ScmNamespaces{
+			storage.MockScmNamespace(0),
+			storage.MockScmNamespace(1),
+		}
+		if err := convert.Types(scmNamespaces, &spr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+	case "failNvme":
+		scmNamespaces := storage.ScmNamespaces{
+			storage.MockScmNamespace(0),
+			storage.MockScmNamespace(1),
+		}
+		if err := convert.Types(scmNamespaces, &spr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		spr.Nvme.State.Status = ctlpb.ResponseStatus_CTL_ERR_NVME
+		spr.Nvme.State.Error = "prepare failed"
+	case "noStorage":
+	default:
+		t.Fatalf("variant %s unrecognized", variant)
+	}
+	return spr
 }
