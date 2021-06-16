@@ -31,7 +31,7 @@ class PoolCreateTests(PoolTestBase):
         :avocado: tags=pool_create_tests,create_max_pool_scm_only
         """
         # Create 1 pool using 90% of the available SCM capacity (no NVMe)
-        self.add_autosized_pool(scm_ratio=90, nvme_ratio=0, quantity=1, svcn=1)
+        self.add_pool_qty(1, namespace="/run/pool_1/*", create=False)
         self.check_pool_creation(60)
 
     def test_create_max_pool(self):
@@ -48,7 +48,7 @@ class PoolCreateTests(PoolTestBase):
         :avocado: tags=pool_create_tests,create_max_pool
         """
         # Create 1 pool using 90% of the available capacity
-        self.add_autosized_pool(scm_ratio=90, nvme_ratio=90, quantity=1, svcn=1)
+        self.add_pool_qty(1, namespace="/run/pool_2/*", create=False)
         self.check_pool_creation(120)
 
     def test_create_no_space(self):
@@ -70,9 +70,7 @@ class PoolCreateTests(PoolTestBase):
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
-        pool_params = self.get_pool_params(
-            scm_ratio=90, nvme_ratio=90, quantity=1, svcn=1)
-        self.add_pool_with_params(pool_params, 3)
+        self.add_pool_qty(3, namespace="/run/pool_2/*", create=False)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
         self.pool[1].target_list.update(ranks, "pool[1].target_list")
@@ -125,9 +123,7 @@ class PoolCreateTests(PoolTestBase):
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
-        pool_params = self.get_pool_params(
-            scm_ratio=90, nvme_ratio=90, quantity=1, svcn=1)
-        self.add_pool_with_params(pool_params, 3)
+        self.add_pool_qty(3, namespace="/run/pool_2/*", create=False)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
         self.pool[1].target_list.update(ranks, "pool[1].target_list")

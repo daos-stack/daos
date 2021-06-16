@@ -15,6 +15,7 @@ from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
+from server_utils_base import ServerFailed
 
 
 class TestPool(TestDaosApiBase):
@@ -53,6 +54,15 @@ class TestPool(TestDaosApiBase):
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
 
+        # Optional TestPool parameters used to autosize the dmg pool create
+        # 'size', 'scm_size', and/or 'nvme_size' values:
+        #   server_index: TestWithServers.server_managers list index
+        #   quantity:     number of pools to account for in sizing
+        #   min_targets:  minimum number of targets allowed
+        self.server_index = BasicParameter(None, 0)
+        self.quantity = BasicParameter(None, 1)
+        self.min_targets = BasicParameter(None, 1)
+
         self.pool = None
         self.uuid = None
         self.info = None
@@ -61,6 +71,41 @@ class TestPool(TestDaosApiBase):
 
         self.dmg = dmg_command
         self.query_data = []
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Autosize any size/scm_size/nvme_size parameter whose value ends in "%".
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super().get_params(test)
+
+        # Autosize any size/scm_size/nvme_size parameters
+        if ((self.size.value is not None and str(self.size.value).endswith("%"))
+                or (self.scm_size.value is not None
+                    and str(self.scm_size.value).endswith("%"))
+                or (self.nvme_size.value is not None
+                    and str(self.nvme_size.value).endswith("%"))):
+            index = self.server_index.value
+            try:
+                params = test.server_managers[index].autosize_pool_params(
+                    self.size.value, self.scm_ratio.value, self.scm_size.value,
+                    self.nvme_size.value, self.quantity.value,
+                    self.min_targets.value)
+            except ServerFailed as error:
+                test.fail(
+                    "Failure autosizing pool parameters: {}".format(error))
+
+            # Update the pool parameters with any autosized values
+            for name in params:
+                test_pool_param = getattr(self, name)
+                test_pool_param.update(params[name], name)
+
+                # Cache the autosized value so we do not calculate it again
+                id = (name, self.namespace, test_pool_param._default)
+                test.params._cache[id] = params[name]
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)

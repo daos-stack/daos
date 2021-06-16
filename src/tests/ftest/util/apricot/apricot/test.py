@@ -1441,75 +1441,35 @@ class TestWithServers(TestWithoutServers):
         """
         self.pool = self.get_pool(namespace, create, connect, index)
 
-    def get_pool_params(self, index=0, scm_ratio=6, nvme_ratio=90,
-                        min_targets=1, quantity=1):
-        """Get TestPool params configured to fit the current server config.
+    def add_pool_qty(self, quantity, namespace=None, create=True, connect=True,
+                     index=0):
+        """Add multiple pools to the test case.
 
-        The test case will be canceled if parameters cannot be configured for a
-        TestPool object that can create a pool within the server configuration.
-
-        Args:
-            index (int, optional): Server manager list index. Defaults to 0.
-            scm_ratio (int, optional): when creating a pool with NVMe
-                (nvme_ratio > 0) this defines the pool SCM size as a percentage
-                of the pool NVMe size. When creating a pool without NVMe
-                (nvme_ratio == 0) this defines the pool SCM size as a percentage
-                of the available SCM storage. Defaults to 6.
-            nvme_ratio (int, optional): this defines the pool NVMe size as a
-                percentage of the available NVMe storage, e.g. 80. If set to 0
-                the pool is created with SCM only. Defaults to 90.
-            min_targets (int, optional): the minimum number of targets per
-                engine that can be configured. Defaults to 1.
-            quantity (int, optional): Number of pools to account for in the size
-                calculations. The pool size returned is only for a single pool.
-                Defaults to 1.
-
-        Returns:
-            dict: the parameters for a TestPool object.
-
-        """
-        # Get the TestPool parameters to autosize the pool
-        self.log.info("-" * 100)
-        try:
-            pool_params = self.server_managers[index].autosize_pool_params(
-                scm_ratio, nvme_ratio, min_targets, quantity)
-        except ServerFailed as error:
-            self.cancel(error)
-        self.log.info("-" * 100)
-
-        return pool_params
-
-    def add_pool_with_params(self, pool_params, quantity=1):
-        """Add TestPools to the pool list with the specified parameters.
+        This method requires self.pool to be defined as a list.  If self.pool is
+        undefined it will define it as a list.
 
         Args:
-            pool_params (dict): a dictionary of TestPool parameter name keys and
-                values
-            quantity (int, optional): number of pools to create with the same
-                parameters. Defaults to 1.
+            quantity (int): number of pools to create
+            namespace (str, optional): namespace for TestPool parameters in the
+                test yaml file. Defaults to None.
+            create (bool, optional): should the pool be created. Defaults to
+                True.
+            connect (bool, optional): should the pool be connected. Defaults to
+                True.
+            index (int, optional): Server index for dmg command. Defaults to 0.
 
         Raises:
-            TestFail: if multiple pools are being added and self.pool is not
-                defined as a list.
+            TestFail: if self.pool is defined, but not as a list object.
 
         """
-        if quantity > 1 and not isinstance(self.pool, list):
+        if self.pool is None:
+            self.pool = []
+        if not isinstance(self.pool, list):
             self.fail(
-                "add_pool_with_params(): self.pool must be a list when adding "
-                "{} pools.".format(quantity))
+                "add_pool_qty(): self.pool must be a list: {}".format(
+                    type(self.pool)))
         for _ in range(quantity):
-            if quantity == 1 and not isinstance(self.pool, list):
-                # Define a single pool
-                self.pool = self.get_pool(create=False)
-                for name in pool_params:
-                    pool_param = getattr(self.pool, name)
-                    pool_param.update(pool_params[name])
-            else:
-                # Append the new pool to the existing pool list
-                self.pool.append(self.get_pool(create=False))
-                for name in pool_params:
-                    pool_param = getattr(self.pool[-1], name)
-                    pool_param.update(pool_params[name])
+            self.pool.append(self.get_pool(namespace, create, connect, index))
 
     def get_container(self, pool, namespace=None, create=True):
         """Get a test container object.

@@ -36,6 +36,4 @@ class EcodMdtest(MdtestBase):
         for oclass in obj_class:
             self.mdtest_cmd.dfs_oclass.update(oclass)
             self.mdtest_cmd.dfs_dir_oclass.update(oclass)
-            self.add_pool_with_params(self.get_pool_params())
-            self.pool.create()
             self.execute_mdtest()

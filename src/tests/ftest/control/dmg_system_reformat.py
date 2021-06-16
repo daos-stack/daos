@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from apricot import skipForTicket
 from avocado.core.exceptions import TestFail
 from pool_test_base import PoolTestBase
 
@@ -18,6 +19,7 @@ class DmgSystemReformatTest(PoolTestBase):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-6004")
     def test_dmg_system_reformat(self):
         """
         JIRA ID: DAOS-5415
@@ -29,13 +31,11 @@ class DmgSystemReformatTest(PoolTestBase):
         :avocado: tags=control,dmg_system_reformat,dmg
         """
         # Create pool using 90% of the available NVMe capacity
-        pool_params = self.get_pool_params(nvme_ratio=90)
-        self.add_pool_with_params(pool_params)
-        self.pool[-1].create()
+        self.add_pool_qty(1)
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
         self.get_dmg_command().exit_status_exception = False
-        self.add_pool_with_params(pool_params)
+        self.add_pool_qty(1, create=False)
         try:
             self.pool[-1].create()
         except TestFail as error:
@@ -82,8 +82,7 @@ class DmgSystemReformatTest(PoolTestBase):
                 self.get_dmg_command().result.stdout_text))
 
         # Create last pool now that memory has been wiped.
-        self.add_pool_with_params(pool_params)
-        self.pool[-1].create()
+        self.add_pool_qty(1)
 
         # Lastly, verify that last created pool is in the list
         pool_info = self.get_dmg_command().pool_list()
