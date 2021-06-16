@@ -39,7 +39,7 @@ class IorIntercept(IorTestBase):
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,pr,full_regression,hw,small,daosio,iorinterceptbasic
+        :avocado: tags=all,pr,full_regression,hw,small,daosio,iorinterceptbasic,dfuse
         """
         apis = self.params.get("ior_api", '/run/ior/iorflags/ssf/*')
         for api in apis:
