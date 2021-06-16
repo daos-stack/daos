@@ -317,7 +317,6 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
-cp %{_libdir}/libdaos_serialize.so %{buildroot}/%{_libdir}/libdaos_serialize.so
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -473,7 +472,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
-#%files daos_serialize
+%files daos_serialize
 #%{_libdir}/libdaos_serialize.so
 
 %changelog
