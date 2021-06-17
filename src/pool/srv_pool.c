@@ -1795,8 +1795,8 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		if (rc != 0)
 			return rc;
 		if (value.iov_len > DAOS_PROP_POLICYSTR_MAX_LEN) {
-			D_ERROR("bad policy string length %zu (> %d).\n", value.iov_len,
-				DAOS_PROP_POLICYSTR_MAX_LEN);
+			D_ERROR("bad policy string length %zu (> %d).\n",
+				value.iov_len, DAOS_PROP_POLICYSTR_MAX_LEN);
 			return -DER_IO;
 		}
 		D_ASSERT(idx < nr);
