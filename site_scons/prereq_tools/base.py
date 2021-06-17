@@ -720,9 +720,9 @@ class PreReqComponent():
             self._build_targets.extend(['client', 'server', 'test'])
         else:
             if 'client' in BUILD_TARGETS:
-                self._build_targets.extend(['client'])
+                self._build_targets.append('client')
             if 'server' in BUILD_TARGETS:
-                self._build_targets.extend(['server'])
+                self._build_targets.append('server')
         BUILD_TARGETS.append(build_dir)
 
     def has_source(self, env, *comps, **kw):
