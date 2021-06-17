@@ -886,6 +886,8 @@ class ValgrindHelper():
         else:
             cmd.append('--leak-check=no')
 
+        cmd.append('--gen-suppressions=all')
+
         src_suppression_file = os.path.join('src',
                                             'cart',
                                             'utils',
@@ -1132,7 +1134,8 @@ def import_daos(server, conf):
 def run_daos_cmd(conf,
                  cmd,
                  show_stdout=False,
-                 valgrind=False):
+                 valgrind=True,
+                 use_json=False):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
@@ -1152,6 +1155,8 @@ def run_daos_cmd(conf,
 
     exec_cmd = vh.get_cmd_prefix()
     exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
+    if use_json:
+        exec_cmd.append('--json')
     exec_cmd.extend(cmd)
 
     cmd_env = get_base_env()
@@ -1190,6 +1195,8 @@ def run_daos_cmd(conf,
                          log_file.name,
                          show_memleaks=show_memleaks)
     vh.convert_xml()
+    if use_json:
+        rc.json = json.loads(rc.stdout.decode('utf-8'))
     return rc
 
 def create_cont(conf, pool, posix=False, label=None):
@@ -1205,9 +1212,11 @@ def create_cont(conf, pool, posix=False, label=None):
     if posix:
         cmd.extend(['--type', 'POSIX'])
 
-    rc = run_daos_cmd(conf, cmd)
+    rc = run_daos_cmd(conf, cmd, use_json=True)
     print('rc is {}'.format(rc))
+    print(rc.json)
     assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
+    return rc.json['response']['container_uuid']
     return rc.stdout.decode().split(' ')[-1].rstrip()
 
 def destroy_container(conf, pool, container):

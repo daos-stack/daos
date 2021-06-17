@@ -35,3 +35,25 @@
    ...
    fun:sock_pe_progress_thread
 }
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:runtime.asyncPreempt
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:x_cgo_thread_start
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:runtime.asyncPreempt
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+   ...
+   fun:runtime.copystack
+}

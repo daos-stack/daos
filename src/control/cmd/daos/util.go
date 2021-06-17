@@ -190,7 +190,6 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	C.free_daos_alloc(unsafe.Pointer(ap.dfs_path))
 
 	if ap.props != nil {
-		ap.props.dpp_nr = C.DAOS_PROP_ENTRIES_MAX_NR
 		C.daos_prop_free(ap.props)
 	}
 }
