@@ -1955,6 +1955,9 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	bool			process_holes = false;
 	int			rc = 0;
 
+	if (DAOS_FAIL_CHECK(DAOS_FORCE_FAIL_EC_AGG))
+		D_GOTO(out, rc = -DER_DATA_LOSS);
+
 	/* Query the parity, entry->ae_par_extent.ape_epoch will be set to
 	 * parity ext epoch if exist.
 	 */
@@ -2087,9 +2090,13 @@ agg_data_extent(struct ec_agg_param *agg_param, vos_iter_entry_t *entry,
 			if (obj_dtx_need_refresh(dth, rc))
 				goto out;
 
-			if (rc)
-				D_ERROR("Process stripe returned "DF_RC"\n",
-					DP_RC(rc));
+			if (rc) {
+				D_ERROR(DF_UOID" Process stripe "DF_U64": "
+					DF_RC"\n", DP_UOID(agg_entry->ae_oid),
+					cur_stripenum, DP_RC(rc));
+				goto out;
+			}
+
 			/* Error leaves data covered by replicas vulnerable to
 			 * vos delete, so don't advance coordination epoch.
 			 */
