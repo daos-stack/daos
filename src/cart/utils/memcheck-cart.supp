@@ -130,25 +130,40 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr1
-   fun:strings.(*Builder).Grow
+   fun:strings.(*Builder).*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
-   fun:strings.(*Builder).Grow
+   fun:strings.(*Builder).*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr1
-   fun:runtime.(*mheap).alloc*
+   fun:runtime.(*mheap).allo*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
-   fun:runtime.(*mheap).alloc*
+   fun:runtime.(*mheap).allo*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
    fun:runtime.systemstack
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:runtime.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   fun:runtime.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:runtime.*
 }
