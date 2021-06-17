@@ -1,53 +1,82 @@
 hosts:
-    test_servers:
-        - server-A
-    test_clients:
-        - client-B
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
 timeout: 1000
 job_manager_timeout: 900
 server_config:
-    name: daos_server
-    servers:
-        bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
+  engines_per_host: 2
+  name: daos_server
+  servers:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["0000:81:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+      log_mask: DEBUG,MEM=ERR
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["0000:da:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+      log_mask: DEBUG,MEM=ERR
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
 pool:
-    control_method: dmg
-    mode: 511
-    name: daos_server
-    scm_size: 50G
-    nvme_size: 100G
+  control_method: dmg
+  mode: 511
+  name: daos_server
+  scm_size: 50G
+  nvme_size: 100G
 container:
-    type: POSIX
-    control_method: daos
+  type: POSIX
+  control_method: daos
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
 daos_vol_tests:  !mux
-    test1:
-        testname: h5_partest_t_shapesame
-        client_processes: 6
-    test2:
-        testname: h5vl_test_parallel
-        client_processes: 6
-    test3:
-        testname: h5vl_test
-        client_processes: 1
-    test4:
-        testname: h5_test_testhdf5
-        client_processes: 1
-    test5:
-        testname: h5_partest_testphdf5
-        client_processes: 6
-    test6:
-        testname: h5daos_test_map
-        client_processes: 1
-    test7:
-        testname: h5daos_test_map_parallel
-        client_processes: 6
-    test8:
-        testname: h5daos_test_oclass
-        client_processes: 1
-    test9:
-        testname: h5daos_test_metadata_parallel -U -u
-        client_processes: 6
+  test1:
+    testname: h5_partest_t_shapesame
+    client_processes: 6
+  test2:
+    testname: h5vl_test_parallel
+    client_processes: 6
+  test3:
+    testname: h5vl_test
+    client_processes: 1
+  test4:
+    testname: h5_test_testhdf5
+    client_processes: 1
+  test5:
+    testname: h5_partest_testphdf5
+    client_processes: 6
+  test6:
+    testname: h5daos_test_map
+    client_processes: 1
+  test7:
+    testname: h5daos_test_map_parallel
+    client_processes: 6
+  test8:
+    testname: h5daos_test_oclass
+    client_processes: 1
+  test9:
+    testname: h5daos_test_metadata_parallel -U -u
+    client_processes: 6

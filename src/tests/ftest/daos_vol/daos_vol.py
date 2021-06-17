@@ -15,8 +15,6 @@ class DaosVol(VolTestBase):
     :avocado: recursive
     """
 
-    CANCEL_FOR_TICKET = [["DAOS-7888", "testname", "h5_test_testhdf5"]]
-
     def test_daos_vol_mpich(self):
         """Jira ID: DAOS-3656.
 
@@ -36,7 +34,7 @@ class DaosVol(VolTestBase):
               h5daos_test_metadata_parallel
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,ib2,small
         :avocado: tags=hdf5,vol,volunit,volmpich,mpich
         :avocado: tags=DAOS_5610
         """
@@ -64,7 +62,7 @@ class DaosVol(VolTestBase):
               h5daos_test_metadata_parallel
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,ib2,small
         :avocado: tags=hdf5,vol,volunit,volopenmpi
         :avocado: tags=DAOS_5610
         """
