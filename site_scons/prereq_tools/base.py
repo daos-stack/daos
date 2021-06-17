@@ -1446,6 +1446,12 @@ class _Component():
         path = os.environ.get("PKG_CONFIG_PATH", None)
         if not path is None:
             env["ENV"]["PKG_CONFIG_PATH"] = path
+        if self.component_prefix:
+            for path in ["lib", "lib64"]:
+                config = os.path.join(self.component_prefix, path, "pkgconfig")
+                if not os.path.exists(config):
+                    continue
+                env.AppendENVPath("PKG_CONFIG_PATH", config)
 
         try:
             env.ParseConfig("pkg-config %s %s" % (opts, self.pkgconfig))
