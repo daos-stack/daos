@@ -31,8 +31,8 @@ class DbenchTest(DfuseTestBase):
             Run dbench on top of mount point.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2,dfuse
-        :avocado: tags=dbench
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=dbench,dfuse
         """
 
         self.add_pool(connect=False)

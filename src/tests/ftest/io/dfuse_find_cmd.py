@@ -36,7 +36,10 @@ class FindCmd(DfuseTestBase):
             The test will fail if find(1) command crashes or if the number of
             files found is not equal to the number of files created.
 
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,findcmd,dfuse
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=findcmd
         """
         self._test_findcmd()
 
@@ -52,8 +55,10 @@ class FindCmd(DfuseTestBase):
             The test will fail if DAOS performance is lower than the
             challenger performance.
 
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression
-        :avocado: tags=findcmd_perf,dfuse
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=findcmd_perf
         """
         # Number of repetitions each test will run.
         samples = self.params.get("samples", '/run/perf/*')

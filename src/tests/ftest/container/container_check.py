@@ -28,7 +28,9 @@ class DfuseContainerCheck(DfuseTestBase):
             Try to mount to dfuse and check the behavior.
             Create container of type POSIX.
             Try to mount to dfuse and check the behavior.
-        :avocado: tags=all,small,full_regression,dfusecontainercheck,dfuse
+        :avocado: tags=all,full_regression
+        :avocado: tags=small
+        :avocado: tags=dfusecontainercheck,dfuse
         """
         # get test params for cont and pool count
         cont_types = self.params.get("cont_types", '/run/container/*')
