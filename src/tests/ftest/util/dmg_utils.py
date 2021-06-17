@@ -630,7 +630,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         # Sample JSON Output:
-        #{
+        # {
         #    "response": {
         #        "status": 0,
         #        "pools": [
@@ -658,7 +658,7 @@ class DmgCommand(DmgCommandBase):
         #    },
         #    "error": null,
         #    "status": 0
-        #}
+        # }
         output = self._get_json_result(("pool", "list"))
 
         data = {}

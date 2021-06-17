@@ -865,6 +865,7 @@ def error_count(error, hostlist, log_file):
 
     return requested_error_count, other_error_count
 
+
 def get_module_class(name, module):
     """Get the class object in the specified module by its name.
 

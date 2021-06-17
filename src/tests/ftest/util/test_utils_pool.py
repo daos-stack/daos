@@ -15,7 +15,7 @@ from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
-from server_utils_base import ServerFailed
+from server_utils_base import ServerFailed, AutosizeCancel
 
 
 class TestPool(TestDaosApiBase):
@@ -92,12 +92,17 @@ class TestPool(TestDaosApiBase):
             index = self.server_index.value
             try:
                 params = test.server_managers[index].autosize_pool_params(
-                    self.size.value, self.scm_ratio.value, self.scm_size.value,
-                    self.nvme_size.value, self.quantity.value,
-                    self.min_targets.value)
+                    size=self.size.value,
+                    scm_ratio=self.scm_ratio.value,
+                    scm_size=self.scm_size.value,
+                    nvme_size=self.nvme_size.value,
+                    min_targets=self.min_targets.value,
+                    quantity=self.quantity.value)
             except ServerFailed as error:
                 test.fail(
                     "Failure autosizing pool parameters: {}".format(error))
+            except AutosizeCancel as error:
+                test.cancel(error)
 
             # Update the pool parameters with any autosized values
             for name in params:

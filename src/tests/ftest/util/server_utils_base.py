@@ -4,14 +4,22 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from logging import getLogger
 import os
 
+from ClusterShell.NodeSet import NodeSet
+
 from command_utils_base import FormattedParameter, CommandWithParameters
-from command_utils import YamlCommand, CommandWithSubCommand
+from command_utils import YamlCommand, CommandWithSubCommand, CommandFailure
+from general_utils import get_display_size, human_to_bytes
 
 
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
+
+
+class AutosizeCancel(Exception):
+    """Cancel a test due to the inability to autosize a pool parameter."""
 
 
 class DaosServerCommand(YamlCommand):
@@ -286,3 +294,249 @@ class DaosServerCommand(YamlCommand):
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
+
+
+class DaosServerInformation():
+    """An object that stores the daos_server storage and network scan data."""
+
+    def __init__(self, dmg):
+        """Create a DaosServerInformation object.
+
+        Args:
+            dmg (DmgCommand): dmg command configured to communicate with the
+                servers
+        """
+        self.log = getLogger(__name__)
+        self.dmg = dmg
+        self.storage = {}
+        self.network = {}
+
+    def collect_storage_information(self):
+        """Collect storage information from the servers.
+
+        Assigns the self.storage dictionary.
+        """
+        try:
+            self.storage = self.dmg.storage_scan()
+        except CommandFailure:
+            self.storage = {}
+
+    def collect_network_information(self):
+        """Collect storage information from the servers.
+
+        Assigns the self.network dictionary.
+        """
+        try:
+            self.network = self.dmg.network_scan()
+        except CommandFailure:
+            self.network = {}
+
+    def _check_information(self, key, section, retry=True):
+        """Check that the information dictionary is populated with data.
+
+        Args:
+            key (str): the information section to verify, e.g. "storage" or
+                "network"
+            section (str): The "response" key/section to verify
+            retry (bool): if set attempt to collect the server storage or
+                network information and call the method again. Defaults to True.
+
+        Raises:
+            ServerFailed: if output from the dmg command is missing or not in
+                the expected format
+
+        """
+        msg = ""
+        entry = getattr(self, key, None)
+        if not entry:
+            self.log.info("Server storage/network information not collected")
+            if retry:
+                collect_method = {
+                    "storage": self.collect_storage_information,
+                    "network": self.collect_network_information}
+                if key in collect_method:
+                    collect_method[key]()
+                self._check_information(key, section, retry=False)
+        elif "status" not in entry:
+            msg = "Missing information status - verify dmg command output"
+        elif "response" not in entry:
+            msg = "No dmg {} scan 'response': status={}".format(
+                key, entry["status"])
+        elif section not in entry["response"]:
+            msg = "No '{}' entry found in information 'response': {}".format(
+                section, entry["response"])
+        if msg:
+            self.log.error(msg)
+            raise ServerFailed("ServerInformation: {}".format(msg))
+
+    def get_storage_scan_info(self, host):
+        """Get the storage scan information is for this host.
+
+        Args:
+            host (str): host for which to get the storage information
+
+        Raises:
+            ServerFailed: if output from the dmg storage scan is missing or not
+                in the expected format
+
+        Returns:
+            dict: a dictionary of storage information for the host, e.g.
+                    {
+                        "bdev_list": ["0000:13:00.0"],
+                        "scm_list": ["pmem0"],
+                    }
+
+        """
+        self._check_information("storage", "HostStorage")
+
+        data = {}
+        try:
+            for entry in self.storage["response"]["HostStorage"].values():
+                if host not in NodeSet(entry["hosts"].split(":")[0]):
+                    continue
+                if entry["storage"]["nvme_devices"]:
+                    for device in entry["storage"]["nvme_devices"]:
+                        if "bdev_list" not in data:
+                            data["bdev_list"] = []
+                        data["bdev_list"].append(device["pci_addr"])
+                if entry["storage"]["scm_namespaces"]:
+                    for device in entry["storage"]["scm_namespaces"]:
+                        if "scm_list" not in data:
+                            data["scm_list"] = []
+                        data["scm_list"].append(device["blockdev"])
+        except KeyError as error:
+            raise ServerFailed(
+                "ServerInformation: Error obtaining storage data") from error
+
+        return data
+
+    def get_network_scan_info(self, host):
+        """Get the network scan information is for this host.
+
+        Args:
+            host (str): host for which to get the network information
+
+        Raises:
+            ServerFailed: if output from the dmg network scan is missing or not
+                in the expected format
+
+        Returns:
+            dict: a dictionary of network information for the host, e.g.
+                    {
+                        1: {"fabric_iface": ib0, "provider": "ofi+psm2"},
+                        2: {"fabric_iface": ib0, "provider": "ofi+verbs"},
+                        3: {"fabric_iface": ib0, "provider": "ofi+tcp"},
+                    }
+
+        """
+        self._check_information("network", "HostFabrics")
+
+        data = {}
+        try:
+            for entry in self.network["response"]["HostFabrics"].values():
+                if host not in NodeSet(entry["HostSet"].split(":")[0]):
+                    continue
+                if entry["HostFabric"]["Interfaces"]:
+                    for device in entry["HostFabric"]["Interfaces"]:
+                        # List each device/provider combo under its priority
+                        data[device["Priority"]] = {
+                            "fabric_iface": device["Device"],
+                            "provider": device["Provider"],
+                            "numa": device["NumaNode"]}
+        except KeyError as error:
+            raise ServerFailed(
+                "ServerInformation: Error obtaining network data") from error
+
+        return data
+
+    def get_storage_capacity(self, engine_params):
+        """Get the configured SCM and NVMe storage per server engine.
+
+        Only sums up capacities of devices that have been specified in the
+        server configuration file.
+
+        Args:
+            engine_params (list): a list of configuration parameters for each
+                engine
+
+        Raises:
+            ServerFailed: if output from the dmg storage scan is missing or
+                not in the expected format
+
+        Returns:
+            dict: a dictionary of each engine's smallest SCM and NVMe storage
+                capacity in bytes, e.g.
+                    {
+                        "scm":  [3183575302144, 6367150604288],
+                        "nvme": [1500312748032, 1500312748032]
+                    }
+
+        """
+        self._check_information("storage", "HostStorage")
+
+        device_capacity = {"nvme": {}, "scm": {}}
+        try:
+            for entry in self.storage["response"]["HostStorage"].values():
+                # Collect a list of sizes for each NVMe device
+                if entry["storage"]["nvme_devices"]:
+                    for device in entry["storage"]["nvme_devices"]:
+                        if device["pci_addr"] not in device_capacity["nvme"]:
+                            device_capacity["nvme"][device["pci_addr"]] = []
+                        device_capacity["nvme"][device["pci_addr"]].append(0)
+                        for namespace in device["namespaces"]:
+                            device_capacity["nvme"][device["pci_addr"]][-1] += \
+                                namespace["size"]
+
+                # Collect a list of sizes for each SCM device
+                if entry["storage"]["scm_namespaces"]:
+                    for device in entry["storage"]["scm_namespaces"]:
+                        if device["blockdev"] not in device_capacity["scm"]:
+                            device_capacity["scm"][device["blockdev"]] = []
+                        device_capacity["scm"][device["blockdev"]].append(
+                            device["size"])
+
+        except KeyError as error:
+            raise ServerFailed(
+                "ServerInformation: Error obtaining storage data") from error
+
+        self.log.info("Detected device capacities:")
+        for category in sorted(device_capacity):
+            for device in sorted(device_capacity[category]):
+                sizes = [
+                    get_display_size(size)
+                    for size in device_capacity[category][device]]
+                self.log.info(
+                    "  %-4s for %s : %s", category.upper(), device, sizes)
+
+        # Determine what storage is currently configured for each engine
+        storage_capacity = {"scm": [], "nvme": []}
+        for engine_param in engine_params:
+            # Get the NVMe storage configuration for this engine
+            bdev_list = engine_param.get_value("bdev_list")
+            storage_capacity["nvme"].append(0)
+            for device in bdev_list:
+                if device in device_capacity["nvme"]:
+                    storage_capacity["nvme"][-1] += min(
+                        device_capacity["nvme"][device])
+
+            # Get the SCM storage configuration for this engine
+            scm_size = engine_param.get_value("scm_size")
+            scm_list = engine_param.get_value("scm_list")
+            if scm_list:
+                storage_capacity["scm"].append(0)
+                for device in scm_list:
+                    scm_dev = os.path.basename(device)
+                    if scm_dev in device_capacity["scm"]:
+                        storage_capacity["scm"][-1] += min(
+                            device_capacity["scm"][scm_dev])
+            else:
+                storage_capacity["scm"].append(
+                    human_to_bytes("{}GB".format(scm_size)))
+
+        self.log.info("Detected engine capacities:")
+        for category in sorted(storage_capacity):
+            sizes = [
+                get_display_size(size) for size in storage_capacity[category]]
+            self.log.info("  %-4s : %s", category.upper(), sizes)
+
+        return storage_capacity
