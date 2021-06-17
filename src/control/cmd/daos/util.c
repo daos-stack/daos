@@ -83,15 +83,13 @@ resolve_duns_path(struct cmd_args_s *ap)
 			if (dattr.da_rel_path) {
 				D_ASPRINTF(ap->dfs_path, "%s/%s",
 						dattr.da_rel_path, name);
-				free(dattr.da_rel_path);
+				D_FREE(dattr.da_rel_path);
 			} else {
 				D_ASPRINTF(ap->dfs_path, "/%s", name);
 			}
 		} else {
 			if (dattr.da_rel_path) {
-				D_STRNDUP(ap->dfs_path,
-						dattr.da_rel_path, PATH_MAX);
-				free(dattr.da_rel_path);
+				ap->dfs_path = dattr.da_rel_path;
 			} else {
 				D_STRNDUP(ap->dfs_path, "/", 1);
 			}

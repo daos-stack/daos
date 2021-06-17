@@ -498,7 +498,7 @@ parse:
 
 	if (cur_idx != path_len) {
 		D_ASSERT(rel_path);
-		attr->da_rel_path = strndup(rel_path, rel_len);
+		D_STRNDUP(attr->da_rel_path, rel_path, rel_len);
 		if (attr->da_rel_path == NULL)
 			D_GOTO(out, rc = ENOMEM);
 	}

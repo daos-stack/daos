@@ -57,3 +57,15 @@
    ...
    fun:runtime.copystack
 }
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:runtime.copystack
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:runtime.gentraceback
+}
