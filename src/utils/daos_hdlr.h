@@ -101,6 +101,9 @@ struct cmd_args_s {
 	daos_obj_id_t		oid;
 	daos_prop_t		*props;		/* --properties cont create */
 
+	FILE			*outstream;	/* normal output stream */
+	FILE			*errstream;	/* errors stream */
+
 	/* DFS related */
 	char			*dfs_prefix;	/* --dfs-prefix name */
 	char			*dfs_path;	/* --dfs-path file/dir */
@@ -204,8 +207,7 @@ int cont_set_attr_hdlr(struct cmd_args_s *ap);
 int cont_get_attr_hdlr(struct cmd_args_s *ap);
 int cont_del_attr_hdlr(struct cmd_args_s *ap);
 int cont_create_snap_hdlr(struct cmd_args_s *ap);
-int cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname,
-			 daos_epoch_t *epoch);
+int cont_list_snaps_hdlr(struct cmd_args_s *ap);
 int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
 int cont_get_acl_hdlr(struct cmd_args_s *ap);
 int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);

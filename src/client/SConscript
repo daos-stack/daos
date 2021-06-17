@@ -1,14 +1,19 @@
 """Build DAOS client"""
+Import('prereqs')
 
 def scons():
     """Execute build"""
 
+    if not (prereqs.client_requested() or prereqs.server_requested()):
+        return
+
     SConscript('array/SConscript')
     SConscript('kv/SConscript')
     SConscript('api/SConscript')
-    SConscript('dfs/SConscript')
-    SConscript('dfuse/SConscript')
-    SConscript('pydaos/SConscript')
+    if prereqs.client_requested():
+        SConscript('dfs/SConscript')
+        SConscript('dfuse/SConscript')
+        SConscript('pydaos/SConscript')
 
 if __name__ == "SCons.Script":
     scons()

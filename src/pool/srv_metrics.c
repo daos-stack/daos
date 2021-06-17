@@ -7,12 +7,13 @@
 #define D_LOGFAC DD_FAC(pool)
 
 #include "srv_internal.h"
+#include <abt.h>
 #include <gurt/telemetry_producer.h>
 
 /*
  * Parent directory in metrics tree for all the per-pool metric directories
  */
-#define POOL_METRICS_DIR	"pool/current"
+#define POOL_METRICS_DIR_FMT	"pool/current/%s"
 
 /*
  * Size in bytes of each per-pool metric directory.
@@ -22,12 +23,18 @@
 /**
  * Global pool metrics
  */
-struct pool_metrics ds_pool_metrics;
+struct pool_metrics ds_global_pool_metrics;
 
 /**
  * Per-pool metrics
  */
-static d_list_t per_pool_metrics;
+static d_list_t		per_pool_metrics;
+static ABT_mutex	per_pool_lock;
+
+struct per_pool_entry {
+	struct ds_pool_metrics	metrics;
+	d_list_t		link;
+};
 
 /**
  * Initializes the pool metrics
@@ -37,17 +44,79 @@ ds_pool_metrics_init(void)
 {
 	int rc;
 
-	memset(&ds_pool_metrics, 0, sizeof(ds_pool_metrics));
+	memset(&ds_global_pool_metrics, 0, sizeof(ds_global_pool_metrics));
 
 	D_INIT_LIST_HEAD(&per_pool_metrics);
+	rc = ABT_mutex_create(&per_pool_lock);
+	if (rc != 0) {
+		D_ERROR("Failed to create ABT mutex, err code=%d\n", rc);
+		return -DER_UNKNOWN;
+	}
 
-	rc = d_tm_add_metric(&ds_pool_metrics.open_hdl_gauge, D_TM_GAUGE,
+	rc = d_tm_add_metric(&ds_global_pool_metrics.open_hdl_gauge, D_TM_GAUGE,
 			     "Number of open pool handles", "",
 			     "pool/ops/open/active");
 	if (rc != 0)
 		D_ERROR("Couldn't add open handle gauge: "DF_RC"\n", DP_RC(rc));
 
+	D_DEBUG(DB_TRACE, "Initialized pool metrics\n");
 	return rc;
+}
+
+static void
+per_pool_metrics_lock(void)
+{
+	int rc = ABT_mutex_lock(per_pool_lock);
+
+	if (unlikely(rc != 0))
+		D_ERROR("Failed to lock per-pool metrics, err code=%d\n", rc);
+}
+
+static void
+per_pool_metrics_unlock(void)
+{
+	int rc = ABT_mutex_unlock(per_pool_lock);
+
+	if (unlikely(rc != 0))
+		D_ERROR("Failed to unlock per-pool metrics, err code=%d\n",
+			rc);
+}
+
+static void
+free_per_pool_metrics(struct per_pool_entry *entry)
+{
+	int rc;
+
+	if (entry == NULL)
+		return;
+
+	d_list_del(&entry->link);
+	rc = ABT_mutex_free(&entry->metrics.pm_lock);
+	if (rc != 0)
+		D_ERROR(DF_UUID ": Failed to free ABT mutex, err code=%d\n",
+			entry->metrics.pm_pool_uuid, rc);
+	D_FREE(entry);
+}
+
+static void
+close_pool_metrics_dir(const uuid_t pool_uuid)
+{
+	char	path[D_TM_MAX_NAME_LEN] = {0};
+	int	rc;
+
+	rc = ds_pool_metrics_get_path(pool_uuid, path, sizeof(path));
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": unable to get pool metrics path, "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		return;
+	}
+
+	rc = d_tm_del_ephemeral_dir(path);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": unable to remove metrics dir for pool, "
+			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
+		return;
+	}
 }
 
 /**
@@ -56,13 +125,92 @@ ds_pool_metrics_init(void)
 int
 ds_pool_metrics_fini(void)
 {
-	struct active_pool_metrics *cur = NULL;
-	struct active_pool_metrics *next = NULL;
+	struct per_pool_entry	*cur = NULL;
+	struct per_pool_entry	*next = NULL;
+	uuid_t			 uuid;
+	int			 rc;
 
+	per_pool_metrics_lock();
 	d_list_for_each_entry_safe(cur, next, &per_pool_metrics, link) {
-		d_list_del(&cur->link);
-		D_FREE(cur);
+		uuid_copy(uuid, cur->metrics.pm_pool_uuid);
+		free_per_pool_metrics(cur);
+		close_pool_metrics_dir(uuid);
 	}
+	per_pool_metrics_unlock();
+
+	D_DEBUG(DB_TRACE, "Finalized pool metrics\n");
+
+	rc = ABT_mutex_free(&per_pool_lock);
+	if (rc != 0) {
+		D_ERROR("Failed to free per-pool metrics mutex, err code=%d\n",
+			rc);
+		return -DER_UNKNOWN;
+	}
+
+	return 0;
+}
+
+/**
+ * Create the metrics path for a specific pool UUID.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[out]	path		Path to the pool metrics
+ * \param[in]	path_len	Length of path array
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid inputs
+ */
+int
+ds_pool_metrics_get_path(const uuid_t pool_uuid, char *path, size_t path_len)
+{
+	char uuid_str[DAOS_UUID_STR_SIZE];
+
+	if (!daos_uuid_valid(pool_uuid)) {
+		D_ERROR(DF_UUID ": invalid uuid\n", DP_UUID(pool_uuid));
+		return -DER_INVAL;
+	}
+	uuid_unparse(pool_uuid, uuid_str);
+
+	snprintf(path, path_len, POOL_METRICS_DIR_FMT, uuid_str);
+	path[path_len - 1] = '\0';
+	return 0;
+}
+
+static int
+new_per_pool_metrics(const uuid_t pool_uuid, const char *path)
+{
+	struct per_pool_entry	*entry;
+	int			 rc;
+
+	D_ALLOC_PTR(entry);
+	if (entry == NULL) {
+		D_ERROR(DF_UUID ": failed to allocate metrics struct\n",
+			DP_UUID(pool_uuid));
+		return -DER_NOMEM;
+	}
+
+	rc = ABT_mutex_create(&entry->metrics.pm_lock);
+	if (unlikely(rc != 0)) {
+		D_ERROR(DF_UUID ": failed to create metrics mutex, "
+			"err code = %d\n", DP_UUID(pool_uuid), rc);
+		D_FREE(entry);
+		return -DER_UNKNOWN;
+	}
+	uuid_copy(entry->metrics.pm_pool_uuid, pool_uuid);
+
+	/* Init all of the per-pool metrics */
+	rc = d_tm_add_metric(&entry->metrics.pm_started_timestamp,
+			     D_TM_TIMESTAMP,
+			     "Last time the pool started", NULL,
+			     "%s/started_at", path);
+	if (rc != 0) /* Probably a bad sign, but not fatal */
+		D_ERROR(DF_UUID ": failed to add started_timestamp metric, "
+			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
+
+	per_pool_metrics_lock();
+	d_list_add(&entry->link, &per_pool_metrics);
+	per_pool_metrics_unlock();
+
 	return 0;
 }
 
@@ -72,24 +220,22 @@ ds_pool_metrics_fini(void)
  * \param[in]	pool_uuid	Pool UUID
  */
 void
-ds_pool_metrics_start(uuid_t pool_uuid)
+ds_pool_metrics_start(const uuid_t pool_uuid)
 {
-	struct active_pool_metrics	*metrics;
-	char				 uuid_str[DAOS_UUID_STR_SIZE];
-	char				 path[D_TM_MAX_NAME_LEN] = {0};
-	int				 rc;
-
-	if (!daos_uuid_valid(pool_uuid)) {
-		D_ERROR(DF_UUID ": invalid uuid\n", DP_UUID(pool_uuid));
-		return;
-	}
+	struct ds_pool_metrics	*metrics;
+	char			 path[D_TM_MAX_NAME_LEN] = {0};
+	int			 rc;
 
 	metrics = ds_pool_metrics_get(pool_uuid);
 	if (metrics != NULL) /* already exists - nothing to do */
 		return;
 
-	uuid_unparse(pool_uuid, uuid_str);
-	snprintf(path, sizeof(path) - 1, POOL_METRICS_DIR "/%s", uuid_str);
+	rc = ds_pool_metrics_get_path(pool_uuid, path, sizeof(path));
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": unable to get pool metrics path, "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		return;
+	}
 
 	rc = d_tm_add_ephemeral_dir(NULL, POOL_METRICS_DIR_BYTES, path);
 	if (rc != 0) {
@@ -98,27 +244,32 @@ ds_pool_metrics_start(uuid_t pool_uuid)
 		return;
 	}
 
-	D_ALLOC_PTR(metrics);
-	if (metrics == NULL) {
-		D_ERROR(DF_UUID ": failed to allocate metrics struct\n",
-			DP_UUID(pool_uuid));
+	rc = new_per_pool_metrics(pool_uuid, path);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": unable to start metrics for pool, "
+			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
+		rc = d_tm_del_ephemeral_dir(path);
+		if (rc != 0)
+			D_ERROR(DF_UUID ": unable to clean up metrics dir for "
+				"pool, "DF_RC "\n", DP_UUID(pool_uuid),
+				DP_RC(rc));
 		return;
 	}
 
-	uuid_copy(metrics->pool_uuid, pool_uuid);
-
-	/* Init all of the per-pool metrics */
-	rc = d_tm_add_metric(&metrics->started_timestamp, D_TM_TIMESTAMP,
-			     "Last time the pool started", NULL,
-			     "%s/started_at", path);
-	if (rc != 0)
-		D_ERROR(DF_UUID ": failed to add started_timestamp metric, "
-			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
-
-	/* Track with the per-pool metrics */
-	d_list_add(&metrics->link, &per_pool_metrics);
-
 	D_INFO(DF_UUID ": created metrics for pool\n", DP_UUID(pool_uuid));
+}
+
+static struct per_pool_entry *
+get_per_pool_entry(const uuid_t pool_uuid)
+{
+	struct per_pool_entry *cur = NULL;
+
+	d_list_for_each_entry(cur, &per_pool_metrics, link) {
+		if (uuid_compare(pool_uuid, cur->metrics.pm_pool_uuid) == 0)
+			return cur;
+	}
+
+	return NULL;
 }
 
 /**
@@ -127,30 +278,21 @@ ds_pool_metrics_start(uuid_t pool_uuid)
  * \param[in]	pool_uuid	Pool UUID
  */
 void
-ds_pool_metrics_stop(uuid_t pool_uuid)
+ds_pool_metrics_stop(const uuid_t pool_uuid)
 {
-	struct active_pool_metrics	*metrics;
-	char				 uuid_str[DAOS_UUID_STR_SIZE];
-	int				 rc;
+	struct per_pool_entry	*entry;
 
 	if (!daos_uuid_valid(pool_uuid)) {
 		D_ERROR(DF_UUID ": invalid uuid\n", DP_UUID(pool_uuid));
 		return;
 	}
 
-	metrics = ds_pool_metrics_get(pool_uuid);
-	if (metrics != NULL) {
-		d_list_del(&metrics->link);
-		D_FREE(metrics);
-	}
+	per_pool_metrics_lock();
+	entry = get_per_pool_entry(pool_uuid);
+	free_per_pool_metrics(entry);
+	per_pool_metrics_unlock();
 
-	uuid_unparse(pool_uuid, uuid_str);
-	rc = d_tm_del_ephemeral_dir(POOL_METRICS_DIR "/%s", uuid_str);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": unable to remove metrics dir for pool, "
-			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
-		return;
-	}
+	close_pool_metrics_dir(pool_uuid);
 
 	D_INFO(DF_UUID ": destroyed metrics for pool\n", DP_UUID(pool_uuid));
 }
@@ -162,15 +304,18 @@ ds_pool_metrics_stop(uuid_t pool_uuid)
  *
  * \return	Pool's metrics structure, or NULL if not found
  */
-struct active_pool_metrics *
-ds_pool_metrics_get(uuid_t pool_uuid)
+struct ds_pool_metrics *
+ds_pool_metrics_get(const uuid_t pool_uuid)
 {
-	struct active_pool_metrics *cur = NULL;
+	struct per_pool_entry *result;
 
-	d_list_for_each_entry(cur, &per_pool_metrics, link) {
-		if (uuid_compare(pool_uuid, cur->pool_uuid) == 0)
-			return cur;
-	}
+	per_pool_metrics_lock();
+	result = get_per_pool_entry(pool_uuid);
+	per_pool_metrics_unlock();
 
-	return NULL;
+	if (result == NULL)
+		return NULL;
+
+	return &result->metrics;
 }
+
