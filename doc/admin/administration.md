@@ -94,7 +94,7 @@ The following table lists supported DAOS RAS events including IDs, type,
 severity, message, description and cause.
 
 +---------------------------------------+--------------+----------+--------------------+----------------------------------------+------------------------------+
-| Event                                 | Event type   | Severity | Mesage             | Description                            | Cause                        |
+| Event                                 | Event type   | Severity | Message            | Description                            | Cause                        |
 +---------------------------------------+--------------+----------+--------------------+----------------------------------------+------------------------------+
 |                                       |              |          |                    |                                        |                              |
 | engine_format required                | INFO_ONLY    | NOTICE   | DAOS engine <idx>  | Indicates engine is waiting for        | DAOS server attempts to      |
@@ -106,9 +106,9 @@ severity, message, description and cause.
 |---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
 |                                       |              |          |                    |                                        |                              |
 | engine_died                           | STATE_CHANGE | ERROR    | DAOS engine <idx>  | Indicates engine instance <idx> exited | N/A                          |
-|                                       |              |          | exited             | unexpectedly. <message> describes the  |                              |
+|                                       |              |          | exited             | unexpectedly. <error> describes the    |                              |
 |                                       |              |          | unexpectedly:      | exit state returned from exited        |                              |
-|                                       |              |          | <message>          | daos_engine process.                   |                              |
+|                                       |              |          | <error>            | daos_engine process.                   |                              |
 |                                       |              |          |                    |                                        |                              |
 |---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
 |                                       |              |          |                    |                                        |                              |
