@@ -833,13 +833,13 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		D_ALLOC_PTR(dfc);
 		if (!dfc)
 			D_GOTO(err, rc = ENOMEM);
+
+		DFUSE_TRA_UP(dfc, dfp, "dfc");
 	}
 
 	/* No existing container found, so setup dfs and connect to one */
 
 	atomic_store_relaxed(&dfc->dfs_ref, 1);
-
-	DFUSE_TRA_UP(dfc, dfp, "dfc");
 
 	DFUSE_TRA_DEBUG(dfp, "New cont "DF_UUIDF" in pool "DF_UUIDF,
 			DP_UUID(cont), DP_UUID(dfp->dfp_pool));
