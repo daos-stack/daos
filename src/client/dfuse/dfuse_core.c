@@ -734,6 +734,8 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
 	if (dfc == NULL)
 		D_GOTO(err_free, rc = ENOMEM);
 
+	DFUSE_TRA_UP(dfc, dfp, "dfc");
+
 	rc = daos_cont_open_by_label(dfp->dfp_poh, label, DAOS_COO_RW,
 				     &dfc->dfs_coh, &c_info, NULL);
 	if (rc == -DER_NONEXIST) {
