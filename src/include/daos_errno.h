@@ -338,6 +338,14 @@ const char *d_errdesc(int errnum);
 /** @}
  */
 
+#define DO_PRAGMA(str)	_Pragma(#str)
+#define DEPRECATE_ERROR(olde, newe)				\
+({								\
+	DO_PRAGMA(message(#olde " is deprecated, use " #newe)); \
+	newe;							\
+})
+#define DER_EVICTED DEPRECATE_ERROR(DER_EVICTED, DER_EXCLUDED)
+
 #ifndef DF_RC
 #define DF_RC "%s(%d): '%s'"
 #define DP_RC(rc) d_errstr(rc), rc, d_errdesc(rc)

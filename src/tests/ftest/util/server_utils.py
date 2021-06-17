@@ -6,15 +6,18 @@
 """
 from getpass import getuser
 import math
+import os
 import socket
 import time
+import yaml
 
 from avocado import fail_on
 
 from command_utils_base import CommandFailure, CommonConfig
 from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
-    convert_list, get_display_size
+    convert_list, get_default_config_file, distribute_files, DaosTestError, \
+    get_display_size
 from dmg_utils import get_dmg_command
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
@@ -656,6 +659,66 @@ class DaosServerManager(SubprocessManager):
         if rank in self._expected_states:
             host = self._expected_states[rank]["host"]
         return host
+
+    def update_config_file_from_file(self, dst_hosts, test_dir, generated_yaml):
+        """Update config file and object.
+
+        Create and place the new config file in /etc/daos/daos_server.yml
+        Then update SCM-related data in engine_params so that those disks will
+        be wiped.
+
+        Args:
+            dst_hosts (list): Destination server hostnames to place the new
+                config file.
+            test_dir (str): Directory where the server config data from
+                generated_yaml will be written.
+            generated_yaml (YAMLObject): New server config data.
+
+        """
+        # Create a temporary file in test_dir and write the generated config.
+        temp_file_path = os.path.join(test_dir, "temp_server.yml")
+        try:
+            with open(temp_file_path, 'w') as write_file:
+                yaml.dump(generated_yaml, write_file, default_flow_style=False)
+        except Exception as error:
+            raise CommandFailure(
+                "Error writing the yaml file! {}: {}".format(
+                    temp_file_path, error)) from error
+
+        # Copy the config from temp dir to /etc/daos of the server node.
+        default_server_config = get_default_config_file("server")
+        try:
+            distribute_files(
+                dst_hosts, temp_file_path, default_server_config,
+                verbose=False, sudo=True)
+        except DaosTestError as error:
+            raise CommandFailure(
+                "ERROR: Copying yaml configuration file to {}: "
+                "{}".format(dst_hosts, error)) from error
+
+        # Before restarting daos_server, we need to clear SCM. Unmount the mount
+        # point, wipefs the disks, etc. This clearing step is built into the
+        # server start steps. It'll look at the engine_params of the
+        # server_manager and clear the SCM set there, so we need to overwrite it
+        # before starting to the values from the generated config.
+        self.log.info("Resetting engine_params")
+        self.manager.job.yaml.engine_params = []
+        engines = generated_yaml["engines"]
+        for i, engine in enumerate(engines):
+            self.log.info("engine %d", i)
+            self.log.info("scm_mount = %s", engine["scm_mount"])
+            self.log.info("scm_class = %s", engine["scm_class"])
+            self.log.info("scm_list = %s", engine["scm_list"])
+
+            per_engine_yaml_parameters =\
+                DaosServerYamlParameters.PerEngineYamlParameters(i)
+            per_engine_yaml_parameters.scm_mount.update(engine["scm_mount"])
+            per_engine_yaml_parameters.scm_class.update(engine["scm_class"])
+            per_engine_yaml_parameters.scm_size.update(None)
+            per_engine_yaml_parameters.scm_list.update(engine["scm_list"])
+
+            self.manager.job.yaml.engine_params.append(
+                per_engine_yaml_parameters)
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.
