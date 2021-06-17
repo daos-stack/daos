@@ -1955,12 +1955,16 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	bool			process_holes = false;
 	int			rc = 0;
 
+	if (DAOS_FAIL_CHECK(DAOS_FORCE_FAIL_EC_AGG))
+		D_GOTO(out, rc = -DER_DATA_LOSS);
+
 	/* Query the parity, entry->ae_par_extent.ape_epoch will be set to
 	 * parity ext epoch if exist.
 	 */
 	iter_param.ip_hdl		= DAOS_HDL_INVAL;
 	iter_param.ip_ih		= entry->ae_thdl;
-	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
+	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE |
+					  VOS_IT_SKIP_REMOVED;
 	iter_param.ip_recx.rx_nr	= ec_age2cs(entry);
 	iter_param.ip_recx.rx_idx	= PARITY_INDICATOR |
 					  (entry->ae_cur_stripe.as_stripenum *
@@ -2086,9 +2090,13 @@ agg_data_extent(struct ec_agg_param *agg_param, vos_iter_entry_t *entry,
 			if (obj_dtx_need_refresh(dth, rc))
 				goto out;
 
-			if (rc)
-				D_ERROR("Process stripe returned "DF_RC"\n",
-					DP_RC(rc));
+			if (rc) {
+				D_ERROR(DF_UOID" Process stripe "DF_U64": "
+					DF_RC"\n", DP_UOID(agg_entry->ae_oid),
+					cur_stripenum, DP_RC(rc));
+				goto out;
+			}
+
 			/* Error leaves data covered by replicas vulnerable to
 			 * vos delete, so don't advance coordination epoch.
 			 */
@@ -2634,7 +2642,8 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
 	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
-	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
+	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE |
+					  VOS_IT_SKIP_REMOVED;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
 

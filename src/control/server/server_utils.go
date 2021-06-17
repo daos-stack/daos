@@ -379,3 +379,33 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 		grpc.ChainStreamInterceptor(streamInterceptors...),
 	}...), nil
 }
+
+type netInterface interface {
+	Addrs() ([]net.Addr, error)
+}
+
+func checkFabricInterface(name string, lookup func(string) (netInterface, error)) error {
+	if name == "" {
+		return errors.New("no name provided")
+	}
+
+	if lookup == nil {
+		return errors.New("no lookup function provided")
+	}
+
+	netIF, err := lookup(name)
+	if err != nil {
+		return err
+	}
+
+	addrs, err := netIF.Addrs()
+	if err != nil {
+		return err
+	}
+
+	if len(addrs) == 0 {
+		return fmt.Errorf("no network addresses for interface %q", name)
+	}
+
+	return nil
+}

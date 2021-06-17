@@ -582,7 +582,8 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	if (rc) {
 		/** don't log error if conditional failed */
 		if (rc != -DER_EXIST)
-			D_ERROR("Failed to insert entry %s (%d)\n", name, rc);
+			D_ERROR("Failed to insert entry %s, "DF_RC"\n",
+				name, DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -881,7 +882,8 @@ fopen:
 	rc = daos_array_open_with_attr(dfs->coh, entry->oid, th, daos_mode, 1,
 				       entry->chunk_size, &file->oh, NULL);
 	if (rc != 0) {
-		D_ERROR("daos_array_open_with_attr() failed (%d)\n", rc);
+		D_ERROR("daos_array_open_with_attr() failed, "DF_RC"\n",
+			DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -932,7 +934,7 @@ create_dir(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, dfs_obj_t *dir)
 	/** Open the Object - local operation */
 	rc = daos_obj_open(dfs->coh, dir->oid, DAOS_OO_RW, &dir->oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_open() Failed, "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -999,7 +1001,7 @@ open_dir(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 
 	rc = daos_obj_open(dfs->coh, entry->oid, daos_mode, &dir->oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_open() Failed, "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 	dir->mode = entry->mode;
@@ -1074,9 +1076,8 @@ set_daos_iod(bool create, daos_iod_t *iod, char *buf, size_t size)
 	iod->iod_recxs	= NULL;
 	iod->iod_type	= DAOS_IOD_SINGLE;
 
-	if (create) {
+	if (create)
 		iod->iod_size = size;
-	}
 }
 
 static void
@@ -1114,7 +1115,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 	rc = daos_obj_open(coh, super_oid, create ? DAOS_OO_RW : DAOS_OO_RO,
 			   oh, NULL);
 	if (rc) {
-		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+		D_ERROR("daos_obj_open() Failed, "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -1163,7 +1164,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 	rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, &dkey, SB_AKEYS, iods, sgls,
 			    NULL, NULL);
 	if (rc) {
-		D_ERROR("Failed to fetch SB info (%d)\n", rc);
+		D_ERROR("Failed to fetch SB info, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err, rc = daos_der2errno(rc));
 	}
 
@@ -1332,7 +1333,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	 */
 	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", 1, &entry);
 	if (rc && rc != EEXIST) {
-		D_ERROR("Failed to insert root entry (%d).", rc);
+		D_ERROR("Failed to insert root entry, %d\n", rc);
 		D_GOTO(err_super, rc);
 	}
 
@@ -1390,10 +1391,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		return EINVAL;
 
 	prop = daos_prop_alloc(0);
-	if (prop == NULL) {
-		D_ERROR("Failed to allocate prop.");
+	if (prop == NULL)
 		return ENOMEM;
-	}
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc) {
@@ -1432,7 +1431,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		/** Set uid to nobody */
 		rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
 	if (rc) {
-		D_ERROR("Unable to convert owner to uid\n");
+		D_ERROR("Unable to convert owner to uid "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
@@ -1443,7 +1443,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		/** Set gid to nobody */
 		rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
 	if (rc) {
-		D_ERROR("Unable to convert owner to gid\n");
+		D_ERROR("Unable to convert owner to gid "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
@@ -1470,7 +1471,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	rc = open_dir(dfs, DAOS_TX_NONE, NULL, amode | S_IFDIR, 0, &root_dir,
 		      1, &dfs->root);
 	if (rc) {
-		D_ERROR("Failed to open root object (%d)\n", rc);
+		D_ERROR("Failed to open root object, %d\n", rc);
 		D_GOTO(err_super, rc);
 	}
 
@@ -1478,7 +1479,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (amode == O_RDWR) {
 		rc = daos_cont_alloc_oids(coh, 1, &dfs->oid.lo, NULL);
 		if (rc) {
-			D_ERROR("daos_cont_alloc_oids() Failed (%d)\n", rc);
+			D_ERROR("daos_cont_alloc_oids() Failed, "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(err_root, rc = daos_der2errno(rc));
 		}
 
@@ -2306,7 +2308,8 @@ lookup_rel_path_loop:
 
 		rc = daos_obj_close(obj->oh, NULL);
 		if (rc) {
-			D_ERROR("daos_obj_close() Failed (%d)\n", rc);
+			D_ERROR("daos_obj_close() Failed, "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
 
@@ -2446,7 +2449,7 @@ lookup_rel_path_loop:
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
-			D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+			D_ERROR("daos_obj_open() Failed, "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
 
@@ -3436,7 +3439,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, ev);
 	if (rc)
-		D_ERROR("daos_array_write() failed (%d)\n", rc);
+		D_ERROR("daos_array_write() failed, "DF_RC"\n", DP_RC(rc));
 
 	return daos_der2errno(rc);
 }
@@ -3737,7 +3740,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod,
 			     &sgl, NULL);
 	if (rc) {
-		D_ERROR("Failed to update mode (rc = %d)\n", rc);
+		D_ERROR("Failed to update mode, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
@@ -3843,9 +3846,8 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		flags &= ~DFS_SET_ATTR_SIZE;
 	}
 
-	if (flags) {
+	if (flags)
 		D_GOTO(out_obj, rc = EINVAL);
-	}
 
 	if (set_size) {
 		rc = daos_array_set_size(obj->oh, th, stbuf->st_size, NULL);
