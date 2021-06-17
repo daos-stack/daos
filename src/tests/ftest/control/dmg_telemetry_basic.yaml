@@ -6,7 +6,7 @@ hosts:
     - client-A
 timeouts:
   test_telemetry_list: 60
-  test_container_telemetry: 130
+  test_container_telemetry: 230
 server_config:
   name: daos_server
   servers:
