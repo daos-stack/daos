@@ -1132,7 +1132,7 @@ def import_daos(server, conf):
 def run_daos_cmd(conf,
                  cmd,
                  show_stdout=False,
-                 valgrind=True):
+                 valgrind=False):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
@@ -1207,7 +1207,7 @@ def create_cont(conf, pool, posix=False, label=None):
 
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
     return rc.stdout.decode().split(' ')[-1].rstrip()
 
 def destroy_container(conf, pool, container):
@@ -1215,7 +1215,7 @@ def destroy_container(conf, pool, container):
     cmd = ['container', 'destroy', '--pool', pool, '--cont', container]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
     return rc.stdout.decode('utf-8').strip()
 
 def check_dfs_tool_output(output, oclass, csize):
@@ -2906,7 +2906,7 @@ class AllocFailTestRun():
                                 'code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
-        if not stderr.endswith("Out of memory (-1009)") and \
+        if not stderr.endswith("(-1009): Out of memory") and \
            'error parsing command line arguments' not in stderr and \
            self.stdout != self.aft.expected_stdout:
             if self.stdout != b'':
@@ -2934,6 +2934,10 @@ class AllocFailTest():
         self.expected_stdout = None
         self.use_il = False
         self.wf = conf.wf
+        # Should failures be re-run under valgrind for improved diagnostics?
+        # Defaults to on but can be disabled, for example if the code being
+        # tested does not work with valgrind.
+        self.rerun_under_valgrind = True
 
     def launch(self):
         """Run all tests for this command"""
@@ -2991,10 +2995,11 @@ class AllocFailTest():
         print('Completed, fid {}'.format(fid))
         print('Max in flight {}'.format(max_count))
 
-        for fid in to_rerun:
-            rerun = self._run_cmd(fid, valgrind=True)
-            print(rerun)
-            rerun.wait()
+        if self.rerun_under_valgrind:
+            for fid in to_rerun:
+                rerun = self._run_cmd(fid, valgrind=True)
+                print(rerun)
+                rerun.wait()
 
         return fatal_errors
 
@@ -3116,6 +3121,7 @@ def test_alloc_fail(server, conf):
     # the command works.
     container = create_cont(conf, pool)
     test_cmd.check_stderr = True
+    test_cmd.rerun_under_valgrind = False
 
     rc = test_cmd.launch()
     destroy_container(conf, pool, container)

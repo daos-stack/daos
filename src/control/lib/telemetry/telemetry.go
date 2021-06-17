@@ -98,6 +98,10 @@ const (
 	handleKey telemetryKey = "handle"
 )
 
+func (h *handle) isValid() bool {
+	return h != nil && h.ctx != nil && h.root != nil && h.rank != nil
+}
+
 func getHandle(ctx context.Context) (*handle, error) {
 	handle, ok := ctx.Value(handleKey).(*handle)
 	if !ok {
@@ -234,6 +238,29 @@ func (sm *statsMetric) SampleSize() uint64 {
 	return uint64(sm.stats.sample_size)
 }
 
+func collectGarbageLoop(ctx context.Context) {
+	ticker := time.NewTicker(60 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			hdl, err := getHandle(ctx)
+			if err != nil {
+				return // can't do anything with this
+			}
+			hdl.Lock()
+			if !hdl.isValid() {
+				// Handle won't become valid again on this ctx
+				hdl.Unlock()
+				return
+			}
+			C.d_tm_gc_ctx(hdl.ctx)
+			hdl.Unlock()
+		}
+	}
+}
+
 // Init initializes the telemetry bindings
 func Init(parent context.Context, idx uint32) (context.Context, error) {
 	tmCtx := C.d_tm_open(C.int(idx))
@@ -252,13 +279,19 @@ func Init(parent context.Context, idx uint32) (context.Context, error) {
 		root: root,
 	}
 
-	return context.WithValue(parent, handleKey, handle), nil
+	newCtx := context.WithValue(parent, handleKey, handle)
+	go collectGarbageLoop(newCtx)
+
+	return newCtx, nil
 }
 
 // Detach detaches from the telemetry handle
 func Detach(ctx context.Context) {
 	if hdl, err := getHandle(ctx); err != nil {
+		hdl.Lock()
 		C.d_tm_close(&hdl.ctx)
+		hdl.root = nil
+		hdl.Unlock()
 	}
 }
 
@@ -303,6 +336,8 @@ func CollectMetrics(ctx context.Context, dirname string, out chan<- Metric) erro
 	if err != nil {
 		return err
 	}
+	hdl.Lock()
+	defer hdl.Unlock()
 
 	node := hdl.root
 
