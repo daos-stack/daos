@@ -895,7 +895,7 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 {
 	struct vos_pool		*pool;
 	int			i;
-	struct policy_desc_t 	*p;
+	struct policy_desc_t	*p;
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL)

@@ -12,24 +12,24 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define POLICY_BAD_PARAM 	(-1)
+#define POLICY_BAD_PARAM	(-1)
 
-static const char *POLICY_NAMES[DAOS_MEDIA_POLICY_MAX] =
-{"io_size",
-"write_intensivity"};
+static const char *POLICY_NAMES[DAOS_MEDIA_POLICY_MAX] = {
+	"io_size",
+	"write_intensivity" };
 
 static const char *POLICY_PARAMS[DAOS_MEDIA_POLICY_MAX]
 				[DAOS_MEDIA_POLICY_PARAMS_MAX] =
 {
-{"th1","th2","",""},				/* io_size */
-{"wr_size", "hot1", "hot2",""}			/* write_intensivity */
+{"th1", "th2", "", ""},				/* io_size */
+{"wr_size", "hot1", "hot2", ""}			/* write_intensivity */
 };
 
 static const char *PARAM_DELIM = ",";
 static const char *VALUE_DELIM = "=";
 
 bool
-daos_policy_try_parse(const char * policy_str, struct policy_desc_t *out_pd)
+daos_policy_try_parse(const char *policy_str, struct policy_desc_t *out_pd)
 {
 	char *tok		= NULL;
 	const char *delim	= PARAM_DELIM;
@@ -42,15 +42,17 @@ daos_policy_try_parse(const char * policy_str, struct policy_desc_t *out_pd)
 	int tok_len		= 0;
 	bool ret_val		= false;
 
+	int i,j,k;
+
 	size_t len = strlen(policy_str);
 
-	char *str = strndup(policy_str, len);
-	//D_STRNDUP(str, policy_str, len); /* for strtok_r */
+	char *str;
+	D_STRNDUP(str, policy_str, len); /* for strtok_r */
 
 	unsigned int policy_idx = DAOS_MEDIA_POLICY_MAX;
 
 	/* tokenize input to "name=value" format */
-	for (int i = 0; ;i++, str = NULL) {
+	for (i = 0; ;i++, str = NULL) {
 		tok = strtok_r(str, delim, &saveptr);
 		if (tok == NULL) {
 			break;
@@ -58,7 +60,7 @@ daos_policy_try_parse(const char * policy_str, struct policy_desc_t *out_pd)
 		/* tokenize left and right items of "name=value" */
 		str2 = tok;
 
-		for (int j = 0;;j++, str2 = NULL) {
+		for (j = 0; ; j++, str2 = NULL) {
 			tok = strtok_r(str2, delim2, &saveptr2);
 			if (tok == NULL) {
 				break;
@@ -71,8 +73,7 @@ daos_policy_try_parse(const char * policy_str, struct policy_desc_t *out_pd)
 
 			tok_len = strlen(tok);
 			if (type_found) {
-				for (int k = 0;
-				     k < DAOS_MEDIA_POLICY_MAX; k++) {
+				for (k = 0; k < DAOS_MEDIA_POLICY_MAX; k++) {
 					if (strncmp(tok, POLICY_NAMES[k],
 					    tok_len) == 0) {
 						policy_idx = k;
@@ -88,8 +89,8 @@ daos_policy_try_parse(const char * policy_str, struct policy_desc_t *out_pd)
 				type_found = false;
 				continue;
 			} else if (policy_idx != DAOS_MEDIA_POLICY_MAX) {
-			 	if (param_idx == POLICY_BAD_PARAM) {
-					for (int k = 0;
+				if (param_idx == POLICY_BAD_PARAM) {
+					for (k = 0;
 					     k < DAOS_MEDIA_POLICY_PARAMS_MAX;
 					     k++) {
 						if (strncmp(tok,
@@ -106,6 +107,7 @@ daos_policy_try_parse(const char * policy_str, struct policy_desc_t *out_pd)
 				} else {
 					char *endptr;
 					int val = strtol(tok, &endptr, 10);
+
 					if (*tok != '\0' && *endptr == '\0') {
 						if (out_pd != NULL) {
 							out_pd->

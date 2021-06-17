@@ -198,8 +198,8 @@ daos_prop_owner_group_valid(d_string_t owner)
 static bool
 daos_prop_policy_valid(d_string_t policy_str)
 {
-	if(!daos_prop_str_valid(policy_str, "policy string",
-				DAOS_PROP_POLICYSTR_MAX_LEN))
+	if (!daos_prop_str_valid(policy_str, "policy string",
+				 DAOS_PROP_POLICYSTR_MAX_LEN))
 		return false;
 
 	if (!daos_policy_try_parse(policy_str, NULL))
