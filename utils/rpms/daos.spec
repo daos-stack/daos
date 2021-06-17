@@ -477,7 +477,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %files daos_serialize
-#%{_libdir}/libdaos_serialize.so
+if [ -f %{_libdir}/libdaos_serialize.so]; then
+    %{_libdir}/libdaos_serialize.so
+fi
 
 %changelog
 * Tue Jun 15 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.102-3
