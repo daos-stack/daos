@@ -700,7 +700,11 @@ dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash)
 	if (!dtx_is_valid_handle(dth))
 		return 0;
 
-	D_ASSERT(dth->dth_op_seq < (uint16_t)(-1));
+	if (dth->dth_op_seq == VOS_SUB_OP_MAX) {
+		D_ERROR("Transaction exceeds maximum number of suboperations"
+			" (%d)\n", VOS_SUB_OP_MAX);
+		return -DER_NO_PERM;
+	}
 
 	dth->dth_dkey_hash = dkey_hash;
 	dth->dth_op_seq++;

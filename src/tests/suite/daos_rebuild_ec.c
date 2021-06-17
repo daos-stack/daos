@@ -616,6 +616,60 @@ rebuild_dfs_fail_seq_p0p1(void **state)
 	dfs_ec_seq_fail(state, shards, 2);
 }
 
+static void
+rebuild_multiple_group_ec_object(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		*data;
+	char		*verify_data;
+	int		i;
+	char		dkey[32];
+	daos_recx_t	recx;
+	d_rank_t	rank = 0;
+	uint32_t	tgt_idx;
+	int		size = 4 * CELL_SIZE;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G8, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	data = (char *)malloc(size);
+	verify_data = (char *)malloc(size);
+	make_buffer(data, 'a', size);
+	make_buffer(verify_data, 'a', size);
+	for (i = 0; i < 30; i++) {
+		sprintf(dkey, "d_key_%d", i);
+
+		recx.rx_idx = 0;	/* full stripe */
+		recx.rx_nr = size;
+		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, size, &req);
+	}
+
+	rank = get_rank_by_oid_shard(arg, oid, 17);
+	tgt_idx = get_tgt_idx_by_oid_shard(arg, oid, 17);
+	rebuild_single_pool_target(arg, rank, tgt_idx, false);
+
+	for (i = 0; i < 30; i++) {
+		sprintf(dkey, "d_key_%d", i);
+
+		recx.rx_idx = 0;	/* full stripe */
+		recx.rx_nr = size;
+		memset(data, 0, size);
+		lookup_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, size, &req);
+		assert_memory_equal(data, verify_data, size);
+	}
+
+	ioreq_fini(&req);
+
+	free(data);
+	free(verify_data);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -718,7 +772,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD35: rebuild dfs io with 2 parities(p0, p1) fail",
 	 rebuild_dfs_fail_seq_p0p1, rebuild_ec_8nodes_setup,
 	 test_teardown},
-
+	{"REBUILD36: rebuild multiple group EC object",
+	 rebuild_multiple_group_ec_object, rebuild_ec_8nodes_setup,
+	 test_teardown},
 };
 
 int
