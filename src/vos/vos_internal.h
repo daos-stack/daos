@@ -312,17 +312,6 @@ struct vos_dtx_cmt_ent {
 	d_list_t			 dce_committed_link;
 	struct vos_dtx_cmt_ent_df	 dce_base;
 
-	/* The single object OID if it is different from 'dce_base::dce_oid'. */
-	daos_unit_oid_t			 dce_oid_inline;
-
-	/* Similar as dae_oids, it points to 'dce_base::dce_oid',
-	 * or 'dce_oid_inline' or new buffer to hold more OIDs.
-	 */
-	daos_unit_oid_t			*dce_oids;
-
-	/* The count objects modified by current DTX. */
-	int				 dce_oid_cnt;
-
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1,
 					 dce_invalid:1;

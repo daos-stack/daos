@@ -351,10 +351,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		char	*saveptr, *t;
 
 		D_STRNDUP(dir, path, PATH_MAX);
-		if (dir == NULL) {
-			D_ERROR("Failed to copy path\n");
+		if (dir == NULL)
 			return ENOMEM;
-		}
 
 		D_DEBUG(DB_TRACE, "DUNS resolve to direct path: %s\n", dir);
 		t = strtok_r(dir, "/", &saveptr);

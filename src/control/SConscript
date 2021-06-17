@@ -8,7 +8,8 @@ from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib')
+Import('env', 'prereqs', 'daos_version', 'conf_dir',
+       'gurt_lib')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -71,8 +72,11 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     install_bin = get_install_bin_path(denv, install_name)
     build_bin = join('$BUILD_DIR', 'src/control/bin', name)
     src = [mod_src]
-    if libs is not None:
-        src.extend(libs)
+
+    if libs is None:
+        libs = []
+    libs.extend(gurt_lib)
+
     def gen_build_id():
         """generate a unique build id per binary for use by RPM
            https://fedoraproject.org/wiki/PackagingDrafts/Go#Build_ID"""
@@ -96,7 +100,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     # Propagate useful GO environment variables from the caller
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
-    denv.Command(build_bin, src + gurt_lib,
+    denv.Command(build_bin, src + libs,
                  'cd %s; %s build -mod vendor -v %s %s %s -o %s %s' %
                  (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv),
                   get_build_tags(denv), build_bin, install_src))
@@ -193,6 +197,16 @@ def scons():
             AlwaysBuild(drpcbin)
 
         AlwaysBuild([agentbin, dmgbin])
+
+        Import('daos_hdlrs_lib')
+        dbenv = denv.Clone()
+        dblibs = dbenv.subst("-L$BUILD_DIR/src/gurt "
+                            "-L$BUILD_DIR/src/cart "
+                            "-L$BUILD_DIR/src/client/dfs "
+                            "-L$BUILD_DIR/src/utils $_RPATH")
+        dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
+        daosbin = install_go_bin(dbenv, gosrc, [daos_hdlrs_lib], "daos", "daos")
+        AlwaysBuild([daosbin])
 
     if not prereqs.server_requested():
         return
