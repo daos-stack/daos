@@ -346,8 +346,8 @@ daos_cont_serialize_attrs(hid_t file_id, hid_t *usr_attr_memtype,
 	}
 
 	/* Create the user attribute dataset */
-	dset = H5Dcreate(file_id, SERIALIZE_ATTR_DSET, *usr_attr_memtype, dspace,
-			 H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+	dset = H5Dcreate(file_id, SERIALIZE_ATTR_DSET, *usr_attr_memtype,
+			 dspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 	if (dset < 0) {
 		rc = -DER_MISC;
 		D_GOTO(out, rc);
