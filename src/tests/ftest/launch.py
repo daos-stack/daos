@@ -1015,15 +1015,14 @@ def run_tests(test_files, tag_filter, args):
                 valgrind_logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR",
                                                    os.environ['HOME'])
 
-                # Archive remote valgrind log files
+                # Archive valgrind log files from shared dir
                 return_code |= archive_files(
                     "valgrind log files",
                     os.path.join(avocado_logs_dir, "latest", "valgrind_logs"),
-                    test_hosts,
+                    [test_hosts[0]],
                     "{}/valgrind*".format(valgrind_logs_dir),
                     args,
-                    avocado_logs_dir,
-                    get_test_category(test_file["py"]))
+                    avocado_logs_dir)
 
             # Optionally rename the test results directory for this test
             if args.rename:
@@ -1204,7 +1203,6 @@ def archive_files(description, destination, hosts, source_files, args,
         destination (str): path in which to archive files
         hosts (list): hosts from which to archive files
         source_files (str): remote files to archive
-        cart (str): enable running cart_logtest.py
         args (argparse.Namespace): command line arguments for this program
         avocado_logs_dir (optional, str): path to the avocado log files.
             Required for checking for large log files - see 'test_name'.
