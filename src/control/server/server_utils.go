@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -154,7 +155,7 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 	return netDevClass, nil
 }
 
-func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn) error {
+func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := bdev.PrepareRequest{
 		// Default to minimum necessary for scan to work correctly.

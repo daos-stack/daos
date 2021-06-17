@@ -778,6 +778,62 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithTargetCount(15).
 					WithHelperStreamCount(6)),
 		},
+		"hugepages test": {
+			engineCount:    1,
+			accessPoints:   []string{"hostX:10002"},
+			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
+			numaIfaces:     numaNetIfaceMap{0: ib0},
+			numaSSDs:       numaSSDsMap{0: []string{common.MockPCIAddr(1)}},
+			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(3584).WithEngines(
+				defaultEngineCfg(0).
+					WithFabricInterface("ib0").
+					WithFabricInterfacePort(defaultFiPort).
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa0).
+					WithScmDeviceList("/dev/pmem0").
+					WithScmMountPoint("/mnt/daos0").
+					WithBdevDeviceList(common.MockPCIAddr(1)).
+					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
+					WithBdevVosEnv("NVME").
+					WithTargetCount(7)),
+		},
+		"hugepages test, multiple target counts": {
+			engineCount:  2,
+			accessPoints: []string{"hostX:10002"},
+			numaPMems:    numaPMemsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
+			numaIfaces:   numaNetIfaceMap{0: ib0, 1: ib1},
+			numaSSDs: numaSSDsMap{
+				0: common.MockPCIAddrs(0, 1, 2, 3), 1: common.MockPCIAddrs(4, 5, 6),
+			},
+			numaCoreCounts: numaCoreCountsMap{
+				0: &coreCounts{16, 7}, 1: &coreCounts{15, 6},
+			},
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(6144).WithEngines(
+				defaultEngineCfg(0).
+					WithFabricInterface("ib0").
+					WithFabricInterfacePort(defaultFiPort).
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa0).
+					WithScmDeviceList("/dev/pmem0").
+					WithScmMountPoint("/mnt/daos0").
+					WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...).
+					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
+					WithBdevVosEnv("NVME").
+					WithTargetCount(12),
+				defaultEngineCfg(1).
+					WithFabricInterface("ib1").
+					WithFabricInterfacePort(
+						int(defaultFiPort+defaultFiPortInterval)).
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa1).
+					WithScmDeviceList("/dev/pmem1").
+					WithScmMountPoint("/mnt/daos1").
+					WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...).
+					WithBdevOutputConfigPath("/mnt/daos1/daos_nvme.conf").
+					WithBdevVosEnv("NVME").
+					WithTargetCount(6)),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

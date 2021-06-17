@@ -7,17 +7,14 @@
 package control
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"sort"
-	"strconv"
-	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -559,41 +556,6 @@ func defaultEngineCfg(idx int) *engine.Config {
 		WithBdevDeviceList([]string{}...)
 }
 
-func getHugePageSize() (int, error) {
-	var PageSizeKb int
-	f, err := os.Open("/proc/meminfo")
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-
-	scn := bufio.NewScanner(f)
-	for scn.Scan() {
-		keyVal := strings.Split(scn.Text(), ":")
-		if len(keyVal) < 2 {
-			continue
-		}
-
-		switch keyVal[0] {
-		case "Hugepagesize":
-			sf := strings.Fields(keyVal[1])
-			if len(sf) != 2 {
-				return 0, errors.Errorf("unable to parse %q", keyVal[1])
-			}
-			// units are hard-coded to kB in the kernel, but doesn't hurt
-			// to double-check...
-			if sf[1] != "kB" {
-				return 0, errors.Errorf("unhandled page size unit %q", sf[1])
-			}
-			PageSizeKb, _ = strconv.Atoi(strings.TrimSpace(sf[0]))
-		default:
-			continue
-		}
-	}
-
-	return PageSizeKb, scn.Err()
-}
-
 // genConfig generates server config file from details of available network,
 // storage and CPU hardware.
 func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
@@ -637,11 +599,14 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 	}
 
 	// determine a reasonable amount of hugepages to use
-	hugepage_size, err := getHugePageSize()
-	if err != nil || hugepage_size == 0 {
+	hugepage_info, err := common.GetHugePageInfo()
+	if err != nil {
+		return nil, errors.New("unable to read system hugepage info")
+	}
+	hugepage_size := hugepage_info.PageSizeKb >> 10
+	if hugepage_size == 0 {
 		return nil, errors.New("unable to read system hugepage size")
 	}
-	hugepage_size = hugepage_size >> 10
 	max_nrTgts := 0
 	for i := 0; i < nd.engineCount; i++ {
 		if ccs[i].nrTgts > max_nrTgts {
