@@ -7,7 +7,7 @@ request and response structures are converted into protobuf messages internally
 (protobuf definitions are not directly exposed to the consumer of the API).
 
 Public API functions that return a structured response adhere to the following signature pattern:
-  
+
   `func ObjectAction(context.Context, UnaryInvoker, *ObjectActionReq) (*ObjectActionResp, error)`
 
 Public API functions that are pass/fail adhere to the following signature pattern:
@@ -26,7 +26,6 @@ The Control API is organized into two primary areas of focus: Control, and Manag
   - [NetworkScan(](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#NetworkScan)context.Context, UnaryInvoker, [*NetworkScanReq](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#NetworkScanReq)) ([*NetworkScanResp](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#NetworkScanResp), error)
   - [SmdQuery(](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#SmdQuery)context.Context, UnaryInvoker, [*SmdQueryReq](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#SmdQueryReq)) ([*SmdQueryResp](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#SmdQueryResp), error)
   - [StorageFormat(](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#StorageFormat)context.Context, UnaryInvoker, [*StorageFormatReq](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#StorageFormatReq)) ([*StorageFormatResp](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#StorageFormatResp), error)
-  - [StoragePrepare(](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#StoragePrepare)context.Context, UnaryInvoker, [*StoragePrepareReq](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#StoragePrepareReq)) ([*StoragePrepareResp](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#StoragePrepareResp), error)
   - [StorageScan(](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#StorageScan)context.Context, UnaryInvoker, [*StorageScanReq](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#StorageScanReq)) ([*StorageScanResp](https://pkg.go.dev/github.com/daos-stack/daos/src/control/lib/control#StorageScanResp), error)
 
 ## Management Methods

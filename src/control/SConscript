@@ -207,6 +207,7 @@ def scons():
 
     denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    daos_build.add_rpaths(denv, "..", True, True)
 
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/gurt "
