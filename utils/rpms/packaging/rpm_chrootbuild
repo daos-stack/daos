@@ -4,16 +4,21 @@ set -uex
 
 # shellcheck disable=SC2153
 IFS=\| read -r -a distro_base_local_repos <<< "$DISTRO_BASE_LOCAL_REPOS"
+repo_adds=()
+repo_dels=()
 
-if [ -w /etc/mock/"$CHROOT_NAME".cfg ]; then
-    # Remove the distro repos
-    if [[ $CHROOT_NAME =~ opensuse-leap-* ]]; then
-        ed /etc/mock/"$CHROOT_NAME".cfg << EOF
-/^# repos$/+2;/^"""$/-1d
-wq
-EOF
-    fi
-    echo -e "config_opts['yum.conf'] += \"\"\"\n" >> /etc/mock/"$CHROOT_NAME".cfg
+if [ -n "$REPOSITORY_URL" ] && [ -n "$DISTRO_REPOS" ]; then
+    repo_dels+=("--disablerepo=\*")
+fi
+
+original_cfg_file="/etc/mock/${CHROOT_NAME}.cfg"
+cfg_file="/etc/mock/${CHROOT_NAME}_daos.cfg"
+
+
+if [ -w "/etc/mock" ]; then
+    cp "$original_cfg_file" "$cfg_file"
+
+    echo -e "config_opts['yum.conf'] += \"\"\"\n" >> "$cfg_file"
     for repo in $DISTRO_BASE_PR_REPOS $PR_REPOS; do
         branch="master"
         build_number="lastSuccessfulBuild"
@@ -25,23 +30,27 @@ EOF
                 branch="${branch%:*}"
             fi
         fi
+        repo_adds+=("--enablerepo $repo:$branch:$build_number")
         echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
 baseurl=${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/$DISTRO/\n\
 enabled=1\n\
-gpgcheck=False\n" >> /etc/mock/"$CHROOT_NAME".cfg
+gpgcheck=False\n" >> "$cfg_file"
     done
     for repo in $JOB_REPOS "${distro_base_local_repos[@]}"; do
         repo_name=${repo##*://}
         repo_name=${repo_name//\//_}
+        repo_adds+=("--enablerepo $repo_name")
         echo -e "[${repo_name//@/_}]\n\
 name=${repo_name}\n\
 baseurl=${repo}\n\
-enabled=1\n" >> /etc/mock/"$CHROOT_NAME".cfg
+enabled=1\n" >> "$cfg_file"
     done
-    echo "\"\"\"" >> /etc/mock/"$CHROOT_NAME".cfg
+    echo "\"\"\"" >> "$cfg_file"
 else
-    echo "Unable to update /etc/mock/$CHROOT_NAME.cfg."
+    echo "Unable to create ${cfg_file}."
     echo "You need to make sure it has the needed repos in it yourself."
 fi
-eval mock -r "$CHROOT_NAME" $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"
+# shellcheck disable=SC2086
+eval mock -r "${CHROOT_NAME}_daos" "${repo_dels[*]}" "${repo_adds[*]}" \
+     $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"

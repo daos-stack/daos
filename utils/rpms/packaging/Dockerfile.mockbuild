@@ -28,4 +28,4 @@ RUN usermod -a -G mock $USER
 RUN grep use_nspawn /etc/mock/site-defaults.cfg || \
     echo "config_opts['use_nspawn'] = False" >> /etc/mock/site-defaults.cfg
 
-RUN chmod g+w /etc/mock/*
+RUN chmod g+w /etc/mock; chgrp mock /etc/mock
