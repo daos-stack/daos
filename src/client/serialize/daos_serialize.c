@@ -154,29 +154,22 @@ serialize_uint(hid_t file_id,
 	int	rc = 0;
 	hid_t	status = 0;
 	hsize_t	attr_dims[1];
-	hid_t	attr_dtype = 0;
 	hid_t	attr_dspace = 0;
 	hid_t	usr_attr = 0;
 
-
 	attr_dims[0] = 1;
-	attr_dtype = H5Tcopy(H5T_NATIVE_UINT64);
-	if (attr_dtype < 0) {
-		rc = -DER_MISC;
-		D_GOTO(out, rc);
-	}
 	attr_dspace = H5Screate_simple(1, attr_dims, NULL);
 	if (attr_dspace < 0) {
 		rc = -DER_MISC;
 		D_GOTO(out, rc);
 	}
-	usr_attr = H5Acreate2(file_id, prop_str, attr_dtype,
+	usr_attr = H5Acreate2(file_id, prop_str, H5T_NATIVE_UINT64,
 			      attr_dspace, H5P_DEFAULT, H5P_DEFAULT);
 	if (usr_attr < 0) {
 		rc = -DER_MISC;
 		D_GOTO(out, rc);
 	}
-	status = H5Awrite(usr_attr, attr_dtype, &entry->dpe_val);
+	status = H5Awrite(usr_attr, H5T_NATIVE_UINT64, &entry->dpe_val);
 	if (status < 0) {
 		rc = -DER_IO;
 		D_ERROR("failed to write attr "DF_RC"\n", DP_RC(rc));
@@ -186,8 +179,6 @@ out:
 	/* close hdf5 objects */
 	if (usr_attr > 0)
 		H5Aclose(usr_attr);
-	if (attr_dtype > 0)
-		H5Tclose(attr_dtype);
 	if (attr_dspace > 0)
 		H5Sclose(attr_dspace);
 	return rc;
