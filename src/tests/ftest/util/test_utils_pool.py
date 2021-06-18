@@ -22,7 +22,8 @@ class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosPools objects."""
 
-    def __init__(self, context, dmg_command, cb_handler=None):
+    def __init__(self, context, dmg_command, cb_handler=None,
+                 label_generator=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -35,6 +36,8 @@ class TestPool(TestDaosApiBase):
             log (logging): logging object used to report the pool status
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
+            label_generator (LabelGenerator, optional): Generates label by
+                adding number to the end of the prefix set in self.label
         """
         super().__init__("/run/pool/*", cb_handler)
         self.context = context
@@ -51,13 +54,15 @@ class TestPool(TestDaosApiBase):
         self.prop_value = BasicParameter(None)      # value of property
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
+        self.label = BasicParameter(None, "TestLabel")
+        self.label_generator = label_generator
 
         self.pool = None
-        self.label = None
         self.uuid = None
         self.info = None
         self.svc_ranks = None
         self.connected = False
+        self.use_label = True
 
         self.dmg = dmg_command
         self.query_data = []
@@ -92,11 +97,14 @@ class TestPool(TestDaosApiBase):
             self.log.info("Creating a pool")
 
         self.pool = DaosPool(self.context)
+
+        self.label.update(self.label_generator.get_label(self.label.value))
+
         kwargs = {
             "uid": self.uid,
             "gid": self.gid,
             "scm_size": self.scm_size.value,
-            "label": self.label
+            "label": self.label.value
         }
         for key in ("target_list", "svcn", "nvme_size"):
             value = getattr(self, key).value
@@ -213,10 +221,11 @@ class TestPool(TestDaosApiBase):
                 elif self.control_method.value == self.USE_DMG and self.dmg:
                     # Destroy the pool with the dmg command. Use label if the
                     # pool was created with it.
-                    if self.label is None:
-                        self.dmg.pool_destroy(pool=self.uuid, force=force)
+                    if self.use_label and self.label.value is not None:
+                        self.dmg.pool_destroy(
+                            pool=self.label.value, force=force)
                     else:
-                        self.dmg.pool_destroy(pool=self.label, force=force)
+                        self.dmg.pool_destroy(pool=self.uuid, force=force)
                     status = True
 
                 elif self.control_method.value == self.USE_DMG:
@@ -793,3 +802,26 @@ class TestPool(TestDaosApiBase):
         status = True
 
         return status
+
+
+class LabelGenerator():
+    # pylint: disable=too-many-public-methods
+    """Generates label used for pool."""
+
+    def __init__(self, value=1):
+        self.value = value
+
+    def get_label(self, base_label):
+        """Create a label by adding number after the given base_label.
+
+        Args:
+            base_label (str): Label prefix. Don't include space.
+
+        Returns:
+            str: Created label.
+        """
+        label = base_label
+        if label is not None:
+            label = "_".join([base_label, str(self.value)])
+            self.value += 1
+        return label
