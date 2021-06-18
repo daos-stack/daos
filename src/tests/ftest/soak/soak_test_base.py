@@ -286,9 +286,7 @@ class SoakTestBase(TestWithServers):
                     if "ior" in job:
                         commands = create_ior_cmdline(self, job, pool, ppn, npj)
                     elif "fio" in job:
-                        self.add_cancel_ticket(
-                            "DAOS-7778/DAOS-7671", "fio dfuse issue")
-                        # commands = create_fio_cmdline(self, job, pool)
+                        commands = create_fio_cmdline(self, job, pool)
                     elif "mdtest" in job:
                         commands = create_mdtest_cmdline(
                             self, job, pool, ppn, npj)
