@@ -6,9 +6,14 @@ def scons():
     Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+
+    if not prereqs.server_requested():
+        return
+
     denv = env.Clone()
 
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    prereqs.require(denv, 'pmdk', headers_only=True)
 
     # dtx
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])

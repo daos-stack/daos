@@ -29,7 +29,7 @@ enum {
 	EC_SPECIFIED,
 };
 
-static bool
+bool
 oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 {
 	struct daos_oclass_attr *oca;
@@ -251,7 +251,7 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 	ctx->fetch_iom.iom_nr = 1;
 	ctx->fetch_iom.iom_nr_out = 0;
 
-	/** Setup Fetch IOD*/
+	/** Setup Fetch IOD */
 	ctx->fetch_iod.iod_name = ctx->update_iod.iod_name;
 	ctx->fetch_iod.iod_size = ctx->update_iod.iod_size;
 	ctx->fetch_iod.iod_recxs = ctx->update_iod.iod_recxs;
@@ -792,14 +792,21 @@ cleanup_ec_agg_tests(struct ec_agg_test_ctx *ctx)
 static void
 test_all_ec_agg(void **statep)
 {
+	test_arg_t		*arg = *statep;
 	struct ec_agg_test_ctx	 ctx = { 0 };
 
+	if (!test_runable(arg, 5))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	setup_ec_agg_tests(statep, &ctx);
 	test_filled_stripe(&ctx);
 	test_half_stripe(&ctx);
 	test_partial_stripe(&ctx);
 	test_range_punch(&ctx);
-	sleep(40);
+	print_message("sleep 45 seconds for aggregation ...\n");
+	sleep(45);
+	print_message("verification after aggregation\n");
 	verify_1p(&ctx, DAOS_OC_EC_K2P1_L32K, 2);
 	verify_2p(&ctx, DAOS_OC_EC_K2P2_L32K);
 	verify_1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);

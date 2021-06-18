@@ -609,6 +609,8 @@ enum {
 	EVT_ITER_FOR_PURGE	= (1 << 5),
 	/** The iterator is for data migration scan */
 	EVT_ITER_FOR_MIGRATION	= (1 << 6),
+	/** Skip extents removed by vos_obj_array_remove */
+	EVT_ITER_SKIP_REMOVED	= (1 << 7),
 };
 
 /**
