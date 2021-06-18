@@ -358,8 +358,6 @@ class DmgCommandBase(YamlCommand):
             """Get the dmg storage sub command object."""
             if self.sub_command.value == "format":
                 self.sub_command_class = self.FormatSubCommand()
-            elif self.sub_command.value == "prepare":
-                self.sub_command_class = self.PrepareSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
             elif self.sub_command.value == "scan":
@@ -377,20 +375,6 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/storage/format/*", "format")
                 self.verbose = FormattedParameter("--verbose", False)
                 self.reformat = FormattedParameter("--reformat", False)
-
-        class PrepareSubCommand(CommandWithParameters):
-            """Defines an object for the dmg storage format command."""
-
-            def __init__(self):
-                """Create a dmg storage prepare command object."""
-                super().__init__("/run/dmg/storage/prepare/*", "prepare")
-                self.pci_whitelist = FormattedParameter("-w {}", None)
-                self.hugepages = FormattedParameter("-p {}", None)
-                self.target_user = FormattedParameter("-u {}", None)
-                self.nvme_only = FormattedParameter("-n", False)
-                self.scm_only = FormattedParameter("-s", False)
-                self.reset = FormattedParameter("--reset", False)
-                self.force = FormattedParameter("-f", False)
 
         class QuerySubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage query command."""
