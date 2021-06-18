@@ -244,10 +244,12 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		epoch_min = param->ap_start_eph_get(cont);
 	}
 
-	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG)))
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG) ||
+		     DAOS_FAIL_CHECK(DAOS_FORCE_FAIL_EC_AGG)))
 		interval = 0;
 	else
 		interval = crt_sec2hlc(DAOS_AGG_THRESHOLD);
+
 	D_ASSERT(hlc > (interval * 2));
 	/*
 	 * Assume 'current hlc - interval' as the highest stable view (all

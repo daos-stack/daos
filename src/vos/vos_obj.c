@@ -1198,7 +1198,14 @@ recx_get_flags(struct vos_obj_iter *oiter)
 		D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_COVERED));
 		goto done;
 	}
+	if (recx_flags_set(oiter->it_flags,
+			   VOS_IT_RECX_VISIBLE | VOS_IT_SKIP_REMOVED)) {
+		options |= EVT_ITER_VISIBLE | EVT_ITER_SKIP_REMOVED;
+		D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_COVERED));
+		goto done;
+	}
 	D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_SKIP_HOLES));
+	D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_SKIP_REMOVED));
 	if (oiter->it_flags & VOS_IT_RECX_VISIBLE)
 		options |= EVT_ITER_VISIBLE;
 	if (oiter->it_flags & VOS_IT_RECX_COVERED)
