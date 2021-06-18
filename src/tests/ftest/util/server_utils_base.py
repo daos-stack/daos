@@ -156,7 +156,7 @@ class DaosServerCommand(YamlCommand):
             list: a list of YamlParameters for each server engine
 
         """
-        engine_params = 0
+        engine_params = []
         if self.yaml is not None and hasattr(self.yaml, "engine_params"):
             engine_params = self.yaml.engine_params
         return engine_params
