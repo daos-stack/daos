@@ -34,7 +34,7 @@ utils/check.sh -n /opt/daos/bin/dmg
 echo ::endgroup::
 
 echo ::group::Test incremental debug build with test target
-$SCONS --jobs 10 test
+$SCONS --jobs 10 test client
 echo ::endgroup::
 
 echo ::group::Config file
