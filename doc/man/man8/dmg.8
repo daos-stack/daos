@@ -1,4 +1,4 @@
-.TH dmg 1 "26 May 2021"
+.TH dmg 1 "11 June 2021"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -365,35 +365,6 @@ Quickly blink the status LED on a VMD NVMe SSD for device identification. Durati
 .TP
 \fB\fB\-\-uuid\fR (\fIrequired\fR)\fP
 Device UUID of the VMD device to identify
-.SS storage prepare
-Prepare SCM and NVMe storage attached to remote servers.
-
-\fBUsage\fP: storage prepare [prepare-OPTIONS]
-.TP
-
-\fBAliases\fP: p
-
-.TP
-\fB\fB\-w\fR, \fB\-\-pci-whitelist\fR\fP
-Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices).
-.TP
-\fB\fB\-p\fR, \fB\-\-hugepages\fR\fP
-Number of hugepages to allocate (in MB) for use by SPDK (default 1024)
-.TP
-\fB\fB\-u\fR, \fB\-\-target-user\fR\fP
-User that will own hugepage mountpoint directory and vfio groups.
-.TP
-\fB\fB\-n\fR, \fB\-\-nvme-only\fR\fP
-Only prepare NVMe storage.
-.TP
-\fB\fB\-s\fR, \fB\-\-scm-only\fR\fP
-Only prepare SCM.
-.TP
-\fB\fB\-\-reset\fR\fP
-Reset SCM modules to memory mode after removing namespaces. Reset SPDK returning NVMe device bindings back to kernel modules.
-.TP
-\fB\fB\-f\fR, \fB\-\-force\fR\fP
-Perform format without prompting for confirmation
 .SS storage query
 Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info.
 

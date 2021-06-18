@@ -39,6 +39,15 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
+	lookupNetIF := func(name string) (netInterface, error) {
+		return net.InterfaceByName(name)
+	}
+	for _, ec := range cfg.Engines {
+		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
+			return nil, err
+		}
+	}
+
 	cfg.SaveActiveConfig(log)
 
 	if err := setDaosHelperEnvs(cfg, os.Setenv); err != nil {
@@ -75,6 +84,7 @@ type server struct {
 	mgmtSvc      *mgmtSvc
 	grpcServer   *grpc.Server
 
+	cbLock           sync.Mutex
 	onEnginesStarted []func(context.Context) error
 	onShutdown       []func()
 }
@@ -152,16 +162,23 @@ func (srv *server) createServices(ctx context.Context) error {
 // OnEnginesStarted adds callback functions to be called when all engines have
 // started up.
 func (srv *server) OnEnginesStarted(fns ...func(context.Context) error) {
+	srv.cbLock.Lock()
 	srv.onEnginesStarted = append(srv.onEnginesStarted, fns...)
+	srv.cbLock.Unlock()
 }
 
 // OnShutdown adds callback functions to be called when the server shuts down.
 func (srv *server) OnShutdown(fns ...func()) {
+	srv.cbLock.Lock()
 	srv.onShutdown = append(srv.onShutdown, fns...)
+	srv.cbLock.Unlock()
 }
 
 func (srv *server) shutdown() {
-	for _, fn := range srv.onShutdown {
+	srv.cbLock.Lock()
+	onShutdownCbs := srv.onShutdown
+	srv.cbLock.Unlock()
+	for _, fn := range onShutdownCbs {
 		fn()
 	}
 }
@@ -247,7 +264,11 @@ func (srv *server) addEngines(ctx context.Context) error {
 		srv.log.Debug("waiting for engines to start...")
 		allStarted.Wait()
 		srv.log.Debug("engines have started")
-		for _, cb := range srv.onEnginesStarted {
+
+		srv.cbLock.Lock()
+		onEnginesStartedCbs := srv.onEnginesStarted
+		srv.cbLock.Unlock()
+		for _, cb := range onEnginesStartedCbs {
 			if err := cb(ctx); err != nil {
 				srv.log.Errorf("on engines started: %s", err)
 			}
