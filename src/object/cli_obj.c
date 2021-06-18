@@ -3780,9 +3780,10 @@ obj_comp_cb(tse_task_t *task, void *data)
 			if (daos_handle_is_valid(obj_auxi->th) &&
 			    (task->dt_result == 0 ||
 			     task->dt_result == -DER_NONEXIST)) {
+				D_ASSERT(obj != NULL);
 				obj_addref(obj);
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, NULL,
+				dc_tx_attach(obj_auxi->th, obj,
 					     obj_auxi->opc, task);
 			}
 			break;

@@ -11,12 +11,10 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 import json
-import yaml
 
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
-from command_utils import CommandFailure
 
 
 def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -279,28 +277,6 @@ class DmgCommand(DmgCommandBase):
         self.timeout = saved_timeout
         return self.result
 
-    def storage_prepare(self, user=None, hugepages="4096", nvme=False,
-                        scm=False, reset=False, force=True):
-        """Get the result of the dmg storage format command.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
-        Raises:
-            CommandFailure: if the dmg storage prepare command fails.
-
-        """
-        kwargs = {
-            "nvme_only": nvme,
-            "scm_only": scm,
-            "target_user": getuser() if user is None else user,
-            "hugepages": hugepages,
-            "reset": reset,
-            "force": force
-        }
-        return self._get_result(("storage", "prepare"), **kwargs)
-
     def storage_set_faulty(self, uuid, force=True):
         """Get the result of the 'dmg storage set nvme-faulty' command.
 
@@ -326,7 +302,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -346,7 +322,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -364,7 +340,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -382,7 +358,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -932,25 +908,13 @@ class DmgCommand(DmgCommandBase):
                 i.e. "best-available"|"ethernet"|"infiniband"
 
         Returns:
-            dict: the contents of the generate config file.
-
-        Raises:
-            CommandFailure: if the dmg config generate command fails or if YAML
-                parser encounters an error condition while parsing the contents.
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
 
         """
-        result = self._get_result(
+        return self._get_result(
             ("config", "generate"), access_points=access_points,
             num_engines=num_engines, min_ssds=min_ssds, net_class=net_class)
-
-        try:
-            yaml_data = yaml.safe_load(result.stdout)
-        except yaml.YAMLError as error:
-            raise CommandFailure(
-                "Error loading dmg generated config: {}".format(
-                    error)) from error
-
-        return yaml_data
 
     def telemetry_metrics_list(self, host):
         """List telemetry metrics.
