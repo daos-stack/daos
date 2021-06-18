@@ -90,11 +90,13 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
+   ...
    fun:bufio.(*Reader).*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr1
+   ...
    fun:bufio.(*Reader).*
 }
 {
@@ -105,7 +107,7 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
-   fun:os.(*File).Read
+   fun:os.*
 }
 {
    <insert_a_suppression_name_here>
@@ -166,4 +168,36 @@
    <insert_a_suppression_name_here>
    Memcheck:Addr8
    fun:runtime.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr32
+   fun:indexbytebody
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:main.createWriteStream.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:main.createWriteStream.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:runtime.memmove
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:fmt.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:github.com/daos-stack/daos/*
 }
