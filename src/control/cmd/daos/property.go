@@ -817,7 +817,6 @@ func (f *PropertiesFlag) Cleanup() {
 		return
 	}
 
-	f.props.dpp_nr = C.DAOS_PROP_ENTRIES_MAX_NR
 	C.daos_prop_free(f.props)
 }
 
