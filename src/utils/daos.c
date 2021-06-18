@@ -1177,19 +1177,26 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
 
-	if (ap->pool_label)
+	if (ap->pool_label) {
 		rc = daos_pool_connect_by_label(ap->pool_label, ap->sysname,
 						DAOS_PC_RW, &ap->pool,
 						NULL, NULL);
-	else
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to "
+				"pool %s: %s (%d)\n",
+				ap->pool_label, d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+	} else {
 		rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
 				       &ap->pool, NULL /* info */,
 				       NULL /* ev */);
-	if (rc != 0) {
-		fprintf(stderr, "failed to connect to "
-			"pool "DF_UUIDF ": %s (%d)\n",
-			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to "
+				"pool "DF_UUIDF ": %s (%d)\n",
+				DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
 	}
 
 	/* container UUID: user-provided, generated here or by uns
@@ -1214,20 +1221,27 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		uuid_generate(ap->c_uuid);
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
-		if (ap->cont_label)
+		if (ap->cont_label) {
 			rc = daos_cont_open_by_label(ap->pool, ap->cont_label,
 					     DAOS_COO_RW | DAOS_COO_FORCE,
 					     &ap->cont, &cont_info, NULL);
-		else
+			if (rc != 0) {
+				fprintf(stderr, "failed to open "
+					"container %s: %s (%d)\n",
+					ap->cont_label, d_errdesc(rc), rc);
+				D_GOTO(out_disconnect, rc);
+			}
+		} else {
 			rc = daos_cont_open(ap->pool, ap->c_uuid,
 					    DAOS_COO_RW | DAOS_COO_FORCE,
 					    &ap->cont, &cont_info, NULL);
-		if (rc != 0) {
-			fprintf(stderr, "failed to open "
-				"container "DF_UUIDF
-				": %s (%d)\n", DP_UUID(ap->c_uuid),
-				d_errdesc(rc), rc);
-			D_GOTO(out_disconnect, rc);
+			if (rc != 0) {
+				fprintf(stderr, "failed to open "
+					"container "DF_UUIDF
+					": %s (%d)\n", DP_UUID(ap->c_uuid),
+					d_errdesc(rc), rc);
+				D_GOTO(out_disconnect, rc);
+			}
 		}
 	}
 

@@ -34,32 +34,44 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 	char            *dir_name = NULL;
 	int		rc, rc2;
 
-	if (ap->pool_label)
+	if (ap->pool_label) {
 		rc = daos_pool_connect_by_label(ap->pool_label, ap->sysname,
 						DAOS_PC_RW, &ap->pool,
 						NULL, NULL);
-	else
+		if (rc != 0) {
+			fprintf(ap->errstream,
+				"failed to connect to pool %s: %s (%d)\n",
+				ap->pool_label, d_errdesc(rc), rc);
+			return rc;
+		}
+	} else {
 		rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
 				       &ap->pool, NULL, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to connect to pool "DF_UUIDF": %s (%d)\n",
-			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		return rc;
+		if (rc != 0) {
+			fprintf(ap->errstream,
+				"failed to connect to pool "DF_UUIDF": %s (%d)"
+				"\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+			return rc;
+		}
 	}
 
-	if (ap->cont_label)
+	if (ap->cont_label) {
 		rc = daos_cont_open_by_label(ap->pool, ap->cont_label,
 					     DAOS_COO_RW | DAOS_COO_FORCE,
 					     &ap->cont, NULL, NULL);
-	else
+		fprintf(ap->errstream,
+			"failed to open container %s: %s (%d)\n",
+			ap->cont_label, d_errdesc(rc), rc);
+		D_GOTO(out_disconnect, rc);
+	} else {
 		rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW |
 				    DAOS_COO_FORCE, &ap->cont, NULL, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to open container "DF_UUIDF ": %s (%d)\n",
-			DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, rc);
+		if (rc != 0) {
+			fprintf(ap->errstream,
+				"failed to open container "DF_UUIDF ": %s (%d)"
+				"\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			D_GOTO(out_disconnect, rc);
+		}
 	}
 
 	if (ap->fs_op == FS_GET_ATTR)

@@ -246,6 +246,10 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 #endif
 
 #define UUID_REGEX "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}){1}"
+/*
+ * 256 corresponds to DAOS_PROP_LABEL_MAX_LEN.
+ * TODO: Make a common label format check function.
+ */
 #define LABEL_REGEX "([a-zA-Z0-9._:]{1,256})"
 #define DAOS_FORMAT "^daos://("UUID_REGEX"|"LABEL_REGEX")/("UUID_REGEX"|"LABEL_REGEX")(/.*)?$"
 #define DAOS_FORMAT_NO_PREFIX "^[/]+("UUID_REGEX"|"LABEL_REGEX")/("UUID_REGEX"|"LABEL_REGEX")(/.*)?$"
