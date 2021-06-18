@@ -784,7 +784,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
 			numaSSDs:       numaSSDsMap{0: []string{common.MockPCIAddr(1)}},
-			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
+			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{8, 2}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(3584).WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
@@ -796,7 +796,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithBdevDeviceList(common.MockPCIAddr(1)).
 					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
 					WithBdevVosEnv("NVME").
-					WithTargetCount(7)),
+					WithTargetCount(8).
+					WithHelperStreamCount(2)),
 		},
 		"hugepages test, multiple target counts": {
 			engineCount:  2,
@@ -807,7 +808,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				0: common.MockPCIAddrs(0, 1, 2, 3), 1: common.MockPCIAddrs(4, 5, 6),
 			},
 			numaCoreCounts: numaCoreCountsMap{
-				0: &coreCounts{16, 7}, 1: &coreCounts{15, 6},
+				0: &coreCounts{12, 2}, 1: &coreCounts{6, 0},
 			},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(6144).WithEngines(
 				defaultEngineCfg(0).
@@ -820,7 +821,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...).
 					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
 					WithBdevVosEnv("NVME").
-					WithTargetCount(12),
+					WithTargetCount(12).
+					WithHelperStreamCount(2),
 				defaultEngineCfg(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(
@@ -832,7 +834,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...).
 					WithBdevOutputConfigPath("/mnt/daos1/daos_nvme.conf").
 					WithBdevVosEnv("NVME").
-					WithTargetCount(6)),
+					WithTargetCount(6).
+					WithHelperStreamCount(0)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
