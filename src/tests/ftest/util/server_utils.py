@@ -752,10 +752,10 @@ class DaosServerManager(SubprocessManager):
         storage_capacity = self.information.get_storage_capacity(
             self.manager.job.engine_params)
 
-        self.log.info("Total available storage:")
+        self.log.info("Largest storage size available per engine:")
         for key in ["scm", "nvme"]:
             if storage_capacity[key]:
-                # Use the minimum storage across all engines
+                # Use the same storage size across all engines
                 storage.append(min(storage_capacity[key]))
                 self.log.info(
                     "  %-4s:  %s", key.upper(), get_display_size(storage[-1]))
@@ -835,9 +835,21 @@ class DaosServerManager(SubprocessManager):
                 raise ServerFailed(
                     "Error obtaining available storage") from error
 
+            # Determine whether the SCM or NVMe limits the available storage for
+            # the size parameter.  Default to 6% scm_ratio if not specified.
+            if scm_ratio is None:
+                scm_ratio = 6
+            engine_qty = len(self.manager.job.engine_params)
+            available_size_nvme = (
+                (available_storage[1] * engine_qty) /
+                (1 - float(scm_ratio / 100)))
+            available_size_scm = (
+                (available_storage[0] * engine_qty) / float(scm_ratio / 100))
+            available_size = min(available_size_nvme, available_size_scm)
+
             # Apply any requested percentages to the pool parameters
             available = {
-                "size": {"size": available_storage[1], "type": "NVMe"},
+                "size": {"size": available_size, "type": "Combined"},
                 "scm_size": {"size": available_storage[0], "type": "SCM"},
                 "nvme_size": {"size": available_storage[1], "type": "NVMe"}}
             self.log.info("Adjusted pool sizes for %s:", pool_msg)

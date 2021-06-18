@@ -41,8 +41,8 @@ server_config:
 pool:
     name: daos_server
     control_method: dmg
-    size: 93%
-    scm_ratio: 28
+    size: 9%
+    scm_ratio: 22
 container:
     type: POSIX
     control_method: daos
