@@ -907,7 +907,6 @@ fopen:
 		D_ERROR("daos_array_open_with_attr() failed, "DF_RC"\n",
 			DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
-		return daos_der2errno(rc);
 	}
 
 	if (flags & O_TRUNC) {
