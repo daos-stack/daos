@@ -566,8 +566,11 @@ obj_set_reply_sizes(crt_rpc_t *rpc, daos_iod_t *iods, int iod_nr)
 			return -DER_NOMEM;
 	}
 
-	for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++)
+	for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
 		sizes[i] = iods[i].iod_size;
+		D_DEBUG(DB_IO, DF_UOID" %d:"DF_U64"\n", DP_UOID(orw->orw_oid),
+			i, iods[i].iod_size);
+	}
 
 out:
 	if (sizes == NULL)

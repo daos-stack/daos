@@ -283,7 +283,6 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 			continue
 		}
 
-		req.MemSize = p.engineStorage.MemSize
 		results[i].Result, results[i].Error = p.Bdev.Format(req)
 
 		if err := results[i].Error; err != nil {

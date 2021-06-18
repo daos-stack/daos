@@ -244,7 +244,6 @@ type (
 	BdevFormatRequest struct {
 		pbin.ForwardableRequest
 		Properties BdevTierProperties
-		MemSize    int // size MiB memory to be used by SPDK proc
 		OwnerUID   int
 		OwnerGID   int
 		DisableVMD bool
@@ -265,9 +264,8 @@ type (
 
 	// BdevDeviceFormatRequest designs the parameters for a device-specific format.
 	BdevDeviceFormatRequest struct {
-		MemSize int // size MiB memory to be used by SPDK proc
-		Device  string
-		Class   Class
+		Device string
+		Class  Class
 	}
 
 	// BdevDeviceFormatResponse contains device-specific Format operation results.

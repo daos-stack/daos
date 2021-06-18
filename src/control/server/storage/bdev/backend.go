@@ -204,7 +204,6 @@ func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.Bdev
 	}
 
 	spdkOpts := &spdk.EnvOptions{
-		MemSize:        req.MemSize,
 		PciIncludeList: req.Properties.DeviceList,
 		DisableVMD:     sb.IsVMDDisabled(),
 	}

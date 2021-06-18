@@ -11,6 +11,14 @@ def scons():
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     common = denv.SharedObject(['rpc.c'])
+
+    # dc_pool: Pool Client
+    dc_pool_tgts = denv.SharedObject(['cli.c']) + common
+    Export('dc_pool_tgts')
+
+    if not prereqs.server_requested():
+        return
+
     # ds_pool: Pool Server
     ds_pool = daos_build.library(denv, 'pool',
                                  ['srv.c', 'srv_pool.c', 'srv_layout.c',
@@ -19,10 +27,6 @@ def scons():
                                   'srv_pool_map.c', 'srv_metrics.c', common],
                                  install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_pool)
-
-    # dc_pool: Pool Client
-    dc_pool_tgts = denv.SharedObject(['cli.c']) + common
-    Export('dc_pool_tgts')
 
 if __name__ == "SCons.Script":
     scons()

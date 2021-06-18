@@ -62,7 +62,6 @@ type Server struct {
 	DisableVFIO         bool             `yaml:"disable_vfio"`
 	DisableVMD          bool             `yaml:"disable_vmd"`
 	NrHugepages         int              `yaml:"nr_hugepages"`
-	SetHugepages        bool             `yaml:"set_hugepages"`
 	ControlLogMask      ControlLogLevel  `yaml:"control_log_mask"`
 	ControlLogFile      string           `yaml:"control_log_file"`
 	ControlLogJSON      bool             `yaml:"control_log_json,omitempty"`

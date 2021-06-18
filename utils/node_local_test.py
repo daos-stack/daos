@@ -145,10 +145,12 @@ class WarningsFactory():
                  junit=False,
                  class_id=None,
                  post=False,
+                 post_error=False,
                  check=None):
         self._fd = open(filename, 'w')
         self.filename = filename
         self.post = post
+        self.post_error = post_error
         self.check = check
         self.issues = []
         self._class_id = class_id
@@ -290,8 +292,10 @@ class WarningsFactory():
             self.reset_pending()
         self.pending.append((line, message))
         self._flush()
-        if self.post:
+        if self.post or (self.post_error and sev in ('HIGH', 'ERROR')):
             # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
+            if self.post_error:
+                message = line.get_msg()
             print('::warning file={},line={},::{}, {}'.format(line.filename,
                                                               line.lineno,
                                                               self.check,
@@ -440,8 +444,11 @@ class DaosServer():
     def __del__(self):
         if self._agent:
             self._stop_agent()
-        if self.running:
-            self.stop(None)
+        try:
+            if self.running:
+                self.stop(None)
+        except NLTestTimeout:
+            print('Ignoring timeout on stop')
         server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
         if os.path.exists(server_file):
             os.unlink(server_file)
@@ -744,7 +751,16 @@ class DaosServer():
             entry['message'] = message
             self.conf.wf.issues.append(entry)
         rc = self.run_dmg(['system', 'stop'])
-        print(rc)
+        if rc.returncode != 0:
+            print(rc)
+            entry = {}
+            entry['fileName'] = self._file
+            # pylint: disable=protected-access
+            entry['lineStart'] = sys._getframe().f_lineno
+            entry['severity'] = 'ERROR'
+            msg = 'dmg system stop failed with {}'.format(rc.returncode)
+            entry['message'] = msg
+            self.conf.wf.issues.append(entry)
         assert rc.returncode == 0
 
         start = time.time()
@@ -3099,6 +3115,8 @@ def main():
     conf = load_conf(args)
 
     wf = WarningsFactory('nlt-errors.json',
+                         post_error=True,
+                         check='Log file errors',
                          junit=True,
                          class_id=args.class_name)
 

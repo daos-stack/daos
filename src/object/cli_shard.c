@@ -1881,7 +1881,7 @@ re_check:
 			if (DAOS_RECX_END(*result_recx) > end[0] || changed)
 				*result_recx = recx[0];
 		} else {
-			if (DAOS_RECX_END(*result_recx) > end[0] || changed)
+			if (DAOS_RECX_END(*result_recx) > end[1] || changed)
 				*result_recx = recx[1];
 		}
 	}

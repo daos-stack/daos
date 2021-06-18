@@ -3,9 +3,12 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'prereqs')
 
     unit_env = denv.Clone()
+
+    prereqs.require(unit_env, 'pmdk', headers_only=True)
+
     unit_env.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     srv_checksum_tests = daos_build.test(unit_env, 'srv_checksum_tests',
                                          ['srv_checksum_tests.c',

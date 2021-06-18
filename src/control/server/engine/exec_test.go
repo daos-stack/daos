@@ -163,7 +163,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	}
 
 	// Light integration testing of arg/env generation; unit tests elsewhere.
-	wantArgs := "-t 42 -x 1 -T 1 -p 1 -I 0 -s /foo/bar"
+	wantArgs := "-t 42 -x 1 -T 1 -p 1 -I 0 -r 0 -H 0"
 	var gotArgs string
 	env := []string{
 		"CRT_CTX_SHARE_ADDR=1",
