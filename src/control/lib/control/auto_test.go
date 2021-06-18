@@ -785,7 +785,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaIfaces:     numaNetIfaceMap{0: ib0},
 			numaSSDs:       numaSSDsMap{0: []string{common.MockPCIAddr(1)}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{8, 2}},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(3584).WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(4096).WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
