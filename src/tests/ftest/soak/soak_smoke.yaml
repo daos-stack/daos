@@ -5,12 +5,6 @@ hosts:
         - server-B
         - server-C
         - server-D
-        - server-E
-        - server-F
-        - server-G
-        - server-H
-        - server-I
-        - server-J
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
