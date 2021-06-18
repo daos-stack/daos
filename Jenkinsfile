@@ -860,7 +860,7 @@ pipeline {
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label 'ci_nvme3'
+                        label 'ci_ofed3'
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -880,7 +880,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label 'ci_nvme5'
+                        label 'ci_ofed5'
                     }
                     steps {
                         functionalTest target: hwDistroTarget(),
@@ -901,7 +901,7 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label 'ci_nvme9'
+                        label 'ci_ofed9'
                     }
                     steps {
                         functionalTest target: hwDistroTarget(),
