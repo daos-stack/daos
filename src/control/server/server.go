@@ -40,6 +40,15 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
+	lookupNetIF := func(name string) (netInterface, error) {
+		return net.InterfaceByName(name)
+	}
+	for _, ec := range cfg.Engines {
+		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
+			return nil, err
+		}
+	}
+
 	cfg.SaveActiveConfig(log)
 
 	if err := setDaosHelperEnvs(cfg, os.Setenv); err != nil {

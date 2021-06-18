@@ -15,6 +15,8 @@
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
+#define VOS_SUB_OP_MAX	((uint16_t)-2)
+
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
 	d_list_t		dru_nvme;
@@ -315,8 +317,10 @@ enum {
 	VOS_IT_PUNCHED		= (1 << 6),
 	/** Cleanup stale DTX entry. */
 	VOS_IT_CLEANUP_DTX	= (1 << 7),
+	/** Skip extents removed by vos_obj_array_remove */
+	VOS_IT_SKIP_REMOVED	= (1 << 8),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 8) - 1,
+	VOS_IT_MASK		= (1 << 9) - 1,
 };
 
 /**
