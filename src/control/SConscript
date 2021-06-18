@@ -225,6 +225,7 @@ def scons():
             ":$BUILD_DIR/src/cart" + \
             ":$BUILD_DIR/src/common" + \
             ":$BUILD_DIR/src/utils" + \
+            ":$OFI_PREFIX/lib" + \
             ":$BUILD_DIR/src/client/dfs" + \
             ":$BUILD_DIR/src/client/api")
         dmg_man = install_go_manpage(menv, "dmg")
