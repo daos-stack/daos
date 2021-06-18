@@ -37,10 +37,10 @@ def get_data_parity_number(log, oclass):
 def check_aggregation_status(pool):
     """EC Aggregation triggered status.
     Args:
-        pool: pool object to get the query.
+        pool(object): pool object to get the query.
 
     return:
-        result: Aggregation started status True/False.
+        result(bool): Aggregation started status True/False.
     """
     pool.connect()
     initial_usage = pool.pool_percentage_used()
