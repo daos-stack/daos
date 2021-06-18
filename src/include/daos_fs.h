@@ -39,6 +39,19 @@ typedef struct dfs_obj dfs_obj_t;
 /** DFS mount handle struct */
 typedef struct dfs dfs_t;
 
+/*
+ * Consistency modes of the DFS container. A container created with balanced
+ * mode, can only be accessed with balanced mode with dfs_mount. A container
+ * created with relaxed mode, can be accessed with either mode in the future.
+ *
+ * Reserve bit 3 in the access flags for dfs_mount() - bits 1 and 2 are used
+ * for read / write access (O_RDONLY, O_RDRW).
+ */
+#define DFS_BALANCED	4 /** DFS operations using a DTX */
+#define DFS_RELAXED	0 /** DFS operations do not use a DTX (default mode). */
+#define DFS_RDONLY	O_RDONLY
+#define DFS_RDWR	O_RDWR
+
 /** struct holding attributes for a DFS container */
 typedef struct {
 	/** Optional user ID for DFS container. */
