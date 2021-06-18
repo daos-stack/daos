@@ -7,7 +7,7 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 1000
+timeout: 1100
 setup:
   start_servers_once: False
 server_config:

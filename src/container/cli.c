@@ -758,7 +758,8 @@ dc_cont_open_internal(tse_task_t *task, struct dc_pool *pool)
 				  DAOS_CO_QUERY_PROP_CSUM_CHUNK |
 				  DAOS_CO_QUERY_PROP_DEDUP |
 				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD |
-				  DAOS_CO_QUERY_PROP_REDUN_FAC;
+				  DAOS_CO_QUERY_PROP_REDUN_FAC |
+				  DAOS_CO_QUERY_PROP_EC_CELL_SZ;
 
 	/* open bylabel RPC input */
 	if (args->label) {
