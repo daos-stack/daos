@@ -95,6 +95,12 @@
 }
 {
    <insert_a_suppression_name_here>
+   Memcheck:Value8
+   ...
+   fun:bufio.(*Reader).*
+}
+{
+   <insert_a_suppression_name_here>
    Memcheck:Addr1
    ...
    fun:bufio.(*Reader).*
@@ -167,6 +173,11 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
+   fun:runtime.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
    fun:runtime.*
 }
 {
