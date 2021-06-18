@@ -50,7 +50,7 @@ baseurl=${repo}\n\
 enabled=1\n" >> "$cfg_file"
 done
 echo "\"\"\"" >> "$cfg_file"
-fi
+
 # shellcheck disable=SC2086
 eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}_daos" \
      "${repo_dels[*]}" "${repo_adds[*]}" \
