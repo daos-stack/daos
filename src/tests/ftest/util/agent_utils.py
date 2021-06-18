@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import socket
+import tempfile
 from getpass import getuser
 
 from command_utils_base import \
@@ -233,6 +234,45 @@ class DaosAgentManager(SubprocessManager):
         self.attachinfo = run_pcmd(self.hosts,
                                    str(self.manager.job))[0]["stdout"]
         self.log.info("Agent attachinfo: %s", self.attachinfo)
+
+    def get_attachinfo_file(self):
+        """Run dump-attachinfo on the daos_agent."""
+
+        self.job.set_sub_command("dump-attachinfo")
+        self.job.sudo = True
+        self.attachinfo = run_pcmd(self.hosts,
+                                   str(self.manager.job))[0]["stdout"]
+        self.log.info("Agent attachinfo: %s", self.attachinfo)
+
+        server_name = "daos_server"
+
+        self.dump_attachinfo()
+        self.log.info("Agent attachinfo: %s",
+                      self.attachinfo)
+
+        a = self.attachinfo
+
+        # Filter log messages from attachinfo content
+        L = [x for x in a if re.match(r"^(name\s|size\s|all|\d+\s)", x)]
+        attach_info_contents = "\n".join(L)
+        attach_info_filename = "{}.attach_info_tmp".format(server_name)
+
+        if len(L) < 4:
+            self.log.info("Malformed attachinfo file: %s",
+                          attach_info_contents)
+            return
+            
+        # Write an attach_info_tmp file in this directory for cart_ctl to use
+        tmpdir = tempfile.gettempdir()
+        attachinfo_file_path = os.path.join(tmpdir, attach_info_filename)
+
+        try:
+            with open(attachinfo_file_path, 'w') as file_handle:
+                file_handle.write(attach_info_contents)
+        finally:
+            file_handle.close()
+
+        return attachinfo_file_path
 
     def stop(self):
         """Stop the agent through the job manager.

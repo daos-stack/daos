@@ -711,28 +711,9 @@ class TestWithServers(TestWithoutServers):
         """
 
         # Fetch attachinfo data from server
-        self.agent_managers[0].dump_attachinfo()
-        self.log.info("Agent attachinfo: %s",
-                      self.agent_managers[0].attachinfo)
+        attachinfo_file_path = self.agent_managers[0].get_attachinfo_file()
 
-        a = self.agent_managers[0].attachinfo
-
-        # Filter log messages from attachinfo content
-        l = [x for x in a if re.match(r"^(name\s|size\s|all|\d+\s)", x)]
-        attach_info_contents = "\n".join(l)
-
-        # Write an attach_info_tmp file in this directory for cart_ctl to use
-        tmpdir = tempfile.gettempdir()
-        attachinfo_file_name = tmpdir + "/daos_server.attach_info_tmp"
-
-        file1 = None
-        try:
-            file1 = open(attachinfo_file_name, 'w')
-            file1.write(attach_info_contents)
-        finally:
-            file1.close()
-
-        cp_command = "sudo cp {} {}".format(attachinfo_file_name, ".")
+        cp_command = "sudo cp {} {}".format(attachinfo_file_path, ".")
         run_command(cp_command, verbose=True, raise_exception=False)
 
         # Compose and run cart_ctl command
