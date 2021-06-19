@@ -8,7 +8,7 @@ import uuid
 from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosApiError, c_uuid_to_str
 from command_utils_base import CommandFailure
-from test_utils_pool import TestPool
+from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
 from general_utils import create_string_buffer
 
@@ -33,7 +33,9 @@ class EvictTests(TestWithServers):
             TestPool: a TestPool objectfor the created pool
 
         """
-        pool = TestPool(self.context, self.get_dmg_command())
+        pool = TestPool(
+            context=self.context, dmg_command=self.get_dmg_command(),
+            label_generator=LabelGenerator())
         pool.get_params(self)
         if targets is not None:
             pool.target_list.value = targets

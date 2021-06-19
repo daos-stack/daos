@@ -29,15 +29,9 @@ class MpiioTests(TestWithServers):
         self.cont_uuid = None
 
     def setUp(self):
+        """Initialization function for MpiioTests."""
         super().setUp()
-
-        # initialize daos_cmd
-        self.daos_cmd = DaosCommand(self.bin)
-
-        # initialize a python pool object then create the underlying
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
+        self.add_pool()
 
     def _create_cont(self):
         """Create a container.
