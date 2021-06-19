@@ -265,7 +265,6 @@ This is the package needed to manage server storage firmware on DAOS servers.
 %endif
 %{scons_exe} %{?_smp_mflags} \
       --config=force         \
-      --no-rpath             \
       USE_INSTALLED=all      \
       FIRMWARE_MGMT=yes      \
       CONF_DIR=%{conf_dir}   \
@@ -280,7 +279,6 @@ mv test.cov{,-build}
 %install
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
-      --no-rpath                      \
       --install-sandbox=%{buildroot}  \
       %{buildroot}%{_prefix}          \
       %{buildroot}%{conf_dir}         \
