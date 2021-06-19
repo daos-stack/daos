@@ -31,6 +31,10 @@ class MpiioTests(TestWithServers):
     def setUp(self):
         """Initialization function for MpiioTests."""
         super().setUp()
+
+        # initialize daos_cmd
+        self.daos_cmd = DaosCommand(self.bin)
+
         self.add_pool()
 
     def _create_cont(self):
