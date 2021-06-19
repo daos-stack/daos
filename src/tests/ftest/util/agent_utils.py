@@ -238,8 +238,8 @@ class DaosAgentManager(SubprocessManager):
     def get_attachinfo_file(self):
         """Run dump-attachinfo on the daos_agent."""
 
-        self.job.set_sub_command("dump-attachinfo")
-        self.job.sudo = True
+        self.manager.job.set_sub_command("dump-attachinfo")
+        self.manager.job.sudo = True
         self.attachinfo = run_pcmd(self.hosts,
                                    str(self.manager.job))[0]["stdout"]
         self.log.info("Agent attachinfo: %s", self.attachinfo)
