@@ -37,7 +37,8 @@ class TestPool(TestDaosApiBase):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
             label_generator (LabelGenerator, optional): Generates label by
-                adding number to the end of the prefix set in self.label
+                adding number to the end of the prefix set in self.label.
+                Defaults to None.
         """
         super().__init__("/run/pool/*", cb_handler)
         self.context = context
@@ -55,7 +56,11 @@ class TestPool(TestDaosApiBase):
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
         self.label = BasicParameter(None, "TestLabel")
-        self.label_generator = label_generator
+
+        if label_generator is None:
+            self.label_generator = LabelGenerator()
+        else:
+            self.label_generator = label_generator
 
         self.pool = None
         self.uuid = None
