@@ -8,6 +8,7 @@
  * not belong to other parts.
  */
 #define D_LOGFAC	DD_FAC(common)
+#include <regex.h>
 
 #include <daos/common.h>
 #include <daos/dtx.h>
@@ -162,22 +163,66 @@ err:
 }
 
 static bool
-daos_prop_str_valid(d_string_t str, const char *prop_name, size_t max_len)
+daos_prop_str_format_valid(const char *str, const char *regex)
+{
+	regex_t		regx;
+	int		rc;
+
+	rc = regcomp(&regx, regex, REG_EXTENDED | REG_ICASE);
+	if (rc != 0) {
+		D_ERROR("regcomp() failed, %d\n", rc);
+		return false;
+	}
+	rc = regexec(&regx, str, 0, NULL, 0);
+	regfree(&regx);
+	if (rc == 0) {
+		return true;
+	} else if (rc != REG_NOMATCH) {
+		D_ERROR("regexec() failed, %d\n", rc);
+		return false;
+	} else {
+		return false;
+	}
+}
+
+static bool
+daos_prop_str_valid(const char *str, const char *prop_name,
+		    size_t max_len, const char *fmt_regex,
+		    bool do_log)
 {
 	size_t len;
 
 	if (str == NULL) {
-		D_ERROR("invalid NULL %s\n", prop_name);
+		if (do_log)
+			D_ERROR("invalid NULL %s\n", prop_name);
 		return false;
 	}
 	/* Detect if it's longer than max_len */
 	len = strnlen(str, max_len + 1);
 	if (len == 0 || len > max_len) {
-		D_ERROR("invalid %s len=%lu, max=%lu\n",
-			prop_name, len, max_len);
+		if (do_log)
+			D_ERROR("invalid %s len=%lu, max=%lu\n",
+				prop_name, len, max_len);
 		return false;
 	}
+
+	if (fmt_regex) {
+		if (!daos_prop_str_format_valid(str, fmt_regex)) {
+			if (do_log)
+				D_ERROR("invalid %s prop \"%s\": does not "
+					"match regex: \"%s\"\n", prop_name,
+					str, fmt_regex);
+			return false;
+		}
+	}
 	return true;
+}
+
+
+bool
+daos_label_is_valid(const char *label) {
+	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN,
+				   DAOS_STANDALONE_LABEL_REGEX, false);
 }
 
 static bool
@@ -185,7 +230,7 @@ daos_prop_owner_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
 	return daos_prop_str_valid(owner, "owner",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN);
+				   DAOS_ACL_MAX_PRINCIPAL_LEN, NULL, true);
 }
 
 static bool
@@ -193,13 +238,14 @@ daos_prop_owner_group_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
 	return daos_prop_str_valid(owner, "owner-group",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN);
+				   DAOS_ACL_MAX_PRINCIPAL_LEN, NULL, true);
 }
 
 static bool
 daos_prop_label_valid(d_string_t label)
 {
-	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN);
+	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN,
+				   DAOS_STANDALONE_LABEL_REGEX, true);
 }
 
 /**
@@ -426,6 +472,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 					co_status.dcs_status);
 				return false;
 			}
+			break;
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_ROOTS:
 		case DAOS_PROP_CO_EC_CELL_SZ:
@@ -514,14 +561,14 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
  * \a pool true for pool properties, false for container properties.
  */
 daos_prop_t *
-daos_prop_dup(daos_prop_t *prop, bool pool)
+daos_prop_dup(daos_prop_t *prop, bool pool, bool input)
 {
 	daos_prop_t		*prop_dup;
 	struct daos_prop_entry	*entry, *entry_dup;
 	int			 i;
 	int			 rc;
 
-	if (!daos_prop_valid(prop, pool, true))
+	if (!daos_prop_valid(prop, pool, input))
 		return NULL;
 
 	prop_dup = daos_prop_alloc(prop->dpp_nr);
