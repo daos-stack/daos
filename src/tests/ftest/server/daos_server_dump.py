@@ -64,4 +64,4 @@ class DaosServerDumpTest(TestWithServers):
 
         # set stopped servers state to make teardown happy
         self.server_managers[0].update_expected_states(
-            None, ["stopped", "excluded"])
+            None, ["stopped", "excluded", "errored"])

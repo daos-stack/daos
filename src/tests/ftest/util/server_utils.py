@@ -1053,7 +1053,7 @@ class DaosServerManager(SubprocessManager):
                 "Please investigate/report.***".format(regex))
         # set stopped servers state to make teardown happy
         self.update_expected_states(
-            None, ["stopped", "excluded"])
+            None, ["stopped", "excluded", "errored"])
 
     def get_host(self, rank):
         """Get the host name that matches the specified rank.
