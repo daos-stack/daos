@@ -4019,7 +4019,7 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	int			 rc;
 
 	D_DEBUG(DB_CSUM, DF_C_OID_DKEY " UPDATE - csummer: %p, "
-			 "csum_type: %d, csum_enabled: %s\n",
+			 "csum_type: %d, csum_enabled: %s.\n",
 		DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey),
 		csummer, cont_props.dcp_csum_type,
 		DP_BOOL(cont_props.dcp_csum_enabled));
