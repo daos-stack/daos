@@ -243,7 +243,7 @@ class TestPool(TestDaosApiBase):
 
             self.pool = None
             self.uuid = None
-            self.label = None
+            self.label = BasicParameter(None)
             self.info = None
             self.svc_ranks = None
 
