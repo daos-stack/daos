@@ -7,6 +7,10 @@ def scons():
     Import('env', 'prereqs', 'control_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(LIBPATH=[Dir('smd')])
+
+    if not prereqs.server_requested():
+        return
 
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])

@@ -2061,7 +2061,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
 
-	metrics = &ds_pool_metrics;
+	metrics = &ds_global_pool_metrics;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -2319,7 +2319,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 
 	D_ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
 
-	metrics = &ds_pool_metrics;
+	metrics = &ds_global_pool_metrics;
 
 	D_DEBUG(DF_DSMS, DF_UUID": disconnecting %d hdls: hdl_uuids[0]="DF_UUID
 		"\n", DP_UUID(svc->ps_uuid), n_hdl_uuids,
@@ -5696,17 +5696,16 @@ ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 		return rc;
 	leader_shard = rc;
 
-	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader_tgt);
 	rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
 	if (rc < 0)
-		return rc;
+		D_GOTO(out, rc);
 
 	if (rc != 1)
-		return -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 
 	rc = crt_group_rank(NULL, &myrank);
 	if (rc < 0)
-		return rc;
+		D_GOTO(out, rc);
 
 	if (myrank != target->ta_comp.co_rank) {
 		rc = 0;
@@ -5716,6 +5715,9 @@ ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 			rc = 0;
 	}
 
+out:
+	D_DEBUG(DB_TRACE, DF_UOID" get new leader shard/tgtid %d/%d: %d\n",
+		DP_UOID(*oid), leader_shard, leader_tgt, rc);
 	return rc;
 }
 
