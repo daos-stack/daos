@@ -42,41 +42,42 @@ resolve_duns_path(struct cmd_args_s *ap)
 	char   *name = NULL, *dir_name = NULL;
 
 	rc = duns_resolve_path(ap->path, &dattr);
-	if (rc == 0) {
-		ap->type = dattr.da_type;
-		uuid_copy(ap->p_uuid, dattr.da_puuid);
-		uuid_copy(ap->c_uuid, dattr.da_cuuid);
-	} else {
-		if (ap->fs_op == -1) {
-			rc = call_dfuse_ioctl(ap->path, &il_reply);
-			if (rc == 0) {
-				ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
-				uuid_copy(ap->p_uuid, il_reply.fir_pool);
-				uuid_copy(ap->c_uuid, il_reply.fir_cont);
-				ap->oid = il_reply.fir_oid;
-			}
-		} else if (rc == ENOENT && ap->fs_op == FS_SET_ATTR) {
-			/** we could be creating a new file, so try dirname */
-			parse_filename_dfs(ap->path, &name,
-				&dir_name);
+	if (rc == ENOENT && ap->fs_op == FS_SET_ATTR) {
+		/** we could be creating a new file, so try dirname */
+		parse_filename_dfs(ap->path, &name, &dir_name);
 
-			rc = duns_resolve_path(dir_name, &dattr);
-			if (rc == 0) {
-				ap->type = dattr.da_type;
-				uuid_copy(ap->p_uuid, dattr.da_puuid);
-				uuid_copy(ap->c_uuid, dattr.da_cuuid);
-			}
+		rc = duns_resolve_path(dir_name, &dattr);
+	}
+
+	if (rc && ap->fs_op == -1) {
+		rc = call_dfuse_ioctl(ap->path, &il_reply);
+		if (rc == 0) {
+			ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
+			uuid_copy(ap->p_uuid, il_reply.fir_pool);
+			uuid_copy(ap->c_uuid, il_reply.fir_cont);
+			ap->oid = il_reply.fir_oid;
+			D_GOTO(out, rc);
 		}
 	}
 
-	if (rc != 0) {
-		fprintf(ap->errstream, "could not resolve "
-		"pool, container by "
-		"path: %d %s %s\n",
-		rc, strerror(rc), ap->path);
-
+	if (rc) {
+		fprintf(ap->errstream, "could not resolve pool, container by "
+		"path: %d %s %s\n", rc, strerror(rc), ap->path);
 		D_GOTO(out, rc);
 	}
+
+	ap->type = dattr.da_type;
+
+	/** set pool/cont label or uuid */
+	if (dattr.da_pool_label)
+		ap->pool_label = dattr.da_pool_label;
+	else
+		uuid_copy(ap->p_uuid, dattr.da_puuid);
+
+	if (dattr.da_cont_label)
+		ap->cont_label = dattr.da_cont_label;
+	else
+		uuid_copy(ap->c_uuid, dattr.da_cuuid);
 
 	if (ap->fs_op != -1) {
 		if (name) {
@@ -98,6 +99,9 @@ resolve_duns_path(struct cmd_args_s *ap)
 		}
 		if (ap->dfs_path == NULL)
 			D_GOTO(out, rc = ENOMEM);
+	} else {
+		if (dattr.da_rel_path)
+			free(dattr.da_rel_path);
 	}
 
 out:
