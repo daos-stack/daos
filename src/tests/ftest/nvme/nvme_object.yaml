@@ -22,13 +22,13 @@ server_config:
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 pool:
   createmode:
     mode: 511

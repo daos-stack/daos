@@ -71,13 +71,13 @@ server_config:
       env_vars:
         - DD_MASK=mgmt,io,md,epc,rebuild
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 daos_tests:
   num_clients: 1
   test_name:
