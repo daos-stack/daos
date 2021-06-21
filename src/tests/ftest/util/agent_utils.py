@@ -6,6 +6,7 @@
 """
 import socket
 import tempfile
+import re
 from getpass import getuser
 
 from command_utils_base import \
@@ -260,7 +261,7 @@ class DaosAgentManager(SubprocessManager):
         if len(L) < 4:
             self.log.info("Malformed attachinfo file: %s",
                           attach_info_contents)
-            return
+            return None
             
         # Write an attach_info_tmp file in this directory for cart_ctl to use
         tmpdir = tempfile.gettempdir()

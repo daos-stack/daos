@@ -10,7 +10,6 @@
 import os
 import json
 import re
-import tempfile
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
@@ -682,10 +681,13 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_agents:
             self.start_agents(force=force_agent_start)
 
-        # Write an ID string to the log file for cross rerferencing logs with
-        # tests
-        id_str = '"Test.name: ' + str(self) + '"'
-        self.write_string_to_logfile(id_str)
+        # If there's no server started, then there's no server log to write to.
+        if self.setup_start_servers:
+
+          # Write an ID string to the log file for cross rerferencing logs with
+          # tests
+          id_str = '"Test.name: ' + str(self) + '"'
+          self.write_string_to_logfile(id_str)
 
         # Setup a job manager command for running the test command
         manager_class_name = self.params.get(
