@@ -744,21 +744,20 @@ class DaosServerManager(SubprocessManager):
                 not in the expected format
 
         Returns:
-            list: a list of the maximum available SCM size and NVMe sizes in
-                bytes
+            dict: a dictionary of the largest available storage common to all
+                engines per storage type, "scm"s and "nvme", in bytes
 
         """
-        storage = []
+        storage = {}
         storage_capacity = self.information.get_storage_capacity(
             self.manager.job.engine_params)
 
         self.log.info("Largest storage size available per engine:")
-        for key in ["scm", "nvme"]:
-            if storage_capacity[key]:
-                # Use the same storage size across all engines
-                storage.append(min(storage_capacity[key]))
-                self.log.info(
-                    "  %-4s:  %s", key.upper(), get_display_size(storage[-1]))
+        for key in sorted(storage_capacity):
+            # Use the same storage size across all engines
+            storage[key] = min(storage_capacity[key])
+            self.log.info(
+                "  %-4s:  %s", key.upper(), get_display_size(storage[key]))
         return storage
 
     def autosize_pool_params(self, size, scm_ratio, scm_size, nvme_size,
@@ -835,23 +834,41 @@ class DaosServerManager(SubprocessManager):
                 raise ServerFailed(
                     "Error obtaining available storage") from error
 
-            # Determine whether the SCM or NVMe limits the available storage for
-            # the size parameter.  Default to 6% scm_ratio if not specified.
+            # Determine the largest size pool argument that can be used with
+            # this server configuration and provided scm_ratio.
             if scm_ratio is None:
+                # Default to 6% scm_ratio if not specified.
                 scm_ratio = 6
             engine_qty = len(self.manager.job.engine_params)
-            available_size_nvme = (
-                (available_storage[1] * engine_qty) /
-                (1 - float(scm_ratio / 100)))
-            available_size_scm = (
-                (available_storage[0] * engine_qty) / float(scm_ratio / 100))
-            available_size = min(available_size_nvme, available_size_scm)
+            ratio = float(scm_ratio / 100)
+            if available_storage["scm"] > available_storage["nvme"]:
+                # size = (nvme_per_engine + scm_size) * engines
+                # scm_size = nvme_per_engine * scm_ratio
+                available_storage["size"] = (
+                    engine_qty * available_storage["nvme"] * (1 + ratio))
+            else:
+                # size = (nvme_size + scm_per_engine) * engines
+                # nvme_size = scm_per_engine / scm_ratio
+                available_storage["size"] = (
+                    engine_qty * available_storage["scm"] * (1 + (1 / ratio)))
+            self.log.info(
+                "Largest storage size available for %s engines with a %.2f%% "
+                "scm_ratio:", engine_qty, scm_ratio)
+            self.log.info(
+                "  - NVME     : %s",
+                get_display_size(available_storage["size"] * (1 - ratio)))
+            self.log.info(
+                "  - SCM      : %s", get_display_size(scm_size))
+            self.log.info(
+                "  - COMBINED : %s",
+                get_display_size(available_storage["size"]))
 
             # Apply any requested percentages to the pool parameters
             available = {
-                "size": {"size": available_size, "type": "Combined"},
-                "scm_size": {"size": available_storage[0], "type": "SCM"},
-                "nvme_size": {"size": available_storage[1], "type": "NVMe"}}
+                "size": {"size": available_storage["size"], "type": "Combined"},
+                "scm_size": {"size": available_storage["scm"], "type": "SCM"},
+                "nvme_size": {"size": available_storage["nvme"], "type": "NVMe"}
+            }
             self.log.info("Adjusted pool sizes for %s:", pool_msg)
             for key in keys:
                 try:
@@ -863,7 +880,7 @@ class DaosServerManager(SubprocessManager):
                 adjusted[key] = \
                     (available[key]["size"] * float(ratio / 100)) / quantity
                 self.log.info(
-                    "  - %-9s : %-4s storage adjusted by %.2f%%: %s",
+                    "  - %-8s : %-4s storage adjusted by %.2f%%: %s",
                     key, available[key]["type"], ratio,
                     get_display_size(adjusted[key]))
 
