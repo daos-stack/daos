@@ -312,7 +312,8 @@ def define_components(reqs):
                           'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
-                libs=['rte_bus_pci'], patch_rpath=['lib'])
+                headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
+                extra_include_path=['/usr/include/dpdk'])
 
     retriever = GitRepoRetriever("https://github.com/protobuf-c/protobuf-c.git")
     reqs.define('protobufc',
