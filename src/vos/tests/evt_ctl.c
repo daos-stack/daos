@@ -298,7 +298,7 @@ bio_alloc_init(struct utest_context *utx, bio_addr_t *addr, const void *src,
 		BIO_ADDR_SET_HOLE(addr);
 		return 0;
 	} else {
-		BIO_ADDR_SET_NOT_HOLE(addr);
+		BIO_ADDR_CLEAR_HOLE(addr);
 	}
 	rc = utest_alloc(utx, &umoff, size, init_mem, src);
 

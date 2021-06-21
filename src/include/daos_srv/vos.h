@@ -900,9 +900,10 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
 	      d_iov_t *iov_out);
 
 /**
- * Delete the current data entry of the iterator
+ * Process the operation for the current cursor.
  *
- * \param ih	[IN]	Iterator handle
+ * \param ih	[IN]	Iterator open handle.
+ * \param op	[IN]	op code to process. See vos_iter_proc_op
  * \param args	[IN/OUT]
  *			Optional, Provide additional hints while
  *			deletion to handle special cases.
@@ -912,10 +913,9 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
  * \return		Zero on Success
  *			-DER_NONEXIST if cursor does
  *			not exist. negative value if error
- *
  */
 int
-vos_iter_delete(daos_handle_t ih, void *args);
+vos_iter_process(daos_handle_t ih, vos_iter_proc_op op, void *args);
 
 /**
  * If the iterator has any element. The condition provided to vos_iter_prepare

@@ -177,7 +177,7 @@ agg_del_entry(daos_handle_t ih, struct umem_instance *umm,
 
 	mark_yield(&entry->ie_biov.bi_addr, acts);
 
-	rc = vos_iter_delete(ih, NULL);
+	rc = vos_iter_process(ih, VOS_ITER_PROC_OP_DELETE, NULL);
 	if (rc != 0)
 		rc = umem_tx_abort(umm, rc);
 	else
@@ -784,7 +784,7 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_buf = NULL;
-			BIO_ADDR_SET_NOT_HOLE(
+			BIO_ADDR_CLEAR_HOLE(
 				&bsgl->bs_iovs[add_idx++].bi_addr);
 		}
 		if (bsgl->bs_iovs[i].bi_suffix_len) {
@@ -801,7 +801,7 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_buf = NULL;
-			BIO_ADDR_SET_NOT_HOLE(
+			BIO_ADDR_CLEAR_HOLE(
 				&bsgl->bs_iovs[add_idx++].bi_addr);
 		}
 
