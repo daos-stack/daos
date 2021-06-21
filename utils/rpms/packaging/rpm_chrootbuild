@@ -17,7 +17,7 @@ original_cfg_file="/etc/mock/${CHROOT_NAME}.cfg"
 cfg_file="$mock_config_dir/${CHROOT_NAME}_daos.cfg"
 mkdir -p "$mock_config_dir"
 ln -sf /etc/mock/templates "$mock_config_dir/"
-ln -sf /etc/mock/templates/logging.ini "$mock_config_dir/"
+ln -sf /etc/mock/logging.ini "$mock_config_dir/"
 
 cp "$original_cfg_file" "$cfg_file"
 
