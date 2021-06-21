@@ -90,6 +90,8 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 	arg->rebuild_cb = NULL;
 	arg->rebuild_cb_arg = NULL;
 
+#if 0
+	/* Disable it due to DAOS-7420 */
 	if (oid == NULL) {
 		int rc;
 
@@ -97,6 +99,7 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 		if (rc != 0)
 			assert_rc_equal(rc, -DER_NOSYS);
 	}
+#endif
 }
 
 static void

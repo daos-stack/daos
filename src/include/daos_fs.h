@@ -39,6 +39,19 @@ typedef struct dfs_obj dfs_obj_t;
 /** DFS mount handle struct */
 typedef struct dfs dfs_t;
 
+/*
+ * Consistency modes of the DFS container. A container created with balanced
+ * mode, can only be accessed with balanced mode with dfs_mount. A container
+ * created with relaxed mode, can be accessed with either mode in the future.
+ *
+ * Reserve bit 3 in the access flags for dfs_mount() - bits 1 and 2 are used
+ * for read / write access (O_RDONLY, O_RDRW).
+ */
+#define DFS_BALANCED	4 /** DFS operations using a DTX */
+#define DFS_RELAXED	0 /** DFS operations do not use a DTX (default mode). */
+#define DFS_RDONLY	O_RDONLY
+#define DFS_RDWR	O_RDWR
+
 /** struct holding attributes for a DFS container */
 typedef struct {
 	/** Optional user ID for DFS container. */
@@ -392,9 +405,8 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size);
 
 /**
  * Punch a hole in the file starting at offset to len. If len is set to
- * DFS_MAX_FSIZE, this will be a truncate operation to punch all bytes in the
- * file above offset. If the file size is smaller than offset, the file is
- * extended to offset and len is ignored.
+ * DFS_MAX_FSIZE, this will be equivalent to a truncate operation to shrink or
+ * extend the file to \a offset bytes depending on the file size.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.

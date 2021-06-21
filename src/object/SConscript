@@ -8,7 +8,6 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     # Common object code
@@ -16,8 +15,20 @@ def scons():
                                      'obj_utils.c', 'rpc_csum.c', 'obj_tx.c',
                                      'obj_enum.c', 'obj_class_def.c'])
 
+    # Object client library
+    dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c',
+                                     'cli_mod.c', 'cli_ec.c',
+                                     'obj_verify.c'])
+    dc_obj_tgts += common_tgts
+    Export('dc_obj_tgts')
+
+    if not prereqs.server_requested():
+        return
+
     # generate server module
     senv = denv.Clone()
+    prereqs.require(senv, 'pmdk', headers_only=True)
+
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     srv = daos_build.library(senv, 'obj',
                              common_tgts + ['srv_obj.c', 'srv_mod.c',
@@ -27,13 +38,8 @@ def scons():
                              install_off="../..")
     senv.Install('$PREFIX/lib64/daos_srv', srv)
 
-    # Object client library
-    dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c', 'cli_mod.c',
-                                     'cli_ec.c', 'obj_verify.c'])
-    dc_obj_tgts += common_tgts
-    Export('dc_obj_tgts')
-
-    SConscript('tests/SConscript', exports='denv')
+    if prereqs.test_requested():
+        SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
     scons()

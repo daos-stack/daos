@@ -34,14 +34,16 @@ type (
 	// Pool contains a unified representation of a DAOS Storage Pool.
 	Pool struct {
 		// UUID uniquely identifies a pool within the system.
-		UUID string
+		UUID string `json:"uuid"`
+		// Label is an optional human-friendly identifier for a pool.
+		Label string `json:"label,omitempty"`
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
-		ServiceReplicas []system.Rank
+		ServiceReplicas []system.Rank `json:"svc_replicas"`
 
 		// Info contains information about the pool learned from a
 		// query operation.
-		Info PoolInfo
+		Info PoolInfo `json:"info"`
 	}
 )
 
@@ -243,6 +245,7 @@ func PoolResolveID(ctx context.Context, rpcClient UnaryInvoker, req *PoolResolve
 type PoolDestroyReq struct {
 	msRequest
 	unaryRequest
+	retryableRequest
 	UUID  string
 	Force bool
 }
@@ -259,6 +262,21 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 			Force: req.Force,
 		})
 	})
+	req.retryTestFn = func(reqErr error, _ uint) bool {
+		switch e := reqErr.(type) {
+		case drpc.DaosStatus:
+			switch e {
+			// These destroy errors can be retried.
+			case drpc.DaosGroupVersionMismatch,
+				drpc.DaosTryAgain:
+				return true
+			default:
+				return false
+			}
+		default:
+			return false
+		}
+	}
 
 	rpcClient.Debugf("Destroy DAOS pool request: %v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)

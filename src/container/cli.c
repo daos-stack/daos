@@ -758,7 +758,8 @@ dc_cont_open_internal(tse_task_t *task, struct dc_pool *pool)
 				  DAOS_CO_QUERY_PROP_CSUM_CHUNK |
 				  DAOS_CO_QUERY_PROP_DEDUP |
 				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD |
-				  DAOS_CO_QUERY_PROP_REDUN_FAC;
+				  DAOS_CO_QUERY_PROP_REDUN_FAC |
+				  DAOS_CO_QUERY_PROP_EC_CELL_SZ;
 
 	/* open bylabel RPC input */
 	if (args->label) {
@@ -1202,6 +1203,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_STATUS:
 			bits |= DAOS_CO_QUERY_PROP_CO_STATUS;
 			break;
+		case DAOS_PROP_CO_EC_CELL_SZ:
+			bits |= DAOS_CO_QUERY_PROP_EC_CELL_SZ;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -1355,6 +1359,11 @@ dc_cont_set_prop(tse_task_t *task)
 
 	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_ALLOCED_OID)) {
 		D_ERROR("Can't set OID property if container is created.\n");
+		D_GOTO(err, rc = -DER_NO_PERM);
+	}
+
+	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_EC_CELL_SZ)) {
+		D_ERROR("Can't set EC cell size if container is created.\n");
 		D_GOTO(err, rc = -DER_NO_PERM);
 	}
 

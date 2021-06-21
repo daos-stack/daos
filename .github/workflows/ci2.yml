@@ -4,6 +4,7 @@ on:
    push:
      branches:
        - master
+       - 'release/*'
    pull_request:
 
 jobs:
@@ -25,9 +26,10 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - uses: satackey/action-docker-layer-caching@v0.0.11
+      continue-on-error: true
       with:
-        key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-{hash}
-        restore-keys: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-
+        key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github', '.dockerignore') }}-{hash}
+        restore-keys: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github', '.dockerignore') }}-
     - name: Prepare base image in Docker
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg DAOS_DEPS_BUILD=no --build-arg UID
@@ -63,7 +65,7 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-{hash}
+        key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github', '.dockerignore') }}-{hash}
         restore-keys: docker-${{ matrix.distro }}-
         skip-save: true
     - name: Update dependencies in image.
@@ -73,6 +75,12 @@ jobs:
                           --tag build-image
     - name: Run
       run: ./utils/run_in_ga_wrapper.sh
+    - name: Publish NLT test results
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v1.7
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        files: nlt-junit.xml
 
   Build:
     name: Build DAOS
@@ -81,8 +89,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Run this on distros where we don't test.
-        distro: [centos.8]
+        # Run this on distros where we don't run the ci1 Workflow.
+        distro: [ubuntu.20.04, centos.8]
         compiler: [clang, gcc]
     steps:
     - name: Checkout code
@@ -93,7 +101,7 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github') }}-{hash}
+        key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github', '.dockerignore') }}-{hash}
         restore-keys: docker-${{ matrix.distro }}-
         skip-save: true
     - name: Update dependencies in image.
@@ -103,5 +111,9 @@ jobs:
     - name: Build in docker.
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg DAOS_JAVA_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --build-arg COMPILER=${{ matrix.compiler }}
+    - name: Build Java in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg DEPS_JOBS=10
                           --build-arg COMPILER=${{ matrix.compiler }}

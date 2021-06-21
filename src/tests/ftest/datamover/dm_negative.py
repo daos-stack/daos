@@ -9,7 +9,7 @@ from os.path import join
 from apricot import skipForTicket
 
 
-class DmNegativeTest(DataMoverTestBase):
+class DmvrNegativeTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for POSIX DataMover negative testing.
 
@@ -49,7 +49,7 @@ class DmNegativeTest(DataMoverTestBase):
             (3) Bad parameter: daos-prefix is invalid.
             (4) Bad parameter: UUID, UNS, or POSIX path is invalid.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_negative,dm_bad_params_dcp
         """
         self.set_tool("DCP")
@@ -249,7 +249,7 @@ class DmNegativeTest(DataMoverTestBase):
             DAOS-5515: destination pool does not have enough space.
             DAOS-6387: posix filesystem does not have enough space.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_negative,dm_negative_space_dcp
         """
         self.set_tool("DCP")

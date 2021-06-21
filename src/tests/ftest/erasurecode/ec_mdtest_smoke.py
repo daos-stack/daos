@@ -6,7 +6,7 @@
 '''
 from mdtest_test_base import MdtestBase
 
-class ErasureCodeMdtest(MdtestBase):
+class EcodMdtest(MdtestBase):
     # pylint: disable=too-many-ancestors
     """
     EC MDtest class to run smoke tests.

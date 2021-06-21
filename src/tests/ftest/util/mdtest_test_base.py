@@ -41,8 +41,12 @@ class MdtestBase(DfuseTestBase):
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 
-    def execute_mdtest(self):
-        """Runner method for Mdtest."""
+    def execute_mdtest(self, out_queue=None):
+        """Runner method for Mdtest.
+        Args:
+            out_queue (queue, optional): Pass any exceptions in a queue.
+                                         Defaults to None.
+        """
         # Create a pool if one does not already exist
         if self.pool is None:
             self.add_pool(connect=False)
@@ -60,7 +64,7 @@ class MdtestBase(DfuseTestBase):
 
         # Run Mdtest
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
-                        self.processes)
+                        self.processes, out_queue=out_queue)
 
         # reset self.container if dfs_destroy is True or None.
         if self.mdtest_cmd.dfs_destroy is not False:
@@ -86,7 +90,8 @@ class MdtestBase(DfuseTestBase):
 
         return self.job_manager
 
-    def run_mdtest(self, manager, processes, display_space=True, pool=None):
+    def run_mdtest(self, manager, processes, display_space=True, pool=None,
+                   out_queue=None):
         """Run the Mdtest command.
 
         Args:
@@ -112,6 +117,9 @@ class MdtestBase(DfuseTestBase):
             manager.run()
         except CommandFailure as error:
             self.log.error("Mdtest Failed: %s", str(error))
+            # Queue is used when we use a thread to call
+            # mdtest thread (eg: thread1 --> thread2 --> mdtest)
+            out_queue.put("Mdtest Failed")
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if display_space:
