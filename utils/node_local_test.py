@@ -1654,10 +1654,7 @@ class posix_tests():
         tmp_dir = tempfile.mkdtemp()
 
         cont_path = os.path.join(tmp_dir, 'my-cont')
-        container = create_cont(self.conf,
-                                self.pool.uuid,
-                                posix=True,
-                                path=cont_path)
+        create_cont(self.conf, self.pool.uuid, posix=True, path=cont_path)
 
         dfuse = DFuse(self.server,
                       self.conf,
@@ -1674,19 +1671,6 @@ class posix_tests():
 
         if dfuse.stop():
             self.fatal_errors = True
-
-    @needs_dfuse_with_cache
-    def test_uns_create_with_cache(self):
-        """Simple test to create a container using a path in dfuse"""
-        path = os.path.join(self.dfuse.dir, 'mycont2')
-        container = create_cont(self.conf,
-                                self.pool.uuid,
-                                posix=True,
-                                path=cont_path)
-        stbuf = os.stat(path)
-        print(stbuf)
-        assert stbuf.st_ino < 100
-        print(os.listdir(path))
 
     def test_uns_basic(self):
         """Create a UNS entry point and access it via both EP and path"""
@@ -1824,7 +1808,7 @@ class posix_tests():
                     pool=pool,
                     cont=uns_container,
                     path=uns_path,
-                    posix=True);
+                    posix=True)
 
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
