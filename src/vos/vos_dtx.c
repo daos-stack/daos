@@ -837,9 +837,10 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 			rc = dbtree_delete(cont->vc_dtx_active_hdl,
 					   BTR_PROBE_BYPASS, &kiov, &dae);
-			if (rc == 0)
+			if (rc == 0) {
 				dtx_act_ent_cleanup(cont, dae, NULL, false);
 				dtx_evict_lid(cont, dae);
+			}
 
 			goto out;
 		}
@@ -929,9 +930,10 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 	if (dae->dae_aborted) {
 		rc = dbtree_delete(cont->vc_dtx_active_hdl,
 				   BTR_PROBE_BYPASS, &kiov, &dae);
-		if (rc == 0)
+		if (rc == 0) {
 			dtx_act_ent_cleanup(cont, dae, NULL, true);
 			dtx_evict_lid(cont, dae);
+		}
 
 		goto out;
 	}
