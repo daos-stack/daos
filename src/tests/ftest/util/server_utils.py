@@ -839,7 +839,7 @@ class DaosServerManager(SubprocessManager):
             if scm_ratio is None:
                 # Default to 6% scm_ratio if not specified.
                 scm_ratio = 6
-            engine_qty = len(self.manager.job.engine_params)
+            engine_qty = len(self.manager.job.engine_params) * len(self._hosts)
             ratio = float(scm_ratio / 100)
             if available_storage["scm"] > available_storage["nvme"]:
                 # size = (nvme_per_engine + scm_size) * engines
@@ -858,7 +858,8 @@ class DaosServerManager(SubprocessManager):
                 "  - NVME     : %s",
                 get_display_size(available_storage["size"] * (1 - ratio)))
             self.log.info(
-                "  - SCM      : %s", get_display_size(scm_size))
+                "  - SCM      : %s",
+                get_display_size(available_storage["size"] * ratio))
             self.log.info(
                 "  - COMBINED : %s",
                 get_display_size(available_storage["size"]))
