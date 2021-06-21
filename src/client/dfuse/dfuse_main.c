@@ -252,7 +252,7 @@ show_help(char *name)
 		"many using the uuids as leading components of the path.\n"
 		"Pools and containers can be specified using either uuids or labels.\n"
 		"\n"
-		"The path option can be use to set a filesystem path from with Namespace attributes\n"
+		"The path option can be use to set a filesystem path from which Namespace attributes\n"
 		"will be loaded, or if path is not set then the mount directory will also be\n"
 		"checked.  Only one way of setting pool and container data should be used.\n"
 		"\n"
@@ -432,20 +432,20 @@ main(int argc, char **argv)
 
 	rc = daos_init();
 	if (rc != -DER_SUCCESS)
-		D_GOTO(out_debug, rc = rc);
+		D_GOTO(out_debug, rc);
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
 	rc = dfuse_fs_init(dfuse_info, &fs_handle);
 	if (rc != 0)
-		D_GOTO(out_debug, rc = rc);
+		D_GOTO(out_debug, rc);
 
 	/* Firsly check for attributes on the path.  If this option is set then
 	 * it is expected to work.
 	 */
 	if (path) {
 		if (pool_name) {
-			printf("Pool specified multiple ways");
+			printf("Pool specified multiple ways\n");
 			D_GOTO(out_daos, rc = -DER_INVAL);
 		}
 
@@ -457,14 +457,17 @@ main(int argc, char **argv)
 		if (rc == ENOENT) {
 			printf("Attr path does not exist\n");
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
-		} else {
+		} else if (rc != 0) {
 			/* Abort on all errors here, even ENODATA or ENOTSUP
 			 * because the path is supposed to provide
 			 * pool/container details and it's an error if it can't.
 			 */
+			printf("Error reading attr from path %d %s\n",
+				rc, strerror(rc));
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
 		uuid_copy(pool_uuid, path_attr.da_puuid);
+		uuid_copy(cont_uuid, path_attr.da_cuuid);
 	}
 
 	/* Check for attributes on the mount point itself to use.

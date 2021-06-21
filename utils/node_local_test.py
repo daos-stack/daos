@@ -928,13 +928,15 @@ class DFuse():
                  conf,
                  pool=None,
                  container=None,
-                 path=None,
+                 mount_path=None,
+                 uns_path=None,
                  caching=True):
-        if path:
-            self.dir = path
+        if mount_path:
+            self.dir = mount_path
         else:
             self.dir = os.path.join(conf.dfuse_parent_dir, 'dfuse_mount')
         self.pool = pool
+        self.uns_path = uns_path
         self.valgrind_file = None
         self.container = container
         self.conf = conf
@@ -1005,6 +1007,9 @@ class DFuse():
 
         if not self.caching:
             cmd.append('--disable-caching')
+
+        if self.uns_path:
+            cmd.extend(['--path', self.uns_path])
 
         if self.pool:
             cmd.extend(['--pool', self.pool])
@@ -1192,7 +1197,7 @@ def run_daos_cmd(conf,
     vh.convert_xml()
     return rc
 
-def create_cont(conf, pool, posix=False, label=None):
+def create_cont(conf, pool, cont=None, posix=False, label=None, path=None):
     """Create a container and return the uuid"""
     cmd = ['container',
            'create',
@@ -1204,6 +1209,12 @@ def create_cont(conf, pool, posix=False, label=None):
                     'label:{}'.format(label)])
     if posix:
         cmd.extend(['--type', 'POSIX'])
+
+    if path:
+        cmd.extend(['--path', path])
+
+    if cont:
+        cmd.extend(['--cont', cont])
 
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
@@ -1384,8 +1395,8 @@ class posix_tests():
         dfuse1 = DFuse(self.server,
                        self.conf,
                        caching=True,
-                       path=os.path.join(self.conf.dfuse_parent_dir,
-                                         'dfuse_mount_1'),
+                       mount_path=os.path.join(self.conf.dfuse_parent_dir,
+                                               'dfuse_mount_1'),
                        pool=self.pool.uuid,
                        container=self.container)
         dfuse1.start(v_hint='two_1')
@@ -1631,25 +1642,47 @@ class posix_tests():
     def test_uns_create(self):
         """Simple test to create a container using a path in dfuse"""
         path = os.path.join(self.dfuse.dir, 'mycont')
-        cmd = ['container', 'create',
-               '--pool', self.pool.uuid, '--path', path,
-               '--type', 'POSIX']
-        rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
+        create_cont(self.conf, pool=self.pool.uuid, path=path, posix=True)
         stbuf = os.stat(path)
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
 
+    def test_with_path(self):
+        """Test that dfuse starts with path option."""
+
+        tmp_dir = tempfile.mkdtemp()
+
+        cont_path = os.path.join(tmp_dir, 'my-cont')
+        container = create_cont(self.conf,
+                                self.pool.uuid,
+                                posix=True,
+                                path=cont_path)
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      caching=True,
+                      uns_path=cont_path)
+        dfuse.start(v_hint='with_path')
+
+        # Simply write a file.  This will fail if dfuse isn't backed via
+        # a container.
+        file = os.path.join(dfuse.dir, 'file')
+        fd = open(file, 'w')
+        fd.write('test')
+        fd.close()
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
     @needs_dfuse_with_cache
     def test_uns_create_with_cache(self):
         """Simple test to create a container using a path in dfuse"""
         path = os.path.join(self.dfuse.dir, 'mycont2')
-        cmd = ['container', 'create',
-               '--pool', self.pool.uuid, '--path', path,
-               '--type', 'POSIX']
-        rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
+        container = create_cont(self.conf,
+                                self.pool.uuid,
+                                posix=True,
+                                path=cont_path)
         stbuf = os.stat(path)
         print(stbuf)
         assert stbuf.st_ino < 100
@@ -1671,13 +1704,12 @@ class posix_tests():
         # Create a new container within it using UNS
         uns_path = os.path.join(dfuse.dir, 'ep0')
         uns_container = str(uuid.uuid4())
-        cmd = ['container', 'create',
-               '--pool', pool, '--cont', uns_container, '--path', uns_path,
-               '--type', 'POSIX']
-
         print('Inserting entry point')
-        rc = run_daos_cmd(conf, cmd)
-        print('rc is {}'.format(rc))
+        create_cont(conf,
+                    pool=pool,
+                    cont=uns_container,
+                    path=uns_path,
+                    posix=True)
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
 
@@ -1705,13 +1737,12 @@ class posix_tests():
         uns_container = str(uuid.uuid4())
 
         # Make a link within the new container.
-        cmd = ['container', 'create',
-               '--pool', pool, '--cont', uns_container,
-               '--path', uns_path, '--type', 'POSIX']
-
         print('Inserting entry point')
-        rc = run_daos_cmd(conf, cmd)
-        print('rc is {}'.format(rc))
+        create_cont(conf,
+                    pool=pool,
+                    cont=uns_container,
+                    path=uns_path,
+                    posix=True)
 
         # List the root container again.
         print(os.listdir(os.path.join(dfuse.dir, pool, container)))
@@ -1788,14 +1819,13 @@ class posix_tests():
         # Create a new container within it using UNS
         uns_path = os.path.join(dfuse.dir, 'ep1')
         uns_container = str(uuid.uuid4())
-        cmd = ['container', 'create',
-               '--pool', pool, '--cont', uns_container, '--path', uns_path,
-               '--type', 'POSIX']
-
         print('Inserting entry point')
-        rc = run_daos_cmd(conf, cmd)
-        print('rc is {}'.format(rc))
-        assert rc.returncode == 0
+        create_cont(conf,
+                    pool=pool,
+                    cont=uns_container,
+                    path=uns_path,
+                    posix=True);
+
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
 
@@ -2301,19 +2331,9 @@ def run_duns_overlay_test(server, conf):
 
     uns_dir = os.path.join(parent_dir.name, 'uns_ep')
 
-    rc = run_daos_cmd(conf, ['container',
-                             'create',
-                             '--pool',
-                             pool,
-                             '--type',
-                             'POSIX',
-                             '--path',
-                             uns_dir])
+    create_cont(conf, pool=pool, path=uns_dir, posix=True)
 
-    print('rc is {}'.format(rc))
-    assert rc.returncode == 0
-
-    dfuse = DFuse(server, conf, path=uns_dir, caching=False)
+    dfuse = DFuse(server, conf, mount_path=uns_dir, caching=False)
 
     dfuse.start(v_hint='uns-overlay')
     # To show the contents.
