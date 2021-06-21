@@ -8,7 +8,6 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(LIBPATH=[Dir('smd')])
-    env.AppendUnique(LIBPATH=[Dir('/usr/share/dpdk/lib')])
 
     if not prereqs.server_requested():
         return
