@@ -434,43 +434,62 @@ evt_rect_cmp(const struct evt_rect *rt1, const struct evt_rect *rt2)
 }
 
 #define PRINT_ENT(ent)							\
-	D_PRINT("%s:%d " #ent ": " DF_ENT " visibility = %"PRIx64"\n",	\
+	D_PRINT("%s:%d " #ent ": " DF_ENT " visibility = %c\n",		\
 		__func__, __LINE__, DP_ENT(ent),			\
-		(ent)->en_visibility)
-
-#define evt_flags_equal(flags, set) \
-	(((flags) & (EVT_COVERED | EVT_VISIBLE)) == (set))
+		evt_vis2dbg((ent)->en_visibility))
 
 #define evt_flags_get(flags) \
-	((flags) & (EVT_COVERED | EVT_VISIBLE))
+	((flags) & EVT_VIS_MASK)
+
+#define evt_flags_equal(flags, set) \
+	(evt_flags_get(flags) == (set))
 
 #define evt_flags_valid(flags)			\
 	(evt_flags_get(flags) == EVT_VISIBLE ||	\
+	 evt_flags_get(flags) == EVT_DELETED ||	\
 	 evt_flags_get(flags) == EVT_COVERED)
 
-static int
+/* Mask to always place delete records at the end */
+static const int del_cmp_mask[] = {
+	0,
+	0, /* EVT_VISIBLE */
+	0, /* EVT_COVERED */
+	0,
+	1, /* EVT_DELETED */
+};
+
+/* Mask for prioritizing visible entries */
+static const int vis_cmp_mask[] = {
+	0,
+	0, /* EVT_VISIBLE */
+	1, /* EVT_COVERED */
+	0,
+	2, /* EVT_DELETED */
+};
+
+static inline int
 evt_ent_cmp(const struct evt_entry *ent1, const struct evt_entry *ent2,
-	    int flags)
+	    const int mask[])
 {
 	struct evt_rect		 rt1;
 	struct evt_rect		 rt2;
 
-	if (!flags)
+	if (mask == NULL)
 		goto cmp_ext;
 
 	/* Ensure we've selected one or the other */
-	D_ASSERT(flags == EVT_VISIBLE || flags == EVT_COVERED);
 	D_ASSERT(evt_flags_valid(ent1->en_visibility));
 	D_ASSERT(evt_flags_valid(ent2->en_visibility));
 
-	if (evt_flags_get(ent1->en_visibility) ==
-	    evt_flags_get(ent2->en_visibility))
+	if (mask[evt_flags_get(ent1->en_visibility)] ==
+	    mask[evt_flags_get(ent2->en_visibility)])
 		goto cmp_ext;
 
-	if (evt_flags_equal(ent1->en_visibility, EVT_VISIBLE))
-		return (flags & EVT_VISIBLE) ? -1 : 1;
+	if (mask[evt_flags_get(ent1->en_visibility)] <
+	    mask[evt_flags_get(ent2->en_visibility)])
+		return -1;
 
-	return (flags & EVT_VISIBLE) ? 1 : -1;
+	return 1;
 cmp_ext:
 	evt_ent2rect(&rt1, ent1);
 	evt_ent2rect(&rt2, ent2);
@@ -478,28 +497,31 @@ cmp_ext:
 	return evt_rect_cmp(&rt1, &rt2);
 }
 
-int evt_ent_list_cmp(const void *p1, const void *p2)
+static int
+evt_ent_list_cmp(const void *p1, const void *p2)
 {
 	const struct evt_list_entry	*le1	= p1;
 	const struct evt_list_entry	*le2	= p2;
 
-	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, 0);
+	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, NULL);
 }
 
-int evt_ent_list_cmp_visible(const void *p1, const void *p2)
+static int
+evt_ent_list_cmp_del(const void *p1, const void *p2)
 {
 	const struct evt_list_entry	*le1	= p1;
 	const struct evt_list_entry	*le2	= p2;
 
-	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, EVT_VISIBLE);
+	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, del_cmp_mask);
 }
 
-int evt_ent_list_cmp_covered(const void *p1, const void *p2)
+static int
+evt_ent_list_cmp_visible(const void *p1, const void *p2)
 {
 	const struct evt_list_entry	*le1	= p1;
 	const struct evt_list_entry	*le2	= p2;
 
-	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, EVT_COVERED);
+	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, vis_cmp_mask);
 }
 
 static inline struct evt_list_entry *
@@ -540,6 +562,13 @@ evt_ent_is_later(struct evt_entry *ent1, struct evt_entry *ent2)
 	return false;
 }
 
+static inline void
+set_visibility(struct evt_entry *ent, uint32_t flags)
+{
+	ent->en_visibility &= ~EVT_VIS_MASK;
+	ent->en_visibility |= flags;
+}
+
 static struct evt_entry *
 evt_find_next_visible(struct evt_entry *this_ent, d_list_t *head,
 		      d_list_t **next)
@@ -560,7 +589,7 @@ evt_find_next_visible(struct evt_entry *this_ent, d_list_t *head,
 			return next_ent; /* next_ent extends past end */
 
 		/* next_ent is covered */
-		next_ent->en_visibility |= EVT_COVERED;
+		set_visibility(next_ent, EVT_COVERED);
 		temp = *next;
 		*next = temp->next;
 	}
@@ -587,15 +616,14 @@ evt_split_entry(struct evt_context *tcx, struct evt_entry *current,
 	struct evt_list_entry	*le;
 	daos_off_t		 diff;
 
+	current->en_visibility |= EVT_PARTIAL;
 	*covered = *split = *current;
 	diff = next->en_sel_ext.ex_hi + 1 - split->en_sel_ext.ex_lo;
 	split->en_sel_ext.ex_lo = next->en_sel_ext.ex_hi + 1;
 	/* mark the entries as partial */
-	split->en_visibility = EVT_PARTIAL;
-	current->en_visibility |= EVT_PARTIAL;
-	covered->en_visibility = EVT_PARTIAL | EVT_COVERED;
 	current->en_sel_ext.ex_hi = next->en_sel_ext.ex_lo - 1;
 	covered->en_sel_ext = next->en_sel_ext;
+	set_visibility(covered, EVT_COVERED);
 	evt_ent_addr_update(tcx, split, diff);
 	evt_ent_addr_update(tcx, covered,
 			    evt_extent_width(&current->en_sel_ext));
@@ -616,7 +644,7 @@ evt_insert_sorted(struct evt_entry *this_ent, d_list_t *head, d_list_t *current)
 
 	while (current != head) {
 		next_ent = evt_array_link2entry(current);
-		cmp = evt_ent_cmp(this_ent, next_ent, 0);
+		cmp = evt_ent_cmp(this_ent, next_ent, NULL);
 		if (cmp < 0) {
 			d_list_add(this_link, current->prev);
 			goto out;
@@ -654,23 +682,144 @@ evt_truncate_next(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		if (rc != 0)
 			return rc;
 
+		next_ent->en_visibility |= EVT_PARTIAL;
 		*temp_ent = *next_ent;
-		temp_ent->en_visibility = EVT_COVERED | EVT_PARTIAL;
 	}
 
 	le->le_prev = temp_ent;
-	next_ent->en_visibility |= EVT_PARTIAL;
 	diff = this_ent->en_sel_ext.ex_hi + 1 - next_ent->en_sel_ext.ex_lo;
 	next_ent->en_sel_ext.ex_lo = this_ent->en_sel_ext.ex_hi + 1;
 	temp_ent->en_sel_ext.ex_hi = next_ent->en_sel_ext.ex_lo - 1;
+	set_visibility(temp_ent, EVT_COVERED);
 	evt_ent_addr_update(tcx, next_ent, diff);
+
+	return 0;
+}
+
+static inline void
+evt_mark_visible(struct evt_entry *ent, bool check, int *num_visible)
+{
+	if (ent->en_minor_epc == EVT_MINOR_EPC_MAX) {
+		/** This entry is a "delete" added by vos_obj_array_remove */
+		D_ASSERT(check);
+		set_visibility(ent, EVT_DELETED);
+		return;
+	}
+
+	set_visibility(ent, EVT_VISIBLE);
+	(*num_visible)++;
+}
+
+static int
+evt_mark_deleted(struct evt_context *tcx, struct evt_entry_array *ent_array,
+		 d_list_t *deleted, d_list_t *to_process)
+{
+	d_list_t		*cur_update;
+	d_list_t		*cur_del;
+	d_list_t		*temp;
+	struct evt_entry	*del_ent;
+	struct evt_entry	*this_ent;
+	struct evt_entry	*temp_ent;
+	struct evt_extent	*del_ext;
+	struct evt_extent	*this_ext;
+	struct evt_extent	*temp_ext;
+	int			 rc;
+
+	if (d_list_empty(deleted) || d_list_empty(to_process))
+		return 0;
+
+	cur_update = to_process->next;
+	cur_del = deleted->next;
+
+	while (cur_update != to_process) {
+		this_ent = evt_array_link2entry(cur_update);
+		this_ext = &this_ent->en_sel_ext;
+
+		/** Find matching deleted extent */
+		d_list_for_each_safe(cur_del, temp, deleted) {
+			del_ent = evt_array_link2entry(cur_del);
+			del_ext = &del_ent->en_sel_ext;
+			if (this_ext->ex_lo > del_ext->ex_hi) {
+				/* We are done processing this delete record */
+				d_list_del(cur_del);
+				continue;
+			}
+
+			if (this_ent->en_epoch == del_ent->en_epoch &&
+			    this_ext->ex_hi >= del_ext->ex_lo) {
+				/* Found a deleted extent */
+				goto process_ext;
+			}
+		}
+
+		if (d_list_empty(deleted))
+			break;
+
+		/** Skip to next record */
+		D_ASSERT(cur_del == deleted);
+		cur_update = cur_update->next;
+		continue;
+
+process_ext:
+		temp_ent = NULL;
+		if (this_ext->ex_lo < del_ext->ex_lo) {
+			/* Split, head is not covered */
+			rc = ent_array_alloc(tcx, ent_array, &temp_ent, true);
+			if (rc != 0)
+				return rc;
+
+			this_ent->en_visibility |= EVT_PARTIAL;
+			*temp_ent = *this_ent;
+			temp_ext = &temp_ent->en_sel_ext;
+			temp_ext->ex_lo = del_ext->ex_lo;
+			this_ext->ex_hi = del_ext->ex_lo - 1;
+			evt_ent_addr_update(tcx, temp_ent,
+					    evt_extent_width(this_ext));
+			if (temp_ext->ex_hi <= del_ext->ex_hi) {
+				/* Tail is fully covered */
+				set_visibility(temp_ent,
+					      EVT_COVERED);
+				cur_update = cur_update->next;
+				continue;
+			}
+
+			/** Leave marking it covered until processed */
+			cur_update = evt_insert_sorted(temp_ent,
+						    to_process,
+						    cur_update);
+		} else if (this_ext->ex_hi > del_ext->ex_hi) {
+			/* Split, tail is not covered */
+			rc = ent_array_alloc(tcx, ent_array, &temp_ent, true);
+			if (rc != 0)
+				return rc;
+
+			this_ent->en_visibility |= EVT_PARTIAL;
+			*temp_ent = *this_ent;
+			temp_ext = &temp_ent->en_sel_ext;
+			this_ext->ex_hi = del_ext->ex_hi;
+			temp_ext->ex_lo = del_ext->ex_hi + 1;
+			set_visibility(this_ent, EVT_COVERED);
+			evt_ent_addr_update(tcx, temp_ent,
+					    evt_extent_width(this_ext));
+			/** Leave marking it covered until processed */
+			cur_update = evt_insert_sorted(temp_ent,
+						    to_process,
+						    cur_update);
+		} else {
+			temp = cur_update;
+			cur_update = cur_update->next;
+			d_list_del(temp);
+			set_visibility(this_ent, EVT_COVERED);
+		}
+	}
 
 	return 0;
 }
 
 static int
 evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
-		 struct evt_entry_array *ent_array, int *num_visible)
+		 struct evt_entry_array *ent_array, int *num_visible,
+		 int *num_deleted)
 {
 	struct evt_extent	*this_ext;
 	struct evt_extent	*next_ext;
@@ -679,13 +828,16 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	struct evt_entry	*temp_ent;
 	struct evt_entry	*split;
 	d_list_t		 covered;
+	d_list_t		 deleted;
 	d_list_t		*current;
 	d_list_t		*next;
 	bool			 insert;
 	int			 rc = 0;
 
 	D_INIT_LIST_HEAD(&covered);
+	D_INIT_LIST_HEAD(&deleted);
 	*num_visible = 0;
+	*num_deleted = 0;
 
 	/* Some of the entries may be punched by a key.  We don't need to
 	 * consider such entries for the visibility algorithm and can mark them
@@ -696,13 +848,26 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 		next = evt_array_entry2link(this_ent);
 
 		if (evt_entry_punched(this_ent, filter)) {
-			this_ent->en_visibility = EVT_COVERED;
+			set_visibility(this_ent, EVT_COVERED);
+			continue;
+		}
+
+		if (this_ent->en_minor_epc == EVT_MINOR_EPC_MAX) {
+			evt_array_entry2le(this_ent)->le_prev = NULL;
+			set_visibility(this_ent, EVT_DELETED);
+			(*num_deleted)++;
+			d_list_add_tail(next, &deleted);
 			continue;
 		}
 
 		evt_array_entry2le(this_ent)->le_prev = NULL;
 		d_list_add_tail(next, &covered);
 	}
+
+	/** Mark entries as deleted */
+	rc = evt_mark_deleted(tcx, ent_array, &deleted, &covered);
+	if (rc != 0)
+		return rc;
 
 	if (d_list_empty(&covered))
 		return 0;
@@ -717,9 +882,8 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	while (next != &covered) {
 		if (insert) {
 			this_ent = evt_array_link2entry(current);
-			this_ent->en_visibility |= EVT_VISIBLE;
+			evt_mark_visible(this_ent, false, num_visible);
 			evt_array_entry2le(this_ent)->le_prev = NULL;
-			(*num_visible)++;
 		}
 
 		insert = true;
@@ -779,11 +943,11 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 
 		if (next_ext->ex_hi >= this_ext->ex_hi) {
 			/* Case #3, truncate this_ent */
-			*temp_ent = *this_ent;
-			temp_ent->en_visibility = EVT_COVERED | EVT_PARTIAL;
 			this_ent->en_visibility |= EVT_PARTIAL;
+			*temp_ent = *this_ent;
 			this_ext->ex_hi = next_ext->ex_lo - 1;
 			temp_ent->en_sel_ext.ex_lo = next_ext->ex_lo;
+			set_visibility(temp_ent, EVT_COVERED);
 			evt_ent_addr_update(tcx, temp_ent,
 					    evt_extent_width(this_ext));
 		} else {
@@ -805,8 +969,7 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 
 	this_ent = evt_array_link2entry(current);
 	D_ASSERT(!evt_flags_equal(this_ent->en_visibility, EVT_COVERED));
-	this_ent->en_visibility |= EVT_VISIBLE;
-	(*num_visible)++;
+	evt_mark_visible(this_ent, false, num_visible);
 
 	return 0;
 }
@@ -824,7 +987,8 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	struct evt_entry	*ent;
 	int			(*compar)(const void *, const void *);
 	int			 total;
-	int			 num_visible;
+	int			 num_visible = 0;
+	int			 num_deleted = 0;
 	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER"\n",
@@ -834,12 +998,11 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 
 	if (ent_array->ea_ent_nr == 1) {
 		ent = evt_ent_array_get(ent_array, 0);
-		num_visible = 0;
 		if (evt_entry_punched(ent, filter)) {
-			ent->en_visibility = EVT_COVERED;
+			ent->en_visibility |= EVT_COVERED;
 		} else {
-			num_visible = 1;
-			ent->en_visibility = EVT_VISIBLE;
+			evt_mark_visible(ent, true, &num_visible);
+			num_deleted = 1 - num_visible;
 		}
 		goto re_sort;
 	}
@@ -852,7 +1015,8 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		      evt_ent_list_cmp);
 
 		/* Now separate entries into covered and visible */
-		rc = evt_find_visible(tcx, filter, ent_array, &num_visible);
+		rc = evt_find_visible(tcx, filter, ent_array, &num_visible,
+				      &num_deleted);
 
 		if (rc != 0) {
 			if (rc == -DER_AGAIN)
@@ -864,15 +1028,16 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 
 re_sort:
 	ents = ent_array->ea_ents;
-	total = ent_array->ea_ent_nr;
-	compar = evt_ent_list_cmp;
 	/* Now re-sort the entries */
-	if (evt_flags_equal(flags, EVT_VISIBLE)) {
+	compar = evt_ent_list_cmp_del;
+	if (flags & EVT_DELETED) {
+		total = ent_array->ea_ent_nr;
+	} else if (flags & EVT_COVERED) {
+		total = ent_array->ea_ent_nr - num_deleted;
+	} else {
+		D_ASSERT(flags & EVT_VISIBLE);
 		compar = evt_ent_list_cmp_visible;
 		total = num_visible;
-	} else if (evt_flags_equal(flags, EVT_COVERED)) {
-		compar = evt_ent_list_cmp_covered;
-		total = ent_array->ea_ent_nr - num_visible;
 	}
 
 	if (ent_array->ea_ent_nr != 1)
@@ -1961,10 +2126,13 @@ int
 evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	   uint8_t **csum_bufp)
 {
-	struct evt_context	*tcx;
-	struct evt_entry_array	 ent_array;
-	struct evt_filter	 filter;
-	int			 rc;
+	struct evt_context		*tcx;
+	struct evt_entry		*ent = NULL;
+	struct evt_entry_in		 ent_cpy;
+	const struct evt_entry_in	*entryp = entry;
+	struct evt_entry_array		 ent_array;
+	struct evt_filter		 filter;
+	int				 rc;
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
@@ -2007,6 +2175,24 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	if (rc != 0)
 		return rc;
 
+	if (ent_array.ea_ent_nr == 1) {
+		if (entry->ei_rect.rc_minor_epc == EVT_MINOR_EPC_MAX) {
+			/** Special case.   This is an overlapping delete record
+			 *  which can happen when there are minor epochs
+			 *  involved.   Rather than rejecting, we can delete the
+			 *  old record and insert a merged  one
+			 */
+			ent = evt_ent_array_get(&ent_array, 0);
+			if (ent->en_ext.ex_lo <= entry->ei_rect.rc_ex.ex_lo &&
+			    ent->en_ext.ex_hi >= entry->ei_rect.rc_ex.ex_hi) {
+				/** Nothing to do, existing extent contains
+				 *  the new one
+				 */
+				return 0;
+			}
+		}
+	}
+
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
@@ -2025,6 +2211,24 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 
 	D_ASSERT(ent_array.ea_ent_nr <= 1);
 	if (ent_array.ea_ent_nr == 1) {
+		if (ent != NULL) {
+			memcpy(&ent_cpy, entry, sizeof(*entry));
+			entryp = &ent_cpy;
+			/** We need to edit the existing extent */
+			if (ent->en_ext.ex_lo < ent_cpy.ei_rect.rc_ex.ex_lo)
+				ent_cpy.ei_rect.rc_ex.ex_lo = ent->en_ext.ex_lo;
+			if (ent->en_ext.ex_hi > ent_cpy.ei_rect.rc_ex.ex_hi)
+				ent_cpy.ei_rect.rc_ex.ex_hi = ent->en_ext.ex_hi;
+
+			/** Remove the existing node */
+			rc = evt_node_delete(tcx);
+
+			if (rc != 0)
+				goto out;
+
+			/* Now insert the merged one */
+			goto insert;
+		}
 		/*
 		 * NB: This is part of the current hack to keep "supporting"
 		 * overwrite for same epoch, full overwrite.
@@ -2035,8 +2239,9 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		goto out;
 	}
 
+insert:
 	/* Phase-2: Inserting */
-	rc = evt_insert_entry(tcx, entry, csum_bufp);
+	rc = evt_insert_entry(tcx, entryp, csum_bufp);
 
 	/* No need for evt_ent_array_fill as there will be no allocations
 	 * with 1 entry in the list
@@ -2352,6 +2557,9 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				 * properly.
 				 */
 				if (range_overlap != RT_OVERLAP_SAME) {
+					if (rect->rc_minor_epc ==
+					    EVT_MINOR_EPC_MAX)
+						break; /* Need to adjust it */
 					D_DEBUG(DB_IO, "Same epoch partial "
 						"overwrite not supported:"
 						DF_RECT" overlaps with "DF_RECT
@@ -3395,14 +3603,70 @@ int
 evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 	       const daos_epoch_range_t *epr)
 {
-	struct evt_entry_in	entry = {0};
+	struct evt_context	*tcx;
+	struct evt_entry	*ent;
+	struct evt_entry_in	 entry = {0};
+	struct evt_filter	 filter = {0};
+	struct evt_entry_array	 ent_array;
+	struct evt_rect		 rect;
+	int			 rc = 0;
 
-	entry.ei_rect.rc_ex = *ext;
-	entry.ei_bound = entry.ei_rect.rc_epc = epr->epr_hi;
-	entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
-	BIO_ADDR_SET_HOLE(&entry.ei_addr);
+	/** Find all of the overlapping rectangles and insert a delete record
+	 *  for each one in the specified epoch range
+	 */
+	tcx = evt_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
 
-	return evt_insert(toh, &entry, NULL);
+	rect.rc_epc = filter.fr_epoch = filter.fr_epr.epr_hi = epr->epr_hi;
+	filter.fr_epr.epr_lo = epr->epr_lo;
+	rect.rc_ex = filter.fr_ex = *ext;
+	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
+
+	evt_ent_array_init(&ent_array);
+
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
+				&filter, &rect, &ent_array);
+	if (rc != 0)
+		goto done;
+
+	rc = evt_tx_begin(tcx);
+	if (rc != 0)
+		goto done;
+
+	evt_ent_array_for_each(ent, &ent_array) {
+		entry.ei_rect.rc_ex = ent->en_ext;
+		entry.ei_bound = entry.ei_rect.rc_epc = ent->en_epoch;
+		entry.ei_rect.rc_minor_epc = ent->en_minor_epc;
+		if ((ent->en_visibility & EVT_PARTIAL) == 0) {
+			D_DEBUG(DB_IO, "Remove "DF_RECT"\n",
+				DP_RECT(&entry.ei_rect));
+			rc = evt_delete_internal(tcx, &entry.ei_rect, NULL,
+						 true);
+			if (rc != 0)
+				break;
+			continue;
+		}
+
+		/* It's a partial extent so insert a delete record instead */
+		if (ent->en_ext.ex_lo < ext->ex_lo)
+			entry.ei_rect.rc_ex.ex_lo = ext->ex_lo;
+		if (ent->en_ext.ex_hi > ext->ex_hi)
+			entry.ei_rect.rc_ex.ex_hi = ext->ex_hi;
+		entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
+		D_DEBUG(DB_IO, "Insert delete record "DF_RECT"\n",
+			DP_RECT(&entry.ei_rect));
+		BIO_ADDR_SET_HOLE(&entry.ei_addr);
+
+		rc = evt_insert(toh, &entry, NULL);
+		if (rc != 0)
+			break;
+	}
+	rc = evt_tx_end(tcx, rc);
+done:
+	evt_ent_array_fini(&ent_array);
+
+	return rc;
 }
 
 daos_size_t

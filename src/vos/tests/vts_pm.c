@@ -1523,18 +1523,17 @@ remove_test(void **state)
 
 	/* Try removing partial entries */
 	recx[3].rx_idx = 1;
-	recx[3].rx_nr = 10;
+	recx[3].rx_nr = 8;
 	epr.epr_lo = 0;
 	epr.epr_hi = epoch - 1;
-	printf("Remove at epoch "DF_X64"\n", epr.epr_hi);
 	rc = vos_obj_array_remove(arg->ctx.tc_co_hdl, oid, &epr, &dkey,
 				  &iod.iod_name, &recx[3]);
 	assert_rc_equal(rc, 0);
 
-	check_array(arg, oid, &dkey, &iod.iod_name, epoch,
-		    FETCH_DATA, 1, "e",
-		    FETCH_HOLE, SM_BUF_LEN - 1,
-		    FETCH_END);
+	check_array(arg, oid, &dkey, &iod.iod_name, epoch++,
+		    FETCH_DATA, 1, &REM_VAL1[0], FETCH_HOLE,
+		    sizeof(REM_VAL1) + sizeof(REM_VAL2) + sizeof(REM_VAL3) - 5,
+		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
 
 	/* Swap 1 and 2 and write again */
 	d_iov_set(&sg_iov[1], REM_VAL1, sizeof(REM_VAL1) - 1);
@@ -1545,6 +1544,8 @@ remove_test(void **state)
 	recx[0].rx_nr = sizeof(REM_VAL2) - 1;
 	recx[1].rx_idx = recx[0].rx_idx + recx[0].rx_nr;
 	recx[1].rx_nr = sizeof(REM_VAL1) - 1;
+	sgl.sg_nr = 2;
+	sgl.sg_nr_out = 0;
 
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch++, 0,
 			    0, &dkey, 1, &iod, NULL, &sgl);
@@ -1553,8 +1554,8 @@ remove_test(void **state)
 	check_array(arg, oid, &dkey, &iod.iod_name, epoch,
 		    FETCH_DATA, sizeof(REM_VAL2) - 1, REM_VAL2,
 		    FETCH_DATA, sizeof(REM_VAL1) - 1, REM_VAL1,
-		    FETCH_HOLE, sizeof(REM_VAL3) - 1,
-		    FETCH_END);
+		    FETCH_HOLE, sizeof(REM_VAL3) - 2,
+		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
 
 	/* Now remove the last update only */
 	recx[3].rx_idx = 0;
@@ -1566,7 +1567,9 @@ remove_test(void **state)
 	assert_rc_equal(rc, 0);
 
 	check_array(arg, oid, &dkey, &iod.iod_name, epoch,
-		    FETCH_HOLE, SM_BUF_LEN, FETCH_END);
+		    FETCH_DATA, 1, &REM_VAL1[0], FETCH_HOLE,
+		    sizeof(REM_VAL1) + sizeof(REM_VAL2) + sizeof(REM_VAL3) - 5,
+		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
 
 	start_epoch = epoch + 1;
 }

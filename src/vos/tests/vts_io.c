@@ -547,8 +547,16 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	struct daos_csummer	*csummer = NULL;
 	d_iov_t			*srv_iov;
-	daos_handle_t		ioh;
-	int			rc = 0;
+	daos_epoch_range_t	 epr = {0, epoch};
+	daos_handle_t		 ioh;
+	int			 rc = 0;
+
+	if (arg->ta_flags & TF_DELETE) {
+		rc = vos_obj_array_remove(arg->ctx.tc_co_hdl, arg->oid, &epr,
+					  dkey, &iod->iod_name,
+					  &iod->iod_recxs[0]);
+		return rc;
+	}
 
 	if ((arg->ta_flags & TF_USE_CSUMS) && iod->iod_size > 0) {
 		rc = io_test_add_csums(iod, sgl, &csummer, &iod_csums);
