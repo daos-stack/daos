@@ -300,25 +300,26 @@ enum {
 	VOS_IT_RECX_ALL		= 0,
 	/** Include visible extents in sorted iteration */
 	VOS_IT_RECX_VISIBLE	= (1 << 0),
-	/** Include covered extents in sorted iteration */
-	VOS_IT_RECX_COVERED	= (1 << 1),
-	/** Include hole extents in sorted iteration
-	 * Only applicable if VOS_IT_RECX_VISIBLE is set but
-	 * VOS_IT_RECX_COVERED is not set
+	/** Include covered extents, implies VOS_IT_RECX_VISIBLE */
+	VOS_IT_RECX_COVERED	= (1 << 1) | VOS_IT_RECX_VISIBLE,
+	/** Include deleted extents, implies VOS_IT_RECX_COVERED.
+	 *  Only applicable to array values
 	 */
-	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
+	VOS_IT_RECX_DELETED	= (1 << 2) | VOS_IT_RECX_COVERED,
+	/** Include hole extents in sorted iteration
+	 *  Only applicable if VOS_IT_RECX_COVERED is not set
+	 */
+	VOS_IT_RECX_SKIP_HOLES	= (1 << 3),
 	/** When sorted iteration is enabled, iterate in reverse */
-	VOS_IT_RECX_REVERSE	= (1 << 3),
+	VOS_IT_RECX_REVERSE	= (1 << 4),
 	/** The iterator is for purge operation */
-	VOS_IT_FOR_PURGE	= (1 << 4),
+	VOS_IT_FOR_PURGE	= (1 << 5),
 	/** The iterator is for data migration scan */
-	VOS_IT_FOR_MIGRATION	= (1 << 5),
+	VOS_IT_FOR_MIGRATION	= (1 << 6),
 	/** Iterate only show punched records in interval */
-	VOS_IT_PUNCHED		= (1 << 6),
+	VOS_IT_PUNCHED		= (1 << 7),
 	/** Cleanup stale DTX entry. */
-	VOS_IT_CLEANUP_DTX	= (1 << 7),
-	/** Skip extents removed by vos_obj_array_remove */
-	VOS_IT_SKIP_REMOVED	= (1 << 8),
+	VOS_IT_CLEANUP_DTX	= (1 << 8),
 	/** Mask for all flags */
 	VOS_IT_MASK		= (1 << 9) - 1,
 };
@@ -354,14 +355,16 @@ typedef struct {
 enum {
 	/** It is unknown if the extent is covered or visible */
 	VOS_VIS_FLAG_UNKNOWN = 0,
-	/** The extent is not visible at the requested epoch (epr_hi) */
-	VOS_VIS_FLAG_COVERED = (1 << 0),
 	/** The extent is visible at the requested epoch (epr_hi) */
-	VOS_VIS_FLAG_VISIBLE = (1 << 1),
+	VOS_VIS_FLAG_VISIBLE = (1 << 0),
+	/** The extent is not visible at the requested epoch (epr_hi) */
+	VOS_VIS_FLAG_COVERED = (1 << 1),
+	/** The extent is visible at the requested epoch (epr_hi) */
+	VOS_VIS_FLAG_DELETED = (1 << 2),
 	/** The extent represents only a portion of the in-tree extent */
-	VOS_VIS_FLAG_PARTIAL = (1 << 2),
+	VOS_VIS_FLAG_PARTIAL = (1 << 3),
 	/** In sorted iterator, marks final entry */
-	VOS_VIS_FLAG_LAST    = (1 << 3),
+	VOS_VIS_FLAG_LAST    = (1 << 4),
 };
 
 /**

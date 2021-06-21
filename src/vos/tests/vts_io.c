@@ -550,6 +550,14 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	daos_handle_t		ioh;
 	int			rc = 0;
 
+	if (arg->ta_flags & TF_DELETE) {
+		daos_epoch_range_t	epr = {0, epoch};
+		rc = vos_obj_array_remove(arg->ctx.tc_co_hdl, arg->oid, &epr,
+					  dkey, &iod->iod_name,
+					  &iod->iod_recxs[0]);
+		return rc;
+	}
+
 	if ((arg->ta_flags & TF_USE_CSUMS) && iod->iod_size > 0) {
 		rc = io_test_add_csums(iod, sgl, &csummer, &iod_csums);
 		if (rc != 0)

@@ -1151,12 +1151,13 @@ singv_iter_next(struct vos_obj_iter *oiter)
 	vos_iter_entry_t entry;
 	int		 rc;
 	int		 opc;
+	int		 vis_flag;
 
 	/* Only one SV rec is visible for the given @epoch,
 	 * so return -DER_NONEXIST directly for the next().
 	 */
-	if (oiter->it_flags & VOS_IT_RECX_VISIBLE &&
-	    !(oiter->it_flags & VOS_IT_RECX_COVERED)) {
+	vis_flag = oiter->it_flags & VOS_IT_RECX_COVERED;
+	if (vis_flag == VOS_IT_RECX_VISIBLE) {
 		D_ASSERT(oiter->it_epc_expr == VOS_IT_EPC_RR);
 		return -DER_NONEXIST;
 	}
@@ -1187,31 +1188,19 @@ singv_iter_next(struct vos_obj_iter *oiter)
 #define recx_flags_set(flags, setting)	\
 	(((flags) & (setting)) == (setting))
 
+D_CASSERT((int)VOS_IT_RECX_DELETED == (int)EVT_ITER_DELETED);
+D_CASSERT((int)VOS_IT_RECX_COVERED == (int)EVT_ITER_COVERED);
+D_CASSERT((int)VOS_IT_RECX_VISIBLE == (int)EVT_ITER_VISIBLE);
+D_CASSERT((int)VOS_IT_RECX_SKIP_HOLES == (int)EVT_ITER_SKIP_HOLES);
+
 static uint32_t
 recx_get_flags(struct vos_obj_iter *oiter)
 {
 	uint32_t options = EVT_ITER_EMBEDDED;
+	uint32_t vis_flags = oiter->it_flags & (VOS_IT_RECX_DELETED |
+						VOS_IT_RECX_SKIP_HOLES);
 
-	if (recx_flags_set(oiter->it_flags,
-			   VOS_IT_RECX_VISIBLE | VOS_IT_RECX_SKIP_HOLES)) {
-		options |= EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES;
-		D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_COVERED));
-		goto done;
-	}
-	if (recx_flags_set(oiter->it_flags,
-			   VOS_IT_RECX_VISIBLE | VOS_IT_SKIP_REMOVED)) {
-		options |= EVT_ITER_VISIBLE | EVT_ITER_SKIP_REMOVED;
-		D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_COVERED));
-		goto done;
-	}
-	D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_SKIP_HOLES));
-	D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_SKIP_REMOVED));
-	if (oiter->it_flags & VOS_IT_RECX_VISIBLE)
-		options |= EVT_ITER_VISIBLE;
-	if (oiter->it_flags & VOS_IT_RECX_COVERED)
-		options |= EVT_ITER_COVERED;
-
-done:
+	options |= vis_flags;
 	if (oiter->it_flags & VOS_IT_RECX_REVERSE)
 		options |= EVT_ITER_REVERSE;
 	if (oiter->it_flags & VOS_IT_FOR_PURGE)

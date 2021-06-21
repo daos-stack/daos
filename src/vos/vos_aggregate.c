@@ -1603,6 +1603,40 @@ delete_evt_entry(struct vos_obj_iter *oiter, vos_iter_entry_t *entry,
 	return rc;
 }
 
+static bool
+handle_deleted(daos_handle_t ih, struct agg_merge_window *mw,
+	       vos_iter_entry_t *entry, unsigned int *acts, int *rc)
+{
+	struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
+	struct evt_extent	 ext;
+
+	*rc = 0;
+
+	if ((entry->ie_vis_flags & VOS_VIS_FLAG_DELETED) == 0)
+		return false;
+
+	recx2ext(&entry->ie_recx, &ext);
+
+	/** If the new record is a eleged record, go ahead and flush
+	 *  the window first because that's all we have left.
+	 */
+	*rc = flush_merge_window(ih, mw, acts);
+	if (*rc) {
+		D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
+			DP_EXT(&mw->mw_ext), DP_RC(*rc));
+		goto out;
+	}
+
+	clear_merge_window(mw);
+
+	*rc = delete_evt_entry(oiter, entry, acts, "deleted");
+
+	if (entry->ie_vis_flags & VOS_VIS_FLAG_LAST)
+		close_merge_window(mw, *rc);
+out:
+	return true;
+}
+
 static int
 join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		  vos_iter_entry_t *entry, unsigned int *acts)
@@ -1816,6 +1850,11 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		DP_UOID(agg_param->ap_oid), DP_EXT(&lgc_ext),
 		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_minor_epc,
 		entry->ie_vis_flags);
+
+	if (handle_deleted(ih, mw, entry, acts, &rc)) {
+		/** Handle deleted entry */
+		goto out;
+	}
 
 	rc = set_window_size(mw, entry->ie_rsize);
 	if (rc)
@@ -2116,8 +2155,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	 */
 	iter_param.ip_epc_expr = VOS_IT_EPC_RR;
 	/* EV tree iterator returns all sorted logical rectangles */
-	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_VISIBLE |
-		VOS_IT_RECX_COVERED;
+	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_DELETED;
 
 	/* Set aggregation parameters */
 	agg_param.ap_umm = &cont->vc_pool->vp_umm;
@@ -2194,8 +2232,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	else
 		iter_param.ip_epc_expr = VOS_IT_EPC_GE;
 	/* EV tree iterator returns all sorted logical rectangles */
-	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_VISIBLE |
-		VOS_IT_RECX_COVERED;
+	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_DELETED;
 
 	/* Set aggregation parameters */
 	agg_param.ap_umm = &cont->vc_pool->vp_umm;
