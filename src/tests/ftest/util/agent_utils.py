@@ -7,6 +7,7 @@
 import socket
 import tempfile
 import re
+import os
 from getpass import getuser
 
 from command_utils_base import \

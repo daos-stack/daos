@@ -684,10 +684,10 @@ class TestWithServers(TestWithoutServers):
         # If there's no server started, then there's no server log to write to.
         if self.setup_start_servers:
 
-          # Write an ID string to the log file for cross rerferencing logs with
-          # tests
-          id_str = '"Test.name: ' + str(self) + '"'
-          self.write_string_to_logfile(id_str)
+            # Write an ID string to the log file for cross rerferencing logs with
+            # tests
+            id_str = '"Test.name: ' + str(self) + '"'
+            self.write_string_to_logfile(id_str)
 
         # Setup a job manager command for running the test command
         manager_class_name = self.params.get(
