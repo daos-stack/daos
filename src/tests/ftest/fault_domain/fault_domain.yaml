@@ -1,0 +1,25 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+  test_clients:
+    - client-B
+timeout: 600
+fault_path:
+  - /fault1
+  - /fault2
+  - /fault2
+  - /fault3
+  - /fault1
+server_config:
+  name: daos_server
+  servers:
+    scm_size: 128
+    bdev_class: nvme
+    bdev_list: [ "aaaa:aa:aa.a" ]
+pool:
+  name: daos_server
+  control_method: dmg
