@@ -463,7 +463,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Mon Jun 21 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.102-3
-- Update to spdk 21.04 and dpdk 21.02
+- Update to spdk 21.04 and dpdk 21.05
 
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
 - Update to pmdk 1.11.0-rc1
