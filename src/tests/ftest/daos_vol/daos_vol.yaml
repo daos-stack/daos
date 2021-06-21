@@ -4,6 +4,9 @@ hosts:
     test_clients:
         - client-B
 timeout: 1000
+setup:
+    start_agents_once: False
+    start_servers_once: False
 job_manager_timeout: 900
 server_config:
     name: daos_server
