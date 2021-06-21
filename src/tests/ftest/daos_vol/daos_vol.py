@@ -15,6 +15,12 @@ class DaosVol(VolTestBase):
     :avocado: recursive
     """
 
+    def setUp(self):
+        """Set up before each test."""
+        # Create unique logs per test variant
+        self.update_log_file_names(self.subtest_name)
+        super().setUp()
+
     def test_daos_vol_mpich(self):
         """Jira ID: DAOS-3656.
 
