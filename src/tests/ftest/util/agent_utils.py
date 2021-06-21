@@ -262,7 +262,7 @@ class DaosAgentManager(SubprocessManager):
             self.log.info("Malformed attachinfo file: %s",
                           attach_info_contents)
             return None
-            
+
         # Write an attach_info_tmp file in this directory for cart_ctl to use
         tmpdir = tempfile.gettempdir()
         attachinfo_file_path = os.path.join(tmpdir, attach_info_filename)
