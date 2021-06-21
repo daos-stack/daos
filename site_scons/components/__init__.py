@@ -310,10 +310,15 @@ def define_components(reqs):
                           ' --without-isal --without-vtune --with-shared',
                           'make $JOBS_OPT', 'make install',
                           'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
+                          'mkdir -p "$SPDK_PREFIX/include/dpdk"',
+                          'cp -r -P dpdk/build/include/* '                     \
+                          '"$SPDK_PREFIX/include/dpdk"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
                 headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
-                extra_include_path=['/usr/include/dpdk'])
+                extra_include_path=['/usr/include/dpdk',
+                                    '$SPDK_PREFIX/include/dpdk'],
+                patch_rpath=['lib'])
 
     retriever = GitRepoRetriever("https://github.com/protobuf-c/protobuf-c.git")
     reqs.define('protobufc',
