@@ -66,6 +66,34 @@ EOF
     pip3 install "avocado-framework-plugin-result-html<70.0"
     pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
     pip3 install clustershell
+
+    # Mellanox OFED hack
+    if ls -d /usr/mpi/gcc/openmpi-*; then
+        cat <<EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
+#%Module 1.0
+#
+#  OpenMPI module for use with 'environment-modules' package:
+#
+conflict		mpi
+prepend-path 		PATH 		/usr/mpi/gcc/openmpi-4.1.0rc5/bin
+prepend-path 		LD_LIBRARY_PATH /usr/mpi/gcc/openmpi-4.1.0rc5/lib64
+prepend-path 		PKG_CONFIG_PATH	/usr/mpi/gcc/openmpi-4.1.0rc5/lib64/pkgconfig
+prepend-path		PYTHONPATH	/usr/lib64/python2.7/site-packages/openmpi
+prepend-path		MANPATH		/usr/mpi/gcc/openmpi-4.1.0rc5/share/man
+setenv 			MPI_BIN		/usr/mpi/gcc/openmpi-4.1.0rc5/bin
+setenv			MPI_SYSCONFIG	/usr/mpi/gcc/openmpi-4.1.0rc5/etc
+setenv			MPI_FORTRAN_MOD_DIR	/usr/mpi/gcc/openmpi-4.1.0rc5/lib64
+setenv			MPI_INCLUDE	/usr/mpi/gcc/openmpi-4.1.0rc5/include
+setenv	 		MPI_LIB		/usr/mpi/gcc/openmpi-4.1.0rc5/lib64
+setenv			MPI_MAN			/usr/mpi/gcc/openmpi-4.1.0rc5/share/man
+setenv			MPI_PYTHON_SITEARCH	/usr/lib64/python2.7/site-packages/openmpi
+setenv			MPI_PYTHON2_SITEARCH	/usr/lib64/python2.7/site-packages/openmpi
+setenv			MPI_COMPILER	openmpi-x86_64
+setenv			MPI_SUFFIX	_openmpi
+setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-4.1.0rc5
+EOF
+    fi
+
 }
 
 post_provision_config_nodes() {
