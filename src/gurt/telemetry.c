@@ -3098,7 +3098,7 @@ d_tm_list(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 	int			 rc = DER_SUCCESS;
 	struct d_tm_shmem_hdr	*shmem;
 
-	if ((head == NULL) || (node == NULL)) {
+	if ((ctx == NULL) || (head == NULL) || (node == NULL)) {
 		rc = -DER_INVAL;
 		goto out;
 	}
