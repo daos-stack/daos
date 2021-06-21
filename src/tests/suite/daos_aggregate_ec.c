@@ -29,7 +29,7 @@ enum {
 	EC_SPECIFIED,
 };
 
-static bool
+bool
 oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 {
 	struct daos_oclass_attr *oca;

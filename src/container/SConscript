@@ -11,8 +11,17 @@ def scons():
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     common = denv.SharedObject(['rpc.c'])
+
+    # dc_cont: Container Client
+    dc_co_tgts = denv.SharedObject(['cli.c']) + common
+    Export('dc_co_tgts')
+
+    if not prereqs.server_requested():
+        return
+
     # ds_cont: Container Server
     senv = denv.Clone()
+    prereqs.require(senv, 'pmdk', headers_only=True)
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     ds_cont = daos_build.library(senv, 'cont',
                                  ['srv.c', 'srv_container.c', 'srv_epoch.c',
@@ -22,10 +31,6 @@ def scons():
                                   'srv_metrics.c', common],
                                  install_off="../..")
     senv.Install('$PREFIX/lib64/daos_srv', ds_cont)
-
-    # dc_cont: Container Client
-    dc_co_tgts = denv.SharedObject(['cli.c']) + common
-    Export('dc_co_tgts')
 
 if __name__ == "SCons.Script":
     scons()

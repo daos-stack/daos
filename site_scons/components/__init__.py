@@ -132,6 +132,7 @@ def define_mercury(reqs):
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
                           '--disable-efa ' +
+                          '--disable-psm3 ' +
                           '--without-gdrcopy ' +
                           OFI_DEBUG +
                           exclude(reqs, 'psm2',
@@ -196,6 +197,11 @@ def define_mercury(reqs):
 
 def define_common(reqs):
     """common system component definitions"""
+    reqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
+
+    reqs.define('libunwind', libs=['unwind'], headers=['libunwind.h'],
+                package='libunwind-devel')
+
     reqs.define('lz4', headers=['lz4.h'], package='lz4-devel')
 
     reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'],
@@ -286,7 +292,7 @@ def define_components(reqs):
                           ' --enable-stack-unwind',
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],
-                requires=['valgrind_devel'],
+                requires=['valgrind_devel', 'libunwind'],
                 libs=['abt'],
                 headers=['abt.h'])
 
