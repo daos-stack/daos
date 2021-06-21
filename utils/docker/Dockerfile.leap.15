@@ -172,6 +172,7 @@ USER daos_server:daos_server
 # ease-of-use for users, however in CI everything is turned off and then
 # selectively enabled.  Turning off any step disables all future steps.
 ARG DAOS_DEPS_BUILD=yes
+ARG DAOS_TARGET_TYPE=release
 
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
@@ -186,7 +187,8 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
+    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
+      BUILD_TYPE=$DAOS_BUILD_TYPE --deps-only && \
     /bin/rm -rf build *.gz; }
 
 # force an upgrade to get any newly built RPMs
@@ -209,13 +211,13 @@ USER daos_server:daos_server
 # select compiler to use
 ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
-ARG DAOS_BUILD_TYPE=release
+ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons --jobs $JOBS install PREFIX=/opt/daos \
-	COMPILER=$COMPILER BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=release && \
+    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER
+      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos; }
 
@@ -244,5 +246,6 @@ RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
+ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN rm -rf /home/daos/*
+RUN [ $"DAOS_KEEP_SRC" == "no" ] || rm -rf /home/daos/*
