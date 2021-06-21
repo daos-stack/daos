@@ -8,14 +8,14 @@ server_config:
   name: daos_server
   port: 10001
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 dmg:
   dmg_sub_command: storage
   storage:
     storage_sub_command: scan
-  insecure: True
+  insecure: False
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
