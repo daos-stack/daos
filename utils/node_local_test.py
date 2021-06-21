@@ -76,6 +76,7 @@ class NLTConf():
         self.wf = None
         self.args = None
         self.max_log_size = None
+        self.valgrind_errors = False
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
                                                  prefix='dnt_dfuse_')
         self.tmp_dir = None
@@ -1195,6 +1196,14 @@ def run_daos_cmd(conf,
                          log_file.name,
                          show_memleaks=show_memleaks)
     vh.convert_xml()
+    # If there are valgrind errors here then mark them for later reporting but
+    # do not abort.  This allows a full-test run to report all valgrind issues
+    # in a single test run.
+    if vh.use_valgrind and rc.returncode == 42:
+        print("Valgrind errors detected")
+        print(rc)
+        conf.valgrind_errors = True
+        rc.returncode = 0
     if use_json:
         rc.json = json.loads(rc.stdout.decode('utf-8'))
     return rc
@@ -1217,7 +1226,6 @@ def create_cont(conf, pool, posix=False, label=None):
     print(rc.json)
     assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
     return rc.json['response']['container_uuid']
-    return rc.stdout.decode().split(' ')[-1].rstrip()
 
 def destroy_container(conf, pool, container):
     """Destroy a container"""
@@ -1787,10 +1795,9 @@ class posix_tests():
             self.fatal_errors = True
 
     @needs_dfuse
-    def Xtest_daos_fs_tool(self):
+    def test_daos_fs_tool(self):
         """Create a UNS entry point"""
 
-        # TODO: Re-enable this one.
         dfuse = self.dfuse
         pool = self.pool.uuid
         conf = self.conf
@@ -3263,6 +3270,9 @@ def main():
         wf.add_test_case('Errors', 'Significant errors encountered')
     else:
         wf.add_test_case('Errors')
+
+    if conf.valgrind_errors:
+        fatal_errors.add_result(True)
 
     wf.close()
     wf_server.close()
