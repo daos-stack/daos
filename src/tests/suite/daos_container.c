@@ -436,8 +436,19 @@ co_properties(void **state)
 
 		/* Create container: different UUID, different label - pass */
 		print_message("Checking create: different UUID and label\n");
-		rc = daos_cont_create(arg->pool.poh, cuuid2, prop, NULL);
+		uuid_clear(cuuid2);
+		rc = daos_cont_create_by_label(arg->pool.poh, label2, NULL,
+					       cuuid2, NULL /* ev */);
 		assert_rc_equal(rc, 0);
+		print_message("created container %s with UUID: "DF_UUIDF"\n",
+			      label2, DP_UUID(cuuid2));
+		/* Open by label, and immediately close */
+		rc = daos_cont_open_by_label(arg->pool.poh, label2, DAOS_COO_RW,
+					     &coh2, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_cont_close(coh2, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("opened and closed container %s\n", label2);
 
 		/* Create container: same UUID, different label - fail
 		 * uuid matches first container, label matches second container
@@ -448,8 +459,8 @@ co_properties(void **state)
 		assert_rc_equal(rc, -DER_INVAL);
 
 		/* destroy the second container (will re-create it next) */
-		rc = daos_cont_destroy(arg->pool.poh, cuuid2, 0 /* force */,
-				       NULL);
+		rc = daos_cont_destroy_by_label(arg->pool.poh, label2,
+						0 /* force */, NULL /* ev */);
 		assert_rc_equal(rc, 0);
 
 		/* Create container 2 without label, set-label label2,
@@ -493,8 +504,8 @@ co_properties(void **state)
 		/* destroy the second container */
 		rc = daos_cont_close(coh2, NULL);
 		assert_rc_equal(rc, 0);
-		rc = daos_cont_destroy(arg->pool.poh, cuuid2, 0 /* force */,
-				       NULL);
+		rc = daos_cont_destroy_by_label(arg->pool.poh, label2_v2,
+						0 /* force */, NULL /* ev */);
 		assert_rc_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);

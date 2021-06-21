@@ -52,6 +52,63 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
 }
 
 int
+daos_cont_create_by_label(daos_handle_t poh, const char *label,
+			  daos_prop_t *cont_prop, uuid_t uuid,
+			  daos_event_t *ev)
+{
+	size_t			 label_len = 0;
+	daos_prop_t		*label_prop;
+	daos_prop_t		*merged_props = NULL;
+	uuid_t			 cuuid;
+	int			 rc;
+
+	if (label)
+		label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN+1);
+	if (!label || (label_len == 0) || (label_len > DAOS_PROP_LABEL_MAX_LEN))
+		return -DER_INVAL;
+
+	label_prop = daos_prop_alloc(1);
+	if (label_prop == NULL) {
+		D_ERROR("failed to allocate label_prop\n");
+		return -DER_NOMEM;
+	}
+	label_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+	D_STRNDUP(label_prop->dpp_entries[0].dpe_str, label,
+		  DAOS_PROP_LABEL_MAX_LEN);
+	if (label_prop->dpp_entries[0].dpe_str == NULL) {
+		D_ERROR("failed to copy label to label_prop\n");
+		rc = -DER_NOMEM;
+		goto out_prop;
+	}
+
+	if (cont_prop) {
+		merged_props = daos_prop_merge(cont_prop, label_prop);
+		if (merged_props == NULL) {
+			D_ERROR("failed to merge cont_prop and label_prop\n");
+			rc = -DER_NOMEM;
+			goto out_prop;
+		}
+	}
+
+	uuid_generate(cuuid);
+	rc = daos_cont_create(poh, cuuid,
+			      merged_props ? merged_props : label_prop, ev);
+	if (rc != 0) {
+		D_ERROR("daos_cont_create UUID:"DF_UUIDF" label=%s failed, "
+			DF_RC"\n", DP_UUID(cuuid), label, DP_RC(rc));
+		goto out_merged_props;
+	}
+	uuid_copy(uuid, cuuid);
+
+out_merged_props:
+	daos_prop_free(merged_props);
+
+out_prop:
+	daos_prop_free(label_prop);
+	return rc;
+}
+
+int
 daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
 {
@@ -151,6 +208,35 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 
 	return dc_task_schedule(task, true);
 }
+
+int
+daos_cont_destroy_by_label(daos_handle_t poh, const char *label, int force,
+			   daos_event_t *ev)
+{
+	size_t			 label_len = 0;
+	daos_cont_destroy_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, CONT_DESTROY);
+	if (label)
+		label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN+1);
+	if (!label || (label_len == 0) || (label_len > DAOS_PROP_LABEL_MAX_LEN))
+		return -DER_INVAL;
+
+	rc = dc_task_create(dc_cont_destroy_lbl, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->poh		= poh;
+	args->force		= force;
+	uuid_clear(args->uuid);
+	args->label		= label;
+
+	return dc_task_schedule(task, true);
+}
+
 
 int
 daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,

@@ -1078,7 +1078,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct daos_acl		       *acl;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: force=%u\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cdi_op.ci_uuid), rpc,
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc,
 		in->cdi_force);
 
 	/* Fetch the container props to check access for delete */
@@ -1102,8 +1102,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	    !ds_sec_cont_can_delete(pool_hdl->sph_flags, &pool_hdl->sph_cred,
 				    &owner, acl)) {
 		D_ERROR(DF_CONT": permission denied to delete cont\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cdi_op.ci_uuid));
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
 		D_GOTO(out_prop, rc = -DER_NO_PERM);
 	}
 
@@ -1111,7 +1110,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0)
 		goto out_prop;
 
-	rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, in->cdi_op.ci_uuid);
+	rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
 	if (rc != 0)
 		goto out_prop;
 
@@ -1145,7 +1144,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 					goto out_prop;
 				D_DEBUG(DB_MD, DF_CONT": deleted label: %s\n",
 					DP_CONT(pool_hdl->sph_pool->sp_uuid,
-						in->cdi_op.ci_uuid),
+						cont->c_uuid),
 						lbl_ent->dpe_str);
 			} else {
 				goto out_prop;
@@ -1154,15 +1153,14 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 	/* Destroy the container attribute KVS. */
-	d_iov_set(&key, in->cdi_op.ci_uuid, sizeof(uuid_t));
+	d_iov_set(&key, cont->c_uuid, sizeof(uuid_t));
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_svc->cs_conts, &key);
 
 out_prop:
 	daos_prop_free(prop);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cdi_op.ci_uuid), rpc,
-		rc);
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, rc);
 	return rc;
 }
 
@@ -1565,6 +1563,8 @@ cont_lookup_bylabel(struct rdb_tx *tx, const struct cont_svc *svc,
 	if (rc != 0)
 		return rc;
 
+	D_DEBUG(DF_DSMS, DF_CONT": successfully found container %s\n",
+		DP_CONT(svc->cs_pool_uuid, (*cont)->c_uuid), label);
 	return 0;
 }
 
@@ -3275,6 +3275,7 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		rc = cont_close(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_DESTROY:
+	case CONT_DESTROY_BYLABEL:
 		d_tm_inc_counter(metrics->op_destroy_ctr, 1);
 		rc = cont_destroy(tx, pool_hdl, cont, rpc);
 		break;
@@ -3315,8 +3316,9 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		 crt_rpc_t *rpc)
 {
 	struct cont_op_in		*in = crt_req_get(rpc);
-	struct cont_open_bylabel_in	*lbl_in = NULL;
-	struct cont_open_bylabel_out	*lbl_out = NULL;
+	struct cont_open_bylabel_in	*olbl_in = NULL;
+	struct cont_open_bylabel_out	*olbl_out = NULL;
+	struct cont_destroy_bylabel_in	*dlbl_in = NULL;
 	struct rdb_tx			 tx;
 	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
 	struct cont			*cont = NULL;
@@ -3338,14 +3340,23 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		rc = cont_create(&tx, pool_hdl, svc, rpc);
 		break;
 	case CONT_OPEN_BYLABEL:
-		lbl_in = crt_req_get(rpc);
-		lbl_out = crt_reply_get(rpc);
-		rc = cont_lookup_bylabel(&tx, svc, lbl_in->coli_label, &cont);
+		olbl_in = crt_req_get(rpc);
+		olbl_out = crt_reply_get(rpc);
+		rc = cont_lookup_bylabel(&tx, svc, olbl_in->coli_label, &cont);
 		if (rc != 0)
 			D_GOTO(out_lock, rc);
 		/* NB: call common cont_op_with_cont() same as CONT_OPEN case */
 		rc = cont_op_with_cont(&tx, pool_hdl, cont, rpc);
-		uuid_copy(lbl_out->colo_uuid, cont->c_uuid);
+		uuid_copy(olbl_out->colo_uuid, cont->c_uuid);
+		cont_put(cont);
+		break;
+	case CONT_DESTROY_BYLABEL:
+		dlbl_in = crt_req_get(rpc);
+		rc = cont_lookup_bylabel(&tx, svc, dlbl_in->cdli_label, &cont);
+		if (rc != 0)
+			D_GOTO(out_lock, rc);
+		/* NB: call common cont_op_with_cont() same as CONT_DESTROY */
+		rc = cont_op_with_cont(&tx, pool_hdl, cont, rpc);
 		cont_put(cont);
 		break;
 	default:
@@ -3423,9 +3434,15 @@ out_pool_hdl:
 			" opc=%u rc=%d\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, lout->colo_uuid),
 				lin->coli_label, rpc, DP_UUID(in->ci_hdl),
-			opc, rc);
+				opc, rc);
+	} else if (opc == CONT_DESTROY_BYLABEL) {
+		struct cont_destroy_bylabel_in	*lin = crt_req_get(rpc);
+
+		D_DEBUG(DF_DSMS, DF_UUID":%s: replying rpc %p: opc=%u, rc=%d\n",
+			DP_UUID(pool_hdl->sph_pool->sp_uuid), lin->cdli_label,
+			rpc, opc, rc);
 	} else {
-		D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: hdl="DF_UUID
+			D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: hdl="DF_UUID
 			" opc=%u rc=%d\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
 			DP_UUID(in->ci_hdl), opc, rc);
