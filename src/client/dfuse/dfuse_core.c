@@ -55,7 +55,6 @@ dfuse_progress_thread(void *arg)
 	return NULL;
 }
 
-#if 0
 /* Parse a string to a time, used for reading container attributes info
  * timeouts.
  */
@@ -91,7 +90,6 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 	*_out = out;
 	return 0;
 }
-#endif
 
 /* Inode entry hash table operations */
 
@@ -578,13 +576,6 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
 static int
 dfuse_cont_get_cache(struct dfuse_cont *dfc)
 {
-#if 1
-	/**
-	 * XXX use default cache value until DAOS-7671 is fixed
-	 */
-	dfuse_set_default_cont_cache_values(dfc);
-	return 0;
-#else
 	size_t		size;
 	char		*buff;
 	int		rc;
@@ -615,6 +606,16 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 		}
 		have_attr = true;
 
+		/* Ensure the character after the fetched string is zero in case
+		 * of non-null terminated strings.  size always refers to the
+		 * number of non-null characters in this case, regardless of if
+		 * the attribute is null terminated or not.
+		 */
+		if (buff[size - 1] == '\0')
+			size--;
+		else
+			buff[size] = '\0';
+
 		if (i == ATTR_DATA_CACHE_INDEX) {
 			if (strncmp(buff, "on", size) == 0) {
 				dfc->dfc_data_caching = true;
@@ -643,11 +644,6 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 			}
 			continue;
 		}
-
-		/* Ensure the character after the fetch string is zero, in case
-		 * of non-null terminated strings.
-		 */
-		buff[size] = '\0';
 
 		rc = dfuse_parse_time(buff, size, &value);
 		if (rc != 0) {
@@ -689,7 +685,6 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 out:
 	D_FREE(buff);
 	return rc;
-#endif
 }
 
 /* Set default cache values for a container.
