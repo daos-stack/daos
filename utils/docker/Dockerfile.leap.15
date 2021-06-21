@@ -188,7 +188,7 @@ ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
-      BUILD_TYPE=$DAOS_BUILD_TYPE --deps-only && \
+      TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
     /bin/rm -rf build *.gz; }
 
 # force an upgrade to get any newly built RPMs
@@ -217,7 +217,7 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
     { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
-      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+      BUILD_TYPE=$DAOS_TARGET_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
     /bin/rm -rf build && \
     cp -r utils/config/examples /opt/daos; }
 
@@ -248,4 +248,4 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ $"DAOS_KEEP_SRC" == "no" ] || rm -rf /home/daos/*
+RUN [ $"DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*

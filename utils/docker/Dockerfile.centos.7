@@ -225,7 +225,7 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos
+    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
       TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
     /bin/rm -rf build *.gz; }
 
@@ -286,4 +286,4 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ $"DAOS_KEEP_SRC" == "no" ] || rm -rf /home/daos/*
+RUN [ $"DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
