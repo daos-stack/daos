@@ -50,7 +50,6 @@ func inList(c Component, compList []Component) bool {
 func TestSecurity_ComponentHasAccess(t *testing.T) {
 	allComponents := []Component{ComponentUndefined, ComponentAdmin, ComponentAgent, ComponentServer}
 	testCases := map[string][]Component{
-		"/ctl.CtlSvc/StoragePrepare":     {ComponentAdmin},
 		"/ctl.CtlSvc/StorageScan":        {ComponentAdmin},
 		"/ctl.CtlSvc/StorageFormat":      {ComponentAdmin},
 		"/ctl.CtlSvc/NetworkScan":        {ComponentAdmin},

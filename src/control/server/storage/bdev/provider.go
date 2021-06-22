@@ -60,7 +60,6 @@ type (
 		Class          storage.BdevClass
 		DeviceList     []string
 		DeviceFileSize uint64 // size in bytes for NVMe device emulation
-		MemSize        int    // size MiB memory to be used by SPDK proc
 		Hostname       string
 		OwnerUID       int
 		OwnerGID       int
@@ -69,9 +68,8 @@ type (
 
 	// DeviceFormatRequest designs the parameters for a device-specific format.
 	DeviceFormatRequest struct {
-		MemSize int // size MiB memory to be used by SPDK proc
-		Device  string
-		Class   storage.BdevClass
+		Device string
+		Class  storage.BdevClass
 	}
 
 	// DeviceFormatResponse contains device-specific Format operation results.
