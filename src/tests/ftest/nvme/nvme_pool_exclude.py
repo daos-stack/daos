@@ -8,7 +8,6 @@ import time
 import random
 import threading
 
-from test_utils_pool import TestPool
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
 
@@ -50,7 +49,7 @@ class NvmePoolExclude(OSAUtils):
                            Defaults to None
         """
         # Create a pool
-        pool = {}
+        self.pool = []
         target_list = []
 
         # Exclude target : random two targets (target idx : 0-7)
@@ -66,14 +65,11 @@ class NvmePoolExclude(OSAUtils):
         rank_list = list(range(1, exclude_servers))
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
-            pool[val].get_params(self)
-            pool[val].create()
-            pool[val].set_property("reclaim", "disabled")
+            self.pool.append(self.get_pool())
+            self.pool[-1].set_property("reclaim", "disabled")
 
         for val in range(0, num_pool):
-            self.pool = pool[val]
-            self.add_container(self.pool)
+            self.add_container(self.pool[val])
             self.cont_list.append(self.container)
             for test in self.ior_test_sequence:
                 threads = []
@@ -87,7 +83,7 @@ class NvmePoolExclude(OSAUtils):
                     thrd.start()
                     time.sleep(1)
 
-                self.pool.display_pool_daos_space("Pool space: Before Exclude")
+                self.pool[val].display_pool_daos_space("Pool space: Before Exclude")
                 pver_begin = self.get_pool_version()
 
                 index = random.randint(1, len(rank_list))
@@ -95,7 +91,7 @@ class NvmePoolExclude(OSAUtils):
                 self.log.info("Removing rank %d", rank)
 
                 self.log.info("Pool Version at the beginning %s", pver_begin)
-                output = self.dmg_command.pool_exclude(self.pool.uuid,
+                output = self.dmg_command.pool_exclude(self.pool[val].uuid,
                                                        rank, t_string)
                 self.print_and_assert_on_rebuild_failure(output)
 
@@ -112,8 +108,8 @@ class NvmePoolExclude(OSAUtils):
                 # Verify the data after pool exclude
                 self.run_ior_thread("Read", oclass, test)
                 display_string = "Pool{} space at the End".format(val)
-                self.pool.display_pool_daos_space(display_string)
-                kwargs = {"pool": self.pool.uuid,
+                self.pool[val].display_pool_daos_space(display_string)
+                kwargs = {"pool": self.pool[val].uuid,
                           "cont": self.container.uuid}
                 output = self.daos_command.container_check(**kwargs)
                 self.log.info(output)

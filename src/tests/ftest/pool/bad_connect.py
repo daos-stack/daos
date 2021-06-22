@@ -4,13 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import traceback
 import ctypes
 from avocado.core.exceptions import TestFail
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from general_utils import create_string_buffer
 
 
@@ -24,7 +21,9 @@ class BadConnectTest(TestWithServers):
         """
         Pass bad parameters to pool connect
 
-        :avocado: tags=all,pool,full_regression,tiny,badconnect
+        :avocado: tags=all,full_regression
+        :avocado: tags=tiny
+        :avocado: tags=pool,bad_connect
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -55,9 +54,7 @@ class BadConnectTest(TestWithServers):
         puuid = (ctypes.c_ubyte * 16)()
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
+        self.add_pool(connect=False)
         # save this uuid since we might trash it as part of the test
         ctypes.memmove(puuid, self.pool.pool.uuid, 16)
 

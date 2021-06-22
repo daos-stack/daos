@@ -28,7 +28,8 @@ class TestPool(TestDaosApiBase):
         """Initialize a TestPool object.
 
         Args:
-            context (DaosContext): [description]
+            context (DaosContext): The daos environment and other info. Use
+                self.context when calling from a test.
             dmg_command (DmgCommand): DmgCommand used to call dmg command. This
                 value can be obtained by calling self.get_dmg_command() from a
                 test. It'll return the object with -l <Access Point host:port>
@@ -38,7 +39,9 @@ class TestPool(TestDaosApiBase):
                 the API methods. Defaults to None.
             label_generator (LabelGenerator, optional): Generates label by
                 adding number to the end of the prefix set in self.label.
-                Defaults to None.
+                There's a link between label_generator and label. If the label
+                is used as it is, i.e., not None, label_generator must be
+                provided in order to call create(). Defaults to None.
         """
         super().__init__("/run/pool/*", cb_handler)
         self.context = context
@@ -56,17 +59,15 @@ class TestPool(TestDaosApiBase):
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
         self.label = BasicParameter(None, "TestLabel")
-
-        if label_generator is None:
-            self.label_generator = LabelGenerator()
-        else:
-            self.label_generator = label_generator
+        self.label_generator = label_generator
 
         self.pool = None
         self.uuid = None
         self.info = None
         self.svc_ranks = None
         self.connected = False
+        # Flag to allow the non-create operations to use UUID. e.g., if you want
+        # to destroy the pool with UUID, set this to False, then call destroy().
         self.use_label = True
 
         self.dmg = dmg_command
@@ -103,7 +104,13 @@ class TestPool(TestDaosApiBase):
 
         self.pool = DaosPool(self.context)
 
-        self.label.update(self.label_generator.get_label(self.label.value))
+        # Use a unique pool label if using pool labels
+        if self.label.value is not None:
+            if not isinstance(self.label_generator, LabelGenerator):
+                raise CommandFailure(
+                    "Unable to create a unique pool label; " +\
+                        "Undefined label_generator")
+            self.label.update(self.label_generator.get_label(self.label.value))
 
         kwargs = {
             "uid": self.uid,
@@ -224,8 +231,10 @@ class TestPool(TestDaosApiBase):
                             .format(self.control_method.value))
 
                 elif self.control_method.value == self.USE_DMG and self.dmg:
-                    # Destroy the pool with the dmg command. Use label if the
-                    # pool was created with it.
+                    # Destroy the pool with the dmg command. First, check the
+                    # flag and see if the caller wants to use the label or UUID.
+                    # If the caller want to use the label, check to make sure
+                    # that self.label is set.
                     if self.use_label and self.label.value is not None:
                         self.dmg.pool_destroy(
                             pool=self.label.value, force=force)
@@ -243,7 +252,6 @@ class TestPool(TestDaosApiBase):
 
             self.pool = None
             self.uuid = None
-            self.label = BasicParameter(None)
             self.info = None
             self.svc_ranks = None
 
@@ -810,10 +818,15 @@ class TestPool(TestDaosApiBase):
 
 
 class LabelGenerator():
-    # pylint: disable=too-many-public-methods
     """Generates label used for pool."""
 
     def __init__(self, value=1):
+        """Constructor.
+
+        Args:
+            value (int): Number that's attached after the base_label.
+
+        """
         self.value = value
 
     def get_label(self, base_label):
@@ -824,6 +837,7 @@ class LabelGenerator():
 
         Returns:
             str: Created label.
+
         """
         label = base_label
         if label is not None:

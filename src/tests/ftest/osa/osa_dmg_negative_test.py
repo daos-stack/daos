@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from osa_utils import OSAUtils
-from test_utils_pool import TestPool
 
 
 class OSADmgNegativeTest(OSAUtils):
@@ -63,20 +62,18 @@ class OSADmgNegativeTest(OSAUtils):
         """
         # Create a pool
         self.dmg_command.exit_status_exception = False
-        pool = {}
+        self.pool = []
         pool_uuid = []
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
-            pool[val].get_params(self)
+            self.pool.append(self.get_pool(create=False))
             # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].scm_size.value /
-                                           num_pool)
-            pool[val].nvme_size.value = int(pool[val].nvme_size.value /
-                                            num_pool)
-            pool[val].create()
-            pool_uuid.append(pool[val].uuid)
-            self.pool = pool[val]
+            self.pool[-1].scm_size.value = int(
+                self.pool[-1].scm_size.value / num_pool)
+            self.pool[-1].nvme_size.value = int(
+                self.pool[-1].nvme_size.value / num_pool)
+            self.pool[-1].create()
+            pool_uuid.append(self.pool[-1].uuid)
 
         # Start the additional servers and extend the pool
         if extend is True:
@@ -87,7 +84,6 @@ class OSADmgNegativeTest(OSAUtils):
         # Some test_dmg_sequence data will be invalid, valid.
         for val in range(0, num_pool):
             for i in range(len(self.test_seq)):
-                self.pool = pool[val]
                 rank = self.test_seq[i][0]
                 target = "{}".format(self.test_seq[i][1])
                 expected_result = "{}".format(self.test_seq[i][2])
@@ -95,33 +91,30 @@ class OSADmgNegativeTest(OSAUtils):
                 # There is no need to extend rank 0
                 # Avoid DER_ALREADY
                 if extend is True and rank != "0":
-                    output = self.dmg_command.pool_extend(self.pool.uuid, rank)
+                    output = self.dmg_command.pool_extend(
+                        self.pool[val].uuid, rank)
                     self.log.info(output)
                     self.validate_results(expected_result, output.stdout_text)
                 if (extend is False and rank in ["4","5"]):
                     continue
                 # Exclude a rank, target
-                output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                       rank,
-                                                       target)
+                output = self.dmg_command.pool_exclude(
+                    self.pool[val].uuid, rank, target)
                 self.log.info(output)
                 self.validate_results(expected_result, output.stdout_text)
                 # Now reintegrate the excluded rank.
-                output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                           rank,
-                                                           target)
+                output = self.dmg_command.pool_reintegrate(
+                    self.pool[val].uuid, rank, target)
                 self.log.info(output)
                 self.validate_results(expected_result, output.stdout_text)
                 # Drain the data from a rank
-                output = self.dmg_command.pool_drain(self.pool.uuid,
-                                                     rank,
-                                                     target)
+                output = self.dmg_command.pool_drain(
+                    self.pool[val].uuid, rank, target)
                 self.log.info(output)
                 self.validate_results(expected_result, output.stdout_text)
                 # Now reintegrate the drained rank
-                output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                           rank,
-                                                           target)
+                output = self.dmg_command.pool_reintegrate(
+                    self.pool[val].uuid, rank, target)
                 self.log.info(output)
                 self.validate_results(expected_result, output.stdout_text)
 

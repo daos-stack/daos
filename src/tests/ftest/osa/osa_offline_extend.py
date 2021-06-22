@@ -6,7 +6,6 @@
 """
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool
 from dmg_utils import check_system_query_status
 from apricot import skipForTicket
 
@@ -44,7 +43,7 @@ class OSAOfflineExtend(OSAUtils):
             oclass (list) : list of daos object class (eg: "RP_2G8")
         """
         # Create a pool
-        pool = {}
+        self.pool = []
         if oclass is None:
             oclass = []
             oclass.append(self.ior_cmd.dfs_oclass.value)
@@ -57,12 +56,9 @@ class OSAOfflineExtend(OSAUtils):
                 index = val
             else:
                 index = 0
-            pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
-            pool[val].get_params(self)
-            pool[val].create()
-            self.pool = pool[val]
+            self.pool.append(self.get_pool())
             test_seq = self.ior_test_sequence[0]
-            self.pool.set_property("reclaim", "disabled")
+            self.pool[-1].set_property("reclaim", "disabled")
             if data:
                 self.run_ior_thread("Write", oclass[index], test_seq)
                 self.run_mdtest_thread(oclass[index])
@@ -87,14 +83,13 @@ class OSAOfflineExtend(OSAUtils):
                 val = rank_index
             else:
                 val = 0
-            self.pool = pool[val]
-            self.pool.display_pool_daos_space("Pool space: Beginning")
+            self.pool[val].display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # Enable aggregation for multiple pool testing only.
             if self.test_during_aggregation is True and (num_pool > 1):
-                self.delete_extra_container(self.pool)
-            output = self.dmg_command.pool_extend(self.pool.uuid, rank_val)
+                self.delete_extra_container(self.pool[val])
+            output = self.dmg_command.pool_extend(self.pool[val].uuid, rank_val)
             self.print_and_assert_on_rebuild_failure(output)
 
             pver_extend = self.get_pool_version()
@@ -104,7 +99,7 @@ class OSAOfflineExtend(OSAUtils):
                             "Pool Version Error:  After extend")
 
             display_string = "Pool{} space at the End".format(val)
-            pool[val].display_pool_daos_space(display_string)
+            self.pool[val].display_pool_daos_space(display_string)
 
             if data:
                 # Perform the IOR read using the same
@@ -115,8 +110,8 @@ class OSAOfflineExtend(OSAUtils):
                     index = 0
                 self.run_ior_thread("Read", oclass[index], test_seq)
                 self.run_mdtest_thread(oclass[index])
-                self.container = self.pool_cont_dict[self.pool][0]
-                kwargs = {"pool": self.pool.uuid,
+                self.container = self.pool_cont_dict[self.pool[val]][0]
+                kwargs = {"pool": self.pool[val].uuid,
                           "cont": self.container.uuid}
                 output = self.daos_command.container_check(**kwargs)
                 self.log.info(output)

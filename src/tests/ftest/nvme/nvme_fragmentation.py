@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import time
 import os
 import threading
@@ -13,7 +12,6 @@ from itertools import product
 
 from apricot import TestWithServers
 from write_host_file import write_host_file
-from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from daos_utils import DaosCommand
 from command_utils_base import CommandFailure
@@ -133,14 +131,13 @@ class NvmeFragmentation(TestWithServers):
         Run above code in loop for some time (~1 hours) and expect
         not to fail with NO ENOM SPAC.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=nvme_fragmentation
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=nvme,ib2,nvme_fragmentation
         """
         no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
+        self.pool = self.get_pool(connect=False)
         self.pool.display_pool_daos_space("Pool space at the Beginning")
 
         # Repeat the test for 30 times which will take ~1 hour

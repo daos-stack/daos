@@ -8,7 +8,6 @@ import os
 import traceback
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
 
@@ -30,7 +29,7 @@ class BadCreateTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=tiny
-        :avocado: tags=pool,badcreate
+        :avocado: tags=pool,bad_create
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -98,8 +97,8 @@ class BadCreateTest(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
+        self.add_pool(create=False)
+
         # Manually set TestPool members before calling create
         self.pool.mode.value = mode
         self.pool.uid = uid

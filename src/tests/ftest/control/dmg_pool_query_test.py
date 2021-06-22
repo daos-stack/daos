@@ -4,10 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 from ior_test_base import IorTestBase
-from test_utils_pool import TestPool
 from control_test_base import ControlTestBase
 
 
@@ -26,9 +23,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         super().setUp()
 
         # Init the pool
-        self.pool = TestPool(self.context, self.dmg)
-        self.pool.get_params(self)
-        self.pool.create()
+        self.pool = self.get_pool(connect=False)
         self.uuid = self.pool.pool.get_uuid_str()
 
     def get_pool_query_info(self, uuid):
