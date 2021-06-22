@@ -1657,6 +1657,7 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_oclass_id = ap->oclass;
 		attr.da_chunk_size = ap->chunk_size;
 		attr.da_props = ap->props;
+		attr.da_mode = ap->mode;
 		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
 	} else {
 		rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);

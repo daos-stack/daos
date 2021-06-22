@@ -55,6 +55,7 @@ dfuse_progress_thread(void *arg)
 	return NULL;
 }
 
+#if 0
 /* Parse a string to a time, used for reading container attributes info
  * timeouts.
  */
@@ -90,6 +91,7 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 	*_out = out;
 	return 0;
 }
+#endif
 
 /* Inode entry hash table operations */
 
@@ -544,7 +546,13 @@ err:
 
 #define ATTR_COUNT 6
 
-char const *cont_attr_names[ATTR_COUNT];
+char const *const
+cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
+			       "dfuse-dentry-time",
+			       "dfuse-dentry-dir-time",
+			       "dfuse-ndentry-time",
+			       "dfuse-data-cache",
+			       "dfuse-direct-io-disable"};
 
 #define ATTR_TIME_INDEX		0
 #define ATTR_DENTRY_INDEX	1
@@ -558,42 +566,6 @@ char const *cont_attr_names[ATTR_COUNT];
  */
 #define ATTR_VALUE_LEN 128
 
-/* Manage attributes names table this way to prevent names/strings to be
- * stored in the text/code region and thus avoid EFAULT errors during
- * memory registration for RDMA xfer to the server
- */
-static void
-fini_cont_attr_names()
-{
-	int i;
-
-	for (i = 0; i < ATTR_COUNT; i++)
-		if (cont_attr_names[i] != NULL)
-			free((void *)cont_attr_names[i]);
-}
-
-static int
-init_cont_attr_names()
-{
-	int i;
-
-	cont_attr_names[ATTR_TIME_INDEX] = strdup("dfuse-attr-time");
-	cont_attr_names[ATTR_DENTRY_INDEX] = strdup("dfuse-dentry-time");
-	cont_attr_names[ATTR_DENTRY_DIR_INDEX] =
-					strdup("dfuse-dentry-dir-time");
-	cont_attr_names[ATTR_NDENTRY_INDEX] = strdup("dfuse-ndentry-time");
-	cont_attr_names[ATTR_DATA_CACHE_INDEX] = strdup("dfuse-data-cache");
-	cont_attr_names[ATTR_DIRECT_IO_DISABLE_INDEX] = 
-					strdup("dfuse-direct-io-disable");
-
-	for (i = 0; i < ATTR_COUNT; i++)
-		if (cont_attr_names[i] == NULL) {
-			fini_cont_attr_names();
-			return ENOMEM;
-		}
-	return 0;
-}
-
 /* Setup caching attributes for a container.
  *
  * These are read from pool attributes, or can be overwritten on the command
@@ -606,6 +578,13 @@ init_cont_attr_names()
 static int
 dfuse_cont_get_cache(struct dfuse_cont *dfc)
 {
+#if 1
+	/**
+	 * XXX use default cache value until DAOS-7671 is fixed
+	 */
+	dfuse_set_default_cont_cache_values(dfc);
+	return 0;
+#else
 	size_t		size;
 	char		*buff;
 	int		rc;
@@ -710,6 +689,7 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 out:
 	D_FREE(buff);
 	return rc;
+#endif
 }
 
 /* Set default cache values for a container.
@@ -753,6 +733,8 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
 	D_ALLOC_PTR(dfc);
 	if (dfc == NULL)
 		D_GOTO(err_free, rc = ENOMEM);
+
+	DFUSE_TRA_UP(dfc, dfp, "dfc");
 
 	rc = daos_cont_open_by_label(dfp->dfp_poh, label, DAOS_COO_RW,
 				     &dfc->dfs_coh, &c_info, NULL);
@@ -851,13 +833,13 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		D_ALLOC_PTR(dfc);
 		if (!dfc)
 			D_GOTO(err, rc = ENOMEM);
+
+		DFUSE_TRA_UP(dfc, dfp, "dfc");
 	}
 
 	/* No existing container found, so setup dfs and connect to one */
 
 	atomic_store_relaxed(&dfc->dfs_ref, 1);
-
-	DFUSE_TRA_UP(dfc, dfp, "dfc");
 
 	DFUSE_TRA_DEBUG(dfp, "New cont "DF_UUIDF" in pool "DF_UUIDF,
 			DP_UUID(cont), DP_UUID(dfp->dfp_pool));
@@ -969,10 +951,6 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 {
 	struct dfuse_projection_info	*fs_handle;
 	int				rc;
-
-	rc = init_cont_attr_names();
-	if (rc != 0)
-		return rc;
 
 	D_ALLOC_PTR(fs_handle);
 	if (!fs_handle)
@@ -1321,8 +1299,6 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close pools");
 		rcp = EINVAL;
 	}
-
-	fini_cont_attr_names();
 
 	return rcp;
 }
