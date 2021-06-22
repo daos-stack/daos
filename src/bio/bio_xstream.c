@@ -414,7 +414,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	/*
 	 * Leave a hugepage overhead buffer for DPDK memory management. Reduce
 	 * the DMA upper bound by 200 hugepages per target to account for this.
-	 * Only necessary gfor 2MB hugepage size.
+	 * Only necessary for 2MB hugepage size.
 	 */
 	if (hugepage_size <= DAOS_HUGEPAGE_SIZE_2MB) {
 		D_ASSERT(bio_chk_cnt_max > ((200 * hugepage_size) / size_mb));
