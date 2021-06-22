@@ -66,12 +66,13 @@ class installed_comps():
         self.not_installed.append(name)
         return False
 
-def exclude(reqs, name, use_value, exclude_value):
-    """Return True if in exclude list"""
-    if set([name, 'all']).intersection(set(reqs.exclude)):
-        print("Excluding %s from build" % name)
-        return exclude_value
-    return use_value
+def include(reqs, name, use_value, exclude_value):
+    """Return True if in include list"""
+    if set([name, 'all']).intersection(set(reqs.include)):
+        print("Including %s optional component from build" % name)
+        return use_value
+    print("Excluding %s optional component from build" % name)
+    return exclude_value
 
 def inst(reqs, name):
     """Return True if name is in list of installed packages"""
@@ -132,20 +133,24 @@ def define_mercury(reqs):
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
                           '--disable-efa ' +
+                          '--disable-psm3 ' +
                           '--without-gdrcopy ' +
                           OFI_DEBUG +
-                          exclude(reqs, 'psm2',
+                          include(reqs, 'psm2',
                                   '--enable-psm2' +
                                   check(reqs, 'psm2',
                                         "=$PSM2_PREFIX "
                                         'LDFLAGS="-Wl,--enable-new-dtags ' +
                                         '-Wl,-rpath=$PSM2_PREFIX/lib64" ',
                                         ''),
-                                  ''),
+                                  '--disable-psm2 ') +
+                          include(reqs, 'psm3',
+                                  '--enable-psm3 ',
+                                  '--disable-psm3 '),
                           'make $JOBS_OPT',
                           'make install'],
                 libs=['fabric'],
-                requires=exclude(reqs, 'psm2', ['psm2'], []),
+                requires=include(reqs, 'psm2', ['psm2'], []),
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
@@ -196,6 +201,11 @@ def define_mercury(reqs):
 
 def define_common(reqs):
     """common system component definitions"""
+    reqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
+
+    reqs.define('libunwind', libs=['unwind'], headers=['libunwind.h'],
+                package='libunwind-devel')
+
     reqs.define('lz4', headers=['lz4.h'], package='lz4-devel')
 
     reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'],
@@ -286,7 +296,7 @@ def define_components(reqs):
                           ' --enable-stack-unwind',
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],
-                requires=['valgrind_devel'],
+                requires=['valgrind_devel', 'libunwind'],
                 libs=['abt'],
                 headers=['abt.h'])
 

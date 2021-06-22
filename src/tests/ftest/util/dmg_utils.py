@@ -277,28 +277,6 @@ class DmgCommand(DmgCommandBase):
         self.timeout = saved_timeout
         return self.result
 
-    def storage_prepare(self, user=None, hugepages="4096", nvme=False,
-                        scm=False, reset=False, force=True):
-        """Get the result of the dmg storage format command.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
-        Raises:
-            CommandFailure: if the dmg storage prepare command fails.
-
-        """
-        kwargs = {
-            "nvme_only": nvme,
-            "scm_only": scm,
-            "target_user": getuser() if user is None else user,
-            "hugepages": hugepages,
-            "reset": reset,
-            "force": force
-        }
-        return self._get_result(("storage", "prepare"), **kwargs)
-
     def storage_set_faulty(self, uuid, force=True):
         """Get the result of the 'dmg storage set nvme-faulty' command.
 
@@ -324,7 +302,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -344,7 +322,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -362,7 +340,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -380,7 +358,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -650,7 +628,7 @@ class DmgCommand(DmgCommandBase):
         output = self._get_json_result(("pool", "list"))
 
         data = {}
-        if output["response"] is None:
+        if output["response"] is None or output["response"]["pools"] is None:
             return data
 
         for pool in output["response"]["pools"]:

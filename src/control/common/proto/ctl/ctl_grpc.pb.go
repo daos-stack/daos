@@ -18,8 +18,6 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CtlSvcClient interface {
-	// Prepare nonvolatile storage devices for use with DAOS
-	StoragePrepare(ctx context.Context, in *StoragePrepareReq, opts ...grpc.CallOption) (*StoragePrepareResp, error)
 	// Retrieve details of nonvolatile storage on server, including health info
 	StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
@@ -50,15 +48,6 @@ type ctlSvcClient struct {
 
 func NewCtlSvcClient(cc grpc.ClientConnInterface) CtlSvcClient {
 	return &ctlSvcClient{cc}
-}
-
-func (c *ctlSvcClient) StoragePrepare(ctx context.Context, in *StoragePrepareReq, opts ...grpc.CallOption) (*StoragePrepareResp, error) {
-	out := new(StoragePrepareResp)
-	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/StoragePrepare", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *ctlSvcClient) StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error) {
@@ -164,8 +153,6 @@ func (c *ctlSvcClient) StartRanks(ctx context.Context, in *RanksReq, opts ...grp
 // All implementations must embed UnimplementedCtlSvcServer
 // for forward compatibility
 type CtlSvcServer interface {
-	// Prepare nonvolatile storage devices for use with DAOS
-	StoragePrepare(context.Context, *StoragePrepareReq) (*StoragePrepareResp, error)
 	// Retrieve details of nonvolatile storage on server, including health info
 	StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
@@ -195,9 +182,6 @@ type CtlSvcServer interface {
 type UnimplementedCtlSvcServer struct {
 }
 
-func (UnimplementedCtlSvcServer) StoragePrepare(context.Context, *StoragePrepareReq) (*StoragePrepareResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StoragePrepare not implemented")
-}
 func (UnimplementedCtlSvcServer) StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StorageScan not implemented")
 }
@@ -242,24 +226,6 @@ type UnsafeCtlSvcServer interface {
 
 func RegisterCtlSvcServer(s grpc.ServiceRegistrar, srv CtlSvcServer) {
 	s.RegisterService(&CtlSvc_ServiceDesc, srv)
-}
-
-func _CtlSvc_StoragePrepare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StoragePrepareReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CtlSvcServer).StoragePrepare(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ctl.CtlSvc/StoragePrepare",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CtlSvcServer).StoragePrepare(ctx, req.(*StoragePrepareReq))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _CtlSvc_StorageScan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -467,10 +433,6 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "ctl.CtlSvc",
 	HandlerType: (*CtlSvcServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "StoragePrepare",
-			Handler:    _CtlSvc_StoragePrepare_Handler,
-		},
 		{
 			MethodName: "StorageScan",
 			Handler:    _CtlSvc_StorageScan_Handler,

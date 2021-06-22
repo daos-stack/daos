@@ -566,8 +566,11 @@ obj_set_reply_sizes(crt_rpc_t *rpc, daos_iod_t *iods, int iod_nr)
 			return -DER_NOMEM;
 	}
 
-	for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++)
+	for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
 		sizes[i] = iods[i].iod_size;
+		D_DEBUG(DB_IO, DF_UOID" %d:"DF_U64"\n", DP_UOID(orw->orw_oid),
+			i, iods[i].iod_size);
+	}
 
 out:
 	if (sizes == NULL)
@@ -4192,19 +4195,24 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 			goto out;
 	}
 
-	/* For resent RPC, abort it firstly if exist but with different (old)
-	 * epoch, then re-execute with new epoch.
-	 */
-	if (rc1 == -DER_MISMATCH) {
+	switch (rc1) {
+	case -DER_NONEXIST:
+	case 0:
+		break;
+	case -DER_MISMATCH:
+		/* For resent RPC, abort it firstly if exist but with different
+		 * (old) epoch, then re-execute with new epoch.
+		 */
 		rc = vos_dtx_abort(ioc->ioc_vos_coh, DAOS_EPOCH_MAX,
 				   &dcsh->dcsh_xid, 1);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
+		break;
+	default:
+		D_ASSERTF(rc1 < 0, "Resend check result: %d\n", rc1);
+		D_GOTO(out, rc = rc1);
 	}
-
-	if (rc1 < 0 && rc1 != -DER_NONEXIST)
-		goto out;
 
 	if (oci->oci_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;

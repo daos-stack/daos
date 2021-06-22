@@ -1379,7 +1379,7 @@ crt_group_version_set(crt_group_t *grp, uint32_t version)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	grp_priv->gp_membs_ver = version;
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
