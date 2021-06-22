@@ -62,6 +62,12 @@ typedef struct {
 	daos_oclass_id_t	da_oclass_id;
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
+	/*
+	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
+	 * If set to 0 or more generally not set to balanced explicitly, relaxed
+	 * mode will be used. In the future, Balanced mode will be the default.
+	 */
+	uint32_t		da_mode;
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */
