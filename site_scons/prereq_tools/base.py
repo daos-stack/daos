@@ -681,8 +681,8 @@ class PreReqComponent():
         self.__opts.Add('USE_INSTALLED',
                         'Comma separated list of preinstalled dependencies',
                         'none')
-        self.add_opts(ListVariable('EXCLUDE', "Components to skip building",
-                                   'none', ['psm2']))
+        self.add_opts(ListVariable('INCLUDE', "Optional components to build",
+                                   'none', ['psm2', 'psm3']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
@@ -705,7 +705,7 @@ class PreReqComponent():
             self.configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
-        self.exclude = env.subst("$EXCLUDE").split(",")
+        self.include = env.subst("$INCLUDE").split(" ")
         self._build_targets = []
 
     def init_build_targets(self, build_dir):
@@ -1448,6 +1448,12 @@ class _Component():
         path = os.environ.get("PKG_CONFIG_PATH", None)
         if not path is None:
             env["ENV"]["PKG_CONFIG_PATH"] = path
+        if self.component_prefix:
+            for path in ["lib", "lib64"]:
+                config = os.path.join(self.component_prefix, path, "pkgconfig")
+                if not os.path.exists(config):
+                    continue
+                env.AppendENVPath("PKG_CONFIG_PATH", config)
 
         try:
             env.ParseConfig("pkg-config %s %s" % (opts, self.pkgconfig))

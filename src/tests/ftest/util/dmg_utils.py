@@ -628,7 +628,7 @@ class DmgCommand(DmgCommandBase):
         output = self._get_json_result(("pool", "list"))
 
         data = {}
-        if output["response"] is None:
+        if output["response"] is None or output["response"]["pools"] is None:
             return data
 
         for pool in output["response"]["pools"]:
