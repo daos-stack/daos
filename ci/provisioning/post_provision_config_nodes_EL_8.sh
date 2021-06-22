@@ -27,6 +27,10 @@ distro_custom() {
     if ! rpm -q nfs-utils; then
         dnf -y install nfs-utils
     fi
+
+    # TODO: remove when test snapshots are adding this
+    sed -e 's/^\(hostname *= *\)[^ ].*$/\1 mail.wolf.hpdd.intel.com:25/' < /usr/share/doc/esmtp/sample.esmtprc > /etc/esmtprc
+
 }
 
 post_provision_config_nodes() {

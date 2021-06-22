@@ -5,24 +5,34 @@ set -eux
 distro="$1"
 client_ver="$2"
 
-if [[ $distro = el8* ]] || [[ $distro = centos8* ]]; then
-    pkgs="hwloc ndctl fio patchutils"
-elif [[ $distro = el7 ]] || [[ $distro = centos7 ]] ||
-     [[ $distro = leap* ]]; then
-    pkgs="hwloc ndctl fio                         \
-          patchutils ior-hpc-daos-${client_ver}   \
-          romio-tests-daos-${client_ver}          \
-          testmpio                                \
-          mpi4py-tests                            \
-          hdf5-mpich-tests                        \
-          hdf5-openmpi3-tests                     \
-          hdf5-vol-daos-mpich-tests               \
-          hdf5-vol-daos-openmpi3-tests            \
-          MACSio-mpich                            \
-          MACSio-openmpi3                         \
-          mpifileutils-mpich-daos-${client_ver}"
-elif [[ $distro = ubuntu20* ]]; then
+if [[ $distro = ubuntu20* ]]; then
     pkgs="openmpi-bin ndctl fio"
+elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
+     [[ $distro = leap* ]]; then
+    openmpi="openmpi"
+    pyver="3"
+    prefix=""
+
+    if [[ $distro = el7* ]] || [[ $distro = centos7* ]]; then
+        pyver="36"
+        openmpi="openmpi3"
+        prefix="--exclude ompi"
+    elif [[ $distro = leap15* ]]; then
+        openmpi="openmpi3"
+    fi
+
+    pkgs="$prefix $openmpi hwloc ndctl \
+          fio patchutils ior           \
+          romio-tests                  \
+          testmpio                     \
+          python$pyver-mpi4py-tests    \
+          hdf5-mpich-tests             \
+          hdf5-$openmpi-tests          \
+          hdf5-vol-daos-$openmpi-tests \
+          hdf5-vol-daos-mpich-tests    \
+          MACSio-mpich                 \
+          MACSio-$openmpi              \
+          mpifileutils-mpich"
 else
     echo "I don't know which packages should be installed for distro"
          "\"$distro\""
@@ -30,4 +40,5 @@ else
 fi
 
 echo "$pkgs"
+
 exit 0
