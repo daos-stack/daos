@@ -676,7 +676,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	d_iov_set(&kiov, &key, sizeof(key));
 	key.sk_epoch	= ioc->ic_bound;
-	key.sk_minor_epc = VOS_MINOR_EPC_MAX;
+	key.sk_minor_epc = VOS_SUB_OP_MAX;
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	memset(&biov, 0, sizeof(biov));
@@ -1139,8 +1139,17 @@ fetch_value:
 			}
 		}
 
-		if (vos_dtx_hit_inprogress())
+		if (vos_dtx_hit_inprogress()) {
+			D_DEBUG(DB_IO, "inprogress %d: idx %lu, nr %lu rsize "
+				DF_U64"\n", i,
+				(unsigned long)iod->iod_recxs[i].rx_idx,
+				(unsigned long)iod->iod_recxs[i].rx_nr, rsize);
 			continue;
+		}
+
+		D_DEBUG(DB_IO, "read IOD at %d: idx %lu, nr %lu rsize "
+			DF_U64"\n", i, (unsigned long)iod->iod_recxs[i].rx_idx,
+			(unsigned long)iod->iod_recxs[i].rx_nr, rsize);
 
 		/*
 		 * Empty tree or all holes, DAOS array API relies on zero
@@ -2073,7 +2082,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	/* Update tree index */
 	err = dkey_update(ioc, pm_ver, dkey, dtx_is_valid_handle(dth) ?
-			  dth->dth_op_seq : VOS_MINOR_EPC_MAX);
+			  dth->dth_op_seq : VOS_SUB_OP_MAX);
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
 				DP_RC(err));
@@ -2575,8 +2584,9 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
 
 	rc = vos_update_end(ioh, 0 /* don't care */, (daos_key_t *)dkey, rc,
 			    NULL, NULL);
-	D_DEBUG(DB_IO, DF_UOID" remove "DF_RECX" "DF_RC"\n",
-		DP_UOID(oid), DP_RECX(*recx), DP_RC(rc));
+	D_DEBUG(DB_IO, DF_UOID" remove "DF_RECX" epr_hi "DF_X64", epr_lo "
+		DF_X64", "DF_RC"\n", DP_UOID(oid), DP_RECX(*recx), epr->epr_hi,
+		epr->epr_lo, DP_RC(rc));
 	return rc;
 }
 

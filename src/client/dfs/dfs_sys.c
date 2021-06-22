@@ -268,7 +268,7 @@ sys_path_free(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	D_FREE(sys_path->alloc);
 	if (dfs_sys->hash == NULL)
 		dfs_release(sys_path->parent);
-	else
+	else if (sys_path->rlink != NULL)
 		d_hash_rec_decref(dfs_sys->hash, sys_path->rlink);
 }
 
@@ -350,6 +350,8 @@ sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path,
 	sys_path->dir_name_len = dir_name_len;
 	sys_path->name = name;
 	sys_path->name_len = name_len;
+	sys_path->parent = NULL;
+	sys_path->rlink = NULL;
 
 	rc = hash_lookup(dfs_sys, sys_path);
 	if (rc != 0) {
@@ -1347,7 +1349,7 @@ dfs_sys_opendir(dfs_sys_t *dfs_sys, const char *dir, int flags, DIR **_dirp)
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "failed to dup %s: (%d)\n",
 				sys_path.name, rc);
-			D_GOTO(out_free_dir, rc);
+			D_GOTO(out_free_path, rc);
 		}
 		D_GOTO(out, rc);
 	}
@@ -1360,21 +1362,22 @@ dfs_sys_opendir(dfs_sys_t *dfs_sys, const char *dir, int flags, DIR **_dirp)
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n",
 			sys_path.name, rc);
-		D_GOTO(out_free_dir, rc);
+		D_GOTO(out_free_path, rc);
 	}
 
 	if (!S_ISDIR(mode)) {
 		dfs_release(sys_dir->obj);
-		D_GOTO(out_free_dir, rc = ENOTDIR);
+		D_GOTO(out_free_path, rc = ENOTDIR);
 	}
 
 out:
 	*_dirp = (DIR *)sys_dir;
 	sys_path_free(dfs_sys, &sys_path);
 	return rc;
+out_free_path:
+	sys_path_free(dfs_sys, &sys_path);
 out_free_dir:
 	D_FREE(sys_dir);
-	sys_path_free(dfs_sys, &sys_path);
 	return rc;
 }
 

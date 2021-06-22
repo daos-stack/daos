@@ -48,15 +48,20 @@ dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
 		if (!dfc)
 			D_GOTO(err, rc = ENOMEM);
 
+		DFUSE_TRA_UP(dfc, dfp, "dfc");
+
 		rc = dfs_cont_create(dfp->dfp_poh, cont, NULL,
 				     &dfc->dfs_coh, &dfc->dfs_ns);
 		if (rc) {
-			DFUSE_TRA_ERROR(parent,
+			DFUSE_TRA_ERROR(dfc,
 					"dfs_cont_create() failed: (%d)",
 					rc);
 			D_FREE(dfc);
 			D_GOTO(err, rc);
 		}
+
+		uuid_copy(dfc->dfs_cont, cont);
+		dfuse_set_default_cont_cache_values(dfc);
 	}
 
 	rc = dfuse_cont_open(fs_handle, dfp, &cont, &dfc);
