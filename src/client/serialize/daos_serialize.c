@@ -203,7 +203,7 @@ out:
 	return rc;
 }
 
-static char* 
+static char*
 prop_to_str(uint32_t type)
 {
 	if (type == DAOS_PROP_CO_LABEL) {
@@ -343,8 +343,8 @@ daos_cont_serialize_attrs(hid_t file_id, hid_t *usr_attr_memtype,
 	}
 
 	/* Create the user attribute dataset */
-	dset = H5Dcreate(file_id, SERIALIZE_ATTR_DSET, *usr_attr_memtype, dspace,
-			 H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+	dset = H5Dcreate(file_id, SERIALIZE_ATTR_DSET, *usr_attr_memtype,
+			 dspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 	if (dset < 0) {
 		rc = -DER_MISC;
 		D_ERROR("failed to create dataset\n");
@@ -672,7 +672,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 	 * for serialization. If property is not found in file it is skipped.
 	 */
 
-	if (H5Aexists(file_id, "DAOS_PROP_CO_LABEL") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_LABEL") > 0) {
 		label = daos_prop_alloc(1);
 		if (label == NULL) {
 			return ENOMEM;
@@ -718,7 +718,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		return -DER_NOMEM;
 	}
 
-	if (H5Aexists(file_id, "DAOS_PROP_CO_LAYOUT_TYPE") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_LAYOUT_TYPE") > 0) {
 		type = DAOS_PROP_CO_LAYOUT_TYPE;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -730,7 +730,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		*cont_type = prop->dpp_entries[prop_num].dpe_val;
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_LAYOUT_VER") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_LAYOUT_VER") > 0) {
 		type = DAOS_PROP_CO_LAYOUT_VER;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -741,7 +741,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_CSUM") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_CSUM") > 0) {
 		type = DAOS_PROP_CO_CSUM;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -752,7 +752,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_CSUM_CHUNK_SIZE") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_CSUM_CHUNK_SIZE") > 0) {
 		type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -763,7 +763,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_CSUM_SERVER_VERIFY") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_CSUM_SERVER_VERIFY") > 0) {
 		type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -774,7 +774,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_REDUN_FAC") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_REDUN_FAC") > 0) {
 		type = DAOS_PROP_CO_REDUN_FAC;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -785,7 +785,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_REDUN_LVL") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_REDUN_LVL") > 0) {
 		type = DAOS_PROP_CO_REDUN_LVL;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -796,7 +796,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_SNAPSHOT_MAX") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_SNAPSHOT_MAX") > 0) {
 		type = DAOS_PROP_CO_SNAPSHOT_MAX;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -807,7 +807,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_COMPRESS") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_COMPRESS") > 0) {
 		type = DAOS_PROP_CO_COMPRESS;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -818,7 +818,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_ENCRYPT") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_ENCRYPT") > 0) {
 		type = DAOS_PROP_CO_ENCRYPT;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -829,7 +829,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_OWNER") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_OWNER") > 0) {
 		type = DAOS_PROP_CO_OWNER;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -839,18 +839,18 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_OWNER_GROUP") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_OWNER_GROUP") > 0) {
 		type = DAOS_PROP_CO_OWNER_GROUP;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
 		rc = deserialize_str(file_id, entry,
-	    			     "DAOS_PROP_CO_OWNER_GROUP");
+				     "DAOS_PROP_CO_OWNER_GROUP");
 		if (rc != 0) {
 			D_GOTO(out, rc);
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_DEDUP") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_DEDUP") > 0) {
 		type = DAOS_PROP_CO_DEDUP;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -861,7 +861,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_DEDUP_THRESHOLD") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_DEDUP_THRESHOLD") > 0) {
 		type = DAOS_PROP_CO_DEDUP_THRESHOLD;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -872,7 +872,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_ALLOCED_OID") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_ALLOCED_OID") > 0) {
 		type = DAOS_PROP_CO_ALLOCED_OID;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
@@ -883,7 +883,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_ACL") > 0) {	
+	if (H5Aexists(file_id, "DAOS_PROP_CO_ACL") > 0) {
 		type = DAOS_PROP_CO_ACL;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
