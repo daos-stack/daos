@@ -204,28 +204,62 @@ daos_pool_list_attr(daos_handle_t poh, char *buf, size_t *size,
 	return dc_task_schedule(task, true);
 }
 
+static int
+free_name(tse_task_t *task, void *args)
+{
+	char *name = *(char **)args;
+	free(name);
+	return 0;
+}
+
+
 int
 daos_pool_get_attr(daos_handle_t poh, int n, char const *const names[],
 		   void *const values[], size_t sizes[], daos_event_t *ev)
 {
 	daos_pool_get_attr_t	*args;
 	tse_task_t		*task;
-	int			 rc;
+	int			 i, rc;
+	char			**new_names;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_GET_ATTR);
+
+	D_ALLOC_ARRAY(new_names, n);
+	if (!new_names)
+		return -DER_NOMEM;
 
 	rc = dc_task_create(dc_pool_get_attr, NULL, ev, &task);
 	if (rc)
 		return rc;
 
+	for (i = 0 ; i < n ; i++) {
+		/* no easy way to determine if a name storage address is likely
+		 * to cause an EFAULT during memory registration, so duplicate
+		 * name in heap
+		 */
+		new_names[i] = strdup(names[i]);
+		if (new_names[i] == NULL)
+			D_GOTO(error, daos_errno2der(errno));
+		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
+					      sizeof(char *));
+		if (rc)
+			D_GOTO(error, rc);
+	}
+
 	args = dc_task_get_args(task);
 	args->poh	= poh;
 	args->n		= n;
-	args->names	= names;
+	args->names	= (char const *const *)new_names;
 	args->values	= values;
 	args->sizes	= sizes;
 
 	return dc_task_schedule(task, true);
+
+error:
+	/* this will cause new_names[] to be freed by callback */
+	tse_task_complete(task, rc);
+	D_FREE(new_names);
+	return rc;
 }
 
 int
