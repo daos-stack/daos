@@ -348,15 +348,14 @@ struct daos_prop_entry {
 #define DAOS_PROP_ENTRIES_MAX_NR	(128)
 /** max length for pool/container label */
 
-/* DAOS labels (pool/container properties) must start with an
- * a-zA-Z, then consist only of alphanumeric characters, colon ':',
- * period '.' or underscore '_', and must be of length
+/* DAOS labels (pool/container properties) must consist only of alphanumeric
+ * characters, colon ':', period '.' or underscore '_', and must be of length
  * 1 - DAOS_PROP_LABEL_MAX_LEN.
  */
-#define DAOS_LABEL_REGEX "([a-zA-Z])+([a-zA-Z0-9._:]+)"
+#define DAOS_PROP_LABEL_MAX_LEN		(127)
+#define DAOS_LABEL_REGEX "([a-zA-Z0-9._:]{1,127})"
 #define DAOS_STANDALONE_LABEL_REGEX "^"DAOS_LABEL_REGEX"$"
 
-#define DAOS_PROP_LABEL_MAX_LEN		(127)
 
 
 /** daos properties, for pool or container */

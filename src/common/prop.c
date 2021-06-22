@@ -168,6 +168,10 @@ daos_prop_str_format_valid(const char *str, const char *regex)
 	regex_t		regx;
 	int		rc;
 
+	/* All callers to this internal function shall provide non-NULL args */
+	D_ASSERT(str != NULL);
+	D_ASSERT(regex != NULL);
+
 	rc = regcomp(&regx, regex, REG_EXTENDED | REG_ICASE);
 	if (rc != 0) {
 		D_ERROR("regcomp() failed, %d\n", rc);

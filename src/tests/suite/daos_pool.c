@@ -1098,12 +1098,14 @@ label_strings_test(void **state)
 					   "Pool_ProjectA:Team42",
 					   "ProjectA.TeamOne",
 					   "server42.fictionaldomaincae61c07.org",
-	};
-	const char	*invalid_labels[] = {
-					     "",
 					     "0ABC",
 					     "0xDA0S1234",
 					     "0b101010",
+					     /* length=DAOS_PROP_LABEL_MAX_LEN */
+					     "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDE",
+	};
+	const char	*invalid_labels[] = {
+					     "",
 					     "no/slashes\\at\\all",
 					     "no spaces",
 					     "is%20this%20label%20ok",
@@ -1113,6 +1115,8 @@ label_strings_test(void **state)
 					     "a-b-cde",
 					     "MyPool!",
 					     "cae61c0]7-52f5-4874-ad21-3c0ec43005cb",
+					     /* length=DAOS_PROP_LABEL_MAX_LEN + 1 */
+					     "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
 					     "A0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789",
 					     "/bin/bash;/bin/ls",
 					     "bash&",
