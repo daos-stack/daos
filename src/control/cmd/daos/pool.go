@@ -30,7 +30,7 @@ import (
 import "C"
 
 type PoolID struct {
-	labelOrUUID
+	labelOrUUIDFlag
 }
 
 type poolBaseCmd struct {
@@ -86,7 +86,14 @@ func (cmd *poolBaseCmd) connectPool() error {
 
 func (cmd *poolBaseCmd) disconnectPool() {
 	cmd.log.Debugf("disconnecting pool %s", cmd.PoolID())
+	// Hack for NLT fault injection testing: If the rc
+	// is -DER_NOMEM, retry once in order to actually
+	// shut down and release resources.
 	rc := C.daos_pool_disconnect(cmd.cPoolHandle, nil)
+	if rc == -C.DER_NOMEM {
+		rc = C.daos_pool_disconnect(cmd.cPoolHandle, nil)
+	}
+
 	if err := daosError(rc); err != nil {
 		cmd.log.Errorf("pool disconnect failed: %s", err)
 	}

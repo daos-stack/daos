@@ -392,7 +392,7 @@ update:
 	}
 
 	rc = ilog_update(loh, &max_epr, epr->epr_hi, dtx_is_valid_handle(dth) ?
-			 dth->dth_op_seq : VOS_MINOR_EPC_MAX, false);
+			 dth->dth_op_seq : VOS_SUB_OP_MAX, false);
 
 	ilog_close(loh);
 
@@ -421,7 +421,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;
 	int			 rc;
-	uint16_t		 minor_epc = VOS_MINOR_EPC_MAX;
+	uint16_t		 minor_epc = VOS_SUB_OP_MAX;
 
 	if (parent != NULL) {
 		D_ASSERT(parent->ii_prior_any_punch.pr_epc >=

@@ -113,9 +113,10 @@ type containerCreateCmd struct {
 	UUID        string         `long:"cont" short:"c" description:"container UUID (optional)"`
 	Type        string         `long:"type" short:"t" description:"container type" choice:"POSIX" choice:"HDF5" default:"POSIX"`
 	Path        string         `long:"path" short:"d" description:"container namespace path"`
-	ChunkSize   chunkSize      `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass objectClass    `long:"oclass" short:"o" description:"default object class"`
+	ChunkSize   chunkSizeFlag  `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass objClassFlag   `long:"oclass" short:"o" description:"default object class"`
 	Properties  PropertiesFlag `long:"properties" description:"container properties"`
+	Mode        consModeFlag   `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile     string         `long:"acl-file" short:"A" description:"input file containing ACL"`
 	User        string         `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
 	Group       string         `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
@@ -180,6 +181,9 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		}
 		if cmd.ObjectClass.set {
 			ap.oclass = cmd.ObjectClass.class
+		}
+		if cmd.Mode.set {
+			ap.mode = cmd.Mode.mode
 		}
 	case "HDF5":
 		ap._type = C.DAOS_PROP_CO_LAYOUT_HDF5
@@ -334,9 +338,34 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 
 type containerListObjectsCmd struct {
 	existingContainerCmd
+
+	Epoch uint64 `long:"epc" short:"e" description:"container epoch"`
 }
 
 func (cmd *containerListObjectsCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	if cmd.Epoch > 0 {
+		ap.epc = C.uint64_t(cmd.Epoch)
+	}
+
+	// TODO: Build a Go slice so that we can JSON-format the list.
+	rc := C.cont_list_objs_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to list objects in container %s", cmd.ContainerID())
+	}
+
 	return nil
 }
 
@@ -692,7 +721,8 @@ func (cmd *containerGetPropertyCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	props, err := getContainerProperties(cmd.cContHandle, nil, cmd.Properties.names...)
+	props, freeProps, err := getContainerProperties(cmd.cContHandle, cmd.Properties.names...)
+	defer freeProps()
 	if err != nil {
 		return errors.Wrapf(err,
 			"failed to fetch properties for container %s",
@@ -796,7 +826,7 @@ func parsePoolFlag() *poolFlagCmd {
 }
 
 type ContainerID struct {
-	labelOrUUID
+	labelOrUUIDFlag
 }
 
 // Implement the completion handler to provide a list of container IDs

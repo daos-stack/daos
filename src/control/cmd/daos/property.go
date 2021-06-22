@@ -23,6 +23,8 @@ import (
 )
 
 /*
+#define D_LOGFAC	DD_FAC(client)
+
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/multihash.h>
@@ -76,7 +78,9 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_LABEL,
 		"Label",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
-			C.set_dpe_str(e, C.CString(v))
+			cStr := C.CString(v)
+			C.set_dpe_dupe_str(e, cStr, C.int(len(v)+1))
+			freeString(cStr)
 			return nil
 		},
 		nil,
@@ -656,17 +660,12 @@ func allocProps(numProps int) (props *C.daos_prop_t, entries propSlice, err erro
 	return
 }
 
-func getContainerProperties(hdl C.daos_handle_t, props *C.daos_prop_t, names ...string) (out []*property, err error) {
-	var entries propSlice
-	if props == nil {
-		props, entries, err = allocProps(len(names))
-		if err != nil {
-			return
-		}
-		defer C.daos_prop_free(props)
-	} else {
-		entries = createPropSlice(props, len(names))
+func getContainerProperties(hdl C.daos_handle_t, names ...string) (out []*property, cleanup func(), err error) {
+	props, entries, err := allocProps(len(names))
+	if err != nil {
+		return nil, func() {}, err
 	}
+	cleanup = func() { C.daos_prop_free(props) }
 
 	for _, name := range names {
 		var hdlr *propHdlr
@@ -688,7 +687,7 @@ func getContainerProperties(hdl C.daos_handle_t, props *C.daos_prop_t, names ...
 
 	rc := C.daos_cont_query(hdl, nil, props, nil)
 	if err = daosError(rc); err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
 
 	return
@@ -818,7 +817,6 @@ func (f *PropertiesFlag) Cleanup() {
 		return
 	}
 
-	f.props.dpp_nr = C.DAOS_PROP_ENTRIES_MAX_NR
 	C.daos_prop_free(f.props)
 }
 
