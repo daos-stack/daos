@@ -458,31 +458,6 @@ func (sb *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) e
 		return FaultBadPCIAddr("")
 	}
 
-	restoreOutput, err := sb.binding.init(sb.log, &spdk.EnvOptions{
-		DisableVMD: sb.IsVMDDisabled(),
-	})
-	if err != nil {
-		return err
-	}
-	defer restoreOutput()
-
-	cs, err := sb.binding.Discover(sb.log)
-	if err != nil {
-		return errors.Wrap(err, "failed to discover nvme")
-	}
-
-	var found bool
-	for _, c := range cs {
-		if c.PciAddr == pciAddr {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return FaultPCIAddrNotFound(pciAddr)
-	}
-
 	if err := sb.binding.Update(sb.log, pciAddr, path, slot); err != nil {
 		return err
 	}

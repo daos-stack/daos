@@ -52,7 +52,7 @@ func (p *Provider) getRequestedControllers(requestedPCIAddrs []string, modelID s
 }
 
 func (p *Provider) getRequestedControllersByAddr(requestedPCIAddrs []string, ignoreMissing bool) (storage.NvmeControllers, error) {
-	resp, err := p.backend.Scan(storage.BdevScanRequest{})
+	resp, err := p.Scan(storage.BdevScanRequest{})
 	if err != nil {
 		return nil, err
 	}
