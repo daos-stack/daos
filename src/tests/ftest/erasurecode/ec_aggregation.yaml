@@ -60,8 +60,9 @@ ior:
   repetitions: 1
   chunk_block_transfer_sizes:
    #[ChunkSize, BlocksSize, TransferSize]
-   - [32M, 64M, 2048]
-   - [32M, 16M, 128]
+   - [32MB, 64MB, 2K]
+   - [32MB, 16MB, 128]
+   - [32MB, 1GB, 1M]
   objectclass:
    dfs_oclass:
     #[EC_Object_Class, Minimum number of servers]

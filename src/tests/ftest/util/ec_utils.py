@@ -34,26 +34,31 @@ def get_data_parity_number(log, oclass):
     tmp = re.findall(r'\d+', oclass)
     return {'data': tmp[0], 'parity': tmp[1]}
 
-def check_aggregation_status(pool):
+def check_aggregation_status(pool, quick_check=True):
     """EC Aggregation triggered status.
     Args:
         pool(object): pool object to get the query.
-
+        quick_check(bool): Return immediately when Aggregation starts for any
+                           storage type.
     return:
-        result(bool): Aggregation started status True/False.
+        result(dic): Storage Aggregation stats SCM/NVMe True/False.
     """
+    agg_status = {'scm': False, 'nvme': False}
     pool.connect()
     initial_usage = pool.pool_percentage_used()
-    print("pool_percentage during Aggregation = {}".format(initial_usage))
 
-    for _tmp in range(8):
+    for _tmp in range(20):
         current_usage = pool.pool_percentage_used()
         print("pool_percentage during Aggregation = {}".format(current_usage))
-        if current_usage['scm'] > initial_usage['scm']:
-            print("Aggregation Started.....")
-            return True
+        for storage_type in ['scm', 'nvme']:
+            if current_usage[storage_type] > initial_usage[storage_type]:
+                print("Aggregation Started for {}.....".format(storage_type))
+                agg_status[storage_type] = True
+                #Return immediately once aggregation starts for quick check
+                if quick_check:
+                    return agg_status
         time.sleep(5)
-    return False
+    return agg_status
 
 class ErasureCodeIor(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -162,7 +167,7 @@ class ErasureCodeIor(ServerFillUp):
         self.ior_param_update(oclass, sizes)
         # Start IOR Read
         self.start_ior_load(operation='Read', percent=percent,
-			    create_cont=False)
+                            create_cont=False)
 
     def ior_read_dataset(self, parity=1):
         """Read IOR data and verify for different EC object and different sizes
@@ -309,10 +314,10 @@ class ErasureCodeSingle(TestWithServers):
                     continue
 
                 self.daos_cmd.container_set_prop(
-                              pool=self.pool.uuid,
-                              cont=self.container[cont_count].uuid,
-                              prop="status",
-                              value="healthy")
+                    pool=self.pool.uuid,
+                    cont=self.container[cont_count].uuid,
+                    prop="status",
+                    value="healthy")
 
                 # Read data and verified the content
                 try:

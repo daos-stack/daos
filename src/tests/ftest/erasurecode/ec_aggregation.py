@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeIor, check_aggregation_status
+from apricot import skipForTicket
 
 class EcodAggregationOff(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -38,12 +39,13 @@ class EcodAggregationOff(ErasureCodeIor):
         self.ior_write_dataset()
 
         # Verify if Aggregation is getting started
-        if check_aggregation_status(self.pool) is True:
+        if any(check_aggregation_status(self.pool).values()) is True:
             self.fail("Aggregation should not happens...")
 
         # Read IOR data and verify content
         self.ior_read_dataset()
 
+    @skipForTicket("DAOS-7204")
     def test_ec_aggregation_default(self):
         """Jira ID: DAOS-7325.
 
@@ -69,12 +71,13 @@ class EcodAggregationOff(ErasureCodeIor):
                 self.ior_write_single_dataset(oclass, sizes)
 
                 # Verify if Aggregation is getting started
-                if check_aggregation_status(self.pool) is False:
+                if not any(check_aggregation_status(self.pool).values()):
                     self.fail("Aggregation failed to start..")
 
                 # Read single IOR
                 self.ior_read_single_dataset(oclass, sizes)
 
+    @skipForTicket("DAOS-7204")
     def test_ec_aggregation_time(self):
         """Jira ID: DAOS-7325.
 
@@ -100,7 +103,7 @@ class EcodAggregationOff(ErasureCodeIor):
         self.ior_write_dataset()
 
         # Verify if Aggregation is getting started
-        if check_aggregation_status(self.pool) is False:
+        if not any(check_aggregation_status(self.pool).values()):
             self.fail("Aggregation failed to start..")
 
         # Read IOR data and verify content
