@@ -275,5 +275,5 @@ func (cmd *systemCleanupCmd) Execute(_ []string) (errOut error) {
 
 	cmd.log.Infof("Response from SystemCleanup RPC: %+v", resp)
 
-	return nil
+	return resp.Errors()
 }

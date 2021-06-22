@@ -783,12 +783,12 @@ type SystemCleanupReq struct {
 
 type CleanupCount struct {
 	UUID  string `json:"uuid"`  // Unique identifier
-	Count uint32 `json:"count"` // Ranks of pool service replicas
+	Count uint32 `json:"count"` // Number of pools reclaimed
 }
 
 // SystemCleanupResp contains the request response.
 type SystemCleanupResp struct {
-	Status int32
+	Status int32           `json:"status"`
 	Pools  []*CleanupCount `json:"pools"`
 }
 
@@ -798,7 +798,7 @@ func (resp *SystemCleanupResp) Errors() error {
 	return nil
 }
 
-// SystemCleaNUP requests resources associated with a machine name be cleanedup.
+// SystemCleanup requests resources associated with a machine name be cleanedup.
 //
 // Handles MS requests sent from management client app e.g. 'dmg' and calls into
 // mgmt_system.go method of the same name. The triggered method uses the control
@@ -811,10 +811,6 @@ func SystemCleanup(ctx context.Context, rpcClient UnaryInvoker, req *SystemClean
 
 	if req.Machine == "" {
 		return nil, errors.New("SystemCleanup requires a machine name.")
-	}
-
-	if len(req.Machine) > 64 {
-		return nil, errors.New("Machine Name must be 64 characters or less.")
 	}
 
 	pbReq := new(mgmtpb.SystemCleanupReq)

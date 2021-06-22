@@ -510,9 +510,9 @@ static int
 get_sec_origin_for_token(Auth__Token *token, char **machine)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
-	int 			machine_size = 0;
-	int 			rc = 0;
-	char 			*mtmp;
+	int			machine_size = 0;
+	int			rc = 0;
+	char			*mtmp;
 	Auth__Sys		*authsys;
 
 
@@ -525,15 +525,15 @@ get_sec_origin_for_token(Auth__Token *token, char **machine)
 	if (rc != 0)
 		return rc;
 
-	if(authsys->machinename) {
-		 machine_size = strnlen(authsys->machinename, MAXHOSTNAMELEN);
+	if (authsys->machinename) {
+		machine_size = strnlen(authsys->machinename, MAXHOSTNAMELEN);
 	} else {
 		D_ERROR("Malformed AuthSys token missing machinename");
 		rc = -DER_INVAL;
 		goto out;
 	}
 
-	if (machine_size > 64) {
+	if (machine_size > MAXHOSTNAMELEN) {
 		D_ERROR("hostname provided by the agent is too large");
 		rc = -DER_INVAL;
 		goto out;
@@ -554,17 +554,39 @@ out:
 }
 
 int
+ds_sec_pool_get_origin(d_iov_t *cred, char **machine)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	int		rc;
+	Auth__Token	*token;
+
+	if (cred == NULL || machine == NULL) {
+		D_ERROR("NULL input\n");
+		return -DER_INVAL;
+	}
+
+	rc = ds_sec_validate_credentials(cred, &token);
+	if (rc != 0) {
+		D_ERROR("Failed to validate credentials, rc="DF_RC"\n",
+			DP_RC(rc));
+		return rc;
+	}
+	rc = get_sec_origin_for_token(token, machine);
+
+	auth__token__free_unpacked(token, &alloc.alloc);
+	return rc;
+}
+int
 ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 			     struct ownership *ownership,
-			     struct daos_acl *acl, uint64_t *capas,
-			     char **machine)
+			     struct daos_acl *acl, uint64_t *capas)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int		rc;
 	Auth__Token	*token;
 
 	if (cred == NULL || ownership == NULL || acl == NULL ||
-	    capas == NULL || machine == NULL) {
+	    capas == NULL) {
 		D_ERROR("NULL input\n");
 		return -DER_INVAL;
 	}
@@ -598,8 +620,6 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 				     pool_capas_from_perms, capas);
 	if (rc == 0)
 		filter_pool_capas_based_on_flags(flags, capas);
-
-	rc = get_sec_origin_for_token(token, machine);
 
 	auth__token__free_unpacked(token, &alloc.alloc);
 	return rc;

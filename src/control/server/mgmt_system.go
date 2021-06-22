@@ -874,13 +874,14 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 	}
 
 	resp := new(mgmtpb.SystemCleanupResp)
+	evictReq := new(mgmtpb.PoolEvictReq)
+
+	evictReq.Sys = req.Sys
+	evictReq.Machine = req.Machine
+
 	for _, ps := range psList {
 		// Use our incoming request and just replace the uuid on each iteration
-		evictReq := &mgmtpb.PoolEvictReq{
-			Sys:     req.Sys,
-			Uuid:    ps.PoolUUID.String(),
-			Machine: req.Machine,
-		}
+		evictReq.Uuid = ps.PoolUUID.String()
 
 		dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, evictReq)
 		if err != nil {

@@ -2113,7 +2113,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 */
 	rc = ds_sec_pool_get_capabilities(in->pci_flags, &in->pci_cred, &owner,
 					  acl_entry->dpe_val_ptr,
-					  &sec_capas, &machine);
+					  &sec_capas);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": refusing connect attempt for "
 			DF_X64" error: "DF_RC"\n", DP_UUID(in->pci_op.pi_uuid),
@@ -4752,7 +4752,7 @@ struct evict_iter_arg {
 	uuid_t *eia_hdl_uuids;
 	size_t	eia_hdl_uuids_size;
 	int	eia_n_hdl_uuids;
-	char 	*eia_machine;
+	char	*eia_machine;
 };
 
 static int
@@ -4774,7 +4774,7 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (arg->eia_machine) {
 		struct pool_hdl	*hdl = (struct pool_hdl *)val->iov_buf;
 
-		if(strncmp(arg->eia_machine, hdl->ph_machine, MAXHOSTNAMELEN ) != 0) {
+		if (strncmp(arg->eia_machine, hdl->ph_machine, MAXHOSTNAMELEN) != 0) {
 			return 0;
 		}
 	}

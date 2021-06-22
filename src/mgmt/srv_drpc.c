@@ -427,9 +427,9 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolEvictReq	*req = NULL;
 	Mgmt__PoolEvictResp	 resp = MGMT__POOL_EVICT_RESP__INIT;
 	uuid_t			 uuid;
-	uuid_t			*handles;
-	int			 n_handles;
-	char 			*machine;
+	uuid_t			*handles = NULL;
+	int			 n_handles = 0;
+	char			*machine = NULL;
 	uint32_t		 count = 0;
 	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
@@ -477,10 +477,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			}
 		}
 		n_handles = req->n_handles;
-		machine = NULL;
-	} else {
-		handles = NULL;
-		n_handles = 0;
+	} else {;
 		machine = req->machine;
 	}
 

@@ -71,7 +71,7 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			 const char *group, uint32_t force);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		       uuid_t *handles, size_t n_handles, char* machine,
+		       uuid_t *handles, size_t n_handles, char *machine,
 		       const char *group, uint32_t *count);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				     uint32_t rank,

@@ -88,7 +88,6 @@ message SystemEraseResp {
 message SystemCleanupReq {
 	string sys = 1; // DAOS system identifier
 	string machine = 2; // Name of the machine whos resources need cleanup
-	bool verbose = 3; // Whether response should contain a list of pools and handles evicted
 }
 
 // SystemCleanupResp returns resultant state of cleanup operation.

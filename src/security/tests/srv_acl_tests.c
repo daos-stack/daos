@@ -562,7 +562,6 @@ expect_pool_get_capas_flags_invalid(uint64_t invalid_flags)
 	d_iov_t			valid_cred;
 	struct ownership	valid_owner;
 	uint64_t		result = 0;
-	char 			*machine;
 
 	valid_owner.user = "root@";
 	valid_owner.group = "admins@";
@@ -575,7 +574,7 @@ expect_pool_get_capas_flags_invalid(uint64_t invalid_flags)
 	assert_rc_equal(ds_sec_pool_get_capabilities(invalid_flags,
 						     &valid_cred,
 						     &valid_owner, valid_acl,
-						     &result, &machine),
+						     &result),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -600,7 +599,6 @@ test_pool_get_capas_null_input(void **state)
 	struct ownership	valid_owner;
 	uint64_t		valid_flags = DAOS_PC_RO;
 	uint64_t		result = 0;
-	char 			*machine;
 
 	init_default_ownership(&valid_owner);
 	init_default_cred(&valid_cred);
@@ -611,25 +609,25 @@ test_pool_get_capas_null_input(void **state)
 	assert_rc_equal(ds_sec_pool_get_capabilities(valid_flags,
 						     NULL,
 						     &valid_owner, valid_acl,
-						     &result, &machine),
+						     &result),
 			-DER_INVAL);
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(valid_flags,
 						     &valid_cred,
 						     NULL, valid_acl,
-						     &result, &machine),
+						     &result),
 			-DER_INVAL);
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(valid_flags,
 						     &valid_cred,
 						     &valid_owner, NULL,
-						     &result, &machine),
+						     &result),
 			-DER_INVAL);
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(valid_flags,
 						     &valid_cred,
 						     &valid_owner, valid_acl,
-						     NULL, &machine),
+						     NULL),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -644,7 +642,6 @@ expect_pool_get_capas_owner_invalid(char *user, char *group)
 	struct ownership	invalid_owner;
 	uint64_t		valid_flags = DAOS_PC_RO;
 	uint64_t		result = 0;
-	char 			*machine;
 
 	init_default_cred(&valid_cred);
 
@@ -656,7 +653,7 @@ expect_pool_get_capas_owner_invalid(char *user, char *group)
 	assert_rc_equal(ds_sec_pool_get_capabilities(valid_flags,
 						     &valid_cred,
 						     &invalid_owner, valid_acl,
-						     &result, &machine),
+						     &result),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -680,7 +677,6 @@ test_pool_get_capas_bad_acl(void **state)
 	d_iov_t			cred;
 	struct ownership	ownership;
 	uint64_t		result;
-	char 			*machine;
 
 	init_default_cred(&cred);
 	init_default_ownership(&ownership);
@@ -691,7 +687,7 @@ test_pool_get_capas_bad_acl(void **state)
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(DAOS_PC_RO, &cred,
 						     &ownership, bad_acl,
-						     &result, &machine),
+						     &result),
 			-DER_INVAL);
 
 	D_FREE(bad_acl);
@@ -705,7 +701,6 @@ test_pool_get_capas_validate_cred_failed(void **state)
 	d_iov_t			cred;
 	struct ownership	ownership;
 	uint64_t		result;
-	char 			*machine;
 
 	init_default_cred(&cred);
 	init_default_ownership(&ownership);
@@ -717,7 +712,7 @@ test_pool_get_capas_validate_cred_failed(void **state)
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(DAOS_PC_RO, &cred,
 						     &ownership, acl,
-						     &result, &machine),
+						     &result),
 			drpc_call_return);
 
 	daos_acl_free(acl);
@@ -734,7 +729,6 @@ expect_pool_get_capas_bad_authsys_payload(int auth_flavor)
 	Auth__ValidateCredResp	resp = AUTH__VALIDATE_CRED_RESP__INIT;
 	struct ownership	ownership;
 	uint64_t		result;
-	char 			*machine;
 
 	init_default_cred(&cred);
 	init_default_ownership(&ownership);
@@ -753,7 +747,7 @@ expect_pool_get_capas_bad_authsys_payload(int auth_flavor)
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(DAOS_PC_RO, &cred,
 						     &ownership, acl,
-						     &result, &machine),
+						     &result),
 			-DER_PROTO);
 
 	daos_acl_free(acl);
@@ -779,16 +773,14 @@ expect_pool_capas_with_acl(struct daos_acl *acl, d_iov_t *cred,
 {
 	struct ownership	ownership;
 	uint64_t		result = -1;
-	char			*machine;
 
 	init_default_ownership(&ownership);
 
 	assert_rc_equal(ds_sec_pool_get_capabilities(flags, cred, &ownership,
-						     acl, &result, &machine),
+						     acl, &result),
 			0);
 
 	assert_int_equal(result, exp_capas);
-	D_FREE(machine);
 }
 
 static void

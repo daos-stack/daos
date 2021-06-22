@@ -241,11 +241,11 @@ main(int argc, char **argv)
 			}
 
 			uuid_unparse(c_uuid, cstr);
-			printf("Opening container %s\n",cstr);
+			printf("Opening container %s\n", cstr);
 			rc = daos_cont_open(pool_handles[i][j], c_uuid, DAOS_COO_RW,
 						&cont_handles[i][j], NULL, NULL);
 			if (rc != 0) {
-				char		uuid_str[64];
+				char		uuid_str[DAOS_UUID_STR_SIZE];
 
 				uuid_unparse(pool_uuids[i], uuid_str);
 				printf("Unable to open container %s rc: %d",
