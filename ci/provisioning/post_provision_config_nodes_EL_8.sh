@@ -91,7 +91,7 @@ post_provision_config_nodes() {
 
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
-       ! time dnf -y install $INST_RPMS; then
+       ! time dnf -y install $INST_RPMS --allowerasing; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"
