@@ -834,39 +834,35 @@ class DaosServerManager(SubprocessManager):
                 raise ServerFailed(
                     "Error obtaining available storage") from error
 
-            # Determine the largest size pool argument that can be used with
-            # this server configuration and provided scm_ratio.
+            # Determine the SCM and NVMe size limits for the size and scm_ratio
+            # arguments for the total number of engines
             if scm_ratio is None:
-                # Default to 6% scm_ratio if not specified.
+                # Use the default value if not provided
                 scm_ratio = 6
             engine_qty = len(self.manager.job.engine_params) * len(self._hosts)
-            ratio = float(scm_ratio / 100)
-            if available_storage["scm"] > available_storage["nvme"]:
-                # size = (nvme_per_engine + scm_size) * engines
-                # scm_size = nvme_per_engine * scm_ratio
-                available_storage["size"] = (
-                    engine_qty * available_storage["nvme"] * (1 + ratio))
-            else:
-                # size = (nvme_size + scm_per_engine) * engines
-                # nvme_size = scm_per_engine / scm_ratio
-                available_storage["size"] = (
-                    engine_qty * available_storage["scm"] * (1 + (1 / ratio)))
+            available_storage["size"] = min(
+                engine_qty * available_storage["nvme"],
+                (engine_qty * available_storage["scm"]) / float(scm_ratio / 100)
+            )
+            available_storage["scm_ratio"] = \
+                available_storage["size"] * float(scm_ratio / 100)
             self.log.info(
                 "Largest storage size available for %s engines with a %.2f%% "
                 "scm_ratio:", engine_qty, scm_ratio)
             self.log.info(
                 "  - NVME     : %s",
-                get_display_size(available_storage["size"] * (1 - ratio)))
+                get_display_size(available_storage["size"]))
             self.log.info(
                 "  - SCM      : %s",
-                get_display_size(available_storage["size"] * ratio))
+                get_display_size(available_storage["scm_ratio"]))
             self.log.info(
                 "  - COMBINED : %s",
-                get_display_size(available_storage["size"]))
+                get_display_size(
+                    available_storage["size"] + available_storage["scm_ratio"]))
 
             # Apply any requested percentages to the pool parameters
             available = {
-                "size": {"size": available_storage["size"], "type": "Combined"},
+                "size": {"size": available_storage["size"], "type": "NVMe"},
                 "scm_size": {"size": available_storage["scm"], "type": "SCM"},
                 "nvme_size": {"size": available_storage["nvme"], "type": "NVMe"}
             }
@@ -881,41 +877,46 @@ class DaosServerManager(SubprocessManager):
                 adjusted[key] = \
                     (available[key]["size"] * float(ratio / 100)) / quantity
                 self.log.info(
-                    "  - %-8s : %-4s storage adjusted by %.2f%%: %s",
+                    "  - %-9s : %-4s storage adjusted by %.2f%%: %s",
                     key, available[key]["type"], ratio,
                     get_display_size(adjusted[key]))
 
-            # Display the smallest pool size that is supported per target
+            # Display the pool size increment value for each size argument
             increment = {
                 "size": human_to_bytes("1GiB"),
                 "scm_size": human_to_bytes("16MiB"),
                 "nvme_size": human_to_bytes("1GiB")}
-            self.log.info("Minimum pool sizes per target:")
+            self.log.info("Increment sizes per target:")
             for key in keys:
                 self.log.info(
                     "  - %-9s : %s", key, get_display_size(increment[key]))
 
-            # Determine the number of targets that can support the adjusted size
-            required_targets = []
-            self.log.info("Target quantity that yields the largest pool size:")
+            # Adjust the size to use a SCM/NVMe target multiplier
+            self.log.info("Pool sizes adjusted to fit by increment sizes:")
+            adjusted_targets = targets
             for key in keys:
-                required_targets.append(
-                    math.floor(adjusted[key] / increment[key]))
+                multiplier = math.floor(adjusted[key] / increment[key])
+                params[key] = multiplier * increment[key]
                 self.log.info(
-                    "  - %-9s : %s -> %s", key, required_targets[-1],
-                    required_targets[-1] * increment[key])
-            adjusted_targets = min(required_targets)
-            self.log.info(
-                "Target-adjusted pool sizes for %s targets:", adjusted_targets)
-            for key in keys:
-                params[key] = adjusted_targets * increment[key]
-                self.log.info(
-                    "  - %-9s : %s", key, get_display_size(params[key]))
-                if adjusted_targets < min_targets:
-                    raise AutosizeCancel(
-                        "Unable to autosize the {} pool parameter due to "
-                        "exceeding the minimum of {} targets: {}".format(
-                            key, min_targets, adjusted_targets))
+                    "  - %-9s : %s * %s = %s",
+                    key, multiplier, increment[key],
+                    get_display_size(params[key]))
+                if multiplier < adjusted_targets:
+                    adjusted_targets = multiplier
+                    if adjusted_targets < min_targets:
+                        raise AutosizeCancel(
+                            "Unable to autosize the {} pool parameter due to "
+                            "exceeding the minimum of {} targets: {}".format(
+                                key, min_targets, adjusted_targets))
+                if key == "size":
+                    scm_ratio_size = params[key] * float(scm_ratio / 100)
+                    self.log.info(
+                        "  - %-9s : %.2f%% scm_ratio = %s",
+                        key, scm_ratio, get_display_size(scm_ratio_size))
+                    params[key] += scm_ratio_size
+                    self.log.info(
+                        "  - %-9s : NVMe + SCM = %s",
+                        key, get_display_size(params[key]))
                 params[key] = bytes_to_human(params[key], binary=True)
 
             # Reboot the servers if a reduced number of targets is required
