@@ -53,7 +53,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
 
 int
 daos_cont_create_by_label(daos_handle_t poh, const char *label,
-			  daos_prop_t *cont_prop, uuid_t uuid,
+			  daos_prop_t *cont_prop, uuid_t *uuid,
 			  daos_event_t *ev)
 {
 	size_t			 label_len = 0;
@@ -98,7 +98,8 @@ daos_cont_create_by_label(daos_handle_t poh, const char *label,
 			DF_RC"\n", DP_UUID(cuuid), label, DP_RC(rc));
 		goto out_merged_props;
 	}
-	uuid_copy(uuid, cuuid);
+	if (uuid)
+		uuid_copy(*uuid, cuuid);
 
 out_merged_props:
 	daos_prop_free(merged_props);

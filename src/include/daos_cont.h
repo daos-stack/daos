@@ -143,12 +143,14 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
  * by \a poh.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[in]	label	label property of the new container
+ * \param[in]	label	Required, label property of the new container.
+ *			Supersedes any label specified in \a cont_prop.
  * \param[in]	cont_prop
  *			Optional, container properties pointer
  *			that if specified must not include an entry
  *			with type DAOS_PROP_CO_LABEL.
- * \param[out]	uuid	Implementation-generated container UUID.
+ * \param[out]	uuid	Optional, pointer to uuid_t to hold the
+ *		        implementation-generated container UUID.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -162,7 +164,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
  */
 int
 daos_cont_create_by_label(daos_handle_t poh, const char *label,
-			  daos_prop_t *cont_prop, uuid_t uuid,
+			  daos_prop_t *cont_prop, uuid_t *uuid,
 			  daos_event_t *ev);
 
 /**
