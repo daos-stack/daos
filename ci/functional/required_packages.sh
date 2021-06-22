@@ -21,7 +21,7 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
         openmpi="openmpi3"
     fi
 
-    pkgs="$prefix $openmpi hwloc ndctl \
+    pkgs="$prefix hwloc ndctl          \
           fio patchutils ior           \
           romio-tests                  \
           testmpio                     \
