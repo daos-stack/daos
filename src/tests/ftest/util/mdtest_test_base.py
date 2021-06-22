@@ -119,7 +119,8 @@ class MdtestBase(DfuseTestBase):
             self.log.error("Mdtest Failed: %s", str(error))
             # Queue is used when we use a thread to call
             # mdtest thread (eg: thread1 --> thread2 --> mdtest)
-            out_queue.put("Mdtest Failed")
+            if out_queue is not None:
+                out_queue.put("Mdtest Failed")
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if display_space:
