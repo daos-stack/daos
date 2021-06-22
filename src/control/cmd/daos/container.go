@@ -61,7 +61,7 @@ type containerCmd struct {
 
 type containerBaseCmd struct {
 	poolBaseCmd
-	contUUID uuid.UUID
+	contUUID  uuid.UUID
 	contLabel *C.char
 
 	cContHandle C.daos_handle_t
@@ -282,7 +282,7 @@ func (cmd *existingContainerCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (cle
 		} else {
 			cmd.poolUUID, err = uuidFromC(ap.p_uuid)
 			if err != nil {
-			   return
+				return
 			}
 		}
 
@@ -292,7 +292,7 @@ func (cmd *existingContainerCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (cle
 		} else {
 			cmd.contUUID, err = uuidFromC(ap.c_uuid)
 			if err != nil {
-			   return
+				return
 			}
 		}
 	}
