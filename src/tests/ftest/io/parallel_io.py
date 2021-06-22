@@ -136,7 +136,7 @@ class ParallelIo(FioBase, IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,tx,dfuse
-        :avocado: tags=parallelio,
+        :avocado: tags=parallelio
         """
         # get test params for cont and pool count
         self.cont_count = self.params.get("cont_count", '/run/container/*')

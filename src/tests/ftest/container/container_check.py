@@ -30,7 +30,8 @@ class DfuseContainerCheck(DfuseTestBase):
             Try to mount to dfuse and check the behavior.
         :avocado: tags=all,full_regression
         :avocado: tags=small
-        :avocado: tags=dfusecontainercheck,dfuse
+        :avocado: tags=dfuse
+        :avocado: tags=dfusecontainercheck
         """
         # get test params for cont and pool count
         cont_types = self.params.get("cont_types", '/run/container/*')
