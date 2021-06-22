@@ -867,7 +867,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		entry = &prop->dpp_entries[prop_num];
 		rc = deserialize_uint(file_id, &entry->dpe_val,
 				      "DAOS_PROP_CO_DEDUP_THRESHOLD");
-      		if (rc != 0) {
+		if (rc != 0) {
 			D_GOTO(out, rc);
 		}
 		prop_num++;
