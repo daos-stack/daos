@@ -38,8 +38,7 @@ class DestroyRebuild(TestWithServers):
         ranks = self.params.get("rank_to_kill", "/run/testparams/*")
 
         # Create a pool
-        self.add_pool(create=False)
-        self.pool.create()
+        self.add_pool()
 
         # Verify the pool information before starting rebuild
         checks = {

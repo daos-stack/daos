@@ -35,7 +35,7 @@ class MpiioTests(TestWithServers):
         # initialize daos_cmd
         self.daos_cmd = DaosCommand(self.bin)
 
-        self.add_pool()
+        self.add_pool(connect=False)
 
     def _create_cont(self):
         """Create a container.

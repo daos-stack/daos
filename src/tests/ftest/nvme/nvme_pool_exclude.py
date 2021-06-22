@@ -91,8 +91,8 @@ class NvmePoolExclude(OSAUtils):
                 self.log.info("Removing rank %d", rank)
 
                 self.log.info("Pool Version at the beginning %s", pver_begin)
-                output = self.dmg_command.pool_exclude(self.pool[val].uuid,
-                                                       rank, t_string)
+                output = self.dmg_command.pool_exclude(
+                    self.pool[val].uuid, rank, t_string)
                 self.print_and_assert_on_rebuild_failure(output)
 
                 pver_exclude = self.get_pool_version()
