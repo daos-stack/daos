@@ -2109,40 +2109,15 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			goto out;
 		}
 	}
-	if (oea->ea_remove_nr) {
-		daos_epoch_range_t	epr;
-		uint64_t		stripe_end;
-		int			i;
 
-		stripe_end = (oea->ea_stripenum + 1) * obj_ioc2ec_ss(&ioc);
-		for (i = 0; i < oea->ea_remove_nr; i++) {
-			daos_recx_t *ea_recx;
-
-			ea_recx = &oea->ea_remove_recxs.ca_arrays[i];
-			if (DAOS_RECX_END(*ea_recx) > stripe_end)
-				continue;
-
-			epr.epr_hi = epr.epr_lo =
-				oea->ea_remove_eps.ca_arrays[i];
-			rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl,
-						  oea->ea_oid, &epr, dkey,
-						  &iod->iod_name, ea_recx);
-			if (rc) {
-				D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
-					DP_UOID(oea->ea_oid), DP_RC(rc));
-			}
-		}
-
-	} else {
-		recx.rx_idx = oea->ea_stripenum * obj_ioc2ec_ss(&ioc);
-		recx.rx_nr = obj_ioc2ec_ss(&ioc);
-		rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
-					  &oea->ea_epoch_range, dkey,
-					  &iod->iod_name, &recx);
-		if (rc) {
-			D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
-				DP_UOID(oea->ea_oid), DP_RC(rc));
-		}
+	recx.rx_idx = oea->ea_stripenum * obj_ioc2ec_ss(&ioc);
+	recx.rx_nr = obj_ioc2ec_ss(&ioc);
+	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
+				  &oea->ea_epoch_range, dkey,
+				  &iod->iod_name, &recx);
+	if (rc) {
+		D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
+			DP_UOID(oea->ea_oid), DP_RC(rc));
 	}
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
