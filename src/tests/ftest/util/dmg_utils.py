@@ -442,8 +442,8 @@ class DmgCommand(DmgCommandBase):
             [str(svc) for svc in output["response"]["svc_reps"]])
         data["ranks"] = ",".join(
             [str(r) for r in output["response"]["tgt_ranks"]])
-        data["scm_per_rank"] = output["response"]["scm_bytes"]
-        data["nvme_per_rank"] = output["response"]["nvme_bytes"]
+        data["scm_per_rank"] = output["response"]["tier_bytes"][0]
+        data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
 
         return data
 
