@@ -1987,7 +1987,8 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	if (daos_oclass_is_ec(&arg->oc_attr)) {
 		/* Convert EC object offset to DAOS offset. */
 		for (i = 0; i <= io->ui_iods_top; i++) {
-			daos_iod_t *iod = &io->ui_iods[i];
+			daos_iod_t	*iod = &io->ui_iods[i];
+			uint32_t	shard;
 
 			if (iod->iod_type == DAOS_IOD_SINGLE)
 				continue;
@@ -2006,12 +2007,15 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 			if (rc)
 				return rc;
 
+			shard = arg->arg->shard % obj_ec_tgt_nr(&arg->oc_attr);
 			/* For data shard, convert to single shard offset */
-			if (arg->arg->shard <
-			    obj_ec_data_tgt_nr(&arg->oc_attr)) {
+			if (shard < obj_ec_data_tgt_nr(&arg->oc_attr)) {
+				D_DEBUG(DB_REBUILD, "convert shard %u tgt %d\n",
+					shard,
+					obj_ec_data_tgt_nr(&arg->oc_attr));
 				/* data shard */
 				rc = obj_recx_ec_daos2shard(&arg->oc_attr,
-							    arg->arg->shard,
+							    shard,
 							    &iod->iod_recxs,
 							    &iod->iod_nr);
 				if (rc)

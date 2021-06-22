@@ -205,6 +205,19 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn
 		}
 	}
 
+	for _, engineCfg := range srv.cfg.Engines {
+		// Calculate mem_size per I/O engine (in MB)
+		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines)
+		engineCfg.MemSize *= (hugePages.PageSizeKb >> 10)
+		// Pass hugepage size, do not assume 2MB is used
+		engineCfg.HugePageSz = (hugePages.PageSizeKb >> 10)
+		// Warn if hugepages are not enough to sustain average
+		// I/O workload (~1GB)
+		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
+			srv.log.Errorf("Not enough hugepages are allocated!")
+		}
+	}
+
 	return nil
 }
 
@@ -365,4 +378,34 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 		grpc.ChainUnaryInterceptor(unaryInterceptors...),
 		grpc.ChainStreamInterceptor(streamInterceptors...),
 	}...), nil
+}
+
+type netInterface interface {
+	Addrs() ([]net.Addr, error)
+}
+
+func checkFabricInterface(name string, lookup func(string) (netInterface, error)) error {
+	if name == "" {
+		return errors.New("no name provided")
+	}
+
+	if lookup == nil {
+		return errors.New("no lookup function provided")
+	}
+
+	netIF, err := lookup(name)
+	if err != nil {
+		return err
+	}
+
+	addrs, err := netIF.Addrs()
+	if err != nil {
+		return err
+	}
+
+	if len(addrs) == 0 {
+		return fmt.Errorf("no network addresses for interface %q", name)
+	}
+
+	return nil
 }

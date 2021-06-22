@@ -32,8 +32,8 @@ class _env_module(): # pylint: disable=invalid-name
     """Class for utilizing Modules component to load environment modules"""
     env_module_init = None
     _mpi_map = {"mpich":['mpi/mpich-x86_64', 'gnu-mpich'],
-                "openmpi":['mpi/openmpi3-x86_64', 'gnu-openmpi',
-                           'mpi/openmpi-x86_64']}
+                "openmpi":['mpi/mlnx_openmpi-x86_64', 'mpi/openmpi3-x86_64',
+                           'gnu-openmpi', 'mpi/openmpi-x86_64']}
 
     def __init__(self):
         """Load Modules for initializing envirables"""

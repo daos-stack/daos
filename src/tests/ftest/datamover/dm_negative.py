@@ -9,7 +9,7 @@ from os.path import join
 from apricot import skipForTicket
 
 
-class DmNegativeTest(DataMoverTestBase):
+class DmvrNegativeTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for POSIX DataMover negative testing.
 
