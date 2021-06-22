@@ -837,9 +837,10 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 			rc = dbtree_delete(cont->vc_dtx_active_hdl,
 					   BTR_PROBE_BYPASS, &kiov, &dae);
-			if (rc == 0)
+			if (rc == 0) {
 				dtx_act_ent_cleanup(cont, dae, NULL, false);
 				dtx_evict_lid(cont, dae);
+			}
 
 			goto out;
 		}
@@ -929,9 +930,10 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 	if (dae->dae_aborted) {
 		rc = dbtree_delete(cont->vc_dtx_active_hdl,
 				   BTR_PROBE_BYPASS, &kiov, &dae);
-		if (rc == 0)
+		if (rc == 0) {
 			dtx_act_ent_cleanup(cont, dae, NULL, true);
 			dtx_evict_lid(cont, dae);
+		}
 
 		goto out;
 	}
@@ -1895,54 +1897,32 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 	struct vos_dtx_blob_df		*dbd;
 	struct vos_dtx_blob_df		*dbd_prev;
 	umem_off_t			 dbd_off;
-	struct vos_dtx_cmt_ent_df	*dce_df = NULL;
 	int				 committed = 0;
-	int				 slots = 0;
 	int				 cur = 0;
 	int				 rc = 0;
 	int				 rc1 = 0;
-	int				 i;
+	int				 i = 0;
 	int				 j;
 	bool				 fatal = false;
 	bool				 allocated = false;
 
 	dbd = umem_off2ptr(umm, cont_df->cd_dtx_committed_tail);
-	if (dbd != NULL) {
-		D_ASSERTF(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC,
-			  "Corrupted committed DTX blob %x\n", dbd->dbd_magic);
-
-		slots = dbd->dbd_cap - dbd->dbd_count;
-	}
-
-	if (slots == 0)
+	if (dbd == NULL)
 		goto new_blob;
 
-	rc = umem_tx_add_ptr(umm, &dbd->dbd_count, sizeof(dbd->dbd_count));
-	if (rc != 0)
-		D_GOTO(out, fatal = true);
+	D_ASSERTF(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC,
+		  "Corrupted committed DTX blob %x\n", dbd->dbd_magic);
+
+	D_ASSERTF(dbd->dbd_cap >= dbd->dbd_count,
+		  "Invalid committed DTX blob slots %d/%d\n",
+		  dbd->dbd_cap, dbd->dbd_count);
+
+	if (dbd->dbd_cap == dbd->dbd_count)
+		goto new_blob;
 
 again:
-	if (slots > count)
-		slots = count;
-
-	count -= slots;
-
-	if (slots > 1) {
-		D_ALLOC_ARRAY(dce_df, slots);
-		if (dce_df == NULL) {
-			D_ERROR("Not enough DRAM to commit "DF_DTI"\n",
-				DP_DTI(&dtis[cur]));
-
-			/* non-fatal, former handled ones can be committed. */
-			D_GOTO(out, rc1 = -DER_NOMEM);
-		}
-		allocated = true;
-	} else {
-		dce_df = &dbd->dbd_committed_data[dbd->dbd_count];
-		allocated = false;
-	}
-
-	for (i = 0, j = 0; i < slots && rc1 == 0; i++, cur++) {
+	for (j = dbd->dbd_count; i < count && j < dbd->dbd_cap && rc1 == 0;
+	     i++, cur++) {
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
 		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce,
@@ -1964,40 +1944,27 @@ again:
 		if (rc1 == 0)
 			rc1 = rc;
 
-		if (dce != NULL) {
-			if (slots == 1) {
-				dtx_memcpy_nodrain(umm, dce_df, &dce->dce_base,
-						   sizeof(*dce_df));
-			} else {
-				memcpy(&dce_df[j], &dce->dce_base,
-				       sizeof(dce_df[j]));
-			}
-			j++;
-		}
+		if (dce != NULL)
+			dtx_memcpy_nodrain(umm, &dbd->dbd_committed_data[j++],
+					   &dce->dce_base,
+					   sizeof(struct vos_dtx_cmt_ent_df));
 	}
 
-	if (dce_df != &dbd->dbd_committed_data[dbd->dbd_count]) {
-		if (j > 0)
-			dtx_memcpy_nodrain(umm,
-				&dbd->dbd_committed_data[dbd->dbd_count],
-				dce_df, sizeof(*dce_df) * j);
-		D_FREE(dce_df);
+	if (!allocated) {
+		/* Only need to add range for the first partial blob. */
+		rc = umem_tx_add_ptr(umm, &dbd->dbd_count,
+				     sizeof(dbd->dbd_count));
+		if (rc != 0)
+			D_GOTO(out, fatal = true);
 	}
 
-	if (j > 0)
-		dbd->dbd_count += j;
+	dbd->dbd_count = j;
 
-	if (count == 0 || rc1 != 0)
+	if (i == count || rc1 != 0)
 		goto out;
-
-	if (j < slots) {
-		slots -= j;
-		goto again;
-	}
 
 new_blob:
 	dbd_prev = dbd;
-
 	/* Need new @dbd */
 	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
 	if (umoff_is_null(dbd_off)) {
@@ -2012,23 +1979,6 @@ new_blob:
 	dbd->dbd_cap = (DTX_BLOB_SIZE - sizeof(struct vos_dtx_blob_df)) /
 		       sizeof(struct vos_dtx_cmt_ent_df);
 	dbd->dbd_prev = umem_ptr2off(umm, dbd_prev);
-
-	/* Not allow to commit too many DTX together. */
-	D_ASSERTF(count < dbd->dbd_cap, "Too many DTX: %d/%d\n",
-		  count, dbd->dbd_cap);
-
-	if (count > 1) {
-		D_ALLOC_ARRAY(dce_df, count);
-		if (dce_df == NULL) {
-			D_ERROR("Not enough DRAM to commit "DF_DTI"\n",
-				DP_DTI(&dtis[cur]));
-			D_GOTO(out, rc1 = -DER_NOMEM);
-		}
-		allocated = true;
-	} else {
-		dce_df = &dbd->dbd_committed_data[0];
-		allocated = false;
-	}
 
 	if (dbd_prev == NULL) {
 		D_ASSERT(umoff_is_null(cont_df->cd_dtx_committed_head));
@@ -2057,48 +2007,10 @@ new_blob:
 	}
 
 	cont_df->cd_dtx_committed_tail = dbd_off;
-
-	for (i = 0, j = 0; i < count && rc1 == 0; i++, cur++) {
-		struct vos_dtx_cmt_ent	*dce = NULL;
-
-		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce,
-					dcks != NULL ? &dcks[cur] : NULL,
-					daes != NULL ? &daes[cur] : NULL,
-					&fatal);
-		if (dces != NULL)
-			dces[cur] = dce;
-
-		if (fatal)
-			goto out;
-
-		if (rc == 0 && (daes == NULL || daes[cur] != NULL))
-			committed++;
-
-		if (rc == -DER_NONEXIST)
-			rc = 0;
-
-		if (rc1 == 0)
-			rc1 = rc;
-
-		if (dce != NULL) {
-			memcpy(&dce_df[j], &dce->dce_base, sizeof(dce_df[j]));
-			j++;
-		}
-	}
-
-	if (dce_df != &dbd->dbd_committed_data[0]) {
-		if (j > 0)
-			memcpy(&dbd->dbd_committed_data[0], dce_df,
-			       sizeof(*dce_df) * j);
-		D_FREE(dce_df);
-	}
-
-	dbd->dbd_count = j;
+	allocated = true;
+	goto again;
 
 out:
-	if (allocated)
-		D_FREE(dce_df);
-
 	return fatal ? rc : (committed > 0 ? committed : rc1);
 }
 
