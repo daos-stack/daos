@@ -82,6 +82,8 @@ dfs_test_modes(void **state)
 	if (arg->myrank != 0)
 		return;
 
+	uuid_generate(cuuid);
+
 	/** create a DFS container in Relaxed mode */
 	attr.da_mode = DFS_RELAXED;
 	rc = dfs_cont_create(arg->pool.poh, cuuid, &attr, NULL, NULL);
@@ -130,6 +132,7 @@ dfs_test_modes(void **state)
 	assert_int_equal(rc, 0);
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
+	/** mount in Balanced mode should succeed */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY | DFS_BALANCED, &dfs);
 	assert_int_equal(rc, 0);
 	rc = dfs_umount(dfs);

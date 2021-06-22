@@ -798,7 +798,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 	if (ocreat && !oexcl && dfs->use_dtx) {
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc) {
-			D_ERROR("daos_tx_open() failed (%d)\n", rc);
+			D_ERROR("daos_tx_open() failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 	}
@@ -860,7 +860,8 @@ restart:
 		entry->chunk_size = chunk_size;
 
 		rc = insert_entry(parent->oh, th, file->name, len,
-				  oexcl ? DAOS_COND_DKEY_INSERT : 0, entry);
+				  (!dfs->use_dtx || oexcl) ?
+				  DAOS_COND_DKEY_INSERT : 0, entry);
 		if (rc == EEXIST && !oexcl) {
 			/** just try refetching entry to open the file */
 			daos_array_close(file->oh, NULL);
