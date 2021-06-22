@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from avocado.core.exceptions import TestFail
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand
@@ -21,12 +21,6 @@ class RbldContainerCreate(TestWithServers):
 
     :avocado: recursive
     """
-
-    # Cancel any tests with tickets already assigned
-    CANCEL_FOR_TICKET = [
-        ["DAOS-2434", "rank", 1],
-        ["DAOS-2434", "rank", 2],
-    ]
 
     def add_containers_during_rebuild(self, loop_id, qty, pool1, pool2):
         """Add containers to a pool while rebuild is still in progress.
@@ -102,7 +96,6 @@ class RbldContainerCreate(TestWithServers):
 
         return status
 
-    @skipForTicket("DAOS-3550")
     def test_rebuild_container_create(self):
         """Jira ID: DAOS-1168.
 
@@ -196,22 +189,21 @@ class RbldContainerCreate(TestWithServers):
                     rank))
 
             # Create a container with 1GB of data in the first pool
+            self.container.append(self.get_container(self.pool[0]))
             if use_ior:
                 self.job_manager.job.flags.update(
                     "-v -w -W -G 1 -k", "ior.flags")
                 self.job_manager.job.dfs_destroy.update(
                     False, "ior.dfs_destroy")
                 self.job_manager.job.set_daos_params(
-                    self.server_group, self.pool[0])
+                    self.server_group, self.pool[0],
+                    cont_uuid=self.container[0].uuid)
                 self.log.info(
                     "%s: Running IOR on pool %s to fill container %s with data",
                     loop_id, self.pool[0].uuid,
                     self.job_manager.job.dfs_cont.value)
                 self.run_ior(loop_id, self.job_manager)
             else:
-                self.container.append(TestContainer(self.pool[0]))
-                self.container[-1].get_params(self)
-                self.container[-1].create()
                 self.log.info(
                     "%s: Writing to pool %s to fill container %s with data",
                     loop_id, self.pool[0].uuid, self.container[-1].uuid)
