@@ -17,7 +17,7 @@ Using the IO interception library with dfuse should yield the same performance
 for IO operations (read/write) as the DFS API with minimal overhead. Performance
 of metadata operations (file creation, deletion, rename, etc.) over dfuse will
 be much slower than the DFS API since there is no interception to bypass the
-fuse / kernel layer.
+fuse/kernel layer.
 
 ## libdfs
 
