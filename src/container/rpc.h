@@ -24,7 +24,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_CONT_VERSION 3
+#define DAOS_CONT_VERSION 4
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -35,14 +35,8 @@
 	X(CONT_DESTROY,							\
 		0, &CQF_cont_destroy,					\
 		ds_cont_op_handler, NULL),				\
-	X(CONT_DESTROY_BYLABEL,						\
-		0, &CQF_cont_destroy_bylabel,				\
-		ds_cont_op_handler, NULL),				\
 	X(CONT_OPEN,							\
 		0, &CQF_cont_open,					\
-		ds_cont_op_handler, NULL),				\
-	X(CONT_OPEN_BYLABEL,						\
-		0, &CQF_cont_open_bylabel,				\
 		ds_cont_op_handler, NULL),				\
 	X(CONT_CLOSE,							\
 		0, &CQF_cont_close,					\
@@ -85,6 +79,12 @@
 		ds_cont_op_handler, NULL),				\
 	X(CONT_ACL_DELETE,						\
 		0, &CQF_cont_acl_delete,				\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_OPEN_BYLABEL,						\
+		0, &CQF_cont_open_bylabel,				\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_DESTROY_BYLABEL,						\
+		0, &CQF_cont_destroy_bylabel,				\
 		ds_cont_op_handler, NULL)
 
 #define CONT_PROTO_SRV_RPC_LIST						\

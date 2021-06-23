@@ -56,16 +56,14 @@ daos_cont_create_by_label(daos_handle_t poh, const char *label,
 			  daos_prop_t *cont_prop, uuid_t *uuid,
 			  daos_event_t *ev)
 {
-	size_t			 label_len = 0;
 	daos_prop_t		*label_prop;
 	daos_prop_t		*merged_props = NULL;
 	uuid_t			 cuuid;
 	int			 rc;
 
-	if (label)
-		label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN+1);
-	if (!label || (label_len == 0) || (label_len > DAOS_PROP_LABEL_MAX_LEN))
-		return -DER_INVAL;
+	/* TODO: if want early label check, use daos_label_is_valid() when
+	 * implemented. Otherwise rely on prop check in daos_cont_create().
+	 */
 
 	label_prop = daos_prop_alloc(1);
 	if (label_prop == NULL) {
@@ -76,7 +74,6 @@ daos_cont_create_by_label(daos_handle_t poh, const char *label,
 	D_STRNDUP(label_prop->dpp_entries[0].dpe_str, label,
 		  DAOS_PROP_LABEL_MAX_LEN);
 	if (label_prop->dpp_entries[0].dpe_str == NULL) {
-		D_ERROR("failed to copy label to label_prop\n");
 		rc = -DER_NOMEM;
 		goto out_prop;
 	}
