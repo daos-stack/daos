@@ -3,7 +3,7 @@
 REPOS_DIR=/etc/yum.repos.d
 DISTRO_NAME=centos8
 LSB_RELEASE=redhat-lsb-core
-EXCLUDE_UPGRADE=fuse,mercury,daos,daos-\*
+EXCLUDE_UPGRADE=dpdk,fuse,mercury,daos,daos-\*
 
 bootstrap_dnf() {
     :
@@ -15,16 +15,6 @@ group_repo_post() {
 }
 
 distro_custom() {
-    # install the debuginfo repo in case we get segfaults
-    cat <<"EOF" > $REPOS_DIR/CentOS-Debuginfo.repo
-[core-0-debuginfo]
-name=CentOS-8 - Debuginfo
-baseurl=http://debuginfo.centos.org/8/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-8
-enabled=0
-EOF
-
     # force install of avocado 69.x
     dnf -y erase avocado{,-common}                                              \
                  python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
@@ -59,6 +49,13 @@ post_provision_config_nodes() {
     # the group repo is always on the test image
     #add_group_repo
     #add_local_repo
+
+    # workaround until new snapshot images are produced
+    # Assume if APPSTREAM is locally proxied so is epel-modular
+    # so disable the upstream epel-modular repo
+    if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO}" ]; then
+        dnf config-manager --disable epel-modular appstream
+    fi
     time dnf repolist
 
     if [ -n "$INST_REPOS" ]; then

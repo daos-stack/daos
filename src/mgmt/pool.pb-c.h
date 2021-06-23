@@ -67,9 +67,9 @@ struct  _Mgmt__PoolCreateReq
    */
   char *uuid;
   /*
-   * Unique name for pool (optional)
+   * Unique label for pool (optional)
    */
-  char *name;
+  char *label;
   /*
    * DAOS system identifier
    */
@@ -411,10 +411,18 @@ struct  _Mgmt__PoolExtendResp
    * DAOS error code
    */
   int32_t status;
+  /*
+   * SCM allocated on rank(s)
+   */
+  uint64_t scm_bytes;
+  /*
+   * NVMe allocated on rank(s)
+   */
+  uint64_t nvme_bytes;
 };
 #define MGMT__POOL_EXTEND_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_resp__descriptor) \
-    , 0 }
+    , 0, 0, 0 }
 
 
 /*
@@ -491,6 +499,10 @@ struct  _Mgmt__ListPoolsResp__Pool
    */
   char *uuid;
   /*
+   * pool label
+   */
+  char *label;
+  /*
    * pool service replica ranks
    */
   size_t n_svc_reps;
@@ -498,7 +510,7 @@ struct  _Mgmt__ListPoolsResp__Pool
 };
 #define MGMT__LIST_POOLS_RESP__POOL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*
@@ -690,6 +702,10 @@ struct  _Mgmt__PoolQueryResp
    */
   char *uuid;
   /*
+   * pool label
+   */
+  char *label;
+  /*
    * total targets in pool
    */
   uint32_t total_targets;
@@ -728,7 +744,7 @@ struct  _Mgmt__PoolQueryResp
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, NULL, NULL, 0, 0, 0 }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, NULL, NULL, 0, 0, 0 }
 
 
 typedef enum {

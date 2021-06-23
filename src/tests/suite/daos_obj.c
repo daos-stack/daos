@@ -1217,7 +1217,6 @@ io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 	/** Lookup */
 	memset(fetch_buf, 0, size);
 	lookup_single(dkey, akey, 0, fetch_buf, size, DAOS_TX_NONE, &req);
-	print_message("\tsize: %lu\n", req.iod[0].iod_size);
 
 	/** Verify data consistency */
 	if (!daos_obj_is_echo(oid)) {
@@ -2909,7 +2908,7 @@ io_nospace(void **state)
 	struct ioreq	req;
 	int		buf_size = 1 << 20;
 	char		*large_buf;
-	char		key[10];
+	char		key[32];
 	int		i;
 
 	FAULT_INJECTION_REQUIRED();
@@ -4141,7 +4140,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	assert_rc_equal(rc, 0);
 
 	cid = daos_obj_id2class(oid);
-	attr = daos_oclass_attr_find(oid);
+	attr = daos_oclass_attr_find(oid, NULL);
 
 	daos_oclass_id2name(cid, name);
 	printf("%s\n", name);
@@ -4668,6 +4667,8 @@ int
 run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
+	char oclass[16] = {0};
+	char buf[32];
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (sub_tests_size == 0) {
@@ -4675,7 +4676,14 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("DAOS_IO", io_tests,
+	if (dt_obj_class != OC_UNKNOWN) {
+		oclass[0] = '_';
+		daos_oclass_id2name(dt_obj_class, &oclass[1]);
+	}
+	snprintf(buf, sizeof(buf), "DAOS_IO%s", oclass);
+	buf[sizeof(buf) - 1] = 0;
+
+	rc = run_daos_sub_tests(buf, io_tests,
 				ARRAY_SIZE(io_tests), sub_tests, sub_tests_size,
 				obj_setup, test_teardown);
 

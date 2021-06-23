@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -20,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -72,15 +71,6 @@ func cfgGetRaftDir(cfg *config.Server) string {
 	}
 
 	return filepath.Join(cfg.Engines[0].Storage.SCM.MountPoint, "control_raft")
-}
-
-func hostname() string {
-	hn, err := os.Hostname()
-	if err != nil {
-		return fmt.Sprintf("Hostname() failed: %s", err.Error())
-	}
-
-	return hn
 }
 
 func iommuDetected() bool {
@@ -165,12 +155,12 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 	return netDevClass, nil
 }
 
-func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter getHugePageInfoFn) error {
+func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := bdev.PrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
-		TargetUser:    usr.Username,
+		TargetUser:    srv.runningUser,
 		PCIAllowlist:  strings.Join(srv.cfg.BdevInclude, " "),
 		PCIBlocklist:  strings.Join(srv.cfg.BdevExclude, " "),
 		DisableVFIO:   srv.cfg.DisableVFIO,
@@ -186,7 +176,7 @@ func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter g
 
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
-		if usr.Uid != "0" {
+		if srv.runningUser != "root" {
 			if srv.cfg.DisableVFIO {
 				return FaultVfioDisabled
 			}
@@ -216,6 +206,21 @@ func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter g
 		}
 	}
 
+	for _, engineCfg := range srv.cfg.Engines {
+		// Calculate mem_size per I/O engine (in MB)
+		PageSizeMb := hugePages.PageSizeKb >> 10
+		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines)
+		engineCfg.MemSize *= PageSizeMb
+		// Pass hugepage size, do not assume 2MB is used
+		engineCfg.HugePageSz = PageSizeMb
+		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
+		// Warn if hugepages are not enough to sustain average
+		// I/O workload (~1GB)
+		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
+			srv.log.Errorf("Not enough hugepages are allocated!")
+		}
+	}
+
 	return nil
 }
 
@@ -235,12 +240,12 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
-func registerEngineCallbacks(engine *EngineInstance, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
+func registerEngineEventCallbacks(engine *EngineInstance, hostname string, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
-	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname()))
+	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname))
 
 	// Register callback to publish engine format requested events.
-	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, hostname()))
+	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, hostname))
 
 	var onceReady sync.Once
 	engine.OnReady(func(_ context.Context) error {
@@ -313,13 +318,14 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 	})
 }
 
-// registerInitialSubscriptions sets up forwarding of published actionable
-// events (type RASTypeStateChange) to the management service leader, behavior
-// is updated on leadership change.
+// registerFollowerSubscriptions stops handling received forwarded (in addition
+// to local) events and starts forwarding events to the new MS leader.
 // Log events on the host that they were raised (and first published) on.
-func registerInitialSubscriptions(srv *server) {
-	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
+// This is the initial behavior before leadership has been determined.
+func registerFollowerSubscriptions(srv *server) {
+	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
+	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 }
 
 // registerLeaderSubscriptions stops forwarding events to MS and instead starts
@@ -340,14 +346,6 @@ func registerLeaderSubscriptions(srv *server) {
 				}
 			}
 		}))
-}
-
-// registerFollowerSubscriptions stops handling received forwarded (in addition
-// to local) events and starts forwarding events to the new MS leader.
-func registerFollowerSubscriptions(srv *server) {
-	srv.pubSub.Reset()
-	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
-	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 }
 
 func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
@@ -383,4 +381,34 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 		grpc.ChainUnaryInterceptor(unaryInterceptors...),
 		grpc.ChainStreamInterceptor(streamInterceptors...),
 	}...), nil
+}
+
+type netInterface interface {
+	Addrs() ([]net.Addr, error)
+}
+
+func checkFabricInterface(name string, lookup func(string) (netInterface, error)) error {
+	if name == "" {
+		return errors.New("no name provided")
+	}
+
+	if lookup == nil {
+		return errors.New("no lookup function provided")
+	}
+
+	netIF, err := lookup(name)
+	if err != nil {
+		return err
+	}
+
+	addrs, err := netIF.Addrs()
+	if err != nil {
+		return err
+	}
+
+	if len(addrs) == 0 {
+		return fmt.Errorf("no network addresses for interface %q", name)
+	}
+
+	return nil
 }

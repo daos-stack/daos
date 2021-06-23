@@ -28,15 +28,18 @@
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
 #define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
 /* DMA buffer parameters */
-#define DAOS_DMA_CHUNK_MB	8		/* 8MB DMA chunks */
-#define DAOS_DMA_CHUNK_CNT_INIT	32		/* Per-xstream init chunks */
-#define DAOS_DMA_CHUNK_CNT_MAX	128		/* Per-xstream max chunks */
-#define DAOS_NVME_MAX_CTRLRS	1024		/* Max read from nvme_conf */
+#define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
+#define DAOS_DMA_CHUNK_CNT_INIT	32	/* Per-xstream init chunks */
+#define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks */
+#define DAOS_DMA_MIN_UB_BUF_MB	1024	/* 1GB min upper bound DMA buffer */
+#define DAOS_NVME_MAX_CTRLRS	1024	/* Max read from nvme_conf */
 
 /* Max inflight blob IOs per io channel */
 #define BIO_BS_MAX_CHANNEL_OPS	(4096)
 /* Schedule a NVMe poll when so many blob IOs queued for an io channel */
 #define BIO_BS_POLL_WATERMARK	(2048)
+
+#define DAOS_HUGEPAGE_SIZE_2MB	2	/* 2MB */
 
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
@@ -44,6 +47,8 @@ unsigned int bio_chk_sz;
 unsigned int bio_chk_cnt_max;
 /* Per-xstream initial DMA buffer size (in chunk count) */
 static unsigned int bio_chk_cnt_init;
+/* Diret RDMA over SCM */
+bool bio_scm_rdma;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -300,8 +305,12 @@ bio_spdk_env_init(void)
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos";
-	if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY)
-		opts.mem_size = nvme_glb.bd_mem_size;
+	/*
+	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
+	 * Currently we can't guarantee clean shutdown (no hugepages leaked).
+	 * Setting mem_size could cause EAL: Not enough memory available error,
+	 * and DPDK will fail to initialize.
+	 */
 
 	rc = populate_whitelist(&opts);
 	if (rc != 0)
@@ -335,9 +344,15 @@ bio_spdk_env_init(void)
 	return rc;
 }
 
+bool
+bio_nvme_configured(void)
+{
+	return nvme_glb.bd_nvme_conf != NULL;
+}
+
 int
 bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-	      struct sys_db *db)
+	      int hugepage_size, int tgt_nr, struct sys_db *db)
 {
 	char		*env;
 	int		rc, fd;
@@ -359,6 +374,13 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		goto free_mutex;
 	}
 
+	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
+	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
+	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
+
+	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
+	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
+
 	if (nvme_conf == NULL || strlen(nvme_conf) == 0) {
 		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
 		nvme_glb.bd_nvme_conf = NULL;
@@ -373,6 +395,31 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		return 0;
 	}
 	close(fd);
+
+	D_ASSERT(tgt_nr > 0);
+	D_ASSERT(mem_size > 0);
+	D_ASSERT(hugepage_size > 0);
+	/*
+	 * Hugepages are not enough to sustain average I/O workload
+	 * (~1GB per xstream).
+	 */
+	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
+		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
+		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
+			mem_size, (mem_size / tgt_nr));
+		return -DER_INVAL;
+	}
+
+	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
+	/*
+	 * Leave a hugepage overhead buffer for DPDK memory management. Reduce
+	 * the DMA upper bound by 200 hugepages per target to account for this.
+	 * Only necessary for 2MB hugepage size.
+	 */
+	if (hugepage_size <= DAOS_HUGEPAGE_SIZE_2MB) {
+		D_ASSERT(bio_chk_cnt_max > ((200 * hugepage_size) / size_mb));
+		bio_chk_cnt_max -= (200 * hugepage_size) / size_mb;
+	}
 
 	rc = smd_init(db);
 	if (rc != 0) {
@@ -399,23 +446,17 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
-	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
-	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
-
 	env = getenv("VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "MALLOC") == 0) {
 		D_WARN("Malloc device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_MALLOC;
 		nvme_glb.bd_bs_opts.cluster_sz = (1ULL << 20);
 		nvme_glb.bd_bs_opts.num_md_pages = 10;
-		size_mb = 2;
 		bio_chk_cnt_max = 32;
 	} else if (env && strcasecmp(env, "AIO") == 0) {
 		D_WARN("AIO device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
-
-	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
 	env = getenv("VMD_LED_PERIOD");
 	vmd_led_period = env ? atoi(env) : 0;
@@ -1387,7 +1428,8 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
-	nvme_glb.bd_xstream_cnt--;
+	if (nvme_glb.bd_xstream_cnt > 0)
+		nvme_glb.bd_xstream_cnt--;
 
 	if (nvme_glb.bd_init_thread != NULL) {
 		if (is_init_xstream(ctxt)) {
@@ -1458,18 +1500,24 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	char			 th_name[32];
 	int			 rc;
 
-	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
-	if (nvme_glb.bd_nvme_conf == NULL) {
-		*pctxt = NULL;
-		return 0;
-	}
-
 	D_ALLOC_PTR(ctxt);
 	if (ctxt == NULL)
 		return -DER_NOMEM;
 
 	D_INIT_LIST_HEAD(&ctxt->bxc_io_ctxts);
 	ctxt->bxc_tgt_id = tgt_id;
+
+	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
+	if (!bio_nvme_configured()) {
+		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+		if (ctxt->bxc_dma_buf == NULL) {
+			D_FREE(ctxt);
+			*pctxt = NULL;
+			return -DER_NOMEM;
+		}
+		*pctxt = ctxt;
+		return 0;
+	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
 
@@ -1743,9 +1791,10 @@ bio_nvme_poll(struct bio_xs_context *ctxt, bool bypass)
 	int rc;
 
 	/* NVMe context setup was skipped */
-	if (ctxt == NULL)
+	if (!bio_nvme_configured())
 		return 0;
 
+	D_ASSERT(ctxt != NULL && ctxt->bxc_thread != NULL);
 	rc = spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
 	/* To avoid complicated race handling (init xstream and starting

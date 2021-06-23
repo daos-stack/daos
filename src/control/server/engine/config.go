@@ -7,6 +7,7 @@
 package engine
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -32,10 +33,15 @@ func (sc *StorageConfig) Validate() error {
 	if err := sc.SCM.Validate(); err != nil {
 		return errors.Wrap(err, "scm config validation failed")
 	}
-	if err := sc.Bdev.Validate(); err != nil {
-		return errors.Wrap(err, "bdev config validation failed")
+
+	// set persistent location for engine bdev config file to be consumed by
+	// provider backend, set to empty when no devices specified
+	sc.Bdev.OutputPath = filepath.Join(sc.SCM.MountPoint, storage.BdevOutConfName)
+	if len(sc.Bdev.DeviceList) == 0 {
+		sc.Bdev.OutputPath = ""
 	}
-	return nil
+
+	return errors.Wrap(sc.Bdev.Validate(), "bdev config validation failed")
 }
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -172,6 +178,8 @@ type Config struct {
 	EnvVars           []string      `yaml:"env_vars,omitempty"`
 	EnvPassThrough    []string      `yaml:"env_pass_through,omitempty"`
 	Index             uint32        `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
+	MemSize           int           `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
+	HugePageSz        int           `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
 }
 
 // NewConfig returns an I/O Engine config.
@@ -251,12 +259,6 @@ func (c *Config) WithSystemName(name string) *Config {
 	return c
 }
 
-// WithHostname sets the hostname to be used when generating NVMe configurations.
-func (c *Config) WithHostname(name string) *Config {
-	c.Storage.Bdev.Hostname = name
-	return c
-}
-
 // WithSocketDir sets the path to the instance's dRPC socket directory.
 func (c *Config) WithSocketDir(dir string) *Config {
 	c.SocketDir = dir
@@ -275,7 +277,7 @@ func (c *Config) WithScmMountPoint(scmPath string) *Config {
 	return c
 }
 
-// WithScmRamdiskSize sets the size (in GB) of the ramdisk used
+// WithScmRamdiskSize sets the size (in GiB) of the ramdisk used
 // to emulate SCM (no effect if ScmClass is not RAM).
 func (c *Config) WithScmRamdiskSize(size int) *Config {
 	c.Storage.SCM.RamdiskSize = size
@@ -300,21 +302,24 @@ func (c *Config) WithBdevDeviceList(devices ...string) *Config {
 	return c
 }
 
-// WithBdevDeviceCount sets the number of devices to be created when BdevClass is malloc.
-func (c *Config) WithBdevDeviceCount(count int) *Config {
-	c.Storage.Bdev.DeviceCount = count
-	return c
-}
-
-// WithBdevFileSize sets the backing file size (used when BdevClass is malloc or file).
+// WithBdevFileSize sets the backing file size in GiB (used when BdevClass is
+// set to "file").
 func (c *Config) WithBdevFileSize(size int) *Config {
 	c.Storage.Bdev.FileSize = size
 	return c
 }
 
-// WithBdevConfigPath sets the path to the generated NVMe config file used by SPDK.
-func (c *Config) WithBdevConfigPath(cfgPath string) *Config {
-	c.Storage.Bdev.ConfigPath = cfgPath
+// WithBdevOutputConfigPath sets the path to the generated NVMe config file
+// used by SPDK.
+func (c *Config) WithBdevOutputConfigPath(outPath string) *Config {
+	c.Storage.Bdev.OutputPath = outPath
+	return c
+}
+
+// WithBdevVosEnv sets the VOS environment variable value to be passed to the
+// engine process on invocation.
+func (c *Config) WithBdevVosEnv(value string) *Config {
+	c.Storage.Bdev.VosEnv = value
 	return c
 }
 
@@ -393,5 +398,17 @@ func (c *Config) WithLogFile(logPath string) *Config {
 // WithLogMask sets the DAOS logging mask to be used by this instance.
 func (c *Config) WithLogMask(logMask string) *Config {
 	c.LogMask = logMask
+	return c
+}
+
+// WithMemSize sets the NVMe memory size for SPDK memory allocation on this instance.
+func (c *Config) WithMemSize(memsize int) *Config {
+	c.MemSize = memsize
+	return c
+}
+
+// WithHugePageSize sets the configured hugepage size on this instance.
+func (c *Config) WithHugePageSize(hugepagesz int) *Config {
+	c.HugePageSz = hugepagesz
 	return c
 }

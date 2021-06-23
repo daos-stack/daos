@@ -20,7 +20,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_DTX_VERSION	1
+#define DAOS_DTX_VERSION	2
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
@@ -48,6 +48,7 @@ enum dtx_operation {
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
 	((int32_t)		(do_status)		CRT_VAR)	\
+	((int32_t)		(do_pad)		CRT_VAR)	\
 	((int32_t)		(do_sub_rets)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
@@ -61,7 +62,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  *	it cannot be too small; otherwise, handing resent RPC
  *	make hit uncertain case and got failure -DER_EP_OLD.
  */
-#define DTX_AGG_THRESHOLD_CNT_LOWER	(1 << 24)
+#define DTX_AGG_THRESHOLD_CNT_LOWER	(1 << 20)
 
 /* The count threshold for triggerring DTX aggregation. */
 #define DTX_AGG_THRESHOLD_CNT_UPPER	((DTX_AGG_THRESHOLD_CNT_LOWER >> 1) * 3)
@@ -70,7 +71,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  * DTX in the DTX table exceeds such threshold, it will trigger DTX
  * aggregation locally.
  */
-#define DTX_AGG_THRESHOLD_AGE_UPPER	1200
+#define DTX_AGG_THRESHOLD_AGE_UPPER	120
 
 /* If DTX aggregation is triggered, then the DTXs with older ages than
  * this threshold will be aggregated.
@@ -78,18 +79,18 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  * XXX: It cannot be too small; otherwise, handing resent RPC
  *	make hit uncertain case and got failure -DER_EP_OLD.
  */
-#define DTX_AGG_THRESHOLD_AGE_LOWER	900
+#define DTX_AGG_THRESHOLD_AGE_LOWER	90
 
 /* The time threshold for triggerring DTX cleanup of stale entries.
  * If the oldest active DTX exceeds such threshold, it will trigger
  * DTX cleanup locally.
  */
-#define DTX_CLEANUP_THRESHOLD_AGE_UPPER	240
+#define DTX_CLEANUP_THRESHOLD_AGE_UPPER	60
 
 /* If DTX cleanup for stale entries is triggered, then the DTXs with
  * older ages than this threshold will be cleanup.
  */
-#define DTX_CLEANUP_THRESHOLD_AGE_LOWER	180
+#define DTX_CLEANUP_THRESHOLD_AGE_LOWER	45
 
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;

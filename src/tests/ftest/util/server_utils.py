@@ -4,10 +4,12 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 from getpass import getuser
 import os
 import socket
 import time
+import yaml
 
 from avocado import fail_on
 
@@ -15,7 +17,7 @@ from command_utils_base import \
     CommandFailure, FormattedParameter, CommandWithParameters, CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
-    convert_list
+    convert_list, get_default_config_file, distribute_files, DaosTestError
 from dmg_utils import get_dmg_command
 from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
@@ -179,6 +181,22 @@ class DaosServerCommand(YamlCommand):
         if self.yaml is not None and hasattr(self.yaml, "using_dcpm"):
             value = self.yaml.using_dcpm
         return value
+
+    def get_engine_values(self, name):
+        """Get the value of the specified attribute name for each engine.
+
+        Args:
+            name (str): name of the attribute from which to get the value
+
+        Returns:
+            list: a list of the value of each matching configuration attribute
+                name per engine
+
+        """
+        engine_values = []
+        if self.yaml is not None and hasattr(self.yaml, "get_engine_values"):
+            engine_values = self.yaml.get_engine_values(name)
+        return engine_values
 
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
@@ -354,10 +372,10 @@ class DaosServerManager(SubprocessManager):
         self._states = {
             "all": [
                 "awaitformat", "starting", "ready", "joined", "stopping",
-                "stopped", "evicted", "errored", "unresponsive", "unknown"],
+                "stopped", "excluded", "errored", "unresponsive", "unknown"],
             "running": ["ready", "joined"],
             "stopped": [
-                "stopping", "stopped", "evicted", "errored", "unresponsive",
+                "stopping", "stopped", "excluded", "errored", "unresponsive",
                 "unknown"],
             "errored": ["errored"],
         }
@@ -839,26 +857,81 @@ class DaosServerManager(SubprocessManager):
             list: a list of the maximum available SCM and NVMe sizes in bytes
 
         """
-        def get_host_capacity(key, device_names):
-            """Get the total storage capacity per host rank.
+        def fill_host_capacity(capacity_type, device_names, storage_dict,
+                               host_hash, host_capacity):
+            """Get the total storage size in device_names per host rank.
 
             Args:
-                key (str): the capacity type, e.g. "scm" or "nvme"
-                device_names (list): the device names of this capacity type
+                capacity_type (str): the capacity type, e.g. "scm" or "nvme"
+                device_names (list): the device names we'll use to get the total
+                    storage size
+                storage_dict (dict): JSON output at "HostStorage"
+                host_hash (str): Hash under "HostStorage"
+                host_capacity (dict): Dictionary to store the sum
 
             Returns:
-                dict: a dictionary of total storage capacity per host rank
+                dict: a dictionary of total storage size in device_names per
+                    host rank
+
+            """
+            # The hosts can be a single host such as wolf-1, or multiple
+            # hosts such as wolf-[1-7].
+            hosts = storage_dict[host_hash]["hosts"].split(":")[0]
+
+            if capacity_type == "nvme":
+                # Get nvme_devices list, iterate it, and sum the sizes.
+                nvme_devices = storage_dict[host_hash]["storage"][
+                    "nvme_devices"]
+                for nvme_device in nvme_devices:
+                    if nvme_device["pci_addr"] in device_names:
+                        for namespace in nvme_device["namespaces"]:
+                            size = namespace["size"]
+                            if hosts in host_capacity:
+                                host_capacity[hosts] += size
+                            else:
+                                host_capacity[hosts] = size
+
+            elif capacity_type == "scm":
+                # Get scm_namespaces list, iterate it, and sum the sizes.
+                scm_namespaces = storage_dict[host_hash]["storage"][
+                    "scm_namespaces"]
+                for scm_namespace in scm_namespaces:
+                    if scm_namespace["blockdev"] in device_names:
+                        size = scm_namespace["size"]
+                        if hosts in host_capacity:
+                            host_capacity[hosts] += size
+                        else:
+                            host_capacity[hosts] = size
+
+            return host_capacity
+
+        def get_host_capacity(capacity_type, device_names):
+            """Get the total storage size in device_names per host rank.
+
+            Args:
+                capacity_type (str): the capacity type, e.g. "scm" or "nvme"
+                device_names (list): the device names we'll use to get the total
+                    storage size
+
+            Returns:
+                dict: a dictionary of total storage size in device_names per
+                    host rank
 
             """
             host_capacity = {}
-            for host in data:
-                device_sizes = []
-                for device in data[host][key]:
-                    if device in device_names:
-                        device_sizes.append(
-                            human_to_bytes(
-                                data[host][key][device]["capacity"]))
-                host_capacity[host] = sum(device_sizes)
+
+            # Get nvme_devices and scm_namespaces list that are buried. There's
+            # a uint64 hash of the strcut under HostStorage.
+            storage_dict = data["response"]["HostStorage"]
+            struct_hashes = list(storage_dict.keys())
+
+            # Iterate the struct hashes, which corresponds to a set of hosts
+            # with the identical configuration.
+            for host_hash in struct_hashes:
+                host_capacity = fill_host_capacity(
+                    capacity_type, device_names, storage_dict, host_hash,
+                    host_capacity)
+
             return host_capacity
 
         # Default maximum bytes for SCM and NVMe
@@ -963,5 +1036,80 @@ class DaosServerManager(SubprocessManager):
         # Stop desired ranks using dmg
         self.dmg.system_stop(ranks=convert_list(value=ranks), force=force)
 
-        # Update the expected status of the stopped/evicted ranks
-        self.update_expected_states(ranks, ["stopped", "evicted"])
+        # Update the expected status of the stopped/excluded ranks
+        self.update_expected_states(ranks, ["stopped", "excluded"])
+
+    def get_host(self, rank):
+        """Get the host name that matches the specified rank.
+
+        Args:
+            rank (int): server rank number
+
+        Returns:
+            str: host name matching the specified rank
+
+        """
+        host = None
+        if rank in self._expected_states:
+            host = self._expected_states[rank]["host"]
+        return host
+
+    def update_config_file_from_file(self, dst_hosts, test_dir, generated_yaml):
+        """Update config file and object.
+
+        Create and place the new config file in /etc/daos/daos_server.yml
+        Then update SCM-related data in engine_params so that those disks will
+        be wiped.
+
+        Args:
+            dst_hosts (list): Destination server hostnames to place the new
+                config file.
+            test_dir (str): Directory where the server config data from
+                generated_yaml will be written.
+            generated_yaml (YAMLObject): New server config data.
+
+        """
+        # Create a temporary file in test_dir and write the generated config.
+        temp_file_path = os.path.join(test_dir, "temp_server.yml")
+        try:
+            with open(temp_file_path, 'w') as write_file:
+                yaml.dump(generated_yaml, write_file, default_flow_style=False)
+        except Exception as error:
+            raise CommandFailure(
+                "Error writing the yaml file! {}: {}".format(
+                    temp_file_path, error)) from error
+
+        # Copy the config from temp dir to /etc/daos of the server node.
+        default_server_config = get_default_config_file("server")
+        try:
+            distribute_files(
+                dst_hosts, temp_file_path, default_server_config,
+                verbose=False, sudo=True)
+        except DaosTestError as error:
+            raise CommandFailure(
+                "ERROR: Copying yaml configuration file to {}: "
+                "{}".format(dst_hosts, error)) from error
+
+        # Before restarting daos_server, we need to clear SCM. Unmount the mount
+        # point, wipefs the disks, etc. This clearing step is built into the
+        # server start steps. It'll look at the engine_params of the
+        # server_manager and clear the SCM set there, so we need to overwrite it
+        # before starting to the values from the generated config.
+        self.log.info("Resetting engine_params")
+        self.manager.job.yaml.engine_params = []
+        engines = generated_yaml["engines"]
+        for i, engine in enumerate(engines):
+            self.log.info("engine %d", i)
+            self.log.info("scm_mount = %s", engine["scm_mount"])
+            self.log.info("scm_class = %s", engine["scm_class"])
+            self.log.info("scm_list = %s", engine["scm_list"])
+
+            per_engine_yaml_parameters =\
+                DaosServerYamlParameters.PerEngineYamlParameters(i)
+            per_engine_yaml_parameters.scm_mount.update(engine["scm_mount"])
+            per_engine_yaml_parameters.scm_class.update(engine["scm_class"])
+            per_engine_yaml_parameters.scm_size.update(None)
+            per_engine_yaml_parameters.scm_list.update(engine["scm_list"])
+
+            self.manager.job.yaml.engine_params.append(
+                per_engine_yaml_parameters)

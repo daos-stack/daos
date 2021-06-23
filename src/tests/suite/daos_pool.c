@@ -231,6 +231,7 @@ pool_attribute(void **state)
 	int		 rc;
 
 	char const *const names[] = { "AVeryLongName", "Name" };
+	char const *const names_get[] = { "AVeryLongName", "Wrong", "Name" };
 	size_t const name_sizes[] = {
 				strlen(names[0]) + 1,
 				strlen(names[1]) + 1,
@@ -244,12 +245,14 @@ pool_attribute(void **state)
 				strlen(in_values[1])
 	};
 	int			 n = (int) ARRAY_SIZE(names);
+	int			 m = (int) ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
-						  &out_buf[1 * BUFSIZE]
+						  &out_buf[1 * BUFSIZE],
+						  &out_buf[2 * BUFSIZE]
 						};
-	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE };
+	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE, BUFSIZE };
 	size_t			 total_size;
 
 	if (arg->async) {
@@ -297,8 +300,8 @@ pool_attribute(void **state)
 	print_message("getting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 
-	rc = daos_pool_get_attr(arg->pool.poh, n, names, out_values, out_sizes,
-				arg->async ? &ev : NULL);
+	rc = daos_pool_get_attr(arg->pool.poh, m, names_get, out_values,
+				out_sizes, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
@@ -307,22 +310,27 @@ pool_attribute(void **state)
 	assert_memory_equal(out_values[0], in_values[0], in_sizes[0]);
 
 	print_message("Verifying Name-Value (B)..\n");
-	assert_true(in_sizes[1] > BUFSIZE);
-	assert_int_equal(out_sizes[1], in_sizes[1]);
-	assert_memory_equal(out_values[1], in_values[1], BUFSIZE);
+	assert_int_equal(out_sizes[1], 0);
 
-	rc = daos_pool_get_attr(arg->pool.poh, n, names, NULL, out_sizes,
+	print_message("Verifying Name-Value (C)..\n");
+	assert_true(in_sizes[1] > BUFSIZE);
+	assert_int_equal(out_sizes[2], in_sizes[1]);
+	assert_memory_equal(out_values[2], in_values[1], BUFSIZE);
+
+	rc = daos_pool_get_attr(arg->pool.poh, m, names_get, NULL, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("Verifying with NULL buffer..\n");
 	assert_int_equal(out_sizes[0], in_sizes[0]);
-	assert_int_equal(out_sizes[1], in_sizes[1]);
+	assert_int_equal(out_sizes[1], 0);
+	assert_int_equal(out_sizes[2], in_sizes[1]);
 
 	print_message("Deleting all attributes\n");
-	rc = daos_pool_del_attr(arg->pool.poh, n, names,
+	rc = daos_pool_del_attr(arg->pool.poh, m, names_get,
 				arg->async ? &ev : NULL);
+	/* should work even if "Wrong" do not exist */
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
@@ -457,8 +465,8 @@ pool_properties(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
-#if 0
 	char			*label = "test_pool_properties";
+#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	uint64_t		 space_rb = 36;
 #endif
 	daos_prop_t		*prop = NULL;
@@ -474,11 +482,16 @@ pool_properties(void **state)
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_rc_equal(rc, 0);
 
-/* FIXME (DAOS-5456): label/space_rb props not supported with dmg */
-#if 0
-	prop = daos_prop_alloc(2);
+	prop = daos_prop_alloc(1);
+	/* label - set arg->pool_label to use daos_pool_connect_by_label() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
-	prop->dpp_entries[0].dpe_str = strdup(label);
+	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
+	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
+	D_STRNDUP(arg->pool_label, label, DAOS_PROP_LABEL_MAX_LEN);
+	assert_ptr_not_equal(arg->pool_label, NULL);
+
+#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
+	/* change daos_prop_alloc() above, specify 2 entries not 1 */
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SPACE_RB;
 	prop->dpp_entries[1].dpe_val = space_rb;
 #endif
@@ -501,13 +514,13 @@ pool_properties(void **state)
 	assert_rc_equal(rc, 0);
 
 	assert_int_equal(prop_query->dpp_nr, DAOS_PROP_PO_NUM);
-#if 0
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
 		print_message("label verification filed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SPACE_RB);
 	if (entry == NULL || entry->dpe_val != space_rb) {
 		print_message("space_rb verification filed.\n");

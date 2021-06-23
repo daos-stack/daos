@@ -18,11 +18,16 @@ import "C"
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
 type Timestamp struct {
 	metricBase
+}
+
+func (t *Timestamp) Type() MetricType {
+	return MetricTypeTimestamp
 }
 
 func (t *Timestamp) Value() time.Time {
@@ -36,6 +41,11 @@ func (t *Timestamp) Value() time.Time {
 		return time.Unix(int64(clk), 0)
 	}
 	return zero
+}
+
+// FloatValue converts the timestamp to time in seconds since the UNIX epoch.
+func (t *Timestamp) FloatValue() float64 {
+	return float64(t.Value().Unix())
 }
 
 func newTimestamp(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t) *Timestamp {
@@ -60,5 +70,9 @@ func GetTimestamp(ctx context.Context, name string) (*Timestamp, error) {
 		return nil, err
 	}
 
-	return newTimestamp(hdl, "", &name, node), nil
+	if node.dtn_type != C.D_TM_TIMESTAMP {
+		return nil, fmt.Errorf("metric %q is not a timestamp", name)
+	}
+
+	return newTimestamp(hdl, name, &name, node), nil
 }

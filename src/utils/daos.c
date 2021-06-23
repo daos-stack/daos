@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -29,6 +30,7 @@
 #include <daos/object.h>
 #include "daos_types.h"
 #include "daos_api.h"
+#include "daos_fs.h"
 #include "daos_uns.h"
 #include "daos_fs.h"
 #include "daos_hdlr.h"
@@ -37,11 +39,36 @@
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
+#define RC_PRINT_HELP	2
+#define RC_NO_HELP	-2
+
+static inline int
+daos_parse_cmode(const char *string, uint32_t *mode)
+{
+	if (strcasecmp(string, "relaxed") == 0)
+		*mode = DFS_RELAXED;
+	else if (strcasecmp(string, "balanced") == 0)
+		*mode = DFS_BALANCED;
+	else
+		return -1;
+	return 0;
+}
+
 static enum fs_op
 filesystem_op_parse(const char *str)
 {
 	if (strcmp(str, "copy") == 0)
 		return FS_COPY;
+	if (strcmp(str, "set-attr") == 0)
+		return FS_SET_ATTR;
+	if (strcmp(str, "get-attr") == 0)
+		return FS_GET_ATTR;
+	if (strcmp(str, "reset-attr") == 0)
+		return FS_RESET_ATTR;
+	if (strcmp(str, "reset-chunk-size") == 0)
+		return FS_RESET_CHUNK_SIZE;
+	if (strcmp(str, "reset-oclass") == 0)
+		return FS_RESET_OCLASS;
 	return -1;
 }
 
@@ -167,7 +194,7 @@ cmd_args_print(struct cmd_args_s *ap)
 		ap->attrname_str ? ap->attrname_str : "NULL",
 		ap->value_str ? ap->value_str : "NULL");
 
-	D_INFO("\tpath=%s, type=%s, oclass=%s, chunk_size="DF_U64"\n",
+	D_INFO("\tpath=%s, type=%s, oclass=%s, chunk-size="DF_U64"\n",
 		ap->path ? ap->path : "NULL",
 		type, oclass, ap->chunk_size);
 	D_INFO("\tsnapshot: name=%s, epoch="DF_U64", epoch range=%s "
@@ -244,7 +271,6 @@ tobytes(const char *str)
 	return size;
 }
 
-
 static int
 epoch_range_parse(struct cmd_args_s *ap)
 {
@@ -292,7 +318,7 @@ daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 	if (*end != '.')
 		return -1;
 
-	ptr = end+1;
+	ptr = end + 1;
 
 	lo = strtoull(ptr, &end, 10);
 	if (ptr[0] == '-')
@@ -327,7 +353,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_LABEL;
-		entry->dpe_str = strdup(value);
+		D_STRNDUP(entry->dpe_str, value, len);
 	} else if (!strcmp(name, "cksum")) {
 		int csum_type = daos_str2csumcontprop(value);
 
@@ -450,6 +476,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		if (!strcmp(value, "healthy")) {
 			entry->dpe_val =
 				DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
+							DAOS_PROP_CO_CLEAR,
 							0);
 		} else {
 			fprintf(stderr, "status prop value can only be "
@@ -457,6 +484,15 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_STATUS;
+
+	} else if (!strcmp(name, "ec_cell")) {
+		entry->dpe_val = strtol(value, NULL, 0);
+		if (!daos_ec_cs_valid(entry->dpe_val)) {
+			fprintf(stderr, "Invalid EC cell size = %u\n",
+				(uint32_t)entry->dpe_val);
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	} else {
 		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/dedup/dedup_th/rf\n");
 		return -DER_INVAL;
@@ -546,6 +582,8 @@ args_free(struct cmd_args_s *ap)
 	D_FREE(ap->attrname_str);
 	D_FREE(ap->value_str);
 	D_FREE(ap->path);
+	D_FREE(ap->dfs_path);
+	D_FREE(ap->dfs_prefix);
 	D_FREE(ap->src);
 	D_FREE(ap->dst);
 	D_FREE(ap->snapname_str);
@@ -578,8 +616,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"src",		required_argument,	NULL,	'S'},
 		{"dst",		required_argument,	NULL,	'D'},
 		{"type",	required_argument,	NULL,	't'},
+		{"mode",	required_argument,	NULL,	'M'},
 		{"oclass",	required_argument,	NULL,	'o'},
-		{"chunk_size",	required_argument,	NULL,	'z'},
+		{"chunk-size",	required_argument,	NULL,	'z'},
+		{"dfs-prefix",	required_argument,	NULL,	'I'},
+		{"dfs-path",	required_argument,	NULL,	'H'},
 		{"snap",	required_argument,	NULL,	's'},
 		{"epc",		required_argument,	NULL,	'e'},
 		{"epcrange",	required_argument,	NULL,	'r'},
@@ -595,20 +636,24 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"principal",	required_argument,	NULL,	'P'},
 		{NULL,		0,			NULL,	0}
 	};
+	bool			posix_mode_set = false;
 	int			rc;
-	const int		RC_PRINT_HELP = 2;
-	const int		RC_NO_HELP = -2;
 	char			*cmdname = NULL;
 
 	assert(ap != NULL);
+
 	ap->p_op  = -1;
 	ap->c_op  = -1;
 	ap->o_op  = -1;
 	ap->fs_op = -1;
 	ap->sh_op = -1;
+	ap->mode  = 0;
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
 		return RC_NO_HELP;
+
+	ap->outstream = stdout;
+	ap->errstream = stderr;
 
 	if ((strcmp(argv[1], "container") == 0) ||
 	    (strcmp(argv[1], "cont") == 0)) {
@@ -719,11 +764,30 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			if (ap->dst == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
+		case 'I':
+			D_STRNDUP(ap->dfs_prefix, optarg, strlen(optarg));
+			if (ap->dfs_prefix == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'H':
+			D_STRNDUP(ap->dfs_path, optarg, strlen(optarg));
+			if (ap->dfs_path == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
 		case 't':
 			daos_parse_ctype(optarg, &ap->type);
 			if (ap->type == DAOS_PROP_CO_LAYOUT_UNKOWN) {
 				fprintf(stderr, "unknown container type %s\n",
 						optarg);
+				D_GOTO(out_free, rc = RC_PRINT_HELP);
+			}
+			break;
+		case 'M':
+			posix_mode_set = true;
+			if (daos_parse_cmode(optarg, &ap->mode) != 0) {
+				fprintf(stderr,
+					"Invalid POSIX consistency mode: %s\n",
+					optarg);
 				D_GOTO(out_free, rc = RC_PRINT_HELP);
 			}
 			break;
@@ -739,7 +803,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			ap->chunk_size = tobytes(optarg);
 			if (ap->chunk_size == 0 ||
 			    (ap->chunk_size == ULLONG_MAX && errno != 0)) {
-				fprintf(stderr, "failed to parse chunk_size:"
+				fprintf(stderr, "failed to parse chunk-size:"
 					"%s\n", optarg);
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
@@ -843,6 +907,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	cmd_args_print(ap);
 
+	if (posix_mode_set && ap->type != DAOS_PROP_CO_LAYOUT_POSIX) {
+		fprintf(stderr, "--mode is valid only for a POSIX container\n");
+		D_GOTO(out_free, rc = RC_NO_HELP);
+	}
+
 	/* Check for any unimplemented commands, print help */
 	if (ap->p_op != -1 &&
 	    (ap->p_op == POOL_STAT)) {
@@ -885,7 +954,6 @@ pool_op_hdlr(struct cmd_args_s *ap)
 {
 	int			rc = 0;
 	enum pool_op		op;
-	const int		RC_PRINT_HELP = 2;
 
 	assert(ap != NULL);
 	op = ap->p_op;
@@ -931,7 +999,7 @@ out:
 }
 
 static int
-call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
+call_dfuse_ioctl(const char *path, struct dfuse_il_reply *reply)
 {
 	int fd;
 	int rc;
@@ -959,8 +1027,9 @@ call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
 static int
 fs_op_hdlr(struct cmd_args_s *ap)
 {
-	int rc = 0;
-	enum fs_op op;
+	enum fs_op	op;
+	char		*name = NULL, *dir_name = NULL;
+	int		rc = 0, rc2 = 0;
 
 	assert(ap != NULL);
 	op = ap->fs_op;
@@ -970,13 +1039,106 @@ fs_op_hdlr(struct cmd_args_s *ap)
 		if (ap->src == NULL || ap->dst == NULL) {
 			fprintf(stderr, "a source and destination path "
 				"must be provided\n");
+			D_GOTO(out, rc = RC_PRINT_HELP);
 		} else {
 			rc = fs_copy_hdlr(ap);
 		}
 		break;
+	case FS_SET_ATTR:
+	case FS_GET_ATTR:
+	case FS_RESET_ATTR:
+	case FS_RESET_CHUNK_SIZE:
+	case FS_RESET_OCLASS:
+		if (ap->path != NULL) {
+			struct duns_attr_t      dattr = {0};
+
+			if (ap->dfs_path) {
+				fprintf(stderr, "can't specify file or dir in "
+					"path and dfs_path at the same time\n");
+				return EINVAL;
+			}
+
+			rc = duns_resolve_path(ap->path, &dattr);
+			/** we could be creating a new file, so try dirname */
+			if (rc == ENOENT && op == FS_SET_ATTR) {
+				parse_filename_dfs(ap->path, &name,
+						   &dir_name);
+
+				rc = duns_resolve_path(dir_name, &dattr);
+			}
+			if (rc) {
+				fprintf(stderr, "could not resolve pool &"
+					" container by path: %d %s %s\n",
+					rc, strerror(rc), ap->path);
+				D_GOTO(out, rc);
+			}
+
+			ap->type = dattr.da_type;
+			uuid_copy(ap->p_uuid, dattr.da_puuid);
+			uuid_copy(ap->c_uuid, dattr.da_cuuid);
+
+			if (name) {
+				if (dattr.da_rel_path) {
+					D_ASPRINTF(ap->dfs_path, "%s/%s",
+						   dattr.da_rel_path, name);
+					free(dattr.da_rel_path);
+				} else {
+					D_ASPRINTF(ap->dfs_path, "/%s", name);
+				}
+			} else {
+				if (dattr.da_rel_path) {
+					D_STRNDUP(ap->dfs_path,
+						  dattr.da_rel_path, PATH_MAX);
+					free(dattr.da_rel_path);
+				} else {
+					D_STRNDUP(ap->dfs_path, "/", 1);
+				}
+			}
+			if (ap->dfs_path == NULL)
+				D_GOTO(out, rc = ENOMEM);
+		} else {
+			ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
+			ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
+		}
+
+		rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
+				&ap->pool, NULL, NULL);
+		if (rc != 0) {
+			fprintf(stderr,
+				"failed to connect to pool "DF_UUIDF": %s (%d)\n",
+				DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+			return rc;
+		}
+
+		rc = daos_cont_open(ap->pool, ap->c_uuid,
+				    DAOS_COO_RW | DAOS_COO_FORCE,
+				    &ap->cont, NULL, NULL);
+		if (rc != 0) {
+			fprintf(stderr,
+				"failed to open container "DF_UUIDF ": %s (%d)\n",
+				DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			D_GOTO(out_disconnect, rc);
+		}
+
+		rc = fs_dfs_hdlr(ap);
+		if (rc)
+			D_GOTO(out, rc);
+		break;
 	default:
 		break;
 	}
+
+out_disconnect:
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr,
+			"failed to disconnect from pool "DF_UUIDF": %s (%d)\n",
+			DP_UUID(ap->p_uuid), d_errdesc(rc2), rc2);
+	if (rc == 0)
+		rc = rc2;
+out:
+	D_FREE(dir_name);
+	D_FREE(name);
 	return rc;
 }
 
@@ -987,7 +1149,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	int			rc = 0;
 	int			rc2 = 0;
 	enum cont_op		op;
-	const int		RC_PRINT_HELP = 2;
 
 	assert(ap != NULL);
 	op = ap->c_op;
@@ -1138,7 +1299,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_create_snap_hdlr(ap);
 		break;
 	case CONT_LIST_SNAPS:
-		rc = cont_list_snaps_hdlr(ap, NULL, NULL);
+		ap->snapname_str = NULL;
+		ap->epc = 0;
+		rc = cont_list_snaps_hdlr(ap);
 		break;
 	case CONT_DESTROY_SNAP:
 		rc = cont_destroy_snap_hdlr(ap);
@@ -1199,7 +1362,6 @@ obj_op_hdlr(struct cmd_args_s *ap)
 	int			rc;
 	int			rc2;
 	enum obj_op		op;
-	const int		RC_PRINT_HELP = 2;
 
 	assert(ap != NULL);
 	op = ap->o_op;
@@ -1396,7 +1558,6 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		DAOS_VERSION, DAOS_API_VERSION_MAJOR,
 		DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 
-
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
 	} else if (strcmp(argv[2], "filesystem") == 0 ||
@@ -1440,12 +1601,15 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"	--path=PATHSTR     container namespace path\n"
 			"container create common optional options:\n"
 			"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
+			"	--mode=FLAG        In case of POSIX type, select consistency mode:\n"
+			"			   relaxed (default): weaker consistency semantics.\n"
+			"			   balanced: stronger consistency semantics.\n"
 			"	--oclass=OCLSSTR   container object class\n"
 			"			   (");
 			/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */
 			print_oclass_names_list(stream);
 			fprintf(stream, ")\n"
-			"	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
+			"	--chunk-size=BYTES chunk size of files created. Supports suffixes:\n"
 			"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
 			"			   supported prop names are label, cksum,\n"

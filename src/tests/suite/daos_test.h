@@ -127,7 +127,9 @@ typedef struct {
 	const char		*group;
 	const char		*dmg_config;
 	struct test_pool	pool;
+	char			*pool_label;
 	uuid_t			co_uuid;
+	char			*cont_label;
 	unsigned int		uid;
 	unsigned int		gid;
 	daos_handle_t		eq;
@@ -403,12 +405,22 @@ void daos_reint_server(const uuid_t pool_uuid, const char *grp,
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		       const char *value);
 
+int ec_data_nr_get(daos_obj_id_t oid);
+int ec_parity_nr_get(daos_obj_id_t oid);
+
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,
 			int parity, d_rank_t *ranks, int *ranks_num);
 
 d_rank_t
 get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
+uint32_t
+get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
+
+void
+ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
+		      daos_off_t offset, daos_size_t size,
+		      char *verify_data);
 
 int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		       int tests_size, int *sub_tests, int sub_tests_size,
@@ -465,6 +477,8 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 				   char *expected_state);
 void save_group_state(void **state);
+void trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
+				    int oids_nr, bool fail);
 
 enum op_type {
 	PARTIAL_UPDATE	=	1,
@@ -481,6 +495,8 @@ void write_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off);
 void write_ec_partial_full(struct ioreq *req, int test_idx, daos_off_t off);
 void verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off);
 void make_buffer(char *buffer, char start, int total);
+
+bool oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr);
 
 static inline void
 daos_test_print(int rank, char *message)

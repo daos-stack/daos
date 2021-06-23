@@ -7,8 +7,7 @@
 from ec_utils import ErasureCodeIor
 from apricot import skipForTicket
 
-
-class EcOnlineRebuild(ErasureCodeIor):
+class EcodOnlineRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object data after killing
@@ -22,7 +21,7 @@ class EcOnlineRebuild(ErasureCodeIor):
         self.set_online_rebuild = True
 
     @skipForTicket("DAOS-7293")
-    def test_ec_offline_rebuild(self):
+    def test_ec_online_rebuild(self):
         """Jira ID: DAOS-5894.
 
         Test Description: Test Erasure code object with IOR.
@@ -31,11 +30,22 @@ class EcOnlineRebuild(ErasureCodeIor):
                   kill single server, while IOR Write phase is in progress,
                   verify all IOR write finish.Read and verify data.
 
-        :avocado: tags=all,hw,large,ib2,full_regression
-        :avocado: tags=ec,ec_online_rebuild
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large,ib2
+        :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild
+        :avocado: tags=ec_online_rebuild_array
         """
         # Kill last server rank
         self.rank_to_kill = self.server_count - 1
+
+        # Run only object type which matches the server count and
+        # remove other objects
+        tmp_obj_class = []
+        for oclass in self.obj_class:
+            if oclass[1] == self.server_count:
+                tmp_obj_class = oclass
+        self.obj_class = [tmp_obj_class]
+
         # Write IOR data set with different EC object.
         # kill single server while IOR Write phase is in progress.
         self.ior_write_dataset()

@@ -16,13 +16,13 @@
 #include <gurt/telemetry_common.h>
 
 /**
- * Metrics collected on pools
+ * Global pool metrics
  */
 struct pool_metrics {
-	struct d_tm_node_t *open_hdl_gauge;
+	struct d_tm_node_t	*open_hdl_gauge;
 };
 
-extern struct pool_metrics ds_pool_metrics;
+extern struct pool_metrics ds_global_pool_metrics;
 
 /**
  * DSM server thread local storage structure
@@ -59,6 +59,7 @@ struct pool_iv_prop {
 	uint64_t	pip_space_rb;
 	uint64_t	pip_self_heal;
 	uint64_t	pip_reclaim;
+	uint64_t	pip_ec_cell_sz;
 	struct daos_acl	*pip_acl;
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;
@@ -188,5 +189,7 @@ void ds_stop_scrubbing_ult(struct ds_pool_child *child);
  */
 int ds_pool_metrics_init(void);
 int ds_pool_metrics_fini(void);
+void ds_pool_metrics_start(const uuid_t pool_uuid);
+void ds_pool_metrics_stop(const uuid_t pool_uuid);
 
 #endif /* __POOL_SRV_INTERNAL_H__ */

@@ -311,7 +311,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = create_pool_props(&prop, req->user, req->usergroup, req->name,
+	rc = create_pool_props(&prop, req->user, req->usergroup, req->label,
 			       (const char **)req->acl, req->n_acl);
 	if (rc != 0)
 		goto out;
@@ -695,6 +695,13 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			DP_RC(rc));
 
 	d_rank_list_free(svc_ranks);
+
+	/* For the moment, just echo back the allocations from the request.
+	 * In the future, we may need to adjust the allocations somehow and
+	 * this is how we would let the caller know.
+	 */
+	resp.scm_bytes = req->scmbytes;
+	resp.nvme_bytes = req->nvmebytes;
 
 out_list:
 	d_rank_list_free(rank_list);

@@ -44,7 +44,10 @@
 
 #define DF_UOID		DF_OID".%u"
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
-
+#define DF_BOOL "%s"
+#define DP_BOOL(b) ((b) ? "true" : "false")
+#define DF_IOV "<%p, %zu/%zu>"
+#define DP_IOV(i) (i)->iov_buf, (i)->iov_len, (i)->iov_buf_len
 #define MAX_TREE_ORDER_INC	7
 
 struct daos_node_overhead {
@@ -151,14 +154,17 @@ char *DP_UUID(const void *uuid);
 #else
 char *daos_key2str(daos_key_t *key);
 
-#define DF_KEY			"[%d] %.*s"
+#define DF_KEY			"[%d] '%.*s'"
 #define DP_KEY(key)		(int)(key)->iov_len,	\
 				(int)(key)->iov_len,	\
 				daos_key2str(key)
 #endif
 
-#define DF_RECX			"["DF_U64"-"DF_U64"]"
+#define DF_RECX			"["DF_X64"-"DF_X64"]"
 #define DP_RECX(r)		(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1)
+#define DF_IOM			"{nr: %d, lo: "DF_RECX", hi: "DF_RECX"}"
+#define DP_IOM(m)		(m)->iom_nr, DP_RECX((m)->iom_recx_lo), \
+				DP_RECX((m)->iom_recx_hi)
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
@@ -174,7 +180,6 @@ daos_u32_hash(uint64_t key, unsigned int bits)
 {
 	return (DGOLDEN_RATIO_PRIME_32 * key) >> (32 - bits);
 }
-
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
@@ -433,11 +438,11 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 /* given a pointer @ptr to the field @member embedded into type (usually
  *  * struct) @type, return pointer to the embedding instance of @type. */
 # define container_of(ptr, type, member)		\
-	        ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+	 ((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 #endif
 
 #ifndef offsetof
-# define offsetof(typ,memb)	((long)((char *)&(((typ *)0)->memb)))
+# define offsetof(typ, memb)	((long)((char *)&(((typ *)0)->memb)))
 #endif
 
 #ifndef ARRAY_SIZE
@@ -445,27 +450,27 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 #endif
 
 #ifndef MIN
-# define MIN(a,b) (((a)<(b)) ? (a): (b))
+# define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 #ifndef MAX
-# define MAX(a,b) (((a)>(b)) ? (a): (b))
+# define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
 #ifndef min
-#define min(x,y) ((x)<(y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
 #endif
 
 #ifndef max
-#define max(x,y) ((x)>(y) ? (x) : (y))
+#define max(x, y) ((x) > (y) ? (x) : (y))
 #endif
 
 #ifndef min_t
-#define min_t(type,x,y) \
-	        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
+#define min_t(type, x, y) \
+	     ({ type __x = (x); type __y = (y); __x < __y ? __x : __y; })
 #endif
 #ifndef max_t
-#define max_t(type,x,y) \
-	        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
+#define max_t(type, x, y) \
+	     ({ type __x = (x); type __y = (y); __x > __y ? __x : __y; })
 #endif
 
 #define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
@@ -755,6 +760,9 @@ enum {
 #define DAOS_VOS_GC_CONT_NULL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x95)
 
 #define DAOS_OBJ_SKIP_PARITY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x96)
+#define DAOS_OBJ_FORCE_DEGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x97)
+#define DAOS_FORCE_EC_AGG		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x98)
+#define DAOS_FORCE_FAIL_EC_AGG		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x99)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 

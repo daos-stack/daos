@@ -39,6 +39,19 @@ typedef struct dfs_obj dfs_obj_t;
 /** DFS mount handle struct */
 typedef struct dfs dfs_t;
 
+/*
+ * Consistency modes of the DFS container. A container created with balanced
+ * mode, can only be accessed with balanced mode with dfs_mount. A container
+ * created with relaxed mode, can be accessed with either mode in the future.
+ *
+ * Reserve bit 3 in the access flags for dfs_mount() - bits 1 and 2 are used
+ * for read / write access (O_RDONLY, O_RDRW).
+ */
+#define DFS_BALANCED	4 /** DFS operations using a DTX */
+#define DFS_RELAXED	0 /** DFS operations do not use a DTX (default mode). */
+#define DFS_RDONLY	O_RDONLY
+#define DFS_RDWR	O_RDWR
+
 /** struct holding attributes for a DFS container */
 typedef struct {
 	/** Optional user ID for DFS container. */
@@ -49,6 +62,12 @@ typedef struct {
 	daos_oclass_id_t	da_oclass_id;
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
+	/*
+	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
+	 * If set to 0 or more generally not set to balanced explicitly, relaxed
+	 * mode will be used. In the future, Balanced mode will be the default.
+	 */
+	uint32_t		da_mode;
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */
@@ -58,6 +77,13 @@ typedef struct {
 	/** Array of ranges; each range defines a starting index and length. */
 	daos_range_t	       *iod_rgs;
 } dfs_iod_t;
+
+typedef struct {
+	/** object class */
+	daos_oclass_id_t	doi_oclass_id;
+	/** chunk size */
+	daos_size_t		doi_chunk_size;
+} dfs_obj_info_t;
 
 /**
  * Create a DFS container with the POSIX property layout set.  Optionally set
@@ -385,9 +411,8 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size);
 
 /**
  * Punch a hole in the file starting at offset to len. If len is set to
- * DFS_MAX_FSIZE, this will be a truncate operation to punch all bytes in the
- * file above offset. If the file size is smaller than offset, the file is
- * extended to offset and len is ignored.
+ * DFS_MAX_FSIZE, this will be equivalent to a truncate operation to shrink or
+ * extend the file to \a offset bytes depending on the file size.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.
@@ -567,6 +592,53 @@ int
 dfs_get_mode(dfs_obj_t *obj, mode_t *mode);
 
 /**
+ * Retrieve some attributes of DFS object. Those include the object class and
+ * the chunk size.
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]   obj	Open object handle to query.
+ * \param[out]  info	info object container object class, chunks size, etc.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info);
+
+/**
+ * Set the object class on a directory for new files or sub-dirs that are
+ * created in that dir.  This does not change the chunk size for existing files
+ * or dirs in that directory, nor it does change the object class of the
+ * directory itself. Note that this is only supported on directories and will
+ * fail if called on non-directory objects.
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]   obj	Open object handle to access.
+ * \param[in]	flags	Flags for setting oclass (currently ignored)
+ * \param[in]   cid	object class.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid);
+
+/**
+ * Set the chunk size on a directory for new files or sub-dirs that are created
+ * in that dir.  This does not change the chunk size for existing files or dirs
+ * in that directory. Note that this is only supported on directories and will
+ * fail if called on non-directory objects.
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]   obj	Open object handle to access.
+ * \param[in]	flags	Flags for setting chunk size (currently ignored)
+ * \param[in]   csize	Chunk size to set object to.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags,
+		       daos_size_t csize);
+
+/**
  * Retrieve the DAOS open handle of a DFS file object. User should not close
  * this handle. This is used in cases like MPI-IO where 1 rank creates the file
  * with dfs, but wants to access the file with the array API directly rather
@@ -616,15 +688,16 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
  * is a local operation and doesn't change anything on the storage.
  *
  * \param[in]	obj	Open object handle to update.
- * \param[in]	parent_obj
- *			Open object handle of new parent.
+ * \param[in]	src_obj
+ *			Open object handle of the object whose parent will be
+ *			used as the new parent of \a obj.
  * \param[in]	name	Optional new name of entry in parent. Pass NULL to leave
  *			the entry name unchanged.
  *
  * \return		0 on Success. errno code on Failure.
  */
 int
-dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name);
+dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *src_obj, const char *name);
 
 /**
  * stat attributes of an entry. If object is a symlink, the link itself is

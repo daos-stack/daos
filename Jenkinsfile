@@ -45,9 +45,7 @@ pipeline {
 
     triggers {
         cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
-             env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
-             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '' +
-             env.BRANCH_NAME == 'weekly-testing-1.2' ? 'H 0 * * 6' : '')
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '' )
     }
 
     environment {
@@ -74,6 +72,13 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: "",
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestRepeat',
+               defaultValue: "",
+               description: 'Test-repeat to use for this run.  Specifies the ' +
+                            'number of times to repeat each functional test. ' +
+                            'CAUTION: only use in combination with a reduced ' +
+                            'number of tests specified with the TestTag ' +
+                            'parameter.')
     }
 
     stages {
@@ -173,7 +178,7 @@ pipeline {
                             filename 'Dockerfile.code_scanning'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
+                            additionalBuildArgs dockerBuildArgs(add_repos: false)
                         }
                     }
                     steps {
@@ -308,7 +313,6 @@ pipeline {
                             filename 'Dockerfile.ubuntu.20.04'
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
-                            args '--privileged=true'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--cap-add=SYS_ADMIN --privileged=true'
                         }
@@ -343,7 +347,8 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickBuild()) +
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                qb: quickBuild()) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7') + '"' +
@@ -381,7 +386,8 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickBuild()) +
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                qb: quickBuild()) +
                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
@@ -420,7 +426,8 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickBuild(),
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                qb: quickBuild(),
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
@@ -459,13 +466,14 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickBuild(),
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                qb: quickBuild(),
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
-                            args '--tmpfs /mnt/daos'
+                            args '--tmpfs /mnt/daos_0'
                         }
                     }
                     steps {
@@ -504,7 +512,8 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickBuild(),
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                qb: quickBuild(),
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
@@ -543,7 +552,8 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(deps_build: true) +
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15"
                             args '-v /opt/intel:/opt/intel'
                         }
@@ -700,7 +710,8 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: true) +
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                qb: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7', true) + '"' +
@@ -917,7 +928,8 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickBuild()) +
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                qb: quickBuild()) +
                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
