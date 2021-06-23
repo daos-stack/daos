@@ -17,7 +17,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -40,11 +39,14 @@ type (
 		Label string `json:"label,omitempty"`
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
-		ServiceReplicas []system.Rank `json:"svc_replicas"`
+		ServiceReplicas []system.Rank `json:"svc_reps"`
 
 		// Info contains information about the pool learned from a
 		// query operation.
 		Info PoolInfo `json:"info"`
+		// QueryStatus reports any DAOS error returned from a query
+		// operation.
+		QueryStatus int32 `json:"query_status"`
 	}
 )
 
@@ -728,8 +730,8 @@ type ListPoolsReq struct {
 // ListPoolsResp contains the status of the request and, if successful, the list
 // of pools in the system.
 type ListPoolsResp struct {
-	Status int32                   `json:"status"`
-	Pools  []*common.PoolDiscovery `json:"pools"`
+	Status int32   `json:"status"`
+	Pools  []*Pool `json:"pools"`
 }
 
 // ListPools fetches the list of all pools and their service replicas from the

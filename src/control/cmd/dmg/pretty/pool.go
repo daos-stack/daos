@@ -13,7 +13,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
@@ -87,57 +86,67 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	return err
 }
 
+func poolListGetTitles() []string {
+	return []string{"Pool", "Size", "Used", "Imbalance", "Disabled"}
+}
+
+func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
+	name := pool.Label
+	if name == "" {
+		name = pool.UUID
+	}
+
+	nvmeTotal := pool.Info.Nvme.Total
+	scmTotal := pool.Info.Scm.Total
+
+	size := nvmeTotal
+	if size == 0 {
+		size = scmTotal
+	}
+
+	scmUsage := (scmTotal - pool.Info.Scm.Free) / scmTotal
+	nvmeUsage := (nvmeTotal - pool.Info.Nvme.Free) / nvmeTotal
+	usage := scmUsage
+	if nvmeUsage > usage {
+		usage = nvmeUsage
+	}
+
+	scmSpread := pool.Info.Scm.Max - pool.Info.Scm.Min
+	scmImbalance := scmSpread / (scmTotal / pool.Info.ActiveTargets)
+	nvmeSpread := pool.Info.Nvme.Max - pool.Info.Nvme.Min
+	nvmeImbalance := nvmeSpread / (nvmeTotal / pool.Info.ActiveTargets)
+	imbalance := scmImbalance
+	if nvmeImbalance > imbalance {
+		imbalance = nvmeImbalance
+	}
+
+	row := txtfmt.TableRow{
+		"Pool":      name,
+		"Size":      humanize.Bytes(size),
+		"Used":      fmt.Sprintf("%d%%", int(usage*100)),
+		"Imbalance": fmt.Sprintf("%d%%", int(imbalance*100)),
+		"Disabled":  fmt.Sprintf("%d/%d", pool.Info.DisabledTargets, pool.Info.TotalTargets),
+	}
+
+	return row
+}
+
 func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 	if len(resp.Pools) == 0 {
 		fmt.Fprintln(out, "no pools in system")
 		return nil
 	}
 
-	labelTitle := "Pool"
-	sizeTitle := "Size"
-	usedTitle := "Used"
-	imbalanceTitle := "Imbalance"
-	disabledTitle := "Disabled"
+	formatter := txtfmt.NewTableFormatter(poolListGetTitles()...)
 
-	formatter := txtfmt.NewTableFormatter(labelTitle, sizeTitle, usedTitle,
-		imbalanceTitle, disabledTitle)
 	var table []txtfmt.TableRow
-
 	for _, pool := range resp.Pools {
-		label = pool.Label
-		if pool.Label == "" {
-			label = pool.UUID
-		}
-		row := txtfmt.TableRow{labelTitle: label}
-		row[sizeTitle] = pool.Size
-		row[usedTitle] = pool.Used
-		row[imbalanceTitle] = pool.Imbalance
-		row[disabledTitle] = pool.DisabledRanks
-
-		table = append(table, row)
+		table = append(table, poolListCreateRow(pool))
 	}
+
 	fmt.Fprintln(out, formatter.Format(table))
 
 	return nil
-}
-
-func poolListGetTitles() []string {
-	return []string{"Pool", "Size", "Used", "Imbalance", "Disabled"}
-}
-
-func poolListCreateRow(pool *common.PoolDiscovery) txtfmt.TableRow {
-	row := txtfmt.TableRow{
-		"Pool":      pool.Label,
-		"Size":      pool.Size,
-		"Used":      pool.Used,
-		"Imbalance": pool.Imbalance,
-		"Disabled":  pool.DisabledRanks,
-	}
-	if row["Pool"] == "" {
-		row["Pool"] = pool.UUID
-	}
-
-	return row
 }
 
 func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error {
@@ -153,8 +162,8 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 	verboseTitles = append(verboseTitles, titles[1:]...)
 
 	formatter := txtfmt.NewTableFormatter(verboseTitles...)
-	var table []txtfmt.TableRow
 
+	var table []txtfmt.TableRow
 	for _, pool := range resp.Pools {
 		row := poolListCreateRow(pool)
 		row[uuidTitle] = pool.UUID
@@ -164,6 +173,7 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 		}
 		table = append(table, row)
 	}
+
 	fmt.Fprintln(out, formatter.Format(table))
 
 	return nil
@@ -176,5 +186,6 @@ func PrintListPoolsResponse(o io.Writer, r *control.ListPoolsResp, v bool) error
 	if v {
 		return printListPoolsRespVerbose(o, r)
 	}
+
 	return printListPoolsResp(o, r)
 }
