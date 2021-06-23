@@ -18,7 +18,8 @@ class DaosVol(VolTestBase):
     def setUp(self):
         """Set up before each test."""
         # Create unique logs per test variant
-        self.update_log_file_names()
+        testname = self.params.get("testname")
+        self.update_log_file_names("_".join([self.test_id, testname]))
         super().setUp()
 
     def test_daos_vol_mpich(self):
