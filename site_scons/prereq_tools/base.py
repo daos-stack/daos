@@ -47,6 +47,7 @@ from SCons.Script import SetOption
 from SCons.Script import Configure
 from SCons.Script import AddOption
 from SCons.Script import SConscript
+from SCons.Script import BUILD_TARGETS
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from SCons.Errors import UserError
@@ -464,9 +465,9 @@ class WebRetriever():
                 tfile.extractall()
                 if not RUNNER.run_commands(['mv %s %s' % (prefix, subdir)]):
                     raise ExtractionError(subdir)
-            except (IOError, tarfile.TarError):
+            except (IOError, tarfile.TarError) as io_error:
                 print(traceback.format_exc())
-                raise ExtractionError(subdir)
+                raise ExtractionError(subdir) from io_error
         else:
             raise UnsupportedCompression(subdir)
 
@@ -680,8 +681,8 @@ class PreReqComponent():
         self.__opts.Add('USE_INSTALLED',
                         'Comma separated list of preinstalled dependencies',
                         'none')
-        self.add_opts(ListVariable('EXCLUDE', "Components to skip building",
-                                   'none', ['psm2']))
+        self.add_opts(ListVariable('INCLUDE', "Optional components to build",
+                                   'none', ['psm2', 'psm3']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
@@ -704,7 +705,25 @@ class PreReqComponent():
             self.configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
-        self.exclude = env.subst("$EXCLUDE").split(",")
+        self.include = env.subst("$INCLUDE").split(" ")
+        self._build_targets = []
+
+    def init_build_targets(self, build_dir):
+        """Setup default build targets"""
+        targets = ['test', 'server', 'client']
+        self.__env.Alias('client', build_dir)
+        self.__env.Alias('server', build_dir)
+        self.__env.Alias('test', build_dir)
+        self._build_targets = []
+        check = any(item in BUILD_TARGETS for item in targets)
+        if not check or 'test' in BUILD_TARGETS:
+            self._build_targets.extend(['client', 'server', 'test'])
+        else:
+            if 'client' in BUILD_TARGETS:
+                self._build_targets.append('client')
+            if 'server' in BUILD_TARGETS:
+                self._build_targets.append('server')
+        BUILD_TARGETS.append(build_dir)
 
     def has_source(self, env, *comps, **kw):
         """Check if source exists for a component"""
@@ -989,10 +1008,12 @@ class PreReqComponent():
         """
 
         try:
+            #pylint: disable=import-outside-toplevel
             from components import define_components
+            #pylint: enable=import-outside-toplevel
             define_components(self)
-        except Exception:
-            raise BadScript("components", traceback.format_exc())
+        except Exception as old:
+            raise BadScript("components", traceback.format_exc()) from old
 
         # Go ahead and prebuild some components
 
@@ -1000,6 +1021,42 @@ class PreReqComponent():
         for comp in prebuild:
             env = self.__env.Clone()
             self.require(env, comp)
+
+    def load_defaults(self, is_arm):
+        """Setup default build parameters"""
+        #argobots is not really needed by client but it's difficult to separate
+        common_reqs = ['argobots', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
+                       'crypto', 'protobufc', 'lz4']
+        client_reqs = ['fuse', 'json-c']
+        server_reqs = ['pmdk']
+        test_reqs = ['cmocka']
+
+        if not is_arm:
+            server_reqs.extend(['spdk'])
+            common_reqs.extend(['isal', 'isal_crypto'])
+        reqs = []
+        if not self._build_targets:
+            raise ValueError("Call init_build_targets before load_defaults")
+        reqs = common_reqs
+        if self.test_requested():
+            reqs.extend(test_reqs)
+        if self.server_requested():
+            reqs.extend(server_reqs)
+        if self.client_requested():
+            reqs.extend(client_reqs)
+        self.load_definitions(prebuild=reqs)
+
+    def server_requested(self):
+        """return True if server build is requested"""
+        return "server" in self._build_targets
+
+    def client_requested(self):
+        """return True if client build is requested"""
+        return "client" in self._build_targets
+
+    def test_requested(self):
+        """return True if test build is requested"""
+        return "test" in self._build_targets
 
     def modify_prefix(self, comp_def, env): #pylint: disable=unused-argument
         """Overwrite the prefix in cases where we may be using the default"""
@@ -1391,6 +1448,12 @@ class _Component():
         path = os.environ.get("PKG_CONFIG_PATH", None)
         if not path is None:
             env["ENV"]["PKG_CONFIG_PATH"] = path
+        if self.component_prefix:
+            for path in ["lib", "lib64"]:
+                config = os.path.join(self.component_prefix, path, "pkgconfig")
+                if not os.path.exists(config):
+                    continue
+                env.AppendENVPath("PKG_CONFIG_PATH", config)
 
         try:
             env.ParseConfig("pkg-config %s %s" % (opts, self.pkgconfig))

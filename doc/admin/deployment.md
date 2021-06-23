@@ -686,6 +686,14 @@ engines:
 <end>
 ```
 
+There are a few optional providers that are not built by default. For detailed
+information, please refer to the [DAOS build documentation][6].
+
+>**_NOTE_**
+>
+>The support of the optional providers is not guarantee and can be removed
+>without further notification.
+
 ### Network Scan and Configuration
 
 The `daos_server` supports the `network scan` function to display the network
@@ -1099,3 +1107,5 @@ each storage node.
 [^4]: https://github.com/daos-stack/daos/tree/master/src/control/README.md
 
 [^5]: https://github.com/pmem/ndctl/issues/130
+
+[6]: <../dev/development.md#building-optional-components> (Building DAOS for Development)
