@@ -512,6 +512,7 @@ static int
 free_name(tse_task_t *task, void *args)
 {
 	char *name = *(char **)args;
+
 	free(name);
 	return 0;
 }
@@ -532,15 +533,17 @@ daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[],
 		return -DER_NOMEM;
 
 	rc = dc_task_create(dc_cont_get_attr, NULL, ev, &task);
-	if (rc)
+	if (rc) {
+		D_FREE(new_names);
 		return rc;
+	}
 
 	for (i = 0 ; i < n ; i++) {
 		/* no easy way to determine if a name storage address is likely
 		 * to cause an EFAULT during memory registration, so duplicate
 		 * name in heap
 		 */
-		new_names[i] = strdup(names[i]);
+		D_STRNDUP(new_names[i], names[i], DAOS_ATTR_NAME_MAX);
 		if (new_names[i] == NULL)
 			D_GOTO(error, daos_errno2der(errno));
 		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
