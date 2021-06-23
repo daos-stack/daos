@@ -53,6 +53,7 @@ post_provision_config_nodes() {
     # workaround until new snapshot images are produced
     # Assume if APPSTREAM is locally proxied so is epel-modular
     # so disable the upstream epel-modular repo
+    : "${DAOS_STACK_EL_8_APPSTREAM_REPO:-}"
     if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO}" ]; then
         dnf config-manager --disable epel-modular appstream
     fi
