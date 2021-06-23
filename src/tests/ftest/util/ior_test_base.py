@@ -69,6 +69,10 @@ class IorTestBase(DfuseTestBase):
             self.pool, daos_command=DaosCommand(self.bin))
         self.container.get_params(self)
 
+        # update container oclass
+        if self.ior_cmd.dfs_oclass:
+            self.container.oclass.update(self.ior_cmd.dfs_oclass.value)
+
         # create container
         self.container.create()
 
