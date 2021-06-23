@@ -2,7 +2,7 @@ daos (1.3.102-2) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Update to mercury v2.0.1
 
- -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Fri, 14 May 2021 15:31:50 -0400
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Wed, 16 Jun 2021 15:31:50 -0400
 
 daos (1.3.102-1) unstable; urgency=medium
   [ Johann Lombardi]
@@ -33,7 +33,6 @@ daos (1.3.0-16) unstable; urgency=medium
   * Enable debuginfo package building on SUSE platforms
 
  -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 07 May 2021 13:37:45 -0400
->>>>>>> master
 
 daos (1.3.0-15) unstable; urgency=medium
   [ Brian J. Murrell ]
