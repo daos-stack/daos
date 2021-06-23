@@ -52,8 +52,7 @@ daos_prop_has_str(struct daos_prop_entry *entry)
 	case DAOS_PROP_PO_OWNER_GROUP:
 	case DAOS_PROP_CO_OWNER_GROUP:
 	case DAOS_PROP_PO_POLICY:
-		if (entry->dpe_str)
-			D_FREE(entry->dpe_str);
+		D_FREE(entry->dpe_str);
 		break;
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
