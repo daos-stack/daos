@@ -1,7 +1,7 @@
 # Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of centOS-based
+# 'recipe' for Docker to build an image of Leap based
 # environment for building the DAOS project.
 #
 
@@ -15,8 +15,8 @@ ARG CB0
 # Use our own repo cache
 
 # If a DISTRO repo is provided then use it.
-ARG REPO_URL=""
-ARG REPO_DISTRO=""
+ARG REPO_URL
+ARG REPO_DISTRO
 RUN if [ -n "${REPO_DISTRO}" ]; then                                           \
       rm -f /etc/zypp/repos.d/*.repo &&                                        \
       zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
@@ -26,7 +26,7 @@ RUN if [ -n "${REPO_DISTRO}" ]; then                                           \
       zypper clean --all;                                                      \
     fi
 
-ARG REPO_DAOS=""
+ARG REPO_DAOS
 RUN if [ -n "${REPO_DAOS}" ]; then                                             \
       zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
              ${REPO_URL}${REPO_DAOS} daos-stack-daos-group-repo &&             \
@@ -49,59 +49,59 @@ RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
 RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
     zypper --non-interactive update && \
     zypper --non-interactive install \
-    boost-devel \
-    clang \
-    cmake \
-    cunit-devel \
-    curl \
-    doxygen \
-    flex \
-    fuse3-devel \
-    gcc \
-    gcc-c++ \
-    git \
-    go1.14 \
-    go1.14-race \
-    graphviz \
-    gzip \
-    hwloc-devel \
-    ipmctl-devel \
-    java-1_8_0-openjdk-devel \
-    libaio-devel \
-    libcmocka-devel \
-    libevent-devel \
-    libiscsi-devel \
-    libjson-c-devel \
-    libltdl7 \
-    liblz4-devel \
-    libnuma-devel \
-    libopenssl-devel \
-    libtool \
-    libunwind-devel \
-    libuuid-devel \
-    libyaml-devel \
-    lua-lmod \
-    make \
-    man \
-    maven \
-    nasm \
-    openmpi3-devel \
-    pandoc \
-    patch \
-    patchelf \
-    pciutils \
-    python3-devel \
-    python3-distro \
-    python3-junit-xml \
-    python3-pyxattr  \
-    python3-PyYAML \
-    python3-tabulate \
-    scons \
-    sg3_utils \
-    sudo \
-    valgrind-devel \
-    which \
-    yasm && \
+        boost-devel \
+        clang \
+        cmake \
+        cunit-devel \
+        curl \
+        doxygen \
+        flex \
+        fuse3-devel \
+        gcc \
+        gcc-c++ \
+        git \
+        go1.14 \
+        go1.14-race \
+        graphviz \
+        gzip \
+        hwloc-devel \
+        ipmctl-devel \
+        java-1_8_0-openjdk-devel \
+        libaio-devel \
+        libcmocka-devel \
+        libevent-devel \
+        libiscsi-devel \
+        libjson-c-devel \
+        libltdl7 \
+        liblz4-devel \
+        libnuma-devel \
+        libopenssl-devel \
+        libtool \
+        libunwind-devel \
+        libuuid-devel \
+        libyaml-devel \
+        lua-lmod \
+        make \
+        man \
+        maven \
+        nasm \
+        openmpi3-devel \
+        pandoc \
+        patch \
+        patchelf \
+        pciutils \
+        python3-devel \
+        python3-distro \
+        python3-junit-xml \
+        python3-pyxattr  \
+        python3-PyYAML \
+        python3-tabulate \
+        scons \
+        sg3_utils \
+        sudo \
+        valgrind-devel \
+        which \
+        yasm && \
     zypper clean --all
 
 # Monkey-patch MODULEPATH
@@ -127,11 +127,11 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
     chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
-ARG JENKINS_URL=""
+ARG JENKINS_URL
 ARG QUICKBUILD=false
-ARG QUICKBUILD_DEPS=""
-ARG REPOS=""
-ARG REPO_LOCAL_LEAP15=""
+ARG QUICKBUILD_DEPS
+ARG REPOS
+ARG REPO_LOCAL_LEAP15
 RUN if $QUICKBUILD; then                                                       \
         for repo in $REPOS; do                                                 \
             branch="master";                                                   \
@@ -206,7 +206,7 @@ COPY site_scons site_scons
 COPY utils utils
 COPY src src
 USER root:root
-RUN chown -R daos_server.daos_server /home/daos
+RUN chown -R daos_server.daos_server /home/daos/daos/
 USER daos_server:daos_server
 
 # select compiler to use
@@ -218,8 +218,8 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
     { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
-      BUILD_TYPE=$DAOS_TARGET_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
-    /bin/rm -rf build && \
+      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+    /bin/rm -rf build && go clean -cache && \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
