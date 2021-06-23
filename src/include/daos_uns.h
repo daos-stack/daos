@@ -152,7 +152,7 @@ duns_create_path(daos_handle_t poh, const char *path,
  * xyz here can be a path relative to the root of a POSIX container if the user
  * is accessing a posix container, or it can be empty for example in the case of
  * an HDF5 file.
- * 
+ *
  * User is responsible to call duns_free_attr on \a attr to free the internal
  * buffers allocated here for the relative path and container / pool labels.
  *
