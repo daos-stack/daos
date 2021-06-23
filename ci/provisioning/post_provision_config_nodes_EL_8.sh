@@ -55,7 +55,7 @@ post_provision_config_nodes() {
     # so disable the upstream epel-modular repo
     : "${DAOS_STACK_EL_8_APPSTREAM_REPO:-}"
     if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO}" ]; then
-        dnf config-manager --disable epel-modular appstream
+        dnf config-manager --disable epel-modular appstream powertools
     fi
     time dnf repolist
 
