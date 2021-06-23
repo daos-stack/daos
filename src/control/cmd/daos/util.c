@@ -69,42 +69,46 @@ resolve_duns_path(struct cmd_args_s *ap)
 	ap->type = dattr.da_type;
 
 	/** set pool/cont label or uuid */
-	if (dattr.da_pool_label)
-		ap->pool_label = dattr.da_pool_label;
-	else
+	if (dattr.da_pool_label) {
+		D_STRNDUP(ap->pool_label, dattr.da_pool_label,
+			  DAOS_PROP_LABEL_MAX_LEN);
+		if (ap->pool_label == NULL)
+			D_GOTO(out, rc);
+	} else {
 		uuid_copy(ap->p_uuid, dattr.da_puuid);
+	}
 
-	if (dattr.da_cont_label)
-		ap->cont_label = dattr.da_cont_label;
-	else
+	if (dattr.da_cont_label) {
+		D_STRNDUP(ap->cont_label, dattr.da_cont_label,
+			  DAOS_PROP_LABEL_MAX_LEN);
+		if (ap->cont_label == NULL)
+			D_GOTO(out, rc);
+	} else {
 		uuid_copy(ap->c_uuid, dattr.da_cuuid);
+	}
 
 	if (ap->fs_op != -1) {
 		if (name) {
 			if (dattr.da_rel_path) {
 				D_ASPRINTF(ap->dfs_path, "%s/%s",
-						dattr.da_rel_path, name);
-				free(dattr.da_rel_path);
+					   dattr.da_rel_path, name);
 			} else {
 				D_ASPRINTF(ap->dfs_path, "/%s", name);
 			}
 		} else {
 			if (dattr.da_rel_path) {
 				D_STRNDUP(ap->dfs_path,
-						dattr.da_rel_path, PATH_MAX);
-				free(dattr.da_rel_path);
+					  dattr.da_rel_path, PATH_MAX);
 			} else {
 				D_STRNDUP(ap->dfs_path, "/", 1);
 			}
 		}
 		if (ap->dfs_path == NULL)
 			D_GOTO(out, rc = ENOMEM);
-	} else {
-		if (dattr.da_rel_path)
-			free(dattr.da_rel_path);
 	}
 
 out:
+	duns_destroy_attr(&dattr);
 	D_FREE(dir_name);
 	D_FREE(name);
 	return rc;

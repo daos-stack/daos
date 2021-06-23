@@ -3155,8 +3155,7 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		file->type = POSIX;
 	}
 out:
-	if (dattr.da_rel_path)
-		free(dattr.da_rel_path);
+	duns_destroy_attr(&dattr);
 	return rc;
 }
 

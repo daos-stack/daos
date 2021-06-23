@@ -61,8 +61,7 @@ struct duns_attr_t {
 	 * This is returned if the UNS entry is not the last entry in the path,
 	 * and the UNS library performs a reverse lookup to find a UNS entry in
 	 * the path. To check only the last entry in the path and not return
-	 * this relative path to that entry, set \a da_no_reverse_lookup. User
-	 * is responsible to free this if it is returned.
+	 * this relative path to that entry, set \a da_no_reverse_lookup.
 	 */
 	char			*da_rel_path;
 	/** IN: (Optional Container props to be added with duns_path_create */
@@ -87,18 +86,14 @@ struct duns_attr_t {
 	 *
 	 * If the path is a direct path, we parse the first entry (pool) as
 	 * either a uuid or a label. If the format is not a uuid, then it's
-	 * returned as a label. The string buffer for the label is allocated
-	 * internally and returned here, but the user is responsible for freeing
-	 * the buffer.
+	 * returned as a label.
 	 */
 	char			*da_pool_label;
 	/** OUT: Container label returned with a direct path.
 	 *
 	 * If the path is a direct path, we parse the second entry (cont) as
 	 * either a uuid or a label. If the format is not a uuid, then it's
-	 * returned as a label. The string buffer for the label is allocated
-	 * internally and returned here, but the user is responsible for freeing
-	 * the buffer.
+	 * returned as a label.
 	 */
 	char			*da_cont_label;
 };
@@ -119,6 +114,8 @@ struct duns_attr_t {
  * be able to map a path in the unified namespace to a location in the DAOS
  * tier.  The container and pool can have labels, but the UNS stores the uuids
  * only and so labels are ignored in \a attrp.
+ * The user is not required to call duns_free_attrs on \a attrp as this call
+ * does not allocate any buffers in attrp.
  *
  * \param[in]	poh	Pool handle
  * \param[in]	path	Valid path in an existing namespace.
@@ -147,15 +144,17 @@ duns_create_path(daos_handle_t poh, const char *path,
  * To avoid going through the UNS if the user knows the pool and container
  * uuids, a special format can be passed as a prefix for a "fast path", and this
  * call would parse those out in the \a attr struct and return whatever is left
- * from the path in \a attr.da_rel_path. The user is responsible to free \a
- * attr.da_rel_path. This mode is provided as a convenience to IO middleware
- * libraries and to settle on a unified format for a mode where users know the
- * pool and container uuids and would just like to pass them directly instead of
- * a traditional path. The format of this path should be:
+ * from the path in \a attr.da_rel_path. This mode is provided as a convenience
+ * to IO middleware libraries and to settle on a unified format for a mode where
+ * users know the pool and container uuids and would just like to pass them
+ * directly instead of a traditional path. The format of this path should be:
  *  daos://pool_uuid/container_uuid/xyz
  * xyz here can be a path relative to the root of a POSIX container if the user
  * is accessing a posix container, or it can be empty for example in the case of
  * an HDF5 file.
+ * 
+ * User is responsible to call duns_free_attr on \a attr to free the internal
+ * buffers allocated here for the relative path and container / pool labels.
  *
  * \param[in]		path	Valid path in an existing namespace.
  * \param[in,out]	attr	Struct containing the attrs on the path.
@@ -187,6 +186,16 @@ duns_destroy_path(daos_handle_t poh, const char *path);
  */
 int
 duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr);
+
+/**
+ * Free internal buffers allocated by the DUNS on the \a attr struct.
+ *
+ * \param[in]	attr	Attr pointer that was passed in to duns_resolve_path.
+ *
+ * \return		0 on Success. errno code on failure.
+ */
+int
+duns_destroy_attr(struct duns_attr_t *attrp);
 
 #if defined(__cplusplus)
 }

@@ -393,7 +393,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		/** parse the pool uuid */
 		rc = uuid_parse(t, attr->da_puuid);
 		if (rc) {
-			attr->da_pool_label = strdup(t);
+			D_STRNDUP(attr->da_pool_label, t,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (attr->da_pool_label == NULL)
 				return ENOMEM;
 		} else {
@@ -415,7 +416,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		/** parse the container uuid */
 		rc = uuid_parse(t, attr->da_cuuid);
 		if (rc) {
-			attr->da_cont_label = strdup(t);
+			D_STRNDUP(attr->da_cont_label, t,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (attr->da_cont_label == NULL)
 				return ENOMEM;
 		} else {
@@ -523,7 +525,7 @@ parse:
 
 	if (cur_idx != path_len) {
 		D_ASSERT(rel_path);
-		attr->da_rel_path = strndup(rel_path, rel_len);
+		D_STRNDUP(attr->da_rel_path, rel_path, rel_len);
 		if (attr->da_rel_path == NULL)
 			D_GOTO(out, rc = ENOMEM);
 	}
@@ -996,6 +998,19 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 			return err;
 		}
 	}
+
+	return 0;
+}
+
+int
+duns_destroy_attr(struct duns_attr_t *attrp)
+{
+	if (attrp == NULL)
+		return EINVAL;
+
+	D_FREE(attrp->da_rel_path);
+	D_FREE(attrp->da_pool_label);
+	D_FREE(attrp->da_cont_label);
 
 	return 0;
 }
