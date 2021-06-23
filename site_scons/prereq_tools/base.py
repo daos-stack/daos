@@ -767,7 +767,7 @@ class PreReqComponent():
 
     def _setup_intelc(self):
         """Setup environment to use intel compilers"""
-        env = self.__env.Clone(tools=['intelc'])
+        env = self.__env.Clone(tools=['intel_c'])
         self.__env.Replace(AR=env.get("AR"))
         self.__env.Replace(ENV=env.get("ENV"))
         self.__env.Replace(CC=env.get("CC"))
