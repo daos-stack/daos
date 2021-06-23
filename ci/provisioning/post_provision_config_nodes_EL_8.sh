@@ -50,8 +50,12 @@ post_provision_config_nodes() {
     #add_group_repo
     #add_local_repo
 
-    # workaround until Nexus has 8.4
-    dnf config-manager --enable baseos
+    # workaround until new snapshot images are produced
+    # Assume if APPSTREAM is locally proxied so is epel-modular
+    # so disable the upstream epel-modular repo
+    if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO}" ]; then
+        dnf config-manager --disable epel-modular appstream
+    fi
     time dnf repolist
 
     if [ -n "$INST_REPOS" ]; then
