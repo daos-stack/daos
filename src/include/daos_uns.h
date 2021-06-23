@@ -20,6 +20,30 @@
 extern "C" {
 #endif
 
+/** Flags for duns_resolve_path */
+enum {
+	/*
+	 * String does not include daos:// prefix
+	 * Path that is passed does not have daos: prefix but is direct:
+	 * (/puuid/cuuid/xyz) and does not need to parse a path UNS attrs.
+	 * This is usually not set.
+	 */
+	DUNS_NO_PREFIX = (1 << 0),
+
+	/* look only at the last entry in the path. */
+	DUNS_NO_REVERSE_LOOKUP = (1 << 1),
+
+	/*
+	 * check only for direct path.
+	 * Do not attempt to get the extended attribute of the path, and assume
+	 * the path is a direct path that is either of format:
+	 *   - /puuid/cuuid/xyz
+	 *   - /pool_label/container_label/xyz
+	 * This is usually not set.
+	 */
+	DUNS_NO_CHECK_PATH = (1 << 2),
+};
+
 /** struct that has the values to make the connection from the UNS to DAOS */
 struct duns_attr_t {
 	/** IN/OUT: Pool uuid of the container. */
@@ -45,22 +69,20 @@ struct duns_attr_t {
 	daos_prop_t		*da_props;
 	/** OUT: This is set to true if path is on Lustre filesystem */
 	bool			da_on_lustre;
-	/** IN: String does not include daos:// prefix
+	/** IN: (Deprecated - use flags) String does not include daos:// prefix
 	 *
 	 * Path that is passed does not have daos: prefix but is direct:
 	 * (/puuid/cuuid/xyz) and does not need to parse a path UNS attrs.
 	 * This is usually set to false.
 	 */
 	bool			da_no_prefix;
-	/** IN: check only for direct path.
+	/** IN: access flags
 	 *
-	 * Do not attempt to get the extended attribute of the path, and assume
-	 * the path is a direct path that is either of format:
-	 *   - /puuid/cuuid/xyz
-	 *   - /pool_label/container_label/xyz
-	 * This is usually set to false.
+	 * DUNS_NO_PREFIX
+	 * DUNS_NO_REVERSE_LOOKUP
+	 * DUNS_NO_CHECK_PATH:
 	 */
-	bool			da_no_check_path;
+	uint32_t		da_flags;
 	/** OUT: Pool label returned with a direct path.
 	 *
 	 * If the path is a direct path, we parse the first entry (pool) as
@@ -79,8 +101,6 @@ struct duns_attr_t {
 	 * the buffer.
 	 */
 	char			*da_cont_label;
-	/** IN: look only at the last entry in the path for duns_resolve_path */
-	bool			da_no_reverse_lookup;
 };
 
 /** extended attribute name that will container the UNS info */

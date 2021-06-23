@@ -463,7 +463,7 @@ main(int argc, char **argv)
 		uuid_copy(cont_uuid, dfs->dfs_cont);
 	}
 
-	duns_attr.da_no_reverse_lookup = true;
+	duns_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
 	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s",
 		       rc, strerror(rc));

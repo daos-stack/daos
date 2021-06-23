@@ -342,6 +342,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	char		str[DUNS_MAX_XATTR_LEN];
 	struct statfs	fs;
 	bool		pool_only = false;
+	bool		no_prefix = false;
 	char		*realp = NULL;
 	char		*rel_path = NULL;
 	char		*dir_path = NULL;
@@ -353,14 +354,16 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	if (path == NULL || strlen(path) == 0)
 		return EINVAL;
 
+	if (attr->da_no_prefix || attr->da_flags & DUNS_NO_PREFIX)
+		no_prefix = true;
 	/**
 	 * If caller requested to not check the file system path, we do the
 	 * direct format parsing right away regardless of the format.
 	 */
-	if (attr->da_no_check_path)
+	if (attr->da_flags & DUNS_NO_CHECK_PATH)
 		rc = 0;
 	else
-		rc = check_direct_format(path, attr->da_no_prefix, &pool_only);
+		rc = check_direct_format(path, no_prefix, &pool_only);
 	if (rc == 0) {
 		char	*dir;
 		char	*saveptr, *t;
@@ -378,7 +381,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		}
 
 		/** if there is a daos: prefix, skip over it */
-		if (!attr->da_no_prefix) {
+		if (!no_prefix) {
 			t = strtok_r(NULL, "/", &saveptr);
 			if (t == NULL) {
 				D_ERROR("Invalid DAOS format (%s).\n", path);
@@ -480,7 +483,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 			int err = errno;
 
 			if (err == ENODATA) {
-				if (cur_idx == 0 || attr->da_no_reverse_lookup)
+				if (cur_idx == 0 || (attr->da_flags &
+						     DUNS_NO_REVERSE_LOOKUP))
 					D_INFO("Path does not represent a DAOS"
 					       " link\n");
 				else
@@ -761,6 +765,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	char		str[DUNS_MAX_XATTR_LEN];
 	int		len;
 	bool		try_multiple = true;
+	bool		no_prefix = false;
 	int		rc;
 	bool		backend_dfuse = false;
 	bool		pool_only;
@@ -773,7 +778,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 	path_len = strlen(path);
 
-	rc = check_direct_format(path, attrp->da_no_prefix, &pool_only);
+	if (attrp->da_no_prefix || attrp->da_flags & DUNS_NO_PREFIX)
+		no_prefix = true;
+
+	rc = check_direct_format(path, no_prefix, &pool_only);
 	if (rc == 0) {
 		if (pool_only) {
 			D_ERROR("Invalid DUNS format: %s\n", path);
