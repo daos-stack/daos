@@ -100,7 +100,14 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		return nil, err
 	}
 
-	if in.TotalBytes == 0 {
+	if len(in.TierBytes) > 0 {
+		if in.TotalBytes > 0 {
+			return nil, errors.New("can't mix TotalBytes and ScmBytes/NvmeBytes")
+		}
+		if in.TotalBytes == 0 && in.TierBytes[0] == 0 {
+			return nil, errors.New("can't create pool with 0 SCM")
+		}
+	} else if in.TotalBytes == 0 {
 		return nil, errors.New("can't create pool with size of 0")
 	}
 
@@ -130,7 +137,8 @@ type (
 		TierRatio  []float64
 		NumRanks   uint32
 		// manual params
-		Ranks []system.Rank
+		Ranks     []system.Rank
+		TierBytes []uint64
 	}
 
 	// PoolCreateResp contains the response from a pool create request.

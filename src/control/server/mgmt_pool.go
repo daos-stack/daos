@@ -128,9 +128,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 
 	// the engine will accept only 2 tiers - add missing
 	if len(req.GetTierratio()) == 0 {
-		req.Tierratio = make([]float64, 2)
-		req.Tierratio[0] = DefaultPoolScmRatio
-		req.Tierratio[1] = DefaultPoolNvmeRatio
+		req.Tierratio = []float64{DefaultPoolScmRatio, DefaultPoolNvmeRatio}
 	} else if len(req.GetTierratio()) == 1 {
 		req.Tierratio = append(req.Tierratio, 0)
 	}

@@ -140,13 +140,11 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			}
 		}
 
-		req.TotalBytes = ScmBytes + NvmeBytes
+		req.TierBytes = []uint64{ScmBytes, NvmeBytes}
+		req.TotalBytes = 0
+		req.TierRatio = nil
 
-		scmRatio := float64(ScmBytes) / float64(req.TotalBytes)
-
-		req.TierRatio = make([]float64, 2)
-		req.TierRatio[0] = scmRatio
-		req.TierRatio[1] = 1.0 - req.TierRatio[0]
+		scmRatio := float64(ScmBytes) / float64(NvmeBytes)
 
 		if scmRatio < storage.MinScmToNVMeRatio {
 			cmd.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
