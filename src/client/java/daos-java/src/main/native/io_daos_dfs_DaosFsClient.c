@@ -1857,7 +1857,7 @@ out:
 	if (buf != NULL) {
 		free(buf);
 	}
-	duns_destroy_attr(attr);
+	duns_destroy_attr(&attr);
 	return barray;
 }
 
