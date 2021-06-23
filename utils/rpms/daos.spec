@@ -485,7 +485,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 * Fri May 07 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-16
 - Enable debuginfo package building on SUSE platforms
->>>>>>> master
 
 * Thu May 06 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-15
 - Update to build on EL8
