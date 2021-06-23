@@ -31,6 +31,7 @@ distro_custom() {
     # TODO: remove when test snapshots are adding this
     sed -e 's/^\(hostname *= *\)[^ ].*$/\1 mail.wolf.hpdd.intel.com:25/' < /usr/share/doc/esmtp/sample.esmtprc > /etc/esmtprc
 
+    dnf config-manager --disable powertools
 }
 
 post_provision_config_nodes() {
