@@ -13,13 +13,8 @@
 %endif
 
 Name:          daos
-<<<<<<< HEAD
-Version:       1.3.0
-Release:       16%{?relval}%{?dist}
-=======
 Version:       1.3.102
-Release:       2%{?relval}%{?dist}
->>>>>>> master
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -469,10 +464,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-<<<<<<< HEAD
-* Fri May 14 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.0-16
+* Fri May 14 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.102-3
 - Update to mercury v2.0.1
-=======
+
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
 - Update to pmdk 1.11.0-rc1
 - Remove dependence on libpmem since we use libpmemobj directly
