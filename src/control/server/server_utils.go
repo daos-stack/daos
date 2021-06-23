@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"net"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -385,6 +386,68 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 
 type netInterface interface {
 	Addrs() ([]net.Addr, error)
+}
+
+func getSrxSetting(cfg *config.Server) (int32, error) {
+	srxVarName := "FI_OFI_RXM_USE_SRX"
+	cliSrx := int32(-1) // default to unset
+	srxMismatchErr := errors.Errorf("%s must match in all engine configs", srxVarName)
+
+	getSetting := func(ev string) (bool, int32) {
+		kv := strings.Split(ev, "=")
+		if len(kv) != 2 {
+			return false, -1
+		}
+		if kv[0] != srxVarName {
+			return false, -1
+		}
+		v, err := strconv.ParseInt(kv[1], 10, 32)
+		if err != nil {
+			return true, -1
+		}
+		return true, int32(v)
+	}
+
+	for idx, ec := range cfg.Engines {
+		if cliSrx != -1 && len(ec.EnvVars) == 0 {
+			return -1, srxMismatchErr
+		}
+
+		for _, ev := range ec.EnvVars {
+			if match, engSrx := getSetting(ev); match {
+				if engSrx == -1 {
+					if cliSrx == -1 {
+						continue
+					}
+					return -1, srxMismatchErr
+				} else {
+					if cliSrx == -1 {
+						if idx > 0 {
+							return -1, srxMismatchErr
+						}
+						cliSrx = engSrx
+						continue
+					}
+					if cliSrx == engSrx {
+						continue
+					}
+					return -1, srxMismatchErr
+				}
+			} else {
+				if cliSrx != -1 {
+					return -1, srxMismatchErr
+				}
+			}
+		}
+
+		for _, pte := range ec.EnvPassThrough {
+			if pte == srxVarName {
+				return -1, errors.Errorf("%s may not be set as a pass-through env var", srxVarName)
+			}
+		}
+	}
+
+	return cliSrx, nil
 }
 
 func checkFabricInterface(name string, lookup func(string) (netInterface, error)) error {
