@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -159,7 +160,7 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 	return netDevClass, nil
 }
 
-func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn) error {
+func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := storage.BdevPrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
@@ -212,10 +213,12 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn
 
 	for _, engineCfg := range srv.cfg.Engines {
 		// Calculate mem_size per I/O engine (in MB)
+		PageSizeMb := hugePages.PageSizeKb >> 10
 		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines)
-		engineCfg.MemSize *= (hugePages.PageSizeKb >> 10)
+		engineCfg.MemSize *= PageSizeMb
 		// Pass hugepage size, do not assume 2MB is used
-		engineCfg.HugePageSz = (hugePages.PageSizeKb >> 10)
+		engineCfg.HugePageSz = PageSizeMb
+		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
 		// Warn if hugepages are not enough to sustain average
 		// I/O workload (~1GB)
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -30,7 +31,8 @@ const (
 	defaultEngineLogFile  = "/tmp/daos_engine"
 	defaultControlLogFile = "/tmp/daos_server.log"
 	// NetDevAny matches any netdetect network device class
-	NetDevAny = math.MaxUint32
+	NetDevAny    = math.MaxUint32
+	minDMABuffer = 1024
 
 	errNoNuma            = "zero numa nodes reported on hosts %s"
 	errUnsupNetDevClass  = "unsupported net dev class in request: %s"
@@ -605,11 +607,29 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 		engines = append(engines, engineCfg)
 	}
 
+	// determine a reasonable amount of hugepages to use
+	hugepage_info, err := common.GetHugePageInfo()
+	if err != nil {
+		return nil, errors.New("unable to read system hugepage info")
+	}
+	hugepage_size := hugepage_info.PageSizeKb >> 10
+	if hugepage_size == 0 {
+		return nil, errors.New("unable to read system hugepage size")
+	}
+	max_nrTgts := 0
+	for i := 0; i < nd.engineCount; i++ {
+		if ccs[i].nrTgts > max_nrTgts {
+			max_nrTgts = ccs[i].nrTgts
+		}
+	}
+	nr_hugepages := (minDMABuffer * max_nrTgts) / hugepage_size
+
 	cfg := config.DefaultServer().
 		WithAccessPoints(accessPoints...).
 		WithFabricProvider(engines[0].Fabric.Provider).
 		WithEngines(engines...).
-		WithControlLogFile(defaultControlLogFile)
+		WithControlLogFile(defaultControlLogFile).
+		WithNrHugePages(nr_hugepages)
 
 	return cfg, cfg.Validate(log)
 }
