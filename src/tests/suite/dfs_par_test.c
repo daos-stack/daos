@@ -584,6 +584,56 @@ dfs_test_hole_mgmt(void **state)
 	D_FREE(rsgl.sg_iovs);
 }
 
+static void
+dfs_test_cont_atomic(void **state)
+{
+	test_arg_t		*arg = *state;
+	uuid_t			cuuid;
+	daos_cont_info_t	co_info;
+	daos_handle_t		coh;
+	dfs_t			*dfs;
+	int			rc, op_rc;
+
+	if (arg->myrank == 0)
+		uuid_generate(cuuid);
+	/** share uuid with other ranks */
+	MPI_Bcast(cuuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+	/** All create a DFS container with POSIX layout */
+	if (arg->myrank == 0)
+		print_message("All ranks create the same POSIX container\n");
+
+	op_rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
+	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("one rank Created POSIX Container "DF_UUIDF"\n",
+			      DP_UUID(cuuid));
+
+	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+			    &coh, &co_info, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+		assert_int_equal(rc, 0);
+		print_message("Destroyed POSIX Container "DF_UUIDF"\n",
+			      DP_UUID(cuuid));
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest dfs_par_tests[] = {
 	{ "DFS_PAR_TEST1: Conditional OPs",
 	  dfs_test_cond, async_disable, test_case_teardown},
@@ -593,6 +643,8 @@ static const struct CMUnitTest dfs_par_tests[] = {
 	  dfs_test_ec_short_read, async_disable, test_case_teardown},
 	{ "DFS_PAR_TEST4: DFS hole management",
 	  dfs_test_hole_mgmt, async_disable, test_case_teardown},
+	{ "DFS_PAR_TEST5: DFS Container create atomicity",
+	  dfs_test_cont_atomic, async_disable, test_case_teardown},
 };
 
 static int

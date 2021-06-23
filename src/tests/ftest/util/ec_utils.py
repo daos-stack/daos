@@ -157,6 +157,7 @@ class ErasureCodeSingle(TestWithServers):
         self.server_count = None
         self.set_online_rebuild = False
         self.rank_to_kill = None
+        self.daos_cmd = None
         self.container = []
 
     def setUp(self):
@@ -249,6 +250,7 @@ class ErasureCodeSingle(TestWithServers):
            parity(int): object parity number for reading, default All.
         """
         cont_count = 0
+        self.daos_cmd = DaosCommand(self.bin)
         for oclass in self.obj_class:
             for _sizes in  self.singledata_set:
                 # Skip the object type if server count does not meet
@@ -262,6 +264,13 @@ class ErasureCodeSingle(TestWithServers):
                           .format(oclass[0]))
                     cont_count += 1
                     continue
+
+                self.daos_cmd.container_set_prop(
+                              pool=self.pool.uuid,
+                              cont=self.container[cont_count].uuid,
+                              prop="status",
+                              value="healthy")
+
                 # Read data and verified the content
                 try:
                     if not self.container[cont_count].read_objects():
