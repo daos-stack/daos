@@ -55,7 +55,6 @@ def run_checks(env, p):
         env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
     else:
         config.Finish()
-        p.require(env, 'openpa', headers_only=True)
 
 
 def get_version():
