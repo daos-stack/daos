@@ -6,7 +6,6 @@
 """
 
 from apricot import TestWithServers
-from collections import OrderedDict
 
 
 class FaultDomain(TestWithServers):
@@ -36,28 +35,25 @@ class FaultDomain(TestWithServers):
         """
         test_passed = True
         error_messages = list()
+        # Test pools is a list of OrderedDicts
+        # Here is an example of the first element of test_pools:
+        # OrderedDict([('pool_0',
+        #               OrderedDict([('name', 'daos_server'),
+        #                            ('size', '9G'),
+        #                            ('nranks', 1),
+        #                            ('control_method', 'dmg')]))])
+        test_pools = self.params.get("test_pools", "/run/*")
         fault_paths = self.params.get("fault_path", '/run/*')
-        test_servers = self.params.get("test_servers", '/run/*')
+        test_servers = self.hostlist_servers
 
-        ranks_fault_map = OrderedDict()
-        #
-        # In the form
-        #   { 0: "/fault1",
-        #     1: "/fault2",
-        #     2: "/fault2",
-        #     3: "/fault3"
-        #   }
-        for counter, test_server in enumerate(test_servers):
-            ranks_fault_map[counter] = fault_paths[counter]
-
-        # Setup the servers
-        # The fault path value is set given the fault_paths list
         for counter, server in enumerate(test_servers):
             self.add_server_manager()
             self.configure_manager(
-                "daos_server", self.server_managers[counter],
+                "daos_server",
+                self.server_managers[counter],
                 [server],
-                self.hostfile_servers_slots)
+                self.hostfile_servers_slots
+            )
             self.server_managers[counter].set_config_value("fault_path",
                                                            fault_paths[counter])
 
@@ -65,35 +61,37 @@ class FaultDomain(TestWithServers):
         for server in self.server_managers:
             server.start()
 
-        dmg_cmd = self.get_dmg_command()
+        self.start_agents()
 
-        # Create pools with small sizes and different nranks
-        # We must save the return value from pool create since it is the
-        # only way at the moment where we can get the ranks used
-        # in each pool, should be fixed by
-        # https://jira.hpdd.intel.com/browse/DAOS-5185
-        pool_list = list()
-        pool_list.append(dmg_cmd.pool_create(size="18G", nranks="2"))
-        pool_list.append(dmg_cmd.pool_create(size="27G", nranks="3"))
-        pool_list.append(dmg_cmd.pool_create(size="18G", nranks="2"))
-        pool_list.append(dmg_cmd.pool_create(size="18G", nranks="2"))
-        pool_list.append(dmg_cmd.pool_create(size="27G", nranks="3"))
+        # Create pools, setting the values obtained from yaml file
+        self.pool = []
+        for index in range(len(test_pools)):
+            pool_yaml_name = "pool_{}".format(index)
+            namespace = test_pools[index]
+            control_method = namespace[pool_yaml_name].get("control_method")
+            nranks = namespace[pool_yaml_name].get("nranks")
+            size = namespace[pool_yaml_name].get("size")
+            self.pool.append(self.get_pool(create=False, connect=False))
+            self.pool[index].control_method.update(name="control_method",
+                                                   value=control_method)
+            self.pool[index].nranks.update(name="nranks", value=nranks)
+            self.pool[index].size.update(name="size", value=size)
+            self.pool[index].create()
 
         # Once the pools are created we check each pool
         # and get the ranks used for it.
         # For each pool:
-        # Using a list, the the fault paths of the ranks are added to it
-        # The list should not contain the a duplicated fault path.
-        for pool in pool_list:
-            ranks = pool["ranks"]
+        # Using a list, the fault paths of the ranks are added to the same list
+        # The list should not contain any duplicated fault path.
+        for pool in self.pool:
             pool_fault_path = []
-            for rank in ranks.split(","):
+            for rank in pool.svc_ranks:
                 rank = int(rank)
-                fault_path = ranks_fault_map[rank]
+                fault_path = fault_paths[rank]
                 pool_fault_path.append(fault_path)
             if len(pool_fault_path) != len(set(pool_fault_path)):
                 test_passed = False
-                error_message = f"The pool {pool} with ranks {ranks} has the" \
+                error_message = f"The pool {pool} with ranks {rank} has the" \
                                 f"following fault paths: {pool_fault_path}, " \
                                 f"and must be unique."
                 error_messages.append(error_message)

@@ -397,7 +397,7 @@ class DmgCommand(DmgCommandBase):
                 None, in which case the default value is set by the server.
             acl_file (str, optional): ACL file. Defaults to None.
             nranks (str, optional): Number of ranks to use. Defaults to None
-            size (str, optional): total size of DAOS pool
+            size (str, optional): total size of DAOS pool. Defaults to None
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -416,11 +416,8 @@ class DmgCommand(DmgCommandBase):
             "nsvc": svcn,
             "acl_file": acl_file,
             "nranks": nranks,
-            "size": size
+            "size": size,
         }
-
-        if not size and not scm_size:
-            return False
 
         if target_list is not None:
             kwargs["ranks"] = ",".join([str(target) for target in target_list])

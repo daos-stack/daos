@@ -19,7 +19,30 @@ server_config:
   servers:
     scm_size: 128
     bdev_class: nvme
-    bdev_list: [ "aaaa:aa:aa.a" ]
-pool:
-  name: daos_server
-  control_method: dmg
+    bdev_list: [ "aaaa:aa:aa.a"]
+test_pools:
+  - pool_0:
+      name: daos_server
+      size: 9G
+      nranks: 1
+      control_method: dmg
+  - pool_1:
+      name: daos_server_2
+      size: 27G
+      nranks: 3
+      control_method: dmg
+  - pool_2:
+      name: daos_server_2
+      size: 27G
+      nranks: 3
+      control_method: dmg
+  - pool_3:
+      name: daos_server_3
+      size: 18G
+      nranks: 2
+      control_method: dmg
+  - pool_4:
+      name: daos_server_4
+      size: 18G
+      nranks: 2
+      control_method: dmg

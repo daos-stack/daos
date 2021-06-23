@@ -45,6 +45,8 @@ class TestPool(TestDaosApiBase):
         self.name = BasicParameter(None)            # server group name
         self.svcn = BasicParameter(None)
         self.target_list = BasicParameter(None)
+        self.nranks = BasicParameter(None)
+        self.size = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)       # name of property to be set
@@ -95,6 +97,8 @@ class TestPool(TestDaosApiBase):
             "uid": self.uid,
             "gid": self.gid,
             "scm_size": self.scm_size.value,
+            "size": self.size.value,
+            "nranks": self.nranks.value,
         }
         for key in ("target_list", "svcn", "nvme_size"):
             value = getattr(self, key).value
