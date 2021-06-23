@@ -11,7 +11,7 @@ job_manager_timeout: 900
 server_config:
     name: daos_server
     servers:
-        log_mask: DEBUG
+        log_mask: DEBUG,VOS=ERR
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
         scm_class: dcpm
