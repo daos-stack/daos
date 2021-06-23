@@ -14,7 +14,7 @@ pool:
 container:
     control_method: daos
     properties:
-        - label:"test container"
+        - compress:lz4
 ior:
     client_processes:
         np: 1
