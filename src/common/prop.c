@@ -172,21 +172,14 @@ daos_prop_str_format_valid(const char *str, const char *regex)
 	D_ASSERT(str != NULL);
 	D_ASSERT(regex != NULL);
 
-	rc = regcomp(&regx, regex, REG_EXTENDED | REG_ICASE);
-	if (rc != 0) {
-		D_ERROR("regcomp() failed, %d\n", rc);
-		return false;
-	}
+	rc = regcomp(&regx, regex, REG_EXTENDED);
+	D_ASSERT(rc == 0);
+
 	rc = regexec(&regx, str, 0, NULL, 0);
 	regfree(&regx);
-	if (rc == 0) {
-		return true;
-	} else if (rc != REG_NOMATCH) {
-		D_ERROR("regexec() failed, %d\n", rc);
+	if (rc != 0) /* REG_NOMATCH */
 		return false;
-	} else {
-		return false;
-	}
+	return true;
 }
 
 static bool

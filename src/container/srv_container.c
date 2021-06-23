@@ -2632,13 +2632,11 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 
 	/* Verify request label conforms to rules */
 	in_lbl = in_ent->dpe_str;
-	D_DEBUG(DF_DSMS, "check if label is valid: %s\n", in_lbl);
 	if (!daos_label_is_valid(in_lbl)) {
 		D_ERROR(DF_UUID": invalid label: %s\n", DP_UUID(cont->c_uuid),
 			in_lbl);
 		return -DER_INVAL;
 	}
-	D_DEBUG(DF_DSMS, "yes, this label is valid: %s\n", in_lbl);
 
 	/* Verify request label is not default. */
 	def_ent = daos_prop_entry_get(&cont_prop_default, DAOS_PROP_CO_LABEL);
