@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -19,6 +20,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestControl_PoolDestroy(t *testing.T) {
@@ -623,6 +625,64 @@ func TestPoolSetProp(t *testing.T) {
 	}
 }
 
+func TestControl_getPoolUsage(t *testing.T) {
+	for name, tc := range map[string]struct {
+		label    string
+		uuid     string
+		svcReps  []system.Rank
+		status   int32
+		info     *PoolInfo
+		expUsage *PoolUsage
+		expErr   error
+	}{
+		"with label": {
+			label:   "p1",
+			uuid:    common.MockUUID(1),
+			svcReps: []system.Rank{0},
+			info: &PoolInfo{
+				Scm: &StorageUsageStats{
+					Total: humanize.GByte * 30,
+					Free:  humanize.GByte * 15,
+					Min:   humanize.GByte * 1.6,
+					Max:   humanize.GByte * 2,
+				},
+				Nvme: &StorageUsageStats{
+					Total: humanize.GByte * 500,
+					Free:  humanize.GByte * 250,
+					Min:   humanize.GByte * 29.5,
+					Max:   humanize.GByte * 36,
+				},
+				TotalTargets:  8,
+				ActiveTargets: 8,
+			},
+			expUsage: &PoolUsage{
+				Label:           "p1",
+				UUID:            common.MockUUID(1),
+				ServiceReplicas: []system.Rank{0},
+				ScmSize:         humanize.GByte * 30,
+				NvmeSize:        humanize.GByte * 500,
+				TargetsTotal:    8,
+				ScmUsed:         50,
+				NvmeUsed:        50,
+				ScmImbalance:    10,
+				NvmeImbalance:   10,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			usage, err := getPoolUsage(tc.label, tc.uuid, tc.svcReps, tc.status, tc.info)
+			common.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expUsage, usage); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestControl_ListPools(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
@@ -666,10 +726,10 @@ func TestControl_ListPools(t *testing.T) {
 				),
 			},
 			expResp: &ListPoolsResp{
-				Pools: []*common.PoolDiscovery{
+				Pools: []*PoolUsage{
 					{
-						UUID:        common.MockUUID(),
-						SvcReplicas: []uint32{1, 3, 5, 8},
+						UUID:            common.MockUUID(),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
 					},
 				},
 			},

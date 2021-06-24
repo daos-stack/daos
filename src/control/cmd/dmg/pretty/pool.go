@@ -15,6 +15,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // PrintPoolQueryResponse generates a human-readable representation of the supplied
@@ -90,42 +91,34 @@ func poolListGetTitles() []string {
 	return []string{"Pool", "Size", "Used", "Imbalance", "Disabled"}
 }
 
-func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
+func poolListCreateRow(pool *control.PoolUsage) txtfmt.TableRow {
 	name := pool.Label
 	if name == "" {
 		name = pool.UUID
 	}
 
-	nvmeTotal := pool.Info.Nvme.Total
-	scmTotal := pool.Info.Scm.Total
-
-	size := nvmeTotal
+	size := pool.NvmeSize
 	if size == 0 {
-		size = scmTotal
+		size = pool.ScmSize
 	}
 
-	scmUsage := (scmTotal - pool.Info.Scm.Free) / scmTotal
-	nvmeUsage := (nvmeTotal - pool.Info.Nvme.Free) / nvmeTotal
-	usage := scmUsage
-	if nvmeUsage > usage {
-		usage = nvmeUsage
+	usage := pool.ScmUsed
+	if pool.NvmeUsed > usage {
+		usage = pool.NvmeUsed
 	}
 
-	scmSpread := pool.Info.Scm.Max - pool.Info.Scm.Min
-	scmImbalance := scmSpread / (scmTotal / pool.Info.ActiveTargets)
-	nvmeSpread := pool.Info.Nvme.Max - pool.Info.Nvme.Min
-	nvmeImbalance := nvmeSpread / (nvmeTotal / pool.Info.ActiveTargets)
-	imbalance := scmImbalance
-	if nvmeImbalance > imbalance {
-		imbalance = nvmeImbalance
+	imbalance := pool.ScmImbalance
+	if pool.NvmeImbalance > imbalance {
+		imbalance = pool.NvmeImbalance
 	}
 
 	row := txtfmt.TableRow{
 		"Pool":      name,
 		"Size":      humanize.Bytes(size),
-		"Used":      fmt.Sprintf("%d%%", int(usage*100)),
-		"Imbalance": fmt.Sprintf("%d%%", int(imbalance*100)),
-		"Disabled":  fmt.Sprintf("%d/%d", pool.Info.DisabledTargets, pool.Info.TotalTargets),
+		"Used":      fmt.Sprintf("%d%%", usage),
+		"Imbalance": fmt.Sprintf("%d%%", imbalance),
+		"Disabled": fmt.Sprintf("%d/%d", pool.TargetsDisabled,
+			pool.TargetsTotal),
 	}
 
 	return row
@@ -168,8 +161,9 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 		row := poolListCreateRow(pool)
 		row[uuidTitle] = pool.UUID
 		row[svcRepsTitle] = "N/A"
-		if len(pool.SvcReplicas) != 0 {
-			row[svcRepsTitle] = formatRanks(pool.SvcReplicas)
+		if len(pool.ServiceReplicas) != 0 {
+			rl := system.RanksToUint32(pool.ServiceReplicas)
+			row[svcRepsTitle] = formatRanks(rl)
 		}
 		table = append(table, row)
 	}

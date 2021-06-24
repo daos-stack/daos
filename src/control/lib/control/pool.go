@@ -30,26 +30,6 @@ const (
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 )
 
-type (
-	// Pool contains a unified representation of a DAOS Storage Pool.
-	Pool struct {
-		// UUID uniquely identifies a pool within the system.
-		UUID string `json:"uuid"`
-		// Label is an optional human-friendly identifier for a pool.
-		Label string `json:"label,omitempty"`
-		// ServiceReplicas is the list of ranks on which this pool's
-		// service replicas are running.
-		ServiceReplicas []system.Rank `json:"svc_reps"`
-
-		// Info contains information about the pool learned from a
-		// query operation.
-		Info PoolInfo `json:"info"`
-		// QueryStatus reports any DAOS error returned from a query
-		// operation.
-		QueryStatus int32 `json:"query_status"`
-	}
-)
-
 // checkUUID is a helper function for validating that the supplied
 // UUID string parses as a valid UUID.
 func checkUUID(uuidStr string) error {
@@ -721,6 +701,68 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 	return nil
 }
 
+type (
+	// PoolUsage contains a representation of a DAOS Storage Pool including usage
+	// statistics.
+	PoolUsage struct {
+		// UUID uniquely identifies a pool within the system.
+		UUID string `json:"uuid"`
+		// Label is an optional human-friendly identifier for a pool.
+		Label string `json:"label,omitempty"`
+		// ServiceReplicas is the list of ranks on which this pool's
+		// service replicas are running.
+		ServiceReplicas []system.Rank `json:"svc_reps"`
+		// QueryStatus reports any DAOS error returned from a query
+		// operation.
+		QueryStatus int32 `json:"query_status"`
+
+		// ScmSize is the total bytes of the pool SCM component.
+		ScmSize uint64 `json:"scm_size"`
+		// NvmeSize is the total bytes of the pool NVMe component.
+		NvmeSize uint64 `json:"nvme_size"`
+		// ScmUsed is the percentage usage of pool SCM component.
+		ScmUsed uint32 `json:"scm_used"`
+		// NvmeUsed is the percentage usage of pool NVMe component.
+		NvmeUsed uint32 `json:"nvme_used"`
+		// ScmImbalance is the percentage imbalance of pool SCM.
+		ScmImbalance uint32 `json:"scm_imbalance"`
+		// NvmeImbalance is the percentage imbalance of pool NVMe.
+		NvmeImbalance uint32 `json:"nvme_imbalance"`
+		// TargetsTotal is the total number of targets in pool.
+		TargetsTotal uint32 `json:"targets_total"`
+		// TargetsDisabled is the number of inactive targets in pool.
+		TargetsDisabled uint32 `json:"targets_disabled"`
+	}
+)
+
+func getPoolUsage(label, uuid string, svcReps []system.Rank, status int32, pi *PoolInfo) (*PoolUsage, error) {
+	nvmeTotal := pi.Nvme.Total
+	scmTotal := pi.Scm.Total
+
+	scmUsed := float64(scmTotal-pi.Scm.Free) / float64(scmTotal)
+	nvmeUsed := float64(nvmeTotal-pi.Nvme.Free) / float64(nvmeTotal)
+
+	scmSpread := pi.Scm.Max - pi.Scm.Min
+	scmImbalance := float64(scmSpread) / (float64(scmTotal) / float64(pi.ActiveTargets))
+	nvmeSpread := pi.Nvme.Max - pi.Nvme.Min
+	nvmeImbalance := float64(nvmeSpread) / (float64(nvmeTotal) / float64(pi.ActiveTargets))
+
+	return &PoolUsage{
+		Label:           label,
+		UUID:            uuid,
+		ServiceReplicas: svcReps,
+		QueryStatus:     status,
+		ScmSize:         scmTotal,
+		NvmeSize:        nvmeTotal,
+		ScmUsed:         uint32(scmUsed * 100),
+		NvmeUsed:        uint32(nvmeUsed * 100),
+		ScmImbalance:    uint32(scmImbalance * 100),
+		NvmeImbalance:   uint32(nvmeImbalance * 100),
+		TargetsTotal:    pi.TotalTargets,
+		TargetsDisabled: pi.DisabledTargets,
+	}, nil
+}
+
 // ListPoolsReq contains the inputs for the list pools command.
 type ListPoolsReq struct {
 	unaryRequest
@@ -730,8 +772,8 @@ type ListPoolsReq struct {
 // ListPoolsResp contains the status of the request and, if successful, the list
 // of pools in the system.
 type ListPoolsResp struct {
-	Status int32   `json:"status"`
-	Pools  []*Pool `json:"pools"`
+	Status int32        `json:"status"`
+	Pools  []*PoolUsage `json:"pools"`
 }
 
 // ListPools fetches the list of all pools and their service replicas from the
@@ -750,5 +792,11 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	}
 
 	resp := new(ListPoolsResp)
-	return resp, convertMSResponse(ur, resp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, err
+	}
+
+	// issue query on each pool to retrieve pool info
+
+	return resp, nil
 }

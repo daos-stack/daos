@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestPretty_PrintPoolQueryResp(t *testing.T) {
@@ -184,6 +185,130 @@ Pool created with 100.00%%%% SCM/NVMe ratio
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintListPoolsResponse(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp        *control.ListPoolsResp
+		expPrintStr string
+	}{
+		"empty response": {
+			resp: &control.ListPoolsResp{},
+			expPrintStr: `
+no pools in system
+`,
+		},
+		"one labeled, one not": {
+			resp: &control.ListPoolsResp{
+				Pools: []*control.PoolUsage{
+					{
+						UUID:            common.MockUUID(0),
+						ServiceReplicas: []system.Rank{0, 1, 2},
+					},
+					{
+						UUID:            common.MockUUID(1),
+						Label:           "one",
+						ServiceReplicas: []system.Rank{3, 4, 5},
+					},
+				},
+			},
+			expPrintStr: `
+Pool                                 Size Used Imbalance Disabled 
+----                                 ---- ---- --------- -------- 
+00000000-0000-0000-0000-000000000000 0 B  0%   0%        0/0      
+one                                  0 B  0%   0%        0/0      
+
+`,
+		},
+		"zero svc replicas": {
+			resp: &control.ListPoolsResp{
+				Pools: []*control.PoolUsage{
+					{
+						UUID: common.MockUUID(0),
+					},
+				},
+			},
+			expPrintStr: `
+Pool                                 Size Used Imbalance Disabled 
+----                                 ---- ---- --------- -------- 
+00000000-0000-0000-0000-000000000000 0 B  0%   0%        0/0      
+
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			if err := PrintListPoolsResponse(&bld, tc.resp, false); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintListPoolsResponseVerbose(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp        *control.ListPoolsResp
+		expPrintStr string
+	}{
+		"empty response": {
+			resp: &control.ListPoolsResp{},
+			expPrintStr: `
+no pools in system
+`,
+		},
+		"one labeled, one not": {
+			resp: &control.ListPoolsResp{
+				Pools: []*control.PoolUsage{
+					{
+						UUID:            common.MockUUID(0),
+						ServiceReplicas: []system.Rank{0, 1, 2},
+					},
+					{
+						UUID:            common.MockUUID(1),
+						Label:           "one",
+						ServiceReplicas: []system.Rank{3, 4, 5},
+					},
+				},
+			},
+			expPrintStr: `
+UUID                                 Label Svc Replicas 
+----                                 ----- ------------ 
+00000000-0000-0000-0000-000000000000 N/A   [0-2]        
+00000001-0001-0001-0001-000000000001 one   [3-5]        
+
+`,
+		},
+		"zero svc replicas": {
+			resp: &control.ListPoolsResp{
+				Pools: []*control.PoolUsage{
+					{
+						UUID: common.MockUUID(0),
+					},
+				},
+			},
+			expPrintStr: `
+UUID                                 Label Svc Replicas 
+----                                 ----- ------------ 
+00000000-0000-0000-0000-000000000000 N/A   None         
+
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			if err := PrintListPoolsResponse(&bld, tc.resp, true); err != nil {
+				t.Fatal(err)
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
