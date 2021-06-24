@@ -27,7 +27,6 @@
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
-#include <daos/policy.h>
 
 #include "daos_types.h"
 #include "daos_api.h"
@@ -99,7 +98,7 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_POLICY);
 	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(stderr, "policy property not found\n");
+		fprintf(ap->errstream, "policy property not found\n");
 		rc = -DER_INVAL;
 	} else {
 		D_PRINT("policy:\t\t\t%s\n", entry->dpe_str);

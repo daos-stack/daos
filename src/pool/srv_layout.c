@@ -11,7 +11,7 @@
 
 #include <daos_srv/rdb.h>
 #include <daos_srv/security.h>
-#include <daos/policy.h>
+#include <daos_srv/policy.h>
 #include "srv_layout.h"
 
 /** Root KVS */

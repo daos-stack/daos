@@ -7,7 +7,7 @@
  * This file is part of daos. It implements some miscellaneous policy functions
  */
 
-#include "policy.h"
+#include <daos_srv/policy.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -34,9 +34,8 @@ parse_param_val(int param_idx, char *tok, struct policy_desc_t *out_pd)
 	int val = strtol(tok, &endptr, 10);
 
 	if (*tok != '\0' && *endptr == '\0') {
-		if (out_pd != NULL) {
+		if (out_pd != NULL)
 			out_pd->params[param_idx] = val;
-		}
 		return true;
 	}
 
@@ -78,24 +77,23 @@ policy_name_to_idx(char *name, int len)
 bool
 daos_policy_try_parse(const char *policy_str, struct policy_desc_t *out_pd)
 {
-	char *tok		= NULL;
-	const char *delim	= PARAM_DELIM;
-	const char *delim2	= VALUE_DELIM;
-	char *saveptr		= NULL;
-	char *saveptr2		= NULL;
-	char *str2		= NULL;
-	bool type_found		= false;
-	int param_idx		= POLICY_BAD_PARAM;
-	int tok_len		= 0;
-	bool ret_val		= false;
-	int i, j;
-	size_t len;
-	char *str;
+	char		*tok = NULL;
+	const char	*delim = PARAM_DELIM;
+	const char	*delim2 = VALUE_DELIM;
+	char		*saveptr = NULL;
+	char		*saveptr2 = NULL;
+	char		*str2 = NULL;
+	bool		type_found = false;
+	int		param_idx = POLICY_BAD_PARAM;
+	int		tok_len = 0;
+	bool		ret_val = false;
+	int		i, j;
+	size_t		len;
+	char		*str;
+	unsigned int	policy_idx = DAOS_MEDIA_POLICY_MAX;
 
 	len = strlen(policy_str);
 	D_STRNDUP(str, policy_str, len); /* for strtok_r */
-
-	unsigned int policy_idx = DAOS_MEDIA_POLICY_MAX;
 
 	/* tokenize input to "name=value" format */
 	for (i = 0; ; i++, str = NULL) {
@@ -151,6 +149,6 @@ daos_policy_try_parse(const char *policy_str, struct policy_desc_t *out_pd)
 	if (policy_idx != DAOS_MEDIA_POLICY_MAX)
 		ret_val = true;
 out:
-	free(str);
+	D_FREE(str);
 	return ret_val;
 }

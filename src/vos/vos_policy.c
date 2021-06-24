@@ -9,7 +9,7 @@
  *
  */
 
-#include <daos/policy.h>
+#include <daos_srv/policy.h>
 #include "vos_policy.h"
 
 /* policy functions definitions */

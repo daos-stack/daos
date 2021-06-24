@@ -22,7 +22,7 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
-#include <daos/policy.h>
+#include <daos_srv/policy.h>
 
 /** Metrics for each individual active pool */
 struct ds_pool_metrics {

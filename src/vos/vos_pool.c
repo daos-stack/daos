@@ -28,7 +28,7 @@
 #include <fcntl.h>
 
 #include <daos_pool.h>
-#include <daos/policy.h>
+#include <daos_srv/policy.h>
 
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -919,8 +919,7 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 		if (param == NULL)
 			return -DER_INVAL;
 
-		p = (struct policy_desc_t *)param;
-
+		p = param;
 		pool->vp_policy_desc.policy = p->policy;
 
 		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)

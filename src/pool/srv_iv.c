@@ -269,7 +269,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			}
 			break;
 		case DAOS_PROP_PO_POLICY:
-			D_ASSERT(strlen(iv_prop->pip_policy_str) <=
+			D_ASSERT(strnlen(iv_prop->pip_policy_str,
+					DAOS_PROP_POLICYSTR_MAX_LEN) <=
 				 DAOS_PROP_POLICYSTR_MAX_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_policy_str,
 				  DAOS_PROP_POLICYSTR_MAX_LEN);
