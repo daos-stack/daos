@@ -61,6 +61,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         """Initialize a DataMoverTestBase object."""
         super().__init__(*args, **kwargs)
         self.tool = None
+        self.api = None
         self.daos_cmd = None
         self.dcp_cmd = None
         self.dsync_cmd = None
