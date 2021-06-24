@@ -2907,7 +2907,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 					}
 				break;
 			case DAOS_PROP_PO_POLICY:
-				D_ASSERT(strlen(entry->dpe_str) <=
+				D_ASSERT(strnlen(entry->dpe_str,
+						 DAOS_PROP_POLICYSTR_MAX_LEN) <=
 					 DAOS_PROP_POLICYSTR_MAX_LEN);
 				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
 					    DAOS_PROP_POLICYSTR_MAX_LEN) != 0) {

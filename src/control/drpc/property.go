@@ -8,7 +8,7 @@ package drpc
 import "unsafe"
 
 // #include <daos_prop.h>
-// #include <daos/policy.h>
+// #include <daos_srv/policy.h>
 import "C"
 
 const (

@@ -13,7 +13,7 @@
 #include <daos/dtx.h>
 #include <daos_security.h>
 #include <daos/cont_props.h>
-#include <daos/policy.h>
+#include <daos_srv/policy.h>
 
 daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr)
@@ -516,10 +516,8 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	case DAOS_PROP_PO_POLICY:
 		D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
 			  DAOS_PROP_POLICYSTR_MAX_LEN);
-		if (entry_dup->dpe_str == NULL) {
-			D_ERROR("failed to dup policy string.\n");
+		if (entry_dup->dpe_str == NULL)
 			return -DER_NOMEM;
-		}
 		break;
 	default:
 		entry_dup->dpe_val = entry->dpe_val;
