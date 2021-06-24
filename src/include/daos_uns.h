@@ -191,10 +191,8 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr);
  * Free internal buffers allocated by the DUNS on the \a attr struct.
  *
  * \param[in]	attrp	Attr pointer that was passed in to duns_resolve_path.
- *
- * \return		0 on Success. errno code on failure.
  */
-int
+void
 duns_destroy_attr(struct duns_attr_t *attrp);
 
 #if defined(__cplusplus)

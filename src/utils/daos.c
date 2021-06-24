@@ -1280,9 +1280,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 				uuid_copy(ap->c_uuid, dattr.da_cuuid);
 			}
 		}
-		rc = duns_destroy_attr(&dattr);
-		if (rc)
-			D_GOTO(out, rc);
+		duns_destroy_attr(&dattr);
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}

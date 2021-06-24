@@ -1002,15 +1002,13 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 	return 0;
 }
 
-int
+void
 duns_destroy_attr(struct duns_attr_t *attrp)
 {
 	if (attrp == NULL)
-		return EINVAL;
+		return;
 
 	D_FREE(attrp->da_rel_path);
 	D_FREE(attrp->da_pool_label);
 	D_FREE(attrp->da_cont_label);
-
-	return 0;
 }
