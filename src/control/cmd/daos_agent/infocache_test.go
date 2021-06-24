@@ -8,14 +8,10 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"math/rand"
-	"strings"
-	"sync"
 	"testing"
-	"time"
 
-	"google.golang.org/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -24,467 +20,365 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const maxConcurrent = 100
-
-type netdetectCleanup func(context.Context)
-
-func initCache(t *testing.T, scanResults []*netdetect.FabricScan, aiCache *attachInfoCache) (context.Context, netdetectCleanup) {
-	netCtx, err := netdetect.Init(context.Background())
-	if err != nil {
-		t.Fatalf("failed to init netdetect context: %v", err)
-	}
-	resp := &mgmtpb.GetAttachInfoResp{
-		ClientNetHint: &mgmtpb.ClientNetHint{},
-	}
-	err = aiCache.initResponseCache(netCtx, resp, scanResults)
-	if err != nil {
-		t.Fatalf("initResponseCache error: %v", err)
-	}
-	return netCtx, netdetect.CleanUp
-}
-
-func TestInfoCacheInitNoScanResults(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-	enabled := atm.NewBool(true)
-	scanResults := []*netdetect.FabricScan{}
-	aiCache := attachInfoCache{log: log, enabled: enabled}
-
-	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
-	defer cleanupFn(netCtx)
-
-	common.AssertTrue(t, aiCache.isCached() == true, "initResponseCache failed to initialized")
-
+func TestAgent_newAttachInfoCache(t *testing.T) {
 	for name, tc := range map[string]struct {
-		numaNode   int
-		deviceName string
+		enabled bool
 	}{
-		"info cache response for numa 0": {
-			numaNode:   0,
-			deviceName: "eth0",
+		"enabled": {
+			enabled: true,
 		},
-		"info cache response for numa 1": {
-			numaNode:   1,
-			deviceName: "eth1",
-		},
-		"info cache response for numa 2": {
-			numaNode:   2,
-			deviceName: "eth2",
+		"disabled": {
+			enabled: false,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			var res []byte
-			var err error
-			if aiCache.isCached() {
-				res, err = aiCache.getResponse(tc.numaNode)
-				common.AssertEqual(t, err, nil, "getResponse error")
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			cache := newAttachInfoCache(log, tc.enabled)
+
+			if cache == nil {
+				t.Fatal("expected non-nil cache")
 			}
-			resp := &mgmtpb.GetAttachInfoResp{}
-			if err = proto.Unmarshal(res, resp); err != nil {
-				t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
+
+			common.AssertEqual(t, log, cache.log, "")
+			common.AssertEqual(t, tc.enabled, cache.IsEnabled(), "IsEnabled()")
+			common.AssertFalse(t, cache.IsCached(), "default state is uncached")
+			if cache.AttachInfo != nil {
+				t.Fatalf("initial data should be nil, got %+v", cache.AttachInfo)
 			}
-			hint := resp.GetClientNetHint()
-			common.AssertTrue(t, hint.GetInterface() == defaultNetworkDevice, fmt.Sprintf("Expected default interface: %s, got %s", defaultNetworkDevice, hint.GetInterface()))
-			common.AssertTrue(t, hint.GetDomain() == defaultDomain, fmt.Sprintf("Expected default domain: %s, got %s", defaultDomain, hint.GetDomain()))
 		})
 	}
 }
 
-func TestInfoCacheInit(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-	enabled := atm.NewBool(true)
-	scanResults := []*netdetect.FabricScan{
-		{Provider: "ofi+sockets", DeviceName: "eth0_node0", NUMANode: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node0", NUMANode: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth2_node0", NUMANode: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth3_node0", NUMANode: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth0_node1", NUMANode: 1},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node1", NUMANode: 1},
-		{Provider: "ofi+sockets", DeviceName: "eth0_node2", NUMANode: 2},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node2", NUMANode: 2},
-		{Provider: "ofi+sockets", DeviceName: "eth2_node2", NUMANode: 2},
-		{Provider: "ofi+sockets", DeviceName: "eth3_node2", NUMANode: 2}}
-
-	aiCache := attachInfoCache{log: log, enabled: enabled}
-
-	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
-	defer cleanupFn(netCtx)
-
+func TestAgent_attachInfoCache_Cache(t *testing.T) {
 	for name, tc := range map[string]struct {
-		numaNode int
-		numDevs  int
+		aic       *attachInfoCache
+		input     *mgmtpb.GetAttachInfoResp
+		expErr    error
+		expCached bool
 	}{
-		"info cache response for numa 0": {
-			numaNode: 0,
-			numDevs:  4,
+		"nil cache": {
+			expErr: errors.New("nil attachInfoCache"),
 		},
-		"info cache response for numa 1": {
-			numaNode: 1,
-			numDevs:  2,
+		"not enabled": {
+			aic:    &attachInfoCache{},
+			expErr: errors.New("not enabled"),
 		},
-		"info cache response for numa 2": {
-			numaNode: 2,
-			numDevs:  4,
+		"nil input": {
+			aic:    &attachInfoCache{enabled: atm.NewBool(true)},
+			expErr: errors.New("nil input"),
 		},
-	} {
-		t.Run(name, func(t *testing.T) {
-
-			numDevs := len(aiCache.numaDeviceMarshResp[tc.numaNode])
-			common.AssertEqual(t, numDevs, tc.numDevs,
-				fmt.Sprintf("initResponseCache error - expected %d cached responses, got %d", tc.numDevs, numDevs))
-		})
-	}
-}
-
-func TestInfoCacheInitWithDeviceFiltering(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-	enabled := atm.NewBool(true)
-
-	scanResults := []*netdetect.FabricScan{
-		{Provider: "ofi+sockets", DeviceName: "eth0_node0", NUMANode: 0, NetDevClass: netdetect.Ether},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node0", NUMANode: 0, NetDevClass: netdetect.Ether},
-		{Provider: "ofi+sockets", DeviceName: "eth2_node0", NUMANode: 0, NetDevClass: netdetect.Ether},
-		{Provider: "ofi+sockets", DeviceName: "ib0_node0", NUMANode: 0, NetDevClass: netdetect.Infiniband},
-		{Provider: "ofi+sockets", DeviceName: "eth0_node1", NUMANode: 1, NetDevClass: netdetect.Ether},
-		{Provider: "ofi+sockets", DeviceName: "ib1_node1", NUMANode: 1, NetDevClass: netdetect.Infiniband},
-		{Provider: "ofi+sockets", DeviceName: "eth0_node2", NUMANode: 2, NetDevClass: netdetect.Ether},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node2", NUMANode: 2, NetDevClass: netdetect.Ether},
-		{Provider: "ofi+sockets", DeviceName: "eth2_node2", NUMANode: 2, NetDevClass: netdetect.Ether},
-		{Provider: "ofi+sockets", DeviceName: "eth3_node2", NUMANode: 2, NetDevClass: netdetect.Ether}}
-
-	aiCache := attachInfoCache{log: log, enabled: enabled}
-
-	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
-	defer cleanupFn(netCtx)
-
-	for name, tc := range map[string]struct {
-		numaNode          int
-		numDevs           int
-		serverNetDevClass uint32
-	}{
-		"info cache device with filtering for Ethernet with numa 0": {
-			numaNode:          0,
-			numDevs:           3,
-			serverNetDevClass: netdetect.Ether,
-		},
-		"info cache device with filtering for Ethernet with numa 1": {
-			numaNode:          1,
-			numDevs:           1,
-			serverNetDevClass: netdetect.Ether,
-		},
-		"info cache device with filtering for Ethernet with numa 2": {
-			numaNode:          2,
-			numDevs:           4,
-			serverNetDevClass: netdetect.Ether,
-		},
-		"info cache device with filtering for Infiniband with numa 0": {
-			numaNode:          0,
-			numDevs:           1,
-			serverNetDevClass: netdetect.Infiniband,
-		},
-		"info cache device with filtering for Infiniband with numa 1": {
-			numaNode:          1,
-			numDevs:           1,
-			serverNetDevClass: netdetect.Infiniband,
-		},
-		"info cache device with filtering for Infiniband with numa 2": {
-			numaNode:          2,
-			numDevs:           0,
-			serverNetDevClass: netdetect.Infiniband,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			resp := &mgmtpb.GetAttachInfoResp{
-				ClientNetHint: &mgmtpb.ClientNetHint{
-					NetDevClass: tc.serverNetDevClass,
+		"success": {
+			aic: &attachInfoCache{enabled: atm.NewBool(true)},
+			input: &mgmtpb.GetAttachInfoResp{
+				Status: -1000,
+				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
+					{Rank: 1, Uri: "firsturi"},
+					{Rank: 2, Uri: "nexturi"},
 				},
-			}
-			err := aiCache.initResponseCache(netCtx, resp, scanResults)
-			common.AssertEqual(t, err, nil, "initResponseCache error")
+			},
+			expCached: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := tc.aic.Cache(context.TODO(), tc.input)
 
-			numDevs := len(aiCache.numaDeviceMarshResp[tc.numaNode])
-			common.AssertEqual(t, numDevs, tc.numDevs,
-				fmt.Sprintf("initResponseCache error - expected %d cached responses, got %d", tc.numDevs, numDevs))
+			common.CmpErr(t, tc.expErr, err)
+			common.AssertEqual(t, tc.expCached, tc.aic.IsCached(), "IsCached()")
+
+			if tc.aic == nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.input, tc.aic.AttachInfo, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
 		})
 	}
 }
 
-// TestInfoCacheGetResponse reads an entry from the cache for the specified NUMA node
-// and verifies that it got the exact response that was expected.
-func TestInfoCacheGetResponse(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-	enabled := atm.NewBool(true)
-	scanResults := []*netdetect.FabricScan{
-		{Provider: "ofi+sockets", DeviceName: "eth0", NUMANode: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth1", NUMANode: 1},
-		{Provider: "ofi+sockets", DeviceName: "eth2", NUMANode: 2}}
-
-	aiCache := attachInfoCache{log: log, enabled: enabled}
-
-	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
-	defer cleanupFn(netCtx)
-
-	devList := func(devs ...string) []string {
-		return devs
-	}
-
+func TestAgent_attachInfoCache_IsEnabled(t *testing.T) {
 	for name, tc := range map[string]struct {
-		numaNode       int
-		allowedDevices []string
+		aic        *attachInfoCache
+		expEnabled bool
 	}{
-		"info cache response for numa 0": {
-			numaNode:       0,
-			allowedDevices: devList("eth0"),
+		"nil": {},
+		"not enabled": {
+			aic: &attachInfoCache{},
 		},
-		"info cache response for numa 1": {
-			numaNode:       1,
-			allowedDevices: devList("eth1"),
-		},
-		"info cache response for numa 2": {
-			numaNode:       2,
-			allowedDevices: devList("eth2"),
-		},
-		"info cache response one for numa 3 with no devices": {
-			numaNode:       3,
-			allowedDevices: devList("eth0", "eth1", "eth2"),
-		},
-		"info cache response two for numa 3 with no devices": {
-			numaNode:       3,
-			allowedDevices: devList("eth0", "eth1", "eth2"),
-		},
-		"info cache response three for numa 3 with no devices": {
-			numaNode:       3,
-			allowedDevices: devList("eth0", "eth1", "eth2"),
+		"enabled": {
+			aic:        &attachInfoCache{enabled: atm.NewBool(true)},
+			expEnabled: true,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			res, err := aiCache.getResponse(tc.numaNode)
-			common.AssertEqual(t, err, nil, "getResponse error")
+			enabled := tc.aic.IsEnabled()
 
-			resp := &mgmtpb.GetAttachInfoResp{}
-			if err = proto.Unmarshal(res, resp); err != nil {
-				t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
+			common.AssertEqual(t, tc.expEnabled, enabled, "IsEnabled()")
+		})
+	}
+}
+
+func TestAgent_newLocalFabricCache(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	cache := newLocalFabricCache(log)
+
+	if cache == nil {
+		t.Fatal("expected non-nil cache")
+	}
+
+	common.AssertEqual(t, log, cache.log, "")
+	common.AssertFalse(t, cache.IsCached(), "default state is uncached")
+}
+
+func newTestFabricCache(t *testing.T, log logging.Logger, cacheMap *NUMAFabric) *localFabricCache {
+	t.Helper()
+
+	cache := newLocalFabricCache(log)
+	if cache == nil {
+		t.Fatalf("nil cache")
+	}
+	cache.localNUMAFabric = cacheMap
+	cache.initialized.SetTrue()
+
+	return cache
+}
+
+func TestAgent_localFabricCache_Cache(t *testing.T) {
+	for name, tc := range map[string]struct {
+		lfc       *localFabricCache
+		input     []*netdetect.FabricScan
+		expErr    error
+		expCached bool
+		expResult *NUMAFabric
+	}{
+		"nil": {
+			expErr: errors.New("nil localFabricCache"),
+		},
+		"no devices in scan": {
+			lfc:       &localFabricCache{},
+			expCached: true,
+			expResult: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{},
+			},
+		},
+		"successfully cached": {
+			lfc: &localFabricCache{},
+			input: []*netdetect.FabricScan{
+				{
+					Provider:    "ofi+sockets",
+					DeviceName:  "test0",
+					NUMANode:    1,
+					NetDevClass: netdetect.Ether,
+				},
+				{
+					Provider:   "ofi+sockets",
+					DeviceName: "lo",
+					NUMANode:   1,
+				},
+				{
+					Provider:    "ofi+verbs",
+					DeviceName:  "test1",
+					NUMANode:    0,
+					NetDevClass: netdetect.Infiniband,
+				},
+				{
+					Provider:    "ofi+sockets",
+					DeviceName:  "test2",
+					NUMANode:    0,
+					NetDevClass: netdetect.Ether,
+				},
+			},
+			expCached: true,
+			expResult: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "test1",
+							NetDevClass: netdetect.Infiniband,
+						},
+						{
+							Name:        "test2",
+							NetDevClass: netdetect.Ether,
+						},
+					},
+					1: {
+						{
+							Name:        "test0",
+							NetDevClass: netdetect.Ether,
+						},
+					},
+				},
+			},
+		},
+		"with device alias": {
+			lfc: &localFabricCache{
+				getDevAlias: func(_ context.Context, dev string) (string, error) {
+					return dev + "_alias", nil
+				},
+			},
+			input: []*netdetect.FabricScan{
+				{
+					Provider:    "ofi+sockets",
+					DeviceName:  "test0",
+					NUMANode:    2,
+					NetDevClass: netdetect.Ether,
+				},
+				{
+					Provider:    "ofi+verbs",
+					DeviceName:  "test1",
+					NUMANode:    1,
+					NetDevClass: netdetect.Infiniband,
+				},
+				{
+					Provider:    "ofi+sockets",
+					DeviceName:  "test2",
+					NUMANode:    1,
+					NetDevClass: netdetect.Ether,
+				},
+			},
+			expCached: true,
+			expResult: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					1: {
+						{
+							Name:        "test1",
+							NetDevClass: netdetect.Infiniband,
+							Domain:      "test1_alias",
+						},
+						{
+							Name:        "test2",
+							NetDevClass: netdetect.Ether,
+							Domain:      "test2_alias",
+						},
+					},
+					2: {
+						{
+							Name:        "test0",
+							NetDevClass: netdetect.Ether,
+							Domain:      "test0_alias",
+						},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.lfc != nil {
+				tc.lfc.log = log
 			}
-			hint := resp.GetClientNetHint()
 
-			for _, dev := range tc.allowedDevices {
-				if hint.GetInterface() == dev {
-					return
+			err := tc.lfc.Cache(context.TODO(), tc.input)
+
+			common.CmpErr(t, tc.expErr, err)
+			common.AssertEqual(t, tc.expCached, tc.lfc.IsCached(), "IsCached()")
+
+			if tc.lfc == nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResult.numaMap, tc.lfc.localNUMAFabric.numaMap); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestAgent_localFabricCache_GetDevice(t *testing.T) {
+	populatedCache := &NUMAFabric{
+		numaMap: map[int][]*FabricInterface{
+			0: {
+				{
+					Name:        "test1",
+					NetDevClass: netdetect.Infiniband,
+					Domain:      "test1_alias",
+				},
+				{
+					Name:        "test2",
+					NetDevClass: netdetect.Ether,
+					Domain:      "test2_alias",
+				},
+			},
+			1: {
+				{
+					Name:        "test3",
+					NetDevClass: netdetect.Infiniband,
+					Domain:      "test3_alias",
+				},
+				{
+					Name:        "test4",
+					NetDevClass: netdetect.Infiniband,
+					Domain:      "test4_alias",
+				},
+				{
+					Name:        "test5",
+					NetDevClass: netdetect.Ether,
+					Domain:      "test5_alias",
+				},
+			},
+			2: {
+				{
+					Name:        "test6",
+					NetDevClass: netdetect.Ether,
+					Domain:      "test6_alias",
+				},
+				{
+					Name:        "test7",
+					NetDevClass: netdetect.Ether,
+					Domain:      "test7_alias",
+				},
+			},
+		},
+	}
+
+	for name, tc := range map[string]struct {
+		lfc         *localFabricCache
+		numaNode    int
+		netDevClass uint32
+		expDevice   *FabricInterface
+		expErr      error
+	}{
+		"nil cache": {
+			expErr: errors.New("nil localFabricCache"),
+		},
+		"nothing cached": {
+			lfc:    &localFabricCache{},
+			expErr: errors.New("not cached"),
+		},
+		"success": {
+			lfc:         newTestFabricCache(t, nil, populatedCache),
+			numaNode:    1,
+			netDevClass: netdetect.Ether,
+			expDevice: &FabricInterface{
+				Name:        "test5",
+				NetDevClass: netdetect.Ether,
+				Domain:      "test5_alias",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.lfc != nil {
+				tc.lfc.log = log
+				if tc.lfc.localNUMAFabric != nil {
+					tc.lfc.localNUMAFabric.log = log
 				}
 			}
-			t.Fatalf("response device %s was not in list of allowed devices (%+v)", hint.GetInterface(), tc.allowedDevices)
-		})
-	}
-}
 
-// TestInfoCacheDefaultNumaNode reads an entry from the cache for the specified NUMA node
-// and verifies the default response does not depend specifically on NUMA 0.
-func TestInfoCacheDefaultNumaNode(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-	enabled := atm.NewBool(true)
-	scanResults := []*netdetect.FabricScan{
-		{Provider: "ofi+sockets", DeviceName: "eth1", NUMANode: 1},
-		{Provider: "ofi+sockets", DeviceName: "eth2", NUMANode: 2}}
+			dev, err := tc.lfc.GetDevice(tc.numaNode, tc.netDevClass)
 
-	aiCache := attachInfoCache{log: log, enabled: enabled}
-
-	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
-	defer cleanupFn(netCtx)
-
-	for name, tc := range map[string]struct {
-		numaNode   int
-		deviceName string
-	}{
-		"info cache response for numa 0 with no devices": {
-			numaNode:   0,
-			deviceName: "eth1",
-		},
-		"info cache response for numa 1": {
-			numaNode:   1,
-			deviceName: "eth1",
-		},
-		"info cache response for numa 2": {
-			numaNode:   2,
-			deviceName: "eth2",
-		},
-		"info cache response for numa 3 with no devices": {
-			numaNode:   3,
-			deviceName: "eth1",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			res, err := aiCache.getResponse(tc.numaNode)
-			common.AssertEqual(t, err, nil, "getResponse error")
-
-			resp := &mgmtpb.GetAttachInfoResp{}
-			if err = proto.Unmarshal(res, resp); err != nil {
-				t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
+			common.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expDevice, dev); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
 			}
-			hint := resp.GetClientNetHint()
-			common.AssertTrue(t, hint.GetInterface() == tc.deviceName, fmt.Sprintf("Expected: %s, got %s", tc.deviceName, hint.GetInterface()))
 		})
 	}
-}
-
-// TestInfoCacheLoadBalancer verifies that the load balancer provided the desired response.
-// This test initializes the info cache with multiple devices per NUMA node and a predictable
-// set of data for the cache.  The load balancer is expected to assign each cached response
-// per NUMA node in linear order.
-func TestInfoCacheLoadBalancer(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-	enabled := atm.NewBool(true)
-	scanResults := []*netdetect.FabricScan{
-		{Provider: "ofi+sockets", DeviceName: "eth0_node0", NUMANode: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node0", NUMANode: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth2_node0", NUMANode: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth3_node0", NUMANode: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth0_node1", NUMANode: 1},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node1", NUMANode: 1},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node2", NUMANode: 1},
-		{Provider: "ofi+sockets", DeviceName: "eth0_node2", NUMANode: 2},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node2", NUMANode: 2},
-		{Provider: "ofi+sockets", DeviceName: "eth0_node3", NUMANode: 3},
-		{Provider: "ofi+sockets", DeviceName: "eth0_node7", NUMANode: 7},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node7", NUMANode: 7},
-		{Provider: "ofi+sockets", DeviceName: "eth2_node7", NUMANode: 7},
-		{Provider: "ofi+sockets", DeviceName: "eth3_node7", NUMANode: 7},
-		{Provider: "ofi+sockets", DeviceName: "eth4_node7", NUMANode: 7},
-	}
-
-	aiCache := attachInfoCache{log: log, enabled: enabled}
-
-	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
-	defer cleanupFn(netCtx)
-
-	var results map[int][]byte
-	var response map[int]*mgmtpb.GetAttachInfoResp
-	results = make(map[int][]byte)
-	response = make(map[int]*mgmtpb.GetAttachInfoResp)
-
-	for name, tc := range map[string]struct {
-		numaNode   int
-		numDevices int
-		deviceName string
-		neighbor   string
-	}{
-		"load balancer infocache entry numa 0 with 4 devices": {
-			numaNode:   0,
-			numDevices: 4,
-			deviceName: "eth0_node0",
-			neighbor:   "eth1_node0",
-		},
-		"load balancer infocache entry numa 1 with 3 devices": {
-			numaNode:   1,
-			numDevices: 3,
-			deviceName: "eth0_node1",
-			neighbor:   "eth1_node1",
-		},
-		"load balancer infocache entry numa 2 with 2 devices": {
-			numaNode:   2,
-			numDevices: 2,
-			deviceName: "eth0_node2",
-			neighbor:   "eth1_node2",
-		},
-		"load balancer infocache entry numa 3 with 1 device": {
-			numaNode:   3,
-			numDevices: 1,
-			deviceName: "eth0_node3",
-			neighbor:   "eth0_node3",
-		},
-		// This entry shows that numa nodes entries need not be contiguous
-		"load balancer infocache entry numa 7 with 5 devices": {
-			numaNode:   7,
-			numDevices: 5,
-			deviceName: "eth0_node7",
-			neighbor:   "eth1_node7",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			for i := 0; i < tc.numDevices+2; i++ {
-				var err error
-				results[i], err = aiCache.getResponse(tc.numaNode)
-				common.AssertEqual(t, err, nil, "getResponse error")
-				response[i] = &mgmtpb.GetAttachInfoResp{}
-				if err = proto.Unmarshal(results[i], response[i]); err != nil {
-					t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
-				}
-			}
-
-			// verifies that the load balancer rolled back to the beginning of the list
-			common.AssertTrue(t, response[0].GetClientNetHint().GetInterface() == response[tc.numDevices].GetClientNetHint().GetInterface(),
-				fmt.Sprintf("expected: %s, got %s", response[0].GetClientNetHint().GetInterface(), response[tc.numDevices].GetClientNetHint().GetInterface()))
-
-			// verifies that the device name is exactly the one expected
-			common.AssertTrue(t, response[0].GetClientNetHint().GetInterface() == tc.deviceName,
-				fmt.Sprintf("expected: %s, got %s", tc.deviceName, response[0].GetClientNetHint().GetInterface()))
-
-			// verifies that the neighbor response is what was expected
-			common.AssertTrue(t, response[tc.numDevices+1].GetClientNetHint().GetInterface() == tc.neighbor,
-				fmt.Sprintf("expected: %s, got %s", tc.neighbor, response[tc.numDevices+1].GetClientNetHint().GetInterface()))
-		})
-	}
-}
-
-// getResponse is called as a concurrent routine to access the info cache.
-// The cache contains responses with interface names specific to each NUMA node.
-// Aside from actually generating a failure due to a race condition, the response
-// data is checked to make sure it contains a device known to be associated with the
-// given numa node.
-func getResponse(t *testing.T, aiCache *attachInfoCache, numaNode int, wg *sync.WaitGroup) {
-	defer wg.Done()
-	res, err := aiCache.getResponse(numaNode)
-	common.AssertEqual(t, err, nil, "TestInfoCacheConcurrentAccess getResponse error")
-
-	resp := &mgmtpb.GetAttachInfoResp{}
-	if err = proto.Unmarshal(res, resp); err != nil {
-		t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
-	}
-
-	deviceName := fmt.Sprintf("_node%d", numaNode)
-	hint := resp.GetClientNetHint()
-	if !strings.HasSuffix(hint.GetInterface(), deviceName) {
-		t.Errorf("TestInfoCacheConcurrentAccess response mismatch.  Devicename: %s, does not have suffix: %s", hint.GetInterface(), deviceName)
-	}
-}
-
-// TestInfoCacheConcurrentAccess launches maxConcurrent go routines
-// that concurrently access the info cache.  This test verifies that there are
-// no race conditions accessing the shared cache.
-func TestInfoCacheConcurrentAccess(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-	enabled := atm.NewBool(true)
-	scanResults := []*netdetect.FabricScan{
-		{Provider: "ofi+sockets", DeviceName: "eth0_node0", NUMANode: 0, Priority: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node0", NUMANode: 0, Priority: 1},
-		{Provider: "ofi+sockets", DeviceName: "eth2_node0", NUMANode: 0, Priority: 2},
-		{Provider: "ofi+sockets", DeviceName: "eth3_node0", NUMANode: 0, Priority: 3},
-		{Provider: "ofi+sockets", DeviceName: "eth0_node1", NUMANode: 1, Priority: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node1", NUMANode: 1, Priority: 1},
-		{Provider: "ofi+sockets", DeviceName: "eth0_node2", NUMANode: 2, Priority: 0},
-		{Provider: "ofi+sockets", DeviceName: "eth1_node2", NUMANode: 2, Priority: 1},
-		{Provider: "ofi+sockets", DeviceName: "eth2_node2", NUMANode: 2, Priority: 2},
-		{Provider: "ofi+sockets", DeviceName: "eth3_node2", NUMANode: 2, Priority: 3}}
-
-	aiCache := attachInfoCache{log: log, enabled: enabled}
-
-	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
-	defer cleanupFn(netCtx)
-
-	var wg sync.WaitGroup
-	maxNumaNodes := 3
-	rand.Seed(time.Now().UnixNano())
-	for i := 0; i < maxConcurrent; i++ {
-		wg.Add(1)
-		go func(n int) {
-			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
-			getResponse(t, &aiCache, n, &wg)
-		}(i % maxNumaNodes)
-	}
-	wg.Wait()
 }
