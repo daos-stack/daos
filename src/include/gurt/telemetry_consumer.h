@@ -31,6 +31,7 @@ int d_tm_get_bucket_range(struct d_tm_context *ctx,
 /* Developer facing client API to discover topology and manage results */
 struct d_tm_context *d_tm_open(int id);
 void d_tm_close(struct d_tm_context **ctx);
+void d_tm_gc_ctx(struct d_tm_context *ctx);
 void *d_tm_conv_ptr(struct d_tm_context *ctx, struct d_tm_node_t *node,
 		    void *ptr);
 struct d_tm_node_t *d_tm_get_root(struct d_tm_context *ctx);

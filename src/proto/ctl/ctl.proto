@@ -21,8 +21,6 @@ import "ctl/ranks.proto";
 // All Control service RPCs will terminate at gRPC server and do not interact
 // with the Management Service.
 service CtlSvc {
-	// Prepare nonvolatile storage devices for use with DAOS
-	rpc StoragePrepare(StoragePrepareReq) returns (StoragePrepareResp) {};
 	// Retrieve details of nonvolatile storage on server, including health info
 	rpc StorageScan(StorageScanReq) returns(StorageScanResp) {};
 	// Format nonvolatile storage devices for use with DAOS

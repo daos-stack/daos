@@ -1793,7 +1793,8 @@ struct obj_query_key_cb_args {
 
 static void
 obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
-			  struct obj_query_key_out *okqo, bool get_max)
+			  struct obj_query_key_out *okqo, bool get_max,
+			  bool changed)
 {
 	daos_recx_t		*reply_recx = &okqo->okqo_recx;
 	daos_recx_t		*result_recx = cb_args->recx;
@@ -1828,6 +1829,8 @@ re_check:
 		tmp_recx->rx_idx = rx_idx;
 		tmp_recx->rx_nr = stripe_rec_nr *
 				     (reply_recx->rx_nr / cell_rec_nr);
+		D_DEBUG(DB_IO, "shard %d get recx "DF_U64" "DF_U64"\n",
+			shard, tmp_recx->rx_idx, tmp_recx->rx_nr);
 	} else {
 		/* data ext from data shard needs to convert to daos ext,
 		 * replica ext from parity shard needs not to convert.
@@ -1849,6 +1852,8 @@ re_check:
 							       stripe_rec_nr,
 							       cell_rec_nr,
 							       tgt_idx);
+			D_DEBUG(DB_IO, "shard %d get recx "DF_U64" "DF_U64"\n",
+				shard, tmp_recx->rx_idx, tmp_recx->rx_nr);
 		}
 	}
 	if (!parity_checked && !from_data_tgt) {
@@ -1864,15 +1869,21 @@ re_check:
 	end[0] = DAOS_RECX_END(recx[0]);
 	end[1] = DAOS_RECX_END(recx[1]);
 	if (get_max) {
-		if (end[0] > end[1])
-			*result_recx = recx[0];
-		else
-			*result_recx = recx[1];
+		if (end[0] > end[1]) {
+			if (DAOS_RECX_END(*result_recx) < end[0] || changed)
+				*result_recx = recx[0];
+		} else {
+			if (DAOS_RECX_END(*result_recx) < end[1] || changed)
+				*result_recx = recx[1];
+		}
 	} else {
-		if (end[0] < end[1])
-			*result_recx = recx[0];
-		else
-			*result_recx = recx[1];
+		if (end[0] < end[1]) {
+			if (DAOS_RECX_END(*result_recx) > end[0] || changed)
+				*result_recx = recx[0];
+		} else {
+			if (DAOS_RECX_END(*result_recx) > end[1] || changed)
+				*result_recx = recx[1];
+		}
 	}
 }
 
@@ -1957,6 +1968,8 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 			changed = true;
 		} else if (flags & DAOS_GET_MAX) {
 			if (*val > *cur) {
+				D_DEBUG(DB_IO, "dkey update "DF_U64"->"
+					DF_U64"\n", *cur, *val);
 				*cur = *val;
 				/** set to change akey and recx */
 				changed = true;
@@ -1965,7 +1978,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 				 * replica obj, for EC obj need to check again
 				 * as it possibly from different data shards.
 				 */
-				if (!is_ec_obj)
+				if (!is_ec_obj || *val < *cur)
 					check = false;
 			}
 		} else if (flags & DAOS_GET_MIN) {
@@ -2000,10 +2013,8 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		if (!first && !changed)
 			D_ASSERT(is_ec_obj);
 
-		if (changed)
-			obj_shard_query_recx_post(cb_args,
-						  okqi->okqi_oid.id_shard,
-						  okqo, get_max);
+		obj_shard_query_recx_post(cb_args, okqi->okqi_oid.id_shard,
+					  okqo, get_max, changed);
 	}
 	D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
 
