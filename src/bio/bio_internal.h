@@ -183,61 +183,61 @@ struct bio_dma_buffer {
 	  "", D_TM_GAUGE)
 
 #define BIO_PROTO_NVME_VENDOR_STATS_LIST				\
-	Y(bdh_prog_fail_cnt_norm, "program_fail_cnt_norm",		\
+	Y(bdh_prog_fail_cnt_norm, "vendor/program_fail_cnt_norm",	\
 	  "Percent remaining of allowable program fails",		\
 	  "%", D_TM_COUNTER)						\
-	Y(bdh_prog_fail_cnt_raw, "program_fail_cnt_raw",		\
+	Y(bdh_prog_fail_cnt_raw, "vendor/program_fail_cnt_raw",		\
 	  "Total count of current program fails",			\
 	  "", D_TM_COUNTER)						\
-	Y(bdh_erase_fail_cnt_norm, "erase_fail_cnt_norm",		\
+	Y(bdh_erase_fail_cnt_norm, "vendor/erase_fail_cnt_norm",	\
 	  "Percent remaining of allowable erase fails",			\
 	  "%", D_TM_COUNTER)						\
-	Y(bdh_erase_fail_cnt_raw, "erase_fail_cnt_raw",			\
+	Y(bdh_erase_fail_cnt_raw, "vendor/erase_fail_cnt_raw",		\
 	  "Total count of current erase fails",				\
 	  "", D_TM_COUNTER)						\
-	Y(bdh_wear_leveling_cnt_norm, "wear_leveling_cnt_norm",		\
+	Y(bdh_wear_leveling_cnt_norm, "vendor/wear_leveling_cnt_norm",	\
 	  "Wear leveling count remaining, decrements from 100 to 0",	\
 	  "", D_TM_COUNTER)						\
-	Y(bdh_wear_leveling_cnt_min, "wear_leveling_cnt_min",		\
+	Y(bdh_wear_leveling_cnt_min, "vendor/wear_leveling_cnt_min",	\
 	  "Wear leveling minimum erase cycle",				\
 	  "", D_TM_COUNTER)						\
-	Y(bdh_wear_leveling_cnt_max, "wear_leveling_cnt_max",           \
+	Y(bdh_wear_leveling_cnt_max, "vendor/wear_leveling_cnt_max",    \
 	  "Wear leveling maximum erase cycle",                          \
 	  "", D_TM_COUNTER)                                             \
-	Y(bdh_wear_leveling_cnt_avg, "wear_leveling_cnt_avg",           \
+	Y(bdh_wear_leveling_cnt_avg, "vendor/wear_leveling_cnt_avg",    \
 	  "Wear leveling average erase cycle",                          \
 	  "", D_TM_COUNTER)						\
-	Y(bdh_endtoend_err_cnt_raw, "endtoend_err_cnt_raw",		\
+	Y(bdh_endtoend_err_cnt_raw, "vendor/endtoend_err_cnt_raw",	\
 	  "End-to-End detected and corrected errors by hardware",	\
 	  "", D_TM_COUNTER)						\
-	Y(bdh_crc_err_cnt_raw, "crc_err_cnt_raw",			\
+	Y(bdh_crc_err_cnt_raw, "vendor/crc_err_cnt_raw",		\
 	  "PCIe Interface CRC errors encountered",			\
 	  "", D_TM_COUNTER)						\
-	Y(bdh_media_wear_raw, "media_wear_raw",				\
+	Y(bdh_media_wear_raw, "vendor/media_wear_raw",			\
 	  "Wear seen by the SSD as a percentage of the maximum rated cycles", \
 	  "%", D_TM_COUNTER)						\
-	Y(bdh_host_reads_raw, "host_reads_raw",				\
+	Y(bdh_host_reads_raw, "vendor/host_reads_raw",			\
 	  "Percentage of I/O operations that are a read operation",	\
 	  "%", D_TM_COUNTER)						\
-	Y(bdh_workload_timer_raw, "crc_workload_timer_raw",		\
+	Y(bdh_workload_timer_raw, "vendor/crc_workload_timer_raw",	\
 	  "The elapsed time since starting the workload timer",		\
 	  "minutes", D_TM_COUNTER)					\
-	Y(bdh_thermal_throttle_status, "thermal_throttle_status_raw",	\
+	Y(bdh_thermal_throttle_status, "vendor/thermal_throttle_status_raw",	\
 	  "Thermal throttle status",					\
 	  "%", D_TM_COUNTER)						\
-	Y(bdh_thermal_throttle_event_cnt, "thermal_throttle_event_cnt",	\
+	Y(bdh_thermal_throttle_event_cnt, "vendor/thermal_throttle_event_cnt",	\
 	  "Thermal throttling event count",				\
 	  "", D_TM_COUNTER)						\
-	Y(bdh_retry_buffer_overflow_cnt, "retry_buffer_overflow_cnt",	\
+	Y(bdh_retry_buffer_overflow_cnt, "vendor/retry_buffer_overflow_cnt",	\
 	  "Retry Buffer overflow count",				\
 	  "", D_TM_COUNTER)						\
-	Y(bdh_pll_lock_loss_cnt, "pll_lock_loss_cnt",			\
+	Y(bdh_pll_lock_loss_cnt, "vendor/pll_lock_loss_cnt",		\
 	  "PCIe Refclock PLL unlock count",				\
 	  "", D_TM_COUNTER)						\
-	Y(bdh_nand_bytes_written, "nand_bytes_written",			\
+	Y(bdh_nand_bytes_written, "vendor/nand_bytes_written",		\
 	  "NAND bytes written (1 count = 32 MiB)",			\
 	  "", D_TM_COUNTER)						\
-	Y(bdh_host_bytes_written, "host_bytes_written",			\
+	Y(bdh_host_bytes_written, "vendor/host_bytes_written",		\
 	  "Host bytes written (1 count = 32 MiB)",			\
 	  "", D_TM_COUNTER)
 
