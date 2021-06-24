@@ -357,7 +357,6 @@ class GitRepoRetriever():
 
         # Now checkout the commit_sha if specified
         passed_commit_sha = kw.get("commit_sha", None)
-        branch = kw.get("branch", None)
         if passed_commit_sha is None:
             comp = os.path.basename(subdir)
             print("""
@@ -368,20 +367,28 @@ build with random upstream changes.
 *********************** ERROR ************************\n""" % comp)
             raise DownloadFailure(self.url, subdir)
 
-        if (passed_commit_sha and not branch):
-            commands = ['git',
-                        'clone',
-                        self.url,
-                        '--branch',
-                        passed_commit_sha,
-                        '--single-branch',
-                        '--depth',
-                        '1',
-                        subdir]
-            if not RUNNER.run_commands([' '.join(commands)]):
-                raise DownloadFailure(self.url, subdir)
-        else:
+        commands = ['git clone %s %s' % (self.url, subdir)]
+        if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)
+        self.get_specific(subdir, **kw)
+
+    def get_specific(self, subdir, **kw):
+        """Checkout the configured commit"""
+        # If the config overrides the branch, use it.  If a branch is
+        # specified, check it out first.
+        branch = kw.get("branch", None)
+        if branch is None:
+            branch = self.branch
+        self.branch = branch
+        if self.branch:
+            self.commit_sha = self.branch
+            self.checkout_commit(subdir)
+
+        # Now checkout the commit_sha if specified
+        passed_commit_sha = kw.get("commit_sha", None)
+        if passed_commit_sha is not None:
+            self.commit_sha = passed_commit_sha
+            self.checkout_commit(subdir)
 
         # Now apply any patches specified
         self.apply_patches(subdir, kw.get("patches", None))
@@ -681,8 +688,8 @@ class PreReqComponent():
         self.__opts.Add('USE_INSTALLED',
                         'Comma separated list of preinstalled dependencies',
                         'none')
-        self.add_opts(ListVariable('EXCLUDE', "Components to skip building",
-                                   'none', ['psm2']))
+        self.add_opts(ListVariable('INCLUDE', "Optional components to build",
+                                   'none', ['psm2', 'psm3']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
@@ -705,7 +712,7 @@ class PreReqComponent():
             self.configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
-        self.exclude = env.subst("$EXCLUDE").split(",")
+        self.include = env.subst("$INCLUDE").split(" ")
         self._build_targets = []
 
     def init_build_targets(self, build_dir):
@@ -1448,6 +1455,12 @@ class _Component():
         path = os.environ.get("PKG_CONFIG_PATH", None)
         if not path is None:
             env["ENV"]["PKG_CONFIG_PATH"] = path
+        if self.component_prefix:
+            for path in ["lib", "lib64"]:
+                config = os.path.join(self.component_prefix, path, "pkgconfig")
+                if not os.path.exists(config):
+                    continue
+                env.AppendENVPath("PKG_CONFIG_PATH", config)
 
         try:
             env.ParseConfig("pkg-config %s %s" % (opts, self.pkgconfig))

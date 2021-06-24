@@ -463,7 +463,9 @@ do_init:
 			}
 		}
 
+		/* Print notice that "ofi+psm2" will be deprecated*/
 		if (prov == CRT_NA_OFI_PSM2) {
+			D_WARN("\"ofi+psm2\" will be deprecated soon.\n");
 			setenv("FI_PSM2_NAME_SERVER", "1", true);
 			D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
 		}

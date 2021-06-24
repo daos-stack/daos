@@ -66,12 +66,13 @@ class installed_comps():
         self.not_installed.append(name)
         return False
 
-def exclude(reqs, name, use_value, exclude_value):
-    """Return True if in exclude list"""
-    if set([name, 'all']).intersection(set(reqs.exclude)):
-        print("Excluding %s from build" % name)
-        return exclude_value
-    return use_value
+def include(reqs, name, use_value, exclude_value):
+    """Return True if in include list"""
+    if set([name, 'all']).intersection(set(reqs.include)):
+        print("Including %s optional component from build" % name)
+        return use_value
+    print("Excluding %s optional component from build" % name)
+    return exclude_value
 
 def inst(reqs, name):
     """Return True if name is in list of installed packages"""
@@ -135,18 +136,21 @@ def define_mercury(reqs):
                           '--disable-psm3 ' +
                           '--without-gdrcopy ' +
                           OFI_DEBUG +
-                          exclude(reqs, 'psm2',
+                          include(reqs, 'psm2',
                                   '--enable-psm2' +
                                   check(reqs, 'psm2',
                                         "=$PSM2_PREFIX "
                                         'LDFLAGS="-Wl,--enable-new-dtags ' +
                                         '-Wl,-rpath=$PSM2_PREFIX/lib64" ',
                                         ''),
-                                  ''),
+                                  '--disable-psm2 ') +
+                          include(reqs, 'psm3',
+                                  '--enable-psm3 ',
+                                  '--disable-psm3 '),
                           'make $JOBS_OPT',
                           'make install'],
                 libs=['fabric'],
-                requires=exclude(reqs, 'psm2', ['psm2'], []),
+                requires=include(reqs, 'psm2', ['psm2'], []),
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
@@ -187,8 +191,8 @@ def define_mercury(reqs):
                                 '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
                           'make $JOBS_OPT', 'make install'],
                 libs=['mercury', 'na', 'mercury_util'],
+                pkgconfig='mercury',
                 requires=[atomic, 'boost', 'ofi'] + libs,
-                extra_include_path=[os.path.join('include', 'na')],
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 patch_rpath=['lib'])

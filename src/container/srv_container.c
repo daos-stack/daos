@@ -2588,7 +2588,7 @@ set_prop_co_status_pre_process(struct ds_pool *pool, struct cont *cont,
 	daos_prop_val_2_co_status(entry->dpe_val, &co_status);
 	D_ASSERT(co_status.dcs_status == DAOS_PROP_CO_HEALTHY ||
 		 co_status.dcs_status == DAOS_PROP_CO_UNCLEAN);
-	clear_stat = (co_status.dcs_flags == DAOS_PROP_CO_CLEAR);
+	clear_stat = (co_status.dcs_status == DAOS_PROP_CO_HEALTHY);
 	co_status.dcs_pm_ver = ds_pool_get_version(pool);
 	co_status.dcs_flags = 0;
 	entry->dpe_val = daos_prop_co_status_2_val(&co_status);
