@@ -25,8 +25,6 @@
 
 struct dfuse_info {
 	struct fuse_session		*di_session;
-	char				*di_pool;
-	char				*di_cont;
 	char				*di_group;
 	char				*di_mountpoint;
 	uint32_t			di_thread_count;
