@@ -1476,25 +1476,27 @@ host1
         Volatile Memory Backup: WARNING
       Intel Vendor SMART Attributes:
         Program Fail Count:
-	   Normalized:%d\%
-	   Raw:%d
-	Erase Fail Count:
-	   Normalized:%d\%
-	   Raw:%d
-	Wear Leveling Count:
-	   Normalized:%d\%
-	   Min:%d
-	   Max:%d
-	   Avg:%d
-	End-to-End Error Detection Count:%d
-	CRC Error Count:%d
-	Timed Workload, Media Wear:%d\%
-	Timed Workload, Host Reads:%d
-	Timed Workload, Timer:%d
-	Thermal Throttle Status:%d\%
-	Thermal Throttle Event Count:%d
-	Retry Buffer Overflow Counter:%d
-	PLL Lock Loss Count:%d
+           Normalized(%%):%d
+           Raw:%d
+        Erase Fail Count:
+           Normalized(%%):%d
+           Raw:%d
+        Wear Leveling Count:
+           Normalized(%%):%d
+           Min:%d
+           Max:%d
+           Avg:%d
+        End-to-End Error Detection Count:%d
+        CRC Error Count:%d
+        Timed Workload, Media Wear(%%):%d
+        Timed Workload, Host Reads:%d
+        Timed Workload, Timer:%d
+        Thermal Throttle Status(%%):%d
+        Thermal Throttle Event Count:%d
+        Retry Buffer Overflow Counter:%d
+        PLL Lock Loss Count:%d
+        NAND Bytes Written:%d
+        Host Bytes Written:%d
 
 `,
 				mockController.HealthStats.TempK(), mockController.HealthStats.TempC(),
@@ -1513,6 +1515,7 @@ host1
 				mockController.HealthStats.ThermalThrottleStatus, mockController.HealthStats.ThermalThrottleEventCnt,
 				mockController.HealthStats.RetryBufferOverflowCnt,
 				mockController.HealthStats.PllLockLossCnt,
+				mockController.HealthStats.NandBytesWritten, mockController.HealthStats.HostBytesWritten,
 			),
 		},
 	} {
