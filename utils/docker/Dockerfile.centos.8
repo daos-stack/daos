@@ -6,7 +6,8 @@
 #
 
 # Pull base image
-FROM centos:8
+ARG BASE_DISTRO=centos:8
+FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
