@@ -17,7 +17,7 @@ class CartCoRpcOneNodeTest(CartTest):
     def test_cart_ghost_rank_rpc(self):
         """Test ghost rank RPC.
 
-        #:avocado: tags=all,pr,daily_regression
+        #:avocado: tags=all,pr,full_regression
         #:avocado: tags=cart,ghost_rank_rpc,one_node,memcheck
         """
         cmd = self.build_cmd(self.env, "test_servers")
