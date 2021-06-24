@@ -83,7 +83,6 @@ static const char * const bypass_status[] = {
 static void
 ioil_shrink_pool(struct ioil_pool *pool)
 {
-
 	if (daos_handle_is_valid(pool->iop_poh)) {
 		int rc;
 
@@ -143,7 +142,6 @@ entry_array_close(void *arg) {
 
 	DFUSE_LOG_DEBUG("entry %p closing array fd_count %d",
 			entry, entry->fd_cont->ioc_open_count);
-
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
 	dfs_release(entry->fd_dfsoh);
@@ -290,6 +288,8 @@ ioil_fini(void)
 
 	DFUSE_TRA_DOWN(&ioil_iog);
 	vector_destroy(&fd_table);
+
+	printf("All done from Interception\n");
 
 	/* Tidy up any remaining open connections */
 	d_list_for_each_entry_safe(pool, pnext,
