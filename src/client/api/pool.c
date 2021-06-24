@@ -240,7 +240,7 @@ daos_pool_get_attr(daos_handle_t poh, int n, char const *const names[],
 		 * to cause an EFAULT during memory registration, so duplicate
 		 * name in heap
 		 */
-		new_names[i] = D_STRNDUP(new_names[i], names[i], DAOS_ATTR_NAME_MAX);
+		D_STRNDUP(new_names[i], names[i], DAOS_ATTR_NAME_MAX);
 		if (new_names[i] == NULL)
 			D_GOTO(error, daos_errno2der(errno));
 		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
