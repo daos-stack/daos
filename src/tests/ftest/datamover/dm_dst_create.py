@@ -54,6 +54,9 @@ class DmvrDstCreate(DataMoverTestBase):
         # Set the tool to use
         self.set_tool(tool)
 
+        # Set the api to use
+        self.set_api(api)
+
         # Create 1 pool
         pool1 = self.create_pool()
         pool1.connect(2)
