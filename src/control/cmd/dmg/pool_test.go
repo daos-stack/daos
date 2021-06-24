@@ -608,10 +608,33 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Query pool with positional UUID",
+			"pool query 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					UUID: "12345678-1234-1234-1234-1234567890ab",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with positional label",
+			"pool query test-label",
+			strings.Join([]string{
+				printRequest(t, &control.PoolResolveIDReq{
+					HumanID: "test-label",
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					UUID: defaultPoolUUID,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Query pool with empty ID",
 			"pool query --pool \"\"",
 			"",
-			fmt.Errorf("pool ID"),
+			fmt.Errorf("invalid label"),
 		},
 		{
 			"Nonexistent subcommand",
