@@ -73,7 +73,7 @@ resolve_duns_path(struct cmd_args_s *ap)
 		D_STRNDUP(ap->pool_label, dattr.da_pool_label,
 			  DAOS_PROP_LABEL_MAX_LEN);
 		if (ap->pool_label == NULL)
-			D_GOTO(out, rc);
+			D_GOTO(out, rc = ENOMEM);
 	} else {
 		uuid_copy(ap->p_uuid, dattr.da_puuid);
 	}
@@ -82,7 +82,7 @@ resolve_duns_path(struct cmd_args_s *ap)
 		D_STRNDUP(ap->cont_label, dattr.da_cont_label,
 			  DAOS_PROP_LABEL_MAX_LEN);
 		if (ap->cont_label == NULL)
-			D_GOTO(out, rc);
+			D_GOTO(out, rc = ENOMEM);
 	} else {
 		uuid_copy(ap->c_uuid, dattr.da_cuuid);
 	}
