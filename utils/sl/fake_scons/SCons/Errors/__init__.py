@@ -21,11 +21,9 @@
 
 class StopError(Exception):
     """Fake StopError"""
-    pass
 
 class InternalError(Exception):
     """Fake InternalError"""
-    pass
 
 ARGUMENTS = {}
 
