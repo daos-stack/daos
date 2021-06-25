@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.102
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -84,7 +84,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.7.3
+BuildRequires: daos-raft-devel = 0.8.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -462,8 +462,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Mon Jun 21 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.102-3
-- Update to spdk 21.04 and dpdk 21.05
+* Fri Jun 25 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.102-4
+- Update to spdk 21.04 and (indirectly) dpdk 21.05
+
+* Mon Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
+- Update raft to pick up Pre-Vote
 
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
 - Update to pmdk 1.11.0-rc1
