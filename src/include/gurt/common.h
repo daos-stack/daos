@@ -129,14 +129,13 @@ char *d_realpath(const char *path, char *resolved_path);
  * which are defined in-place or through #define but it will not work with
  * strings which are defined as a char * variable as in that case it'll copy
  * the first 8 bytes.  To avoid this case add a static assert on the size,
- * however this does mean that the macro cannot be used with 8 character
- * strings.
+ * so code that tries to mis-use this macro will fail at compile time.
  */
 
 #define D_STRNDUP_S(ptr, s)						\
 	do {								\
-		_Static_assert(sizeof(s) != sizeof(void *),		\
-			"D_STRNDUP_S does not work with size of 8");	\
+		_Static_assert(sizeof(s) != sizeof(void *) ||		\
+			__builtin_types_compatible_p(typeof(s), typeof("1234567"))); \
 		(ptr) = d_strndup(s, sizeof(s));			\
 		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\
 			sizeof(s), 0, #ptr, 0);				\

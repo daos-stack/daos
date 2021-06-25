@@ -710,7 +710,7 @@ test_log(void **state)
 	setenv("D_LOG_MASK", "T2=WARN", 1);
 	setenv("DD_MASK", "trace", 1);
 	d_log_sync_mask();
-	D_STRNDUP(logmask, "T2=WARN", 8);
+	D_STRNDUP_S(logmask, "T2=WARN");
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
