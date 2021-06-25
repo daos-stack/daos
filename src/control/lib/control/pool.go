@@ -702,9 +702,21 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 }
 
 type (
-	// PoolUsage contains a representation of a DAOS Storage Pool including usage
+	// PoolTierUsage describes usage of a single pool storage tier.
+	PoolTierUsage struct {
+		// TierName identifies a pool's storage tier.
+		TierName string `json:"tier_name"`
+		// Size is the total bytes of the pool tier.
+		Size uint64 `json:"size"`
+		// Used is the percentage usage of pool tier.
+		Used uint32 `json:"used"`
+		// Imbalance is the percentage imbalance of pool tier.
+		Imbalance uint32 `json:"imbalance"`
+	}
+
+	// Pool contains a representation of a DAOS Storage Pool including usage
 	// statistics.
-	PoolUsage struct {
+	Pool struct {
 		// UUID uniquely identifies a pool within the system.
 		UUID string `json:"uuid"`
 		// Label is an optional human-friendly identifier for a pool.
@@ -712,55 +724,50 @@ type (
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
 		ServiceReplicas []system.Rank `json:"svc_reps"`
-		// QueryStatus reports any DAOS error returned from a query
-		// operation.
-		QueryStatus int32 `json:"query_status"`
 
-		// ScmSize is the total bytes of the pool SCM component.
-		ScmSize uint64 `json:"scm_size"`
-		// NvmeSize is the total bytes of the pool NVMe component.
-		NvmeSize uint64 `json:"nvme_size"`
-		// ScmUsed is the percentage usage of pool SCM component.
-		ScmUsed uint32 `json:"scm_used"`
-		// NvmeUsed is the percentage usage of pool NVMe component.
-		NvmeUsed uint32 `json:"nvme_used"`
-		// ScmImbalance is the percentage imbalance of pool SCM.
-		ScmImbalance uint32 `json:"scm_imbalance"`
-		// NvmeImbalance is the percentage imbalance of pool NVMe.
-		NvmeImbalance uint32 `json:"nvme_imbalance"`
 		// TargetsTotal is the total number of targets in pool.
 		TargetsTotal uint32 `json:"targets_total"`
 		// TargetsDisabled is the number of inactive targets in pool.
 		TargetsDisabled uint32 `json:"targets_disabled"`
+
+		// QueryError reports an RPC error returned from a query.
+		QueryError error `json:"query_error"`
+		// QueryStatus reports any DAOS error returned from a query
+		// operation.
+		QueryStatus int32 `json:"query_status"`
+
+		// Usage contains pool usage statistics for each storage tier.
+		Usage []*PoolTierUsage
 	}
 )
 
-func getPoolUsage(label, uuid string, svcReps []system.Rank, status int32, pi *PoolInfo) (*PoolUsage, error) {
-	nvmeTotal := pi.Nvme.Total
-	scmTotal := pi.Scm.Total
+func (p *Pool) setUsage(pqr *PoolQueryResp) {
+	nvmeTotal := pqr.Nvme.Total
+	scmTotal := pqr.Scm.Total
 
-	scmUsed := float64(scmTotal-pi.Scm.Free) / float64(scmTotal)
-	nvmeUsed := float64(nvmeTotal-pi.Nvme.Free) / float64(nvmeTotal)
+	scmUsed := float64(scmTotal-pqr.Scm.Free) / float64(scmTotal)
+	nvmeUsed := float64(nvmeTotal-pqr.Nvme.Free) / float64(nvmeTotal)
 
-	scmSpread := pi.Scm.Max - pi.Scm.Min
-	scmImbalance := float64(scmSpread) / (float64(scmTotal) / float64(pi.ActiveTargets))
-	nvmeSpread := pi.Nvme.Max - pi.Nvme.Min
-	nvmeImbalance := float64(nvmeSpread) / (float64(nvmeTotal) / float64(pi.ActiveTargets))
+	scmSpread := pqr.Scm.Max - pqr.Scm.Min
+	scmImbalance := float64(scmSpread) / (float64(scmTotal) / float64(pqr.ActiveTargets))
+	nvmeSpread := pqr.Nvme.Max - pqr.Nvme.Min
+	nvmeImbalance := float64(nvmeSpread) / (float64(nvmeTotal) / float64(pqr.ActiveTargets))
 
-	return &PoolUsage{
-		Label:           label,
-		UUID:            uuid,
-		ServiceReplicas: svcReps,
-		QueryStatus:     status,
-		ScmSize:         scmTotal,
-		NvmeSize:        nvmeTotal,
-		ScmUsed:         uint32(scmUsed * 100),
-		NvmeUsed:        uint32(nvmeUsed * 100),
-		ScmImbalance:    uint32(scmImbalance * 100),
-		NvmeImbalance:   uint32(nvmeImbalance * 100),
-		TargetsTotal:    pi.TotalTargets,
-		TargetsDisabled: pi.DisabledTargets,
-	}, nil
+	p.Usage = append(p.Usage,
+		// scm is tier 0
+		&PoolTierUsage{
+			TierName:  "SCM",
+			Size:      scmTotal,
+			Used:      uint32(scmUsed * 100),
+			Imbalance: uint32(scmImbalance * 100),
+		},
+		// nvme is tier 1
+		&PoolTierUsage{
+			TierName:  "NVME",
+			Size:      nvmeTotal,
+			Used:      uint32(nvmeUsed * 100),
+			Imbalance: uint32(nvmeImbalance * 100),
+		})
 }
 
 // ListPoolsReq contains the inputs for the list pools command.
@@ -772,8 +779,8 @@ type ListPoolsReq struct {
 // ListPoolsResp contains the status of the request and, if successful, the list
 // of pools in the system.
 type ListPoolsResp struct {
-	Status int32        `json:"status"`
-	Pools  []*PoolUsage `json:"pools"`
+	Status int32   `json:"status"`
+	Pools  []*Pool `json:"pools"`
 }
 
 // ListPools fetches the list of all pools and their service replicas from the
@@ -796,7 +803,33 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 		return nil, err
 	}
 
-	// issue query on each pool to retrieve pool info
+	// issue query request and populate usage statistics for each pool
+	for _, p := range resp.Pools {
+		rpcClient.Debugf("Pool discovered: %+v", p)
+
+		resp, err := PoolQuery(ctx, rpcClient, &PoolQueryReq{UUID: p.UUID})
+		if err != nil {
+			p.QueryError = err
+			continue
+		}
+		if resp.Status != 0 {
+			p.QueryStatus = resp.Status
+			continue
+		}
+		if resp.Scm == nil {
+			return nil, errors.New("PoolQueryResp missing SCM stats")
+		}
+		if resp.Nvme == nil {
+			return nil, errors.New("PoolQueryResp missing NVMe stats")
+		}
+		if p.UUID != resp.UUID {
+			return nil, errors.New("PoolQueryResp UUID doesn't match request")
+		}
+
+		p.TargetsTotal = resp.TotalTargets
+		p.TargetsDisabled = resp.DisabledTargets
+		p.setUsage(resp)
+	}
 
 	return resp, nil
 }

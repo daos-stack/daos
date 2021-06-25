@@ -625,58 +625,89 @@ func TestPoolSetProp(t *testing.T) {
 	}
 }
 
-func TestControl_getPoolUsage(t *testing.T) {
+func TestControl_Pool_setUsage(t *testing.T) {
 	for name, tc := range map[string]struct {
-		label    string
-		uuid     string
-		svcReps  []system.Rank
-		status   int32
-		info     *PoolInfo
-		expUsage *PoolUsage
-		expErr   error
+		status        int32
+		scmStats      *StorageUsageStats
+		nvmeStats     *StorageUsageStats
+		totalTargets  uint32
+		activeTargets uint32
+		expPool       *Pool
+		expErr        error
 	}{
-		"with label": {
-			label:   "p1",
-			uuid:    common.MockUUID(1),
-			svcReps: []system.Rank{0},
-			info: &PoolInfo{
-				Scm: &StorageUsageStats{
-					Total: humanize.GByte * 30,
-					Free:  humanize.GByte * 15,
-					Min:   humanize.GByte * 1.6,
-					Max:   humanize.GByte * 2,
-				},
-				Nvme: &StorageUsageStats{
-					Total: humanize.GByte * 500,
-					Free:  humanize.GByte * 250,
-					Min:   humanize.GByte * 29.5,
-					Max:   humanize.GByte * 36,
-				},
-				TotalTargets:  8,
-				ActiveTargets: 8,
+		"successful query": {
+			scmStats: &StorageUsageStats{
+				Total: humanize.GByte * 30,
+				Free:  humanize.GByte * 15,
+				Min:   humanize.GByte * 1.6,
+				Max:   humanize.GByte * 2,
 			},
-			expUsage: &PoolUsage{
-				Label:           "p1",
-				UUID:            common.MockUUID(1),
-				ServiceReplicas: []system.Rank{0},
-				ScmSize:         humanize.GByte * 30,
-				NvmeSize:        humanize.GByte * 500,
-				TargetsTotal:    8,
-				ScmUsed:         50,
-				NvmeUsed:        50,
-				ScmImbalance:    10,
-				NvmeImbalance:   10,
+			nvmeStats: &StorageUsageStats{
+				Total: humanize.GByte * 500,
+				Free:  humanize.GByte * 250,
+				Min:   humanize.GByte * 29.5,
+				Max:   humanize.GByte * 36,
+			},
+			totalTargets:  8,
+			activeTargets: 8,
+			expPool: &Pool{
+				Usage: []*PoolTierUsage{
+					{
+						Size:      humanize.GByte * 30,
+						Used:      50,
+						Imbalance: 10,
+					},
+					{
+						Size:      humanize.GByte * 500,
+						Used:      50,
+						Imbalance: 10,
+					},
+				},
+			},
+		},
+		"disabled targets": {
+			scmStats: &StorageUsageStats{
+				Total: humanize.GByte * 30,
+				Free:  humanize.GByte * 15,
+				Min:   humanize.GByte * 1.6,
+				Max:   humanize.GByte * 2,
+			},
+			nvmeStats: &StorageUsageStats{
+				Total: humanize.GByte * 500,
+				Free:  humanize.GByte * 250,
+				Min:   humanize.GByte * 29.5,
+				Max:   humanize.GByte * 36,
+			},
+			totalTargets:  8,
+			activeTargets: 4,
+			expPool: &Pool{
+				Usage: []*PoolTierUsage{
+					{
+						Size:      humanize.GByte * 30,
+						Used:      50,
+						Imbalance: 5,
+					},
+					{
+						Size:      humanize.GByte * 500,
+						Used:      50,
+						Imbalance: 5,
+					},
+				},
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			usage, err := getPoolUsage(tc.label, tc.uuid, tc.svcReps, tc.status, tc.info)
-			common.CmpErr(t, tc.expErr, err)
-			if tc.expErr != nil {
-				return
-			}
+			resp := &PoolQueryResp{Status: tc.status}
+			resp.Scm = tc.scmStats
+			resp.Nvme = tc.nvmeStats
+			resp.TotalTargets = tc.totalTargets
+			resp.ActiveTargets = tc.activeTargets
+			resp.DisabledTargets = tc.activeTargets
 
-			if diff := cmp.Diff(tc.expUsage, usage); diff != "" {
+			pool := new(Pool)
+			pool.setUsage(resp)
+
+			if diff := cmp.Diff(tc.expPool, pool); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -684,6 +715,34 @@ func TestControl_getPoolUsage(t *testing.T) {
 }
 
 func TestControl_ListPools(t *testing.T) {
+	queryResp := func(i int32) *mgmtpb.PoolQueryResp {
+		return &mgmtpb.PoolQueryResp{
+			Uuid:            common.MockUUID(i),
+			TotalTargets:    42,
+			ActiveTargets:   16,
+			DisabledTargets: 17,
+			Rebuild: &mgmtpb.PoolRebuildStatus{
+				State:   mgmtpb.PoolRebuildStatus_BUSY,
+				Objects: 1,
+				Records: 2,
+			},
+			Scm: &mgmtpb.StorageUsageStats{
+				Total: 123456,
+				Free:  0,
+				Min:   1000,
+				Max:   2000,
+				Mean:  1500,
+			},
+			Nvme: &mgmtpb.StorageUsageStats{
+				Total: 1234567,
+				Free:  600000,
+				Min:   1000,
+				Max:   2000,
+				Mean:  15000,
+			},
+		}
+	}
+
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *ListPoolsReq
@@ -714,26 +773,48 @@ func TestControl_ListPools(t *testing.T) {
 		},
 		"one pool": {
 			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.ListPoolsResp{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
 						Pools: []*mgmtpb.ListPoolsResp_Pool{
 							{
-								Uuid:    common.MockUUID(),
+								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
 							},
 						},
-					},
-				),
+					}),
+					MockMSResponse("host1", nil, queryResp(1)),
+				},
 			},
 			expResp: &ListPoolsResp{
-				Pools: []*PoolUsage{
+				Pools: []*Pool{
 					{
-						UUID:            common.MockUUID(),
+						UUID:            common.MockUUID(1),
 						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage: []*PoolTierUsage{
+							{
+								TierName:  "SCM",
+								Size:      123456,
+								Used:      100,
+								Imbalance: 12,
+							},
+							{
+								TierName:  "NVME",
+								Size:      1234567,
+								Used:      51,
+								Imbalance: 1,
+							},
+						},
 					},
 				},
 			},
 		},
+		//		"one pool; bad query response; no scm":        {},
+		//		"one pool; bad query response; no nvme":       {},
+		//		"one pool; bad query response; uuid mismatch": {},
+		//		"multiple pools; one query error":             {},
+		//		"multiple pools; one query failed status":     {},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
