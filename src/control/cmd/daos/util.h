@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#ifndef __CMD_DAOS_UTIL_H__
+#define __CMD_DAOS_UTIL_H__
+
 #define D_LOGFAC	DD_FAC(client)
 
 #include <stdio.h>
@@ -107,3 +110,4 @@ set_dpe_val_ptr(struct daos_prop_entry *dpe, void *val_ptr)
 	dpe->dpe_val_ptr = val_ptr;
 }
 
+#endif /* __CMD_DAOS_UTIL_H__ */
