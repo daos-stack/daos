@@ -6,7 +6,6 @@
 """
 # pylint: disable=too-many-lines
 
-from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
 import re
