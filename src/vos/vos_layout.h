@@ -154,15 +154,6 @@ struct vos_dtx_ent_common {
 
 /** Committed DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_cmt_ent_df {
-	/**
-	 * For single RDG based DTX, the DTX may be in the CoS cache. Under
-	 * such case, 'dce_common.dec_oid' is part of the key for CoS cache.
-	 *
-	 * For cross RDGs modification, the DTX will not be in CoS cache.
-	 * Under such case, if only single object is modified by this DTX,
-	 * its OID is stored inside 'dce_common.dec_oid'; otherwise, the
-	 * objects' OIDs are stored via 'dce_oid_off'.
-	 */
 	struct vos_dtx_ent_common	dce_common;
 };
 

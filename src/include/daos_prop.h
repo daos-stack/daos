@@ -66,6 +66,7 @@ enum daos_pool_props {
 	 * The pool svc rank list.
 	 */
 	DAOS_PROP_PO_SVC_LIST,
+	DAOS_PROP_PO_EC_CELL_SZ,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -192,6 +193,8 @@ enum daos_cont_props {
 	DAOS_PROP_CO_STATUS,
 	/** OID value to start allocation from */
 	DAOS_PROP_CO_ALLOCED_OID,
+	/** EC cell size, it can overwrite DAOS_PROP_EC_CELL_SZ of pool */
+	DAOS_PROP_CO_EC_CELL_SZ,
 	DAOS_PROP_CO_MAX,
 };
 
@@ -343,8 +346,8 @@ struct daos_prop_entry {
 
 /** Allowed max number of property entries in daos_prop_t */
 #define DAOS_PROP_ENTRIES_MAX_NR	(128)
-/** max length for pool/container label */
-#define DAOS_PROP_LABEL_MAX_LEN		(256)
+/** max length for pool/container label - NB: POOL_LIST_CONT RPC wire format */
+#define DAOS_PROP_LABEL_MAX_LEN		(127)
 
 /** daos properties, for pool or container */
 typedef struct {

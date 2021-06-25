@@ -839,7 +839,7 @@ is_max_class_obj(daos_oclass_id_t cid)
 	oid.hi = 5;
 	oid.lo = rand();
 	daos_obj_set_oid(&oid, 0, cid, 0);
-	oc_attr = daos_oclass_attr_find(oid);
+	oc_attr = daos_oclass_attr_find(oid, NULL);
 
 	if (oc_attr->ca_grp_nr == DAOS_OBJ_GRP_MAX ||
 	    oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)

@@ -166,9 +166,8 @@ free_io_params_cb(tse_task_t *task, void *data)
 			daos_recx_free(current->iom.iom_recxs);
 			current->iom.iom_recxs = NULL;
 		}
-		if (current->iod.iod_recxs)
-			D_FREE(current->iod.iod_recxs);
-		if (!current->user_sgl_used && current->sgl.sg_iovs)
+		D_FREE(current->iod.iod_recxs);
+		if (!current->user_sgl_used)
 			D_FREE(current->sgl.sg_iovs);
 
 		io_list = current->next;
@@ -818,7 +817,6 @@ dc_array_open(tse_task_t *task)
 	D_ALLOC_PTR(params);
 	if (params == NULL)
 		D_GOTO(err_put2, rc = -DER_NOMEM);
-
 
 	rc = tse_task_register_comp_cb(task, free_md_params_cb, &params,
 				       sizeof(params));
@@ -1593,9 +1591,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			/** add another element to recxs */
 			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs,
 					iod->iod_nr, iod->iod_nr + 1);
-			if (new_recxs == NULL) {
+			if (new_recxs == NULL)
 				D_GOTO(err_stask, rc = -DER_NOMEM);
-			}
+
 			iod->iod_nr++;
 			iod->iod_recxs = new_recxs;
 
@@ -1735,8 +1733,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 					      tse_task2sched(task),
 					      0, NULL, &io_task);
 			if (rc != 0) {
-				D_ERROR("Update dkey "DF_U64" failed (%d)\n",
-					params->dkey_val, rc);
+				D_ERROR("Update dkey "DF_U64" failed "DF_RC"\n",
+					params->dkey_val, DP_RC(rc));
 				D_GOTO(err_iotask, rc);
 			}
 			io_arg = daos_task_get_args(io_task);
@@ -1969,10 +1967,8 @@ dc_array_get_size(tse_task_t *task)
 err_query_task:
 	tse_task_complete(query_task, rc);
 err_task:
-	if (kqp)
-		D_FREE(kqp);
-	if (query_task)
-		D_FREE(query_task);
+	D_FREE(kqp);
+	D_FREE(query_task);
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);
@@ -2003,8 +1999,7 @@ free_set_size_cb(tse_task_t *task, void *data)
 {
 	struct set_size_props *props = *((struct set_size_props **)data);
 
-	if (props->val)
-		D_FREE(props->val);
+	D_FREE(props->val);
 	if (props->array)
 		array_decref(props->array);
 	D_FREE(props);
@@ -2061,8 +2056,7 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2132,8 +2126,7 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2220,8 +2213,7 @@ err:
 	if (io_task)
 		tse_task_complete(io_task, rc);
 out:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	return rc;
 }
 
@@ -2291,8 +2283,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2367,8 +2358,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2497,8 +2487,8 @@ dc_array_set_size(tse_task_t *task)
 		num_records = array->chunk_size;
 		record_i = 0;
 	} else {
-		rc = compute_dkey(array, args->size-1, &num_records, &record_i,
-				  &dkey_val);
+		rc = compute_dkey(array, args->size - 1, &num_records,
+				  &record_i, &dkey_val);
 		if (rc) {
 			D_ERROR("Failed to compute dkey\n");
 			D_GOTO(err_task, rc);
@@ -2570,8 +2560,7 @@ dc_array_set_size(tse_task_t *task)
 err_enum_task:
 	tse_task_complete(enum_task, rc);
 err_task:
-	if (set_size_props)
-		D_FREE(set_size_props);
+	D_FREE(set_size_props);
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);

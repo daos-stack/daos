@@ -18,6 +18,7 @@ import "C"
 
 import (
 	"context"
+	"fmt"
 )
 
 type Gauge struct {
@@ -48,7 +49,7 @@ func (g *Gauge) Value() uint64 {
 }
 
 func newGauge(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t) *Gauge {
-	return &Gauge{
+	g := &Gauge{
 		statsMetric: statsMetric{
 			metricBase: metricBase{
 				handle: hdl,
@@ -58,6 +59,10 @@ func newGauge(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t
 			},
 		},
 	}
+
+	// Load up the stats
+	_ = g.Value()
+	return g
 }
 
 func GetGauge(ctx context.Context, name string) (*Gauge, error) {
@@ -71,5 +76,9 @@ func GetGauge(ctx context.Context, name string) (*Gauge, error) {
 		return nil, err
 	}
 
-	return newGauge(hdl, "", &name, node), nil
+	if node.dtn_type != C.D_TM_GAUGE {
+		return nil, fmt.Errorf("metric %q is not a gauge", name)
+	}
+
+	return newGauge(hdl, name, &name, node), nil
 }
