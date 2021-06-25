@@ -121,7 +121,7 @@ class OSAOnlineExtend(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            output = self.dmg_command.pool_extend(self.pool.uuid, rank)
+            output = self.dmg_command.pool_extend(self.pool.uuid, self.ranks)
             self.print_and_assert_on_rebuild_failure(output)
 
             pver_extend = self.get_pool_version()
