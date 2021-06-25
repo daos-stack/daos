@@ -318,7 +318,6 @@ int64_t : "%ld",				\
 #define D_GOTO(label, rc)						\
 	do {								\
 		__typeof__(rc) __rc = (rc);				\
-		D_DEBUG(DB_TRACE, "Jumping to " #label " '" #rc "'\n"); \
 		(void)(__rc);						\
 		goto label;						\
 	} while (0)
