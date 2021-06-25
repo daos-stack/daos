@@ -9,9 +9,10 @@ package bdev
 import (
 	"fmt"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/dustin/go-humanize"
 )
 
 // SPDK bdev subsystem configuration method name definitions.

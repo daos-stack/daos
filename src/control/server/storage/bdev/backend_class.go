@@ -111,18 +111,12 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 	if req.ConfigPath == "" {
 		return errors.New("no output config directory set in request")
 	}
+
 	if req.Class == storage.BdevClassNvme && len(req.DeviceList) == 0 {
 		sb.log.Debug("skip write nvme conf for empty device list")
 		return nil
 	}
 
-	// TODO: enable AIO config support
-	if req.Class != storage.BdevClassNvme {
-		sb.log.Info("Skipping JSON SPDK config creation for non-NVMe bdev class")
-		return nil
-	}
-
 	sb.log.Debugf("write nvme output json config: %+v", req)
-
 	return writeJsonConfig(sb.log, !sb.IsVMDDisabled(), req)
 }
