@@ -710,7 +710,7 @@ test_log(void **state)
 	setenv("D_LOG_MASK", "T2=WARN", 1);
 	setenv("DD_MASK", "trace", 1);
 	d_log_sync_mask();
-	D_STRNDUP_S(logmask, "T2=WARN");
+	D_STRNDUP(logmask, "T2=WARN", 8);
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
@@ -1192,7 +1192,7 @@ test_gurt_alloc(void **state)
 	assert_non_null(path);
 	assert_string_equal(path, "/usr");
 	D_FREE(path);
-	D_STRNDUP_S(testptr, str1);
+	D_STRNDUP(testptr, str1, 13);
 	assert_non_null(testptr);
 	assert_string_equal(testptr, str1);
 	D_FREE(testptr);

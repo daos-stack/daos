@@ -155,7 +155,7 @@ test_daos_prop_merge_total_update(void **state)
 
 	prop2 = daos_prop_alloc(2);
 	prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP_S(prop2->dpp_entries[0].dpe_str, "Updated");
+	D_STRNDUP(prop2->dpp_entries[0].dpe_str, "Updated", 8);
 	prop2->dpp_entries[1].dpe_type = DAOS_PROP_CO_COMPRESS;
 	prop2->dpp_entries[1].dpe_val = 0;
 
@@ -182,7 +182,7 @@ test_daos_prop_merge_subset_update(void **state)
 
 	prop2 = daos_prop_alloc(1);
 	prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP_S(prop2->dpp_entries[0].dpe_str, "Updated");
+	D_STRNDUP(prop2->dpp_entries[0].dpe_str, "Updated", 8);
 
 	/* Expecting only one prop to be overwritten */
 	exp_result = daos_prop_dup(prop1, false);
@@ -217,7 +217,7 @@ test_daos_prop_merge_add_and_update(void **state)
 	prop2 = daos_prop_alloc(2);
 	dup_idx = 0; /* duplicate type to what's in prop1 */
 	prop2->dpp_entries[dup_idx].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP_S(prop2->dpp_entries[dup_idx].dpe_str, "Updated");
+	D_STRNDUP(prop2->dpp_entries[dup_idx].dpe_str, "Updated", 8);
 	new_idx = 1; /* type that isn't in prop1 */
 	prop2->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
 	prop2->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_CRC32;
