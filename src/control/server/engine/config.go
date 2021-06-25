@@ -178,6 +178,8 @@ type Config struct {
 	EnvVars           []string      `yaml:"env_vars,omitempty"`
 	EnvPassThrough    []string      `yaml:"env_pass_through,omitempty"`
 	Index             uint32        `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
+	MemSize           int           `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
+	HugePageSz        int           `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
 }
 
 // NewConfig returns an I/O Engine config.
@@ -396,5 +398,17 @@ func (c *Config) WithLogFile(logPath string) *Config {
 // WithLogMask sets the DAOS logging mask to be used by this instance.
 func (c *Config) WithLogMask(logMask string) *Config {
 	c.LogMask = logMask
+	return c
+}
+
+// WithMemSize sets the NVMe memory size for SPDK memory allocation on this instance.
+func (c *Config) WithMemSize(memsize int) *Config {
+	c.MemSize = memsize
+	return c
+}
+
+// WithHugePageSize sets the configured hugepage size on this instance.
+func (c *Config) WithHugePageSize(hugepagesz int) *Config {
+	c.HugePageSz = hugepagesz
 	return c
 }

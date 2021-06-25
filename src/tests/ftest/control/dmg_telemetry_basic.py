@@ -1,0 +1,163 @@
+#!/usr/bin/python3
+"""
+(C) Copyright 2021 Intel Corporation.
+
+SPDX-License-Identifier: BSD-2-Clause-Patent
+"""
+import random
+
+from telemetry_test_base import TestWithTelemetry
+
+
+class TestWithTelemetryBasic(TestWithTelemetry):
+    # pylint: disable=too-many-ancestors
+    """Test container telemetry metrics.
+
+    :avocado: recursive
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a Test object."""
+        super().__init__(*args, **kwargs)
+        self.container = []
+        self.metrics = {
+            "open_count": {},
+            "active_count": {},
+            "close_count": {},
+            "destroy_count": {}}
+        self.pool_leader_host = None
+
+    def create_container(self, posix):
+        """Create a new container and update the metrics.
+
+        Args:
+            posix (bool): Whether or not to create a posix container
+        """
+        self.container.append(self.get_container(self.pool, create=False))
+        self.container[-1].type.update(
+            "POSIX" if posix else None, "container.type")
+        self.container[-1].create()
+        self.metrics["open_count"][self.pool_leader_host] += 2
+        self.metrics["close_count"][self.pool_leader_host] += 2
+
+    def open_container(self, container):
+        """Open the container and update the metrics.
+
+        Args:
+            container (TestContainer): container to open
+        """
+        container.open()
+        self.metrics["open_count"][self.pool_leader_host] += 1
+        self.metrics["active_count"][self.pool_leader_host] += 1
+
+    def close_container(self, container):
+        """Close the container and update the metrics.
+
+        Args:
+            container (TestContainer): container to close
+        """
+        container.close()
+        self.metrics["close_count"][self.pool_leader_host] += 1
+        self.metrics["active_count"][self.pool_leader_host] -= 1
+
+    def destroy_container(self, container):
+        """Destroy the container and update the metrics.
+
+        Args:
+            container (TestContainer): container to destroy
+        """
+        container.destroy()
+        # For the moment, the new daos tool opens and closes
+        # the container before destroying it.
+        self.metrics["open_count"][self.pool_leader_host] += 1
+        self.metrics["close_count"][self.pool_leader_host] += 1
+        self.metrics["destroy_count"][self.pool_leader_host] += 1
+
+    def check_metrics(self):
+        """Check the container telemetry metrics."""
+        errors = self.telemetry.check_container_metrics(**self.metrics)
+        if errors:
+            self.fail("\n".join(errors))
+
+    def test_telemetry_list(self):
+        """JIRA ID: DAOS-7667 / SRS-324.
+
+        Test Description:
+            Verify the dmg telemetry list command.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,telemetry
+        :avocado: tags=test_with_telemetry_basic,test_telemetry_list
+        """
+        self.verify_telemetry_list()
+
+    def test_container_telemetry(self):
+        """JIRA ID: DAOS-7667 / SRS-324.
+
+        Test Description:
+            Create, connect, and destroy containers to verify telemetry metrics.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,telemetry,container
+        :avocado: tags=test_with_telemetry_basic,test_container_telemetry
+        """
+        container_qty = self.params.get("container_qty", "/run/test/*", 1)
+        open_close_qty = self.params.get("open_close_qty", "/run/test/*", 2)
+        self.add_pool(connect=False)
+        self.pool.set_query_data()
+        pool_leader_rank = self.pool.query_data["response"]["leader"]
+        self.pool_leader_host = self.server_managers[0].get_host(
+            pool_leader_rank)
+        self.log.info(
+            "Pool leader host: %s (rank: %s)",
+            self.pool_leader_host, pool_leader_rank)
+
+        # Verify container telemetry metrics report 0 before container creation
+        self.log.info("Before container creation")
+        data = self.telemetry.get_container_metrics()
+        for host in data:
+            self.metrics["open_count"][host] = \
+                data[host]["engine_container_ops_open_total"]
+            self.metrics["active_count"][host] = \
+                data[host]["engine_container_ops_open_active"]
+            self.metrics["close_count"][host] = \
+                data[host]["engine_container_ops_close_total"]
+            self.metrics["destroy_count"][host] = \
+                data[host]["engine_container_ops_destroy_total"]
+
+        # Create a number of containers and verify metrics
+        for loop in range(1, container_qty + 1):
+            self.create_container(random.choice([True, False]))
+            self.log.info(
+                "Container %s/%s: After create()", loop, container_qty)
+            self.check_metrics()
+
+        # Open each container and verify metrics
+        for outer_loop in range(1, open_close_qty + 1):
+            # Open each container and verify metrics
+            for loop, container in enumerate(self.container):
+                self.open_container(container)
+                self.log.info(
+                    "Loop %s/%s: Container %s/%s: After open()",
+                    outer_loop, open_close_qty, loop + 1, len(self.container))
+                self.check_metrics()
+
+            # Close each container and verify metrics
+            for loop, container in enumerate(self.container):
+                self.close_container(container)
+                self.log.info(
+                    "Loop %s/%s: Container %s/%s: After close()",
+                    outer_loop, open_close_qty, loop + 1, len(self.container))
+                self.check_metrics()
+
+        # Destroy each container and verify metrics
+        for loop, container in enumerate(self.container):
+            self.destroy_container(container)
+            self.log.info(
+                "Container %s/%s: After destroy()",
+                loop + 1, len(self.container))
+            self.check_metrics()
+
+        self.log.info("Test PASSED")

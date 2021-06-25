@@ -30,6 +30,7 @@
 #include <daos/object.h>
 #include "daos_types.h"
 #include "daos_api.h"
+#include "daos_fs.h"
 #include "daos_uns.h"
 #include "daos_fs.h"
 #include "daos_hdlr.h"
@@ -40,6 +41,18 @@ const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
 #define RC_PRINT_HELP	2
 #define RC_NO_HELP	-2
+
+static inline int
+daos_parse_cmode(const char *string, uint32_t *mode)
+{
+	if (strcasecmp(string, "relaxed") == 0)
+		*mode = DFS_RELAXED;
+	else if (strcasecmp(string, "balanced") == 0)
+		*mode = DFS_BALANCED;
+	else
+		return -1;
+	return 0;
+}
 
 static enum fs_op
 filesystem_op_parse(const char *str)
@@ -258,7 +271,6 @@ tobytes(const char *str)
 	return size;
 }
 
-
 static int
 epoch_range_parse(struct cmd_args_s *ap)
 {
@@ -306,7 +318,7 @@ daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 	if (*end != '.')
 		return -1;
 
-	ptr = end+1;
+	ptr = end + 1;
 
 	lo = strtoull(ptr, &end, 10);
 	if (ptr[0] == '-')
@@ -341,7 +353,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_LABEL;
-		entry->dpe_str = strdup(value);
+		D_STRNDUP(entry->dpe_str, value, len);
 	} else if (!strcmp(name, "cksum")) {
 		int csum_type = daos_str2csumcontprop(value);
 
@@ -472,6 +484,15 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_STATUS;
+
+	} else if (!strcmp(name, "ec_cell")) {
+		entry->dpe_val = strtol(value, NULL, 0);
+		if (!daos_ec_cs_valid(entry->dpe_val)) {
+			fprintf(stderr, "Invalid EC cell size = %u\n",
+				(uint32_t)entry->dpe_val);
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	} else {
 		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/dedup/dedup_th/rf\n");
 		return -DER_INVAL;
@@ -595,6 +616,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"src",		required_argument,	NULL,	'S'},
 		{"dst",		required_argument,	NULL,	'D'},
 		{"type",	required_argument,	NULL,	't'},
+		{"mode",	required_argument,	NULL,	'M'},
 		{"oclass",	required_argument,	NULL,	'o'},
 		{"chunk-size",	required_argument,	NULL,	'z'},
 		{"dfs-prefix",	required_argument,	NULL,	'I'},
@@ -614,18 +636,24 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"principal",	required_argument,	NULL,	'P'},
 		{NULL,		0,			NULL,	0}
 	};
+	bool			posix_mode_set = false;
 	int			rc;
 	char			*cmdname = NULL;
 
 	assert(ap != NULL);
+
 	ap->p_op  = -1;
 	ap->c_op  = -1;
 	ap->o_op  = -1;
 	ap->fs_op = -1;
 	ap->sh_op = -1;
+	ap->mode  = 0;
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
 		return RC_NO_HELP;
+
+	ap->outstream = stdout;
+	ap->errstream = stderr;
 
 	if ((strcmp(argv[1], "container") == 0) ||
 	    (strcmp(argv[1], "cont") == 0)) {
@@ -754,6 +782,15 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				D_GOTO(out_free, rc = RC_PRINT_HELP);
 			}
 			break;
+		case 'M':
+			posix_mode_set = true;
+			if (daos_parse_cmode(optarg, &ap->mode) != 0) {
+				fprintf(stderr,
+					"Invalid POSIX consistency mode: %s\n",
+					optarg);
+				D_GOTO(out_free, rc = RC_PRINT_HELP);
+			}
+			break;
 		case 'o':
 			ap->oclass = daos_oclass_name2id(optarg);
 			if (ap->oclass == OC_UNKNOWN) {
@@ -869,6 +906,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	}
 
 	cmd_args_print(ap);
+
+	if (posix_mode_set && ap->type != DAOS_PROP_CO_LAYOUT_POSIX) {
+		fprintf(stderr, "--mode is valid only for a POSIX container\n");
+		D_GOTO(out_free, rc = RC_NO_HELP);
+	}
 
 	/* Check for any unimplemented commands, print help */
 	if (ap->p_op != -1 &&
@@ -987,7 +1029,7 @@ fs_op_hdlr(struct cmd_args_s *ap)
 {
 	enum fs_op	op;
 	char		*name = NULL, *dir_name = NULL;
-	int		rc = 0;
+	int		rc = 0, rc2 = 0;
 
 	assert(ap != NULL);
 	op = ap->fs_op;
@@ -1058,6 +1100,26 @@ fs_op_hdlr(struct cmd_args_s *ap)
 			ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 			ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
 		}
+
+		rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
+				&ap->pool, NULL, NULL);
+		if (rc != 0) {
+			fprintf(stderr,
+				"failed to connect to pool "DF_UUIDF": %s (%d)\n",
+				DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+			return rc;
+		}
+
+		rc = daos_cont_open(ap->pool, ap->c_uuid,
+				    DAOS_COO_RW | DAOS_COO_FORCE,
+				    &ap->cont, NULL, NULL);
+		if (rc != 0) {
+			fprintf(stderr,
+				"failed to open container "DF_UUIDF ": %s (%d)\n",
+				DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			D_GOTO(out_disconnect, rc);
+		}
+
 		rc = fs_dfs_hdlr(ap);
 		if (rc)
 			D_GOTO(out, rc);
@@ -1066,6 +1128,14 @@ fs_op_hdlr(struct cmd_args_s *ap)
 		break;
 	}
 
+out_disconnect:
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr,
+			"failed to disconnect from pool "DF_UUIDF": %s (%d)\n",
+			DP_UUID(ap->p_uuid), d_errdesc(rc2), rc2);
+	if (rc == 0)
+		rc = rc2;
 out:
 	D_FREE(dir_name);
 	D_FREE(name);
@@ -1229,7 +1299,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_create_snap_hdlr(ap);
 		break;
 	case CONT_LIST_SNAPS:
-		rc = cont_list_snaps_hdlr(ap, NULL, NULL);
+		ap->snapname_str = NULL;
+		ap->epc = 0;
+		rc = cont_list_snaps_hdlr(ap);
 		break;
 	case CONT_DESTROY_SNAP:
 		rc = cont_destroy_snap_hdlr(ap);
@@ -1486,7 +1558,6 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		DAOS_VERSION, DAOS_API_VERSION_MAJOR,
 		DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 
-
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
 	} else if (strcmp(argv[2], "filesystem") == 0 ||
@@ -1530,6 +1601,9 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"	--path=PATHSTR     container namespace path\n"
 			"container create common optional options:\n"
 			"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
+			"	--mode=FLAG        In case of POSIX type, select consistency mode:\n"
+			"			   relaxed (default): weaker consistency semantics.\n"
+			"			   balanced: stronger consistency semantics.\n"
 			"	--oclass=OCLSSTR   container object class\n"
 			"			   (");
 			/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */
