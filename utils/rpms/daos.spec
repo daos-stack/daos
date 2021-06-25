@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.102
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -84,7 +84,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.7.3
+BuildRequires: daos-raft-devel = 0.8.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -476,8 +476,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Tue Jun 15 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.102-3
+* Fri Jun 25 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.102-4
 - Add DAOS serialization library that requires hdf5
+
+* Mon Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
+- Update raft to pick up Pre-Vote
 
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
 - Update to pmdk 1.11.0-rc1
