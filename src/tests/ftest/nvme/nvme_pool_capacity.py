@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
 import time
 import threading
 import uuid
@@ -11,6 +12,7 @@ from itertools import product
 
 from apricot import TestWithServers
 from write_host_file import write_host_file
+from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
@@ -111,30 +113,36 @@ class NvmePoolCapacity(TestWithServers):
             Returns:
                 None
         """
-        self.pool = []
+        label_generator = LabelGenerator()
+        pool = {}
         cont = {}
 
         for loop_count in range(0, total_count):
             self.log.info("Running test %s", loop_count)
             for val in range(0, num_pool):
-                self.pool.append(self.get_pool(create=False))
+                pool[val] = TestPool(
+                    context=self.context, dmg_command=self.get_dmg_command(),
+                    label_generator=label_generator)
+                pool[val].get_params(self)
                 # Split total SCM and NVME size for creating multiple pools.
                 temp = int(scm_size) / num_pool
-                self.pool[-1].scm_size.update(str(temp))
+                pool[val].scm_size.update(str(temp))
                 temp = int(nvme_size) / num_pool
-                self.pool[-1].nvme_size.update(str(temp))
-                self.pool[-1].create()
+                pool[val].nvme_size.update(str(temp))
+                pool[val].create()
+                self.pool = pool[val]
                 display_string = "pool{} space at the Beginning".format(val)
-                self.pool[-1].display_pool_daos_space(display_string)
-                nvme_size_begin = self.pool[-1].get_pool_free_space("NVME")
+                self.pool.display_pool_daos_space(display_string)
+                nvme_size_begin = self.pool.get_pool_free_space("NVME")
                 for cont_val in range(0, num_cont):
-                    cont[cont_val] = TestContainer(self.pool[-1])
+                    cont[cont_val] = TestContainer(pool[val])
             m_leak = 0
             for val in range(0, num_pool):
                 display_string = "Pool{} space at the End".format(val)
-                self.pool[val].display_pool_daos_space(display_string)
+                self.pool = pool[val]
+                self.pool.display_pool_daos_space(display_string)
                 nvme_size_end = self.pool.get_pool_free_space("NVME")
-                self.pool[val].destroy()
+                pool[val].destroy()
                 if (nvme_size_begin != nvme_size_end) and (m_leak == 0):
                     m_leak = val + 1
             # After destroying pools, check memory leak for each test loop.
@@ -152,7 +160,7 @@ class NvmePoolCapacity(TestWithServers):
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
-        self.pool = []
+        pool = {}
 
         # Iterate through IOR different ior test sequence
         for oclass, api, test, flags in product(self.ior_dfs_oclass,
@@ -162,25 +170,26 @@ class NvmePoolCapacity(TestWithServers):
             # Create the IOR threads
             threads = []
             for val in range(0, num_pool):
-                self.pool.append(self.get_pool(create=False))
+                pool[val] = TestPool(self.context, self.get_dmg_command())
+                pool[val].get_params(self)
                 # Split total SCM and NVME size for creating multiple pools.
-                self.pool[-1].scm_size.value = int(test[0]) / num_pool
-                self.pool[-1].nvme_size.value = int(test[1]) / num_pool
-                self.pool[-1].create()
+                pool[val].scm_size.value = int(test[0]) / num_pool
+                pool[val].nvme_size.value = int(test[1]) / num_pool
+                pool[val].create()
                 display_string = "pool{} space at the Beginning".format(val)
-                self.pool[-1].display_pool_daos_space(display_string)
+                self.pool = pool[val]
+                self.pool.display_pool_daos_space(display_string)
 
                 for thrd in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
-                                                    kwargs={
-                                                        "pool": self.pool[-1],
-                                                        "oclass": oclass,
-                                                        "api": api,
-                                                        "test": test,
-                                                        "flags": flags,
-                                                        "results":
-                                                        self.out_queue}))
+                                                    kwargs={"pool": pool[val],
+                                                            "oclass": oclass,
+                                                            "api": api,
+                                                            "test": test,
+                                                            "flags": flags,
+                                                            "results":
+                                                            self.out_queue}))
             # Launch the IOR threads
             for thrd in threads:
                 self.log.info("Thread : %s", thrd)
@@ -199,8 +208,9 @@ class NvmePoolCapacity(TestWithServers):
 
             for val in range(0, num_pool):
                 display_string = "Pool{} space at the End".format(val)
-                self.pool[val].display_pool_daos_space(display_string)
-                self.pool[val].destroy()
+                self.pool = pool[val]
+                self.pool.display_pool_daos_space(display_string)
+                self.pool.destroy()
 
     def test_nvme_pool_capacity(self):
         """Jira ID: DAOS-2085.

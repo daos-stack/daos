@@ -7,6 +7,7 @@
 import random
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
+from test_utils_pool import TestPool, LabelGenerator
 from write_host_file import write_host_file
 from apricot import skipForTicket
 
@@ -42,7 +43,8 @@ class OSAOfflineDrain(OSAUtils):
             oclass (str): DAOS object class (eg: RP_2G1,etc)
         """
         # Create a pool
-        self.pool = []
+        label_generator = LabelGenerator()
+        pool = {}
         target_list = []
 
         if oclass is None:
@@ -55,8 +57,13 @@ class OSAOfflineDrain(OSAUtils):
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         for val in range(0, num_pool):
-            self.pool.append(self.get_pool())
-            self.pool[-1].set_property("reclaim", "disabled")
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.get_dmg_command(),
+                label_generator=label_generator)
+            pool[val].get_params(self)
+            pool[val].create()
+            self.pool = pool[val]
+            self.pool.set_property("reclaim", "disabled")
             test_seq = self.ior_test_sequence[0]
 
             if data:
@@ -69,22 +76,22 @@ class OSAOfflineDrain(OSAUtils):
         for val in range(0, num_pool):
             # Drain ranks provided in YAML file
             for index, rank in enumerate(self.ranks):
+                self.pool = pool[val]
                 # If we are testing using multiple pools, reintegrate
                 # the rank back and then drain.
-                self.pool[val].display_pool_daos_space("Pool space: Beginning")
+                self.pool.display_pool_daos_space("Pool space: Beginning")
                 pver_begin = self.get_pool_version()
                 self.log.info("Pool Version at the beginning %s", pver_begin)
                 if self.test_during_aggregation is True and index == 0:
-                    self.pool[val].set_property("reclaim", "time")
-                    self.delete_extra_container(self.pool[val])
+                    self.pool.set_property("reclaim", "time")
+                    self.delete_extra_container(self.pool)
                     self.simple_osa_reintegrate_loop(rank=rank, action="drain")
                 if (self.test_during_rebuild is True and val == 0):
                     # Exclude rank 3
-                    output = self.dmg_command.pool_exclude(
-                        self.pool[val].uuid, "3")
-                    self.pool[val].wait_for_rebuild(True)
-                output = self.dmg_command.pool_drain(
-                    self.pool[val].uuid, rank, t_string)
+                    output = self.dmg_command.pool_exclude(self.pool.uuid, "3")
+                    self.pool.wait_for_rebuild(True)
+                output = self.dmg_command.pool_drain(self.pool.uuid,
+                                                     rank, t_string)
                 self.print_and_assert_on_rebuild_failure(output)
 
                 pver_drain = self.get_pool_version()
@@ -93,23 +100,23 @@ class OSAOfflineDrain(OSAUtils):
                 self.assertTrue(pver_drain > (pver_begin + 1),
                                 "Pool Version Error:  After drain")
                 if num_pool > 1:
-                    output = self.dmg_command.pool_reintegrate(
-                        self.pool[val].uuid, rank, t_string)
+                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
+                                                               rank, t_string)
                     self.print_and_assert_on_rebuild_failure(output)
                 if (self.test_during_rebuild is True and val == 0):
                     # Reintegrate rank 3
-                    output = self.dmg_command.pool_reintegrate(
-                        self.pool[val].uuid, "3")
+                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
+                                                               "3")
                     self.print_and_assert_on_rebuild_failure(output)
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
-            self.pool[val].display_pool_daos_space(display_string)
+            pool[val].display_pool_daos_space(display_string)
             if data:
                 self.run_ior_thread("Read", oclass, test_seq)
                 self.run_mdtest_thread(oclass)
-                self.container = self.pool_cont_dict[self.pool[val]][0]
-                kwargs = {"pool": self.pool[val].uuid,
+                self.container = self.pool_cont_dict[self.pool][0]
+                kwargs = {"pool": self.pool.uuid,
                           "cont": self.container.uuid}
                 output = self.daos_command.container_check(**kwargs)
                 self.log.info(output)

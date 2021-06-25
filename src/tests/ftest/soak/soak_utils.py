@@ -58,9 +58,7 @@ def add_pools(self, pool_names):
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
         # Create a pool and add it to the overall list of pools
-        self.pool.append(self.get_pool(create=False))
-        self.pool[-1].namespace = path
-        self.pool[-1].create()
+        self.pool.append(self.get_pool(namespace=path, connect=False))
         self.pool[-1].set_property("reclaim", "time")
         self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
 

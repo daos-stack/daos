@@ -70,7 +70,7 @@ class ObjectMetadata(TestWithServers):
         super().setUp()
 
         # Create a pool
-        self.add_pool()
+        self.add_pool(connect=False)
         self.log.info("Created pool %s: svcranks:",
                       self.pool.pool.get_uuid_str())
         for r in range(len(self.pool.svc_ranks)):

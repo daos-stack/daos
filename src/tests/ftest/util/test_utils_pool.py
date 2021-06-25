@@ -73,6 +73,24 @@ class TestPool(TestDaosApiBase):
         self.dmg = dmg_command
         self.query_data = []
 
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Create a unique label by adding the incremented number prefix.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super().get_params(test)
+
+        # Use a unique pool label if using pool labels
+        if self.label.value is not None:
+            if not isinstance(self.label_generator, LabelGenerator):
+                raise CommandFailure(
+                    "Unable to create a unique pool label; " +\
+                        "Undefined label_generator")
+            self.label.update(self.label_generator.get_label(self.label.value))
+
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     def create(self):
@@ -104,14 +122,6 @@ class TestPool(TestDaosApiBase):
 
         self.pool = DaosPool(self.context)
 
-        # Use a unique pool label if using pool labels
-        if self.label.value is not None:
-            if not isinstance(self.label_generator, LabelGenerator):
-                raise CommandFailure(
-                    "Unable to create a unique pool label; " +\
-                        "Undefined label_generator")
-            self.label.update(self.label_generator.get_label(self.label.value))
-
         kwargs = {
             "uid": self.uid,
             "gid": self.gid,
@@ -132,6 +142,7 @@ class TestPool(TestDaosApiBase):
             # Create a pool with the dmg command and store its CmdResult
             self._log_method("dmg.pool_create", kwargs)
             data = self.dmg.pool_create(**kwargs)
+
             if self.dmg.result.exit_status == 0:
                 # Convert the string of service replicas from the dmg command
                 # output into an ctype array for the DaosPool object using the
