@@ -513,7 +513,7 @@ free_name(tse_task_t *task, void *args)
 {
 	char *name = *(char **)args;
 
-	free(name);
+	D_FREE(name);
 	return 0;
 }
 
@@ -545,7 +545,7 @@ daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[],
 		 */
 		D_STRNDUP(new_names[i], names[i], DAOS_ATTR_NAME_MAX);
 		if (new_names[i] == NULL)
-			D_GOTO(error, daos_errno2der(errno));
+			D_GOTO(error, rc = -DER_NOMEM);
 		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
 					       sizeof(char *));
 		if (rc)
