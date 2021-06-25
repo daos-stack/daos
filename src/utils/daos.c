@@ -1091,7 +1091,7 @@ fs_op_hdlr(struct cmd_args_s *ap)
 						  dattr.da_rel_path, PATH_MAX);
 					free(dattr.da_rel_path);
 				} else {
-					D_STRNDUP(ap->dfs_path, "/", 1);
+					D_STRNDUP_S(ap->dfs_path, "/");
 				}
 			}
 			if (ap->dfs_path == NULL)
