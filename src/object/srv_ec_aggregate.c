@@ -1387,6 +1387,9 @@ agg_peer_update_ult(void *arg)
 	int			 i = 0;
 	int			 rc = 0;
 
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
+		D_GOTO(out, rc = -DER_TIMEDOUT);
+
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	csummer = ec_agg_param2csummer(agg_param);
 	iod.iod_type = DAOS_IOD_ARRAY;
@@ -1955,7 +1958,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	bool			process_holes = false;
 	int			rc = 0;
 
-	if (DAOS_FAIL_CHECK(DAOS_FORCE_FAIL_EC_AGG))
+	if (DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_FAIL))
 		D_GOTO(out, rc = -DER_DATA_LOSS);
 
 	/* Query the parity, entry->ae_par_extent.ape_epoch will be set to
