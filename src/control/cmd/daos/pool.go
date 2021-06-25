@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"unsafe"
@@ -20,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 /*
@@ -181,13 +183,29 @@ func poolListContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 	for i := range out {
 		out[i] = new(ContainerID)
 		out[i].UUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
-		// FIXME: The label should be returned as part of
-		// the list payload. The alternative is to open each
-		// container sequentially in order to query the label
-		// property, which would be terrible for performance.
+		out[i].Label = C.GoString(&dpciSlice[i].pci_label[0])
 	}
 
 	return out, nil
+}
+
+func printContainerList(out io.Writer, contIDs []*ContainerID) {
+	uuidTitle := "UUID"
+	labelTitle := "Label"
+	titles := []string{uuidTitle, labelTitle}
+
+	table := []txtfmt.TableRow{}
+	for _, id := range contIDs {
+		table = append(table,
+			txtfmt.TableRow{
+				uuidTitle:  id.UUID.String(),
+				labelTitle: id.Label,
+			})
+	}
+
+	tf := txtfmt.NewTableFormatter(titles...)
+	tf.InitWriter(out)
+	tf.Format(table)
 }
 
 func (cmd *poolContainersListCmd) Execute(_ []string) error {
@@ -207,13 +225,9 @@ func (cmd *poolContainersListCmd) Execute(_ []string) error {
 		return cmd.outputJSON(contIDs, nil)
 	}
 
-	for _, id := range contIDs {
-		if id.HasLabel() {
-			cmd.log.Info(id.Label)
-			continue
-		}
-		cmd.log.Infof("%s", id.UUID)
-	}
+	var bld strings.Builder
+	printContainerList(&bld, contIDs)
+	cmd.log.Info(bld.String())
 
 	return nil
 }
