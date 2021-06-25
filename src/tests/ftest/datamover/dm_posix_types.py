@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 from os.path import basename, join
 
 
-class DmPosixTypesTest(DataMoverTestBase):
+class DmvrPosixTypesTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """POSIX Data Mover validation for varying source and destination types
        using "dcp", "dsync, and "daos filesystem copy" with POSIX containers.

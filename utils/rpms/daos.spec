@@ -13,7 +13,7 @@
 %endif
 
 Name:          daos
-Version:       1.3.101
+Version:       1.3.102
 Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -59,7 +59,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
+BuildRequires: libpmemobj-devel >= 1.11
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -84,7 +84,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel >= 0.7.3
+BuildRequires: daos-raft-devel = 0.8.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -158,10 +158,10 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
-Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
+Requires: libpmemobj1 >= 1.11
 %else
 Requires: ipmctl > 02.00.00.3816
-Requires: libpmem >= 1.8, libpmemobj >= 1.8
+Requires: libpmemobj >= 1.11
 %endif
 Requires: hwloc
 Requires: mercury = %{mercury_version}
@@ -393,6 +393,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
+%{_bindir}/daos_old
+%{_libdir}/libdaos_cmd_hdlrs.so
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
 %{_libdir}/libduns.so
@@ -462,6 +464,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Mon Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
+- Update raft to pick up Pre-Vote
+
+* Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
+- Update to pmdk 1.11.0-rc1
+- Remove dependence on libpmem since we use libpmemobj directly
+
+* Fri Jun 11 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.102-1
+- Version bump to 1.3.102 for 2.0 test build 2
+
 * Wed Jun 02 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.101-3
 - Remove libs from devel package
 
