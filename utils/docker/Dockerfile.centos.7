@@ -1,7 +1,7 @@
 # Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of centOS-based
+# 'recipe' for Docker to build an image of centOS 7 based
 # environment for building the DAOS project.
 #
 
@@ -12,8 +12,6 @@ LABEL maintainer="daos@daos.groups.io"
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
-# Switch to using DNF instead of yum.
-#
 # If a local distro repository is supplied, then we should use it
 # and disable using the distro repositories.
 # The Docker image starts out with the DISTRO provided GPG keys
@@ -22,10 +20,10 @@ ARG CB0
 # data for installing those keys.  Then the epel-release package
 # version from the extras repository must be installed and the
 # GPG key it provides must be installed.
-ARG REPO_URL=""
-ARG REPO_DISTRO=""
+ARG REPO_URL
+ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
-      rpm --import /etc/pki/rpm-gpg/* ;                         \
+      rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
       MY_NAME="${MY_REPO#*//}";                                 \
       MY_NAME="${MY_NAME//\//_}";                               \
@@ -51,7 +49,7 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
-ARG REPO_DAOS=""
+ARG REPO_DAOS
 RUN if [ -n "$REPO_DAOS" ]; then                                \
       MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
       MY_NAME="${MY_REPO#*//}";                                 \
@@ -155,10 +153,10 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
 # Dependencies
 # Packages for NVML exist in CentOS, but are
 # unfortunately outdated. The DAOS build system will rebuild those packages.
-ARG JENKINS_URL=""
+ARG JENKINS_URL
 ARG QUICKBUILD=false
-ARG QUICKBUILD_DEPS=""
-ARG REPOS=""
+ARG QUICKBUILD_DEPS
+ARG REPOS
 RUN if $QUICKBUILD; then                                                      \
         for repo in $REPOS; do                                                \
             branch="master";                                                  \
@@ -183,7 +181,7 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
         dnf clean all;                                                        \
     fi
 
-ARG BULLSEYE=""
+ARG BULLSEYE
 RUN if [ "x$BULLSEYE" != "x" ]; then \
       curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
         --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar; \
@@ -210,6 +208,8 @@ USER daos_server:daos_server
 # ease-of-use for users, however in CI everything is turned off and then
 # selectively enabled.  Turning off any step disables all future steps.
 ARG DAOS_DEPS_BUILD=yes
+ARG DAOS_KEEP_BUILD=no
+ARG DAOS_TARGET_TYPE=release
 
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
@@ -218,17 +218,18 @@ USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { dnf -y upgrade \
           --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-      dnf clean all; }
+    dnf clean all; }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
-    /bin/rm -rf build *.gz; }
+    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
+      TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
+    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
-USER root:root
 # force an upgrade to get any newly built RPMs
+USER root:root
 ARG CACHEBUST
 RUN dnf -y upgrade \
         --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
@@ -241,18 +242,20 @@ COPY site_scons site_scons
 COPY utils utils
 COPY src src
 USER root:root
-RUN chown -R daos_server.daos_server /home/daos
+RUN chown -R daos_server.daos_server /home/daos/daos/
 USER daos_server:daos_server
 
 # select compiler to use
 ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
-    /bin/rm -rf build && \
+    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
+      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+    /bin/rm -rf build && go clean -cache && \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
@@ -280,5 +283,6 @@ RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
+ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN rm -rf /home/daos/*
+RUN [ $"DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
