@@ -486,6 +486,7 @@ class Systemctl(JobManager):
         self._systemctl.service.value = self.job.service_name
 
         self.timestamps = {
+            "init": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "enable": None,
             "disable": None,
             "start": None,

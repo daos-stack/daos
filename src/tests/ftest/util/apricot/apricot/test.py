@@ -1297,6 +1297,10 @@ class TestWithServers(TestWithoutServers):
                 "Workaround for DAOS-6873: Stopping %s group(s) of agents",
                 len(self.agent_managers))
             errors.extend(self._stop_managers(self.agent_managers, "agents"))
+
+        # Store journalctl logs for each server\
+        self.store_manager_system_logs(self.server_managers, "servers")
+
         return errors
 
     def _stop_managers(self, managers, name):
@@ -1536,3 +1540,21 @@ class TestWithServers(TestWithoutServers):
             access_points
         )
         self._start_manager_list("server", [self.server_managers[-1]])
+
+    def store_manager_system_logs(self, managers, name):
+        """Collect and write the journalctl data for each manager host.
+
+        Args:
+            managers (list): list of managers to stop
+            name (str): manager list name
+        """
+        self.log.info("Collecting system logs for %s", name)
+        for manager in managers:
+            log_data = manager.manager.get_log_data(
+                manager.hosts, manager.manager.timestamps["init"])
+            for entry in log_data:
+                filename = os.path.join(
+                    self.outputdir, "{}.journalctl".format(entry["hosts"]))
+                self.log.info("  Writing journalctl output to %s", filename)
+                with open(filename, "w") as journalctl_file:
+                    journalctl_file.write("\n".join(entry["data"]))
