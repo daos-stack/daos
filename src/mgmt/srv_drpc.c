@@ -14,7 +14,6 @@
 #include <daos_srv/pool.h>
 #include <daos_api.h>
 #include <daos_security.h>
-#include <daos_srv/policy.h>
 
 #include "svc.pb-c.h"
 #include "acl.pb-c.h"
