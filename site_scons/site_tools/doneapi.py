@@ -6,13 +6,9 @@ Hack to support oneapi version of Intel compilers
 import sys
 import os
 
-
-is_linux = sys.platform.startswith('linux')
-
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
-if is_linux:
-    import SCons.Tool.gcc
+import SCons.Tool.gcc
 import SCons.Util
 import SCons.Warnings
 import SCons.Errors
@@ -20,9 +16,6 @@ import SCons.Errors
 # pylint: enable=no-name-in-module
 # pylint: disable=no-member
 # pylint: disable=too-few-public-methods
-
-if not is_linux:
-    raise SCons.Errors.UserError("This tool is only supported on Linux")
 
 class DetectCompiler():
     """Find oneapi compiler"""
