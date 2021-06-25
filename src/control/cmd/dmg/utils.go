@@ -97,19 +97,16 @@ func errIncompatFlags(key string, incompat ...string) error {
 
 func parseUint64Array(in string) (out []uint64, err error) {
 	arr, err := csv.NewReader(strings.NewReader(in)).Read()
-	if arr == nil || err != nil {
-		out = nil
+	if err != nil {
 		return
 	}
-	out = make([]uint64, 0)
-	for _, elemStr := range arr {
-		elemInt, err_ := humanize.ParseBytes(elemStr)
+
+	out = make([]uint64, len(arr))
+	for idx, elemStr := range arr {
+		out[idx], err = humanize.ParseBytes(elemStr)
 		if err != nil {
-			out = nil
-			err = err_
 			return
 		}
-		out = append(out, elemInt)
 	}
 	return
 }

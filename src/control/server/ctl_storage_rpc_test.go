@@ -15,6 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dustin/go-humanize"
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -30,9 +33,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
-	"github.com/dustin/go-humanize"
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 )
 
 var (

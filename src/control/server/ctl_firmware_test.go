@@ -10,6 +10,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -20,8 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 )
 
 func getPBNvmeQueryResults(t *testing.T, devs storage.NvmeControllers) []*ctlpb.NvmeFirmwareQueryResp {

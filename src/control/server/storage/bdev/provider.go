@@ -113,21 +113,6 @@ func forwardScan(req storage.BdevScanRequest, cache *storage.BdevScanResponse, s
 // "NoCache" is set to "false" in the request. Returned results will be
 // filtered by request "DeviceList" and empty filter implies allowing all.
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
-	/*if p.shouldForward(req) {
-		req.DisableVMD = p.IsVMDDisabled()
-
-		p.Lock()
-		defer p.Unlock()
-
-		msg, resp, update, err := forwardScan(req, p.scanCache, p.fwd.Scan)
-		p.log.Debug(msg)
-		if update {
-			p.scanCache = resp
-		}
-
-		return resp, err
-	}*/
-
 	// set vmd state on remote provider in forwarded request
 	if req.IsForwarded() && req.DisableVMD {
 		p.disableVMD()
@@ -139,16 +124,6 @@ func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResp
 // Prepare attempts to perform all actions necessary to make NVMe
 // components available for use by DAOS.
 func (p *Provider) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	/*if p.shouldForward(req) {
-		resp, err := p.fwd.Prepare(req)
-		// set vmd state on local provider after forwarding request
-		if err == nil && !resp.VmdDetected {
-			p.disableVMD()
-		}
-
-		return resp, err
-	}*/
-
 	// run reset first to ensure reallocation of hugepages
 	if err := p.backend.PrepareReset(); err != nil {
 		return nil, errors.Wrap(err, "bdev prepare reset")
@@ -170,10 +145,6 @@ func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatRes
 		return nil, errors.New("empty DeviceList in FormatRequest")
 	}
 
-	/*if p.shouldForward(req) {
-		req.DisableVMD = p.IsVMDDisabled()
-		return p.fwd.Format(req)
-	}*/
 	// set vmd state on remote provider in forwarded request
 	if req.IsForwarded() && req.DisableVMD {
 		p.disableVMD()
