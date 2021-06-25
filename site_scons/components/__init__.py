@@ -321,7 +321,9 @@ def define_components(reqs):
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
                 headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
                 extra_include_path=['/usr/include/dpdk',
-                                    '$SPDK_PREFIX/include/dpdk'],
+                                    '$SPDK_PREFIX/include/dpdk',
+                                    # debian dpdk rpm puts rte_config.h here
+                                    '/usr/include/x86_64-linux-gnu/dpdk'],
                 patch_rpath=['lib'])
 
     retriever = GitRepoRetriever("https://github.com/protobuf-c/protobuf-c.git")
