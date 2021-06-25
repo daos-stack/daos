@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@bmurrell/re-enable-datamver") _
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -901,7 +901,7 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label 'ci_nvme9'
+                        label 'ci_ofed9'
                     }
                     steps {
                         functionalTest target: hwDistroTarget(),

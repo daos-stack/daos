@@ -57,6 +57,7 @@ Package: libdaos-dev
 Section: libdevel
 Architecture: any
 Multi-Arch: same
+Depends: libuuid-dev
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage

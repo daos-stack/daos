@@ -27,6 +27,11 @@ distro_custom() {
     if ! rpm -q nfs-utils; then
         dnf -y install nfs-utils
     fi
+
+    # TODO: remove when test snapshots are adding this
+    sed -e 's/^\(hostname *= *\)[^ ].*$/\1 mail.wolf.hpdd.intel.com:25/' < /usr/share/doc/esmtp/sample.esmtprc > /etc/esmtprc
+
+    dnf config-manager --disable powertools
 }
 
 post_provision_config_nodes() {
@@ -87,7 +92,7 @@ post_provision_config_nodes() {
 
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
-       ! time dnf -y install $INST_RPMS; then
+       ! time dnf -y install $INST_RPMS --allowerasing; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"
