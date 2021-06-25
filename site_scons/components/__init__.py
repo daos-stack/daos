@@ -320,6 +320,7 @@ def define_components(reqs):
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
                 headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
+                pkgconfig='libdpdk',
                 extra_include_path=['/usr/include/dpdk',
                                     '$SPDK_PREFIX/include/dpdk'],
                 patch_rpath=['lib'])
