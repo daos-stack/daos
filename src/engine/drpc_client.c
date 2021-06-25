@@ -28,7 +28,6 @@ struct dss_drpc_thread_arg {
 	int		  cta_flags;
 	void		 *cta_req;
 	size_t		  cta_req_size;
-
 	Drpc__Response	**cta_resp;
 };
 
