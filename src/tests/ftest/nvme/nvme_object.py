@@ -161,7 +161,7 @@ class NvmeObject(TestWithServers):
         """
         # perform multiple object writes to a single pool
         self.pool.append(
-            self.get_pool(namespace="/run/pool/pool_1", connect=False))
+            self.get_pool(namespace="/run/pool/pool_1/*", connect=False))
         test_runner(self, self.pool[-1], self.record_size[:-1], 0,
                     self.array_size)
 
@@ -188,7 +188,7 @@ class NvmeObject(TestWithServers):
             time.sleep(1)
             thread = threading.Thread(
                 target=test_runner,
-                args=(self, f"/run/pool/pool_{index + 2}", self.record_size,
+                args=(self, f"/run/pool/pool_{index + 2}/*", self.record_size,
                       self.array_size))
             threads.append(thread)
 
