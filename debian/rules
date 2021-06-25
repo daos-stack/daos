@@ -21,6 +21,8 @@ DEB_SCONS_OPTIONS := --config=force --no-rpath USE_INSTALLED=all \
                      $(SCONS_ARGS)
 
 export GOCACHE := $(CURDIR)/.gocache
+# https://github.com/spdk/spdk/issues/2011
+export DEB_CFLAGS_MAINT_APPEND = $(shell pkg-config --cflags libdpdk)
 
 %:
 	dh $@ --with-systemd
