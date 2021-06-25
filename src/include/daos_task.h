@@ -362,6 +362,8 @@ typedef struct {
 	uuid_t			uuid;
 	/** Force destroy even if there is outstanding open handles. */
 	int			force;
+	/* label, API v1.2.4 (placed at end for ABI compatibility) */
+	const char	       *label;
 } daos_cont_destroy_t;
 
 /** Container query args */

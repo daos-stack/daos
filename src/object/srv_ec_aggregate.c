@@ -93,7 +93,6 @@ struct ec_agg_stripe {
 	d_list_t	as_hoextents;   /* list of hold-over extents         */
 	daos_off_t	as_stripe_fill; /* amount of stripe covered by data  */
 	unsigned int	as_extent_cnt;  /* number of replica extents         */
-	unsigned int	as_ho_ext_cnt;  /* number of holdover extents        */
 	unsigned int	as_offset;      /* start offset in stripe            */
 	bool		as_has_holes;   /* stripe includes holes             */
 };
@@ -151,7 +150,6 @@ struct ec_agg_stripe_ud {
 struct ec_agg_extent {
 	d_list_t	ae_link;        /* for extents list   */
 	daos_recx_t	ae_recx;        /* idx, nr for extent */
-	daos_recx_t	ae_orig_recx;   /* For removal        */
 	daos_epoch_t	ae_epoch;       /* epoch for extent   */
 	bool		ae_hole;        /* extent is a hole   */
 };
@@ -291,62 +289,27 @@ static void
 agg_clear_extents(struct ec_agg_entry *entry)
 {
 	struct ec_agg_extent	*extent, *ext_tmp;
-	uint64_t		 tail, ptail = 0U;
+	uint64_t		 tail;
 	bool			 carry_is_hole = false;
-
-	if (entry->ae_cur_stripe.as_ho_ext_cnt) {
-		d_list_for_each_entry_safe(extent, ext_tmp,
-					   &entry->ae_cur_stripe.as_hoextents,
-					   ae_link) {
-			d_list_del(&extent->ae_link);
-			D_FREE_PTR(extent);
-		}
-		entry->ae_cur_stripe.as_ho_ext_cnt = 0;
-	}
 
 	d_list_for_each_entry_safe(extent, ext_tmp,
 				   &entry->ae_cur_stripe.as_dextents,
 				   ae_link) {
-		unsigned long next_stripe_st =
-			(entry->ae_cur_stripe.as_stripenum + 1) *
-				 ec_age2ss(entry);
-
 		/* Check for carry-over extent. */
 		tail = agg_carry_over(entry, extent);
+		D_ASSERT(tail == 0);
 		if (extent->ae_hole && tail)
 			carry_is_hole = true;
 
-		if (tail) {
-			D_ASSERT(ptail == 0U);
-			ptail = tail;
-			D_ASSERT(extent->ae_recx.rx_nr >= tail);
-			extent->ae_recx.rx_idx += extent->ae_recx.rx_nr - tail;
-			D_ASSERT(extent->ae_recx.rx_idx == next_stripe_st);
-			extent->ae_recx.rx_nr = tail;
-			entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
-			continue;
-		}
 		d_list_del(&extent->ae_link);
 		entry->ae_cur_stripe.as_extent_cnt--;
-
-		if (DAOS_RECX_END(extent->ae_orig_recx) > next_stripe_st) {
-			d_list_add_tail(&extent->ae_link,
-					&entry->ae_cur_stripe.as_hoextents);
-			entry->ae_cur_stripe.as_ho_ext_cnt++;
-		} else {
-			D_FREE_PTR(extent);
-		}
+		D_FREE_PTR(extent);
 	}
 
 	entry->ae_cur_stripe.as_offset = 0U;
-	/* Account for carry over. */
-	if (ptail) {
-		entry->ae_cur_stripe.as_stripenum++;
-	} else {
-		D_ASSERT(entry->ae_cur_stripe.as_extent_cnt == 0);
-		entry->ae_cur_stripe.as_hi_epoch = 0UL;
-	}
-	entry->ae_cur_stripe.as_stripe_fill = ptail;
+	D_ASSERT(entry->ae_cur_stripe.as_extent_cnt == 0);
+	entry->ae_cur_stripe.as_hi_epoch = 0UL;
+	entry->ae_cur_stripe.as_stripe_fill = 0;
 	entry->ae_cur_stripe.as_has_holes = carry_is_hole ? true : false;
 }
 
@@ -787,57 +750,6 @@ ec_age_stripe_full(struct ec_agg_entry *entry, bool has_parity)
 	return is_filled && (!has_parity || ec_age_data_is_newer(entry));
 }
 
-/* True if all original extents are contained within the current stripe.
-*/
-static bool
-agg_contained(struct ec_agg_entry *entry)
-{
-	struct ec_agg_extent	*extent;
-	uint64_t		 ss, se;
-
-	ss = ec_age2ss(entry) * entry->ae_cur_stripe.as_stripenum;
-	se = ss + ec_age2ss(entry);
-	d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
-			      ae_link) {
-		if (extent->ae_orig_recx.rx_idx < ss ||
-		    extent->ae_orig_recx.rx_idx + extent->ae_orig_recx.rx_nr >
-		    se)
-			return false;
-	}
-	return true;
-}
-
-/* Removes from VOS any holdover extents from prior stripe.
- */
-static int
-agg_remove_holdovers(struct ec_agg_entry *entry)
-{
-	daos_epoch_range_t	 epoch_range = { 0 };
-	struct ec_agg_extent	*ext;
-	struct ec_agg_param	*ap;
-	int			 rc = 0;
-
-	ap = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	d_list_for_each_entry(ext, &entry->ae_cur_stripe.as_hoextents,
-			      ae_link) {
-		int		erc = 0;
-
-		epoch_range.epr_lo = epoch_range.epr_hi = ext->ae_epoch;
-		erc = vos_obj_array_remove(ap->ap_cont_handle,
-					   entry->ae_oid,
-					   &epoch_range,
-					   &entry->ae_dkey,
-					   &entry->ae_akey,
-					   &ext->ae_orig_recx);
-			if (erc)
-				D_ERROR("array_remov failed: "DF_RC"\n",
-					DP_RC(erc));
-			if (!rc && erc)
-				rc = erc;
-	}
-	return rc;
-}
-
 /* Writes updated parity to VOS, and removes replicas fully contained
  * in the processed stripe.
  */
@@ -894,44 +806,24 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 			daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
 			D_ERROR("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
-			goto out;
+			D_GOTO(out, rc);
 		}
 	}
 
-	if (entry->ae_cur_stripe.as_ho_ext_cnt == 0 && agg_contained(entry)) {
-		epoch_range = ap->ap_epr;
-		recx.rx_nr = ec_age2ss(entry);
-		recx.rx_idx = entry->ae_cur_stripe.as_stripenum * recx.rx_nr;
-		rc = vos_obj_array_remove(ap->ap_cont_handle,
-					  entry->ae_oid, &epoch_range,
-					  &entry->ae_dkey, &entry->ae_akey,
-					  &recx);
+	d_list_for_each_entry(ext, &entry->ae_cur_stripe.as_dextents, ae_link) {
+		int err;
 
-	} else {
-		d_list_for_each_entry(ext, &entry->ae_cur_stripe.as_dextents,
-				      ae_link) {
-			int		erc = 0;
-			uint64_t	se;
-
-			se = ec_age2ss(entry) *
-			     (entry->ae_cur_stripe.as_stripenum + 1);
-			if (DAOS_RECX_END(ext->ae_orig_recx) <= se) {
-				epoch_range.epr_lo = epoch_range.epr_hi =
-					ext->ae_epoch;
-
-				erc = vos_obj_array_remove(ap->ap_cont_handle,
-							   entry->ae_oid,
-							   &epoch_range,
-							   &entry->ae_dkey,
-							   &entry->ae_akey,
-							   &ext->ae_orig_recx);
-				if (erc)
-					D_ERROR("array_remove fails: "DF_RC"\n",
-						DP_RC(erc));
-				if (!rc && erc)
-					rc = erc;
-			}
-		}
+		epoch_range.epr_lo = epoch_range.epr_hi = ext->ae_epoch;
+		err = vos_obj_array_remove(ap->ap_cont_handle,
+					   entry->ae_oid,
+					   &epoch_range,
+					   &entry->ae_dkey,
+					   &entry->ae_akey,
+					   &ext->ae_recx);
+		if (err)
+			D_ERROR("array_remove fails: "DF_RC"\n", DP_RC(err));
+		if (!rc && err)
+			rc = err;
 	}
 out:
 	return rc;
@@ -1373,7 +1265,6 @@ agg_peer_update_ult(void *arg)
 	struct obj_ec_agg_in	*ec_agg_in = NULL;
 	struct obj_ec_agg_out	*ec_agg_out;
 	struct ec_agg_param	*agg_param;
-	struct ec_agg_extent	*ext;
 	crt_bulk_t		 bulk_hdl = NULL;
 	struct daos_csummer	*csummer = NULL;
 	struct dcs_iod_csums	*iod_csums;
@@ -1384,8 +1275,10 @@ agg_peer_update_ult(void *arg)
 	uint32_t		 p = ec_age2p(entry);
 	uint32_t		 peer, peer_shard;
 	crt_rpc_t		*rpc = NULL;
-	int			 i = 0;
 	int			 rc = 0;
+
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
+		D_GOTO(out, rc = -DER_TIMEDOUT);
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	csummer = ec_agg_param2csummer(agg_param);
@@ -1468,48 +1361,6 @@ agg_peer_update_ult(void *arg)
 		}
 		ec_agg_in->ea_iod = iod;
 
-		if (entry->ae_cur_stripe.as_ho_ext_cnt ||
-		    !agg_contained(entry)) {
-			ec_agg_in->ea_remove_nr =
-				entry->ae_cur_stripe.as_ho_ext_cnt +
-				entry->ae_cur_stripe.as_extent_cnt;
-			D_ALLOC_ARRAY(ec_agg_in->ea_remove_recxs.ca_arrays,
-				      ec_agg_in->ea_remove_nr);
-			if (ec_agg_in->ea_remove_recxs.ca_arrays == NULL) {
-				rc = -DER_NOMEM;
-				goto out_bulk;
-			}
-			D_ALLOC_ARRAY(ec_agg_in->ea_remove_eps.ca_arrays,
-				      ec_agg_in->ea_remove_nr);
-			if (ec_agg_in->ea_remove_eps.ca_arrays == NULL) {
-				rc = -DER_NOMEM;
-				goto out_bulk;
-			}
-
-			d_list_for_each_entry(ext,
-					      &entry->ae_cur_stripe.as_dextents,
-					      ae_link) {
-				ec_agg_in->ea_remove_recxs.ca_arrays[i] =
-					ext->ae_orig_recx;
-				ec_agg_in->ea_remove_eps.ca_arrays[i++] =
-					ext->ae_epoch;
-			}
-			if (entry->ae_cur_stripe.as_ho_ext_cnt) {
-				d_list_for_each_entry(ext,
-						      &entry->ae_cur_stripe.
-						      as_hoextents,
-						      ae_link) {
-					ec_agg_in->ea_remove_recxs.ca_arrays[i]
-						= ext->ae_orig_recx;
-					ec_agg_in->ea_remove_eps.ca_arrays[i++]
-						= ext->ae_epoch;
-				}
-			}
-			D_ASSERT(ec_agg_in->ea_remove_nr == i);
-			ec_agg_in->ea_remove_recxs.ca_count = i;
-			ec_agg_in->ea_remove_eps.ca_count = i;
-		}
-
 		rc = dss_rpc_send(rpc);
 		if (rc) {
 			D_ERROR(DF_UOID" pidx %d to peer %d, dss_rpc_send "
@@ -1539,10 +1390,6 @@ out_bulk:
 	if (bulk_hdl)
 		crt_bulk_free(bulk_hdl);
 out_rpc:
-	if (ec_agg_in && ec_agg_in->ea_remove_nr) {
-		D_FREE(ec_agg_in->ea_remove_recxs.ca_arrays);
-		D_FREE(ec_agg_in->ea_remove_eps.ca_arrays);
-	}
 	if (rpc)
 		crt_req_decref(rpc);
 out:
@@ -1634,7 +1481,7 @@ agg_process_holes_ult(void *arg)
 	d_iov_t			*csum_iov_fetch = &stripe_ud->asu_csum_iov;
 	d_iov_t			 tmp_csum_iov;
 	struct ec_agg_entry	*entry = stripe_ud->asu_agg_entry;
-	struct ec_agg_extent	*agg_extent, *ext_tmp;
+	struct ec_agg_extent	*agg_extent;
 	struct pool_target	*targets;
 	struct ec_agg_param	*agg_param;
 	struct obj_ec_rep_in	*ec_rep_in = NULL;
@@ -1658,8 +1505,8 @@ agg_process_holes_ult(void *arg)
 
 	/* Process extent list to find what to re-replicate -- build recx array
 	 */
-	d_list_for_each_entry_safe(agg_extent, ext_tmp,
-				   &entry->ae_cur_stripe.as_dextents, ae_link) {
+	d_list_for_each_entry(agg_extent,
+			      &entry->ae_cur_stripe.as_dextents, ae_link) {
 		if (agg_extent->ae_epoch < entry->ae_par_extent.ape_epoch)
 			continue;
 		if (agg_extent->ae_hole)
@@ -1955,7 +1802,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	bool			process_holes = false;
 	int			rc = 0;
 
-	if (DAOS_FAIL_CHECK(DAOS_FORCE_FAIL_EC_AGG))
+	if (DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_FAIL))
 		D_GOTO(out, rc = -DER_DATA_LOSS);
 
 	/* Query the parity, entry->ae_par_extent.ape_epoch will be set to
@@ -2024,25 +1871,6 @@ out:
 					DP_RC(rc));
 		}
 	}
-	if (rc == 0 && entry->ae_cur_stripe.as_ho_ext_cnt) {
-		if (ec_age2p(entry) > 1 && !update_vos)  {
-			/* No VOS update, but holdovers.
-			 * Didn't call peer update,
-			 * so send holdover list to peer for
-			 * removal
-			 */
-			rc = agg_peer_update(entry, false);
-			if (rc)
-				D_ERROR("agg_peer_update failed: "DF_RC"\n",
-					DP_RC(rc));
-		}
-		if (rc == 0) {
-			rc = agg_remove_holdovers(entry);
-			if (rc)
-				D_ERROR("remove_holdovers failed: "DF_RC"\n",
-					DP_RC(rc));
-		}
-	}
 
 	agg_clear_extents(entry);
 	return rc;
@@ -2065,69 +1893,19 @@ agg_in_stripe(struct ec_agg_entry *entry, daos_recx_t *recx)
 		return recx->rx_nr;
 }
 
-/* Iterator call back sub-function for handling data extents.
- */
 static int
-agg_data_extent(struct ec_agg_param *agg_param, vos_iter_entry_t *entry,
-		struct ec_agg_entry *agg_entry, unsigned int *acts)
+agg_extent_add(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
+	       daos_recx_t *recx)
 {
-	struct dtx_handle	*dth = agg_param->ap_dth;
 	struct ec_agg_extent	*extent = NULL;
-	daos_off_t		 cur_stripenum, this_stripenum;
-	int			 rc = 0;
-
-	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
-
-	this_stripenum = agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
-	D_DEBUG(DB_TRACE, DF_UOID" get recx "DF_RECX", stripe "DF_U64"\n",
-		DP_UOID(agg_entry->ae_oid), DP_RECX(entry->ie_recx),
-		this_stripenum);
-	if (this_stripenum != agg_entry->ae_cur_stripe.as_stripenum) {
-		/* Iterator has reached next stripe */
-		if (agg_entry->ae_cur_stripe.as_extent_cnt) {
-			cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
-			rc = agg_process_stripe(agg_param, agg_entry);
-			if (obj_dtx_need_refresh(dth, rc))
-				goto out;
-
-			if (rc) {
-				D_ERROR(DF_UOID" Process stripe "DF_U64": "
-					DF_RC"\n", DP_UOID(agg_entry->ae_oid),
-					cur_stripenum, DP_RC(rc));
-				goto out;
-			}
-
-			/* Error leaves data covered by replicas vulnerable to
-			 * vos delete, so don't advance coordination epoch.
-			 */
-			rc = 0;
-			if (cur_stripenum <
-			    agg_entry->ae_cur_stripe.as_stripenum &&
-			agg_entry->ae_cur_stripe.as_stripenum <
-			this_stripenum) {
-				/* Handle holdover stripe */
-				rc = agg_process_stripe(agg_param, agg_entry);
-				if (obj_dtx_need_refresh(dth, rc))
-					goto out;
-
-				if (rc)
-					D_ERROR("Holdover returned "DF_RC"\n",
-						DP_RC(rc));
-				rc = 0;
-			}
-		}
-		agg_entry->ae_cur_stripe.as_stripenum = this_stripenum;
-	}
+	int			rc = 0;
 
 	/* Add the extent to the entry, for the current stripe */
 	D_ALLOC_PTR(extent);
-	if (extent == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (extent == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
-	extent->ae_recx = entry->ie_recx;
-	extent->ae_orig_recx = entry->ie_orig_recx;
+	extent->ae_recx = *recx;
 	extent->ae_epoch = entry->ie_epoch;
 	agg_entry->ae_rsize = entry->ie_rsize;
 
@@ -2139,7 +1917,7 @@ agg_data_extent(struct ec_agg_param *agg_param, vos_iter_entry_t *entry,
 		agg_entry->ae_cur_stripe.as_offset =  extent->ae_recx.rx_idx -
 			rounddown(extent->ae_recx.rx_idx, ec_age2ss(agg_entry));
 		agg_entry->ae_cur_stripe.as_stripenum =
-				agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
+				agg_stripenum(agg_entry, recx->rx_idx);
 	}
 
 	agg_entry->ae_cur_stripe.as_extent_cnt++;
@@ -2148,7 +1926,7 @@ agg_data_extent(struct ec_agg_param *agg_param, vos_iter_entry_t *entry,
 		agg_entry->ae_cur_stripe.as_has_holes = true;
 	} else {
 		agg_entry->ae_cur_stripe.as_stripe_fill +=
-			agg_in_stripe(agg_entry, &entry->ie_recx);
+			agg_in_stripe(agg_entry, recx);
 	}
 
 	if (extent->ae_epoch > agg_entry->ae_cur_stripe.as_hi_epoch)
@@ -2162,62 +1940,88 @@ out:
 	return rc;
 }
 
-/* Post iteration call back for akey.
- */
+/* Iterator call back sub-function for handling data extents. */
+static int
+agg_data_extent(struct ec_agg_param *agg_param, vos_iter_entry_t *entry,
+		struct ec_agg_entry *agg_entry, unsigned int *acts)
+{
+	daos_off_t	offset = entry->ie_recx.rx_idx;
+	daos_off_t	end = DAOS_RECX_END(entry->ie_recx);
+	int		rc = 0;
+
+	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
+
+	D_DEBUG(DB_IO, DF_UOID" get recx "DF_RECX", %u\n",
+		DP_UOID(agg_entry->ae_oid), DP_RECX(entry->ie_recx),
+		entry->ie_minor_epc);
+
+	while (offset < end) {
+		daos_off_t this_stripenum;
+		daos_off_t this_end_stripenum;
+		daos_recx_t new_recx;
+		daos_off_t  min_end = min(roundup(offset + 1,
+						  ec_age2ss(agg_entry)), end);
+
+		new_recx.rx_idx = offset;
+		new_recx.rx_nr = min_end - offset;
+
+		this_stripenum = agg_stripenum(agg_entry, new_recx.rx_idx);
+		this_end_stripenum = agg_stripenum(agg_entry,
+						   DAOS_RECX_END(new_recx));
+
+		/* If it can be added to the current stripe */
+		if (agg_entry->ae_cur_stripe.as_extent_cnt == 0 ||
+		    this_stripenum == agg_entry->ae_cur_stripe.as_stripenum) {
+			rc = agg_extent_add(agg_entry, entry, &new_recx);
+			if (rc)
+				D_GOTO(out, rc);
+			offset += new_recx.rx_nr;
+		}
+
+		/* If it reaches to the end of the stripe, let's process it */
+		if ((this_stripenum > agg_entry->ae_cur_stripe.as_stripenum ||
+		     this_end_stripenum >
+		     agg_entry->ae_cur_stripe.as_stripenum) &&
+		     agg_entry->ae_cur_stripe.as_extent_cnt > 0) {
+			rc = agg_process_stripe(agg_param, agg_entry);
+			if (rc) {
+				D_ERROR(DF_UOID" stripe "DF_U64":"DF_RC"\n",
+					DP_UOID(agg_entry->ae_oid),
+					agg_entry->ae_cur_stripe.as_stripenum,
+					DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+			D_ASSERT(agg_entry->ae_cur_stripe.as_extent_cnt == 0);
+		}
+	}
+out:
+	return rc;
+}
+
+/* Post iteration call back for akey.  */
 static int
 agg_akey_post(daos_handle_t ih, struct ec_agg_param *agg_param,
 	      vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	      unsigned int *acts)
 {
-	struct dtx_handle	*dth = agg_param->ap_dth;
-	daos_off_t		 cur_stripenum;
-	int			 rc = 0;
+	int	   rc = 0;
 
 	if (agg_entry->ae_cur_stripe.as_extent_cnt) {
-		cur_stripenum = agg_entry->ae_cur_stripe.as_stripenum;
 		rc = agg_process_stripe(agg_param, agg_entry);
-		if (obj_dtx_need_refresh(dth, rc))
-			return rc;
-
-		if (rc)
+		if (rc) {
 			D_ERROR("Process stripe returned "DF_RC"\n",
 				DP_RC(rc));
-		rc = 0;
-		if (cur_stripenum < agg_entry->ae_cur_stripe.as_stripenum) {
-			/* Handle holdover stripe */
-			rc = agg_process_stripe(agg_param, agg_entry);
-			if (obj_dtx_need_refresh(dth, rc))
-				return rc;
-
-			if (rc)
-				D_ERROR("Holdover returned "DF_RC"\n",
-					DP_RC(rc));
-			rc = 0;
-		}
-		if (agg_entry->ae_cur_stripe.as_ho_ext_cnt) {
-			if (ec_age2p(agg_entry) > 1) {
-				rc = agg_peer_update(agg_entry, false);
-				if (rc)
-					D_ERROR("peer update failed: "DF_RC"\n",
-						DP_RC(rc));
-			}
-			if (rc == 0) {
-				rc = agg_remove_holdovers(agg_entry);
-				if (rc)
-					D_ERROR("holdover failed: "DF_RC"\n",
-						DP_RC(rc));
-			}
-			rc = 0;
+			return rc;
 		}
 
 		agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
 		agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
 		agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
 		agg_entry->ae_cur_stripe.as_offset	= 0U;
-		D_ASSERT(agg_entry->ae_cur_stripe.as_ho_ext_cnt == 0);
 
 		*acts |= VOS_ITER_CB_YIELD;
 	}
+
 	return rc;
 }
 
@@ -2672,7 +2476,6 @@ again:
 			anchors.ia_reprobe_akey = 0;
 			anchors.ia_reprobe_sv = 0;
 			anchors.ia_reprobe_ev = 0;
-
 			goto again;
 		}
 	}
