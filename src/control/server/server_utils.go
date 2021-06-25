@@ -421,22 +421,17 @@ func getSrxSetting(cfg *config.Server) (int32, error) {
 					}
 					return -1, srxMismatchErr
 				} else {
-					if cliSrx == -1 {
-						if idx > 0 {
-							return -1, srxMismatchErr
-						}
-						cliSrx = engSrx
-						continue
-					}
 					if cliSrx == engSrx {
 						continue
 					}
-					return -1, srxMismatchErr
+					// no engine srx, or client srx is set but not equal
+					if engSrx == -1 || cliSrx != -1 || idx > 0 {
+						return -1, srxMismatchErr
+					}
+					cliSrx = engSrx
 				}
-			} else {
-				if cliSrx != -1 {
-					return -1, srxMismatchErr
-				}
+			} else if cliSrx != -1 {
+				return -1, srxMismatchErr
 			}
 		}
 
