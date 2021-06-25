@@ -129,8 +129,9 @@ serialize_str(hid_t file_id, struct daos_prop_entry *entry,
 	}
 	status = H5Awrite(usr_attr, attr_dtype, entry->dpe_str);
 	if (status < 0) {
+		rc = -DER_IO;
 		D_ERROR("failed to write attribute "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc = -DER_MISC);
+		D_GOTO(out, rc);
 	}
 out:
 	/* close hdf5 objects */
@@ -375,10 +376,10 @@ daos_cont_serialize_md(char *filename, daos_prop_t *props, int num_attrs,
 	hid_t	usr_attr_name_vtype = 0;
 	hid_t	usr_attr_val_vtype = 0;
 
-	D_PRINT("Writing metadata file: %s\n", filename);
-
 	if (filename == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
+
+	D_PRINT("Writing metadata file: %s\n", filename);
 
 	file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 	if (file_id < 0) {
@@ -878,10 +879,10 @@ daos_cont_deserialize_props(daos_handle_t poh, char *filename,
 	int	rc = 0;
 	hid_t	file_id = 0;
 
-	D_PRINT("Reading metadata file: %s\n", filename);
-
 	if (filename == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
+
+	D_PRINT("Reading metadata file: %s\n", filename);
 
 	file_id = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
 	if (file_id < 0) {
