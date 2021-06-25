@@ -135,7 +135,8 @@ char *d_realpath(const char *path, char *resolved_path);
 
 #define D_STRNDUP_S(ptr, s)						\
 	do {								\
-		_Static_assert(sizeof(s) != sizeof(void *), "D_STRNDUP_S does not work with 8 character strings"); \
+		_Static_assert(sizeof(s) != sizeof(void *),		\
+			"D_STRNDUP_S does not work with size of 8");	\
 		(ptr) = d_strndup(s, sizeof(s));			\
 		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\
 			sizeof(s), 0, #ptr, 0);				\
