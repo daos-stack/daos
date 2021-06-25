@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"unsafe"
@@ -20,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 /*
@@ -129,12 +131,12 @@ func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
 }
 
 type poolCmd struct {
-	ListContainers poolContainersListCmd `command:"list-containers" alias:"list-cont" alias:"ls" description:"container operations for the specified pool"`
+	ListContainers poolContainersListCmd `command:"list-containers" alias:"list-cont" alias:"ls" description:"list all containers in pool"`
 	Query          poolQueryCmd          `command:"query" description:"query pool info"`
-	ListAttrs      poolListAttrsCmd      `command:"list-attributes" alias:"list-attrs" description:"list pool attributes"`
-	GetAttr        poolGetAttrCmd        `command:"get-attribute" alias:"get-attr" description:"get pool attribute"`
-	SetAttr        poolSetAttrCmd        `command:"set-attribute" alias:"set-attr" description:"set pool attribute"`
-	DelAttr        poolDelAttrCmd        `command:"delete-attribute" alias:"del-attr" description:"delete pool attribute"`
+	ListAttrs      poolListAttrsCmd      `command:"list-attributes" alias:"list-attrs" description:"list pool user-defined attributes"`
+	GetAttr        poolGetAttrCmd        `command:"get-attribute" alias:"get-attr" description:"get pool user-defined attribute"`
+	SetAttr        poolSetAttrCmd        `command:"set-attribute" alias:"set-attr" description:"set pool user-defined attribute"`
+	DelAttr        poolDelAttrCmd        `command:"delete-attribute" alias:"del-attr" description:"delete pool user-defined attribute"`
 	AutoTest       poolAutoTestCmd       `command:"autotest" description:"verify setup with smoke tests"`
 }
 
@@ -181,13 +183,29 @@ func poolListContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 	for i := range out {
 		out[i] = new(ContainerID)
 		out[i].UUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
-		// FIXME: The label should be returned as part of
-		// the list payload. The alternative is to open each
-		// container sequentially in order to query the label
-		// property, which would be terrible for performance.
+		out[i].Label = C.GoString(&dpciSlice[i].pci_label[0])
 	}
 
 	return out, nil
+}
+
+func printContainerList(out io.Writer, contIDs []*ContainerID) {
+	uuidTitle := "UUID"
+	labelTitle := "Label"
+	titles := []string{uuidTitle, labelTitle}
+
+	table := []txtfmt.TableRow{}
+	for _, id := range contIDs {
+		table = append(table,
+			txtfmt.TableRow{
+				uuidTitle:  id.UUID.String(),
+				labelTitle: id.Label,
+			})
+	}
+
+	tf := txtfmt.NewTableFormatter(titles...)
+	tf.InitWriter(out)
+	tf.Format(table)
 }
 
 func (cmd *poolContainersListCmd) Execute(_ []string) error {
@@ -207,13 +225,9 @@ func (cmd *poolContainersListCmd) Execute(_ []string) error {
 		return cmd.outputJSON(contIDs, nil)
 	}
 
-	for _, id := range contIDs {
-		if id.HasLabel() {
-			cmd.log.Info(id.Label)
-			continue
-		}
-		cmd.log.Infof("%s", id.UUID)
-	}
+	var bld strings.Builder
+	printContainerList(&bld, contIDs)
+	cmd.log.Info(bld.String())
 
 	return nil
 }

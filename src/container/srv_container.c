@@ -3099,14 +3099,16 @@ out_svc:
 
 /* argument type for callback function to list containers */
 struct list_cont_iter_args {
-	uuid_t				pool_uuid;
+	uuid_t				 pool_uuid;
 
 	/* Number of containers in pool and conts[] index while counting */
-	uint64_t			ncont;
+	uint64_t			 ncont;
 
 	/* conts[]: capacity*/
-	uint64_t			conts_len;
+	uint64_t			 conts_len;
 	struct daos_pool_cont_info	*conts;
+	struct cont_svc			*svc;
+	struct rdb_tx			*tx;
 };
 
 /* callback function for list containers iteration. */
@@ -3116,7 +3118,10 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	struct list_cont_iter_args	*ap = varg;
 	struct daos_pool_cont_info	*cinfo;
 	uuid_t				 cont_uuid;
-	(void)val;
+	struct cont			*cont;
+	daos_prop_t			*prop = NULL;
+	int				 rc;
+	(void) val;
 
 	if (key->iov_len != sizeof(uuid_t)) {
 		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
@@ -3144,6 +3149,26 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	cinfo = &ap->conts[ap->ncont];
 	ap->ncont++;
 	uuid_copy(cinfo->pci_uuid, cont_uuid);
+
+	/* Get the label property. FIXME: cont_lookup no need to search
+	 * in cs_conts, since we're iterating that KVS already.
+	 * Isn't val the container properties KVS? Can it be used directly?
+	 */
+	rc = cont_lookup(ap->tx, ap->svc, cont_uuid, &cont);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		return rc;
+	}
+	rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_LABEL, &prop);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cont_prop_read() failed, "DF_RC"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+	}
+	strncpy(cinfo->pci_label, prop->dpp_entries[0].dpe_str,
+		DAOS_PROP_LABEL_MAX_LEN);
+	cinfo->pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
+
 	return 0;
 }
 
@@ -3178,11 +3203,12 @@ ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
 				    NULL /* hint **/);
 	if (rc != 0)
 		D_GOTO(out, rc);
+	args.svc = svc;
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
-
+	args.tx = &tx;
 	ABT_rwlock_rdlock(svc->cs_lock);
 
 	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */,
