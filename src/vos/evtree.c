@@ -3395,70 +3395,14 @@ int
 evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 	       const daos_epoch_range_t *epr)
 {
-	struct evt_context	*tcx;
-	struct evt_entry	*entry;
-	struct evt_entry_array	 ent_array = { 0 };
-	struct evt_filter	 filter = {0};
-	int			 rc;
-	struct evt_rect		 rect;
+	struct evt_entry_in	entry = {0};
 
-	tcx = evt_hdl2tcx(toh);
-	if (tcx == NULL)
-		return -DER_NO_HDL;
+	entry.ei_rect.rc_ex = *ext;
+	entry.ei_bound = entry.ei_rect.rc_epc = epr->epr_hi;
+	entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
+	BIO_ADDR_SET_HOLE(&entry.ei_addr);
 
-	rect.rc_ex = *ext;
-	rect.rc_epc = epr->epr_hi;
-	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
-
-	evt_ent_array_init(&ent_array);
-
-	filter.fr_ex = rect.rc_ex;
-	filter.fr_epr = *epr;
-	filter.fr_epoch = epr->epr_hi;
-	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE,
-				&filter, &rect, &ent_array);
-	if (rc != 0) {
-		D_ERROR("ent_array_fill failed: "DF_RC"\n", DP_RC(rc));
-		goto done;
-	}
-
-	if (ent_array.ea_ent_nr == 0)
-		D_GOTO(done, rc = 0);
-
-	evt_ent_array_for_each(entry, &ent_array) {
-		if (entry->en_visibility & EVT_PARTIAL) {
-			D_ERROR("Removing partial extents not allowed:"
-				" Specified rect "DF_RECT" overlaps "DF_EXT"\n",
-				DP_RECT(&rect), DP_EXT(&entry->en_ext));
-			rc = -DER_NO_PERM;
-			goto done;
-		}
-	}
-
-	rc = evt_tx_begin(tcx);
-	if (rc != 0)
-		goto done;
-
-	evt_ent_array_for_each(entry, &ent_array) {
-		struct evt_rect	to_delete;
-
-		to_delete.rc_ex = entry->en_ext;
-		to_delete.rc_epc = entry->en_epoch;
-		to_delete.rc_minor_epc = entry->en_minor_epc;
-		rc = evt_delete_internal(tcx, &to_delete, NULL, true);
-		if (rc != 0) {
-			D_ERROR("Failed to delete "DF_RECT"\n",
-				DP_RECT(&to_delete));
-			break;
-		}
-	}
-
-	rc = evt_tx_end(tcx, rc);
-
-done:
-	evt_ent_array_fini(&ent_array);
-
-	return rc;
+	return evt_insert(toh, &entry, NULL);
 }
 
 daos_size_t

@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 from os.path import basename
 
 # pylint: disable=too-many-ancestors
-class DmLargeDir(DataMoverTestBase):
+class DmvrLargeDir(DataMoverTestBase):
     """Test class Description: Add datamover test to copy a large directory
                                amongst daos containers and external file
                                system.

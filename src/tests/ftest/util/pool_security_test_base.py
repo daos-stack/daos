@@ -283,10 +283,10 @@ class PoolSecurityTestBase(TestWithServers):
 
         """
         action = "cont_delete"
-        result = self.test_container_destroy(
+        result = self.destroy_test_container(
             self.pool_uuid, self.container)
         self.log.info(
-            "  In verify_cont_delete %s.\n =test_container_destroy() result:"
+            "  In verify_cont_delete %s.\n =destroy_test_container() result:"
             "\n%s", action, result)
         self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
 

@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 from os.path import join
 
 
-class DmPosixMetaEntry(DataMoverTestBase):
+class DmvrPosixMetaEntry(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for POSIX DataMover entry metadata validation.
 

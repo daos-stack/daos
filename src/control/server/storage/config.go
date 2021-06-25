@@ -135,7 +135,6 @@ type BdevConfig struct {
 	DeviceList  []string  `yaml:"bdev_list,omitempty"`
 	VmdDisabled bool      `yaml:"-"` // set during start-up
 	FileSize    int       `yaml:"bdev_size,omitempty"`
-	MemSize     int       `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
 	VosEnv      string    `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 }
 

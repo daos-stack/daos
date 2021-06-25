@@ -8,7 +8,6 @@ package server
 
 import (
 	"fmt"
-	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -18,8 +17,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -41,121 +38,6 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 	}
 
 	return rs
-}
-
-// TODO: de-duplicate logic to populate prepare request from server config after
-//       DAOS-7002 is completed
-func updateNvmePrepareReq(log logging.Logger, req *bdev.PrepareRequest, cfg *config.Server) {
-	if req.HugePageCount == 0 {
-		req.HugePageCount = minHugePageCount
-		if cfgHasBdevs(cfg) {
-			// The config value is intended to be per-engine, so we
-			// need to adjust based on the number of engines.
-			req.HugePageCount = cfg.NrHugepages * len(cfg.Engines)
-		}
-	}
-	if req.PCIAllowlist == "" {
-		req.PCIAllowlist = strings.Join(cfg.BdevInclude, " ")
-	}
-	req.PCIBlocklist = strings.Join(cfg.BdevExclude, " ")
-	req.DisableVFIO = cfg.DisableVFIO
-	req.DisableVMD = cfg.DisableVMD || cfg.DisableVFIO || !iommuDetected()
-	if req.TargetUser == "" {
-		usr, err := user.Current()
-		if err != nil {
-			log.Errorf("look up current user: %s", err)
-			return
-		}
-		req.TargetUser = usr.Username
-	}
-}
-
-// doNvmePrepare issues prepare request and returns response.
-func (c *ControlService) doNvmePrepare(pbReq *ctlpb.PrepareNvmeReq) *ctlpb.PrepareNvmeResp {
-	c.log.Debugf("performing nvme prep %v", pbReq)
-	pnr := new(ctlpb.PrepareNvmeResp)
-
-	req := bdev.PrepareRequest{
-		HugePageCount: int(pbReq.GetNrHugePages()),
-		TargetUser:    pbReq.GetTargetUser(),
-		PCIAllowlist:  pbReq.GetPciAllowList(),
-		ResetOnly:     pbReq.GetReset_(),
-		// Default to minimum necessary for scan to work correctly.
-	}
-
-	if !req.ResetOnly {
-		updateNvmePrepareReq(c.log, &req, c.srvCfg)
-	}
-
-	_, err := c.NvmePrepare(req)
-	pnr.State = newResponseState(err, ctlpb.ResponseStatus_CTL_ERR_NVME, "")
-
-	return pnr
-}
-
-// newPrepareScmResp sets protobuf SCM prepare response with results.
-func newPrepareScmResp(inResp *scm.PrepareResponse, inErr error) (*ctlpb.PrepareScmResp, error) {
-	outResp := new(ctlpb.PrepareScmResp)
-	outResp.State = new(ctlpb.ResponseState)
-
-	if inErr != nil {
-		outResp.State = newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_SCM, "")
-		return outResp, nil
-	}
-
-	if inResp.RebootRequired {
-		outResp.Rebootrequired = true
-		outResp.State.Info = scm.MsgRebootRequired
-	}
-
-	outResp.Namespaces = make(proto.ScmNamespaces, 0, len(inResp.Namespaces))
-	if err := (*proto.ScmNamespaces)(&outResp.Namespaces).FromNative(inResp.Namespaces); err != nil {
-		return nil, err
-	}
-
-	return outResp, nil
-}
-
-func (c *ControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (*ctlpb.PrepareScmResp, error) {
-	c.log.Debugf("performing scm prep %v", req)
-
-	scmState, err := c.GetScmState()
-	if err != nil {
-		return newPrepareScmResp(nil, err)
-	}
-	c.log.Debugf("SCM state before prep: %s", scmState)
-
-	resp, err := c.ScmPrepare(scm.PrepareRequest{Reset: req.Reset_})
-
-	return newPrepareScmResp(resp, err)
-}
-
-// StoragePrepare configures resident host storage for use with DAOS, fails if
-// harness engine instances have started.
-func (c *ControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (*ctlpb.StoragePrepareResp, error) {
-	c.log.Debugf("received StoragePrepare RPC %v", req)
-
-	resp := new(ctlpb.StoragePrepareResp)
-
-	for _, ei := range c.harness.Instances() {
-		if ei.IsStarted() {
-			return nil, errors.Errorf("instance %d: can't prepare storage if running",
-				ei.Index())
-		}
-	}
-
-	if req.Nvme != nil {
-		resp.Nvme = c.doNvmePrepare(req.Nvme)
-	}
-	if req.Scm != nil {
-		respScm, err := c.doScmPrepare(req.Scm)
-		if err != nil {
-			return nil, err
-		}
-		resp.Scm = respScm
-	}
-
-	return resp, nil
 }
 
 // mapCtrlrs maps each controller to it's PCI address.
