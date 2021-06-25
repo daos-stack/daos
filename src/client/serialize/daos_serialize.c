@@ -63,7 +63,7 @@ serialize_acl(hid_t file_id, struct daos_prop_entry *entry,
 	}
 	status = H5Awrite(usr_attr, attr_dtype, acl_strs);
 	if (status < 0) {
-		rc = -DER_IO;	
+		rc = -DER_IO;
 		D_ERROR("failed to write attributes "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
@@ -192,42 +192,42 @@ static char*
 prop_to_str(uint32_t type)
 {
 	switch (type) {
-		case DAOS_PROP_CO_LABEL:
-			return "DAOS_PROP_CO_LABEL";
-		case DAOS_PROP_CO_OWNER:
-			return "DAOS_PROP_CO_OWNER";
-		case DAOS_PROP_CO_OWNER_GROUP:
-			return "DAOS_PROP_CO_OWNER_GROUP";
-		case DAOS_PROP_CO_ACL:
-			return "DAOS_PROP_CO_ACL";
-		case DAOS_PROP_CO_LAYOUT_TYPE:
-			return "DAOS_PROP_CO_LAYOUT_TYPE";
-		case DAOS_PROP_CO_LAYOUT_VER:
-			return "DAOS_PROP_CO_LAYOUT_VER";
-		case DAOS_PROP_CO_CSUM:
-			return "DAOS_PROP_CO_CSUM";
-		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
-			return "DAOS_PROP_CO_CSUM_CHUNK_SIZE";
-		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
-			return "DAOS_PROP_CO_CSUM_SERVER_VERIFY";
-		case DAOS_PROP_CO_REDUN_FAC:
-			return "DAOS_PROP_CO_REDUN_FAC";
-		case DAOS_PROP_CO_REDUN_LVL:
-			return "DAOS_PROP_CO_REDUN_LVL";
-		case DAOS_PROP_CO_SNAPSHOT_MAX:
-			return "DAOS_PROP_CO_SNAPSHOT_MAX";
-		case DAOS_PROP_CO_COMPRESS:
-			return "DAOS_PROP_CO_COMPRESS";
-		case DAOS_PROP_CO_ENCRYPT:
-			return "DAOS_PROP_CO_ENCRYPT";
-		case DAOS_PROP_CO_DEDUP:
-			return "DAOS_PROP_CO_DEDUP";
-		case DAOS_PROP_CO_DEDUP_THRESHOLD:
-			return "DAOS_PROP_CO_DEDUP_THRESHOLD";
-		case DAOS_PROP_CO_ALLOCED_OID:
-			return "DAOS_PROP_CO_ALLOCED_OID";
-		default:	
-			return "PROPERTY NOT SUPPORTED";
+	case DAOS_PROP_CO_LABEL:
+		return "DAOS_PROP_CO_LABEL";
+	case DAOS_PROP_CO_OWNER:
+		return "DAOS_PROP_CO_OWNER";
+	case DAOS_PROP_CO_OWNER_GROUP:
+		return "DAOS_PROP_CO_OWNER_GROUP";
+	case DAOS_PROP_CO_ACL:
+		return "DAOS_PROP_CO_ACL";
+	case DAOS_PROP_CO_LAYOUT_TYPE:
+		return "DAOS_PROP_CO_LAYOUT_TYPE";
+	case DAOS_PROP_CO_LAYOUT_VER:
+		return "DAOS_PROP_CO_LAYOUT_VER";
+	case DAOS_PROP_CO_CSUM:
+		return "DAOS_PROP_CO_CSUM";
+	case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
+		return "DAOS_PROP_CO_CSUM_CHUNK_SIZE";
+	case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
+		return "DAOS_PROP_CO_CSUM_SERVER_VERIFY";
+	case DAOS_PROP_CO_REDUN_FAC:
+		return "DAOS_PROP_CO_REDUN_FAC";
+	case DAOS_PROP_CO_REDUN_LVL:
+		return "DAOS_PROP_CO_REDUN_LVL";
+	case DAOS_PROP_CO_SNAPSHOT_MAX:
+		return "DAOS_PROP_CO_SNAPSHOT_MAX";
+	case DAOS_PROP_CO_COMPRESS:
+		return "DAOS_PROP_CO_COMPRESS";
+	case DAOS_PROP_CO_ENCRYPT:
+		return "DAOS_PROP_CO_ENCRYPT";
+	case DAOS_PROP_CO_DEDUP:
+		return "DAOS_PROP_CO_DEDUP";
+	case DAOS_PROP_CO_DEDUP_THRESHOLD:
+		return "DAOS_PROP_CO_DEDUP_THRESHOLD";
+	case DAOS_PROP_CO_ALLOCED_OID:
+		return "DAOS_PROP_CO_ALLOCED_OID";
+	default:
+		return "PROPERTY NOT SUPPORTED";
 	}
 }
 
