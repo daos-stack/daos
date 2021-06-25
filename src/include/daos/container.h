@@ -38,6 +38,7 @@ int dc_cont_open(tse_task_t *task);
 int dc_cont_open_lbl(tse_task_t *task);
 int dc_cont_close(tse_task_t *task);
 int dc_cont_destroy(tse_task_t *task);
+int dc_cont_destroy_lbl(tse_task_t *task);
 int dc_cont_query(tse_task_t *task);
 int dc_cont_set_prop(tse_task_t *task);
 int dc_cont_update_acl(tse_task_t *task);
