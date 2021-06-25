@@ -31,6 +31,10 @@ trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
+# run node checkout
+clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
+    "$(cat ci/functional/node_checkout.sh)"
+
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
