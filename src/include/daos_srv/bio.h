@@ -601,13 +601,17 @@ int bio_iod_post(struct bio_desc *biod);
  * specified DRAM SG lists.
  *
  * \param biod       [IN]	io descriptor
+ * \param zc_copy    [IN]	zero-copy fetch, reuse the DMA buffer for RPC
  * \param sgls       [IN]	DRAM SG lists
  * \param nr_sgl     [IN]	Number of SG lists
  *
  * \return			Zero on success, negative value on error
  */
-int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
+int bio_iod_copy(struct bio_desc *biod, bool zc_copy,
+		 d_sg_list_t *sgls, unsigned int nr_sgl);
 
+// int bio_iod_copy(biod, ioc->ioc_zc_fetch,
+// 				  orw->orw_sgls.ca_arrays, orw->orw_nr);
 /*
  * Helper function to flush memory vectors in SG lists of io descriptor
  *

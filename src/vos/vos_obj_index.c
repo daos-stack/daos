@@ -191,13 +191,14 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_t			 val_iov;
 	int			 rc;
 	int			 tmprc;
-
+	D_DEBUG(DB_IO, "here");
 	*obj_p = NULL;
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 	d_iov_set(&val_iov, NULL, 0);
 
 	rc = dbtree_fetch(cont->vc_btr_hdl, BTR_PROBE_EQ,
 			  DAOS_INTENT_DEFAULT, &key_iov, NULL, &val_iov);
+	D_DEBUG(DB_IO, "rc after dbtree fetch %d", rc);
 	if (rc == 0) {
 		struct vos_obj_df *obj = val_iov.iov_buf;
 
@@ -229,7 +230,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	struct ilog_desc_cbs	 cbs;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
+	D_DEBUG(DB_IO, "Lookup obj "DF_UOID" in the OI table.\n",
 		DP_UOID(oid));
 
 	rc = vos_oi_find(cont, oid, &obj, ts_set);
@@ -239,7 +240,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		return rc;
 
 	/* Object ID not found insert it to the OI tree */
-	D_DEBUG(DB_TRACE, "Object "DF_UOID" not found adding it..\n",
+	D_DEBUG(DB_IO, "Object "DF_UOID" not found adding it..\n",
 		DP_UOID(oid));
 
 	d_iov_set(&val_iov, NULL, 0);

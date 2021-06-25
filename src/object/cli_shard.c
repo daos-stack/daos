@@ -76,6 +76,7 @@ dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t oid,
 		return rc;
 
 	shard->do_id = oid;
+	D_DEBUG(DB_IO, "oid: "DF_UOID"\n", DP_UOID(shard->do_id));
 	shard->do_target_rank = map_tgt->ta_comp.co_rank;
 	shard->do_target_idx = map_tgt->ta_comp.co_index;
 	shard->do_obj = obj;
@@ -683,6 +684,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 
 	rc = obj_reply_get_status(rw_args->rpc);
+	D_DEBUG(DB_IO,"rc: %d after obj_reply_get_status", rc);
 	/*
 	 * orwo->orw_epoch may be set even when the status is nonzero (e.g.,
 	 * -DER_TX_RESTART and -DER_INPROGRESS).
@@ -690,7 +692,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	th = rw_args->shard_args->api_args->th;
 	if (daos_handle_is_valid(th)) {
 		int rc_tmp;
-
+ 
 		rc_tmp = dc_tx_op_end(task, th,
 				      &rw_args->shard_args->auxi.epoch, rc,
 				      orwo->orw_epoch);
@@ -700,7 +702,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				orwo->orw_epoch, DP_RC(rc_tmp));
 			goto out;
 		}
-	}
+	} 
 
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
@@ -1027,7 +1029,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_GOTO(out_pool, rc = (int)tgt_ep.ep_rank);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
-	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" "DF_KEY" rank:%d tag:%d eph "
+	D_DEBUG(DB_IO, "rpc %p opc:%d "DF_UOID" "DF_KEY" rank:%d tag:%d eph "
 		DF_U64"\n", req, opc, DP_UOID(shard->do_id), DP_KEY(dkey),
 		tgt_ep.ep_rank, tgt_ep.ep_tag, auxi->epoch.oe_value);
 	if (rc != 0)

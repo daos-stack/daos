@@ -905,7 +905,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 
 	jmap = pl_map2jmap(map);
 	oid = md->omd_id;
-	D_DEBUG(DB_PL, "Determining location for object: "DF_OID", ver: %d\n",
+	D_DEBUG(DB_IO, "Determining location for object: "DF_OID", ver: %d\n",
 		DP_OID(oid), md->omd_ver);
 
 	rc = jm_obj_placement_get(jmap, md, shard_md, &jmop);

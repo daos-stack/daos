@@ -34,7 +34,7 @@
  * This environment is mostly for performance evaluation.
  */
 #define IO_BYPASS_ENV	"DAOS_IO_BYPASS"
-
+#define OBJ_IO_IODS	4
 /**
  * Bypass client I/O RPC, it means the client stack will complete the
  * fetch/update RPC immediately, nothing will be submitted to remote server.
@@ -581,14 +581,24 @@ struct dc_object *obj_hdl2ptr(daos_handle_t oh);
 struct obj_io_context {
 	struct ds_cont_hdl	*ioc_coh;
 	struct ds_cont_child	*ioc_coc;
+	struct bio_desc		*ioc_biod;
+	daos_handle_t		 ioc_ioh;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_map_ver;
+	bool			 ioc_zc_fetch;
 	uint32_t		 ioc_opc;
 	uint64_t		 ioc_start_time;
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
 				 ioc_lost_reply:1;
+	int			 ioc_status;
+	/* for returning record size */
+	uint32_t		 ioc_nrs[OBJ_IO_IODS];
+	uint64_t		 ioc_sizes[OBJ_IO_IODS];
+	uint64_t		 ioc_data_sizes[OBJ_IO_IODS];
 };
+
+struct obj_io_context;
 
 struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;

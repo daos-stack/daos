@@ -23,7 +23,7 @@ dc_obj_open_task_create(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
 {
 	daos_obj_open_t	*args;
 	int		rc;
-
+	D_DEBUG(DB_IO, "here");
 	DAOS_API_ARG_ASSERT(*args, OBJ_OPEN);
 	rc = dc_task_create(dc_obj_open, tse, ev, task);
 	if (rc)

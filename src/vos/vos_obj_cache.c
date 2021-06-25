@@ -224,8 +224,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	create = flags & VOS_OBJ_CREATE;
 	visible_only = flags & VOS_OBJ_VISIBLE;
 	test = flags & VOS_OBJ_EXISTS; /** for block IO lookup only */
-
-	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
+	D_DEBUG(DB_IO, "Try to hold cont="DF_UUID", obj="DF_UOID
 		" create=%s epr="DF_U64"-"DF_U64"\n",
 		DP_UUID(cont->vc_id), DP_UOID(oid),
 		create ? "true" : "false", epr->epr_lo, epr->epr_hi);
@@ -258,7 +257,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 	if (obj->obj_df) {
-		D_DEBUG(DB_TRACE, "looking up object ilog");
+		D_DEBUG(DB_IO, "looking up object ilog");
 		tmprc = vos_ilog_ts_add(ts_set, &obj->obj_df->vo_ilog,
 					&oid, sizeof(oid));
 		D_ASSERT(tmprc == 0); /* Non-zero only valid for akey */
@@ -266,7 +265,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 	 /* newly cached object */
-	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_U64"-"DF_U64"\n",
+	D_DEBUG(DB_IO, "%s Got empty obj "DF_UOID" epr="DF_U64"-"DF_U64"\n",
 		create ? "find/create" : "find", DP_UOID(oid), epr->epr_lo,
 		epr->epr_hi);
 

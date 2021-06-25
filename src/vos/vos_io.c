@@ -1437,9 +1437,9 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_io_context	*ioc;
 	int			 i, rc;
 
-	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_X64"\n",
+	D_DEBUG(DB_IO, "Fetch "DF_UOID", desc_nr %d, epoch "DF_X64"\n",
 		DP_UOID(oid), iod_nr, epoch);
-
+	
 	rc = vos_ioc_create(coh, oid, true, epoch, iod_nr, iods,
 			    NULL, vos_flags, shadows, false, 0,
 			    dth, &ioc);
@@ -1450,6 +1450,9 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(rc == 0);
+	struct vos_container *cont = ioc->ic_cont;
+	D_DEBUG(DB_IO, "Try to hold cont="DF_UUID", obj="DF_UOID
+		"\n",DP_UUID(cont->vc_id), DP_UOID(oid));
 
 	rc = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, oid,
 			  &ioc->ic_epr, ioc->ic_bound, VOS_OBJ_VISIBLE,
@@ -1643,7 +1646,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	int			 i;
 	int			 rc = 0;
 
-	D_DEBUG(DB_TRACE, "akey "DF_KEY" update %s value eph "DF_X64"\n",
+	D_DEBUG(DB_IO, "akey "DF_KEY" update %s value eph "DF_X64"\n",
 		DP_KEY(&iod->iod_name), is_array ? "array" : "single",
 		ioc->ic_epr.epr_hi);
 
@@ -2471,7 +2474,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
 		return -DER_IO;
 
-	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
+	D_DEBUG(DB_IO, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
 			  ", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
 			  dtx_is_valid_handle(dth) ?
 			  dth->dth_epoch :  epoch, flags);
@@ -2800,7 +2803,7 @@ vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	if (rc)
 		return rc;
 
-	err = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
+	err = bio_iod_copy(ioc->ic_biod, false, sgls, sgl_nr);
 	rc = bio_iod_post(ioc->ic_biod);
 
 	return err ? err : rc;

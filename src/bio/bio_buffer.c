@@ -259,6 +259,7 @@ iod_release_buffer(struct bio_desc *biod)
 	rsrvd_dma->brd_chk_max = rsrvd_dma->brd_chk_cnt = 0;
 
 	biod->bd_buffer_prep = 0;
+	D_DEBUG(DB_IO, "biod->bd_buffer_prep %d", biod->bd_buffer_prep);
 }
 
 struct bio_copy_args {
@@ -269,6 +270,8 @@ struct bio_copy_args {
 	int		 ca_sgl_idx;
 	/* Current IOV index inside of current sgl */
 	int		 ca_iov_idx;
+	/* zero-copy fetch */
+	bool		 ca_zc_fetch;
 	/* Current offset inside of current IOV */
 	ssize_t		 ca_iov_off;
 };
@@ -851,10 +854,16 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 
 		nob = min(size, buf_len - arg->ca_iov_off);
 		if (addr != NULL) {
-			D_DEBUG(DB_TRACE, "bio copy %p size %zd\n",
+			D_DEBUG(DB_IO, "bio copy %p size %zd\n",
 				addr, nob);
-			bio_memcpy(biod, media, addr, iov->iov_buf +
-					arg->ca_iov_off, nob);
+			if (arg->ca_zc_fetch) {
+				/* just use the DMA buffer */
+				iov->iov_buf = addr;
+			} else {
+				bio_memcpy(biod, media, addr,
+					   iov->iov_buf +
+					   arg->ca_iov_off, nob);
+			}			
 			addr += nob;
 		} else {
 			/* fetch on hole */
@@ -886,7 +895,7 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 			return 0;
 	}
 
-	D_DEBUG(DB_TRACE, "Consumed all iovs, "DF_U64" bytes left\n", size);
+	D_DEBUG(DB_IO, "Consumed all iovs, "DF_U64" bytes left\n", size);
 	return -DER_REC2BIG;
 }
 
@@ -912,12 +921,14 @@ bio_iod_prep(struct bio_desc *biod, unsigned int type)
 
 	biod->bd_chk_type = type;
 retry:
+
 	rc = iterate_biov(biod, dma_map_one, NULL);
 	if (rc) {
 		/*
 		 * To avoid deadlock, held buffers need be released
 		 * before waiting for other active IODs.
 		 */
+		D_DEBUG(DB_IO, "here");
 		iod_release_buffer(biod);
 
 		if (!biod->bd_retry)
@@ -943,8 +954,10 @@ retry:
 
 		goto retry;
 	}
-	biod->bd_buffer_prep = 1;
 
+
+	biod->bd_buffer_prep = 1;
+	D_DEBUG(DB_IO, "biod->bd_buffer_prep %d", biod->bd_buffer_prep);
 	/* All SCM IOVs, no DMA transfer prepared */
 	if (biod->bd_rsrvd.brd_rg_cnt == 0)
 		return 0;
@@ -966,6 +979,7 @@ retry:
 
 	return 0;
 failed:
+	D_DEBUG(DB_IO, "here");
 	iod_release_buffer(biod);
 	dma_drop_iod(bdb);
 	return rc;
@@ -975,12 +989,17 @@ int
 bio_iod_post(struct bio_desc *biod)
 {
 	struct bio_dma_buffer *bdb;
+	D_DEBUG(DB_IO,"biod->bd_buffer_prep %d", (int)biod->bd_buffer_prep);
 
 	if (!biod->bd_buffer_prep)
-		return -DER_INVAL;
+		{
+			D_DEBUG(DB_IO, "here");
+			return -DER_INVAL;
+		}
 
 	/* No more actions for SCM IOVs */
 	if (biod->bd_rsrvd.brd_rg_cnt == 0) {
+		D_DEBUG(DB_IO, "here");
 		iod_release_buffer(biod);
 		return 0;
 	}
@@ -989,7 +1008,7 @@ bio_iod_post(struct bio_desc *biod)
 		dma_rw(biod, false);
 	else
 		biod->bd_result = 0;
-
+	D_DEBUG(DB_IO,"biod->bd_result %d", (int)biod->bd_result);
 	iod_release_buffer(biod);
 	bdb = iod_dma_buf(biod);
 	dma_drop_iod(bdb);
@@ -998,7 +1017,8 @@ bio_iod_post(struct bio_desc *biod)
 }
 
 int
-bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
+bio_iod_copy(struct bio_desc *biod, bool zc_fetch,
+	     d_sg_list_t *sgls, unsigned int nr_sgl)
 {
 	struct bio_copy_args arg = { 0 };
 
@@ -1010,8 +1030,14 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 
 	arg.ca_sgls = sgls;
 	arg.ca_sgl_cnt = nr_sgl;
-
-	return iterate_biov(biod, copy_one, &arg);
+	arg.ca_zc_fetch = zc_fetch;
+	
+	int rc = iterate_biov(biod, copy_one, &arg);
+	d_iov_t *iov;
+	iov = arg.ca_sgls->sg_iovs;
+	D_DEBUG(DB_IO, "buf %s", (char *)iov->iov_buf);
+	return rc;
+	
 }
 
 static int
@@ -1082,7 +1108,7 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 	for (i = 0; i < bsgl->bs_nr; i++)
 		D_ASSERT(bio_iov2raw_buf(&bsgl->bs_iovs[i]) != NULL);
 
-	rc = bio_iod_copy(biod, sgl, 1 /* single sgl */);
+	rc = bio_iod_copy(biod, false, sgl, 1 /* single sgl */);
 	if (rc)
 		D_ERROR("Copy biod failed, "DF_RC"\n", DP_RC(rc));
 
