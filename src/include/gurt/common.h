@@ -263,27 +263,35 @@ char *d_realpath(const char *path, char *resolved_path);
  * cases.
  */
 
+#ifdef USE_GOTO_LOGGING
 #ifdef __clang__
 #define VERBOSE_GOTO 1
-#else
+#else /* __clang__ */
 #if defined  __GNUC__ && __GNUC__ > 4 || \
 	(__GNUC__ == 4 && (__GNUC_MINOR__ < 9))
 #define VERBOSE_GOTO 0
 #else
 #define VERBOSE_GOTO 1
 #endif
-#endif
+#endif /* __clang__ */
+#else /* USE_GOTO_LOGGING */
+#define VERBOSE_GOTO 0
+#endif /* USE_GOTO_LOGGING */
 
 #if VERBOSE_GOTO
 
-#define maybe_derrcode(x) _Generic((x), int: true, default: false)
+#define maybe_derrcode(x) _Generic((x), int : true, default : false)
 
 #define DG_FMT(x) _Generic(__rc,					\
-				int: "%d",				\
+int : "%d",				\
 				unsigned int: "%u",			\
 				unsigned long: "%lu",			\
-				bool: "%d",				\
-				int64_t: "%ld", default: "%p")
+bool : "%d",				\
+int64_t : "%ld",				\
+				struct swim_context *  : "%p",		\
+				struct crt_hg_hdl *  : "%p",		\
+				struct crt_ivns_internal *  : "%p",	\
+				d_rank_list_t *  : "%p")
 
 #define D_GOTO(label, rc)						\
 	do {								\

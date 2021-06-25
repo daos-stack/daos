@@ -160,6 +160,7 @@ def set_defaults(env, daos_version):
             env.AppendUnique(CCFLAGS=['-Og'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
+            env.AppendUnique(CCFLAGS=['-DUSE_GOTO_LOGGING'])
     else:
         if env.get('BUILD_TYPE') == 'release':
             env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE'])
