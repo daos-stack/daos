@@ -3,23 +3,29 @@
 Hack to support oneapi version of Intel compilers
 
 """
-import sys, os
+import sys
+import os
+
 
 is_linux = sys.platform.startswith('linux')
 
+# pylint: disable=no-name-in-module
+# pylint: disable=import-error
 if is_linux:
     import SCons.Tool.gcc
 import SCons.Util
 import SCons.Warnings
 import SCons.Errors
+# pylint: enable=import-error
+# pylint: enable=no-name-in-module
+# pylint: disable=no-member
+# pylint: disable=too-few-public-methods
 
 if not is_linux:
-    raise SCons.Errors.UserError("This tool doesn't work on non-Linux platforms")
+    raise SCons.Errors.UserError("This tool is only supported on Linux")
 
-class OneapiError(SCons.Errors.InternalError):
-    pass
-
-class DetectCompiler(object):
+class DetectCompiler():
+    """Find oneapi compiler"""
 
     def __init__(self):
         root = '/opt/intel/oneapi/compiler/latest'
@@ -31,14 +37,12 @@ class DetectCompiler(object):
         icx = os.path.join(binp, 'icx')
         self.map = {}
         sys.stdout.flush()
-        if not os.path.exists(root) or \
-           not os.path.exists(binp) or \
-           not os.path.exists(libp) or \
-           not os.path.exists(binarch) or \
-           not os.path.exists(libarch) or \
-           not os.path.exists(include) or \
-           not os.path.exists(icx):
-            return
+        # pylint: disable=too-many-boolean-expressions
+        paths = [root, binp, libp, binarch, libarch, include, icx]
+        for path in paths:
+            if not os.path.exists(path):
+                return
+        # pylint: enable=too-many-boolean-expressions
         self.map = {'root' : root,
                     'bin' : binp,
                     'lib' : libp,
@@ -59,7 +63,7 @@ def generate(env):
 
     detector = DetectCompiler()
     if detector['icx'] is None:
-        raise OneapiError("No oneapi compiler found")
+        raise SCons.Error.InternalError("No oneapi compiler found")
 
     env['INTEL_C_COMPILER_TOP'] = detector['root']
     paths = {'INCLUDE': 'include',
@@ -76,7 +80,8 @@ def generate(env):
     env['AR'] = 'xiar'
     env['LD'] = 'xild'  # not used by default
 
-def exists(env):
+def exists(_env):
+    """Find if icx exists"""
     detector = DetectCompiler()
     if detector['icx'] is None:
         return False

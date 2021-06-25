@@ -614,6 +614,7 @@ class PreReqComponent():
         self.__env.AddMethod(mocked_tests.build_mock_unit_tests,
                              'BuildMockingUnitTests')
         self.__require_optional = GetOption('require_optional')
+        self.has_icx = False
         self.download_deps = False
         self.build_deps = False
         self.__parse_build_deps()
@@ -775,11 +776,10 @@ class PreReqComponent():
 
     def _setup_intelc(self):
         """Setup environment to use intel compilers"""
-        self.has_icx = False
         try:
             env = self.__env.Clone(tools=['doneapi'])
             self.has_icx = True
-        except InternalError as err:
+        except InternalError as _err:
             print("No oneapi compiler, trying legacy")
             env = self.__env.Clone(tools=['intelc'])
         self.__env["ENV"]["PATH"] = env["ENV"]["PATH"]
