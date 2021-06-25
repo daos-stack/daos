@@ -1,8 +1,14 @@
-daos (1.3.102-2) unstable; urgency=medium
+daos (1.3.102-4) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Update to mercury v2.0.1
 
- -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Wed, 16 Jun 2021 15:31:50 -0400
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Fri, 25 Jun 2021 15:31:50 -0400
+
+daos (1.3.102-3) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to pick Pre-Vote
+
+ -- Li Wei <wei.g.li@intel.com>  Wed, 23 Jun 2021 14:46:00 +0800
 
 daos (1.3.102-1) unstable; urgency=medium
   [ Johann Lombardi]
