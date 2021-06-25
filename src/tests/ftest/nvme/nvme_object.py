@@ -4,15 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import threading
 import avocado
 import time
 
 from pydaos.raw import DaosApiError
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 from apricot import TestWithServers
 
 
@@ -158,8 +154,9 @@ class NvmeObject(TestWithServers):
             Verify the objects are being created and the data is not
             corrupted.
 
-        :avocado: tags=all,daily_regression,hw,large,nvme_object_single_pool
-        :avocado: tags=nvme_object
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme_object,nvme_object_single_pool
         :avocado: tags=DAOS_5610
         """
         # perform multiple object writes to a single pool
@@ -181,8 +178,9 @@ class NvmeObject(TestWithServers):
             Verify the objects are being created and the data is not
             corrupted.
 
-        :avocado: tags=all,full_regression,hw,large,nvme_object_multiple_pools
-        :avocado: tags=nvme_object
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme_object,nvme_object_multiple_pools
         """
         # thread to perform simultaneous object writes to multiple pools
         threads = []
