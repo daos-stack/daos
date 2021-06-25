@@ -139,6 +139,35 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
 		 daos_event_t *ev);
 
 /**
+ * Create a new container with label \a label on the storage pool connected
+ * by \a poh.
+ *
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	label	Required, label property of the new container.
+ *			Supersedes any label specified in \a cont_prop.
+ * \param[in]	cont_prop
+ *			Optional, container properties pointer
+ *			that if specified must not include an entry
+ *			with type DAOS_PROP_CO_LABEL.
+ * \param[out]	uuid	Optional, pointer to uuid_t to hold the
+ *		        implementation-generated container UUID.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_HDL	Invalid pool handle
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	network is unreachable
+ */
+int
+daos_cont_create_by_label(daos_handle_t poh, const char *label,
+			  daos_prop_t *cont_prop, uuid_t *uuid,
+			  daos_event_t *ev);
+
+/**
  * Open an existing container identified by UUID \a uuid. Upon successful
  * completion, \a coh and \a info, both of which shall be allocated by the
  * caller, return the container handle and the latest container information
@@ -239,6 +268,34 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev);
 int
 daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 		  daos_event_t *ev);
+
+/**
+ * Destroy a container identified by \a label, all objects within this
+ * container will be destroyed as well.
+ * If there is at least one container opener, and \a force is set to zero, then
+ * the operation completes with DER_BUSY. Otherwise, the container is destroyed
+ * when the operation completes.
+ *
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	label	Container label property.
+ * \param[in]	force	Container destroy will return failure if the container
+ *			is still busy (outstanding open handles). This parameter
+ *			will force the destroy to proceed even if there is an
+ *			outstanding open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NONEXIST	Container is nonexistent
+ *			-DER_BUSY	Pool is busy
+ */
+int
+daos_cont_destroy_by_label(daos_handle_t poh, const char *label, int force,
+			   daos_event_t *ev);
 
 /**
  * Query container information.

@@ -267,7 +267,8 @@ class IorTestBase(DfuseTestBase):
             self.log.error("IOR Failed: %s", str(error))
             # Queue is used when we use a thread to call
             # ior thread (eg: thread1 --> thread2 --> ior)
-            out_queue.put("IOR Failed")
+            if out_queue is not None:
+                out_queue.put("IOR Failed")
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if not self.subprocess and display_space:
