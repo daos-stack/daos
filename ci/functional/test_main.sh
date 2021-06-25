@@ -39,13 +39,13 @@ clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
 export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
-if $TEST_RPMS; then
-    # shellcheck disable=SC2029
-    ssh -i ci_key -l jenkins "${first_node}" \
-      "TEST_TAG=\"$test_tag\"                        \
-       TNODES=\"$tnodes\"                            \
-       FTEST_ARG=\"$FTEST_ARG\"                      \
-       $(cat ci/functional/test_main_node.sh)"
-else
-    ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
-fi
+#if $TEST_RPMS; then
+#    # shellcheck disable=SC2029
+#    ssh -i ci_key -l jenkins "${first_node}" \
+#      "TEST_TAG=\"$test_tag\"                        \
+#       TNODES=\"$tnodes\"                            \
+#       FTEST_ARG=\"$FTEST_ARG\"                      \
+#       $(cat ci/functional/test_main_node.sh)"
+#else
+#    ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
+#fi
