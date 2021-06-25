@@ -68,6 +68,31 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 	}
 }
 
+func TestPromExp_EngineSource_IsEnabled(t *testing.T) {
+	es, cleanup, err := NewEngineSource(context.Background(), 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if es == nil {
+		t.Fatal("EngineSource was nil")
+	}
+
+	common.AssertTrue(t, es.IsEnabled(), "default state should be enabled")
+
+	es.Enable()
+	common.AssertTrue(t, es.IsEnabled(), "Enable() while enabled")
+
+	es.Disable()
+	common.AssertFalse(t, es.IsEnabled(), "Disable() while enabled")
+
+	es.Disable()
+	common.AssertFalse(t, es.IsEnabled(), "Disable() while disabled")
+
+	es.Enable()
+	common.AssertTrue(t, es.IsEnabled(), "Enable() while disabled")
+}
+
 func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
 	t.Helper()
 
@@ -102,11 +127,18 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 	realMetrics := allTestMetrics(t)
 	telemetry.AddTestMetrics(t, realMetrics)
 
-	validSrc, cleanup, err := NewEngineSource(context.Background(), testIdx, testRank)
+	validSrc, cleanupValid, err := NewEngineSource(context.Background(), testIdx, testRank)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cleanup()
+	defer cleanupValid()
+
+	disabledSrc, cleanupDisabled, err := NewEngineSource(context.Background(), testIdx, testRank)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanupDisabled()
+	disabledSrc.Disable()
 
 	for name, tc := range map[string]struct {
 		es         *EngineSource
@@ -131,6 +163,11 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 			es:         validSrc,
 			resultChan: make(chan *rankMetric),
 			expMetrics: realMetrics,
+		},
+		"disabled": {
+			es:         disabledSrc,
+			resultChan: make(chan *rankMetric),
+			expMetrics: telemetry.TestMetricsMap{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -345,6 +382,92 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 				if !found {
 					t.Errorf("expected metric %q not found", exp)
 				}
+			}
+		})
+	}
+}
+
+func TestPromExp_extractLabels(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     string
+		expName   string
+		expLabels labelMap
+	}{
+		"empty": {},
+		"nothing to change": {
+			input:   "goodname",
+			expName: "goodname",
+		},
+		"fix spaces": {
+			input:   "a fine name",
+			expName: "a_fine_name",
+		},
+		"ID": {
+			input:   "ID: 2_stat",
+			expName: "stat",
+		},
+		"io target": {
+			input:   "io_3_latency",
+			expName: "io_latency",
+			expLabels: labelMap{
+				"target": "3",
+			},
+		},
+		"io latency B": {
+			input:   "io_fetch_latency_16B",
+			expName: "io_fetch_latency",
+			expLabels: labelMap{
+				"size": "16B",
+			},
+		},
+		"io latency KB": {
+			input:   "io_update_latency_128KB",
+			expName: "io_update_latency",
+			expLabels: labelMap{
+				"size": "128KB",
+			},
+		},
+		"io latency MB": {
+			input:   "io_fetch_latency_256MB",
+			expName: "io_fetch_latency",
+			expLabels: labelMap{
+				"size": "256MB",
+			},
+		},
+		"io latency >size": {
+			input:   "io_update_latency_GT4MB",
+			expName: "io_update_latency",
+			expLabels: labelMap{
+				"size": "GT4MB",
+			},
+		},
+		"net rank and context": {
+			input:   "net_15_128_stat",
+			expName: "net_stat",
+			expLabels: labelMap{
+				"rank":    "15",
+				"context": "128",
+			},
+		},
+		"pool current UUID": {
+			input:   "pool_current_11111111_2222_3333_4444_555555555555_info",
+			expName: "pool_info",
+			expLabels: labelMap{
+				"pool": "11111111-2222-3333-4444-555555555555",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			labels, name := extractLabels(tc.input)
+
+			common.AssertEqual(t, tc.expName, name, "")
+			common.AssertEqual(t, len(tc.expLabels), len(labels), "wrong number of labels")
+			for key, val := range labels {
+				expVal, exists := tc.expLabels[key]
+				if !exists {
+					t.Fatalf("key %q was not expected", key)
+				}
+				common.AssertEqual(t, expVal, val, "incorrect value")
 			}
 		})
 	}
