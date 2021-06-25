@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
@@ -108,14 +109,15 @@ func (c *logCmd) setLog(log *logging.LeveledLogger) {
 }
 
 type cliOptions struct {
-	Debug      bool         `long:"debug" description:"enable debug output"`
-	Verbose    bool         `long:"verbose" description:"enable verbose output (when applicable)"`
-	JSON       bool         `long:"json" description:"enable JSON output"`
-	Container  containerCmd `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
-	Pool       poolCmd      `command:"pool" description:"perform tasks related to DAOS pools"`
-	Filesystem fsCmd        `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
-	Object     objectCmd    `command:"object" alias:"obj" description:"DAOS object operations"`
-	Version    versionCmd   `command:"version" description:"print daos version"`
+	Debug      bool          `long:"debug" description:"enable debug output"`
+	Verbose    bool          `long:"verbose" description:"enable verbose output (when applicable)"`
+	JSON       bool          `long:"json" description:"enable JSON output"`
+	Container  containerCmd  `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
+	Pool       poolCmd       `command:"pool" description:"perform tasks related to DAOS pools"`
+	Filesystem fsCmd         `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
+	Object     objectCmd     `command:"object" alias:"obj" description:"DAOS object operations"`
+	Version    versionCmd    `command:"version" description:"print daos version"`
+	ManPage    common.ManCmd `command:"manpage" hidden:"true"`
 }
 
 type versionCmd struct{}
@@ -135,26 +137,25 @@ func exitWithError(log logging.Logger, err error) {
 	os.Exit(1)
 }
 
-func writeManPage(wr io.Writer) {
-	var opts cliOptions
-	p := flags.NewParser(&opts, flags.Default)
-	p.Name = "daos"
-	p.ShortDescription = "Command to manage DAOS pool/container/object"
-	p.Usage = "[OPTIONS] [COMMAND] [SUBCOMMAND]"
-	p.LongDescription = `daos  can  be  used  to  manage/query  a  pool  content,
-	create/query/manage/destroy a container inside a pool or
-	query/manage an object inside a container.`
-
-	p.WriteManPage(wr)
-}
-
 func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
 	var wroteJSON atm.Bool
 	p := flags.NewParser(opts, flags.Default)
+	p.Name = "daos"
+	p.ShortDescription = "Command to manage DAOS pool/container/object"
+	p.Usage = "RESOURCE COMMAND [OPTIONS]"
+	p.LongDescription = `daos is a tool that can be used to manage/query pool content,
+create/query/manage/destroy a container inside a pool, copy data
+between a POSIX container and a POSIX filesystem, clone a DAOS container,
+or query/manage an object inside a container.`
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
 		if cmd == nil {
 			return nil
+		}
+
+		if manCmd, ok := cmd.(common.ManPageWriter); ok {
+			manCmd.SetWriteFunc(p.WriteManPage)
+			return cmd.Execute(args)
 		}
 
 		if opts.Debug {
