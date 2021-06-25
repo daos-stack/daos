@@ -1220,12 +1220,14 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			mw->mw_phy_cnt--;
 			continue;
 		}
-
 		/* Update extent start of truncated physical entry */
 		rect.rc_ex.ex_lo = mw->mw_ext.ex_hi + 1;
 		phy_ent->pe_off = rect.rc_ex.ex_lo -
 				phy_ent->pe_rect.rc_ex.ex_lo;
 		phy_ent->pe_trunc_head = false;
+		printf("Leftover extent "DF_RECT"\n", DP_RECT(rect));
+		fflush(stdout);
+
 		leftovers++;
 	}
 	D_ASSERT(leftovers == mw->mw_phy_cnt);
@@ -1617,23 +1619,7 @@ handle_deleted(daos_handle_t ih, struct agg_merge_window *mw,
 
 	recx2ext(&entry->ie_recx, &ext);
 
-	/** If the new record is a eleged record, go ahead and flush
-	 *  the window first because that's all we have left.
-	 */
-	*rc = flush_merge_window(ih, mw, acts);
-	if (*rc) {
-		D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
-			DP_EXT(&mw->mw_ext), DP_RC(*rc));
-		goto out;
-	}
-
-	clear_merge_window(mw);
-
 	*rc = delete_evt_entry(oiter, entry, acts, "deleted");
-
-	if (entry->ie_vis_flags & VOS_VIS_FLAG_LAST)
-		close_merge_window(mw, *rc);
-out:
 	return true;
 }
 
@@ -1831,7 +1817,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		 * Sorted iteration doesn't support tree empty check, so we
 		 * always inform vos_iterate() to check if subtree is empty.
 		 */
-		if (entry->ie_vis_flags & VOS_VIS_FLAG_LAST) {
+		if (entry->ie_vis_flags & VOS_VIS_FLAG_END) {
 			/* Trigger re-probe in akey iteration */
 			*acts |= VOS_ITER_CB_YIELD;
 		}

@@ -1044,6 +1044,11 @@ re_sort:
 		qsort(ents, ent_array->ea_ent_nr, sizeof(ents[0]), compar);
 
 	ent_array->ea_ent_nr = total;
+	if (total != num_deleted) {
+		ent = evt_ent_array_get(ent_array, total - num_deleted - 1);
+		/** Mark the last entry that isn't a delete record */
+		ent->en_visibility |= EVT_LAST;
+	}
 
 	return 0;
 }

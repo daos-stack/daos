@@ -303,8 +303,13 @@ enum evt_visibility {
 	EVT_PARTIAL	= (1 << 3),
 	/** Visibility mask */
 	EVT_VIS_MASK	= (EVT_DELETED | EVT_COVERED | EVT_VISIBLE),
-	/** In sorted iterator, marks final entry */
+	/** Marks the final entry that isn't a delete record.
+	 *  Assumes increasing epoch order so not very useful
+	 *  for reverse iterator.
+	 */
 	EVT_LAST	= (1 << 4),
+	/** Marks the final entry in the iterator */
+	EVT_END		= (1 << 5),
 };
 
 /**

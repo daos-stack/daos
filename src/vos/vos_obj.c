@@ -23,6 +23,7 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_COVERED == (uint32_t)EVT_COVERED);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
+D_CASSERT((uint32_t)VOS_VIS_FLAG_END == (uint32_t)EVT_END);
 
 /** This callback is invoked only if the tree is not empty */
 static int

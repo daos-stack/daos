@@ -363,8 +363,13 @@ enum {
 	VOS_VIS_FLAG_DELETED = (1 << 2),
 	/** The extent represents only a portion of the in-tree extent */
 	VOS_VIS_FLAG_PARTIAL = (1 << 3),
-	/** In sorted iterator, marks final entry */
+	/** Marks the final entry in sorted iterator that isn't a delete record.
+	 *  Assumes increasing epoch order so not very useful for reverse
+	 *  iterator.
+	 */
 	VOS_VIS_FLAG_LAST    = (1 << 4),
+	/** Marks the last entry in the sorted iterator */
+	VOS_VIS_FLAG_END     = (1 << 5),
 };
 
 /**
