@@ -961,7 +961,7 @@ bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name)
 	}
 
 	BIO_PROTO_NVME_VENDOR_STATS_LIST
-#undef X
+#undef Y
 	D_FREE(binfo);
 }
 

@@ -222,13 +222,13 @@ struct bio_dma_buffer {
 	Y(bdh_workload_timer_raw, "vendor/crc_workload_timer_raw",	\
 	  "The elapsed time since starting the workload timer",		\
 	  "minutes", D_TM_COUNTER)					\
-	Y(bdh_thermal_throttle_status, "vendor/thermal_throttle_status_raw",	\
+	Y(bdh_thermal_throttle_status, "vendor/thermal_throttle_status_raw", \
 	  "Thermal throttle status",					\
 	  "%", D_TM_COUNTER)						\
-	Y(bdh_thermal_throttle_event_cnt, "vendor/thermal_throttle_event_cnt",	\
+	Y(bdh_thermal_throttle_event_cnt, "vendor/thermal_throttle_event_cnt", \
 	  "Thermal throttling event count",				\
 	  "", D_TM_COUNTER)						\
-	Y(bdh_retry_buffer_overflow_cnt, "vendor/retry_buffer_overflow_cnt",	\
+	Y(bdh_retry_buffer_overflow_cnt, "vendor/retry_buffer_overflow_cnt", \
 	  "Retry Buffer overflow count",				\
 	  "", D_TM_COUNTER)						\
 	Y(bdh_pll_lock_loss_cnt, "vendor/pll_lock_loss_cnt",		\
