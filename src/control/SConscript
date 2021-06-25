@@ -8,8 +8,7 @@ from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'daos_version', 'conf_dir',
-       'gurt_lib')
+Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -56,6 +55,18 @@ def get_build_flags(benv):
         # enable race detector for non-release builds
         flags += "-race"
     return flags
+
+def install_go_manpage(menv, name):
+    """
+    Dynamically generate a manpage for a tool.
+    """
+    gen_bin = join('$BUILD_DIR', 'src/control/bin', name)
+    build_path = join('$BUILD_DIR', 'src/control', name+'.8')
+    install_path = join(menv.subst("$PREFIX"), "share/man/man8", name+'.8')
+    menv.Command(build_path, [gen_bin, gurt_lib],
+                '%s manpage -o %s' % (gen_bin, build_path))
+    menv.InstallAs(install_path, build_path)
+    return install_path
 
 #pylint: disable=too-many-arguments
 def install_go_bin(denv, gosrc, libs, name, install_name):
@@ -207,6 +218,19 @@ def scons():
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
         daosbin = install_go_bin(dbenv, gosrc, [daos_hdlrs_lib], "daos", "daos")
         AlwaysBuild([daosbin])
+
+        menv = denv.Clone()
+        menv["ENV"]["LD_LIBRARY_PATH"] = menv.subst(
+            "$BUILD_DIR/src/gurt" + \
+            ":$BUILD_DIR/src/cart" + \
+            ":$BUILD_DIR/src/common" + \
+            ":$BUILD_DIR/src/utils" + \
+            ":$OFI_PREFIX/lib" + \
+            ":$BUILD_DIR/src/client/dfs" + \
+            ":$BUILD_DIR/src/client/api")
+        dmg_man = install_go_manpage(menv, "dmg")
+        daos_man = install_go_manpage(menv, "daos")
+        AlwaysBuild([dmg_man, daos_man])
 
     if not prereqs.server_requested():
         return
