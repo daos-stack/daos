@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -32,45 +31,6 @@ func flagTestInit() (func(), error) {
 	return func() {
 		C.obj_class_fini()
 	}, nil
-}
-
-type LabelOrUUIDFlag struct {
-	UUID  uuid.UUID `json:"uuid"`
-	Label string    `json:"label"`
-}
-
-func (f LabelOrUUIDFlag) Empty() bool {
-	return !f.HasLabel() && !f.HasUUID()
-}
-
-func (f LabelOrUUIDFlag) HasLabel() bool {
-	return f.Label != ""
-}
-
-func (f LabelOrUUIDFlag) HasUUID() bool {
-	return f.UUID != uuid.Nil
-}
-
-func (f LabelOrUUIDFlag) String() string {
-	switch {
-	case f.HasLabel():
-		return f.Label
-	case f.HasUUID():
-		return f.UUID.String()
-	default:
-		return "<no label or uuid set>"
-	}
-}
-
-func (f *LabelOrUUIDFlag) UnmarshalFlag(fv string) error {
-	uuid, err := uuid.Parse(fv)
-	if err == nil {
-		f.UUID = uuid
-		return nil
-	}
-
-	f.Label = fv
-	return nil
 }
 
 type EpochRangeFlag struct {

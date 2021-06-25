@@ -22,6 +22,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
 /*
@@ -30,7 +31,7 @@ import (
 import "C"
 
 type PoolID struct {
-	LabelOrUUIDFlag
+	ui.LabelOrUUIDFlag
 }
 
 type poolBaseCmd struct {

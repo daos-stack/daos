@@ -21,6 +21,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -934,7 +935,7 @@ func parsePoolFlag() *poolFlagCmd {
 }
 
 type ContainerID struct {
-	LabelOrUUIDFlag
+	ui.LabelOrUUIDFlag
 }
 
 // Implement the completion handler to provide a list of container IDs
