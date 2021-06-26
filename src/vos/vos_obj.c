@@ -1306,8 +1306,6 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_orig_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_orig_recx.rx_nr	 = evt_extent_width(ext);
 	it_entry->ie_vis_flags = entry.en_visibility;
-	if (it_entry->ie_minor_epc == EVT_MINOR_EPC_MAX)
-		it_entry->ie_vis_flags &= ~VOS_VIS_FLAG_VISIBLE;
 	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;
 	it_entry->ie_csum	= entry.en_csum;

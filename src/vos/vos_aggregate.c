@@ -1835,8 +1835,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 			  lgc_ext.ex_hi == phy_ext.ex_hi,
 			  ""DF_EXT" != "DF_EXT"\n",
 			  DP_EXT(&lgc_ext), DP_EXT(&phy_ext));
-		D_ASSERT(entry->ie_vis_flags & VOS_VIS_FLAG_COVERED ||
-			 entry->ie_minor_epc == EVT_MINOR_EPC_MAX);
+		D_ASSERT(entry->ie_vis_flags & VOS_VIS_FLAG_COVERED);
 
 		rc = delete_evt_entry(oiter, entry, acts, "covered");
 		if (rc)
