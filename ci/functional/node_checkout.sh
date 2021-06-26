@@ -194,7 +194,14 @@ lsblk
 bash -c "spdk_nvme_perf -q 16 -o 1048576 -w write -t 100 -c 0xf00000f ${transport_ids}"
 rc_spdk_perf=`echo $?`
 if [[ $rc_spdk_perf != 0 ]]; then
-    echo "[FAILED] SPDK Perf failed"
+    echo "[FAILED] SPDK Perf write failed"
+    exit $rc
+fi
+
+bash -c "spdk_nvme_perf -q 16 -o 1048576 -w read -t 100 -c 0xf00000f ${transport_ids}"
+rc_spdk_perf=`echo $?`
+if [[ $rc_spdk_perf != 0 ]]; then
+    echo "[FAILED] SPDK Perf read failed"
     exit $rc
 fi
 
