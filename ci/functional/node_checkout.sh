@@ -204,7 +204,7 @@ fi
 #rpms_check $1
 vtx_enabled
 check_numa_sockets
-verify_ibstate
+#verify_ibstate
 verify_ip_for_interfaces
 #check_for_multirail_settings
 #verify_ntp
