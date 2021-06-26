@@ -1034,10 +1034,12 @@ re_sort:
 		total = ent_array->ea_ent_nr;
 	} else if (flags & EVT_COVERED) {
 		total = ent_array->ea_ent_nr - num_deleted;
+		num_deleted = 0;
 	} else {
 		D_ASSERT(flags & EVT_VISIBLE);
 		compar = evt_ent_list_cmp_visible;
 		total = num_visible;
+		num_deleted = 0;
 	}
 
 	if (ent_array->ea_ent_nr != 1)
@@ -3600,6 +3602,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
+
 
 	return evt_delete_internal(tcx, rect, ent, false);
 }

@@ -420,7 +420,7 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
 				   ds_csum_agg_recalc, NULL, NULL, false);
-	if (rc != -DER_CSUM && !ds->td_delete) {
+	if (rc != -DER_CSUM) {
 		/* Skip delete verification for now */
 		assert_rc_equal(rc, 0);
 		verify_view(arg, oid, dkey, akey, ds);
@@ -2125,7 +2125,7 @@ aggregate_23(void **state)
 	ds.td_iod_size = iod_size;
 	ds.td_recx_nr = 8;
 	ds.td_recx = &recx_arr[0];
-	ds.td_expected_recs = 5;
+	ds.td_expected_recs = 4;
 	ds.td_upd_epr.epr_lo = 1;
 	ds.td_upd_epr.epr_hi = 8;
 	ds.td_agg_epr.epr_lo = 0;
@@ -2139,6 +2139,82 @@ aggregate_23(void **state)
 
 	VERBOSE_MSG("Aggregate deleted records spanning window end.\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
+}
+
+static void
+aggregate_24(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[4];
+	daos_epoch_t		 punch_epochs[] = {2, 3, 4};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = end_idx - 5;
+	recx_arr[0].rx_nr = 25;
+	recx_arr[1].rx_idx = end_idx - 2;
+	recx_arr[1].rx_nr = 4;
+	recx_arr[2].rx_idx = end_idx + 4;
+	recx_arr[2].rx_nr = 4;
+	recx_arr[3].rx_idx = end_idx + 2;
+	recx_arr[3].rx_nr = 2;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 2;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 4;
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = 5;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Aggregate extents not fully covered by delete record\n");
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
+static void
+aggregate_25(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[3];
+	daos_epoch_t		 punch_epochs[] = {2};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = end_idx - 5;
+	recx_arr[0].rx_nr = end_idx + 5;
+	recx_arr[1].rx_idx = end_idx - 2;
+	recx_arr[1].rx_nr = end_idx + 2;
+	recx_arr[2].rx_idx = end_idx - 2;
+	recx_arr[2].rx_nr = 4;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 1;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Aggregate delete of end of merge window\n")
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
 	cleanup();
 }
 
@@ -2230,6 +2306,10 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_22, NULL, agg_tst_teardown },
 	{ "VOS423: Aggregate deleted records spanning window end",
 	  aggregate_23, NULL, agg_tst_teardown },
+	{ "VOS424: Aggregate extents not fully covered by delete record",
+	  aggregate_24, NULL, agg_tst_teardown },
+	{ "VOS425: Aggregate delete of end of merge window",
+	  aggregate_25, NULL, agg_tst_teardown },
 };
 
 int
