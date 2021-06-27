@@ -74,7 +74,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         # defined manually:
         exp_info = {
             "status": self.params.get("pool_status", path="/run/exp_vals/*"),
-            "uuid": self.uuid.upper(),
+            "uuid": self.uuid.lower(),
             "total_targets": self.params.get(
                 "total_targets", path="/run/exp_vals/*"),
             "active_targets": self.params.get(

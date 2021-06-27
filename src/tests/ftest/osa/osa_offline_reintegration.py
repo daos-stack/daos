@@ -7,7 +7,7 @@
 import random
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool, LabelGenerator
+from test_utils_pool import TestPool
 from write_host_file import write_host_file
 
 
@@ -48,7 +48,6 @@ class OSAOfflineReintegration(OSAUtils):
             oclass (str) : daos object class string (eg: "RP_2G8")
         """
         # Create a pool
-        label_generator = LabelGenerator()
         pool = {}
         random_pool = 0
         if oclass is None:
@@ -59,7 +58,7 @@ class OSAOfflineReintegration(OSAUtils):
         for val in range(0, num_pool):
             pool[val] = TestPool(
                 context=self.context, dmg_command=self.get_dmg_command(),
-                label_generator=label_generator)
+                label_generator=self.label_generator)
             pool[val].get_params(self)
             pool[val].create()
             self.pool = pool[val]

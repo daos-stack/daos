@@ -12,7 +12,7 @@ from itertools import product
 
 from apricot import TestWithServers
 from write_host_file import write_host_file
-from test_utils_pool import TestPool, LabelGenerator
+from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
@@ -113,7 +113,6 @@ class NvmePoolCapacity(TestWithServers):
             Returns:
                 None
         """
-        label_generator = LabelGenerator()
         pool = {}
         cont = {}
 
@@ -122,7 +121,7 @@ class NvmePoolCapacity(TestWithServers):
             for val in range(0, num_pool):
                 pool[val] = TestPool(
                     context=self.context, dmg_command=self.get_dmg_command(),
-                    label_generator=label_generator)
+                    label_generator=self.label_generator)
                 pool[val].get_params(self)
                 # Split total SCM and NVME size for creating multiple pools.
                 temp = int(scm_size) / num_pool
@@ -170,7 +169,9 @@ class NvmePoolCapacity(TestWithServers):
             # Create the IOR threads
             threads = []
             for val in range(0, num_pool):
-                pool[val] = TestPool(self.context, self.get_dmg_command())
+                pool[val] = TestPool(
+                    context=self.context, dmg_command=self.get_dmg_command(),
+                    label_generator=self.label_generator)
                 pool[val].get_params(self)
                 # Split total SCM and NVME size for creating multiple pools.
                 pool[val].scm_size.value = int(test[0]) / num_pool
