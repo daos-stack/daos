@@ -653,13 +653,15 @@ func TestControl_Pool_setUsage(t *testing.T) {
 			expPool: &Pool{
 				Usage: []*PoolTierUsage{
 					{
+						TierName:  "SCM",
 						Size:      humanize.GByte * 30,
-						Used:      50,
+						Free:      humanize.GByte * 15,
 						Imbalance: 10,
 					},
 					{
+						TierName:  "NVME",
 						Size:      humanize.GByte * 500,
-						Used:      50,
+						Free:      humanize.GByte * 250,
 						Imbalance: 10,
 					},
 				},
@@ -683,13 +685,15 @@ func TestControl_Pool_setUsage(t *testing.T) {
 			expPool: &Pool{
 				Usage: []*PoolTierUsage{
 					{
+						TierName:  "SCM",
 						Size:      humanize.GByte * 30,
-						Used:      50,
+						Free:      humanize.GByte * 15,
 						Imbalance: 5,
 					},
 					{
+						TierName:  "NVME",
 						Size:      humanize.GByte * 500,
-						Used:      50,
+						Free:      humanize.GByte * 250,
 						Imbalance: 5,
 					},
 				},
@@ -742,6 +746,24 @@ func TestControl_ListPools(t *testing.T) {
 			},
 		}
 	}
+	queryRespNoScm := queryResp(1)
+	queryRespNoScm.Scm = nil
+	queryRespNoNvme := queryResp(1)
+	queryRespNoNvme.Nvme = nil
+	expUsage := []*PoolTierUsage{
+		{
+			TierName:  "SCM",
+			Size:      123456,
+			Free:      0,
+			Imbalance: 12,
+		},
+		{
+			TierName:  "NVME",
+			Size:      1234567,
+			Free:      600000,
+			Imbalance: 1,
+		},
+	}
 
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
@@ -792,29 +814,169 @@ func TestControl_ListPools(t *testing.T) {
 						ServiceReplicas: []system.Rank{1, 3, 5, 8},
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
-						Usage: []*PoolTierUsage{
-							{
-								TierName:  "SCM",
-								Size:      123456,
-								Used:      100,
-								Imbalance: 12,
-							},
-							{
-								TierName:  "NVME",
-								Size:      1234567,
-								Used:      51,
-								Imbalance: 1,
-							},
-						},
+						Usage:           expUsage,
 					},
 				},
 			},
 		},
-		//		"one pool; bad query response; no scm":        {},
-		//		"one pool; bad query response; no nvme":       {},
-		//		"one pool; bad query response; uuid mismatch": {},
-		//		"multiple pools; one query error":             {},
-		//		"multiple pools; one query failed status":     {},
+		"one pool; no scm in query response": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryRespNoScm),
+				},
+			},
+			expErr: errors.New("missing scm"),
+		},
+		"one pool; no nvme in query response": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryRespNoNvme),
+				},
+			},
+			expErr: errors.New("missing nvme"),
+		},
+		"one pool; uuid mismatch in query response": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expErr: errors.New("uuid does not match"),
+		},
+		"two pools": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+							{
+								Uuid:    common.MockUUID(2),
+								SvcReps: []uint32{1, 2, 3},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryResp(1)),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expResp: &ListPoolsResp{
+				Pools: []*Pool{
+					{
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{1, 2, 3},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+				},
+			},
+		},
+		"two pools; one query has error": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+							{
+								Uuid:    common.MockUUID(2),
+								SvcReps: []uint32{1, 2, 3},
+							},
+						},
+					}),
+					MockMSResponse("host1", errors.New("remote failed"), nil),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expResp: &ListPoolsResp{
+				Pools: []*Pool{
+					{
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						QueryErrorMsg:   "remote failed",
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{1, 2, 3},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+				},
+			},
+		},
+		"two pools; one query has bad status": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+							{
+								Uuid:    common.MockUUID(2),
+								SvcReps: []uint32{1, 2, 3},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{Status: -1}),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expResp: &ListPoolsResp{
+				Pools: []*Pool{
+					{
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						QueryStatus:     -1,
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{1, 2, 3},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

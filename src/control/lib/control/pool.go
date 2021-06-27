@@ -706,11 +706,12 @@ type (
 	PoolTierUsage struct {
 		// TierName identifies a pool's storage tier.
 		TierName string `json:"tier_name"`
-		// Size is the total bytes of the pool tier.
+		// Size is the total number of bytes in the pool tier.
 		Size uint64 `json:"size"`
-		// Used is the percentage usage of pool tier.
-		Used uint32 `json:"used"`
-		// Imbalance is the percentage imbalance of pool tier.
+		// Free is the number of free bytes in the pool tier.
+		Free uint64 `json:"free"`
+		// Imbalance is the percentage imbalance of pool tier usage
+		// across all the targets.
 		Imbalance uint32 `json:"imbalance"`
 	}
 
@@ -731,7 +732,7 @@ type (
 		TargetsDisabled uint32 `json:"targets_disabled"`
 
 		// QueryError reports an RPC error returned from a query.
-		QueryError error `json:"query_error"`
+		QueryErrorMsg string `json:"query_error_msg"`
 		// QueryStatus reports any DAOS error returned from a query
 		// operation.
 		QueryStatus int32 `json:"query_status"`
@@ -745,9 +746,6 @@ func (p *Pool) setUsage(pqr *PoolQueryResp) {
 	nvmeTotal := pqr.Nvme.Total
 	scmTotal := pqr.Scm.Total
 
-	scmUsed := float64(scmTotal-pqr.Scm.Free) / float64(scmTotal)
-	nvmeUsed := float64(nvmeTotal-pqr.Nvme.Free) / float64(nvmeTotal)
-
 	scmSpread := pqr.Scm.Max - pqr.Scm.Min
 	scmImbalance := float64(scmSpread) / (float64(scmTotal) / float64(pqr.ActiveTargets))
 	nvmeSpread := pqr.Nvme.Max - pqr.Nvme.Min
@@ -758,14 +756,14 @@ func (p *Pool) setUsage(pqr *PoolQueryResp) {
 		&PoolTierUsage{
 			TierName:  "SCM",
 			Size:      scmTotal,
-			Used:      uint32(scmUsed * 100),
+			Free:      pqr.Scm.Free,
 			Imbalance: uint32(scmImbalance * 100),
 		},
 		// nvme is tier 1
 		&PoolTierUsage{
 			TierName:  "NVME",
 			Size:      nvmeTotal,
-			Used:      uint32(nvmeUsed * 100),
+			Free:      pqr.Nvme.Free,
 			Imbalance: uint32(nvmeImbalance * 100),
 		})
 }
@@ -809,7 +807,10 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 
 		resp, err := PoolQuery(ctx, rpcClient, &PoolQueryReq{UUID: p.UUID})
 		if err != nil {
-			p.QueryError = err
+			p.QueryErrorMsg = err.Error()
+			if p.QueryErrorMsg == "" {
+				p.QueryErrorMsg = "pool query returned empty error"
+			}
 			continue
 		}
 		if resp.Status != 0 {
@@ -817,13 +818,13 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			continue
 		}
 		if resp.Scm == nil {
-			return nil, errors.New("PoolQueryResp missing SCM stats")
+			return nil, errors.New("pool query response missing scm stats")
 		}
 		if resp.Nvme == nil {
-			return nil, errors.New("PoolQueryResp missing NVMe stats")
+			return nil, errors.New("pool query response missing nvme stats")
 		}
 		if p.UUID != resp.UUID {
-			return nil, errors.New("PoolQueryResp UUID doesn't match request")
+			return nil, errors.New("pool query response uuid does not match request")
 		}
 
 		p.TargetsTotal = resp.TotalTargets

@@ -87,38 +87,51 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	return err
 }
 
-func poolListGetTitles() []string {
-	return []string{"Pool", "Size", "Used", "Imbalance", "Disabled"}
-}
-
-func poolListCreateRow(pool *control.PoolUsage) txtfmt.TableRow {
+func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 	name := pool.Label
 	if name == "" {
 		name = pool.UUID
 	}
 
-	size := pool.NvmeSize
-	if size == 0 {
-		size = pool.ScmSize
+	// display size of the largest non-empty tier
+	var sizeTier *control.PoolTierUsage
+	for ti := len(pool.Usage) - 1; ti >= 0; ti-- {
+		if pool.Usage[ti].Size != 0 {
+			sizeTier = pool.Usage[ti]
+			break
+		}
 	}
+	sizeStr := fmt.Sprintf("%s (%s)", humanize.Bytes(sizeTier.Size), sizeTier.TierName)
 
-	usage := pool.ScmUsed
-	if pool.NvmeUsed > usage {
-		usage = pool.NvmeUsed
-	}
+	// display usage of the most used tier
+	var usedTierName string
+	var usedPercentage int
+	for ti := 0; ti < len(pool.Usage); ti++ {
+		t := pool.Usage[ti]
+		u := float64(t.Size-t.Free) / float64(t.Size)
 
-	imbalance := pool.ScmImbalance
-	if pool.NvmeImbalance > imbalance {
-		imbalance = pool.NvmeImbalance
+		if int(u*100) > usedPercentage {
+			usedTierName = t.TierName
+			usedPercentage = int(u * 100)
+		}
 	}
+	usedStr := fmt.Sprintf("%d%% (%s)", usedPercentage, usedTierName)
+
+	// display imbalance of the most imbalanced tier
+	imbalancedTier := pool.Usage[0]
+	for ti := 0; ti < len(pool.Usage); ti++ {
+		if pool.Usage[ti].Imbalance > imbalancedTier.Imbalance {
+			imbalancedTier = pool.Usage[ti]
+		}
+	}
+	imbalanceStr := fmt.Sprintf("%d%% (%s)", imbalancedTier.Imbalance, imbalancedTier.TierName)
 
 	row := txtfmt.TableRow{
 		"Pool":      name,
-		"Size":      humanize.Bytes(size),
-		"Used":      fmt.Sprintf("%d%%", usage),
-		"Imbalance": fmt.Sprintf("%d%%", imbalance),
-		"Disabled": fmt.Sprintf("%d/%d", pool.TargetsDisabled,
-			pool.TargetsTotal),
+		"Size":      sizeStr,
+		"Used":      usedStr,
+		"Imbalance": imbalanceStr,
+		"Disabled":  fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
 	}
 
 	return row
@@ -130,7 +143,7 @@ func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 		return nil
 	}
 
-	formatter := txtfmt.NewTableFormatter(poolListGetTitles()...)
+	formatter := txtfmt.NewTableFormatter("Pool", "Size", "Used", "Imbalance", "Disabled")
 
 	var table []txtfmt.TableRow
 	for _, pool := range resp.Pools {
@@ -142,33 +155,82 @@ func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 	return nil
 }
 
+func addVerboseTierUsage(row txtfmt.TableRow, usage *control.PoolTierUsage) txtfmt.TableRow {
+	row[usage.TierName+" Size"] = humanize.Bytes(usage.Size)
+	row[usage.TierName+" Used"] = humanize.Bytes(usage.Size - usage.Free)
+	row[usage.TierName+" Imbalance"] = fmt.Sprintf("%d%%", usage.Imbalance)
+
+	return row
+}
+
+func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
+	label := pool.Label
+	if label == "" {
+		label = "-"
+	}
+
+	svcReps := "N/A"
+	if len(pool.ServiceReplicas) != 0 {
+		rl := system.RanksToUint32(pool.ServiceReplicas)
+		svcReps = formatRanks(rl)
+	}
+
+	row := txtfmt.TableRow{
+		"Label":    label,
+		"UUID":     pool.UUID,
+		"SvcReps":  svcReps,
+		"Disabled": fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
+	}
+
+	for _, tu := range pool.Usage {
+		row = addVerboseTierUsage(row, tu)
+	}
+
+	return row
+}
+
 func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error {
 	if len(resp.Pools) == 0 {
 		fmt.Fprintln(out, "no pools in system")
 		return nil
 	}
 
-	titles := poolListGetTitles()
-	uuidTitle := "UUID"
-	svcRepsTitle := "SvcReps"
-	verboseTitles := []string{titles[0], uuidTitle, svcRepsTitle}
-	verboseTitles = append(verboseTitles, titles[1:]...)
-
-	formatter := txtfmt.NewTableFormatter(verboseTitles...)
+	titles := []string{"Label", "UUID", "SvcReps"}
+	for _, t := range resp.Pools[0].Usage {
+		titles = append(titles,
+			t.TierName+" Size",
+			t.TierName+" Used",
+			t.TierName+" Imbalance")
+	}
+	titles = append(titles, "Disabled")
+	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow
 	for _, pool := range resp.Pools {
-		row := poolListCreateRow(pool)
-		row[uuidTitle] = pool.UUID
-		row[svcRepsTitle] = "N/A"
-		if len(pool.ServiceReplicas) != 0 {
-			rl := system.RanksToUint32(pool.ServiceReplicas)
-			row[svcRepsTitle] = formatRanks(rl)
-		}
-		table = append(table, row)
+		table = append(table, poolListCreateRowVerbose(pool))
 	}
 
 	fmt.Fprintln(out, formatter.Format(table))
+
+	return nil
+}
+
+func validateListPoolsResp(r *control.ListPoolsResp) error {
+	var numTiers int
+
+	for i, p := range r.Pools {
+		if p.UUID == "" {
+			return errors.Errorf("pool with index %d has no uuid", i)
+		}
+		if len(p.Usage) == 0 {
+			return errors.Errorf("pool %s has no usage info", p.UUID)
+		}
+		if numTiers != 0 && len(p.Usage) != numTiers {
+			return errors.Errorf("pool %s has %d storage tiers, want %d",
+				p.UUID, len(p.Usage), numTiers)
+		}
+		numTiers = len(p.Usage)
+	}
 
 	return nil
 }
@@ -177,6 +239,10 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 // supplied ListPoolsResp struct and writes it to the supplied io.Writer.
 // Additional columns for pool UUID and service replicas if verbose is set.
 func PrintListPoolsResponse(o io.Writer, r *control.ListPoolsResp, v bool) error {
+	if err := validateListPoolsResp(r); err != nil {
+		return err
+	}
+
 	if v {
 		return printListPoolsRespVerbose(o, r)
 	}
