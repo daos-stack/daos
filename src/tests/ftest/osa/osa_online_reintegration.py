@@ -13,6 +13,7 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
+from apricot import skipForTicket
 import queue
 
 
@@ -100,8 +101,6 @@ class OSAOnlineReintegration(OSAUtils):
                                             kwargs={"action": "Write",
                                                     "oclass": oclass,
                                                     "test": test_seq}))
-            # Add a mdtest thread to threads list
-            threads.append(threading.Thread(target=self.run_mdtest_thread))
 
             # Launch the IOR threads
             for thrd in threads:
@@ -176,6 +175,7 @@ class OSAOnlineReintegration(OSAUtils):
         self.log.info("Online Reintegration : Basic test")
         self.run_online_reintegration_test(1)
 
+    @skipForTicket("DAOS-7195")
     def test_osa_online_reintegration_server_stop(self):
         """Test ID: DAOS-5920.
         Test Description: Validate Online Reintegration with server stop
