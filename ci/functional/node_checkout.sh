@@ -3,6 +3,8 @@
 # Hardware Validation script to verify if the single node
 # is in deployable state. This is intended to run on a single node.
 
+set -x
+
 rc=1
 
 # Verify if all the required rpms are installed
