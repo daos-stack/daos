@@ -402,4 +402,5 @@ obj_iter_scrub(coh, epr, csummer, pool_uuid, event_handlers, entry, type)
 - D_LOG_MASK=DEBUG
 - DD_SUBSYS=pool
 - DD_MASK=csum
+What other debugging info??
 ```
