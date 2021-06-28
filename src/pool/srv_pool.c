@@ -337,6 +337,12 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		}
 	}
 
+	/* Validate the result */
+	if (!daos_prop_valid(prop_def, true /* pool */, true /* input */)) {
+		D_ERROR("properties validation check failed\n");
+		return -DER_INVAL;
+	}
+
 	return 0;
 }
 
@@ -1836,7 +1842,8 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	/* duplicate the default properties, overwrite it with pool create
 	 * parameter and then write to pool meta data.
 	 */
-	prop_dup = daos_prop_dup(&pool_prop_default, true);
+	prop_dup = daos_prop_dup(&pool_prop_default, true /* pool */,
+				 false /* input */);
 	if (prop_dup == NULL) {
 		D_ERROR("daos_prop_dup failed.\n");
 		D_GOTO(out_tx, rc = -DER_NOMEM);
@@ -2061,7 +2068,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
 
-	metrics = &ds_pool_metrics;
+	metrics = &ds_global_pool_metrics;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -2319,7 +2326,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 
 	D_ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
 
-	metrics = &ds_pool_metrics;
+	metrics = &ds_global_pool_metrics;
 
 	D_DEBUG(DF_DSMS, DF_UUID": disconnecting %d hdls: hdl_uuids[0]="DF_UUID
 		"\n", DP_UUID(svc->ps_uuid), n_hdl_uuids,
@@ -3499,6 +3506,12 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 				    &out->pso_op.po_hint);
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	if (!daos_prop_valid(in->psi_prop, true /* pool */, true /* input */)) {
+		D_ERROR(DF_UUID": invalid properties input\n",
+			DP_UUID(in->psi_op.pi_uuid));
+		D_GOTO(out_svc, rc = -DER_INVAL);
+	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -5696,17 +5709,16 @@ ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 		return rc;
 	leader_shard = rc;
 
-	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader_tgt);
 	rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
 	if (rc < 0)
-		return rc;
+		D_GOTO(out, rc);
 
 	if (rc != 1)
-		return -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 
 	rc = crt_group_rank(NULL, &myrank);
 	if (rc < 0)
-		return rc;
+		D_GOTO(out, rc);
 
 	if (myrank != target->ta_comp.co_rank) {
 		rc = 0;
@@ -5716,6 +5728,9 @@ ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 			rc = 0;
 	}
 
+out:
+	D_DEBUG(DB_TRACE, DF_UOID" get new leader shard/tgtid %d/%d: %d\n",
+		DP_UOID(*oid), leader_shard, leader_tgt, rc);
 	return rc;
 }
 

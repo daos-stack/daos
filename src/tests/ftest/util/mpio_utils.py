@@ -38,14 +38,16 @@ class MpioUtils():
             return False
 
         # checking mpich install
-        cmd = "set -e; "                                                \
-              "export MODULEPATH=/usr/share/modules:/etc/modulefiles; " \
-              "for mod in mpi/mpich-x86_64 gnu-mpich; do "              \
-                  "if module is-avail $mod >/dev/null 2>&1; then "      \
-                      "module load $mod >/dev/null 2>&1; "              \
-                      "break; "                                         \
-                  "fi; "                                                \
-              "done; "                                                  \
+        cmd = "set -e; "                                           \
+              "export MODULEPATH=/usr/share/modulefiles:"          \
+                                 "/usr/share/modules:"             \
+                                 "/etc/modulefiles; "              \
+              "for mod in mpi/mpich-x86_64 gnu-mpich; do "         \
+                  "if module is-avail $mod >/dev/null 2>&1; then " \
+                      "module load $mod >/dev/null 2>&1; "         \
+                      "break; "                                    \
+                  "fi; "                                           \
+              "done; "                                             \
               "command -v mpichversion"
         cmd = '/usr/bin/ssh {} {}'.format(hostlist[0], cmd)
         try:

@@ -111,6 +111,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
+        self.telemetry_port = BasicParameter(None, 9191)
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
@@ -215,6 +216,22 @@ class DaosServerYamlParameters(YamlParameters):
             index += 1
 
         return value
+
+    def get_engine_values(self, name):
+        """Get the value of the specified attribute name for each engine.
+
+        Args:
+            name (str): name of the attribute from which to get the value
+
+        Returns:
+            list: a list of the value of each matching configuration attribute
+                name per engine
+
+        """
+        engine_values = []
+        for engine_params in self.engine_params:
+            engine_values.append(engine_params.get_value(name))
+        return engine_values
 
     @property
     def using_nvme(self):

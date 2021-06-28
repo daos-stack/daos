@@ -89,6 +89,7 @@ struct cmd_args_s {
 	char			*dst;		/* --dst path for fs copy */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
+	uint32_t		mode;		/* --posix consistency mode */
 	daos_size_t		chunk_size;	/* --chunk_size of cont objs */
 
 	/* Container snapshot/rollback related */
@@ -99,6 +100,9 @@ struct cmd_args_s {
 	daos_epoch_t		epcrange_end;
 	daos_obj_id_t		oid;
 	daos_prop_t		*props;		/* --properties cont create */
+
+	FILE			*outstream;	/* normal output stream */
+	FILE			*errstream;	/* errors stream */
 
 	/* DFS related */
 	char			*dfs_prefix;	/* --dfs-prefix name */
@@ -203,8 +207,7 @@ int cont_set_attr_hdlr(struct cmd_args_s *ap);
 int cont_get_attr_hdlr(struct cmd_args_s *ap);
 int cont_del_attr_hdlr(struct cmd_args_s *ap);
 int cont_create_snap_hdlr(struct cmd_args_s *ap);
-int cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname,
-			 daos_epoch_t *epoch);
+int cont_list_snaps_hdlr(struct cmd_args_s *ap);
 int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
 int cont_get_acl_hdlr(struct cmd_args_s *ap);
 int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);

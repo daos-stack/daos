@@ -66,7 +66,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
-			case "version", "telemetry config", "telemetry run", "config generate":
+			case "version", "telemetry config", "telemetry run", "config generate",
+				"manpage":
 				return
 			case "storage prepare":
 				testArgs = append(testArgs, "--force")

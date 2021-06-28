@@ -287,6 +287,7 @@ err_task:
 	return rc;
 }
 
+/* Common function for CONT_DESTROY and CONT_DESTROY_BYLABEL RPCs */
 static int
 cont_destroy_complete(tse_task_t *task, void *data)
 {
@@ -364,6 +365,76 @@ dc_cont_destroy(tse_task_t *task)
 	uuid_copy(in->cdi_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cdi_op.ci_uuid, args->uuid);
 	in->cdi_force = args->force;
+
+	arg.pool = pool;
+	arg.rpc = rpc;
+	crt_req_addref(rpc);
+
+	rc = tse_task_register_comp_cb(task, cont_destroy_complete, &arg,
+				       sizeof(arg));
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	return daos_rpc_send(rpc, task);
+
+err_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+err_pool:
+	dc_pool_put(pool);
+err:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+int
+dc_cont_destroy_lbl(tse_task_t *task)
+{
+	daos_cont_destroy_t	*args;
+	struct cont_destroy_in	*in;
+	struct dc_pool		*pool;
+	crt_endpoint_t		 ep;
+	crt_rpc_t		*rpc;
+	struct cont_args	 arg;
+	int			 rc;
+
+	args = dc_task_get_args(task);
+
+	if (args->label == NULL)
+		D_GOTO(err, rc = -DER_INVAL);
+
+	pool = dc_hdl2pool(args->poh);
+	if (pool == NULL)
+		D_GOTO(err, rc = -DER_NO_HDL);
+
+	D_DEBUG(DF_DSMC, DF_UUID": destroying %s: force=%d\n",
+		DP_UUID(pool->dp_pool), args->label, args->force);
+
+	ep.ep_grp = pool->dp_sys->sy_group;
+	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
+				     &pool->dp_client, &pool->dp_client_lock,
+				     pool->dp_sys, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": %s: cannot find container service: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), args->label, DP_RC(rc));
+		goto err_pool;
+	}
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_DESTROY_BYLABEL,
+			     &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err_pool, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->cdi_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->cdi_op.ci_uuid, args->uuid);
+	in->cdi_force = args->force;
+	if (args->label) {
+		struct cont_destroy_bylabel_in *lbl_in = crt_req_get(rpc);
+
+		lbl_in->cdli_label = args->label;
+	}
 
 	arg.pool = pool;
 	arg.rpc = rpc;
@@ -758,7 +829,8 @@ dc_cont_open_internal(tse_task_t *task, struct dc_pool *pool)
 				  DAOS_CO_QUERY_PROP_CSUM_CHUNK |
 				  DAOS_CO_QUERY_PROP_DEDUP |
 				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD |
-				  DAOS_CO_QUERY_PROP_REDUN_FAC;
+				  DAOS_CO_QUERY_PROP_REDUN_FAC |
+				  DAOS_CO_QUERY_PROP_EC_CELL_SZ;
 
 	/* open bylabel RPC input */
 	if (args->label) {
