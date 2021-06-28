@@ -83,7 +83,6 @@ static const char * const bypass_status[] = {
 static void
 ioil_shrink_pool(struct ioil_pool *pool)
 {
-
 	if (daos_handle_is_valid(pool->iop_poh)) {
 		int rc;
 
@@ -143,7 +142,6 @@ entry_array_close(void *arg) {
 
 	DFUSE_LOG_DEBUG("entry %p closing array fd_count %d",
 			entry, entry->fd_cont->ioc_open_count);
-
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
 	dfs_release(entry->fd_dfsoh);
@@ -604,15 +602,15 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 					 il_reply.fir_cont) != 0)
 				continue;
 
-			D_GOTO(get_file, 0);
+			goto get_file;
 		}
-		D_GOTO(open_cont, 0);
+		goto open_cont;
 	}
 
 	/* Allocate data for pool */
 	D_ALLOC_PTR(pool);
 	if (pool == NULL)
-		D_GOTO(err, 0);
+		goto err;
 
 	pool_alloc = true;
 	uuid_copy(pool->iop_uuid, il_reply.fir_pool);
@@ -624,7 +622,7 @@ open_cont:
 	if (cont == NULL) {
 		if (pool_alloc)
 			D_FREE(pool);
-		D_GOTO(err, 0);
+		goto err;
 	}
 
 	cont->ioc_pool = pool;
@@ -643,11 +641,11 @@ open_cont:
 		rcb = ioil_open_cont_handles(fd, &il_reply, cont);
 		if (!rcb) {
 			DFUSE_LOG_DEBUG("ioil_open_cont_handles() failed");
-			D_GOTO(shrink, 0);
+			goto shrink;
 		}
 	} else if (rc != 0) {
 		D_ERROR("ioil_fetch_cont_handles() failed, %d\n", rc);
-		D_GOTO(shrink, 0);
+		goto shrink;
 	}
 
 get_file:
@@ -659,7 +657,7 @@ get_file:
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);
 	if (rc)
-		D_GOTO(shrink, 0);
+		D_GOTO(shrink, rc);
 
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
@@ -667,7 +665,7 @@ get_file:
 				rc);
 		/* Disable kernel bypass */
 		entry->fd_status = DFUSE_IO_DIS_RSRC;
-		D_GOTO(obj_close, 0);
+		D_GOTO(obj_close, rc);
 	}
 
 	DFUSE_LOG_DEBUG("Added entry for new fd %d", fd);

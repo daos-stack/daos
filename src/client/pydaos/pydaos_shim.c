@@ -53,7 +53,6 @@ do {									\
 	}								\
 } while (0)
 
-
 /* Parse arguments and magic number out*/
 #define RETURN_NULL_IF_FAILED_TO_PARSE(args, format, x...)		\
 do {									\
@@ -305,7 +304,6 @@ cont_prop_define(PyObject *module)
 	DEFINE_CONT(CO_LAYOUT_HDF5);
 }
 
-
 /**
  * Anchor management
  * The anchor is a 128-byte structure which isn't straightforward to serialize
@@ -360,7 +358,7 @@ __shim_handle__obj_idroot(PyObject *self, PyObject *args)
 
 	/* Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Li", &coh.cookie, &cid_in);
-	cid = (uint16_t) cid_in;
+	cid = (uint16_t)cid_in;
 	oid.hi = 0;
 	oid.lo = 0;
 
@@ -385,7 +383,7 @@ __shim_handle__obj_idgen(PyObject *self, PyObject *args)
 
 	/* Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Li", &coh.cookie, &cid_in);
-	cid = (uint16_t) cid_in;
+	cid = (uint16_t)cid_in;
 
 	/** XXX: OID should be generated via daos_cont_alloc_oids() */
 	srand(time(0));
@@ -553,7 +551,7 @@ rewait:
 			if (evp->ev_error == DER_SUCCESS) {
 				rc = kv_get_comp(op, daos_dict);
 				if (rc != DER_SUCCESS)
-					D_GOTO(err, 0);
+					D_GOTO(err, rc);
 				/* Reset the size of the request */
 				op->size = op->buf_size;
 				evp->ev_error = 0;
@@ -577,7 +575,7 @@ rewait:
 						&op->size, op->buf, evp);
 				if (rc != -DER_SUCCESS)
 					break;
-				D_GOTO(rewait, 0);
+				goto rewait;
 			} else {
 				rc = evp->ev_error;
 				break;
@@ -595,7 +593,7 @@ rewait:
 			op->key = PyString_AsString(key);
 		}
 		if (!op->key)
-			D_GOTO(err, 0);
+			goto err;
 		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key, &op->size,
 				 op->buf, evp);
 		if (rc) {
@@ -740,7 +738,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 
 			rc = PyBytes_AsStringAndSize(value, &buf, &pysize);
 			if (buf == NULL || rc != 0)
-				D_GOTO(err, 0);
+				D_GOTO(err, rc);
 
 			size = pysize;
 		}
@@ -754,7 +752,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 			key_str = PyString_AsString(key);
 		}
 		if (!key_str)
-			D_GOTO(err, 0);
+			goto err;
 
 		/** insert or delete kv pair */
 		if (size == 0)
@@ -930,10 +928,8 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	}
 
 out:
-	if (kds)
-		D_FREE(kds);
-	if (enum_buf)
-		D_FREE(enum_buf);
+	D_FREE(kds);
+	D_FREE(enum_buf);
 
 	/* Populate return list */
 	return_list = PyList_New(4);
@@ -991,6 +987,7 @@ static PyMethodDef daosMethods[] = {
 struct module_struct {
 	PyObject *error;
 };
+
 #define GETSTATE(m) ((struct module_struct *)PyModule_GetState(m))
 
 static int

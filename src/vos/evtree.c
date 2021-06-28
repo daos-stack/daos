@@ -326,6 +326,7 @@ ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 
 	return 0;
 }
+
 static inline struct evt_list_entry *
 evt_array_entry2le(struct evt_entry *ent)
 {
@@ -1178,7 +1179,6 @@ evt_node_rect_read_at(struct evt_context *tcx, struct evt_node *node,
 	}
 }
 
-
 /**
  * This function adjusts the location of the child record,
  * if necessary and updates the mbr of the parent, if necessary.
@@ -1519,6 +1519,7 @@ evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 
 	root = tcx->tc_root;
 	uint32_t inob = ent->ei_inob;
+
 	csum = &ent->ei_csum;
 
 	D_ASSERT(root->tr_depth == 0);
@@ -1537,7 +1538,7 @@ evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 	root->tr_depth = 1;
 	if (inob != 0)
 		tcx->tc_inob = root->tr_inob = inob;
-	if (ci_is_valid((struct dcs_csum_info *) csum)) {
+	if (ci_is_valid((struct dcs_csum_info *)csum)) {
 		/**
 		 * csum len, type, and chunksize will be a configuration stored
 		 * in the container meta data. for now trust the entity checksum
@@ -1700,7 +1701,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 			mbr_changed = evt_node_mbr_update(tcx, nd_cur, mbr,
 							  trace->tr_at);
 			if (!mbr_changed || level == 0)
-				D_GOTO(out, 0);
+				goto out;
 
 			/* continue to merge MBR with upper level node */
 			mbr = nd_cur;
@@ -1721,7 +1722,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 			 */
 			mbr_changed |= changed;
 			if (!mbr_changed || level == 0)
-				D_GOTO(out, 0);
+				goto out;
 
 			/* continue to merge MBR with upper level node */
 			mbr = nd_cur;
@@ -2021,7 +2022,6 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 			goto out;
 		tcx->tc_inob = tcx->tc_root->tr_inob = entry->ei_inob;
 	}
-
 
 	D_ASSERT(ent_array.ea_ent_nr <= 1);
 	if (ent_array.ea_ent_nr == 1) {
@@ -2411,7 +2411,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				 * NB: clip is not implemented yet.
 				 */
 				evt_tcx_set_trace(tcx, level, nd_off, i, false);
-				D_GOTO(out, rc = 0);
+				goto out;
 
 			case EVT_FIND_ALL:
 				break;
@@ -2844,6 +2844,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		if (ci_is_valid(&ent->ei_csum))
 			csum_buf_size = ci_csums_len(ent->ei_csum);
 		size_t     desc_size = sizeof(struct evt_desc) + csum_buf_size;
+
 		ne = evt_node_entry_at(tcx, nd, i);
 
 		evt_rect_write(&ne->ne_rect, &ent->ei_rect);

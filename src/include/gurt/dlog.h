@@ -55,6 +55,7 @@ typedef uint64_t d_dbug_t;
 	ACTION(DLOG_INFO,  info,  info,  0x01000000, arg) /**< info */	    \
 	ACTION(DLOG_DBG,   debug, debug, 0x00ffff00, arg) /**< debug mask */
 
+#define D_NOOP_PRINT(...) (void)0
 #define D_NOOP(...)
 
 #define D_PRIO_ENUM(name, id, longid, mask, arg)	name = mask,

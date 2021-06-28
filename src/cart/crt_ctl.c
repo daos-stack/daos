@@ -111,7 +111,7 @@ crt_hdlr_ctl_get_uri_cache(crt_rpc_t *rpc_req)
 	rc = d_hash_table_traverse(&grp_priv->gp_uri_lookup_cache,
 				   crt_ctl_fill_buffer_cb, &uri_cache);
 	if (rc != 0 && rc != -DER_OVERFLOW)
-		D_GOTO(out, 0);
+		D_GOTO(out, rc);
 
 	out_args->cguc_grp_cache.ca_arrays = uri_cache.grp_cache;
 	out_args->cguc_grp_cache.ca_count  = uri_cache.idx; /* actual count */

@@ -87,6 +87,7 @@ handler_shutdown(crt_rpc_t *rpc)
 	tc_progress_stop();
 	return 0;
 }
+
 static int
 corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
 {
@@ -384,7 +385,7 @@ int main(int argc, char **argv)
 	}
 
 	if (my_rank != 0)
-		D_GOTO(join, 0);
+		goto join;
 
 	/* Wait for all servers to load up */
 	/* TODO: This will be replaced by proper sync when CART-715 is done */

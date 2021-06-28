@@ -120,7 +120,7 @@ d_hash_string_u32(const char *string, unsigned int len)
 	uint32_t result = 5381;
 	const unsigned char *p;
 
-	p = (const unsigned char *) string;
+	p = (const unsigned char *)string;
 
 	for (; len > 0; len--) {
 		result = (result << 5) + result + *p;
@@ -505,7 +505,7 @@ d_hash_rec_find_insert(struct d_hash_table *htable, const void *key,
 	if (tmp) {
 		ch_rec_addref(htable, tmp);
 		link = tmp;
-		D_GOTO(out_unlock, 0);
+		goto out_unlock;
 	}
 	ch_rec_insert_addref(htable, bucket, link);
 
@@ -802,7 +802,7 @@ d_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 		D_INIT_LIST_HEAD(&htable->ht_buckets[i].hb_head);
 
 	if (htable->ht_feats & D_HASH_FT_NOLOCK)
-		D_GOTO(out, rc = 0);
+		goto out;
 
 	if (htable->ht_feats & D_HASH_FT_GLOCK) {
 		if (htable->ht_feats & D_HASH_FT_MUTEX)
@@ -917,7 +917,7 @@ d_hash_table_is_empty(struct d_hash_table *htable)
 	if (htable->ht_buckets == NULL) {
 		D_ERROR("d_hash_table %p not initialized (NULL buckets).\n",
 			htable);
-		D_GOTO(out, 0);
+		goto out;
 	}
 
 	for (idx = 0; idx < nr && is_empty; idx++) {
@@ -950,7 +950,7 @@ d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 	}
 
 	if (htable->ht_feats & D_HASH_FT_NOLOCK)
-		D_GOTO(free_buckets, rc = 0);
+		goto free_buckets;
 
 	if (htable->ht_feats & D_HASH_FT_GLOCK) {
 		if (htable->ht_feats & D_HASH_FT_MUTEX)

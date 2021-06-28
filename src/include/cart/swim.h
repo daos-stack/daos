@@ -20,9 +20,9 @@
 extern "C" {
 #endif
 
-#define SWIM_ID_INVALID ((uint64_t)-1)
-
 typedef uint64_t swim_id_t;
+
+#define SWIM_ID_INVALID ((swim_id_t)-1)
 
 enum swim_member_status {
 	SWIM_MEMBER_ALIVE = 0,

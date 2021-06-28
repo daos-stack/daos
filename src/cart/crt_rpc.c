@@ -1368,7 +1368,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 			RPC_ERROR(rpc_priv,
 				  "crt_corpc_req_hdlr() failed, " DF_RC "\n",
 				  DP_RC(rc));
-		D_GOTO(out, rc);
+		goto out;
 	} else {
 		if (!rpc_priv->crp_have_ep) {
 			D_WARN("target endpoint not set "

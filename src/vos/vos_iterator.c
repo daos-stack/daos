@@ -659,7 +659,7 @@ probe:
 					  "(type=%d anchor=%p): "DF_RC"\n",
 					  type, probe_anchor, DP_RC(rc));
 		}
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 	while (1) {
@@ -695,7 +695,6 @@ probe:
 					 !daos_anchor_is_eof(anchor));
 				goto probe;
 			}
-
 		}
 
 		if (recursive && !is_last_level(type) && !skipped &&
@@ -811,7 +810,6 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 	/** hijack a couple of internal fields to pass information */
 	param.ip_flags = VOS_IT_KEY_TREE;
 	param.ip_dkey.iov_buf = obj;
-
 
 	return vos_iterate_internal(&param, type, false, ignore_inprogress,
 				    &anchors, cb, NULL, arg, dth);

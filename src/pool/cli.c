@@ -806,7 +806,6 @@ out_pool:
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
-
 }
 
 #define DC_POOL_GLOB_MAGIC	(0x16da0386)
@@ -1130,8 +1129,7 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 		DP_UUID(in->pti_op.pi_uuid), DP_UUID(in->pti_op.pi_hdl),
 		(int)out->pto_addr_list.ca_count);
 
-	if (in->pti_addr_list.ca_arrays)
-		D_FREE(in->pti_addr_list.ca_arrays);
+	D_FREE(in->pti_addr_list.ca_arrays);
 
 	if (out->pto_addr_list.ca_arrays != NULL &&
 	    out->pto_addr_list.ca_count > 0) {
@@ -1332,7 +1330,7 @@ pool_query_cb(tse_task_t *task, void *data)
 			pool_buf_size(map_buf->pb_nr), out->pqo_map_buf_size);
 
 		/* retry with map buffer size required by server */
-		D_INFO("retry with map buffer size required by server (%ul)\n",
+		D_INFO("retry with map buffer size required by server (%u)\n",
 		       out->pqo_map_buf_size);
 		pool->dp_map_sz = out->pqo_map_buf_size;
 		rc = tse_task_reinit(task);
@@ -1462,7 +1460,7 @@ struct pool_lc_arg {
 static int
 pool_list_cont_cb(tse_task_t *task, void *data)
 {
-	struct pool_lc_arg		*arg = (struct pool_lc_arg *) data;
+	struct pool_lc_arg		*arg = (struct pool_lc_arg *)data;
 	struct pool_list_cont_in	*in = crt_req_get(arg->rpc);
 	struct pool_list_cont_out	*out = crt_reply_get(arg->rpc);
 	int				 rc = task->dt_result;
@@ -1995,7 +1993,7 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 	}
 
 	for (i = 0; i < n; i++) {
-		if (names[i] == NULL || *(names[i]) == '\0') {
+		if (names[i] == NULL || *names[i] == '\0') {
 			D_ERROR("Invalid Arguments: names[%d] = %s",
 				i, names[i] == NULL ? "NULL" : "\'\\0\'");
 
@@ -2030,7 +2028,7 @@ dc_pool_get_attr(tse_task_t *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	rc = attr_check_input(args->n, args->names,
-			      (const void *const*) args->values,
+			      (const void *const*)args->values,
 			      (size_t *)args->sizes, true);
 	if (rc != 0)
 		D_GOTO(out, rc);

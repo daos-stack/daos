@@ -14,7 +14,7 @@
 #define CRT_PROC_NULL (NULL)
 #define CRT_PROC_TYPE_FUNC(type)				\
 	int crt_proc_##type(crt_proc_t proc,			\
-			     crt_proc_op_t proc_op, type *data)	\
+			     crt_proc_op_t proc_op, type * data)	\
 	{							\
 		type *buf;					\
 		if (FREEING(proc_op))				\
@@ -150,7 +150,7 @@ crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		rank_list = *data;
 		if (rank_list == NULL) {
 			*buf = 0;
-			D_GOTO(out, rc = 0);
+			goto out;
 		}
 
 		nr = rank_list->rl_nr;
@@ -164,7 +164,7 @@ crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		nr = *buf;
 		if (nr == 0) {
 			*data = NULL;
-			D_GOTO(out, rc = 0);
+			goto out;
 		}
 
 		rank_list = d_rank_list_alloc(nr);
@@ -188,7 +188,7 @@ out:
 int
 crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
 {
-	int rc;
+	int rc = 0;
 
 	if (unlikely(div == NULL))
 		D_GOTO(out, rc = -DER_INVAL);
@@ -197,7 +197,7 @@ crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
 		div->iov_buf = NULL;
 		div->iov_buf_len = 0;
 		div->iov_len = 0;
-		D_GOTO(out, rc = 0);
+		goto out;
 	}
 
 	rc = crt_proc_uint64_t(proc, proc_op, &div->iov_buf_len);

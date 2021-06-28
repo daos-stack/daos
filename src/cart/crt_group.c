@@ -239,8 +239,7 @@ crt_ui_destroy(struct crt_uri_item *ui)
 	D_ASSERT(ui->ui_initialized == 1);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		if (ui->ui_uri[i])
-			D_FREE(ui->ui_uri[i]);
+		D_FREE(ui->ui_uri[i]);
 
 	D_FREE(ui);
 }
@@ -596,7 +595,7 @@ grp_lc_uri_insert_internal_locked(struct crt_grp_priv *grp_priv,
 				" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
 				grp_priv, ctx_idx, rank, &li->li_link);
 		}
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 	if (!uri)
@@ -897,7 +896,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 			*hg_addr = li->li_tag_addr[tag];
 		d_hash_rec_decref(&default_grp_priv->gp_lookup_cache[ctx_idx],
 				  rlink);
-		D_GOTO(out, 0);
+		goto out;
 	} else {
 		D_DEBUG(DB_ALL, "Entry for rank=%d not found\n", rank);
 	}
@@ -1035,7 +1034,6 @@ out_grp_priv:
 out:
 	return rc;
 }
-
 
 void
 crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
@@ -2217,7 +2215,7 @@ crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 			break;
 
 		rc = crt_grp_psr_set(grp_priv, psr_rank, uri, false);
-		D_GOTO(out, 0);
+		D_GOTO(out, rc);
 	}
 
 	rc = crt_grp_config_psr_load(grp_priv, psr_rank);
@@ -2356,7 +2354,7 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 				&grp_priv->gp_membs.cgm_free_indices,
 				i, true);
 			if (rc != -DER_SUCCESS)
-				D_GOTO(out, 0);
+				D_GOTO(out, rc);
 		}
 
 		index = grp_get_free_index(grp_priv);
@@ -2369,7 +2367,7 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		rc = crt_swim_rank_add(grp_priv, rank);
 		if (rc) {
 			D_ERROR("crt_swim_rank_add() failed: rc=%d\n", rc);
-			D_GOTO(out, 0);
+			D_GOTO(out, rc);
 		} else {
 			membs->rl_ranks[index] = rank;
 			grp_priv->gp_size++;

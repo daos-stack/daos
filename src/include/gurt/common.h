@@ -258,12 +258,61 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_ALLOC_ARRAY_NZ(ptr, count) D_ALLOC_CORE_NZ(ptr, sizeof(*ptr), count)
 #define D_FREE_PTR(ptr)		D_FREE(ptr)
 
-#define D_GOTO(label, rc)			\
-	do {					\
-		__typeof__(rc) __rc = (rc);	\
-		(void)(__rc);			\
-		goto label;			\
+/* _Generic() is part of the c11 standard but isn't yet supported by all
+ * compilers so there's a configure check for this in scons.
+ */
+
+#ifdef USE_GOTO_LOGGING
+#ifdef HAVE_GENERIC
+#define VERBOSE_GOTO 1
+#endif
+#endif /* USE_GOTO_LOGGING */
+
+#ifdef VERBOSE_GOTO
+
+#define maybe_derrcode(x) _Generic((x), int : true, default : false)
+
+#define DG_FMT(x) _Generic(__rc,					\
+int : "%d",				\
+				unsigned int: "%u",			\
+				unsigned long: "%lu",			\
+bool : "%d",				\
+int64_t : "%ld",				\
+				struct swim_context *  : "%p",		\
+				struct crt_hg_hdl *  : "%p",		\
+				struct crt_ivns_internal *  : "%p",	\
+				d_rank_list_t *  : "%p")
+
+#define D_GOTO(label, rc)						\
+	do {								\
+		__typeof__(rc) __rc = (rc);				\
+		if (D_LOG_ENABLED(DB_GOTO)) {				\
+			char __result[20] = {0};			\
+			char *__errcode = NULL;				\
+			if (maybe_derrcode(__rc)) {			\
+				d_get_errstr((int)__rc, &__errcode);	\
+			}						\
+			snprintf(__result, 20, DG_FMT(__rc), __rc);	\
+			if (__errcode) {				\
+				D_DEBUG(DB_GOTO, "Jumping to " #label " '" #rc "' result '%s': %s\n", __result, __errcode); \
+			} else {					\
+				D_DEBUG(DB_GOTO, "Jumping to " #label " '" #rc "' result '%s'\n", __result); \
+			}						\
+		}							\
+		(void)(__rc);						\
+		goto label;						\
 	} while (0)
+
+#else /* VERBOSE_GOTO */
+
+#define D_GOTO(label, rc)						\
+	do {								\
+		__typeof__(rc) __rc = (rc);				\
+		(void)(__rc);						\
+		goto label;						\
+	} while (0)
+
+#endif /* VERBOSE_GOTO */
 
 #define D_FPRINTF(...)							\
 	({								\

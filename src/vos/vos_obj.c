@@ -330,7 +330,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			if (flags & VOS_OF_COND_PUNCH)
 				cflags |= VOS_TS_READ_OBJ;
 		}
-
 	}
 
 	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr, dth);
@@ -631,7 +630,6 @@ static int
 key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	       daos_anchor_t *anchor, bool check_existence)
 {
-
 	struct vos_krec_df	*krec;
 	struct vos_rec_bundle	 rbund;
 	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
@@ -863,7 +861,7 @@ key_iter_next(struct vos_obj_iter *oiter)
 
 	rc = dbtree_iter_next(oiter->it_hdl);
 	if (rc)
-		D_GOTO(out, rc);
+		goto out;
 
 	rc = key_iter_match_probe(oiter);
 	if (rc)
@@ -1280,6 +1278,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	key_tree_release(ak_toh, false);
 	return rc;
 }
+
 static int
 recx_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 {
@@ -1927,6 +1926,7 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_delete		= vos_obj_iter_delete,
 	.iop_empty		= vos_obj_iter_empty,
 };
+
 /**
  * @} vos_obj_iters
  */

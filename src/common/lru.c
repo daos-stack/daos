@@ -63,7 +63,6 @@ lru_hop_rec_addref(struct d_hash_table *htable, d_list_t *link)
 static bool
 lru_hop_rec_decref(struct d_hash_table *htable, d_list_t *link)
 {
-
 	struct daos_llink *llink = link2llink(link);
 
 	D_ASSERT(llink->ll_ref > 0);
@@ -148,8 +147,7 @@ daos_lru_cache_create(int bits, uint32_t feats,
 	*lcache_pp = lcache;
 	lcache = NULL;
 out:
-	if (lcache != NULL)
-		D_FREE(lcache);
+	D_FREE(lcache);
 	return rc;
 }
 
@@ -232,7 +230,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	link = d_hash_rec_find(&lcache->dlc_htable, key, key_size);
 	if (link != NULL) {
 		llink = link2llink(link);
-		D_GOTO(found, rc = 0);
+		goto found;
 	}
 
 	if (create_args == NULL)

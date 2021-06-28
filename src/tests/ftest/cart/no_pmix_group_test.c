@@ -116,6 +116,7 @@ handler_shutdown(crt_rpc_t *rpc)
 	tc_progress_stop();
 	return 0;
 }
+
 static int
 corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
 {
@@ -192,7 +193,6 @@ __dump_ranklist(const char *msg, d_rank_list_t *rl)
 	DBG_PRINT("%s", msg);
 	for (i = 0; i < rl->rl_nr; i++)
 		DBG_PRINT("rank[%d] = %d\n", i, rl->rl_ranks[i]);
-
 }
 
 static void
@@ -515,7 +515,7 @@ int main(int argc, char **argv)
 
 	/* All ranks except for 0 wait for RPCs. rank=0 initiates test */
 	if (my_rank != 1)
-		D_GOTO(join, 0);
+		goto join;
 
 	rc = crt_group_ranks_get(grp, &rank_list);
 	if (rc != 0) {
@@ -553,7 +553,6 @@ int main(int argc, char **argv)
 		rank = rank_list->rl_ranks[i];
 
 		for (tag = NUM_SERVER_CTX - 1; tag > 0; tag--) {
-
 			server_ep.ep_rank = rank;
 			server_ep.ep_grp = sec_grp1;
 			server_ep.ep_tag = tag;

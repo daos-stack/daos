@@ -718,8 +718,7 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *split_iods, uint64_t *split_offs)
 
 		/* Check each vector */
 		if (p_sgl->sg_iovs[i].iov_buf_len < size) {
-			if (p_sgl->sg_iovs[i].iov_buf != NULL)
-				D_FREE(p_sgl->sg_iovs[i].iov_buf);
+			D_FREE(p_sgl->sg_iovs[i].iov_buf);
 
 			D_ALLOC(p_sgl->sg_iovs[i].iov_buf, size);
 			/* obj_tls_fini() will free these buffer */
@@ -1470,7 +1469,6 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				D_ERROR(DF_UOID" fetch verify failed: %d.\n",
 					DP_UOID(orw->orw_oid), rc);
 				goto post;
-
 			}
 		}
 	}
@@ -1644,7 +1642,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		ds_cont_child_get(coh->sch_cont);
 		coc = coh->sch_cont;
 		if (uuid_compare(cont_uuid, coc->sc_uuid) == 0)
-			D_GOTO(out, rc = 0);
+			goto out;
 
 		D_ERROR("Stale container handle "DF_UUID" != "DF_UUID"\n",
 			DP_UUID(cont_uuid), DP_UUID(coh->sch_uuid));
@@ -2128,6 +2126,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	if (DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
 		unsigned char	*buf = dkey->iov_buf;
+
 		buf[0] += orw->orw_oid.id_shard + 1;
 		orw->orw_dkey_hash = obj_dkey2hash(orw->orw_oid.id_pub, dkey);
 	}
@@ -2435,7 +2434,7 @@ re_fetch:
 			goto re_fetch;
 		}
 
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 	tgts = orw->orw_shard_tgts.ca_arrays;
@@ -2914,7 +2913,6 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 			       DAOS_HDL_INVAL, sgls, NULL, idx, NULL);
 	if (oei->oei_kds_bulk) {
 		D_FREE(oeo->oeo_kds.ca_arrays);
-		oeo->oeo_kds.ca_arrays = NULL;
 		oeo->oeo_kds.ca_count = 0;
 	}
 
@@ -4105,7 +4103,6 @@ out:
 				if (biods[i] != NULL)
 					bio_iod_post(biods[i]);
 			}
-
 		}
 
 		if (iohs != NULL) {

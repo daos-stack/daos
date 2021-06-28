@@ -189,30 +189,30 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 	fprintf(stderr, "arg_str %s\n", arg_str);
 	token = strtok_r(arg_str, ",", &saveptr);
 	if (token == NULL)
-		D_GOTO(error_out, 0);
+		goto error_out;
 	fi_attr_in->fa_fault_id = strtoull(token, &endptr, 10);
 	fprintf(stderr, "fault_id %d\n", fi_attr_in->fa_fault_id);
 
 	/* get max_faults */
 	token = strtok_r(NULL, ",", &saveptr);
 	if (token == NULL)
-		D_GOTO(error_out, 0);
+		goto error_out;
 	fi_attr_in->fa_max_faults = strtoull(token, &endptr, 10);
 	fprintf(stderr, "max_faults %lu\n", fi_attr_in->fa_max_faults);
 
 	token = strtok_r(NULL, ",", &saveptr);
 	if (token == NULL)
-		D_GOTO(error_out, 0);
+		goto error_out;
 	fi_attr_in->fa_probability_x = strtoull(token, &endptr, 10);
 
 	token = strtok_r(NULL, ",", &saveptr);
 	if (token == NULL)
-		D_GOTO(error_out, 0);
+		goto error_out;
 	fi_attr_in->fa_err_code = strtoull(token, &endptr, 10);
 
 	token = strtok_r(NULL, ",", &saveptr);
 	if (token == NULL)
-		D_GOTO(error_out, 0);
+		goto error_out;
 	fi_attr_in->fa_interval = strtoull(token, &endptr, 10);
 
 	token = strtok_r(NULL, ",", &saveptr);

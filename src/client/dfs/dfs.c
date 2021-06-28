@@ -2952,7 +2952,6 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	daos_size_t		file_size = 0;
 	int			rc;
 
-
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if ((dfs->amode != O_RDWR) && (flags & O_CREAT))
@@ -3935,7 +3934,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	iod.iod_nr = i;
 
 	if (i == 0)
-		D_GOTO(out_stat, 0);
+		goto out_stat;
 
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;

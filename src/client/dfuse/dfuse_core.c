@@ -1106,13 +1106,13 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(fs_handle, "hash_insert() failed: %d",
 				rc);
-		D_GOTO(err, 0);
+		D_GOTO(err_ie_remove, rc);
 	}
 
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err_ie_remove, 0);
+		D_GOTO(err_ie_remove, rc);
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 

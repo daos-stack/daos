@@ -216,7 +216,7 @@ swim_updates_notify(struct swim_context *ctx, swim_id_t from, swim_id_t id,
 		if (item->si_id == id) {
 			item->si_from = from;
 			item->u.si_count = count;
-			D_GOTO(update, 0);
+			goto update;
 		}
 	}
 

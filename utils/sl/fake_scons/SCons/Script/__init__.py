@@ -277,6 +277,10 @@ class Configure():
         """Fake CheckStructMember"""
         return True
 
+    def GenericTest(self, *_args, **_kw):
+        """Fake GenericTest"""
+        return True
+
     def CheckFuseIoctl(self, *_args, **_kw):
         """Fake CheckFuseIoctl"""
         return True
