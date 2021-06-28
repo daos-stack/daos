@@ -1282,7 +1282,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		if (rect.rc_ex.ex_hi <= mw->mw_ext.ex_hi ||
 		    phy_ent->pe_remove) {
 			d_list_del(&phy_ent->pe_link);
-			D_FREE_PTR(phy_ent);
+			D_FREE(phy_ent);
 			D_ASSERT(mw->mw_phy_cnt > 0);
 			mw->mw_phy_cnt--;
 			continue;
@@ -1382,12 +1382,23 @@ clear_merge_window(struct agg_merge_window *mw)
 
 	mw->mw_ext.ex_lo = mw->mw_ext.ex_hi = 0;
 	mw->mw_lgc_cnt = 0;
-	d_list_for_each_entry_safe(phy_ent, tmp, &mw->mw_phy_ents,
-				   pe_link) {
+	d_list_for_each_entry_safe(phy_ent, tmp, &mw->mw_phy_ents, pe_link) {
 		d_list_del(&phy_ent->pe_link);
-		D_FREE_PTR(phy_ent);
+		D_FREE(phy_ent);
 	}
 	mw->mw_phy_cnt = 0;
+}
+
+static void
+free_removal_records(struct agg_merge_window *mw)
+{
+	struct agg_rmv_ent *rm_ent, *tmp;
+
+	d_list_for_each_entry_safe(rm_ent, tmp, &mw->mw_rmv_ents, re_link) {
+		d_list_del(&rm_ent->re_link);
+		D_FREE(rm_ent);
+	}
+	mw->mw_rmv_cnt = 0;
 }
 
 static bool
@@ -1616,9 +1627,12 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 {
 	struct agg_io_context *io = &mw->mw_io_ctxt;
 
-	if (rc)
+	if (rc) {
 		clear_merge_window(mw);
+		free_removal_records(mw);
+	}
 
+	D_ASSERT(mw->mw_rmv_cnt == 0);
 	D_ASSERT(merge_window_status(mw) != MW_OPENED);
 
 	mw->mw_rsize = 0;
