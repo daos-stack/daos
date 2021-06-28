@@ -216,7 +216,7 @@ mount /dev/pmem0 /mnt/pmem0/ -o dax
 mount /dev/pmem1 /mnt/pmem1/ -o dax
 
 # check for which pmem mount point is present in fio file
-fio_file='ci/functional/fio_libpmem.fio'
+fio_file='/tmp/fio_libpmem.fio'
 grep '/mnt/pmem0' ${fio_file}
 rc_grep_pmem=`echo $?`
 if [[ $rc_grep_pmem == 0 ]]; then
