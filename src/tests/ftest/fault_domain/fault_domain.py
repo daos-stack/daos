@@ -35,18 +35,9 @@ class FaultDomain(TestWithServers):
         """
         test_passed = True
         error_messages = list()
-        # Test pools is a list of OrderedDicts
-        # Here is an example of the first element of test_pools:
-        # OrderedDict([('pool_0',
-        #               OrderedDict([('name', 'daos_server'),
-        #                            ('size', '9G'),
-        #                            ('nranks', 1),
-        #                            ('control_method', 'dmg')]))])
-        test_pools = self.params.get("test_pools", "/run/*")
         fault_paths = self.params.get("fault_path", '/run/*')
-        test_servers = self.hostlist_servers
 
-        for counter, server in enumerate(test_servers):
+        for counter, server in enumerate(self.hostlist_servers):
             self.add_server_manager()
             self.configure_manager(
                 "daos_server",
@@ -65,24 +56,20 @@ class FaultDomain(TestWithServers):
 
         # Create pools, setting the values obtained from yaml file
         self.pool = []
-        for index in range(len(test_pools)):
-            pool_yaml_name = "pool_{}".format(index)
-            namespace = test_pools[index]
-            control_method = namespace[pool_yaml_name].get("control_method")
-            nranks = namespace[pool_yaml_name].get("nranks")
-            size = namespace[pool_yaml_name].get("size")
-            self.pool.append(self.get_pool(create=False, connect=False))
-            self.pool[index].control_method.update(name="control_method",
-                                                   value=control_method)
-            self.pool[index].nranks.update(name="nranks", value=nranks)
-            self.pool[index].size.update(name="size", value=size)
-            self.pool[index].create()
+        for index in range(5):
+            namespace = "/run/pool_{}/*".format(index)
+            print(namespace)
+            pool = self.get_pool(namespace=namespace, create=False,
+                                 connect=False)
+            pool.create()
+            self.pool.append(pool)
 
         # Once the pools are created we check each pool
         # and get the ranks used for it.
         # For each pool:
         # Using a list, the fault paths of the ranks are added to the same list
         # The list should not contain any duplicated fault path.
+        rank = "unknown"  # To avoid pylint-undefined-loop-variable
         for pool in self.pool:
             pool_fault_path = []
             for rank in pool.svc_ranks:
