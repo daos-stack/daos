@@ -185,7 +185,7 @@ test_daos_prop_merge_subset_update(void **state)
 	D_STRNDUP_S(prop2->dpp_entries[0].dpe_str, "Updated");
 
 	/* Expecting only one prop to be overwritten */
-	exp_result = daos_prop_dup(prop1, false);
+	exp_result = daos_prop_dup(prop1, false /* pool */, true /* input */);
 	entry = daos_prop_entry_get(exp_result, prop2->dpp_entries[0].dpe_type);
 	assert_int_equal(daos_prop_entry_copy(&prop2->dpp_entries[0], entry),
 			 0);

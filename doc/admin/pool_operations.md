@@ -133,7 +133,7 @@ properties. Refer to the manual page for full `daos` usage details.
 ```bash
 $ daos pool get-prop --pool=b1e9f5c0-ce10-42ab-b19e-081032400611
 Pool properties for b1e9f5c0-ce10-42ab-b19e-081032400611 :
-label:                  pool label not set
+label:                  pool_label_not_set
 rebuild space ratio:    0%
 self-healing:           auto-exclude,auto-rebuild
 reclaim strategy:       lazy
