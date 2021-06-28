@@ -374,11 +374,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_common_pmem.so
 %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
-%{python3_sitearch}/storage_estimator/*.py
-%dir %{python3_sitearch}/storage_estimator
+%{_libdir}/python3.6/site-packages/storage_estimator/*.py
+%dir %{_libdir}/python3.6/site-packages/storage_estimator
 %if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
-%dir %{python3_sitearch}/storage_estimator/__pycache__
-%{python3_sitearch}/storage_estimator/__pycache__/*.pyc
+%dir %{_libdir}/python3.6/site-packages/storage_estimator/__pycache__
+%{_libdir}/python3.6/site-packages/storage_estimator/__pycache__/*.pyc
 %endif
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
@@ -401,17 +401,17 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
-%dir %{python3_sitearch}/pydaos
-%{python3_sitearch}/pydaos/*.py
-%dir %{python3_sitearch}/pydaos/raw
-%{python3_sitearch}/pydaos/raw/*.py
+%dir %{_libdir}/python3.6/site-packages/pydaos
+%{_libdir}/python3.6/site-packages/pydaos/*.py
+%dir %{_libdir}/python3.6/site-packages/pydaos/raw
+%{_libdir}/python3.6/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
-%dir %{python3_sitearch}/pydaos/__pycache__
-%{python3_sitearch}/pydaos/__pycache__/*.pyc
-%dir %{python3_sitearch}/pydaos/raw/__pycache__
-%{python3_sitearch}/pydaos/raw/__pycache__/*.pyc
+%dir %{_libdir}/python3.6/site-packages/pydaos/__pycache__
+%{_libdir}/python3.6/site-packages/pydaos/__pycache__/*.pyc
+%dir %{_libdir}/python3.6/site-packages/pydaos/raw/__pycache__
+%{_libdir}/python3.6/site-packages/pydaos/raw/__pycache__/*.pyc
 %endif
-%{python3_sitearch}/pydaos/pydaos_shim.so
+%{_libdir}/python3.6/site-packages/pydaos/pydaos_shim.so
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos_control.yml
@@ -467,7 +467,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Mon Jun 28 2021  Maureen Jean <maureen.jean@intel.com> 1.3.102-4
 - Use rpm macro for path to python site packages
 
-* Mon Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
+* Wed Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
 - Update raft to pick up Pre-Vote
 
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
