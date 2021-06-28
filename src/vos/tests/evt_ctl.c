@@ -573,12 +573,6 @@ ts_list_rect(void)
 		options |= EVT_ITER_COVERED;
 		probe = false;
 		break;
-	case 'D':
-		options |= EVT_ITER_EMBEDDED;
-	case 'd':
-		options |= EVT_ITER_DELETED;
-		/* Don't skip the probe in this case just to test that path */
-		break;
 	default:
 		D_PRINT("Unknown iterator type: %c\n", val[0]);
 		fail();
@@ -1475,7 +1469,7 @@ test_evt_find_internal(void **state)
 *   EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
 *   EVT_ITER_REVERSE|EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
 *   EVT_ITER_VISIBLE
-*   EVT_ITER_DELETED|EVT_ITER_EMBEDDED
+*   EVT_ITER_COVERED|EVT_ITER_EMBEDDED
 *   EVT_ITER_REVERSE|EVT_ITER_VISIBLE
 *   EVT_ITER_COVERED
 *   EVT_ITER_REVERSE|EVT_ITER_COVERED
@@ -1495,7 +1489,7 @@ test_evt_iter_delete_internal(void **state)
 		EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES,
 		EVT_ITER_REVERSE | EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES,
 		EVT_ITER_VISIBLE,
-		EVT_ITER_DELETED|EVT_ITER_EMBEDDED,
+		EVT_ITER_COVERED|EVT_ITER_EMBEDDED,
 		EVT_ITER_REVERSE|EVT_ITER_VISIBLE,
 		EVT_ITER_COVERED,
 		EVT_ITER_REVERSE|EVT_ITER_COVERED,

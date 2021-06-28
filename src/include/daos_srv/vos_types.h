@@ -305,19 +305,19 @@ enum {
 	/** Include hole extents in sorted iteration
 	 *  Only applicable if VOS_IT_RECX_COVERED is not set
 	 */
-	VOS_IT_RECX_SKIP_HOLES	= (1 << 3),
+	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
 	/** When sorted iteration is enabled, iterate in reverse */
-	VOS_IT_RECX_REVERSE	= (1 << 4),
+	VOS_IT_RECX_REVERSE	= (1 << 3),
 	/** The iterator is for purge operation */
-	VOS_IT_FOR_PURGE	= (1 << 5),
+	VOS_IT_FOR_PURGE	= (1 << 4),
 	/** The iterator is for data migration scan */
-	VOS_IT_FOR_MIGRATION	= (1 << 6),
+	VOS_IT_FOR_MIGRATION	= (1 << 5),
 	/** Iterate only show punched records in interval */
-	VOS_IT_PUNCHED		= (1 << 7),
+	VOS_IT_PUNCHED		= (1 << 6),
 	/** Cleanup stale DTX entry. */
-	VOS_IT_CLEANUP_DTX	= (1 << 8),
+	VOS_IT_CLEANUP_DTX	= (1 << 7),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 9) - 1,
+	VOS_IT_MASK		= (1 << 8) - 1,
 };
 
 /**

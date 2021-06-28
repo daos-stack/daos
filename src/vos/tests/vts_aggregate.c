@@ -2266,7 +2266,6 @@ static const struct CMUnitTest discard_tests[] = {
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
-#if 0
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",
@@ -2315,7 +2314,6 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_23, NULL, agg_tst_teardown },
 	{ "VOS424: Aggregate extents not fully covered by delete record",
 	  aggregate_24, NULL, agg_tst_teardown },
-#endif
 	{ "VOS425: Aggregate delete of end of merge window",
 	  aggregate_25, NULL, agg_tst_teardown },
 };

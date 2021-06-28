@@ -56,13 +56,15 @@ struct agg_phy_ent {
 	uint32_t		pe_ref;
 	/* Need to truncate on window flush */
 	bool			pe_trunc_head;
+	/** Mark the entry as removed */
+	bool			pe_remove;
 };
 
 /* Removal record */
 struct agg_rmv_ent {
-	d_list_t		de_link;
+	d_list_t		re_link;
 	/* In tree rectangle */
-	struct evt_rect		de_rect;
+	struct evt_rect		re_rect;
 };
 
 /* EV tree logical entry */
@@ -531,21 +533,25 @@ csum_prepare_buf(struct agg_lgc_seg *segs, unsigned int seg_cnt,
 	return 0;
 }
 
-static struct agg_del_ent *
-enqueue_rmv_ent(struct agg_merge_window *mw, const struct evt_rect *rect)
+static struct agg_rmv_ent *
+enqueue_rmv_ent(struct agg_merge_window *mw, const struct evt_extent *ext,
+		const vos_iter_entry_t *entry)
 {
-	struct agg_del_ent *del_ent;
+	struct agg_rmv_ent *rm_ent;
 
-	D_ALLOC_PTR(del_ent);
-	if (del_ent == NULL)
+	D_ALLOC_PTR(rm_ent);
+	if (rm_ent == NULL)
 		return NULL;
 
-	memcpy(&del_ent->de_rect, rect, sizeof(*rect));
+	rm_ent->re_rect.rc_ex.ex_lo = ext->ex_lo;
+	rm_ent->re_rect.rc_ex.ex_hi = ext->ex_hi;
+	rm_ent->re_rect.rc_minor_epc = entry->ie_minor_epc;
+	rm_ent->re_rect.rc_epc = entry->ie_epoch;
 
-	d_list_add_tail(&del_ent->de_link, &mw->mw_del_ents);
-	mw->mw_del_cnt++;
+	d_list_add_tail(&rm_ent->re_link, &mw->mw_rmv_ents);
+	mw->mw_rmv_cnt++;
 
-	return del_ent;
+	return rm_ent;
 }
 
 static int
@@ -563,7 +569,6 @@ prepare_segments(struct agg_merge_window *mw)
 	unsigned int		 cs_len = 0;
 	unsigned int		 chunksize = 0;
 	unsigned int		 cs_total = 0;
-	bool			 removed;
 	bool			 hole = false, coalesce;
 	int			 rc = 0;
 
@@ -647,6 +652,7 @@ prepare_segments(struct agg_merge_window *mw)
 
 	/* Generate truncated segments according to physical entries */
 	d_list_for_each_entry_safe(phy_ent, temp, &mw->mw_phy_ents, pe_link) {
+		struct agg_rmv_ent	*rm_ent;
 
 		lgc_seg = &io->ic_segs[io->ic_seg_cnt];
 		ent_in = &lgc_seg->ls_ent_in;
@@ -661,32 +667,41 @@ prepare_segments(struct agg_merge_window *mw)
 		D_ASSERT(ext.ex_lo <= mw->mw_ext.ex_hi);
 		D_ASSERT(ext.ex_hi >= mw->mw_ext.ex_lo);
 
+		phy_ent->pe_remove = false;
+		if (ext.ex_hi > mw->mw_ext.ex_hi) {
+			/** If a record is covered by a removal record and is
+			 *  contained in the current merge window, it will be
+			 *  removed by aggregation algorithm.  If it extends
+			 *  into next window, and the tail is fully covered
+			 *  by a removal entry, we need to mark the record for
+			 *  removal.
+			 */
+			d_list_for_each_entry(rm_ent, &mw->mw_rmv_ents,
+					      re_link) {
+				struct evt_rect	*rect = &rm_ent->re_rect;
+
+				if (rect->rc_epc != phy_ent->pe_rect.rc_epc ||
+				    rect->rc_ex.ex_lo > ext.ex_hi ||
+				    rect->rc_ex.ex_lo > ext.ex_hi)
+					continue;
+
+				if (rect->rc_ex.ex_hi >= ext.ex_hi) {
+					/** The extent is fully covered after
+					 *  the current merge window, so
+					 *  mark for removal
+					 */
+					phy_ent->pe_remove = true;
+					break;
+				}
+			}
+		}
+
 		/*
 		 * Physical entry is in window, or it's fully covered (not
 		 * visible) in current window.
 		 */
-		if (ext.ex_hi <= mw->mw_ext.ex_hi || phy_ent->pe_ref == 0)
-			continue;
-
-		removed = false;
-		/** Check if it's covered by a delete record */
-		d_list_for_each(rmv_ent, &mw->mw_rmv_ents, re_link) {
-			if (rmv_ent->re_rect.rc_ex.ex_hi < ext.ex_lo)
-				continue;
-			if (rmv->ent->rc_rect.rc_ex.ex_lo > ext_ex_hi)
-				continue;
-
-			if (rmv_ent->re_rect.rc_ex.ex_lo == ext.ex_lo &&
-			    rmv_ent->rc_rect.rc_ex.ex_hi == ext.ex_hi &&
-			    rmv_ent->rc_rect.rc_epc == phy_ent.pe_rect.rc_epc) {
-				removed = true;
-				break;
-			}
-		}
-		/*
-		 * Physical entry exactly matches a removal record
-		 */
-		if (removed)
+		if (ext.ex_hi <= mw->mw_ext.ex_hi || phy_ent->pe_ref == 0 ||
+		    phy_ent->pe_remove)
 			continue;
 
 		lgc_seg->ls_phy_ent = phy_ent;
@@ -1178,12 +1193,13 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 static int
 insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
-		unsigned int *acts)
+		bool last, unsigned int *acts)
 {
 	struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
 	struct vos_object	*obj = oiter->it_obj;
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
 	struct agg_phy_ent	*phy_ent, *tmp;
+	struct agg_rmv_ent	*rm_ent, *rm_tmp;
 	struct agg_lgc_ent	*lgc_ent;
 	struct agg_lgc_seg	*lgc_seg;
 	struct evt_entry_in	*ent_in;
@@ -1262,8 +1278,9 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			goto abort;
 		}
 
-		/* Physical entry is in window */
-		if (rect.rc_ex.ex_hi <= mw->mw_ext.ex_hi) {
+		/* Physical entry is in window or fully removed */
+		if (rect.rc_ex.ex_hi <= mw->mw_ext.ex_hi ||
+		    phy_ent->pe_remove) {
 			d_list_del(&phy_ent->pe_link);
 			D_FREE_PTR(phy_ent);
 			D_ASSERT(mw->mw_phy_cnt > 0);
@@ -1279,6 +1296,26 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		leftovers++;
 	}
 	D_ASSERT(leftovers == mw->mw_phy_cnt);
+
+	/** Remove processed removal records */
+	d_list_for_each_entry_safe(rm_ent, rm_tmp, &mw->mw_rmv_ents, re_link) {
+		rect = rm_ent->re_rect;
+
+		if (!last && rect.rc_ex.ex_hi > mw->mw_ext.ex_hi)
+			continue;
+
+		rc = evt_delete(oiter->it_hdl, &rect, NULL);
+		if (rc) {
+			D_ERROR("Delete "DF_RECT" error: "DF_RC"\n",
+				DP_RECT(&rect), DP_RC(rc));
+			goto abort;
+		}
+
+		d_list_del(&rm_ent->re_link);
+		D_FREE(rm_ent);
+		D_ASSERT(mw->mw_rmv_cnt > 0);
+		mw->mw_rmv_cnt--;
+	}
 
 	/* Insert new segments into EV tree */
 	for (i = 0; i < io->ic_seg_cnt; i++) {
@@ -1354,7 +1391,7 @@ clear_merge_window(struct agg_merge_window *mw)
 }
 
 static bool
-need_flush(struct agg_merge_window *mw)
+need_flush(struct agg_merge_window *mw, bool last)
 {
 	struct agg_phy_ent	*phy_ent;
 	struct agg_lgc_ent	*lgc_ent;
@@ -1387,6 +1424,10 @@ need_flush(struct agg_merge_window *mw)
 	if (mw->mw_lgc_cnt != mw->mw_phy_cnt)
 		return true;
 
+	/* Need to cleanup remaining removal records */
+	if (last && mw->mw_rmv_cnt != 0)
+		return true;
+
 	clear_merge_window(mw);
 	D_DEBUG(DB_EPC, "Skip window flush "DF_EXT"\n", DP_EXT(&mw->mw_ext));
 
@@ -1395,7 +1436,7 @@ need_flush(struct agg_merge_window *mw)
 
 static int
 flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
-		   unsigned int *acts)
+		   bool last, unsigned int *acts)
 {
 	int	rc;
 
@@ -1405,7 +1446,7 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	 * migrated to a new location, such batch data migration is good for
 	 * anti-fragmentaion.
 	 */
-	if (!need_flush(mw))
+	if (!need_flush(mw, last))
 		return 0;
 
 	/* Prepare the new segments to be inserted */
@@ -1425,7 +1466,7 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	/* Replace the old logical records with new segments in EV tree */
-	rc = insert_segments(ih, mw, acts);
+	rc = insert_segments(ih, mw, last, acts);
 	if (rc) {
 		D_ERROR("Insert segments "DF_EXT" error: "DF_RC"\n",
 			DP_EXT(&mw->mw_ext), DP_RC(rc));
@@ -1572,140 +1613,6 @@ recx2ext(daos_recx_t *recx, struct evt_extent *ext)
 }
 
 static void
-prepare_delete(struct agg_merge_window *mw)
-{
-	struct agg_phy_ent	*phy_ent;
-
-	/** Fix the extents in the tree */
-	d_list_for_each_entry(phy_ent, &mw->mw_phy_ents, pe_link) {
-		if (phy_ent->pe_off) {
-			phy_ent->pe_rect.rc_ex.ex_lo += phy_ent->pe_off;
-			enqueue_del_ent(mw, &phy_ent->pe_rect);
-			d_list_del(&phy_ent->pe_link);
-			D_FREE_PTR(phy_ent);
-			D_ASSERT(mw->mw_phy_cnt > 0);
-			mw->mw_phy_cnt--;
-		}
-	}
-}
-
-static int
-delete_removed(struct vos_obj_iter	*oiter, struct agg_merge_window *mw,
-	       vos_iter_entry_t *entry)
-{
-	struct agg_del_ent	*del_ent;
-	struct agg_del_ent	*temp;
-	struct agg_del_ent	*new_ent = NULL;
-	struct evt_entry_in	 ent_in = {0};
-	struct vos_object	*obj = oiter->it_obj;
-	uint64_t		 saved_bound;
-	struct evt_rect		 rect;
-	int			 rc = 0;
-
-	BIO_ADDR_SET_HOLE(&ent_in.ei_addr);
-	D_ASSERT(obj != NULL);
-	rc = umem_tx_begin(vos_obj2umm(obj), NULL);
-	if (rc)
-		return rc;
-
-	recx2ext(&entry->ie_orig_recx, &rect.rc_ex);
-	rect.rc_epc = entry->ie_epoch;
-	rect.rc_minor_epc = entry->ie_minor_epc;
-	D_ASSERT(rect.rc_minor_epc == EVT_MINOR_EPC_MAX);
-
-	/** Ok, search the sorted phy extents for matches */
-	d_list_for_each_entry_safe(del_ent, temp, &mw->mw_del_ents, de_link) {
-		if (rect.rc_ex.ex_hi < del_ent->de_rect.rc_ex.ex_lo)
-			continue;
-
-		if (rect.rc_ex.ex_lo > del_ent->de_rect.rc_ex.ex_hi + 1)
-			continue;
-
-		if (rect.rc_epc != del_ent->de_rect.rc_epc)
-			continue;
-
-		rc = evt_delete(oiter->it_hdl, &del_ent->de_rect, NULL);
-		if (rc != 0) {
-			D_ERROR("Could not remove "DF_RECT": rc="DF_RC"\n",
-				DP_RECT(&del_ent->de_rect), DP_RC(rc));
-			goto abort;
-		}
-
-		if (rect.rc_ex.ex_lo == del_ent->de_rect.rc_ex.ex_lo &&
-		    rect.rc_ex.ex_hi == del_ent->de_rect.rc_ex.ex_hi) {
-			goto dequeue;
-		}
-
-		/* Ok, it wasn't the whole thing, insert any remaining
-		 * chunk(s)
-		 */
-		if (rect.rc_ex.ex_lo > del_ent->de_rect.rc_ex.ex_lo) {
-			saved_bound = del_ent->de_rect.rc_ex.ex_hi;
-			del_ent->de_rect.rc_ex.ex_hi = rect.rc_ex.ex_lo - 1;
-			new_ent = enqueue_del_ent(mw, del_ent);
-			if (new_ent == NULL) {
-				rc = -DER_NOMEM;
-				D_ERROR("Enqueue del_ent win:"DF_EXT", ent:"
-					DF_EXT" error: "DF_RC"\n",
-					DP_EXT(&mw->mw_ext),
-					DP_EXT(&del_ent->de_rect.rc_ex),
-					DP_RC(rc));
-				goto abort;
-			}
-
-			ent_in.ei_rect = new_ent->de_rect;
-			ent_in.ei_bound = entry->ie_epoch;
-			rc = evt_insert(oiter->it_hdl, &ent_in, NULL);
-			if (rc != 0) {
-				D_ERROR("Could not insert new entry: "DF_RC
-					"\n", DP_RC(rc));
-				goto abort;
-			}
-			del_ent->de_rect.rc_ex.ex_hi = saved_bound;
-		}
-
-		if (rect.rc_ex.ex_hi < del_ent->de_rect.rc_ex.ex_hi) {
-			del_ent->de_rect.rc_ex.ex_lo = rect.rc_ex.ex_hi + 1;
-			new_ent = enqueue_del_ent(mw, del_ent);
-			if (new_ent == NULL) {
-				rc = -DER_NOMEM;
-				D_ERROR("Enqueue del_ent win:"DF_EXT", ent:"
-					DF_EXT" error: "DF_RC"\n",
-					DP_EXT(&mw->mw_ext),
-					DP_EXT(&del_ent->de_rect.rc_ex),
-					DP_RC(rc));
-				goto abort;
-			}
-
-			ent_in.ei_rect = new_ent->de_rect;
-			ent_in.ei_bound = entry->ie_epoch;
-			rc = evt_insert(oiter->it_hdl, &ent_in, NULL);
-			if (rc != 0) {
-				D_ERROR("Could not insert new entry: "DF_RC
-					"\n", DP_RC(rc));
-				goto abort;
-			}
-		}
-dequeue:
-		/** Remove physical extent from list */
-		d_list_del(&del_ent->de_link);
-		D_FREE_PTR(del_ent);
-		D_ASSERT(mw->mw_del_cnt > 0);
-		mw->mw_del_cnt--;
-	}
-
-	rc = evt_delete(oiter->it_hdl, &rect, NULL);
-abort:
-	if (rc)
-		rc = umem_tx_abort(vos_obj2umm(obj), rc);
-	else
-		rc = umem_tx_commit(vos_obj2umm(obj));
-
-	return rc;
-}
-
-
-static void
 close_merge_window(struct agg_merge_window *mw, int rc)
 {
 	struct agg_io_context *io = &mw->mw_io_ctxt;
@@ -1787,27 +1694,6 @@ delete_evt_entry(struct vos_obj_iter *oiter, vos_iter_entry_t *entry,
 	return rc;
 }
 
-static bool
-handle_deleted(daos_handle_t ih, struct agg_merge_window *mw,
-	       vos_iter_entry_t *entry, unsigned int *acts, int *rc)
-{
-	struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
-
-	*rc = 0;
-
-	if ((entry->ie_vis_flags & VOS_VIS_FLAG_DELETED) == 0)
-		return false;
-
-	*rc = delete_removed(oiter, mw, entry);
-
-	if (entry->ie_vis_flags & VOS_VIS_FLAG_END) {
-		D_ASSERT(*rc != 0 || mw->mw_del_cnt == 0);
-		close_merge_window(mw, *rc);
-	}
-
-	return true;
-}
-
 static int
 join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		  vos_iter_entry_t *entry, unsigned int *acts)
@@ -1865,19 +1751,19 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	last = (entry->ie_vis_flags & VOS_VIS_FLAG_LAST);
 
 	if (entry->ie_vis_flags & VOS_VIS_FLAG_REMOVE) {
-		struct agg_rmv_ent	*rmv_ent;
+		struct agg_rmv_ent	*rm_ent;
 
 		/* Enqueue removal record */
-		rmv_ent = enqueue_rmv_ent(mw, &phy_ext, entry);
-		if (rmv_ent == NULL) {
+		rm_ent = enqueue_rmv_ent(mw, &phy_ext, entry);
+		if (rm_ent == NULL) {
 			rc = -DER_NOMEM;
-			D_ERROR("Enqueue rmv_ent win:"DF_EXT", ent:"DF_EXT" "
+			D_ERROR("Enqueue rm_ent win:"DF_EXT", ent:"DF_EXT" "
 				"error: "DF_RC"\n", DP_EXT(&mw->mw_ext),
 				DP_EXT(&phy_ext), DP_RC(rc));
 			return rc;
 		}
 
-		continue;
+		goto out;
 	}
 
 	/* Just delete the fully covered intact physical entry */
@@ -1896,7 +1782,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 
 	/* Trigger current window flush when reaching threshold */
 	if (visible && trigger_flush(mw, &lgc_ext)) {
-		rc = flush_merge_window(ih, mw, acts);
+		rc = flush_merge_window(ih, mw, false, acts);
 		if (rc) {
 			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
 				DP_EXT(&mw->mw_ext), DP_RC(rc));
@@ -1941,7 +1827,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 out:
 	/* Flush & close window on last entry */
 	if (last) {
-		rc = flush_merge_window(ih, mw, acts);
+		rc = flush_merge_window(ih, mw, true, acts);
 		if (rc)
 			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
 				DP_EXT(&mw->mw_ext), DP_RC(rc));
@@ -2019,7 +1905,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		 * Sorted iteration doesn't support tree empty check, so we
 		 * always inform vos_iterate() to check if subtree is empty.
 		 */
-		if (entry->ie_vis_flags & VOS_VIS_FLAG_END) {
+		if (entry->ie_vis_flags & VOS_VIS_FLAG_LAST) {
 			/* Trigger re-probe in akey iteration */
 			*acts |= VOS_ITER_CB_YIELD;
 		}
@@ -2038,11 +1924,6 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		DP_UOID(agg_param->ap_oid), DP_EXT(&lgc_ext),
 		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_minor_epc,
 		entry->ie_vis_flags);
-
-	if (handle_deleted(ih, mw, entry, acts, &rc)) {
-		/** Handle deleted entry */
-		goto out;
-	}
 
 	rc = set_window_size(mw, entry->ie_rsize);
 	if (rc)
@@ -2309,7 +2190,7 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 
 	memset(mw, 0, sizeof(*mw));
 	D_INIT_LIST_HEAD(&mw->mw_phy_ents);
-	D_INIT_LIST_HEAD(&mw->mw_del_ents);
+	D_INIT_LIST_HEAD(&mw->mw_rmv_ents);
 	D_INIT_LIST_HEAD(&io->ic_nvme_exts);
 	io->ic_csum_recalc_func = func;
 }
