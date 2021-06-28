@@ -45,7 +45,7 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
-def run_checks(env, p):
+def run_checks(env):
     """Run all configure time checks"""
     if GetOption('help') or GetOption('clean'):
         return
@@ -416,10 +416,10 @@ def scons(): # pylint: disable=too-many-locals
     if env['CC'] == 'clang' or env['CC'] == 'icx':
         il_env = env.Clone()
         il_env['CC'] = 'gcc'
-        run_checks(env, prereqs)
-        run_checks(il_env, prereqs)
+        run_checks(env)
+        run_checks(il_env)
     else:
-        run_checks(env, prereqs)
+        run_checks(env)
         il_env = env.Clone()
 
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
