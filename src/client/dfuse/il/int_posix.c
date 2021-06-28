@@ -301,12 +301,10 @@ ioil_fini(void)
 	DFUSE_TRA_DOWN(&ioil_iog);
 	vector_destroy(&fd_table);
 
-	printf("Performed "PRIu64" reads and "PRIu64" writes from "PRIu64" files\n",
+	printf("Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
 		ioil_iog.iog_read_count,
 		ioil_iog.iog_write_count,
 		ioil_iog.iog_file_count);
-
-	printf("All done from Interception\n");
 
 	/* Tidy up any remaining open connections */
 	d_list_for_each_entry_safe(pool, pnext,
