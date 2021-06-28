@@ -378,6 +378,10 @@ ult_create_internal(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
 		return -DER_NONEXIST;
 
 	if (stack_size > 0) {
+#if 0
+		stack_size *= 3;
+#endif
+
 		rc = ABT_thread_attr_create(&attr);
 		if (rc != ABT_SUCCESS)
 			return dss_abterr2der(rc);

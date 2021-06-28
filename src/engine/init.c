@@ -202,7 +202,6 @@ modules_load(void)
 	return rc;
 }
 
-
 /**
  * Get the appropriate number of main XS based on the number of cores and
  * passed in preferred number of threads.
@@ -425,6 +424,8 @@ set_abt_max_num_xstreams(int n)
 	return 0;
 }
 
+static bool d_abt_on;
+
 static int
 abt_init(int argc, char *argv[])
 {
@@ -450,12 +451,15 @@ abt_init(int argc, char *argv[])
 		return dss_abterr2der(rc);
 	}
 
+	d_abt_on = true;
+
 	return 0;
 }
 
 static void
 abt_fini(void)
 {
+	d_abt_on = false;
 	ABT_finalize();
 }
 
@@ -499,7 +503,7 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
-	if (uid != NULL)
+	if (uid != NULL && d_abt_on)
 		ABT_self_get_thread_id(uid);
 
 	if (tid != NULL) {
