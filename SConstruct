@@ -175,6 +175,13 @@ def set_defaults(env, daos_version):
     if env.get('BUILD_TYPE') != 'release':
         env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
 
+    if env['CC'] == 'icx' and not GetOption('no_rpath'):
+        #Hack to add rpaths
+        for path in env["ENV"]["LD_LIBRARY_PATH"].split(":"):
+            if "oneapi" in path:
+                env.AppendUnique(RPATH_FULL=[path])
+
+
 def build_misc():
     """Build miscellaneous items"""
     # install the configuration files
@@ -408,7 +415,7 @@ def scons(): # pylint: disable=too-many-locals
               default=False,
               help='Download and build dependencies only, do not build daos')
 
-    if env['CC'] == 'clang':
+    if env['CC'] == 'clang' or env['CC'] == 'icx':
         il_env = env.Clone()
         il_env['CC'] = 'gcc'
         run_checks(env, prereqs)
