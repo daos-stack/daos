@@ -10,7 +10,7 @@ def build_shim_module(env, lib_prefix, version):
     new_env = env.Clone()
     extra_flags = ""
 
-    if version == "3":
+    if version == "3.6":
         tgt_name = 'pydaos_shim'
         extra_flags = " -D__USE_PYTHON3__==1"
         new_env.ParseConfig("pkg-config --cflags --libs python3")
