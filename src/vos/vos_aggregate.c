@@ -1492,9 +1492,8 @@ trigger_flush(struct agg_merge_window *mw, struct evt_extent *lgc_ext)
 	 * Window is formed by visible logical entries, must have no
 	 * overlapping.
 	 */
-	D_ASSERTF(w_ext->ex_hi < lgc_ext->ex_lo,
-		  "win:"DF_EXT", lgc_ent:"DF_EXT"\n",
-		  DP_EXT(w_ext), DP_EXT(lgc_ext));
+	D_ASSERTF(w_ext->ex_hi < lgc_ext->ex_lo, "win:"DF_EXT", lgc_ent:"
+		  DF_EXT"\n", DP_EXT(w_ext), DP_EXT(lgc_ext));
 
 	/* Window is large enough */
 	if (merge_window_size(mw) >= mw->mw_flush_thresh)
@@ -1701,7 +1700,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
 	struct evt_extent	 phy_ext, lgc_ext;
 	struct agg_phy_ent	*phy_ent;
-	bool			 visible, partial, last;
+	bool			 remove, visible, partial, last;
 	int			 rc = 0;
 
 	recx2ext(&entry->ie_recx, &lgc_ext);
@@ -1747,8 +1746,42 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	visible = (entry->ie_vis_flags & VOS_VIS_FLAG_VISIBLE);
+	remove = (entry->ie_vis_flags & VOS_VIS_FLAG_REMOVE);
 	partial = (entry->ie_vis_flags & VOS_VIS_FLAG_PARTIAL);
 	last = (entry->ie_vis_flags & VOS_VIS_FLAG_LAST);
+
+	/* Just delete the fully covered intact physical entry */
+	if (!visible && !partial && !remove) {
+		D_ASSERTF(lgc_ext.ex_lo == phy_ext.ex_lo &&
+			  lgc_ext.ex_hi == phy_ext.ex_hi,
+			  ""DF_EXT" != "DF_EXT"\n",
+			  DP_EXT(&lgc_ext), DP_EXT(&phy_ext));
+		D_ASSERT(entry->ie_vis_flags & VOS_VIS_FLAG_COVERED);
+
+		rc = delete_evt_entry(oiter, entry, acts, "covered");
+		if (rc)
+			return rc;
+		goto out;
+	}
+
+	if (remove) {
+		/** Since this isn't a traditional logical extent, change the
+		 *  lower bound so checks in trigger_flush work
+		 */
+		if (mw->mw_ext.ex_hi >= lgc_ext.ex_lo)
+			lgc_ext.ex_lo = mw->mw_ext.ex_hi + 1;
+	}
+
+	/* Trigger current window flush when reaching threshold */
+	if ((visible || remove) && trigger_flush(mw, &lgc_ext)) {
+		rc = flush_merge_window(ih, mw, false, acts);
+		if (rc) {
+			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
+				DP_EXT(&mw->mw_ext), DP_RC(rc));
+			return rc;
+		}
+		D_ASSERT(merge_window_status(mw) == MW_FLUSHED);
+	}
 
 	if (entry->ie_vis_flags & VOS_VIS_FLAG_REMOVE) {
 		struct agg_rmv_ent	*rm_ent;
@@ -1764,31 +1797,6 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		}
 
 		goto out;
-	}
-
-	/* Just delete the fully covered intact physical entry */
-	if (!visible && !partial) {
-		D_ASSERTF(lgc_ext.ex_lo == phy_ext.ex_lo &&
-			  lgc_ext.ex_hi == phy_ext.ex_hi,
-			  ""DF_EXT" != "DF_EXT"\n",
-			  DP_EXT(&lgc_ext), DP_EXT(&phy_ext));
-		D_ASSERT(entry->ie_vis_flags & VOS_VIS_FLAG_COVERED);
-
-		rc = delete_evt_entry(oiter, entry, acts, "covered");
-		if (rc)
-			return rc;
-		goto out;
-	}
-
-	/* Trigger current window flush when reaching threshold */
-	if (visible && trigger_flush(mw, &lgc_ext)) {
-		rc = flush_merge_window(ih, mw, false, acts);
-		if (rc) {
-			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
-				DP_EXT(&mw->mw_ext), DP_RC(rc));
-			return rc;
-		}
-		D_ASSERT(merge_window_status(mw) == MW_FLUSHED);
 	}
 
 	/* Lookup physical entry, enqueue if it doesn't exist */

@@ -1571,6 +1571,15 @@ remove_test(void **state)
 		    sizeof(REM_VAL1) + sizeof(REM_VAL2) + sizeof(REM_VAL3) - 5,
 		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
 
+	epr.epr_lo = 0;
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL, true);
+
+	/* Should get same result after aggregation */
+	check_array(arg, oid, &dkey, &iod.iod_name, epoch,
+		    FETCH_DATA, 1, &REM_VAL1[0], FETCH_HOLE,
+		    sizeof(REM_VAL1) + sizeof(REM_VAL2) + sizeof(REM_VAL3) - 5,
+		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
+
 	start_epoch = epoch + 1;
 }
 
