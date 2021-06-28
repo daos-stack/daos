@@ -52,14 +52,6 @@ server_config:
             log_mask: ERR
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
-    transport_config:
-        allow_insecure: True
-agent_config:
-    transport_config:
-        allow_insecure: True
-dmg:
-    transport_config:
-      allow_insecure: True
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     mode: 146
