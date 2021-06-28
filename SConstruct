@@ -57,13 +57,15 @@ if (check(x))
 }
 """
 
-def check_generic(env):
+def check_generic(context):
     """Check if the compiler supports _Generic"""
 
-    env.Message('Checking if _Generic is supported ')
+    compiler = context.env.get('CC')
 
-    rc = env.TryCompile(generic_src, '.c')
-    env.Result(rc)
+    context.Message('Checking if {} supports _Generic '.format(compiler))
+
+    rc = context.TryCompile(generic_src, '.c')
+    context.Result(rc)
     return rc
 
 def run_checks(env, p):
@@ -79,12 +81,12 @@ def run_checks(env, p):
                        custom_tests={'GenericTest': check_generic})
 
     if config.CheckHeader('stdatomic.h'):
-        env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
+        env.AppendUnique(CPPDEFINES={'HAVE_STDATOMIC':'1'})
     else:
         p.require(env, 'openpa', headers_only=True)
 
     if config.GenericTest():
-        env.AppendUnique(CPPDEFINES=['HAVE_GENERIC'])
+        env.AppendUnique(CPPDEFINES={'HAVE_GENERIC':'1'})
 
     config.Finish()
 
@@ -431,7 +433,7 @@ def scons(): # pylint: disable=too-many-locals
     prereqs.init_build_targets(build_prefix)
     prereqs.load_defaults(platform_arm)
     if prereqs.check_component('valgrind_devel'):
-        env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
+        env.AppendUnique(CPPDEFINES='D_HAS_VALGRIND')
 
     AddOption('--deps-only',
               dest='deps_only',

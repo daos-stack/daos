@@ -100,13 +100,31 @@ def clear_icc_env(env):
             env.Replace(**{flag_type : newflags})
         env.Replace(LINKFLAGS=linkflags)
 
+_TO_STRIP=['HAVE_GENERIC']
+
+def strip_defines(env):
+    """Remove any compiler envs"""
+
+    matched = False
+    old = env.get('CPPDEFINES')
+    new = []
+    for (d) in old:
+        if d[0] in _TO_STRIP:
+            matched = True
+            continue
+        new.append(d)
+    if matched:
+        env.Replace(CPPDEFINES=new)
+
 def _find_mpicc(env):
     """find mpicc"""
     mpicc = find_executable("mpicc")
     if mpicc:
         env.Replace(CC="mpicc")
         env.Replace(LINK="mpicc")
-        env.AppendUnique(CPPDEFINES=["-DDAOS_MPI_PATH=\"%s\"" % mpicc])
+        env.AppendUnique(CPPDEFINES={'DAOS_MPI_PATH':mpicc})
+
+        strip_defines(env)
         clear_icc_env(env)
         load_mpi_path(env)
         return True

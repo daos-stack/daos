@@ -107,21 +107,21 @@ def build_client_libs_static(env, common):
 
     return il_lib + dfuse_lib
 
-def check_struct_member(env, text, struct, member):
+def check_struct_member(context, text, struct, member):
     """scons check for a struct member existing"""
 
-    env.Message('Checking for {} in {} '.format(member, struct))
+    context.Message('Checking for {} in {} '.format(member, struct))
 
     src = '{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text, struct,
                                                                  member)
-    rc = env.TryCompile(src, '.c')
-    env.Result(rc)
+    rc = context.TryCompile(src, '.c')
+    context.Result(rc)
     return rc
 
-def check_ioctl_def(env, ctype):
+def check_ioctl_def(context, ctype):
     """scons check for a struct member existing"""
 
-    env.Message('Checking if fuse ioctl is type {} '.format(ctype))
+    context.Message('Checking if fuse ioctl is type {} '.format(ctype))
 
     src = """#include <fuse3/fuse_lowlevel.h>
 
@@ -134,8 +134,8 @@ struct fuse_lowlevel_ops ops = {.ioctl = my_ioctl};
 
 """ % ctype
 
-    rc = env.TryCompile(src, '.c')
-    env.Result(rc)
+    rc = context.TryCompile(src, '.c')
+    context.Result(rc)
     return rc
 
 def configure_fuse(cenv):
