@@ -50,7 +50,7 @@ def build_common(env, files, is_shared):
 
     return common
 
-def build_client_libs_shared(env):
+def build_client_libs_shared(env, prereqs):
     """build the shared interception library"""
 
     ilenv = env.Clone()
@@ -74,9 +74,10 @@ def build_client_libs_shared(env):
 
     gen_script = daos_build.program(ilenv, 'il/gen_script', ['il/gen_script.c'],
                                     LIBS=[])
-    script = ilenv.Command('il/check_ioil_syms', gen_script,
-                           "$SOURCE -s $TARGET")
-    env.Install('$PREFIX/lib/daos/TESTING/scripts', script)
+    if prereqs.test_requested():
+        script = ilenv.Command('il/check_ioil_syms', gen_script,
+                               "$SOURCE -s $TARGET")
+        env.Install('$PREFIX/lib/daos/TESTING/scripts', script)
     script = ilenv.Command('il/ioil-ld-opts', gen_script,
                            '$SOURCE -l $TARGET')
     env.Install('$PREFIX/share/daos', script)
@@ -180,7 +181,7 @@ def scons():
     gcc_env.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
     gcc_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
 
-    libs = build_client_libs_shared(gcc_env)
+    libs = build_client_libs_shared(gcc_env, prereqs)
 
     static_env = gcc_env.Clone()
 
@@ -220,7 +221,8 @@ def scons():
 
     Export('dfuse_env')
 
-    SConscript('test/SConscript')
+    if prereqs.test_requested():
+        SConscript('test/SConscript')
 
 if __name__ == "SCons.Script":
     scons()

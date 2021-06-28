@@ -13,7 +13,6 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
@@ -28,7 +27,8 @@ import (
 #cgo CFLAGS: -I${SRCDIR}/../../../utils
 #cgo LDFLAGS: -lgurt -lcart -ldaos -ldaos_common -lduns -ldfs -luuid -ldaos_cmd_hdlrs
 
-#include <sys/stat.h>
+#define D_LOGFAC	DD_FAC(client)
+
 #include <daos.h>
 #include <daos/common.h>
 
@@ -45,6 +45,14 @@ init_op_vals(struct cmd_args_s *ap)
 	ap->o_op = -1;
 	ap->fs_op = -1;
 	ap->sh_op = -1;
+}
+
+void
+free_daos_alloc(void *ptr)
+{
+	// Use the macro to free memory allocated
+	// by DAOS macros in order to keep NLT happy.
+	D_FREE(ptr);
 }
 */
 import "C"
@@ -179,33 +187,31 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	}
 
 	freeString(ap.sysname)
+	C.free_daos_alloc(unsafe.Pointer(ap.dfs_path))
+	C.free_daos_alloc(unsafe.Pointer(ap.pool_label))
+	C.free_daos_alloc(unsafe.Pointer(ap.cont_label))
 
 	if ap.props != nil {
-		ap.props.dpp_nr = C.DAOS_PROP_ENTRIES_MAX_NR
 		C.daos_prop_free(ap.props)
 	}
-
-	C.free(unsafe.Pointer(ap))
 }
 
 func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), err error) {
-	ap = (*C.struct_cmd_args_s)(C.calloc(1, C.sizeof_struct_cmd_args_s))
-
-	if ap == nil {
-		return nil, nil, errors.New("unable to alloc cmd_args_s")
-	}
-
+	ap = &C.struct_cmd_args_s{}
 	C.init_op_vals(ap)
 	ap.sysname = C.CString(build.DefaultSystemName)
 
 	outStream, outCleanup, err := createWriteStream("", log.Info)
 	if err != nil {
+		freeCmdArgs(ap)
 		return nil, nil, err
 	}
 	ap.outstream = outStream
 
 	errStream, errCleanup, err := createWriteStream("handler", log.Error)
 	if err != nil {
+		outCleanup()
+		freeCmdArgs(ap)
 		return nil, nil, err
 	}
 	ap.errstream = errStream
@@ -234,7 +240,19 @@ func (dc *daosCmd) initDAOS() (func(), error) {
 	}
 
 	return func() {
-		C.daos_fini()
+		if rc := C.daos_fini(); rc != 0 {
+			dc.log.Errorf("daos_fini() failed: %s", daosError(rc))
+		}
+	}, nil
+}
+
+func initDaosDebug() (func(), error) {
+	if rc := C.daos_debug_init(nil); rc != 0 {
+		return nil, errors.Wrap(daosError(rc), "daos_debug_init() failed")
+	}
+
+	return func() {
+		C.daos_debug_fini()
 	}, nil
 }
 
@@ -253,113 +271,6 @@ func resolveDunsPath(path string, ap *C.struct_cmd_args_s) error {
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err, "failed to resolve path %s", path)
 	}
-
-	return nil
-}
-
-type labelOrUUID struct {
-	UUID  uuid.UUID
-	Label string
-}
-
-func (f labelOrUUID) Empty() bool {
-	return !f.HasLabel() && !f.HasUUID()
-}
-
-func (f labelOrUUID) HasLabel() bool {
-	return f.Label != ""
-}
-
-func (f labelOrUUID) HasUUID() bool {
-	return f.UUID != uuid.Nil
-}
-
-func (f labelOrUUID) String() string {
-	switch {
-	case f.HasLabel():
-		return f.Label
-	case f.HasUUID():
-		return f.UUID.String()
-	default:
-		return "<no label or uuid set>"
-	}
-}
-
-func (f *labelOrUUID) UnmarshalFlag(fv string) error {
-	uuid, err := uuid.Parse(fv)
-	if err == nil {
-		f.UUID = uuid
-		return nil
-	}
-
-	f.Label = fv
-	return nil
-}
-
-type epochRange struct {
-	set   bool
-	begin uint64
-	end   uint64
-}
-
-func (er *epochRange) String() string {
-	return fmt.Sprintf("%d-%d", er.begin, er.end)
-}
-
-func (er *epochRange) UnmarshalFlag(fv string) error {
-	er.set = true
-	n, err := fmt.Sscanf(fv, "%d-%d", &er.begin, &er.end)
-	if err != nil {
-		return err
-	}
-	if n != 2 {
-		return errors.Errorf("range=%q must be in A-B form", fv)
-	}
-	if er.begin >= er.end {
-		return errors.Errorf("range begin must be < end")
-	}
-	return nil
-}
-
-type chunkSize struct {
-	set  bool
-	size C.uint64_t
-}
-
-func (c *chunkSize) UnmarshalFlag(fv string) error {
-	if fv == "" {
-		return errors.New("empty chunk size")
-	}
-
-	size, err := humanize.ParseBytes(fv)
-	if err != nil {
-		return err
-	}
-	c.size = C.uint64_t(size)
-	c.set = true
-
-	return nil
-}
-
-type objectClass struct {
-	set   bool
-	class C.ushort
-}
-
-func (oc *objectClass) UnmarshalFlag(fv string) error {
-	if fv == "" {
-		return errors.New("empty object class")
-	}
-
-	cObjClass := C.CString(fv)
-	defer freeString(cObjClass)
-
-	oc.class = (C.ushort)(C.daos_oclass_name2id(cObjClass))
-	if oc.class == C.OC_UNKNOWN {
-		return errors.Errorf("unknown object class %q",
-			fv)
-	}
-	oc.set = true
 
 	return nil
 }

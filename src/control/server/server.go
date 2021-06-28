@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
@@ -38,6 +39,15 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 	err := cfg.Validate(log)
 	if err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
+	}
+
+	lookupNetIF := func(name string) (netInterface, error) {
+		return net.InterfaceByName(name)
+	}
+	for _, ec := range cfg.Engines {
+		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
+			return nil, err
+		}
 	}
 
 	cfg.SaveActiveConfig(log)
@@ -210,7 +220,7 @@ func (srv *server) initNetwork(ctx context.Context) error {
 func (srv *server) initStorage() error {
 	defer srv.logDuration(track("time to init storage"))
 
-	if err := prepBdevStorage(srv, iommuDetected(), getHugePageInfo); err != nil {
+	if err := prepBdevStorage(srv, iommuDetected(), common.GetHugePageInfo); err != nil {
 		return err
 	}
 

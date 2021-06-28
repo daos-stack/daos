@@ -5,6 +5,7 @@
  */
 
 #include <daos.h>
+#include <gurt/common.h>
 
 /* cgo is unable to work directly with preprocessor macros
  * so we have to provide these glue helpers.
@@ -52,6 +53,22 @@ set_dpe_str(struct daos_prop_entry *dpe, d_string_t str)
 		return;
 
 	dpe->dpe_str = str;
+}
+
+static inline void
+set_dpe_dupe_str(struct daos_prop_entry *dpe, d_string_t str, int strlen)
+{
+	if (dpe == NULL || str == NULL || strlen == 0)
+		return;
+
+	/* Use this to keep NLT happy; otherwise it will complain
+	 * about "free of unknown memory" if a string allocated
+	 * by cgo's CString() is used.
+	 */
+	D_STRNDUP(dpe->dpe_str, str, strlen);
+
+	if (dpe->dpe_str == NULL)
+		D_ERROR("failed to duplicate %s\n", str);
 }
 
 static inline void

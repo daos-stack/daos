@@ -604,7 +604,7 @@ prepare_segments(struct agg_merge_window *mw)
 		if (ent_in->ei_ver == 0 ||
 		    ent_in->ei_ver > phy_ent->pe_ver)
 			ent_in->ei_ver = phy_ent->pe_ver;
-		ent_in->ei_rect.rc_minor_epc = VOS_MINOR_EPC_MAX;
+		ent_in->ei_rect.rc_minor_epc = VOS_SUB_OP_MAX;
 	}
 
 	if (mw->mw_csum_support) {
@@ -1665,7 +1665,8 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 			  lgc_ext.ex_hi == phy_ext.ex_hi,
 			  ""DF_EXT" != "DF_EXT"\n",
 			  DP_EXT(&lgc_ext), DP_EXT(&phy_ext));
-		D_ASSERT(entry->ie_vis_flags & VOS_VIS_FLAG_COVERED);
+		D_ASSERT(entry->ie_vis_flags & VOS_VIS_FLAG_COVERED ||
+			 entry->ie_minor_epc == EVT_MINOR_EPC_MAX);
 
 		rc = delete_evt_entry(oiter, entry, acts, "covered");
 		if (rc)

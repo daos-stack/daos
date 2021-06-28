@@ -10,6 +10,9 @@ def scons():
 
     senv = denv.Clone()
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    if senv["CC"] == 'icx':
+        #Avoid need to link Intel libraries in go build
+        senv["CC"] = "gcc"
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
     senv.AppendUnique(OBJPREFIX='s_')
@@ -35,7 +38,8 @@ def scons():
 
     senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
 
-    SConscript('ctests/SConscript', exports='senv')
+    if prereqs.test_requested():
+        SConscript('ctests/SConscript', exports='senv')
 
 if __name__ == "SCons.Script":
     scons()

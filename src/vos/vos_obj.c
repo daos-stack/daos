@@ -1198,7 +1198,14 @@ recx_get_flags(struct vos_obj_iter *oiter)
 		D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_COVERED));
 		goto done;
 	}
+	if (recx_flags_set(oiter->it_flags,
+			   VOS_IT_RECX_VISIBLE | VOS_IT_SKIP_REMOVED)) {
+		options |= EVT_ITER_VISIBLE | EVT_ITER_SKIP_REMOVED;
+		D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_COVERED));
+		goto done;
+	}
 	D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_SKIP_HOLES));
+	D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_SKIP_REMOVED));
 	if (oiter->it_flags & VOS_IT_RECX_VISIBLE)
 		options |= EVT_ITER_VISIBLE;
 	if (oiter->it_flags & VOS_IT_RECX_COVERED)
@@ -1309,6 +1316,8 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_orig_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_orig_recx.rx_nr	 = evt_extent_width(ext);
 	it_entry->ie_vis_flags = entry.en_visibility;
+	if (it_entry->ie_minor_epc == EVT_MINOR_EPC_MAX)
+		it_entry->ie_vis_flags &= ~VOS_VIS_FLAG_VISIBLE;
 	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;
 	it_entry->ie_csum	= entry.en_csum;

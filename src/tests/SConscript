@@ -6,6 +6,9 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
+    if not prereqs.test_requested():
+        return
+
     libs = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka',
             'daos_tests']
 

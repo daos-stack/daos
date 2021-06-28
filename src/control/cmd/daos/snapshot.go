@@ -57,8 +57,8 @@ func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
 type containerSnapshotDestroyCmd struct {
 	existingContainerCmd
 
-	Epoch      uint64     `long:"epc" short:"e" description:"snapshot epoch to delete"`
-	EpochRange epochRange `long:"epcrange" short:"r" description:"range of snapshot epochs to delete"`
+	Epoch      uint64         `long:"epc" short:"e" description:"snapshot epoch to delete"`
+	EpochRange epochRangeFlag `long:"epcrange" short:"r" description:"range of snapshot epochs to delete"`
 }
 
 func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {

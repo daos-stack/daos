@@ -564,7 +564,8 @@ pool_list_containers_hdlr(struct cmd_args_s *ap)
 	}
 
 	for (i = 0; i < ncont; i++) {
-		D_PRINT(DF_UUIDF"\n", DP_UUID(conts[i].pci_uuid));
+		D_PRINT(DF_UUIDF" %s\n", DP_UUID(conts[i].pci_uuid),
+			conts[i].pci_label);
 	}
 
 out_free:
@@ -1425,7 +1426,11 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 		D_GOTO(err_out, rc);
 	}
 
-	D_PRINT("Container properties for "DF_UUIDF" :\n", DP_UUID(ap->c_uuid));
+	if (ap->cont_label)
+		D_PRINT("Container properties for \"%s\":\n", ap->cont_label);
+	else
+		D_PRINT("Container properties for "DF_UUIDF" :\n",
+			DP_UUID(ap->c_uuid));
 
 	rc = cont_decode_props(ap, prop_query, prop_acl);
 
@@ -1656,6 +1661,7 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_oclass_id = ap->oclass;
 		attr.da_chunk_size = ap->chunk_size;
 		attr.da_props = ap->props;
+		attr.da_mode = ap->mode;
 		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
 	} else {
 		rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
@@ -1834,52 +1840,42 @@ parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 	int	rc = 0;
 
 	if (path == NULL || _obj_name == NULL || _cont_name == NULL)
-		return -EINVAL;
+		return EINVAL;
 	path_len = strlen(path) + 1;
 
 	if (strcmp(path, "/") == 0) {
 		D_STRNDUP(*_cont_name, "/", 2);
 		if (*_cont_name == NULL)
-			return -ENOMEM;
+			return ENOMEM;
 		*_obj_name = NULL;
 		return 0;
 	}
 	D_STRNDUP(f1, path, path_len);
-	if (f1 == NULL) {
-		rc = -ENOMEM;
-		goto out;
-	}
+	if (f1 == NULL)
+		D_GOTO(out, rc = ENOMEM);
 
 	D_STRNDUP(f2, path, path_len);
-	if (f2 == NULL) {
-		rc = -ENOMEM;
-		goto out;
-	}
+	if (f2 == NULL)
+		D_GOTO(out, rc = ENOMEM);
 	fname = basename(f1);
 	cont_name = dirname(f2);
 
 	if (cont_name[0] != '/') {
 		char cwd[1024];
 
-		if (getcwd(cwd, 1024) == NULL) {
-			rc = -ENOMEM;
-			goto out;
-		}
+		if (getcwd(cwd, 1024) == NULL)
+			D_GOTO(out, rc = ENOMEM);
 
 		if (strcmp(cont_name, ".") == 0) {
 			D_STRNDUP(cont_name, cwd, 1024);
-			if (cont_name == NULL) {
-				rc = -ENOMEM;
-				goto out;
-			}
+			if (cont_name == NULL)
+				D_GOTO(out, rc = ENOMEM);
 		} else {
 			char *new_dir = calloc(strlen(cwd) + strlen(cont_name)
 						+ 1, sizeof(char));
 
-			if (new_dir == NULL) {
-				rc = -ENOMEM;
-				goto out;
-			}
+			if (new_dir == NULL)
+				D_GOTO(out, rc = ENOMEM);
 
 			strcpy(new_dir, cwd);
 			if (cont_name[0] == '.') {
@@ -1894,16 +1890,13 @@ parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 	} else {
 		D_STRNDUP(*_cont_name, cont_name,
 			  strlen(cont_name) + 1);
-		if (*_cont_name == NULL) {
-			rc = -ENOMEM;
-			goto out;
-		}
+		if (*_cont_name == NULL)
+			D_GOTO(out, rc = ENOMEM);
 	}
 	D_STRNDUP(*_obj_name, fname, strlen(fname) + 1);
 	if (*_obj_name == NULL) {
 		D_FREE(*_cont_name);
-		rc = -ENOMEM;
-		goto out;
+		D_GOTO(out, rc = ENOMEM);
 	}
 out:
 	D_FREE(f1);
@@ -1968,8 +1961,10 @@ open_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file,
 	char		*name = NULL;
 	char		*dir_name = NULL;
 
-	parse_filename_dfs(file, &name, &dir_name);
-	assert(dir_name);
+	rc = parse_filename_dfs(file, &name, &dir_name);
+	if (rc != 0)
+		return rc;
+
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
 	if (parent == NULL) {
 		fprintf(ap->errstream, "dfs_lookup %s failed with error %d\n",
@@ -2050,7 +2045,10 @@ mkdir_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path,
 	char		*name = NULL;
 	char		*dname = NULL;
 
-	parse_filename_dfs(path, &name, &dname);
+	rc = parse_filename_dfs(path, &name, &dname);
+	if (rc != 0)
+		return rc;
+
 	/* if the "/" path is given to DAOS the dfs_mkdir fails with
 	 * INVALID argument, so skip creation of that in DAOS since
 	 * it always already exists. This happens when copying from
@@ -2215,8 +2213,10 @@ stat_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 	char		*name = NULL;
 	char		*dir_name = NULL;
 
-	parse_filename_dfs(path, &name, &dir_name);
-	assert(dir_name);
+	rc = parse_filename_dfs(path, &name, &dir_name);
+	if (rc != 0)
+		return rc;
+
 	/* Lookup the parent directory */
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
 	if (parent == NULL) {
@@ -2414,8 +2414,10 @@ chmod_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file,
 	char		*name = NULL;
 	char		*dir_name = NULL;
 
-	parse_filename_dfs(file, &name, &dir_name);
-	assert(dir_name);
+	rc = parse_filename_dfs(file, &name, &dir_name);
+	if (rc != 0)
+		return rc;
+
 	/* Lookup the parent directory */
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
 	if (parent == NULL) {
@@ -2718,10 +2720,10 @@ fs_copy(struct cmd_args_s *ap,
 
 	if (copy_into_dst) {
 		/* Get the dirname and basename */
-		parse_filename_dfs(src_path, &tmp_name, &tmp_dir);
-		if (tmp_dir == NULL) {
+		rc = parse_filename_dfs(src_path, &tmp_name, &tmp_dir);
+		if (rc != 0) {
 			printf("Failed to parse path %s\n", src_path);
-			D_GOTO(out, rc = EINVAL);
+			D_GOTO(out, rc);
 		}
 
 		/* Build the destination path */
@@ -3154,8 +3156,7 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		file->type = POSIX;
 	}
 out:
-	if (dattr.da_rel_path)
-		free(dattr.da_rel_path);
+	duns_destroy_attr(&dattr);
 	return rc;
 }
 

@@ -192,10 +192,9 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	}
 
 	*rlinkp = rlink;
-out:
 	if (rc != 0)
 		dfuse_ie_close(fs_handle, ie);
-
+out:
 	return rc;
 }
 
@@ -231,12 +230,12 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 	D_ALLOC(reply_buff, size);
 	if (reply_buff == NULL)
-		D_GOTO(err, rc = ENOMEM);
+		D_GOTO(out, rc = ENOMEM);
 
 	if (oh->doh_dre == NULL) {
 		D_ALLOC_ARRAY(oh->doh_dre, READDIR_MAX_COUNT);
 		if (oh->doh_dre == NULL)
-			D_GOTO(err, rc = ENOMEM);
+			D_GOTO(out, rc = ENOMEM);
 	}
 
 	/* if starting from the beginning, reset the anchor attached to
@@ -278,7 +277,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 					 (NAME_MAX + 1) * num,
 					 NULL, NULL);
 			if (rc)
-				D_GOTO(err, rc);
+				D_GOTO(out_reset, rc);
 
 			if (daos_anchor_is_eof(&oh->doh_anchor)) {
 				dfuse_readdir_reset(oh);
@@ -318,7 +317,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 			rc = fetch_dir_entries(oh, offset, to_fetch, &eod);
 			if (rc != 0)
-				D_GOTO(err, 0);
+				D_GOTO(out_reset, 0);
 
 			if (eod)
 				D_GOTO(reply, 0);
@@ -444,15 +443,16 @@ reply:
 		DFUSE_TRA_DEBUG(oh, "Replying with %d entries", added);
 
 	if (added == 0 && rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(out_reset, 0);
 
 	DFUSE_REPLY_BUF(oh, req, reply_buff, buff_offset);
 	D_FREE(reply_buff);
 
 	return;
 
-err:
+out_reset:
 	dfuse_readdir_reset(oh);
+out:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	D_FREE(reply_buff);
 }

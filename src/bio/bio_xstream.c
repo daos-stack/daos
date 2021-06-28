@@ -28,15 +28,18 @@
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
 #define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
 /* DMA buffer parameters */
-#define DAOS_DMA_CHUNK_MB	8		/* 8MB DMA chunks */
-#define DAOS_DMA_CHUNK_CNT_INIT	32		/* Per-xstream init chunks */
-#define DAOS_DMA_CHUNK_CNT_MAX	128		/* Per-xstream max chunks */
-#define DAOS_NVME_MAX_CTRLRS	1024		/* Max read from nvme_conf */
+#define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
+#define DAOS_DMA_CHUNK_CNT_INIT	32	/* Per-xstream init chunks */
+#define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks */
+#define DAOS_DMA_MIN_UB_BUF_MB	1024	/* 1GB min upper bound DMA buffer */
+#define DAOS_NVME_MAX_CTRLRS	1024	/* Max read from nvme_conf */
 
 /* Max inflight blob IOs per io channel */
 #define BIO_BS_MAX_CHANNEL_OPS	(4096)
 /* Schedule a NVMe poll when so many blob IOs queued for an io channel */
 #define BIO_BS_POLL_WATERMARK	(2048)
+
+#define DAOS_HUGEPAGE_SIZE_2MB	2	/* 2MB */
 
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
@@ -302,8 +305,12 @@ bio_spdk_env_init(void)
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos";
-	if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY)
-		opts.mem_size = nvme_glb.bd_mem_size;
+	/*
+	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
+	 * Currently we can't guarantee clean shutdown (no hugepages leaked).
+	 * Setting mem_size could cause EAL: Not enough memory available error,
+	 * and DPDK will fail to initialize.
+	 */
 
 	rc = populate_whitelist(&opts);
 	if (rc != 0)
@@ -345,7 +352,7 @@ bio_nvme_configured(void)
 
 int
 bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-	      struct sys_db *db)
+	      int hugepage_size, int tgt_nr, struct sys_db *db)
 {
 	char		*env;
 	int		rc, fd;
@@ -388,6 +395,31 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		return 0;
 	}
 	close(fd);
+
+	D_ASSERT(tgt_nr > 0);
+	D_ASSERT(mem_size > 0);
+	D_ASSERT(hugepage_size > 0);
+	/*
+	 * Hugepages are not enough to sustain average I/O workload
+	 * (~1GB per xstream).
+	 */
+	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
+		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
+		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
+			mem_size, (mem_size / tgt_nr));
+		return -DER_INVAL;
+	}
+
+	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
+	/*
+	 * Leave a hugepage overhead buffer for DPDK memory management. Reduce
+	 * the DMA upper bound by 200 hugepages per target to account for this.
+	 * Only necessary for 2MB hugepage size.
+	 */
+	if (hugepage_size <= DAOS_HUGEPAGE_SIZE_2MB) {
+		D_ASSERT(bio_chk_cnt_max > ((200 * hugepage_size) / size_mb));
+		bio_chk_cnt_max -= (200 * hugepage_size) / size_mb;
+	}
 
 	rc = smd_init(db);
 	if (rc != 0) {

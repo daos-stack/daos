@@ -3780,9 +3780,10 @@ obj_comp_cb(tse_task_t *task, void *data)
 			if (daos_handle_is_valid(obj_auxi->th) &&
 			    (task->dt_result == 0 ||
 			     task->dt_result == -DER_NONEXIST)) {
+				D_ASSERT(obj != NULL);
 				obj_addref(obj);
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, NULL,
+				dc_tx_attach(obj_auxi->th, obj,
 					     obj_auxi->opc, task);
 			}
 			break;
@@ -5288,7 +5289,8 @@ dc_obj_query_key(tse_task_t *api_task)
 			 * retry because some potential 'prepared' DTX.
 			 */
 			shard = obj_grp_leader_get(obj, i, map_ver);
-			if (shard < 0) {
+			if (shard < 0 ||
+			    unlikely(DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
 				if (!is_ec_obj) {
 					rc = shard;
 					D_ERROR(DF_OID" no valid shard, rc "
