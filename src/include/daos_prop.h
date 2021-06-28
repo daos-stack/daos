@@ -404,7 +404,7 @@ daos_label_is_valid(const char *label)
 
 /** max length of the policy string */
 #define DAOS_PROP_POLICYSTR_MAX_LEN	(127)
-#define DAOS_POLICYSTR_REGEX "([a-zA-Z0-9,=]{1,127})"
+#define DAOS_POLICYSTR_REGEX "([a-zA-Z0-9,=_]{1,127})"
 #define DAOS_STANDALONE_POLICYSTR_REGEX "^"DAOS_POLICYSTR_REGEX"$"
 
 /** daos properties, for pool or container */
