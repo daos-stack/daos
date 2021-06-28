@@ -58,6 +58,7 @@ if (check(x))
 """
 
 def check_generic(env):
+    """Check if the compiler supports _Generic"""
 
     env.Message('Checking if _Generic is supported ')
 

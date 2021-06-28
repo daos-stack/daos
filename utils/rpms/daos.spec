@@ -464,7 +464,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Mon Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
+* Wed Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
 - Update raft to pick up Pre-Vote
 
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
