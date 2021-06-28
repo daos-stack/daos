@@ -69,7 +69,11 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 }
 
 func TestPromExp_EngineSource_IsEnabled(t *testing.T) {
-	es, cleanup, err := NewEngineSource(context.Background(), 1, 2)
+	testIdx := uint32(42)
+	telemetry.InitTestMetricsProducer(t, int(testIdx), 2048)
+	defer telemetry.CleanupTestMetricsProducer(t)
+
+	es, cleanup, err := NewEngineSource(context.Background(), testIdx, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
