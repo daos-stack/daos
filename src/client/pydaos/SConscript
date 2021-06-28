@@ -50,7 +50,7 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
-    build_shim_module(env, '$PREFIX/lib64/', "3")
+    build_shim_module(env, '$PREFIX/lib64/', "3.6")
 
 if __name__ == "SCons.Script":
     scons()

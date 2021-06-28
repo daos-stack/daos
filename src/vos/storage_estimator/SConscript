@@ -26,7 +26,7 @@ def scons():
     denv = env.Clone()
     denv.Install("$PREFIX/bin/", "daos_storage_estimator.py")
 
-    install_storage_estimator_module(env, '$PREFIX/lib64/', "3")
+    install_storage_estimator_module(env, '$PREFIX/lib64/', "3.6")
 
 if __name__ == "SCons.Script":
     scons()
