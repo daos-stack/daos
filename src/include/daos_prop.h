@@ -348,12 +348,6 @@ struct daos_prop_entry {
 #define DAOS_PROP_ENTRIES_MAX_NR	(128)
 /** max length for pool/container label - NB: POOL_LIST_CONT RPC wire format */
 #define DAOS_PROP_LABEL_MAX_LEN		(127)
-/* DAOS labels (pool/container properties) must consist only of alphanumeric
- * characters, colon ':', period '.' or underscore '_', and must be of length
- * 1 - DAOS_PROP_LABEL_MAX_LEN.
- */
-#define DAOS_LABEL_REGEX "([a-zA-Z0-9._:]{1,127})"
-#define DAOS_STANDALONE_LABEL_REGEX "^"DAOS_LABEL_REGEX"$"
 
 /** daos properties, for pool or container */
 typedef struct {
@@ -444,19 +438,6 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 int
 daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
 			     struct daos_prop_entry *src);
-
-/**
- * Check if DAOS (pool or container property) label string is valid
- * (string length <= DAOS_PROP_LABEL_MAX_LEN, and conforms to
- *  allowed characters defined by DAOS_LABEL_REGEX).
- *
- * \param[in]	label	Label string
- *
- * \return		true		Label meets length/format requirements
- *			false		Label is not valid length or format
- */
-bool
-daos_label_is_valid(const char *label);
 
 #if defined(__cplusplus)
 }

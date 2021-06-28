@@ -72,7 +72,7 @@ ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	ds_mgmt_pool_overwrite_acl_result_ptr = (void *)result;
 	if (result != NULL)
 		*result = daos_prop_dup(ds_mgmt_pool_overwrite_acl_result,
-					true /* pool */, true /* input */);
+					true);
 	return ds_mgmt_pool_overwrite_acl_return;
 }
 
@@ -107,8 +107,7 @@ ds_mgmt_pool_update_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		ds_mgmt_pool_update_acl_acl = daos_acl_dup(acl);
 	ds_mgmt_pool_update_acl_result_ptr = (void *)result;
 	if (result != NULL)
-		*result = daos_prop_dup(ds_mgmt_pool_update_acl_result,
-					true /* pool */, true /* input */);
+		*result = daos_prop_dup(ds_mgmt_pool_update_acl_result, true);
 	return ds_mgmt_pool_update_acl_return;
 }
 
@@ -142,8 +141,7 @@ ds_mgmt_pool_delete_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	ds_mgmt_pool_delete_acl_principal = principal;
 	ds_mgmt_pool_delete_acl_result_ptr = (void *)result;
 	if (result != NULL)
-		*result = daos_prop_dup(ds_mgmt_pool_delete_acl_result,
-					true /* pool */, true /* input */);
+		*result = daos_prop_dup(ds_mgmt_pool_delete_acl_result, true);
 	return ds_mgmt_pool_delete_acl_return;
 }
 
@@ -173,7 +171,7 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		      daos_prop_t **result)
 {
 	if (prop != NULL)
-		ds_mgmt_pool_set_prop_prop = daos_prop_dup(prop, true, true);
+		ds_mgmt_pool_set_prop_prop = daos_prop_dup(prop, true);
 	ds_mgmt_pool_set_prop_result_ptr = (void *)result;
 
 	if (result != NULL && ds_mgmt_pool_set_prop_result != NULL) {

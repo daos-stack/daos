@@ -192,7 +192,7 @@ test_daos_prop_merge_subset_update(void **state)
 		  DAOS_PROP_LABEL_MAX_LEN);
 
 	/* Expecting only one prop to be overwritten */
-	exp_result = daos_prop_dup(prop1, false /* pool */, true /* input */);
+	exp_result = daos_prop_dup(prop1, false);
 	entry = daos_prop_entry_get(exp_result, prop2->dpp_entries[0].dpe_type);
 	assert_int_equal(daos_prop_entry_copy(&prop2->dpp_entries[0], entry),
 			 0);

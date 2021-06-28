@@ -1083,79 +1083,6 @@ pool_connect_access(void **state)
 				   0);
 }
 
-static void
-label_strings_test(void **state)
-{
-	int		 i;
-	test_arg_t	*arg = *state;
-	const char	*valid_labels[] = {
-					   "mypool",
-					   "my_pool",
-					   "MyPool",
-					   "MyPool_2",
-					   "cae61c0752f54874ad213c0ec43005cb",
-					   "bash",
-					   "Pool_ProjectA:Team42",
-					   "ProjectA.TeamOne",
-					   "server42.fictionaldomaincae61c07.org",
-					     "0ABC",
-					     "0xDA0S1234",
-					     "0b101010",
-					     /* len=DAOS_PROP_LABEL_MAX_LEN */
-					     "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDE",
-	};
-	const char	*invalid_labels[] = {
-					     "",
-					     "no/slashes\\at\\all",
-					     "no spaces",
-					     "is%20this%20label%20ok",
-					     "No{brackets}",
-					     "Whatsup?",
-					     "'MyLabel'",
-					     "a-b-cde",
-					     "MyPool!",
-					     "cae61c0]7-52f5-4874-ad21-3c0ec43005cb",
-					     /* len=DAOS_PROP_LABEL_MAX_LEN+1 */
-					     "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
-					     "A0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789",
-					     "/bin/bash;/bin/ls",
-					     "bash&",
-					     "$VAR",
-					     "@daos_dev",
-					     "#objectstorage",
-					     "container7%BigKVS",
-					     "onethousand^6",
-					     "*myptr",
-					     "Project(small_pool)",
-					     "pool+containers+objects",
-					     "`cmd`",
-					     "~daosuser",
-					     "don't\"quote\"me",
-					     "ooo\bps",
-					     "end of the line\n",
-					     "end of the line\r\n",	};
-	size_t	n_valid = ARRAY_SIZE(valid_labels);
-	size_t	n_invalid = ARRAY_SIZE(invalid_labels);
-
-	if (arg->myrank == 0) {
-		print_message("Verify %zu valid labels\n", n_valid);
-		for (i = 0; i < n_valid; i++) {
-			const char *lbl = valid_labels[i];
-
-			assert_true(daos_label_is_valid(lbl));
-			print_message("confirmed valid: %s\n", lbl);
-		}
-
-		print_message("Verify %zu INvalid labels\n", n_invalid);
-		for (i = 0; i < n_invalid; i++) {
-			const char *lbl = invalid_labels[i];
-
-			assert_false(daos_label_is_valid(lbl));
-			print_message("confirmed NOT valid: %s\n", lbl);
-		}
-	}
-}
-
 static const struct CMUnitTest pool_tests[] = {
 	{ "POOL1: connect to non-existing pool",
 	  pool_connect_nonexist, NULL, test_case_teardown},
@@ -1186,8 +1113,6 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_op_retry, NULL, test_case_teardown},
 	{ "POOL14: pool connect access based on ACL",
 	  pool_connect_access, NULL, test_case_teardown},
-	{ "POOL15: label property string validation",
-	  label_strings_test, NULL, test_case_teardown},
 };
 
 int

@@ -337,12 +337,6 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		}
 	}
 
-	/* Validate the result */
-	if (!daos_prop_valid(prop_def, true /* pool */, true /* input */)) {
-		D_ERROR("properties validation check failed\n");
-		return -DER_INVAL;
-	}
-
 	return 0;
 }
 
@@ -1842,8 +1836,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	/* duplicate the default properties, overwrite it with pool create
 	 * parameter and then write to pool meta data.
 	 */
-	prop_dup = daos_prop_dup(&pool_prop_default, true /* pool */,
-				 false /* input */);
+	prop_dup = daos_prop_dup(&pool_prop_default, true);
 	if (prop_dup == NULL) {
 		D_ERROR("daos_prop_dup failed.\n");
 		D_GOTO(out_tx, rc = -DER_NOMEM);
@@ -3506,12 +3499,6 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 				    &out->pso_op.po_hint);
 	if (rc != 0)
 		D_GOTO(out, rc);
-
-	if (!daos_prop_valid(in->psi_prop, true /* pool */, true /* input */)) {
-		D_ERROR(DF_UUID": invalid properties input\n",
-			DP_UUID(in->psi_op.pi_uuid));
-		D_GOTO(out_svc, rc = -DER_INVAL);
-	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
