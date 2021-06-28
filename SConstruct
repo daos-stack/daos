@@ -71,7 +71,7 @@ def get_version():
 
 API_VERSION_MAJOR = "1"
 API_VERSION_MINOR = "2"
-API_VERSION_FIX = "3"
+API_VERSION_FIX = "4"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
 
@@ -173,6 +173,13 @@ def set_defaults(env, daos_version):
 
     if env.get('BUILD_TYPE') != 'release':
         env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
+
+    if env['CC'] == 'icx' and not GetOption('no_rpath'):
+        #Hack to add rpaths
+        for path in env["ENV"]["LD_LIBRARY_PATH"].split(":"):
+            if "oneapi" in path:
+                env.AppendUnique(RPATH_FULL=[path])
+
 
 def build_misc():
     """Build miscellaneous items"""
@@ -407,7 +414,7 @@ def scons(): # pylint: disable=too-many-locals
               default=False,
               help='Download and build dependencies only, do not build daos')
 
-    if env['CC'] == 'clang':
+    if env['CC'] == 'clang' or env['CC'] == 'icx':
         il_env = env.Clone()
         il_env['CC'] = 'gcc'
         run_checks(env, prereqs)
