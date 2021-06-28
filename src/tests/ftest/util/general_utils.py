@@ -642,7 +642,8 @@ def convert_list(value, separator=","):
     return separator.join([str(item) for item in value])
 
 
-def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
+def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
+                   dump_ult_stacks=False):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
@@ -651,6 +652,11 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to 60
             seconds.
+        added_filter (str, optional): negative filter to better identify
+            processes.
+        dump_ult_stacks (bool, optional): whether SIGUSR2 should be sent before
+            any other sigs, to dump all ULTs stacks of servers.
+
 
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
@@ -663,16 +669,34 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     """
     result = {}
     log = getLogger()
-    log.info("Killing any processes on %s that match: %s", hosts, pattern)
+    if dump_ult_stacks is True:
+        log.info("First dumping ULT stacks, then Killing any processes on %s "
+                 "that match: %s", hosts, pattern)
+    else:
+        log.info("Killing any processes on %s that match: %s", hosts, pattern)
 
     if added_filter:
-        ps_cmd = "/usr/bin/ps x | grep -E {} | grep -vE {}".format(
+        ps_cmd = "/usr/bin/ps xa | grep -E {} | grep -vE {}".format(
             pattern, added_filter)
     else:
         ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
 
     if hosts is not None:
-        commands = [
+        if dump_ult_stacks is True and "daos_engine" in pattern:
+            commands_part1 = [
+                "rc=0",
+                "if " + ps_cmd,
+                "then rc=1",
+                "sudo pkill --signal USR2 {}".format(pattern),
+                # leave time for ABT info/stacks dump vs xstream/pool/ULT number
+		"sleep 20",
+                "fi",
+                "exit $rc",
+            ]
+            result = pcmd(hosts, "; ".join(commands_part1), verbose, timeout,
+                          None)
+
+        commands_part2 = [
             "rc=0",
             "if " + ps_cmd,
             "then rc=1",
@@ -688,7 +712,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
             "fi",
             "exit $rc",
         ]
-        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
+        result = pcmd(hosts, "; ".join(commands_part2), verbose, timeout, None)
     return result
 
 
