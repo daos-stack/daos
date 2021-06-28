@@ -32,7 +32,7 @@ rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
 # run node checkout
-clush -B -l root -w "${tnodes}" -c ci/functional/fio_libpmem.fio --dest=/tmp/
+clush -B -S -o '-i ci_key' -l root -w "${tnodes}" -c ci/functional/fio_libpmem.fio --dest=/tmp/
 
 clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
     "$(cat ci/functional/node_checkout.sh)"
