@@ -205,6 +205,49 @@ if [[ $rc_spdk_perf != 0 ]]; then
     exit $rc
 fi
 
+# run fio on pmem
+mkfs.ext4 /dev/pmem0
+mkfs.ext4 /dev/pmem1
+mkdir /mnt/pmem0
+mkdir /mnt/pmem1
+mount /dev/pmem0 /mnt/pmem0/ -o dax
+mount /dev/pmem1 /mnt/pmem1/ -o dax
+
+# check for which pmem mount point is present in fio file
+fio_file='ci/functional/fio_libpmem.fio'
+grep '/mnt/pmem0' ${fio_file}
+rc_grep_pmem=`echo $?`
+if [[ $rc_grep_pmem == 0 ]]; then
+    bash -c "fio ${fio_file}"
+    rc_fio_pmem0=`echo $?`
+    sed -i 's/pmem0/pmem1/g' ${fio_file}
+    bash -c "fio ${fio_file}"
+    rc_fio_pmem1=`echo $?`
+else
+    bash -c "fio ${fio_file}"
+    rc_fio_pmem0=`echo $?`
+    sed -i 's/pmem1/pmem0/g' ${fio_file}
+    bash -c "fio ${fio_file}"
+    rc_fio_pmem1=`echo $?`
+fi
+
+umount /mnt/pmem0
+umount /mnt/pmem1
+rm -rf /mnt/pmem0
+rm -rf /mnt/pmem1
+wipefs -a /dev/pmem0
+wipefs -a /dev/pmem1
+
+if [[ $rc_fio_pmem0 != 0 ]]; then
+    echo "[FAILED] FIO for pmem0 failed"
+    exit $rc
+fi
+
+if [[ $rc_fio_pmem1 != 0 ]]; then
+    echo "[FAILED] FIO for pmem1 failed"
+    exit $rc
+fi
+
 }
 
 
