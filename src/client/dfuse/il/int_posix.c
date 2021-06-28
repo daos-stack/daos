@@ -21,6 +21,7 @@
 
 #include "dfuse_log.h"
 #include <gurt/list.h>
+#include <gurt/atomic.h>
 #include "intercept.h"
 #include "dfuse_ioctl.h"
 #include "dfuse_vector.h"
@@ -43,6 +44,10 @@ struct ioil_global {
 	bool		iog_initialized;
 	bool		iog_no_daos;
 	bool		iog_daos_init;
+
+	uint64_t	iog_file_count;
+	uint64_t	iog_read_count;
+	uint64_t	iog_write_count;
 };
 
 static vector_t	fd_table;
@@ -171,6 +176,8 @@ pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 	ssize_t bytes_read;
 	int errcode;
 
+	atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
+
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_pread(buff, len, offset, entry, &errcode);
 	if (bytes_read < 0)
@@ -186,6 +193,8 @@ preadv_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 	ssize_t bytes_read;
 	int errcode;
 
+	atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
+
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_preadv(iov, count, offset, entry,
 				    &errcode);
@@ -199,6 +208,8 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 {
 	ssize_t bytes_written;
 	int errcode;
+
+	atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_writex(buff, len, offset, entry,
@@ -216,6 +227,8 @@ pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 {
 	ssize_t bytes_written;
 	int errcode;
+
+	atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_pwritev(iov, count, offset, entry,
@@ -249,9 +262,8 @@ ioil_init(void)
 	D_INIT_LIST_HEAD(&ioil_iog.iog_pools_head);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc) {
+	if (rc)
 		ioil_iog.iog_no_daos = true;
-	}
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 
@@ -288,6 +300,11 @@ ioil_fini(void)
 
 	DFUSE_TRA_DOWN(&ioil_iog);
 	vector_destroy(&fd_table);
+
+	printf("Performed "PRIu64" reads and "PRIu64" writes from "PRIu64" files\n",
+		ioil_iog.iog_read_count,
+		ioil_iog.iog_write_count,
+		ioil_iog.iog_file_count);
 
 	printf("All done from Interception\n");
 
@@ -737,6 +754,8 @@ dfuse_open(const char *pathname, int flags, ...)
 				pathname);
 		goto finish;
 	}
+
+	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
 	if (flags & O_CREAT)
 		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o, mode=0%o) = "
