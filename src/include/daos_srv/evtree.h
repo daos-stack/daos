@@ -297,19 +297,14 @@ enum evt_visibility {
 	EVT_VISIBLE	= (1 << 0),
 	/** Entry is covered at specified epoch */
 	EVT_COVERED	= (1 << 1),
-	/** Entry is deleted via vos_obj_array_remove */
-	EVT_DELETED	= (1 << 2),
+	/** Entry is a remove record (See evt_remove_all */
+	EVT_REMOVE	= (1 << 2),
 	/** Entry is part of larger in-tree extent */
 	EVT_PARTIAL	= (1 << 3),
 	/** Visibility mask */
-	EVT_VIS_MASK	= (EVT_DELETED | EVT_COVERED | EVT_VISIBLE),
-	/** Marks the final entry that isn't a delete record.
-	 *  Assumes increasing epoch order so not very useful
-	 *  for reverse iterator.
-	 */
+	EVT_VIS_MASK	= (EVT_REMOVE | EVT_COVERED | EVT_VISIBLE),
+	/** Marks the final entry sorted iterator */
 	EVT_LAST	= (1 << 4),
-	/** Marks the final entry in the iterator */
-	EVT_END		= (1 << 5),
 };
 
 /**
@@ -372,7 +367,7 @@ struct evt_entry_array {
 static inline char
 evt_vis2dbg(int flag)
 {
-	int	flags = EVT_VISIBLE | EVT_PARTIAL | EVT_COVERED | EVT_DELETED;
+	int	flags = EVT_VISIBLE | EVT_PARTIAL | EVT_COVERED | EVT_REMOVE;
 
 	switch (flag & flags) {
 	default:
@@ -389,8 +384,8 @@ evt_vis2dbg(int flag)
 		return 'C';
 	case EVT_COVERED | EVT_PARTIAL:
 		return 'c';
-	case EVT_DELETED:
-		return 'D';
+	case EVT_REMOVE:
+		return 'R';
 	}
 
 	return 'U';
@@ -598,18 +593,16 @@ enum {
 	EVT_ITER_VISIBLE	= (1 << 0),
 	/** Add fully or partially covered extents to EVT_ITER_VISIBLE */
 	EVT_ITER_COVERED	= (1 << 1) | EVT_ITER_VISIBLE,
-	/** Return delete records, implies EVT_ITER_COVERED. */
-	EVT_ITER_DELETED	= (1 << 2) | EVT_ITER_COVERED,
 	/** Skip visible holes (Only valid with EVT_ITER_VISIBLE) */
-	EVT_ITER_SKIP_HOLES	= (1 << 3),
+	EVT_ITER_SKIP_HOLES	= (1 << 2),
 	/**
 	 * Use the embedded iterator of the open handle.
 	 * It can reduce memory consumption, but state of iterator can be
 	 * overwritten by other tree operation.
 	 */
-	EVT_ITER_EMBEDDED	= (1 << 4),
+	EVT_ITER_EMBEDDED	= (1 << 3),
 	/** Reverse iterator (ordered iterator only) */
-	EVT_ITER_REVERSE	= (1 << 5),
+	EVT_ITER_REVERSE	= (1 << 4),
 	/* If EVT_ITER_VISIBLE is set, evt_iter_probe will calculate and cache
 	 * visible extents and iterate through the cached extents.   Each
 	 * rectangle will be marked as visible or covered.  The partial bit will
@@ -621,14 +614,13 @@ enum {
 	 * search rectangle, including punched extents, are returned.
 	 */
 	/** The iterator is for purge operation */
-	EVT_ITER_FOR_PURGE	= (1 << 6),
+	EVT_ITER_FOR_PURGE	= (1 << 5),
 	/** The iterator is for data migration scan */
-	EVT_ITER_FOR_MIGRATION	= (1 << 7),
+	EVT_ITER_FOR_MIGRATION	= (1 << 6),
 };
 
 D_CASSERT((int)EVT_VISIBLE == (int)EVT_ITER_VISIBLE);
 D_CASSERT((int)EVT_COVERED == (int)(EVT_ITER_COVERED & ~EVT_ITER_VISIBLE));
-D_CASSERT((int)EVT_DELETED == (int)(EVT_ITER_DELETED & ~EVT_ITER_COVERED));
 
 /**
  * Initialize an iterator.

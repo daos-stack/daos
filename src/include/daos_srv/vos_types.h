@@ -302,10 +302,6 @@ enum {
 	VOS_IT_RECX_VISIBLE	= (1 << 0),
 	/** Include covered extents, implies VOS_IT_RECX_VISIBLE */
 	VOS_IT_RECX_COVERED	= (1 << 1) | VOS_IT_RECX_VISIBLE,
-	/** Include deleted extents, implies VOS_IT_RECX_COVERED.
-	 *  Only applicable to array values
-	 */
-	VOS_IT_RECX_DELETED	= (1 << 2) | VOS_IT_RECX_COVERED,
 	/** Include hole extents in sorted iteration
 	 *  Only applicable if VOS_IT_RECX_COVERED is not set
 	 */
@@ -359,17 +355,12 @@ enum {
 	VOS_VIS_FLAG_VISIBLE = (1 << 0),
 	/** The extent is not visible at the requested epoch (epr_hi) */
 	VOS_VIS_FLAG_COVERED = (1 << 1),
-	/** The extent is visible at the requested epoch (epr_hi) */
-	VOS_VIS_FLAG_DELETED = (1 << 2),
+	/** The extent a remove record (See vos_obj_array_remove) */
+	VOS_VIS_FLAG_REMOVE = (1 << 2),
 	/** The extent represents only a portion of the in-tree extent */
 	VOS_VIS_FLAG_PARTIAL = (1 << 3),
-	/** Marks the final entry in sorted iterator that isn't a delete record.
-	 *  Assumes increasing epoch order so not very useful for reverse
-	 *  iterator.
-	 */
+	/** Marks the final entry in sorted iterator */
 	VOS_VIS_FLAG_LAST    = (1 << 4),
-	/** Marks the last entry in the sorted iterator */
-	VOS_VIS_FLAG_END     = (1 << 5),
 };
 
 /**

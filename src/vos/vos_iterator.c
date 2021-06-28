@@ -529,7 +529,7 @@ set_reprobe(vos_iter_type_t type, unsigned int acts,
 			anchors->ia_reprobe_sv = 1;
 		/* fallthrough */
 	case VOS_ITER_RECX:
-		sorted = flags & (VOS_IT_RECX_VISIBLE | VOS_IT_RECX_COVERED);
+		sorted = flags & VOS_IT_RECX_VISIBLE;
 		/* evtree only need reprobe on yield for unsorted iteration */
 		if (!sorted && yield && (type == VOS_ITER_RECX))
 			anchors->ia_reprobe_ev = 1;

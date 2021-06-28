@@ -342,7 +342,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 		iter->it_index = index;
 		/* Mark the last entry */
 		entry = evt_ent_array_get(enta, enta->ea_ent_nr - 1 - index);
-		entry->en_visibility |= EVT_END;
+		entry->en_visibility |= EVT_LAST;
 		goto out;
 	}
 

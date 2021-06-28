@@ -446,17 +446,8 @@ evt_rect_cmp(const struct evt_rect *rt1, const struct evt_rect *rt2)
 
 #define evt_flags_valid(flags)			\
 	(evt_flags_get(flags) == EVT_VISIBLE ||	\
-	 evt_flags_get(flags) == EVT_DELETED ||	\
+	 evt_flags_get(flags) == EVT_REMOVE ||	\
 	 evt_flags_get(flags) == EVT_COVERED)
-
-/* Mask to always place delete records at the end */
-static const int del_cmp_mask[] = {
-	0,
-	0, /* EVT_VISIBLE */
-	0, /* EVT_COVERED */
-	0,
-	1, /* EVT_DELETED */
-};
 
 /* Mask for prioritizing visible entries */
 static const int vis_cmp_mask[] = {
@@ -464,7 +455,7 @@ static const int vis_cmp_mask[] = {
 	0, /* EVT_VISIBLE */
 	1, /* EVT_COVERED */
 	0,
-	2, /* EVT_DELETED */
+	1, /* EVT_REMOVE */
 };
 
 static inline int
@@ -504,15 +495,6 @@ evt_ent_list_cmp(const void *p1, const void *p2)
 	const struct evt_list_entry	*le2	= p2;
 
 	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, NULL);
-}
-
-static int
-evt_ent_list_cmp_del(const void *p1, const void *p2)
-{
-	const struct evt_list_entry	*le1	= p1;
-	const struct evt_list_entry	*le2	= p2;
-
-	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, del_cmp_mask);
 }
 
 static int
@@ -700,9 +682,9 @@ static inline void
 evt_mark_visible(struct evt_entry *ent, bool check, int *num_visible)
 {
 	if (ent->en_minor_epc == EVT_MINOR_EPC_MAX) {
-		/** This entry is a "delete" added by vos_obj_array_remove */
+		/** This entry is a "remove" added by evt_remove_all */
 		D_ASSERT(check);
-		set_visibility(ent, EVT_DELETED);
+		set_visibility(ent, EVT_REMOVE);
 		return;
 	}
 
@@ -711,7 +693,7 @@ evt_mark_visible(struct evt_entry *ent, bool check, int *num_visible)
 }
 
 static int
-evt_mark_deleted(struct evt_context *tcx, struct evt_entry_array *ent_array,
+evt_mark_removed(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		 d_list_t *deleted, d_list_t *to_process)
 {
 	d_list_t		*cur_update;
@@ -818,8 +800,7 @@ process_ext:
 
 static int
 evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
-		 struct evt_entry_array *ent_array, int *num_visible,
-		 int *num_deleted)
+		 struct evt_entry_array *ent_array, int *num_visible)
 {
 	struct evt_extent	*this_ext;
 	struct evt_extent	*next_ext;
@@ -828,16 +809,15 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	struct evt_entry	*temp_ent;
 	struct evt_entry	*split;
 	d_list_t		 covered;
-	d_list_t		 deleted;
+	d_list_t		 removals;
 	d_list_t		*current;
 	d_list_t		*next;
 	bool			 insert;
 	int			 rc = 0;
 
 	D_INIT_LIST_HEAD(&covered);
-	D_INIT_LIST_HEAD(&deleted);
+	D_INIT_LIST_HEAD(&removals);
 	*num_visible = 0;
-	*num_deleted = 0;
 
 	/* Some of the entries may be punched by a key.  We don't need to
 	 * consider such entries for the visibility algorithm and can mark them
@@ -854,9 +834,8 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 
 		if (this_ent->en_minor_epc == EVT_MINOR_EPC_MAX) {
 			evt_array_entry2le(this_ent)->le_prev = NULL;
-			set_visibility(this_ent, EVT_DELETED);
-			(*num_deleted)++;
-			d_list_add_tail(next, &deleted);
+			set_visibility(this_ent, EVT_REMOVE);
+			d_list_add_tail(next, &removals);
 			continue;
 		}
 
@@ -864,8 +843,8 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 		d_list_add_tail(next, &covered);
 	}
 
-	/** Mark entries as deleted */
-	rc = evt_mark_deleted(tcx, ent_array, &deleted, &covered);
+	/** Mark removed entries as covered */
+	rc = evt_mark_removed(tcx, ent_array, &removals, &covered);
 	if (rc != 0)
 		return rc;
 
@@ -988,7 +967,6 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	int			(*compar)(const void *, const void *);
 	int			 total;
 	int			 num_visible = 0;
-	int			 num_deleted = 0;
 	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER"\n",
@@ -1002,7 +980,6 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 			ent->en_visibility |= EVT_COVERED;
 		} else {
 			evt_mark_visible(ent, true, &num_visible);
-			num_deleted = 1 - num_visible;
 		}
 		goto re_sort;
 	}
@@ -1015,8 +992,7 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		      evt_ent_list_cmp);
 
 		/* Now separate entries into covered and visible */
-		rc = evt_find_visible(tcx, filter, ent_array, &num_visible,
-				      &num_deleted);
+		rc = evt_find_visible(tcx, filter, ent_array, &num_visible);
 
 		if (rc != 0) {
 			if (rc == -DER_AGAIN)
@@ -1029,28 +1005,19 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 re_sort:
 	ents = ent_array->ea_ents;
 	/* Now re-sort the entries */
-	compar = evt_ent_list_cmp_del;
-	if (flags & EVT_DELETED) {
+	if (flags & EVT_COVERED) {
 		total = ent_array->ea_ent_nr;
-	} else if (flags & EVT_COVERED) {
-		total = ent_array->ea_ent_nr - num_deleted;
-		num_deleted = 0;
+		compar = evt_ent_list_cmp;
 	} else {
 		D_ASSERT(flags & EVT_VISIBLE);
 		compar = evt_ent_list_cmp_visible;
 		total = num_visible;
-		num_deleted = 0;
 	}
 
 	if (ent_array->ea_ent_nr != 1)
 		qsort(ents, ent_array->ea_ent_nr, sizeof(ents[0]), compar);
 
 	ent_array->ea_ent_nr = total;
-	if (total != num_deleted) {
-		ent = evt_ent_array_get(ent_array, total - num_deleted - 1);
-		/** Mark the last entry that isn't a delete record */
-		ent->en_visibility |= EVT_LAST;
-	}
 
 	return 0;
 }

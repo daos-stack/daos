@@ -1189,7 +1189,6 @@ singv_iter_next(struct vos_obj_iter *oiter)
 #define recx_flags_set(flags, setting)	\
 	(((flags) & (setting)) == (setting))
 
-D_CASSERT((int)VOS_IT_RECX_DELETED == (int)EVT_ITER_DELETED);
 D_CASSERT((int)VOS_IT_RECX_COVERED == (int)EVT_ITER_COVERED);
 D_CASSERT((int)VOS_IT_RECX_VISIBLE == (int)EVT_ITER_VISIBLE);
 D_CASSERT((int)VOS_IT_RECX_SKIP_HOLES == (int)EVT_ITER_SKIP_HOLES);
@@ -1198,7 +1197,7 @@ static uint32_t
 recx_get_flags(struct vos_obj_iter *oiter)
 {
 	uint32_t options = EVT_ITER_EMBEDDED;
-	uint32_t vis_flags = oiter->it_flags & (VOS_IT_RECX_DELETED |
+	uint32_t vis_flags = oiter->it_flags & (VOS_IT_RECX_COVERED |
 						VOS_IT_RECX_SKIP_HOLES);
 
 	options |= vis_flags;
