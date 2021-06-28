@@ -45,6 +45,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/PoolResolveID":    {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolQuery":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolSetProp":      {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolGetProp":      {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolGetACL":       {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolOverwriteACL": {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolUpdateACL":    {ComponentAdmin},

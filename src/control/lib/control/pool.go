@@ -91,13 +91,56 @@ func formatNameGroup(ext auth.UserExt, usr string, grp string) (string, string, 
 	return usr, grp, nil
 }
 
+func convertPoolProps(in []*PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty, error) {
+	out := make([]*mgmtpb.PoolProperty, len(in))
+	allProps := PoolProperties()
+
+	for i, prop := range in {
+		if prop == nil {
+			return nil, errors.New("nil property")
+		}
+		out[i] = &mgmtpb.PoolProperty{
+			Number: prop.Number,
+		}
+
+		// Perform one last set of validations, belt-and-suspenders
+		// to guard against a manually-created request with bad
+		// properties.
+		p, err := allProps.GetProperty(prop.Name)
+		if err != nil {
+			return nil, err
+		}
+		if setProp {
+			if err := p.SetValue(prop.StringValue()); err != nil {
+				return nil, err
+			}
+			if p.String() != prop.String() {
+				return nil, errors.Errorf("%s: unexpected key/val", prop)
+			}
+		}
+
+		switch val := prop.Value.data.(type) {
+		case string:
+			out[i].SetValueString(val)
+		case uint64:
+			out[i].SetValueNumber(val)
+		case nil:
+			continue
+		default:
+			return nil, errors.Errorf("unhandled property value: %+v", prop.Value.data)
+		}
+	}
+
+	return out, nil
+}
+
 // genPoolCreateRequest takes a *PoolCreateRequest and generates a valid protobuf
 // request, filling in any missing fields with reasonable defaults.
 func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
 	// ensure pool ownership is set up correctly
 	in.User, in.UserGroup, err = formatNameGroup(&auth.External{}, in.User, in.UserGroup)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	if in.TotalBytes > 0 && (in.ScmBytes > 0 || in.NvmeBytes > 0) {
@@ -109,7 +152,12 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 
 	out = new(mgmtpb.PoolCreateReq)
 	if err = convert.Types(in, out); err != nil {
-		return nil, err
+		return
+	}
+
+	out.Properties, err = convertPoolProps(in.Properties, true)
+	if err != nil {
+		return
 	}
 
 	out.Uuid = uuid.New().String()
@@ -123,11 +171,11 @@ type (
 		msRequest
 		unaryRequest
 		retryableRequest
-		Label      string
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList
 		NumSvcReps uint32
+		Properties []*PoolProperty `json:"-"`
 		// auto-config params
 		TotalBytes uint64
 		ScmRatio   float64
@@ -449,64 +497,98 @@ type PoolSetPropReq struct {
 	msRequest
 	unaryRequest
 	// UUID identifies the pool for which this property should be set.
-	UUID string
-	// Property is always a string representation of the pool property.
-	// It will be resolved into the C representation prior to being
-	// forwarded over dRPC.
-	Property string
-	// Value is an approximation of the union in daos_prop_entry.
-	// It can be either a string or a uint64. Struct-based properties
-	// are not supported via this API.
-	Value interface{}
-}
-
-// SetString sets the property value to a string.
-func (pspr *PoolSetPropReq) SetString(strVal string) {
-	pspr.Value = strVal
-}
-
-// SetNumber sets the property value to a uint64 number.
-func (pspr *PoolSetPropReq) SetNumber(numVal uint64) {
-	pspr.Value = numVal
-}
-
-// PoolSetPropResp contains the response to a pool set-prop operation.
-type PoolSetPropResp struct {
-	UUID     string
-	Property string `json:"Name"`
-	Value    string
+	UUID       string
+	Properties []*PoolProperty
 }
 
 // PoolSetProp sends a pool set-prop request to the pool service leader.
-func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropReq) (*PoolSetPropResp, error) {
-	if err := checkUUID(req.UUID); err != nil {
-		return nil, err
+func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T in PoolSetProp()", req)
 	}
-
-	if req.Property == "" {
-		return nil, errors.Errorf("invalid property name %q", req.Property)
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+	if len(req.Properties) == 0 {
+		return errors.New("empty properties list in PoolSetProp()")
 	}
 
 	pbReq := &mgmtpb.PoolSetPropReq{
 		Sys:  req.getSystem(rpcClient),
 		Uuid: req.UUID,
 	}
-	pbReq.SetPropertyName(req.Property)
 
-	switch val := req.Value.(type) {
-	case string:
-		pbReq.SetValueString(val)
-	case uint64:
-		pbReq.SetValueNumber(val)
-	default:
-		return nil, errors.Errorf("unhandled property value: %+v", req.Value)
+	var err error
+	pbReq.Properties, err = convertPoolProps(req.Properties, true)
+	if err != nil {
+		return err
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolSetProp(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Query DAOS pool set-prop request: %v\n", req)
+	rpcClient.Debugf("DAOS pool set-prop request: %+v\n", pbReq)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return err
+	}
+	rpcClient.Debugf("pool set-prop response: %s\n", msResp)
+
+	return nil
+}
+
+// PoolGetPropReq contains pool get-prop parameters.
+type PoolGetPropReq struct {
+	msRequest
+	unaryRequest
+	// UUID identifies the pool for which this property should be set.
+	UUID string
+	// Name is always a string representation of the pool property.
+	// It will be resolved into the C representation prior to being
+	// forwarded over dRPC. If not set, all properties will be returned.
+	Name string
+	// Properties is the list of properties to be retrieved. If empty,
+	// all properties will be retrieved.
+	Properties []*PoolProperty
+}
+
+// PoolGetProp sends a pool get-prop request to the pool service leader.
+func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropReq) ([]*PoolProperty, error) {
+	if err := checkUUID(req.UUID); err != nil {
+		return nil, err
+	}
+
+	// Get all by default.
+	if len(req.Properties) == 0 {
+		allProps := PoolProperties()
+		req.Properties = make([]*PoolProperty, 0, len(allProps))
+		for _, key := range allProps.Keys() {
+			hdlr := allProps[key]
+			req.Properties = append(req.Properties, hdlr.GetProperty(key))
+		}
+	}
+
+	pbReq := &mgmtpb.PoolGetPropReq{
+		Sys:  req.getSystem(rpcClient),
+		Uuid: req.UUID,
+	}
+	var err error
+	pbReq.Properties, err = convertPoolProps(req.Properties, false)
+	if err != nil {
+		return nil, err
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolGetProp(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("pool get-prop request: %+v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -517,26 +599,38 @@ func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropRe
 		return nil, err
 	}
 
-	pbResp, ok := msResp.(*mgmtpb.PoolSetPropResp)
+	pbResp, ok := msResp.(*mgmtpb.PoolGetPropResp)
 	if !ok {
-		return nil, errors.New("unable to extract PoolSetPropResp from MS response")
+		return nil, errors.New("unable to extract PoolGetPropResp from MS response")
 	}
 
-	pspr := &PoolSetPropResp{
-		UUID:     req.UUID,
-		Property: pbResp.GetName(),
+	resp := req.Properties
+	pbMap := make(map[uint32]*mgmtpb.PoolProperty)
+	for _, prop := range pbResp.GetProperties() {
+		if _, found := pbMap[prop.GetNumber()]; found {
+			return nil, errors.Errorf("got > 1 %d in response", prop.GetNumber())
+		}
+		pbMap[prop.GetNumber()] = prop
 	}
 
-	switch v := pbResp.GetValue().(type) {
-	case *mgmtpb.PoolSetPropResp_Strval:
-		pspr.Value = v.Strval
-	case *mgmtpb.PoolSetPropResp_Numval:
-		pspr.Value = strconv.FormatUint(v.Numval, 10)
-	default:
-		return nil, errors.Errorf("unable to represent response value %+v", pbResp.Value)
+	for _, prop := range resp {
+		pbProp, found := pbMap[prop.Number]
+		if !found {
+			return nil, errors.Errorf("unable to find prop %d (%s) in resp", prop.Number, prop.Name)
+		}
+		switch v := pbProp.GetValue().(type) {
+		case *mgmtpb.PoolProperty_Strval:
+			prop.Value.SetString(v.Strval)
+		case *mgmtpb.PoolProperty_Numval:
+			prop.Value.SetNumber(v.Numval)
+		default:
+			return nil, errors.Errorf("unable to represent response value %+v", v)
+		}
 	}
 
-	return pspr, nil
+	rpcClient.Debugf("pool get-prop resp: %+v\n", resp)
+
+	return resp, nil
 }
 
 // PoolExcludeReq struct contains request
