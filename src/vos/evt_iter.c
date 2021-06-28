@@ -125,13 +125,13 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 	if (start == end) {
 		mid = start;
 		evt_ent2rect(&rect2, evt_ent_array_get(enta, mid));
-		cmp = evt_rect_cmp_sorted(rect, &rect2);
+		cmp = evt_rect_cmp(rect, &rect2);
 	}
 
 	while (start != end) {
 		mid = start + ((end + 1 - start) / 2);
 		evt_ent2rect(&rect2, evt_ent_array_get(enta, mid));
-		cmp = evt_rect_cmp_sorted(rect, &rect2);
+		cmp = evt_rect_cmp(rect, &rect2);
 
 		if (cmp == 0)
 			break;
@@ -140,7 +140,7 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 				mid = start;
 				evt_ent2rect(&rect2,
 					     evt_ent_array_get(enta, mid));
-				cmp = evt_rect_cmp_sorted(rect, &rect2);
+				cmp = evt_rect_cmp(rect, &rect2);
 				break;
 			}
 			end = mid;

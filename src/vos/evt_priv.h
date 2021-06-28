@@ -372,30 +372,6 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 int
 evt_rect_cmp(const struct evt_rect *rt1, const struct evt_rect *rt2);
 
-/** Compare two rectangles in sorted array
- * \param[IN]		rt1	The first rectangle
- * \param[IN]		rt2	The second rectangle
- *
- * Returns < 0 if rt1 < rt2
- * returns > 0 if rt1 > rt2
- * returns 0 if equal
- *
- * Order is lower high offset, higher epoch, lower high offset
- * Delete records are always last
- */
-static inline int
-evt_rect_cmp_sorted(const struct evt_rect *rt1, const struct evt_rect *rt2)
-{
-	if (rt1->rc_minor_epc == EVT_MINOR_EPC_MAX) {
-		if (rt2->rc_minor_epc != EVT_MINOR_EPC_MAX)
-			return 1;
-	} else if (rt2->rc_minor_epc == EVT_MINOR_EPC_MAX) {
-		return -1;
-	}
-
-	return evt_rect_cmp(rt1, rt2);
-}
-
 /** Convert a context to a daos_handle
  * \param[IN]	tcx	The evtree context
  *
