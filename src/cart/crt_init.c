@@ -309,7 +309,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	struct timeval	now;
 	unsigned int	seed;
 	const char	*path;
-	bool		server = false;
+	bool		server;
 	bool		provider_found = false;
 	int		plugin_idx;
 	int		prov;
@@ -423,6 +423,9 @@ do_init:
 				set_sep = true;
 			max_num_ctx = opt->cio_ctx_max_num;
 		} else {
+			share_addr = false;
+			ctx_num = 0;
+
 			d_getenv_bool("CRT_CTX_SHARE_ADDR",
 				      &share_addr);
 			if (share_addr)
