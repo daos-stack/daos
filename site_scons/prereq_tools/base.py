@@ -48,6 +48,7 @@ from SCons.Script import Configure
 from SCons.Script import AddOption
 from SCons.Script import SConscript
 from SCons.Script import BUILD_TARGETS
+from SCons.Errors import InternalError
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from SCons.Errors import UserError
@@ -357,7 +358,6 @@ class GitRepoRetriever():
 
         # Now checkout the commit_sha if specified
         passed_commit_sha = kw.get("commit_sha", None)
-        branch = kw.get("branch", None)
         if passed_commit_sha is None:
             comp = os.path.basename(subdir)
             print("""
@@ -368,20 +368,28 @@ build with random upstream changes.
 *********************** ERROR ************************\n""" % comp)
             raise DownloadFailure(self.url, subdir)
 
-        if (passed_commit_sha and not branch):
-            commands = ['git',
-                        'clone',
-                        self.url,
-                        '--branch',
-                        passed_commit_sha,
-                        '--single-branch',
-                        '--depth',
-                        '1',
-                        subdir]
-            if not RUNNER.run_commands([' '.join(commands)]):
-                raise DownloadFailure(self.url, subdir)
-        else:
+        commands = ['git clone %s %s' % (self.url, subdir)]
+        if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)
+        self.get_specific(subdir, **kw)
+
+    def get_specific(self, subdir, **kw):
+        """Checkout the configured commit"""
+        # If the config overrides the branch, use it.  If a branch is
+        # specified, check it out first.
+        branch = kw.get("branch", None)
+        if branch is None:
+            branch = self.branch
+        self.branch = branch
+        if self.branch:
+            self.commit_sha = self.branch
+            self.checkout_commit(subdir)
+
+        # Now checkout the commit_sha if specified
+        passed_commit_sha = kw.get("commit_sha", None)
+        if passed_commit_sha is not None:
+            self.commit_sha = passed_commit_sha
+            self.checkout_commit(subdir)
 
         # Now apply any patches specified
         self.apply_patches(subdir, kw.get("patches", None))
@@ -606,6 +614,7 @@ class PreReqComponent():
         self.__env.AddMethod(mocked_tests.build_mock_unit_tests,
                              'BuildMockingUnitTests')
         self.__require_optional = GetOption('require_optional')
+        self.has_icx = False
         self.download_deps = False
         self.build_deps = False
         self.__parse_build_deps()
@@ -767,7 +776,14 @@ class PreReqComponent():
 
     def _setup_intelc(self):
         """Setup environment to use intel compilers"""
-        env = self.__env.Clone(tools=['intelc'])
+        try:
+            env = self.__env.Clone(tools=['doneapi'])
+            self.has_icx = True
+        except InternalError as _err:
+            print("No oneapi compiler, trying legacy")
+            env = self.__env.Clone(tools=['intelc'])
+        self.__env["ENV"]["PATH"] = env["ENV"]["PATH"]
+        self.__env["ENV"]["LD_LIBRARY_PATH"] = env["ENV"]["LD_LIBRARY_PATH"]
         self.__env.Replace(AR=env.get("AR"))
         self.__env.Replace(ENV=env.get("ENV"))
         self.__env.Replace(CC=env.get("CC"))
@@ -776,12 +792,14 @@ class PreReqComponent():
         self.__env.Replace(INTEL_C_COMPILER_VERSION=version)
         self.__env.Replace(LINK=env.get("LINK"))
         # disable the warning about Cilk since we don't use it
-        self.__env.AppendUnique(LINKFLAGS=["-static-intel",
-                                           "-diag-disable=10237"])
-        self.__env.AppendUnique(CCFLAGS=["-diag-disable:2282",
-                                         "-diag-disable:188",
-                                         "-diag-disable:2405",
-                                         "-diag-disable:1338"])
+        if not self.has_icx:
+            self.__env.AppendUnique(LINKFLAGS=["-static-intel",
+                                               "-diag-disable=10237"])
+            self.__env.AppendUnique(CCFLAGS=["-diag-disable:2282",
+                                             "-diag-disable:188",
+                                             "-diag-disable:2405",
+                                             "-diag-disable:1338"])
+        return {'CC' : env.get("CC"), "CXX" : env.get("CXX")}
 
     def _setup_compiler(self, warning_level):
         """Setup the compiler to use"""
@@ -791,7 +809,6 @@ class PreReqComponent():
                                   'CVS' : '/opt/BullseyeCoverage/bin/covselect',
                                   'COV01' : '/opt/BullseyeCoverage/bin/cov01'},
                         'clang' : {'CC' : 'clang', 'CXX' : 'clang++'},
-                        'icc' : {'CC' : 'icc', 'CXX' : 'icpc'},
                        }
         self.add_opts(EnumVariable('COMPILER', "Set the compiler family to use",
                                    'gcc', ['gcc', 'covc', 'clang', 'icc'],
@@ -802,10 +819,10 @@ class PreReqComponent():
 
         compiler = self.__env.get('COMPILER').lower()
         if compiler == 'icc':
-            self._setup_intelc()
+            compiler_map['icc'] = self._setup_intelc()
 
         if warning_level == 'error':
-            if compiler == 'icc':
+            if compiler == 'icc' and not self.has_icx:
                 warning_flag = '-Werror-all'
             else:
                 warning_flag = '-Werror'

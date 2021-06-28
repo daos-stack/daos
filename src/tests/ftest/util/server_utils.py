@@ -17,7 +17,8 @@ from command_utils_base import \
     CommandFailure, FormattedParameter, CommandWithParameters, CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
-    convert_list, get_default_config_file, distribute_files, DaosTestError
+    convert_list, get_default_config_file, distribute_files, DaosTestError, \
+    stop_processes
 from dmg_utils import get_dmg_command
 from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
@@ -1038,6 +1039,23 @@ class DaosServerManager(SubprocessManager):
 
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
+
+    def kill(self):
+        """Forcibly terminate any server process running on hosts."""
+        regex = self.manager.job.command_regex
+        # Try to dump all server's ULTs stacks before kill.
+        result = stop_processes(self._hosts, regex, dump_ult_stacks=True)
+        if 0 in result and len(result) == 1:
+            print(
+                "No remote {} server processes killed (none found), "
+                "done.".format(regex))
+        else:
+            print(
+                "***At least one remote {} server process needed to be killed! "
+                "Please investigate/report.***".format(regex))
+        # set stopped servers state to make teardown happy
+        self.update_expected_states(
+            None, ["stopped", "excluded", "errored"])
 
     def get_host(self, rank):
         """Get the host name that matches the specified rank.
