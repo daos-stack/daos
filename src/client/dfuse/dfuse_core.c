@@ -1109,15 +1109,6 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 		D_GOTO(err_ie_remove, rc);
 	}
 
-	rc = daos_eq_create(&fs_handle->dpi_eq);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(err, rc);
-
-	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
-	if (rc != 0)
-		D_GOTO(err_ie_remove, rc);
-
-	fs_handle->dpi_shutdown = false;
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
 	if (rc != 0)
