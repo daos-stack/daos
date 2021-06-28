@@ -247,9 +247,6 @@ parse_rect:
 		epr.epr_hi = strtoull(str, NULL, 10);
 	}
 
-	printf("Parsed "DF_RECT" at epr "DF_X64"-"DF_X64"\n",
-	       DP_RECT(rect), epr.epr_lo, epr.epr_hi);
-
 	if (epr_in != NULL)
 		*epr_in = epr;
 
