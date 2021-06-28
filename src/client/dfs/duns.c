@@ -246,9 +246,14 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 #endif
 
 #define UUID_REGEX "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}){1}"
-#define DAOS_FORMAT "^daos://"UUID_REGEX"/"UUID_REGEX"[/]?"
-#define DAOS_FORMAT_NO_PREFIX "^[/]+"UUID_REGEX"/"UUID_REGEX"[/]?"
-#define DAOS_FORMAT_NO_CONT "^daos://"UUID_REGEX"[/]?$"
+/*
+ * 256 corresponds to DAOS_PROP_LABEL_MAX_LEN.
+ * TODO: Make a common label format check function.
+ */
+#define LABEL_REGEX "([a-zA-Z0-9._:]{1,256})"
+#define DAOS_FORMAT "^daos://("UUID_REGEX"|"LABEL_REGEX")/("UUID_REGEX"|"LABEL_REGEX")(/.*)?$"
+#define DAOS_FORMAT_NO_PREFIX "^[/]+("UUID_REGEX"|"LABEL_REGEX")/("UUID_REGEX"|"LABEL_REGEX")(/.*)?$"
+#define DAOS_FORMAT_NO_CONT "^daos://("UUID_REGEX"|"LABEL_REGEX")[/]?$"
 
 static int
 check_direct_format(const char *path, bool no_prefix, bool *pool_only)
@@ -337,6 +342,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	char		str[DUNS_MAX_XATTR_LEN];
 	struct statfs	fs;
 	bool		pool_only = false;
+	bool		no_prefix = false;
 	char		*realp = NULL;
 	char		*rel_path = NULL;
 	char		*dir_path = NULL;
@@ -345,7 +351,19 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	size_t		rel_len = 0;
 	int		rc;
 
-	rc = check_direct_format(path, attr->da_no_prefix, &pool_only);
+	if (path == NULL || strlen(path) == 0)
+		return EINVAL;
+
+	if (attr->da_no_prefix || attr->da_flags & DUNS_NO_PREFIX)
+		no_prefix = true;
+	/**
+	 * If caller requested to not check the file system path, we do the
+	 * direct format parsing right away regardless of the format.
+	 */
+	if (attr->da_flags & DUNS_NO_CHECK_PATH)
+		rc = 0;
+	else
+		rc = check_direct_format(path, no_prefix, &pool_only);
 	if (rc == 0) {
 		char	*dir;
 		char	*saveptr, *t;
@@ -363,7 +381,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		}
 
 		/** if there is a daos: prefix, skip over it */
-		if (!attr->da_no_prefix) {
+		if (!no_prefix) {
 			t = strtok_r(NULL, "/", &saveptr);
 			if (t == NULL) {
 				D_ERROR("Invalid DAOS format (%s).\n", path);
@@ -375,9 +393,12 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		/** parse the pool uuid */
 		rc = uuid_parse(t, attr->da_puuid);
 		if (rc) {
-			D_ERROR("Invalid format: pool UUID cannot be parsed\n");
-			D_FREE(dir);
-			return EINVAL;
+			D_STRNDUP(attr->da_pool_label, t,
+				  DAOS_PROP_LABEL_MAX_LEN);
+			if (attr->da_pool_label == NULL)
+				return ENOMEM;
+		} else {
+			attr->da_pool_label = NULL;
 		}
 
 		if (pool_only) {
@@ -395,9 +416,12 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		/** parse the container uuid */
 		rc = uuid_parse(t, attr->da_cuuid);
 		if (rc) {
-			D_ERROR("Invalid format: cont UUID cannot be parsed\n");
-			D_FREE(dir);
-			return EINVAL;
+			D_STRNDUP(attr->da_cont_label, t,
+				  DAOS_PROP_LABEL_MAX_LEN);
+			if (attr->da_cont_label == NULL)
+				return ENOMEM;
+		} else {
+			attr->da_cont_label = NULL;
 		}
 
 		/** if there is a relative path, parse it out */
@@ -413,6 +437,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		D_FREE(dir);
 		return 0;
 	}
+
+	/** no match for direct format, do the UNS fs check */
 
 	rc = statfs(path, &fs);
 	if (rc == -1) {
@@ -459,7 +485,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 			int err = errno;
 
 			if (err == ENODATA) {
-				if (cur_idx == 0 || attr->da_no_reverse_lookup)
+				if (cur_idx == 0 || (attr->da_flags &
+						     DUNS_NO_REVERSE_LOOKUP))
 					D_INFO("Path does not represent a DAOS"
 					       " link\n");
 				else
@@ -740,6 +767,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	char		str[DUNS_MAX_XATTR_LEN];
 	int		len;
 	bool		try_multiple = true;
+	bool		no_prefix = false;
 	int		rc;
 	bool		backend_dfuse = false;
 	bool		pool_only;
@@ -752,7 +780,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 	path_len = strlen(path);
 
-	rc = check_direct_format(path, attrp->da_no_prefix, &pool_only);
+	if (attrp->da_no_prefix || attrp->da_flags & DUNS_NO_PREFIX)
+		no_prefix = true;
+
+	rc = check_direct_format(path, no_prefix, &pool_only);
 	if (rc == 0) {
 		if (pool_only) {
 			D_ERROR("Invalid DUNS format: %s\n", path);
@@ -969,4 +1000,15 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 	}
 
 	return 0;
+}
+
+void
+duns_destroy_attr(struct duns_attr_t *attrp)
+{
+	if (attrp == NULL)
+		return;
+
+	D_FREE(attrp->da_rel_path);
+	D_FREE(attrp->da_pool_label);
+	D_FREE(attrp->da_cont_label);
 }
