@@ -1454,7 +1454,7 @@ get_daos_prop_with_label(void)
 	assert_non_null(prop);
 
 	setup_str_prop_entry(&prop->dpp_entries[0], DAOS_PROP_CO_LABEL,
-			     "My container");
+			     "My_container");
 
 	return prop;
 }
@@ -1469,7 +1469,7 @@ get_daos_prop_with_all_prop_categories(void)
 	assert_non_null(prop);
 
 	setup_str_prop_entry(&prop->dpp_entries[0], DAOS_PROP_CO_LABEL,
-			     "Container 1");
+			     "Container_1");
 	setup_str_prop_entry(&prop->dpp_entries[1], DAOS_PROP_CO_OWNER,
 			     "niceuser@");
 	setup_str_prop_entry(&prop->dpp_entries[2], DAOS_PROP_CO_OWNER_GROUP,
@@ -1968,7 +1968,7 @@ co_owner_implicit_access(void **state)
 	print_message("- Verify set-prop denied\n");
 	tmp_prop = daos_prop_alloc(1);
 	tmp_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(tmp_prop->dpp_entries[0].dpe_str, "My Label", 16);
+	D_STRNDUP(tmp_prop->dpp_entries[0].dpe_str, "My_Label", 16);
 	rc = daos_cont_set_prop(arg->coh, tmp_prop, NULL);
 	assert_rc_equal(rc, -DER_NO_PERM);
 	daos_prop_free(tmp_prop);
