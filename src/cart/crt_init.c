@@ -309,7 +309,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	struct timeval	now;
 	unsigned int	seed;
 	const char	*path;
-	bool		server;
+	bool		server = false;
 	bool		provider_found = false;
 	int		plugin_idx;
 	int		prov;
