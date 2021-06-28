@@ -258,27 +258,17 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_ALLOC_ARRAY_NZ(ptr, count) D_ALLOC_CORE_NZ(ptr, sizeof(*ptr), count)
 #define D_FREE_PTR(ptr)		D_FREE(ptr)
 
-/* _Generic() is part of the c11 standard but isn't yet supported by
- * gcc until version 4.9 so check for that but enable it in all other
- * cases.
+/* _Generic() is part of the c11 standard but isn't yet supported by all
+ * compilers so there's a configure check for this in scons.
  */
 
 #ifdef USE_GOTO_LOGGING
-#ifdef __clang__
-#define VERBOSE_GOTO 1
-#else /* __clang__ */
-#if defined  __GNUC__ && __GNUC__ > 4 || \
-	(__GNUC__ == 4 && (__GNUC_MINOR__ < 9))
-#define VERBOSE_GOTO 0
-#else
+#ifdef HAVE_GENERIC
 #define VERBOSE_GOTO 1
 #endif
-#endif /* __clang__ */
-#else /* USE_GOTO_LOGGING */
-#define VERBOSE_GOTO 0
 #endif /* USE_GOTO_LOGGING */
 
-#if VERBOSE_GOTO
+#ifdef VERBOSE_GOTO
 
 #define maybe_derrcode(x) _Generic((x), int : true, default : false)
 

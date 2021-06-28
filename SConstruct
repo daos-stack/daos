@@ -45,6 +45,26 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
+generic_src = """
+
+#include <stdbool.h>
+#define check(x) _Generic((x), int : true, default : false)
+
+void fn(int x)
+{
+if (check(x))
+ return;
+}
+"""
+
+def check_generic(env):
+
+    env.Message('Checking if _Generic is supported ')
+
+    rc = env.TryCompile(generic_src, '.c')
+    env.Result(rc)
+    return rc
+
 def run_checks(env, p):
     """Run all configure time checks"""
     if GetOption('help') or GetOption('clean'):
@@ -54,15 +74,18 @@ def run_checks(env, p):
     daos_build.clear_icc_env(cenv)
     if cenv.get("COMPILER") == 'icc':
         cenv.Replace(CC='gcc', CXX='g++')
-    config = Configure(cenv)
+    config = Configure(cenv,
+                       custom_tests={'GenericTest': check_generic})
 
     if config.CheckHeader('stdatomic.h'):
-        config.Finish()
         env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
     else:
-        config.Finish()
         p.require(env, 'openpa', headers_only=True)
 
+    if config.GenericTest():
+        env.AppendUnique(CPPDEFINES=['HAVE_GENERIC'])
+
+    config.Finish()
 
 def get_version():
     """ Read version from VERSION file """
