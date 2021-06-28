@@ -3276,6 +3276,7 @@ def main():
         wf.add_test_case('Errors')
 
     if conf.valgrind_errors:
+        print("Valgrind errors detected during execution")
         fatal_errors.add_result(True)
 
     wf.close()

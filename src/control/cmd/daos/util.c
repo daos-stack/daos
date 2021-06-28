@@ -91,8 +91,7 @@ resolve_duns_path(struct cmd_args_s *ap)
 		if (name) {
 			if (dattr.da_rel_path) {
 				D_ASPRINTF(ap->dfs_path, "%s/%s",
-						dattr.da_rel_path, name);
-				D_FREE(dattr.da_rel_path);
+					   dattr.da_rel_path, name);
 			} else {
 				D_ASPRINTF(ap->dfs_path, "/%s", name);
 			}
