@@ -290,6 +290,8 @@ def define_components(reqs):
     else:
         ABT_DEBUG = ' --disable-debug'
 
+    ABT_DEBUG = ' --enable-debug=most'
+
     retriever = GitRepoRetriever("https://github.com/pmodels/argobots.git",
                                  True)
     reqs.define('argobots',
