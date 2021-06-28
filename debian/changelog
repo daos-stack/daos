@@ -1,6 +1,6 @@
 daos (1.3.102-4) unstable; urgency=medium
   [ Maureen Jean ]
-  * Use rpm macro for path to python site packages
+  * Add python modules to python3.6 site-packages
 
  -- Maureen Jean <maureen.jean@intel.com>  Mon, 28 Jun 2021 19:15:00 -0400
 

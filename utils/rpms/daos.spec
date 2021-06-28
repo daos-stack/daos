@@ -465,7 +465,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Mon Jun 28 2021  Maureen Jean <maureen.jean@intel.com> 1.3.102-4
-- Use rpm macro for path to python site packages
+- Add python modules to python3.6 site-packages
 
 * Wed Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
 - Update raft to pick up Pre-Vote
