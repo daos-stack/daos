@@ -315,8 +315,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	int		prov;
 	bool		set_sep = false;
 	int		max_num_ctx = 256;
-	uint32_t	ctx_num;
-	bool		share_addr;
+	uint32_t	ctx_num = 0;
+	bool		share_addr = false;
 	int		rc = 0;
 
 	server = flags & CRT_FLAG_BIT_SERVER;
