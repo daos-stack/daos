@@ -422,9 +422,14 @@ main(int argc, char **argv)
 	/* Reserve one CPU thread for the daos event queue */
 	dfuse_info->di_thread_count -= 1;
 
-	if (dfuse_info->di_multi_user && !dfuse_info->di_cont) {
-		printf("Multi-user mode requires a container uuid\n");
-		exit(1);
+	if (cont_name && !pool_name) {
+		printf("Container name specified without pool\n");
+		D_GOTO(out_debug, rc = -DER_INVAL);
+	}
+
+	if (dfuse_info->di_multi_user && !cont_name) {
+		printf("Multi-user mode requires a container\n");
+		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 
 	if (!dfuse_info->di_foreground) {
@@ -433,11 +438,6 @@ main(int argc, char **argv)
 			printf("Failed to background\n");
 			exit(2);
 		}
-	}
-
-	if (cont_name && !pool_name) {
-		printf("Container name specified without pool\n");
-		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 
 	rc = daos_init();
