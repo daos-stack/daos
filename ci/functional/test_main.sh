@@ -32,10 +32,14 @@ rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
 # run node checkout
-clush -B -S -o '-i ci_key' -l root -w "${tnodes}" -c ci/functional/fio_libpmem.fio --dest=/tmp/
+#clush -B -S -o '-i ci_key' -l root -w "${tnodes}" -c ci/functional/fio_libpmem.fio --dest=/tmp/
 
-clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
-    "$(cat ci/functional/node_checkout.sh)"
+#clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
+#    "$(cat ci/functional/node_checkout.sh)"
+
+
+# run network test
+source ci/functional/self_test_8-node.sh '/usr/' $tnodes
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
