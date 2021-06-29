@@ -59,6 +59,10 @@ struct vos_io_context {
 	uint32_t		 ic_dedup_th;
 	/** dedup entries to be inserted after transaction done */
 	d_list_t		 ic_dedup_entries;
+	/** duped SG lists for dedup verify */
+	struct bio_sglist	*ic_dedup_bsgls;
+	/** bulk data buffers for dedup verify */
+	struct bio_desc		**ic_dedup_bufs;
 	/** the total size of the IO */
 	uint64_t		 ic_io_size;
 	/** flags */
@@ -66,6 +70,7 @@ struct vos_io_context {
 				 ic_size_fetch:1,
 				 ic_save_recx:1,
 				 ic_dedup:1, /** candidate for dedup */
+				 ic_dedup_verify:1,
 				 ic_read_ts_only:1,
 				 ic_check_existence:1,
 				 ic_remove:1;
@@ -317,16 +322,182 @@ free_entry:
 	}
 }
 
-static inline struct umem_instance *
-vos_ioc2umm(struct vos_io_context *ioc)
+static void
+vos_dedup_free_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
+		    unsigned int *buf_idx)
 {
-	return &ioc->ic_cont->vc_pool->vp_umm;
+	struct bio_sglist	*bsgl_dup;
+	int			 i;
+
+	D_ASSERT(*buf_idx >= sgl_idx);
+	bsgl_dup = &ioc->ic_dedup_bsgls[sgl_idx];
+	D_ASSERT(bsgl_dup != NULL);
+
+	for (i = 0; i < bsgl_dup->bs_nr_out; i++) {
+		struct bio_iov	*biov = &bsgl_dup->bs_iovs[i];
+
+		if (biov->bi_buf == NULL)
+			goto next;
+
+		D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
+		if (!BIO_ADDR_IS_DEDUP_BUF(&biov->bi_addr))
+			goto next;
+
+		biov->bi_buf = NULL;
+		D_ASSERT(ioc->ic_dedup_bufs[*buf_idx] != NULL);
+		bio_buf_free(ioc->ic_dedup_bufs[*buf_idx]);
+		ioc->ic_dedup_bufs[*buf_idx] = NULL;
+next:
+		D_ASSERT(ioc->ic_dedup_bufs[*buf_idx] == NULL);
+		(*buf_idx)++;
+	}
+	bio_sgl_fini(bsgl_dup);
 }
 
 static struct vos_io_context *
 vos_ioh2ioc(daos_handle_t ioh)
 {
 	return (struct vos_io_context *)ioh.cookie;
+}
+
+static void
+vos_dedup_verify_fini(daos_handle_t ioh)
+{
+	struct vos_io_context	*ioc;
+	unsigned int		 buf_idx = 0;
+	int			 i;
+
+	D_ASSERT(daos_handle_is_valid(ioh));
+	ioc = vos_ioh2ioc(ioh);
+
+	if (ioc->ic_dedup_bsgls == NULL) {
+		D_ASSERT(ioc->ic_dedup_bufs == NULL);
+		return;
+	}
+
+	D_ASSERT(ioc->ic_dedup_verify);
+	D_ASSERT(ioc->ic_dedup_bufs != NULL);
+
+	for (i = 0; i < ioc->ic_iod_nr; i++)
+		vos_dedup_free_bsgl(ioc, i, &buf_idx);
+
+	D_FREE(ioc->ic_dedup_bsgls);
+	D_FREE(ioc->ic_dedup_bufs);
+}
+
+static int
+vos_dedup_dup_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
+		   unsigned int *buf_idx, void *bulk_ctxt,
+		   unsigned int bulk_perm)
+{
+	struct bio_io_context	*bioc;
+	struct bio_desc		*buf;
+	struct bio_sglist	*bsgl, *bsgl_dup;
+	int			 i, rc;
+
+	D_ASSERT(ioc->ic_dedup_verify);
+	D_ASSERT(*buf_idx >= sgl_idx);
+
+	bsgl = bio_iod_sgl(ioc->ic_biod, sgl_idx);
+	D_ASSERT(bsgl != NULL);
+	bsgl_dup = &ioc->ic_dedup_bsgls[sgl_idx];
+	D_ASSERT(bsgl_dup != NULL);
+
+	rc = bio_sgl_init(bsgl_dup, bsgl->bs_nr_out);
+	if (rc != 0)
+		return rc;
+
+	bsgl_dup->bs_nr_out = bsgl->bs_nr_out;
+
+	bioc = ioc->ic_cont->vc_pool->vp_io_ctxt;
+	for (i = 0; i < bsgl->bs_nr_out; i++) {
+		struct bio_iov	*biov = &bsgl->bs_iovs[i];
+		struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[i];
+
+		if (bio_iov2buf(biov) == NULL)
+			goto next;
+
+		*biov_dup = *biov;
+		/* Original biov isn't deduped, don't duplicate buffer */
+		if (!BIO_ADDR_IS_DEDUP(&biov->bi_addr))
+			goto next;
+
+		D_ASSERT(bio_iov2len(biov) != 0);
+		buf = bio_buf_alloc(bioc, bio_iov2len(biov), bulk_ctxt,
+				    bulk_perm);
+		if (buf == NULL) {
+			D_ERROR("Failed to alloc "DF_U64" bytes\n",
+				bio_iov2len(biov));
+			return -DER_NOMEM;
+		}
+		ioc->ic_dedup_bufs[*buf_idx] = buf;
+
+		biov_dup->bi_buf = bio_buf_addr(buf);
+		D_ASSERT(biov_dup->bi_buf != NULL);
+
+		BIO_ADDR_SET_NOT_DEDUP(&biov_dup->bi_addr);
+		BIO_ADDR_SET_DEDUP_BUF(&biov_dup->bi_addr);
+		biov_dup->bi_addr.ba_off = UMOFF_NULL;
+next:
+		(*buf_idx)++;
+	}
+
+	return 0;
+}
+
+int
+vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
+		      unsigned int bulk_perm)
+{
+	struct vos_io_context	*ioc;
+	struct bio_sglist	*bsgl;
+	unsigned int		 buf_idx = 0;
+	int			 i, rc = 0;
+
+	D_ASSERT(daos_handle_is_valid(ioh));
+	ioc = vos_ioh2ioc(ioh);
+
+	if (!ioc->ic_dedup_verify)
+		return 0;
+
+	D_ASSERT(ioc->ic_dedup_bsgls == NULL);
+	D_ALLOC_ARRAY(ioc->ic_dedup_bsgls, ioc->ic_iod_nr);
+	if (ioc->ic_dedup_bsgls == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < ioc->ic_iod_nr; i++) {
+		bsgl = bio_iod_sgl(ioc->ic_biod, i);
+		D_ASSERT(bsgl != NULL);
+
+		buf_idx += bsgl->bs_nr_out;
+
+	}
+
+	D_ASSERT(buf_idx > 0);
+	D_ALLOC_ARRAY(ioc->ic_dedup_bufs, buf_idx);
+	if (ioc->ic_dedup_bufs == NULL) {
+		D_FREE(ioc->ic_dedup_bsgls);
+		return -DER_NOMEM;
+	}
+
+	buf_idx = 0;
+	for (i = 0; i < ioc->ic_iod_nr; i++) {
+		rc = vos_dedup_dup_bsgl(ioc, i, &buf_idx,
+					bulk_ctxt, bulk_perm);
+		if (rc)
+			break;
+	}
+
+	if (rc)
+		vos_dedup_verify_fini(ioh);
+
+	return rc;
+}
+
+static inline struct umem_instance *
+vos_ioc2umm(struct vos_io_context *ioc)
+{
+	return &ioc->ic_cont->vc_pool->vp_umm;
 }
 
 static daos_handle_t
@@ -443,8 +614,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	       daos_epoch_t epoch, unsigned int iod_nr,
 	       daos_iod_t *iods, struct dcs_iod_csums *iod_csums,
 	       uint32_t vos_flags, struct daos_recx_ep_list *shadows,
-	       bool dedup, uint32_t dedup_th,
-	       struct dtx_handle *dth, struct vos_io_context **ioc_pp)
+	       uint32_t dedup_th, struct dtx_handle *dth,
+	       struct vos_io_context **ioc_pp)
 {
 	struct vos_container	*cont;
 	struct vos_io_context	*ioc = NULL;
@@ -478,7 +649,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_update = !read_only;
 	ioc->ic_size_fetch = ((vos_flags & VOS_OF_FETCH_SIZE_ONLY) != 0);
 	ioc->ic_save_recx = ((vos_flags & VOS_OF_FETCH_RECX_LIST) != 0);
-	ioc->ic_dedup = dedup;
+	ioc->ic_dedup = ((vos_flags & VOS_OF_DEDUP) != 0);
+	ioc->ic_dedup_verify = ((vos_flags & VOS_OF_DEDUP_VERIFY) != 0);
 	ioc->ic_dedup_th = dedup_th;
 	if (vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE)
 		ioc->ic_read_ts_only = ioc->ic_check_existence = 1;
@@ -532,7 +704,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 
 	bioc = cont->vc_pool->vp_io_ctxt;
 	D_ASSERT(bioc != NULL);
-	ioc->ic_biod = bio_iod_alloc(bioc, iod_nr, !read_only);
+	ioc->ic_biod = bio_iod_alloc(bioc, iod_nr,
+			read_only ? BIO_IOD_TYPE_FETCH : BIO_IOD_TYPE_UPDATE);
 	if (ioc->ic_biod == NULL) {
 		rc = -DER_NOMEM;
 		goto error;
@@ -1303,8 +1476,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		DP_UOID(oid), iod_nr, epoch);
 
 	rc = vos_ioc_create(coh, oid, true, epoch, iod_nr, iods,
-			    NULL, vos_flags, shadows, false, 0,
-			    dth, &ioc);
+			    NULL, vos_flags, shadows, 0, dth, &ioc);
 	if (rc != 0)
 		return rc;
 
@@ -1578,7 +1750,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 			continue;
 		}
 
-		if (iod_csums != NULL)
+		if (iod_csums != NULL && csum_iod_is_supported(iod))
 			recx_csum = &iod_csums[i];
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
 				      recx_csum, iod->iod_size, ioc,
@@ -2038,6 +2210,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	VOS_TIME_START(time, VOS_UPDATE_END);
 	D_ASSERT(ioc->ic_update);
+	vos_dedup_verify_fini(ioh);
 
 	if (err != 0)
 		goto abort;
@@ -2181,8 +2354,7 @@ int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-		 bool dedup, uint32_t dedup_th, daos_handle_t *ioh,
-		 struct dtx_handle *dth)
+		 uint32_t dedup_th, daos_handle_t *ioh, struct dtx_handle *dth)
 {
 	struct vos_io_context	*ioc;
 	int			 rc;
@@ -2201,7 +2373,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums,
-			    flags, NULL, dedup, dedup_th, dth, &ioc);
+			    flags, NULL, dedup_th, dth, &ioc);
 	if (rc != 0)
 		return rc;
 
@@ -2268,7 +2440,50 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx)
 			idx, ioc->ic_iod_nr);
 		return NULL;
 	}
+
+	if (ioc->ic_dedup_verify) {
+		D_ASSERT(ioc->ic_dedup_bsgls != NULL);
+		return &ioc->ic_dedup_bsgls[idx];
+	}
+
 	return bio_iod_sgl(ioc->ic_biod, idx);
+}
+
+void *
+vos_iod_bulk_at(daos_handle_t ioh, unsigned int sgl_idx, unsigned int iov_idx,
+		unsigned int *bulk_off)
+{
+	struct vos_io_context	*ioc;
+	struct bio_desc		*buf;
+	struct bio_sglist	*bsgl_dup;
+	int			 buf_idx, i;
+
+	if (daos_handle_is_inval(ioh))
+		return NULL;
+
+	ioc = vos_ioh2ioc(ioh);
+	if (ioc->ic_dedup_verify) {
+		D_ASSERT(ioc->ic_dedup_bsgls != NULL);
+		D_ASSERT(ioc->ic_dedup_bufs != NULL);
+
+		buf_idx = 0;
+		for (i = 0; i < sgl_idx; i++) {
+			bsgl_dup = &ioc->ic_dedup_bsgls[i];
+
+			buf_idx += bsgl_dup->bs_nr_out;
+		}
+
+		bsgl_dup = &ioc->ic_dedup_bsgls[sgl_idx];
+		D_ASSERT(iov_idx < bsgl_dup->bs_nr_out);
+		buf_idx += iov_idx;
+
+		buf = ioc->ic_dedup_bufs[buf_idx];
+		if (buf != NULL)
+			return bio_buf_bulk(buf, bulk_off);
+		/* Not deduped data, fallthrough to bio_iod_bulk() */
+	}
+
+	return bio_iod_bulk(ioc->ic_biod, sgl_idx, iov_idx, bulk_off);
 }
 
 void
@@ -2308,72 +2523,6 @@ umem_off2id(const struct umem_instance *umm, umem_off_t umoff)
 	return oid;
 }
 
-/* Duplicate bio_sglist for landing RDMA transfer data */
-int
-vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
-		   struct bio_sglist *bsgl_dup)
-{
-	int	i, rc;
-
-	D_ASSERT(daos_handle_is_valid(ioh));
-	D_ASSERT(bsgl != NULL);
-	D_ASSERT(bsgl_dup != NULL);
-
-	rc = bio_sgl_init(bsgl_dup, bsgl->bs_nr_out);
-	if (rc != 0)
-		return rc;
-
-	bsgl_dup->bs_nr_out = bsgl->bs_nr_out;
-
-	for (i = 0; i < bsgl->bs_nr_out; i++) {
-		struct bio_iov	*biov = &bsgl->bs_iovs[i];
-		struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[i];
-
-		if (bio_iov2buf(biov) == NULL)
-			continue;
-
-		*biov_dup = *biov;
-		/* Original biov isn't deduped, don't duplicate buffer */
-		if (!BIO_ADDR_IS_DEDUP(&biov->bi_addr))
-			continue;
-
-		D_ASSERT(bio_iov2len(biov) != 0);
-		D_ALLOC(biov_dup->bi_buf, bio_iov2len(biov));
-		if (biov_dup->bi_buf == NULL) {
-			D_ERROR("Failed to alloc "DF_U64" bytes\n",
-				bio_iov2len(biov));
-			return -DER_NOMEM;
-		}
-
-		BIO_ADDR_SET_NOT_DEDUP(&biov_dup->bi_addr);
-		BIO_ADDR_SET_DEDUP_BUF(&biov_dup->bi_addr);
-		biov_dup->bi_addr.ba_off = UMOFF_NULL;
-	}
-
-	return 0;
-}
-
-void
-vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl)
-{
-	int	i;
-
-	D_ASSERT(daos_handle_is_valid(ioh));
-	for (i = 0; i < bsgl->bs_nr_out; i++) {
-		struct bio_iov	*biov = &bsgl->bs_iovs[i];
-
-		if (biov->bi_buf == NULL)
-			continue;
-
-		/* Not duplicated buffer, don't free it */
-		D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
-		if (!BIO_ADDR_IS_DEDUP_BUF(&biov->bi_addr))
-			continue;
-
-		D_FREE(biov->bi_buf);
-	}
-}
-
 /*
  * Check if the dedup data is identical to the RDMA data in a temporal
  * allocated DRAM extent, if memcmp fails, allocate a new SCM extent and
@@ -2381,7 +2530,7 @@ vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl)
  * dedup data address in VOS tree.
  */
 int
-vos_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup)
+vos_dedup_verify(daos_handle_t ioh)
 {
 	struct vos_io_context	*ioc;
 	struct bio_sglist	*bsgl, *bsgl_dup;
@@ -2389,13 +2538,17 @@ vos_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup)
 	PMEMoid			 oid;
 
 	D_ASSERT(daos_handle_is_valid(ioh));
-	D_ASSERT(bsgls_dup != NULL);
 	ioc = vos_ioh2ioc(ioh);
 
+	if (!ioc->ic_dedup_verify)
+		return 0;
+
+	D_ASSERT(ioc->ic_dedup_bsgls != NULL);
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
-		bsgl = vos_iod_sgl_at(ioh, i);
+		bsgl = bio_iod_sgl(ioc->ic_biod, i);
 		D_ASSERT(bsgl != NULL);
-		bsgl_dup = &bsgls_dup[i];
+		bsgl_dup = &ioc->ic_dedup_bsgls[i];
+		D_ASSERT(bsgl_dup != NULL);
 
 		D_ASSERT(bsgl->bs_nr_out == bsgl_dup->bs_nr_out);
 		for (j = 0; j < bsgl->bs_nr_out; j++) {
@@ -2467,7 +2620,7 @@ vos_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup)
 	return 0;
 error:
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
-		bsgl_dup = &bsgls_dup[i];
+		bsgl_dup = &ioc->ic_dedup_bsgls[i];
 
 		for (j = 0; j < bsgl_dup->bs_nr_out; j++) {
 			struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[j];
@@ -2525,7 +2678,7 @@ vos_obj_update_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	int rc;
 
 	rc = vos_update_begin(coh, oid, epoch, flags, dkey, iod_nr, iods,
-			      iods_csums, false, 0, &ioh, dth);
+			      iods_csums, 0, &ioh, dth);
 	if (rc) {
 		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
 			DP_RC(rc));
@@ -2570,7 +2723,7 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
 	iod.iod_size = 0;
 
 	rc = vos_update_begin(coh, oid, epr->epr_hi, VOS_OF_REMOVE,
-			      (daos_key_t *)dkey, 1, &iod, NULL, false, 0,
+			      (daos_key_t *)dkey, 1, &iod, NULL, 0,
 			      &ioh, NULL);
 	if (rc) {
 		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
