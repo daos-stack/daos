@@ -298,7 +298,6 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		  off_t remote_off, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  d_sg_list_t *sgl, int sgl_idx, struct obj_bulk_args *p_arg)
 {
-	struct bio_desc		*biod;
 	struct crt_bulk_desc	bulk_desc;
 	crt_bulk_perm_t		bulk_perm;
 	crt_bulk_opid_t		bulk_opid;
@@ -330,7 +329,6 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		return 0;
 	}
 
-	biod = daos_handle_is_valid(ioh) ? vos_ioh2desc(ioh) : NULL;
 	bulk_perm = bulk_op == CRT_BULK_PUT ? CRT_BULK_RO : CRT_BULK_RW;
 
 	while (iov_idx < sgl->sg_nr_out) {
@@ -359,7 +357,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			break;
 		}
 
-		local_bulk = bio_iod_bulk(biod, sgl_idx, iov_idx, &local_off);
+		local_bulk = vos_iod_bulk_at(ioh, sgl_idx, iov_idx, &local_off);
 		if (local_bulk != NULL) {
 			length = sgl->sg_iovs[iov_idx].iov_len;
 			iov_idx++;
@@ -374,7 +372,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			 */
 			while (iov_idx < sgl->sg_nr_out &&
 			       sgl->sg_iovs[iov_idx].iov_buf != NULL &&
-			       bio_iod_bulk(biod, sgl_idx, iov_idx,
+			       vos_iod_bulk_at(ioh, sgl_idx, iov_idx,
 						&local_off) == NULL) {
 				length += sgl->sg_iovs[iov_idx].iov_len;
 				iov_idx++;
@@ -441,8 +439,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 static int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  crt_bulk_t *remote_bulks, uint64_t *remote_offs,
-		  daos_handle_t ioh, d_sg_list_t **sgls,
-		  struct bio_sglist *bsgls_dup, int sgl_nr,
+		  daos_handle_t ioh, d_sg_list_t **sgls, int sgl_nr,
 		  struct obj_bulk_args *p_arg)
 {
 	struct obj_bulk_args	arg = { 0 };
@@ -467,6 +464,16 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	D_DEBUG(DB_IO, "bulk_op %d sgl_nr %d\n", bulk_op, sgl_nr);
 
 	p_arg->bulks_inflight++;
+
+	if (daos_handle_is_valid(ioh)) {
+		rc = vos_dedup_verify_init(ioh, rpc->cr_ctx, CRT_BULK_RW);
+		if (rc) {
+			D_ERROR("Dedup verify prep failed. "DF_RC"\n",
+				DP_RC(rc));
+			goto done;
+		}
+	}
+
 	for (i = 0; i < sgl_nr; i++) {
 		d_sg_list_t	*sgl, tmp_sgl;
 
@@ -474,20 +481,12 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 			continue;
 
 		if (sgls != NULL) {
-			D_ASSERT(bsgls_dup == NULL);
 			sgl = sgls[i];
 		} else {
 			struct bio_sglist *bsgl;
 
 			D_ASSERT(daos_handle_is_valid(ioh));
 			bsgl = vos_iod_sgl_at(ioh, i);
-			if (bsgls_dup) {	/* dedup verify case */
-				rc = vos_dedup_dup_bsgl(ioh, bsgl,
-							&bsgls_dup[i]);
-				if (rc)
-					break;
-				bsgl = &bsgls_dup[i];
-			}
 			D_ASSERT(bsgl != NULL);
 
 			sgl = &tmp_sgl;
@@ -504,7 +503,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		if (rc)
 			break;
 	}
-
+done:
 	if (--(p_arg->bulks_inflight) == 0)
 		ABT_eventual_set(p_arg->eventual, &rc, sizeof(rc));
 
@@ -744,7 +743,7 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *split_iods, uint64_t *split_offs)
 	bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 	rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind,
 			       orw->orw_bulks.ca_arrays, off,
-			       DAOS_HDL_INVAL, &p_sgl, NULL, orw->orw_nr, NULL);
+			       DAOS_HDL_INVAL, &p_sgl, orw->orw_nr, NULL);
 out:
 	orwo->orw_ret = rc;
 	orwo->orw_map_version = orw->orw_map_ver;
@@ -1259,7 +1258,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	struct daos_recx_ep_list	*recov_lists = NULL;
 	daos_iod_t			*iods;
 	uint64_t			*offs;
-	struct bio_sglist		*bsgls_dup = NULL; /* dedup verify */
+	uint64_t			 cond_flags;
 	daos_iod_t			*iods_dup = NULL; /* for EC deg fetch */
 	int				err, rc = 0;
 
@@ -1296,6 +1295,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 	rma = (orw->orw_bulks.ca_arrays != NULL ||
 	       orw->orw_bulks.ca_count != 0);
+	cond_flags = orw->orw_api_flags;
 
 	/* Prepare IO descriptor */
 	if (obj_rpc_is_update(rpc)) {
@@ -1312,25 +1312,15 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				    orw->orw_sgls.ca_count);
 		}
 
-		if (rma && ioc->ioc_coc->sc_props.dcp_dedup_enabled &&
-		    ioc->ioc_coc->sc_props.dcp_dedup_verify) {
-			/**
-			 * If deduped data need to be compared, then perform
-			 * the I/O as a regular one, we will check for dedup
-			 * data after RDMA
-			 */
-			D_ALLOC_ARRAY(bsgls_dup, orw->orw_nr);
-			if (bsgls_dup == NULL) {
-				rc = -DER_NOMEM;
-				goto out;
-			}
+		if (rma && ioc->ioc_coc->sc_props.dcp_dedup_enabled) {
+			cond_flags |= VOS_OF_DEDUP;
+			if (ioc->ioc_coc->sc_props.dcp_dedup_verify)
+				cond_flags |= VOS_OF_DEDUP_VERIFY;
 		}
 
 		rc = vos_update_begin(ioc->ioc_vos_coh, orw->orw_oid,
-			      orw->orw_epoch, orw->orw_api_flags,
-			      dkey, orw->orw_nr, iods,
-			      iod_csums,
-			      ioc->ioc_coc->sc_props.dcp_dedup_enabled,
+			      orw->orw_epoch, cond_flags, dkey,
+			      orw->orw_nr, iods, iod_csums,
 			      ioc->ioc_coc->sc_props.dcp_dedup_size,
 			      &ioh, dth);
 		if (rc) {
@@ -1339,12 +1329,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			goto out;
 		}
 	} else {
-		uint64_t			 cond_flags;
 		uint32_t			 fetch_flags = 0;
 		bool				 ec_deg_fetch;
 		struct daos_recx_ep_list	*shadows = NULL;
 
-		cond_flags = orw->orw_api_flags;
 		bulk_op = CRT_BULK_PUT;
 		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
 			spec_fetch = true;
@@ -1479,7 +1467,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind,
 				       orw->orw_bulks.ca_arrays, offs,
-				       ioh, NULL, bsgls_dup, orw->orw_nr, NULL);
+				       ioh, NULL, orw->orw_nr, NULL);
 		if (rc == 0) {
 			bio_iod_flush(biod);
 
@@ -1509,11 +1497,9 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	}
 
 	if (obj_rpc_is_update(rpc)) {
-		if (bsgls_dup != NULL) {	/* dedup verify */
-			rc = vos_dedup_verify(ioh, bsgls_dup);
-			if (rc)
-				goto post;
-		}
+		rc = vos_dedup_verify(ioh);
+		if (rc)
+			goto post;
 
 		rc = obj_verify_bio_csum(orw->orw_oid.id_pub, iods, iod_csums,
 					 biod, ioc->ioc_coc->sc_csummer,
@@ -1549,18 +1535,6 @@ post:
 	err = bio_iod_post(biod);
 	rc = rc ? : err;
 out:
-	if (bsgls_dup != NULL) {
-		int	i;
-
-		if (daos_handle_is_valid(ioh)) {
-			for (i = 0; i < orw->orw_nr; i++) {
-				vos_dedup_free_bsgl(ioh, &bsgls_dup[i]);
-				bio_sgl_fini(&bsgls_dup[i]);
-			}
-		}
-		D_FREE(bsgls_dup);
-	}
-
 	rc = obj_rw_complete(rpc, ioc, ioh, rc, dth);
 	if (iods_dup != NULL)
 		daos_iod_recx_free(iods_dup, orw->orw_nr);
@@ -1943,7 +1917,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	iod_csums = oer->er_iod_csums.ca_arrays;
 	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid,
 			      oer->er_epoch, 0, dkey, 1, iod, iod_csums,
-			      NULL, 0, &ioh, NULL);
+			      0, &ioh, NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
@@ -1957,7 +1931,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 		goto out;
 	}
 	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oer->er_bulk, NULL,
-			       ioh, NULL, NULL, 1, NULL);
+			       ioh, NULL, 1, NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
@@ -2025,7 +1999,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	if (parity_bulk != CRT_BULK_NULL) {
 		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid,
 				      oea->ea_epoch_range.epr_hi, 0, dkey, 1,
-				      iod, iod_csums, NULL, 0, &ioh, NULL);
+				      iod, iod_csums, 0, &ioh, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
@@ -2040,7 +2014,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			goto out;
 		}
 		rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oea->ea_bulk,
-				       NULL, ioh, NULL, NULL, 1, NULL);
+				       NULL, ioh, NULL, 1, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
@@ -2911,7 +2885,7 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 		return 0;
 
 	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, bulks, NULL,
-			       DAOS_HDL_INVAL, sgls, NULL, idx, NULL);
+			       DAOS_HDL_INVAL, sgls, idx, NULL);
 	if (oei->oei_kds_bulk) {
 		D_FREE(oeo->oeo_kds.ca_arrays);
 		oeo->oeo_kds.ca_arrays = NULL;
@@ -3749,7 +3723,6 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	daos_handle_t			 *iohs = NULL;
 	struct bio_desc			**biods = NULL;
 	struct obj_bulk_args		 *bulks = NULL;
-	struct bio_sglist		**bsgls_dups = NULL;
 	struct dcs_iod_csums		 *csums;
 	daos_iod_t			 *iods;
 	uint64_t			 *offs = NULL;
@@ -3757,7 +3730,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	int				  rma_idx = 0;
 	int				  rc = 0;
 	int				  i;
-	int				  j;
+	uint64_t			  update_flags;
 
 	if (dth->dth_flags & DTE_LEADER &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_RESTART))
@@ -3862,11 +3835,18 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			csums = dcu->dcu_iod_array.oia_iod_csums;
 		}
 
+		update_flags = dcsr->dcsr_api_flags;
+		if (dcu->dcu_flags & ORF_CPD_BULK &&
+		    ioc->ioc_coc->sc_props.dcp_dedup_enabled) {
+			update_flags |= VOS_OF_DEDUP;
+			if (ioc->ioc_coc->sc_props.dcp_dedup_verify)
+				update_flags |= VOS_OF_DEDUP_VERIFY;
+		}
+
 		rc = vos_update_begin(ioc->ioc_vos_coh,
 				dcsr->dcsr_oid, dcsh->dcsh_epoch.oe_value,
-				dcsr->dcsr_api_flags, &dcsr->dcsr_dkey,
+				update_flags, &dcsr->dcsr_dkey,
 				dcsr->dcsr_nr, iods, csums,
-				ioc->ioc_coc->sc_props.dcp_dedup_enabled,
 				ioc->ioc_coc->sc_props.dcp_dedup_size,
 				&iohs[i], dth);
 		if (rc != 0)
@@ -3891,20 +3871,6 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 					D_GOTO(out, rc = -DER_NOMEM);
 			}
 
-			if (ioc->ioc_coc->sc_props.dcp_dedup_enabled &&
-			    ioc->ioc_coc->sc_props.dcp_dedup_verify) {
-				if (bsgls_dups == NULL) {
-					D_ALLOC_ARRAY(bsgls_dups,
-						      dcde->dcde_write_cnt);
-					if (bsgls_dups == NULL)
-						D_GOTO(out, rc = -DER_NOMEM);
-				}
-
-				D_ALLOC_ARRAY(bsgls_dups[i], dcsr->dcsr_nr);
-				if (bsgls_dups[i] == NULL)
-					D_GOTO(out, rc = -DER_NOMEM);
-			}
-
 			if (dcu->dcu_ec_split_req != NULL)
 				offs = dcu->dcu_ec_split_req->osr_offs;
 			else
@@ -3912,9 +3878,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 
 			rc = obj_bulk_transfer(rpc, CRT_BULK_GET,
 				dcu->dcu_flags & ORF_BULK_BIND, dcu->dcu_bulks,
-				offs, iohs[i], NULL,
-				bsgls_dups != NULL ? bsgls_dups[i] : NULL,
-				dcsr->dcsr_nr, &bulks[i]);
+				offs, iohs[i], NULL, dcsr->dcsr_nr, &bulks[i]);
 			if (rc != 0) {
 				D_ERROR("Bulk transfer failed for obj "
 					DF_UOID", DTX "DF_DTI": "DF_RC"\n",
@@ -3979,29 +3943,23 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 				csums = dcu->dcu_iod_array.oia_iod_csums;
 			}
 
-			if (bsgls_dups != NULL && bsgls_dups[i] != NULL) {
-				rc = vos_dedup_verify(iohs[i], bsgls_dups[i]);
-				if (rc != 0) {
-					D_ERROR("dedup_verify failed for obj "
-						DF_UOID", DTX "DF_DTI
-						": "DF_RC"\n",
-						DP_UOID(dcsr->dcsr_oid),
-						DP_DTI(&dcsh->dcsh_xid),
-						DP_RC(rc));
-
+			rc = vos_dedup_verify(iohs[i]);
+			if (rc != 0) {
+				D_ERROR("dedup_verify failed for obj "
+					DF_UOID", DTX "DF_DTI": "DF_RC"\n",
+					DP_UOID(dcsr->dcsr_oid),
+					DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 					goto out;
-				}
-			} else {
-				rc = obj_verify_bio_csum(dcsr->dcsr_oid.id_pub,
-						iods, csums, biods[i],
-						ioc->ioc_coc->sc_csummer,
-						dcsr->dcsr_nr);
-				if (rc != 0) {
-					if (rc == -DER_CSUM)
-						obj_log_csum_err();
+			}
 
-					goto out;
-				}
+			rc = obj_verify_bio_csum(dcsr->dcsr_oid.id_pub,
+						 iods, csums, biods[i],
+						 ioc->ioc_coc->sc_csummer,
+						 dcsr->dcsr_nr);
+			if (rc != 0) {
+				if (rc == -DER_CSUM)
+					obj_log_csum_err();
+				goto out;
 			}
 
 			rc = bio_iod_post(biods[i]);
@@ -4012,16 +3970,6 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 					DP_UOID(dcsr->dcsr_oid),
 					DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 				goto out;
-			}
-
-			if (bsgls_dups != NULL && bsgls_dups[i] != NULL) {
-				for (j = 0; j < dcsr->dcsr_nr; j++) {
-					vos_dedup_free_bsgl(iohs[i],
-							    &bsgls_dups[i][j]);
-					bio_sgl_fini(&bsgls_dups[i][j]);
-				}
-
-				D_FREE(bsgls_dups[i]);
 			}
 
 			rc = dtx_sub_init(dth, &dcsr->dcsr_oid,
@@ -4067,26 +4015,6 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	}
 
 out:
-	if (bsgls_dups != NULL) {
-		dcri = dcde->dcde_reqs + dcde->dcde_read_cnt;
-
-		for (i = 0; i < dcde->dcde_write_cnt; i++) {
-			if (bsgls_dups[i] == NULL)
-				continue;
-
-			dcsr = &dcsrs[dcri[i].dcri_req_idx];
-
-			for (j = 0; j < dcsr->dcsr_nr; j++) {
-				vos_dedup_free_bsgl(iohs[i], &bsgls_dups[i][j]);
-				bio_sgl_fini(&bsgls_dups[i][j]);
-			}
-
-			D_FREE(bsgls_dups[i]);
-		}
-
-		D_FREE(bsgls_dups);
-	}
-
 	if (rc != 0) {
 		if (bulks != NULL) {
 			for (i = 0;

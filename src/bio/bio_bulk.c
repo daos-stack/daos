@@ -474,19 +474,23 @@ done:
 }
 
 static inline bool
-bypass_bulk_cache(struct bio_iov *biov, unsigned int pg_cnt)
+bypass_bulk_cache(struct bio_desc *biod, struct bio_iov *biov,
+		  unsigned int pg_cnt)
 {
 	/* Hole, no RDMA */
 	if (bio_addr_is_hole(&biov->bi_addr))
 		return true;
+	/* Huge IOV, allocate DMA buffer & create bulk handle on-the-fly */
+	if (pg_cnt > bio_chk_sz)
+		return true;
+	/* Get buffer operation */
+	if (biod->bd_type == BIO_IOD_TYPE_GETBUF)
+		return false;
 	/* Direct SCM RDMA or deduped SCM extent */
 	if (bio_iov2media(biov) == DAOS_MEDIA_SCM) {
 		if (bio_scm_rdma || BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 			return true;
 	}
-	/* Huge IOV, allocate DMA buffer & create bulk handle on-the-fly */
-	if (pg_cnt > bio_chk_sz)
-		return true;
 
 	return false;
 }
@@ -562,7 +566,7 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 	D_ASSERT(pg_cnt > 0);
 	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
 
-	if (bypass_bulk_cache(biov, pg_cnt)) {
+	if (bypass_bulk_cache(biod, biov, pg_cnt)) {
 		rc = dma_map_one(biod, biov, NULL);
 		goto done;
 	}

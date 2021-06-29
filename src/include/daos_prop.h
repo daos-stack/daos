@@ -14,6 +14,7 @@
 extern "C" {
 #endif
 
+#include <ctype.h>
 #include <daos_types.h>
 
 /**
@@ -346,8 +347,48 @@ struct daos_prop_entry {
 
 /** Allowed max number of property entries in daos_prop_t */
 #define DAOS_PROP_ENTRIES_MAX_NR	(128)
+
 /** max length for pool/container label - NB: POOL_LIST_CONT RPC wire format */
 #define DAOS_PROP_LABEL_MAX_LEN		(127)
+
+/**
+ * Check if DAOS (pool or container property) label string is valid.
+ * DAOS labels must consist only of alphanumeric characters, colon ':',
+ * period '.' or underscore '_', and must be of length
+ * [1 - DAOS_PROP_LABEL_MAX_LEN].
+ *
+ * \param[in]	label	Label string
+ *
+ * \return		true		Label meets length/format requirements
+ *			false		Label is not valid length or format
+ */
+static inline bool
+daos_label_is_valid(const char *label)
+{
+	size_t	len;
+	int	i;
+
+	/** Label cannot be NULL */
+	if (label == NULL)
+		return false;
+
+	/** Check the length */
+	len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN + 1);
+	if (len == 0 || len > DAOS_PROP_LABEL_MAX_LEN)
+		return false;
+
+	/** Verify that it contains only alphanumeric characters or :._ */
+	for (i = 0; i < len; i++) {
+		char c = label[i];
+
+		if (isalnum(c) || c == '.' || c == '_' || c == ':')
+			continue;
+
+		return false;
+	}
+
+	return true;
+}
 
 /** daos properties, for pool or container */
 typedef struct {

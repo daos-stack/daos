@@ -37,7 +37,8 @@ type PoolID struct {
 
 type poolBaseCmd struct {
 	daosCmd
-	poolUUID uuid.UUID
+	poolUUID  uuid.UUID
+	poolLabel *C.char
 
 	cPoolHandle C.daos_handle_t
 
@@ -81,8 +82,23 @@ func (cmd *poolBaseCmd) connectPool() error {
 
 	cSysName := C.CString(sysName)
 	defer freeString(cSysName)
+
+	if cmd.poolLabel != nil {
+		var pi C.daos_pool_info_t
+
+		rc := C.daos_pool_connect_by_label(cmd.poolLabel, cSysName,
+			C.DAOS_PC_RW, &cmd.cPoolHandle, &pi, nil)
+		if err := daosError(rc); err != nil {
+			return err
+		}
+
+		cmd.poolUUID = uuid.Must(uuidFromC(pi.pi_uuid))
+		return daosError(rc)
+	}
+
 	rc := C.daos_pool_connect(cmd.poolUUIDPtr(), cSysName,
 		C.DAOS_PC_RW, &cmd.cPoolHandle, nil, nil)
+
 	return daosError(rc)
 }
 
@@ -102,7 +118,7 @@ func (cmd *poolBaseCmd) disconnectPool() {
 }
 
 func (cmd *poolBaseCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (func(), error) {
-	if cmd.poolUUID == uuid.Nil {
+	if cmd.poolUUID == uuid.Nil && cmd.poolLabel == nil {
 		if err := cmd.resolvePool(cmd.PoolID()); err != nil {
 			return nil, errors.Wrapf(err,
 				"failed to resolve pool ID %q", cmd.PoolID())
