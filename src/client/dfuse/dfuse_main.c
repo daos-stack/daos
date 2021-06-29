@@ -450,7 +450,7 @@ main(int argc, char **argv)
 			D_GOTO(out_daos, rc = -DER_INVAL);
 		}
 
-		path_attr.da_no_reverse_lookup = true;
+		path_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
 		rc = duns_resolve_path(path, &path_attr);
 		DFUSE_TRA_INFO(dfuse_info,
 			       "duns_resolve_path() on path returned %d %s",
@@ -467,8 +467,16 @@ main(int argc, char **argv)
 				rc, strerror(rc));
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
-		uuid_copy(pool_uuid, path_attr.da_puuid);
-		uuid_copy(cont_uuid, path_attr.da_cuuid);
+
+		if (path_attr.da_pool_label)
+			pool_name = path_attr.da_pool_label;
+		else
+			uuid_copy(pool_uuid, path_attr.da_puuid);
+
+		if (path_attr.da_cont_label)
+			cont_name = path_attr.da_cont_label;
+		else
+			uuid_copy(cont_uuid, path_attr.da_cuuid);
 	}
 
 	/* Check for attributes on the mount point itself to use.
@@ -476,7 +484,7 @@ main(int argc, char **argv)
 	 * set, but if nothing exists on the mountpoint then this is not an
 	 * error so keep going.
 	 */
-	duns_attr.da_no_reverse_lookup = true;
+	duns_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
 	DFUSE_TRA_INFO(dfuse_info,
 		       "duns_resolve_path() on mountpoint returned %d %s",
@@ -492,8 +500,16 @@ main(int argc, char **argv)
 			printf("Attributes set on both path and mountpoint\n");
 			D_GOTO(out_daos, rc = -DER_INVAL);
 		}
-		uuid_copy(pool_uuid, duns_attr.da_puuid);
-		uuid_copy(cont_uuid, duns_attr.da_cuuid);
+
+		if (duns_attr.da_pool_label)
+			pool_name = duns_attr.da_pool_label;
+		else
+			uuid_copy(pool_uuid, duns_attr.da_puuid);
+
+		if (duns_attr.da_cont_label)
+			cont_name = duns_attr.da_cont_label;
+		else
+			uuid_copy(cont_uuid, duns_attr.da_cuuid);
 	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -558,7 +574,8 @@ out_debug:
 	daos_debug_fini();
 out:
 	dfuse_send_to_fg(rc);
-
+	duns_destroy_attr(&path_attr);
+	duns_destroy_attr(&duns_attr);
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not
 	 * DAOS error numbers.
