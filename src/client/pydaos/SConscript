@@ -1,5 +1,6 @@
 """Build pydaos client"""
 import daos_build
+import sys
 
 def build_shim_module(env, lib_prefix, version):
     """Build PyDAOS shim module for the specified python version"""
@@ -49,8 +50,9 @@ def build_shim_module(env, lib_prefix, version):
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
-
-    build_shim_module(env, '$PREFIX/lib64/', "3.6")
+    python_version = "{}.{}".format(
+        sys.version_info.major, sys.version_info.minor)
+    build_shim_module(env, '$PREFIX/lib64/', python_version)
 
 if __name__ == "SCons.Script":
     scons()
