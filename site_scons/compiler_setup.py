@@ -2,7 +2,8 @@
 
 from SCons.Script import GetOption, Configure
 
-DESIRED_FLAGS = ['-Wno-missing-braces',
+DESIRED_FLAGS = ['-Wno-gnu-designator',
+                 '-Wno-missing-braces',
                  '-Wno-ignored-attributes',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
