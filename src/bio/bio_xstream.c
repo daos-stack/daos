@@ -31,7 +31,6 @@
 #define DAOS_DMA_CHUNK_CNT_INIT	32	/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks */
 #define DAOS_DMA_MIN_UB_BUF_MB	1024	/* 1GB min upper bound DMA buffer */
-#define DAOS_NVME_MAX_CTRLRS	1024	/* Max read from nvme_conf */
 
 /* Max inflight blob IOs per io channel */
 #define BIO_BS_MAX_CHANNEL_OPS	(4096)
@@ -128,7 +127,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	      int hugepage_size, int tgt_nr, struct sys_db *db)
 {
 	char		*env;
-	int		 rc;
+	int		 rc, fd;
 	uint64_t	 size_mb = DAOS_DMA_CHUNK_MB;
 
 	nvme_glb.bd_xstream_cnt = 0;
@@ -158,6 +157,14 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
 		return 0;
 	}
+
+	fd = open(nvme_conf, O_RDONLY, 0600);
+	if (fd < 0) {
+		D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
+		       nvme_conf, DP_RC(daos_errno2der(errno)));
+		return 0;
+	}
+	close(fd);
 
 	D_ASSERT(tgt_nr > 0);
 	D_ASSERT(mem_size > 0);
