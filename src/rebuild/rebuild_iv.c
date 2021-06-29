@@ -145,7 +145,7 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver,
 			rgt->rgt_status.rs_toberb_obj_nr,
 			rgt->rgt_status.rs_obj_nr, rgt->rgt_status.rs_rec_nr,
-			rgt->rgt_status.rs_done, rgt->rgt_status.rs_errno,
+			rgt->rgt_status.rs_running, rgt->rgt_status.rs_errno,
 			src_iv->riv_rank);
 	}
 	rgt_put(rgt);

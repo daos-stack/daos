@@ -178,7 +178,7 @@ class RbldContainerCreate(TestWithServers):
                 rebuild_checks.append(
                     {
                         "rs_errno": 0,
-                        "rs_done": 1,
+                        "rs_running": 1,
                         "rs_obj_nr": 0,
                         "rs_rec_nr": 0,
                     }
@@ -243,7 +243,7 @@ class RbldContainerCreate(TestWithServers):
 
             # Check the pool info
             info_checks[0]["pi_ndisabled"] += targets
-            rebuild_checks[0]["rs_done"] = 1
+            rebuild_checks[0]["rs_running"] = 1
             rebuild_checks[0]["rs_obj_nr"] = ">=0"
             rebuild_checks[0]["rs_rec_nr"] = ">=0"
             for index, pool in enumerate(self.pool):
