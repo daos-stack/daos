@@ -45,8 +45,8 @@ class NvmeHealth(ServerFillUp):
         for _pool in range(no_of_pools):
             self.log.info("-- Creating pool number = %s", _pool)
             self.pool.append(self.get_pool(create=False))
-            self.pool[-1].scm_size.update('{}'.format(single_pool_scm_size))
-            self.pool[-1].nvme_size.update('{}'.format(single_pool_nvme_size))
+            self.pool[-1].scm_size.update(single_pool_scm_size, "scm_size")
+            self.pool[-1].nvme_size.update(single_pool_nvme_size, "nvme_size")
             self.pool[-1].create()
 
         # initialize the dmg command

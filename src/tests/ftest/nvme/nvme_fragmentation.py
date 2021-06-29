@@ -18,7 +18,6 @@ from daos_utils import DaosCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from mpio_utils import MpioUtils
-from test_utils_pool import TestPool, LabelGenerator
 
 
 class NvmeFragmentation(TestWithServers):
@@ -138,11 +137,7 @@ class NvmeFragmentation(TestWithServers):
         """
         no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
-        self.pool = TestPool(
-            context=self.context, dmg_command=self.get_dmg_command(),
-            label_generator=LabelGenerator())
-        self.pool.get_params(self)
-        self.pool.create()
+        self.add_pool(connect=False)
         self.pool.display_pool_daos_space("Pool space at the Beginning")
 
         # Repeat the test for 30 times which will take ~1 hour

@@ -23,7 +23,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         super().setUp()
 
         # Init the pool
-        self.pool = self.get_pool(connect=False)
+        self.add_pool(connect=False)
         self.uuid = self.pool.pool.get_uuid_str()
 
     def get_pool_query_info(self, uuid):

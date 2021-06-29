@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from osa_utils import OSAUtils
-from test_utils_pool import TestPool, LabelGenerator
+from test_utils_pool import TestPool
 
 
 class OSADmgNegativeTest(OSAUtils):
@@ -63,14 +63,13 @@ class OSADmgNegativeTest(OSAUtils):
         """
         # Create a pool
         self.dmg_command.exit_status_exception = False
-        label_generator = LabelGenerator()
         pool = {}
         pool_uuid = []
 
         for val in range(0, num_pool):
             pool[val] = TestPool(
                 context=self.context, dmg_command=self.dmg_command,
-                label_generator=label_generator)
+                label_generator=self.label_generator)
             pool[val].get_params(self)
             # Split total SCM and NVME size for creating multiple pools.
             pool[val].scm_size.value = int(pool[val].scm_size.value /

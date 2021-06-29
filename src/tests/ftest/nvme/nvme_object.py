@@ -59,7 +59,6 @@ def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
     """
     # pool initialization
     self.pool.append(self.get_pool(create=False))
-    self.pool[index].get_params(self)
 
     # set pool size
     self.pool[index].nvme_size.update(size)
