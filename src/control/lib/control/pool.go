@@ -789,7 +789,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			Sys: req.getSystem(rpcClient),
 		})
 	})
-	rpcClient.Debugf("DAOS system list-pools request: %s", req)
+	rpcClient.Debugf("DAOS system list-pools request: %+v", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
@@ -830,6 +830,10 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 		p.TargetsTotal = resp.TotalTargets
 		p.TargetsDisabled = resp.DisabledTargets
 		p.setUsage(resp)
+	}
+
+	for _, p := range resp.Pools {
+		rpcClient.Debugf("DAOS system pool in list-pools response: %+v", p)
 	}
 
 	return resp, nil

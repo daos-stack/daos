@@ -193,7 +193,9 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 	if err := pretty.PrintListPoolsResponse(&out, resp, cmd.Verbose); err != nil {
 		return err
 	}
-	cmd.log.Info(out.String())
+	// Infof prints raw string and doesn't try to expand "%"
+	// preserving column formatting in txtfmt table
+	cmd.log.Infof("%s", out.String())
 
 	return nil
 }
