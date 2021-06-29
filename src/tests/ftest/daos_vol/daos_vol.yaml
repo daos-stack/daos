@@ -16,7 +16,7 @@ server_config:
             - "ABT_ENV_MAX_NUM_XSTREAMS=100"
             - "ABT_MAX_NUM_XSTREAMS=100"
             - "DAOS_MD_CAP=1024"
-            - "DD_MASK=mgmt,md,rebuild,dsms"
+            - "DD_MASK=mgmt,md,rebuild,dsms,io,epc"
             - "FI_SOCKETS_MAX_CONN_RETRY=5"
             - "FI_SOCKETS_CONN_TIMEOUT=2000"
             - "CRT_SWIM_RPC_TIMEOUT=10"

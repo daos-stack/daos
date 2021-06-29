@@ -1421,7 +1421,7 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 	d_iov_t		value;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, DF_DB": compacting to "DF_U64"\n", DP_DB(db), index);
+	D_DEBUG(DB_MD, DF_DB": compacting to "DF_U64"\n", DP_DB(db), index);
 
 	rc = rdb_lc_aggregate(db->d_lc, index);
 	if (rc != 0)
@@ -1444,7 +1444,7 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 	}
 	ABT_mutex_unlock(db->d_raft_mutex);
 
-	D_DEBUG(DB_TRACE, DF_DB": compacted to "DF_U64"\n", DP_DB(db), index);
+	D_DEBUG(DB_MD, DF_DB": compacted to "DF_U64"\n", DP_DB(db), index);
 	return 0;
 }
 
@@ -1485,12 +1485,14 @@ rdb_compactd(void *arg)
 		ABT_mutex_unlock(db->d_raft_mutex);
 		if (stop)
 			break;
+		D_DEBUG(DB_MD, DF_DB": compacting\n", DP_DB(db));
 		rc = rdb_raft_compact(db, base);
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to compact to base "DF_U64
 				": %d\n", DP_DB(db), base, rc);
 			break;
 		}
+		D_DEBUG(DB_MD, DF_DB": gcing\n", DP_DB(db));
 		vos_gc_pool(db->d_pool, -1, rdb_gc_yield, NULL);
 	}
 	D_DEBUG(DB_MD, DF_DB": compactd stopping\n", DP_DB(db));

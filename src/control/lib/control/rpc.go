@@ -27,7 +27,7 @@ import (
 const (
 	// Start with this value... If anything takes longer than this,
 	// it almost certainly needs to be fixed.
-	defaultRequestTimeout = 5 * time.Minute
+	defaultRequestTimeout = 1 * time.Minute
 
 	baseMSBackoff      = 250 * time.Millisecond
 	maxMSBackoffFactor = 7 // 8s
