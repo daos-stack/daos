@@ -376,7 +376,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_storage_estimator.py
 %{_libdir}/python3.6/site-packages/storage_estimator/*.py
 %dir %{_libdir}/python3.6/site-packages/storage_estimator
-%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
+%if (0%{?rhel} >= 7)
 %dir %{_libdir}/python3.6/site-packages/storage_estimator/__pycache__
 %{_libdir}/python3.6/site-packages/storage_estimator/__pycache__/*.pyc
 %endif
@@ -405,7 +405,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/python3.6/site-packages/pydaos/*.py
 %dir %{_libdir}/python3.6/site-packages/pydaos/raw
 %{_libdir}/python3.6/site-packages/pydaos/raw/*.py
-%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
+%if (0%{?rhel} >= 7)
 %dir %{_libdir}/python3.6/site-packages/pydaos/__pycache__
 %{_libdir}/python3.6/site-packages/pydaos/__pycache__/*.pyc
 %dir %{_libdir}/python3.6/site-packages/pydaos/raw/__pycache__
