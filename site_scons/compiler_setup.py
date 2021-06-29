@@ -2,8 +2,7 @@
 
 from SCons.Script import GetOption, Configure
 
-DESIRED_FLAGS = ['-Wno-gnu-designator',
-                 '-Wno-missing-braces',
+DESIRED_FLAGS = ['-Wno-missing-braces',
                  '-Wno-ignored-attributes',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
@@ -36,6 +35,17 @@ def base_setup(env, prereqs=None):
     print('Setting up compile environment for {}'.format(compiler))
     print("Build type is '{}'".format(build_type))
 
+    if env.get('BSETUP', False):
+        print('Env already setup, returning')
+        return
+
+    # Turn on -Wall first, then DESIRED_FLAGS may disable some of the options
+    # that this brings in.
+    env.Append(CCFLAGS=['-g',
+                        '-Wshadow',
+                        '-Wall',
+                        '-fpic'])
+
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
     if build_type == 'debug':
@@ -54,12 +64,6 @@ def base_setup(env, prereqs=None):
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION':'1'})
 
     env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED':'0'})
-
-    env.Append(CCFLAGS=['-g',
-                        '-Wshadow',
-                        '-Wall',
-                        '-Wno-missing-braces',
-                        '-fpic'])
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
@@ -82,6 +86,8 @@ def base_setup(env, prereqs=None):
     if GetOption('preprocess'):
         # Could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
+
+    env['BSETUP'] = True
 
 _TO_STRIP=['_FORTIFY_SOURCE']
 
