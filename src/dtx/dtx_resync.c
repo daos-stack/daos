@@ -112,18 +112,22 @@ next:
 	return rc;
 }
 
-static bool
+static int
 dtx_target_alive(struct ds_pool *pool, uint32_t id)
 {
 	struct pool_target	*target;
 	int			 rc;
 
-	ABT_rwlock_wrlock(pool->sp_lock);
+	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target(pool->sp_map, id, &target);
+	if (rc != 1) {
+		D_WARN("Cannot find target %u because of empty pool map\n", id);
+		ABT_rwlock_unlock(pool->sp_lock);
+		return -DER_UNINIT;
+	}
 	ABT_rwlock_unlock(pool->sp_lock);
-	D_ASSERT(rc == 1);
 
-	return target->ta_comp.co_status == PO_COMP_ST_UPIN ? true : false;
+	return target->ta_comp.co_status == PO_COMP_ST_UPIN ? 1 : 0;
 }
 
 static int
@@ -131,11 +135,14 @@ dtx_is_leader(struct ds_pool *pool, struct dtx_resync_args *dra,
 	      struct dtx_resync_entry *dre)
 {
 	struct dtx_memberships	*mbs = dre->dre_dte.dte_mbs;
+	int			 rc;
 
 	/* Old leader is still alive, then current server is not the leader. */
-	if (mbs->dm_flags & DMF_CONTAIN_LEADER &&
-	    dtx_target_alive(pool, mbs->dm_tgts[0].ddt_id))
-		return 0;
+	if (mbs->dm_flags & DMF_CONTAIN_LEADER) {
+		rc = dtx_target_alive(pool, mbs->dm_tgts[0].ddt_id);
+		if (rc != 0)
+			return rc > 0 ? 0 : rc;
+	}
 
 	/* XXX: need more work when we support to elect DTX leader from
 	 *	data shard for EC object in the future.
@@ -144,12 +151,13 @@ dtx_is_leader(struct ds_pool *pool, struct dtx_resync_args *dra,
 					pool->sp_map_version, false);
 }
 
-static bool
+static int
 dtx_verify_groups(struct ds_pool *pool, struct dtx_memberships *mbs,
 		  struct dtx_id *xid, int *tgt_array)
 {
 	struct dtx_redundancy_group	*group;
 	int				 i, j, k;
+	int				 rc;
 	bool				 rdonly = true;
 
 	group = (void *)mbs->dm_data +
@@ -170,7 +178,11 @@ dtx_verify_groups(struct ds_pool *pool, struct dtx_memberships *mbs,
 				continue;
 			}
 
-			if (dtx_target_alive(pool, group->drg_ids[j])) {
+			rc = dtx_target_alive(pool, group->drg_ids[j]);
+			if (rc < 0)
+				return rc;
+
+			if (rc > 0) {
 				if (tgt_array != NULL)
 					tgt_array[group->drg_ids[j]] = 1;
 			} else {
@@ -191,14 +203,14 @@ dtx_verify_groups(struct ds_pool *pool, struct dtx_memberships *mbs,
 			       "cannot recover such DTX.\n",
 			       DP_DTI(xid), mbs->dm_grp_cnt, i,
 			       group->drg_tgt_cnt, group->drg_redundancy, k);
-			return false;
+			return 0;
 		}
 
 		group = (void *)group + sizeof(*group) +
 			sizeof(uint32_t) * group->drg_tgt_cnt;
 	}
 
-	return true;
+	return 1;
 }
 
 int
@@ -227,9 +239,15 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 		/* If the transaction across multiple redundancy groups,
 		 * need to check whether there are enough alive targets.
 		 */
-		if (mbs->dm_grp_cnt > 1 &&
-		    !dtx_verify_groups(cont->sc_pool->spc_pool, mbs,
-				       &dte->dte_xid, tgt_array)) {
+		if (mbs->dm_grp_cnt > 1) {
+			rc = dtx_verify_groups(cont->sc_pool->spc_pool, mbs,
+					       &dte->dte_xid, tgt_array);
+			if (rc < 0)
+				goto out;
+
+			if (rc > 0)
+				return DSHR_NEED_COMMIT;
+
 			/* XXX: For the distributed transaction that lose too
 			 *	many particiants (the whole redundancy group),
 			 *	it's difficult to make decision whether commit
