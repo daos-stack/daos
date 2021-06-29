@@ -38,6 +38,11 @@ func (f labelOrUUIDFlag) HasLabel() bool {
 	return f.Label != ""
 }
 
+func (f *labelOrUUIDFlag) SetLabel(label string) {
+	f.Label = label
+	return
+}
+
 func (f labelOrUUIDFlag) HasUUID() bool {
 	return f.UUID != uuid.Nil
 }
