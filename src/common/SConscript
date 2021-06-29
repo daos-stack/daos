@@ -61,10 +61,10 @@ def build_dts_library(env):
 
 def scons():
     """Execute build"""
-    Import('env', 'il_env', 'prereqs')
+    Import('env', 'base_env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
-    il_env.AppendUnique(LIBPATH=[Dir('.')])
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path
