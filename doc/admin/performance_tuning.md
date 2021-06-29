@@ -1,7 +1,5 @@
 # DAOS Performance Tuning
 
-This section will be expanded in a future revision.
-
 ## Network Performance
 
 The DAOS [CaRT][1] layer can validate and benchmark network communications in
@@ -125,30 +123,47 @@ benchmarks.
 
 IOR (<https://github.com/hpc/ior>) with the following backends:
 
--   The IOR APIs POSIX, MPIIO and HDF5 can be used with DAOS POSIX containers that
-    are accessed over dfuse. This works without or with the I/O interception library
-    (`libioil`). Performance is significantly better when using `libioil`.
+-   The IOR APIs POSIX, MPIIO and HDF5 can be used with DAOS POSIX containers
+    that are accessed over dfuse. This works without or with the I/O
+    interception library (`libioil`). Performance is significantly better when
+    using `libioil`. For detailed information on dfuse usage with the IO
+    interception library, please refer to the [POSIX DFUSE section][7].
 
 -   A custom DFS (DAOS File System) plugin for DAOS can be used by building IOR
     with DAOS support, and selecting API=DFS. This integrates IOR directly with the
     DAOS File System (`libdfs`), without requiring FUSE or an interception library.
+    Please refer to the [DAOS README][10] in the hpc/ior repository for some basic
+    instructions on how to use the DFS driver.
 
 -   When using the IOR API=MPIIO, the ROMIO ADIO driver for DAOS can be used by
     providing the `daos://` prefix to the filename. This ADIO driver bypasses `dfuse`
     and directly invkes the `libdfs` calls to perform I/O to a DAOS POSIX container.
-    The DAOS-enabled MPIIO driver is available in the upstream MPICH repository
-    (MPICH 3.4.1 or higher).
+    The DAOS-enabled MPIIO driver is available in the upstream MPICH repository and
+    included with Intel MPI. Please refer to the [MPI-IO documentation][8].
 
 -   An HDF5 VOL connector for DAOS is under development. This maps the HDF5 data model
     directly to the DAOS data model, and works in conjunction with DAOS containers of
     `--type=HDF5` (in contrast to DAOS container of `--type=POSIX` that are used for
-    the other IOR APIs).
+    the other IOR APIs). Please refer the the [HDF5 with DAOS documentation][9].
+
+IOR has several parameters to characterize performance. The main parameters to
+work with include:
+- transfer size (-t)
+- block size (-b)
+- segment size (-s)
+
+For more use cases, the IO-500 workloads are a good starting point to measure
+performance on a system: https://github.com/IO500/io500
 
 ### mdtest
 
-mdtest is released in the same repository as IOR. The corresponding backends that are
-listed above support mdtest, except for the MPI-IO and HDF5 backends that were
-only designed to support IOR.
+mdtest is released in the same repository as IOR. The corresponding backends
+that are listed above support mdtest, except for the MPI-IO and HDF5 backends
+that were only designed to support IOR. The [DAOS README][10] in the hpc/ior
+repository includes some examples to run mdtest with DAOS.
+
+The IO-500 workloads for mdtest provide some good criteria for performance
+measurements.
 
 ### FIO
 
@@ -271,3 +286,7 @@ section.
 [4]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#server-startup> (DAOS server startup documentation)
 [5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
 [6]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
+[7]: <https://daos-stack.github.io/user/posix/#dfuse>
+[8]: <https://github.com/daos-stack/daos/blob/master/doc/user/mpi-io.md>
+[9]: <https://github.com/daos-stack/daos/blob/master/doc/user/hdf5.md>
+[10]: <https://github.com/hpc/ior/blob/main/README_DAOS>
