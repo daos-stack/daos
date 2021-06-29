@@ -602,6 +602,17 @@ args_free(struct cmd_args_s *ap)
 	D_FREE(ap->cont_label);
 }
 
+/* Use a simplifed macro here to check for memory allocations
+ * to make the code more readable and to avoid logging in D_GOTO
+ */
+#define CHECK_NOT_NULL(var)			\
+	do {					\
+		if ((var) == NULL) {		\
+			rc = RC_NO_HELP;	\
+			goto out_free;		\
+		}				\
+	} while (0)
+
 static int
 common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 {
@@ -699,7 +710,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	}
 	D_STRNDUP(cmdname, argv[2], strlen(argv[2]));
 	if (cmdname == NULL)
-		D_GOTO(out_free, rc = RC_NO_HELP);
+		CHECK_NOT_NULL(cmdname);
 
 	/* Parse remaining command-line options (skip resource and command).
 	 * Use goto on any errors here since some options may result in
@@ -712,8 +723,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		case 'G':
 			D_FREE(ap->sysname);
 			D_STRNDUP(ap->sysname, optarg, strlen(optarg));
-			if (ap->sysname == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->sysname);
 			break;
 		case 'p':
 			if (uuid_parse(optarg, ap->p_uuid) != 0) {
@@ -738,8 +748,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
 			D_STRNDUP(ap->attrname_str, optarg, strlen(optarg));
-			if (ap->attrname_str == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->attrname_str);
 			break;
 		case 'v':
 			if (ap->value_str != NULL) {
@@ -748,33 +757,27 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
 			D_STRNDUP(ap->value_str, optarg, strlen(optarg));
-			if (ap->value_str == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->value_str);
 			break;
 		case 'd':
 			D_STRNDUP(ap->path, optarg, strlen(optarg));
-			if (ap->path == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->path);
 			break;
 		case 'S':
 			D_STRNDUP(ap->src, optarg, strlen(optarg));
-			if (ap->src == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->src);
 			break;
 		case 'D':
 			D_STRNDUP(ap->dst, optarg, strlen(optarg));
-			if (ap->dst == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->dst);
 			break;
 		case 'I':
 			D_STRNDUP(ap->dfs_prefix, optarg, strlen(optarg));
-			if (ap->dfs_prefix == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->dfs_prefix);
 			break;
 		case 'H':
 			D_STRNDUP(ap->dfs_path, optarg, strlen(optarg));
-			if (ap->dfs_path == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->dfs_path);
 			break;
 		case 't':
 			daos_parse_ctype(optarg, &ap->type);
@@ -812,8 +815,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			break;
 		case 's':
 			D_STRNDUP(ap->snapname_str, optarg, strlen(optarg));
-			if (ap->snapname_str == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->snapname_str);
 			break;
 		case 'e':
 			ap->epc = strtoull(optarg, NULL, 10);
@@ -826,8 +828,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			break;
 		case 'r':
 			D_STRNDUP(ap->epcrange_str, optarg, strlen(optarg));
-			if (ap->epcrange_str == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->epcrange_str);
 			rc = epoch_range_parse(ap);
 			if (rc != 0) {
 				fprintf(stderr, "failed to parse epcrange\n");
@@ -847,36 +848,30 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			break;
 		case 'O':
 			D_STRNDUP(ap->outfile, optarg, strlen(optarg));
-			if (ap->outfile == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->outfile);
 			break;
 		case 'V':
 			ap->verbose = true;
 			break;
 		case 'A':
 			D_STRNDUP(ap->aclfile, optarg, strlen(optarg));
-			if (ap->aclfile == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->aclfile);
 			break;
 		case 'E':
 			D_STRNDUP(ap->entry, optarg, strlen(optarg));
-			if (ap->entry == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->entry);
 			break;
 		case 'u':
 			D_STRNDUP(ap->user, optarg, strlen(optarg));
-			if (ap->user == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->user);
 			break;
 		case 'g':
 			D_STRNDUP(ap->group, optarg, strlen(optarg));
-			if (ap->group == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->group);
 			break;
 		case 'P':
 			D_STRNDUP(ap->principal, optarg, strlen(optarg));
-			if (ap->principal == NULL)
-				D_GOTO(out_free, rc = RC_NO_HELP);
+			CHECK_NOT_NULL(ap->principal);
 			break;
 		case DAOS_PROPERTIES_OPTION:
 			/* parse properties to be set at cont create time */

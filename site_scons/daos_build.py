@@ -108,7 +108,7 @@ def strip_defines(env):
     matched = False
     old = env.get('CPPDEFINES')
     new = []
-    for (d) in old:
+    for d in old:
         if d[0] in _TO_STRIP:
             matched = True
             continue
