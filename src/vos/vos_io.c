@@ -1578,7 +1578,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 			continue;
 		}
 
-		if (iod_csums != NULL)
+		if (iod_csums != NULL && csum_iod_is_supported(iod))
 			recx_csum = &iod_csums[i];
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
 				      recx_csum, iod->iod_size, ioc,
