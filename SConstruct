@@ -30,7 +30,6 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
                  '-Wno-ignored-attributes',
                  '-Wno-gnu-zero-variadic-macro-arguments',
-                 '-fstack-usage',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',
                  '-Wframe-larger-than=4096']
