@@ -104,7 +104,7 @@ class EvictTests(TestWithServers):
 
         self.pool[0].pool.set_uuid_str(self.pool[0].uuid)
 
-        result = self.pool[0].dmg
+        result = self.pool[0].dmg.result
         if result.exit_status != 0:
             self.log.info("Expected exception - invalid param %s\n %s\n",
                           test_param, str(result))
