@@ -48,12 +48,6 @@
     obj:*/ld-2.17.so
 }
 {
-    libc-2
-    Memcheck:Leak
-    ...
-    obj:*/libc-2.17.so
-}
-{
     libdl-2
     Memcheck:Leak
     ...
