@@ -738,7 +738,7 @@ type (
 		QueryStatus int32 `json:"query_status"`
 
 		// Usage contains pool usage statistics for each storage tier.
-		Usage []*PoolTierUsage
+		Usage []*PoolTierUsage `json:"usage"`
 	}
 )
 
@@ -803,13 +803,13 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 
 	// issue query request and populate usage statistics for each pool
 	for _, p := range resp.Pools {
-		rpcClient.Debugf("Pool discovered: %+v", p)
+		rpcClient.Debugf("Fetching details for discovered pool: %v", p)
 
 		resp, err := PoolQuery(ctx, rpcClient, &PoolQueryReq{UUID: p.UUID})
 		if err != nil {
 			p.QueryErrorMsg = err.Error()
 			if p.QueryErrorMsg == "" {
-				p.QueryErrorMsg = "pool query returned empty error"
+				p.QueryErrorMsg = "unknown error"
 			}
 			continue
 		}

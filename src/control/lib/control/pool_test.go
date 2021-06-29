@@ -746,10 +746,10 @@ func TestControl_ListPools(t *testing.T) {
 			},
 		}
 	}
-	queryRespNoScm := queryResp(1)
-	queryRespNoScm.Scm = nil
-	queryRespNoNvme := queryResp(1)
-	queryRespNoNvme.Nvme = nil
+	queryRespNilScm := queryResp(1)
+	queryRespNilScm.Scm = nil
+	queryRespNilNvme := queryResp(1)
+	queryRespNilNvme.Nvme = nil
 	expUsage := []*PoolTierUsage{
 		{
 			TierName:  "SCM",
@@ -819,7 +819,7 @@ func TestControl_ListPools(t *testing.T) {
 				},
 			},
 		},
-		"one pool; no scm in query response": {
+		"one pool; nil scm in query response": {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
@@ -830,12 +830,12 @@ func TestControl_ListPools(t *testing.T) {
 							},
 						},
 					}),
-					MockMSResponse("host1", nil, queryRespNoScm),
+					MockMSResponse("host1", nil, queryRespNilScm),
 				},
 			},
 			expErr: errors.New("missing scm"),
 		},
-		"one pool; no nvme in query response": {
+		"one pool; nil nvme in query response": {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
@@ -846,7 +846,7 @@ func TestControl_ListPools(t *testing.T) {
 							},
 						},
 					}),
-					MockMSResponse("host1", nil, queryRespNoNvme),
+					MockMSResponse("host1", nil, queryRespNilNvme),
 				},
 			},
 			expErr: errors.New("missing nvme"),
