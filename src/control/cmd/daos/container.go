@@ -61,7 +61,8 @@ type containerCmd struct {
 
 type containerBaseCmd struct {
 	poolBaseCmd
-	contUUID uuid.UUID
+	contUUID  uuid.UUID
+	contLabel *C.char
 
 	cContHandle C.daos_handle_t
 }
@@ -86,8 +87,21 @@ func (cmd *containerBaseCmd) resolveContainer(id ContainerID) error {
 
 func (cmd *containerBaseCmd) openContainer() error {
 	var ci C.daos_cont_info_t
+
+	if cmd.contLabel != nil {
+		rc := C.daos_cont_open_by_label(cmd.cPoolHandle, cmd.contLabel,
+			C.DAOS_COO_RW|C.DAOS_COO_FORCE, &cmd.cContHandle, &ci, nil)
+		if err := daosError(rc); err != nil {
+			return err
+		}
+
+		cmd.contUUID = uuid.Must(uuidFromC(ci.ci_uuid))
+		return daosError(rc)
+	}
+
 	rc := C.daos_cont_open(cmd.cPoolHandle, cmd.contUUIDPtr(),
 		C.DAOS_COO_RW|C.DAOS_COO_FORCE, &cmd.cContHandle, &ci, nil)
+
 	return daosError(rc)
 }
 
@@ -261,14 +275,30 @@ func (cmd *existingContainerCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (cle
 		if err = resolveDunsPath(cmd.Path, ap); err != nil {
 			return
 		}
-		cmd.poolUUID, err = uuidFromC(ap.p_uuid)
-		if err != nil {
-			return
+
+		if ap.pool_label != nil {
+			cmd.poolLabel = ap.pool_label
+			defer freeString(ap.pool_label)
+		} else {
+			cmd.poolUUID, err = uuidFromC(ap.p_uuid)
+			if err != nil {
+				return
+			}
 		}
-		cmd.contUUID, err = uuidFromC(ap.c_uuid)
-		if err != nil {
-			return
+
+		if ap.cont_label != nil {
+			cmd.contLabel = ap.cont_label
+			defer freeString(ap.cont_label)
+		} else {
+			cmd.contUUID, err = uuidFromC(ap.c_uuid)
+			if err != nil {
+				return
+			}
 		}
+	}
+
+	if cmd.contLabel != nil {
+		cmd.Args.Container.SetLabel(C.GoString(cmd.contLabel))
 	}
 
 	var cleanupPool func()
@@ -277,7 +307,7 @@ func (cmd *existingContainerCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (cle
 		return
 	}
 
-	if cmd.contUUID == uuid.Nil {
+	if cmd.contUUID == uuid.Nil && cmd.contLabel == nil {
 		if err = cmd.resolveContainer(cmd.ContainerID()); err != nil {
 			return
 		}

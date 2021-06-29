@@ -1171,7 +1171,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid,
 			      mrone->mo_update_epoch, 0, &mrone->mo_dkey,
 			      mrone->mo_iod_num, mrone->mo_iods,
-			      mrone->mo_iods_csums, false, 0, &ioh, NULL);
+			      mrone->mo_iods_csums, 0, &ioh, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: "DF_RC"\n",
 			DP_UOID(mrone->mo_oid), DP_RC(rc));
