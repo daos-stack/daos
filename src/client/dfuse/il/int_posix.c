@@ -118,6 +118,7 @@ ioil_shrink(struct ioil_cont *cont)
 			D_ERROR("dfs_umount() failed, %d\n", rc);
 			return;
 		}
+		DFUSE_TRA_DOWN(cont->ioc_dfs);
 		cont->ioc_dfs = NULL;
 	}
 
@@ -301,10 +302,11 @@ ioil_fini(void)
 	DFUSE_TRA_DOWN(&ioil_iog);
 	vector_destroy(&fd_table);
 
-	printf("Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
-		ioil_iog.iog_read_count,
-		ioil_iog.iog_write_count,
-		ioil_iog.iog_file_count);
+	if (ioil_iog.iog_file_count)
+		printf("Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
+			ioil_iog.iog_read_count,
+			ioil_iog.iog_write_count,
+			ioil_iog.iog_file_count);
 
 	/* Tidy up any remaining open connections */
 	d_list_for_each_entry_safe(pool, pnext,
