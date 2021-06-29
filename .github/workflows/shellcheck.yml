@@ -1,3 +1,5 @@
+name: ShellCheck
+
 on:
   push:
     branches:
