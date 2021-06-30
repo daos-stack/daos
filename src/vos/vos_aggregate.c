@@ -698,7 +698,8 @@ prepare_segments(struct agg_merge_window *mw)
 
 		/*
 		 * Physical entry is in window, or it's fully covered (not
-		 * visible) in current window.
+		 * visible) in current window, or the tail (outside of current
+		 * window) is fully covered by a removal record.
 		 */
 		if (ext.ex_hi <= mw->mw_ext.ex_hi || phy_ent->pe_ref == 0 ||
 		    phy_ent->pe_remove)
@@ -1797,7 +1798,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		D_ASSERT(merge_window_status(mw) == MW_FLUSHED);
 	}
 
-	if (entry->ie_vis_flags & VOS_VIS_FLAG_REMOVE) {
+	if (remove) {
 		struct agg_rmv_ent	*rm_ent;
 
 		/* Enqueue removal record */
