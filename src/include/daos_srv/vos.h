@@ -703,7 +703,6 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
- * \param dedup [IN]	Whether deduplication is enabled for this I/O
  * \param dedup_th [IN]	Deduplication threshold size
  * \param ioh	[OUT]	The returned handle for the I/O.
  * \param dth	[IN]	Pointer to the DTX handle.
@@ -714,8 +713,7 @@ int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-		 bool dedup, uint32_t dedup_th, daos_handle_t *ioh,
-		 struct dtx_handle *dth);
+		 uint32_t dedup_th, daos_handle_t *ioh, struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -772,6 +770,20 @@ vos_ioh2ci_nr(daos_handle_t ioh);
  */
 struct bio_sglist *
 vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
+
+/**
+ * Get the bulk handle associated with a given I/O descriptor.
+ *
+ * \param ioh		[IN]	The I/O handle
+ * \param sgl_idx	[IN]	SGL index
+ * \param iov_idx	[IN]	IOV index within the SGL
+ * \param bulk_off	[OUT]	Bulk offset
+ *
+ * \return			Bulk handle
+ */
+void *
+vos_iod_bulk_at(daos_handle_t ioh, unsigned int sgl_idx, unsigned int iov_idx,
+		unsigned int *bulk_off);
 
 void
 vos_set_io_csum(daos_handle_t ioh, struct dcs_iod_csums *csums);
@@ -1087,15 +1099,13 @@ void
 vos_profile_stop(void);
 
 /**
- * Helper functions to create/free duplicated bsgl for dedup verify.
+ * Helper functions for dedup verify.
  */
 int
-vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
-		   struct bio_sglist *bsgl_dup);
-void
-vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
+vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
+		      unsigned int bulk_perm);
 int
-vos_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup);
+vos_dedup_verify(daos_handle_t ioh);
 
 /** Raise a RAS event on incompatible durable format
  *
