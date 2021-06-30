@@ -510,13 +510,13 @@ evt_node_desc_at(struct evt_context *tcx, struct evt_node *node,
 static inline bool
 evt_entry_punched(const struct evt_entry *ent, const struct evt_filter *filter)
 {
-	struct vos_punch_record	punch;
+	struct ilog_time_rec	punch;
 
 	if (filter == NULL)
 		return false;
 
-	punch.pr_epc = filter->fr_punch_epc;
-	punch.pr_minor_epc = filter->fr_punch_minor_epc;
+	punch.tr_epc = filter->fr_punch_epc;
+	punch.tr_minor_epc = filter->fr_punch_minor_epc;
 
 	return vos_epc_punched(ent->en_epoch, ent->en_minor_epc, &punch);
 }

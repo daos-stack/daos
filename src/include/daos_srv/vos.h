@@ -417,6 +417,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  * the caller.
  *
  * \param coh		[IN]	Container open handle
+ * \param oid		[IN]	Optional oid to limit scan
  * \param epr		[IN]	The epoch range to discard
  *				keys to discard
  * \param yield_func	[IN]	Pointer to customized yield function
@@ -425,7 +426,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  * \return			Zero on success, negative value if error
  */
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *epr,
 	    bool (*yield_func)(void *arg), void *yield_arg);
 
 /**

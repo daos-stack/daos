@@ -840,7 +840,7 @@ struct vos_iter_info {
 	daos_recx_t              ii_recx;
 	daos_epoch_range_t	 ii_epr;
 	/** highest epoch where parent obj/key was punched */
-	struct vos_punch_record	 ii_punched;
+	struct ilog_time_rec	 ii_punched;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
@@ -919,7 +919,7 @@ struct vos_obj_iter {
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
 	/** highest epoch where parent obj/key was punched */
-	struct vos_punch_record	 it_punched;
+	struct ilog_time_rec	 it_punched;
 	/** condition of the iterator: attribute key */
 	daos_key_t		 it_akey;
 	/* reference on the object */
@@ -1101,6 +1101,8 @@ gc_reserve_space(daos_size_t *rsrvd);
  *
  * \param ih[IN]	Iterator handle
  * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ * \param hi[IN]	Actual high epoch
+ * \param update[IN]	Optional epoch of lowest update after the epoch range
  *
  * \return		Zero on Success
  *			1 if a reprobe is needed (entry is removed or not
@@ -1108,7 +1110,8 @@ gc_reserve_space(daos_size_t *rsrvd);
  *			negative value otherwise
  */
 int
-oi_iter_aggregate(daos_handle_t ih, bool discard);
+oi_iter_aggregate(daos_handle_t ih, bool discard, daos_epoch_t hi,
+		  const struct ilog_time_rec *update);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key
@@ -1116,6 +1119,8 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
  *
  * \param ih[IN]	Iterator handle
  * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ * \param hi[IN]	Actual high epoch
+ * \param update[IN]	Optional epoch of lowest update after the range
  *
  * \return		Zero on Success
  *			1 if a reprobe is needed (entry is removed or not
@@ -1123,7 +1128,8 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
  *			negative value otherwise
  */
 int
-vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
+vos_obj_iter_aggregate(daos_handle_t ih, bool discard, daos_epoch_t hi,
+		       const struct ilog_time_rec *update);
 
 /** Internal bit for initializing iterator from open tree handle */
 #define VOS_IT_KEY_TREE	(1 << 31)
@@ -1195,15 +1201,15 @@ vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
 
 static inline bool
 vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
-		const struct vos_punch_record *punch)
+		const struct ilog_time_rec *punch)
 {
-	if (punch->pr_epc < epc)
+	if (punch->tr_epc < epc)
 		return false;
 
-	if (punch->pr_epc > epc)
+	if (punch->tr_epc > epc)
 		return true;
 
-	if (punch->pr_minor_epc >= minor_epc)
+	if (punch->tr_minor_epc >= minor_epc)
 		return true;
 
 	return false;

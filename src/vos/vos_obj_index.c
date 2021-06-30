@@ -314,7 +314,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
  * one incarnation for each object.
  */
 int
-vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid)
+vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid, bool gc)
 {
 	d_iov_t		key_iov;
 	int		rc = 0;
@@ -323,7 +323,7 @@ vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid)
 
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 
-	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, cont);
+	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, gc ? cont : NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
 
@@ -647,8 +647,10 @@ exit:
 }
 
 int
-oi_iter_aggregate(daos_handle_t ih, bool discard)
+oi_iter_aggregate(daos_handle_t ih, bool discard, daos_epoch_t hi,
+		  const struct ilog_time_rec *update)
 {
+	daos_epoch_range_t		 epr;
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_obj_df	*obj;
@@ -673,9 +675,11 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 	if (rc != 0)
 		goto exit;
 
+	epr.epr_hi = hi;
+	epr.epr_lo = oiter->oit_epr.epr_lo;
 	rc = vos_ilog_aggregate(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog,
-				&oiter->oit_epr, discard, NULL,
-				&oiter->oit_ilog_info);
+				&epr, discard, NULL,
+				&oiter->oit_ilog_info, update);
 	if (rc == 1) {
 		/* Incarnation log is empty, delete the object */
 		D_DEBUG(DB_IO, "Removing object "DF_UOID" from tree\n",

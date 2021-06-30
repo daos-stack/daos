@@ -975,9 +975,9 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	filter.fr_epoch = epr->epr_hi;
 	filter.fr_epr.epr_lo = epr->epr_lo;
 	filter.fr_epr.epr_hi = ioc->ic_bound;
-	filter.fr_punch_epc = ioc->ic_akey_info.ii_prior_punch.pr_epc;
+	filter.fr_punch_epc = ioc->ic_akey_info.ii_prior_punch.tr_epc;
 	filter.fr_punch_minor_epc =
-		ioc->ic_akey_info.ii_prior_punch.pr_minor_epc;
+		ioc->ic_akey_info.ii_prior_punch.tr_minor_epc;
 
 	evt_ent_array_init(ioc->ic_ent_array, 0);
 	rc = evt_find(toh, &filter, ioc->ic_ent_array);
@@ -1125,8 +1125,8 @@ key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 	rc = vos_ilog_check(info, &epr, epr_out, true);
 out:
 	D_DEBUG(DB_TRACE, "ilog check returned "DF_RC" epr_in="DF_X64"-"DF_X64
-		" punch="DF_PUNCH" epr_out="DF_X64"-"DF_X64"\n", DP_RC(rc),
-		epr.epr_lo, epr.epr_hi, DP_PUNCH(&info->ii_prior_punch),
+		" punch="DF_TREC" epr_out="DF_X64"-"DF_X64"\n", DP_RC(rc),
+		epr.epr_lo, epr.epr_hi, DP_TREC(&info->ii_prior_punch),
 		epr_out ? epr_out->epr_lo : 0,
 		epr_out ? epr_out->epr_hi : 0);
 	return rc;

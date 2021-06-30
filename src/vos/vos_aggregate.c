@@ -126,6 +126,11 @@ struct vos_agg_param {
 	uint32_t		ap_credits;	/* # of tight loops */
 	daos_handle_t		ap_coh;		/* container handle */
 	daos_unit_oid_t		ap_oid;		/* current object ID */
+	struct ilog_time_rec	ap_dkey_min;	/* min update to dkey */
+	struct ilog_time_rec	ap_akey_min;	/* min update to dkey */
+	struct ilog_time_rec	ap_value_min;	/* min update to dkey */
+	struct vos_ilog_info	ap_info;	/* for object discard */
+	daos_epoch_t		ap_discard_hi;	/* Actual high epoch */
 	daos_key_t		ap_dkey;	/* current dkey */
 	daos_key_t		ap_akey;	/* current akey */
 	unsigned int		ap_discard:1,
@@ -142,6 +147,22 @@ struct vos_agg_param {
 	bool			 ap_skip_dkey;
 	bool			 ap_skip_obj;
 };
+
+static inline void
+set_update_min(const vos_iter_entry_t *entry, struct ilog_time_rec *trec)
+{
+	if (trec->tr_epc < entry->ie_epoch)
+		return;
+
+	if (trec->tr_epc > entry->ie_epoch) {
+		trec->tr_epc = entry->ie_epoch;
+		trec->tr_minor_epc = entry->ie_minor_epc;
+		return;
+	}
+
+	if (trec->tr_minor_epc > entry->ie_minor_epc)
+		trec->tr_minor_epc = entry->ie_minor_epc;
+}
 
 static inline void
 mark_yield(bio_addr_t *addr, unsigned int *acts)
@@ -198,12 +219,18 @@ reset_agg_pos(vos_iter_type_t type, struct vos_agg_param *agg_param)
 	switch (type) {
 	case VOS_ITER_OBJ:
 		memset(&agg_param->ap_oid, 0, sizeof(agg_param->ap_oid));
+		agg_param->ap_dkey_min.tr_epc = 0;
+		agg_param->ap_dkey_min.tr_minor_epc = 0;
 		break;
 	case VOS_ITER_DKEY:
 		memset(&agg_param->ap_dkey, 0, sizeof(agg_param->ap_dkey));
+		agg_param->ap_akey_min.tr_epc = 0;
+		agg_param->ap_akey_min.tr_minor_epc = 0;
 		break;
 	case VOS_ITER_AKEY:
 		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
+		agg_param->ap_value_min.tr_epc = 0;
+		agg_param->ap_value_min.tr_minor_epc = 0;
 		break;
 	default:
 		break;
@@ -406,8 +433,16 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(entry->ie_epoch != 0);
 
 	/* Discard */
-	if (agg_param->ap_discard)
+	if (agg_param->ap_discard) {
+		if (entry->ie_epoch > agg_param->ap_discard_hi) {
+			/** Entry is outside of discard range */
+			set_update_min(entry, &agg_param->ap_dkey_min);
+			set_update_min(entry, &agg_param->ap_akey_min);
+			set_update_min(entry, &agg_param->ap_value_min);
+			return 0;
+		}
 		goto delete;
+	}
 
 	/* If entry is covered, the key or object is punched */
 	if (entry->ie_vis_flags & VOS_VIS_FLAG_COVERED)
@@ -1787,6 +1822,14 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (agg_param->ap_discard) {
 		struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
 
+		if (entry->ie_epoch > agg_param->ap_discard_hi) {
+			/** Entry is outside of discard range */
+			set_update_min(entry, &agg_param->ap_dkey_min);
+			set_update_min(entry, &agg_param->ap_akey_min);
+			set_update_min(entry, &agg_param->ap_value_min);
+			return 0;
+		}
+
 		/*
 		 * Delete the physical entry when iterating to the first
 		 * logical entry
@@ -1940,6 +1983,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct vos_agg_param	*agg_param = cb_arg;
 	struct vos_container	*cont;
+	struct ilog_time_rec	*min = &agg_param->ap_value_min;
 	int			 rc = 0;
 
 	cont = vos_hdl2cont(param->ip_hdl);
@@ -1953,19 +1997,22 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_obj = false;
 			break;
 		}
-		rc = oi_iter_aggregate(ih, agg_param->ap_discard);
+		rc = oi_iter_aggregate(ih, agg_param->ap_discard, agg_param->ap_discard_hi,
+				       &agg_param->ap_dkey_min);
 		break;
 	case VOS_ITER_DKEY:
 		if (agg_param->ap_skip_dkey) {
 			agg_param->ap_skip_dkey = false;
 			break;
 		}
+		min = &agg_param->ap_akey_min;
 	case VOS_ITER_AKEY:
 		if (agg_param->ap_skip_akey) {
 			agg_param->ap_skip_akey = false;
 			break;
 		}
-		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard);
+		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard, agg_param->ap_discard_hi,
+					    min);
 		break;
 	case VOS_ITER_SINGLE:
 		return 0;
@@ -2174,12 +2221,48 @@ free_agg_data:
 	return rc;
 }
 
+static int
+vos_obj_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *epr,
+		struct vos_agg_param *ap, const struct ilog_time_rec *update)
+{
+	struct vos_object	*obj;
+	struct vos_obj_df	*obj_df;
+	bool			 delete = false;
+	int			 rc;
+
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), *oid, epr,
+			  DAOS_EPOCH_MAX, VOS_OBJ_VISIBLE, DAOS_INTENT_PUNCH, &obj, NULL);
+	if (rc != 0)
+		return rc;
+
+	vos_ilog_fetch_init(&ap->ap_info);
+
+	obj_df = obj->obj_df;
+	rc = vos_ilog_aggregate(coh, &obj_df->vo_ilog, epr, true, NULL, &ap->ap_info,
+				update);
+	if (rc == 1) {
+		/** The log is empty, object can be removed */
+		D_ASSERT(dbtree_is_empty_inplace(&obj_df->vo_tree));
+		delete = true;
+		rc = 0;
+	}
+	vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
+
+	vos_ilog_fetch_finish(&ap->ap_info);
+
+	if (delete)
+		rc = vos_obj_delete_internal(coh, *oid, false);
+
+	return rc;
+}
+
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *epr,
 	    bool (*yield_func)(void *arg), void *yield_arg)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct agg_data		*ad;
+	int			 type = VOS_ITER_OBJ;
 	int			 rc;
 
 	D_ASSERT(epr != NULL);
@@ -2201,6 +2284,14 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	/* Set iteration parameters */
 	ad->ad_iter_param.ip_hdl = coh;
 	ad->ad_iter_param.ip_epr = *epr;
+	if (oid != NULL) {
+		type = VOS_ITER_DKEY;
+		ad->ad_iter_param.ip_oid = *oid;
+	}
+	/* We need to track the minimum update after the discard range so we
+	 * can ensure the ilog is correct
+	 */
+	ad->ad_iter_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	if (epr->epr_lo == epr->epr_hi)
 		ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_EQ;
 	else if (epr->epr_hi != DAOS_EPOCH_MAX)
@@ -2219,11 +2310,16 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	ad->ad_agg_param.ap_discard = true;
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
+	ad->ad_agg_param.ap_discard_hi = epr->epr_hi;
 
 	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE;
-	rc = vos_iterate(&ad->ad_iter_param, VOS_ITER_OBJ, true, &ad->ad_anchors,
+	rc = vos_iterate(&ad->ad_iter_param, type, true, &ad->ad_anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
 			 &ad->ad_agg_param, NULL);
+
+	if (rc == 0 && oid != NULL)
+		rc = vos_obj_discard(coh, oid, epr, &ad->ad_agg_param,
+				     &ad->ad_agg_param.ap_dkey_min);
 
 	aggregate_exit(cont, true);
 

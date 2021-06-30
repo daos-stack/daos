@@ -974,8 +974,6 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 		return -DER_INVAL;
 	}
 
-	D_ASSERT(!lctx->ic_in_txn);
-
 	root = lctx->ic_root;
 
 	version = ilog_mag2ver(root->lr_magic);
@@ -1466,6 +1464,8 @@ struct agg_arg {
 	const struct ilog_entry		*aa_prev;
 	const struct ilog_entry		*aa_prior_punch;
 	daos_epoch_t			 aa_punched;
+	daos_epoch_t			 aa_max;
+	bool				 aa_max_is_punch;
 	bool				 aa_discard;
 	uint16_t			 aa_punched_minor;
 };
@@ -1581,11 +1581,32 @@ done:
 	return rc;
 }
 
+static inline void
+set_update_max(struct agg_arg *agg_arg, const struct ilog_entry *entry)
+{
+	if (entry->ie_id.id_epoch < agg_arg->aa_max)
+		return;
+
+	/* Not possible.  There should only be one entry per major epoch */
+	D_ASSERT(entry->ie_id.id_epoch != agg_arg->aa_max);
+
+	if (ilog_is_punch(entry)) {
+		/** Last entry is a punch, if it holds, we will not need to
+		 *  insert any ilog
+		 */
+		agg_arg->aa_max_is_punch = true;
+	} else {
+		agg_arg->aa_max_is_punch = false;
+	}
+
+	agg_arg->aa_max = entry->ie_id.id_epoch;
+}
+
 int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
 	       bool discard, daos_epoch_t punched_major, uint16_t punched_minor,
-	       struct ilog_entries *entries)
+	       struct ilog_entries *entries, const struct ilog_time_rec *update)
 {
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
 	struct ilog_context	*lctx;
@@ -1607,6 +1628,8 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 		DF_X64".%d\n", discard ? "Discard" : "Aggregate", epr->epr_lo,
 		epr->epr_hi, punched_major, punched_minor);
 
+	lctx = &priv->ip_lctx;
+
 	/* This can potentially be optimized but using ilog_fetch gets some code
 	 * reuse.
 	 */
@@ -1617,14 +1640,17 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 		return 1;
 	}
 
-	lctx = &priv->ip_lctx;
-
 	root = lctx->ic_root;
 
 	ILOG_ASSERT_VALID(root);
 
 	D_ASSERT(!ilog_empty(root)); /* ilog_fetch should have failed */
 
+	agg_arg.aa_max = 0;
+	/** If the max is a punch, nothing to do.  This is true if we don't find any
+	 *  updates so set the default to true
+	 */
+	agg_arg.aa_max_is_punch = true;
 	agg_arg.aa_epr = epr;
 	agg_arg.aa_prev = NULL;
 	agg_arg.aa_prior_punch = NULL;
@@ -1684,6 +1710,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			agg_arg.aa_prev = entry;
 			break;
 		case AGG_RC_REMOVE_PREV:
+			set_update_max(&agg_arg, agg_arg.aa_prev);
 			rc = remove_ilog_entry(lctx, &toh, agg_arg.aa_prev,
 					       &removed);
 			if (rc != 0)
@@ -1692,6 +1719,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			agg_arg.aa_prev = agg_arg.aa_prior_punch;
 			/* Fall through */
 		case AGG_RC_REMOVE:
+			set_update_max(&agg_arg, entry);
 			rc = remove_ilog_entry(lctx, &toh, entry, &removed);
 			if (rc != 0)
 				goto done;
@@ -1705,6 +1733,21 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 		}
 	}
 collapse:
+	if (update != NULL && !agg_arg.aa_max_is_punch) {
+		daos_epoch_range_t	range	= {update->tr_epc, update->tr_epc};
+		struct ilog_id		id = {
+			.id_tx_id = 0,
+			.id_epoch = update->tr_epc,
+			.id_update_minor_eph = update->tr_minor_epc,
+			.id_punch_minor_eph = 0,
+		};
+
+		/* Were moved a creation entry, so need to add the new one */
+		lctx->ic_cbs.dc_log_add_cb = NULL;
+		rc = ilog_modify(ilog_lctx2hdl(lctx), &id, &range, ILOG_OP_UPDATE);
+		if (rc != 0)
+			goto done;
+	}
 	rc = collapse_tree(lctx, &toh);
 
 	empty = ilog_empty(root);
