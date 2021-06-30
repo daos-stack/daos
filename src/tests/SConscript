@@ -4,7 +4,7 @@ import os
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('base_env', 'prereqs')
 
     if not prereqs.test_requested():
         return
@@ -12,7 +12,7 @@ def scons():
     libs = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka',
             'daos_tests']
 
-    denv = env.Clone()
+    denv = base_env.Clone()
 
     if not GetOption('help') and not GetOption('clean'):
         mpi = daos_build.configure_mpi(denv, libs)

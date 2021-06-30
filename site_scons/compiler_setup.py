@@ -1,6 +1,6 @@
 """Common DAOS library for setting up the compiler"""
 
-from SCons.Script import GetOption, Configure
+from SCons.Script import GetOption, Exit, Configure
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -36,9 +36,12 @@ def base_setup(env, prereqs=None):
     print('Setting up compile environment for {}'.format(compiler))
     print("Build type is '{}'".format(build_type))
 
-    if env.get('BSETUP', False):
-        print('Env already setup, returning')
-        return
+    prev_compiler = env.get('BSETUP', False)
+    if prev_compiler:
+        if prev_compiler != compiler:
+            print('Env is already setup for a different compiler')
+        print('Env already setup')
+        Exit(2)
 
     # Turn on -Wall first, then DESIRED_FLAGS may disable some of the options
     # that this brings in.
@@ -90,7 +93,7 @@ def base_setup(env, prereqs=None):
         # Could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
 
-    env['BSETUP'] = True
+    env['BSETUP'] = compiler
 
 _TO_STRIP=['_FORTIFY_SOURCE']
 

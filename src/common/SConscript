@@ -106,7 +106,7 @@ def scons():
     prereqs.require(tenv, 'pmdk')
     SConscript('tests/SConscript', exports='tenv')
 
-    build_dts_library(denv)
+    build_dts_library(base_env)
 
 if __name__ == "SCons.Script":
     scons()
