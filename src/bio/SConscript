@@ -4,7 +4,9 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'control_tgts')
+    Import('env', 'base_env', 'prereqs', 'control_tgts')
+
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(LIBPATH=[Dir('smd')])
