@@ -399,6 +399,14 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"List pools with verbose flag",
+			"pool list --verbose",
+			strings.Join([]string{
+				printRequest(t, &control.ListPoolsReq{}),
+			}, " "),
+			nil,
+		},
+		{
 			"Set string pool property",
 			"pool set-prop --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name reclaim --value lazy",
 			strings.Join([]string{
