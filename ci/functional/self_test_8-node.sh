@@ -5,10 +5,10 @@ daospath=$1
 nodes=$2
 IFS=', ' read -r -a nodes_array <<< "$nodes"
 for i in "${nodes_array[@]}"; do
-    tnodes+="${i}:5,"
+    total_nodes+="${i}:5,"
 done
-tnodes=${tnodes%?}
-echo $tnodes
+total_nodes=${total_nodes%?}
+echo $total_nodes
 
 /usr/lib64/openmpi3/bin/orterun \
     --mca btl self,tcp \
@@ -22,10 +22,10 @@ echo $tnodes
     -x CRT_ATTACH_INFO_PATH=/home/standan/tmp/ \
     -x CRT_CTX_NUM=16 \
         -x OFI_INTERFACE=ib0 \
-        --host "${tnodes}" \
+        --host "${total_nodes}" \
     crt_launch -e ${daospath}/lib/daos/TESTING/tests/test_group_np_srv --name selftest_srv_grp : \
         -x OFI_INTERFACE=ib1 \
-        --host "${tnodes}" \
+        --host "${total_nodes}" \
     crt_launch -e ${daospath}/lib/daos/TESTING/tests/test_group_np_srv --name selftest_srv_grp&
 
 sleep 5
