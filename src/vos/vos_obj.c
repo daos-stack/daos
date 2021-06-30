@@ -824,7 +824,7 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 	int	rc;
 
 	while (1) {
-		vos_iter_entry_t	entry;
+		static __thread vos_iter_entry_t	entry;
 
 		rc = key_iter_match(oiter, &entry);
 		switch (rc) {

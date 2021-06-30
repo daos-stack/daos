@@ -21,6 +21,7 @@
 
 /** I/O context */
 struct vos_io_context {
+	EVT_ENT_ARRAY_LG_PTR(ic_ent_array);
 	/** The epoch bound including uncertainty */
 	daos_epoch_t		 ic_bound;
 	daos_epoch_range_t	 ic_epr;
@@ -955,7 +956,6 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	/* At present, this is not exposed in interface but passing it toggles
 	 * sorting and clipping of rectangles
 	 */
-	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	struct evt_filter	 filter;
 	struct bio_iov		 biov = {0};
 	daos_size_t		 holes; /* hole width */
@@ -979,15 +979,15 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	filter.fr_punch_minor_epc =
 		ioc->ic_akey_info.ii_prior_punch.pr_minor_epc;
 
-	evt_ent_array_init(ent_array, 0);
-	rc = evt_find(toh, &filter, ent_array);
+	evt_ent_array_init(ioc->ic_ent_array, 0);
+	rc = evt_find(toh, &filter, ioc->ic_ent_array);
 	if (rc != 0 || vos_dtx_hit_inprogress())
 		D_GOTO(failed, rc = (rc == 0 ? -DER_INPROGRESS : rc));
 
 	holes = 0;
 	rsize = 0;
-	inob = ent_array->ea_inob;
-	evt_ent_array_for_each(ent, ent_array) {
+	inob = ioc->ic_ent_array->ea_inob;
+	evt_ent_array_for_each(ent, ioc->ic_ent_array) {
 		daos_off_t	 lo = ent->en_sel_ext.ex_lo;
 		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
 		daos_size_t	 nr;
@@ -1078,7 +1078,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	if (rsize_p && *rsize_p == 0)
 		*rsize_p = rsize;
 failed:
-	evt_ent_array_fini(ent_array);
+	evt_ent_array_fini(ioc->ic_ent_array);
 	return rc;
 }
 

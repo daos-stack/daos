@@ -274,15 +274,6 @@ evt_weight_diff(struct evt_weight *wt1, struct evt_weight *wt2,
 	wt_diff->wt_minor = wt1->wt_minor - wt2->wt_minor;
 }
 
-/** Internal function for initializing an array.   Using 0 for max
- *  ultimately cause it to be set to maximum size needed by
- *  evt_find_visible.
- */
-static inline void
-evt_ent_array_init_internal(struct evt_entry_array *ent_array, int max)
-{
-}
-
 /** Initialize an entry list */
 void
 evt_ent_array_init_(struct evt_entry_array *ent_array, int embedded, int max)
@@ -1923,7 +1914,7 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 	struct evt_entry	*ent;
 	struct evt_entry_in	 hole;
 	struct evt_filter	 filter = {0};
-	EVT_ENT_ARRAY_LG_PTR(ent_array);
+	EVT_ENT_ARRAY_SM_PTR(ent_array);
 	int			 rc = 0;
 
 	filter.fr_epr.epr_hi = entry->ei_bound;
