@@ -25,6 +25,7 @@ except NameError:
 
 import daos_build
 from prereq_tools import PreReqComponent
+import stack_analyzer
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -133,7 +134,7 @@ def is_platform_arm():
         return True
     return False
 
-def set_defaults(env, daos_version):
+def set_defaults(env, build_prefix, daos_version):
     """set compiler defaults"""
     AddOption('--preprocess',
               dest='preprocess',
@@ -145,6 +146,11 @@ def set_defaults(env, daos_version):
               action='store_true',
               default=False,
               help='Disable rpath')
+    AddOption('--analyze-stack',
+              dest='analyze_stack',
+              metavar='ARGSTRING',
+              default=None,
+              help='Gather stack usage statistics after build')
 
     env.Append(API_VERSION_MAJOR=API_VERSION_MAJOR)
     env.Append(API_VERSION_MINOR=API_VERSION_MINOR)
@@ -180,6 +186,10 @@ def set_defaults(env, daos_version):
             if "oneapi" in path:
                 env.AppendUnique(RPATH_FULL=[path])
 
+    args = GetOption('analyze_stack')
+    if args is not None:
+        sa = stack_analyzer.analyzer(env, build_prefix, args)
+        sa.analyze_on_exit()
 
 def build_misc():
     """Build miscellaneous items"""
@@ -443,7 +453,7 @@ def scons(): # pylint: disable=too-many-locals
         # generate .so on OSX instead of .dylib
         env.Replace(SHLIBSUFFIX='.so')
 
-    set_defaults(env, daos_version)
+    set_defaults(env, build_prefix, daos_version)
 
     # generate targets in specific build dir to avoid polluting the source code
     VariantDir(build_prefix, '.', duplicate=0)
