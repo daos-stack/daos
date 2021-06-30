@@ -7,6 +7,10 @@ on:
        - 'release/*'
    pull_request:
 
+concurrency:
+  group: ci2-${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
 
   # Build a base Docker image, and save it with a key based on the

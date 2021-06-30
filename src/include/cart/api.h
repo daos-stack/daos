@@ -1012,11 +1012,6 @@ int
 crt_bulk_free(crt_bulk_t bulk_hdl);
 
 /**
- * Decrease reference of the bulk handle.
- */
-#define crt_bulk_decref(bulk_hdl)	crt_bulk_free(bulk_hdl)
-
-/**
  * Start a bulk transferring (inside an RPC handler).
  *
  * \param[in] bulk_desc        pointer to bulk transferring descriptor

@@ -7,6 +7,10 @@ on:
        - 'release/*'
    pull_request:
 
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
 
   Build:
