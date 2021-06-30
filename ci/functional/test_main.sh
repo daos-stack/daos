@@ -39,7 +39,8 @@ mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
 
 # run network test
-clush -B -S -o '-i ci_key' -l root -w "${first_node}" \
+run_on_node=$(echo ${tnodes} | cut -d ',' -f 2)
+clush -B -S -o '-i ci_key' -l root -w "${run_on_node}" \
     "daospath='/usr/'                                 \
      nodes=${tnodes}                                  \
      $(cat ci/functional/self_test_8-node.sh)"
