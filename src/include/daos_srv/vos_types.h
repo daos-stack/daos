@@ -245,6 +245,10 @@ enum {
 	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
 	/** replay punch (underwrite) */
 	VOS_OF_REPLAY_PC		= (1 << 15),
+	/** Dedup update mode */
+	VOS_OF_DEDUP			= (1 << 16),
+	/** Dedup update with memcmp verify mode */
+	VOS_OF_DEDUP_VERIFY		= (1 << 17),
 };
 
 /** Mask for any conditionals passed to to the fetch */

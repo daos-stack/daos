@@ -4,15 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import threading
 import avocado
 import time
 
 from pydaos.raw import DaosApiError
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 from apricot import TestWithServers
 
 
@@ -49,36 +45,26 @@ def container_read(container, array_size=None):
     container.read_objects()
 
 
-def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
+def test_runner(self, namespace, record_size, array_size, thread_per_size=4):
     """Perform simultaneous writes of varying record size to a container.
 
     Args:
-        self: avocado test object
-        size: pool size to be created
+        self (Test): avocado test object
+        namespace (str): location from which to read the pool parameters
         record_size (list): list of different record sizes to be written
-        index (int): pool/container object index
         array_size (optional): size of array value to be written
         thread_per_size (int): threads per rec size
     """
-    # pool initialization
-    self.pool.append(TestPool(self.context, self.get_dmg_command()))
-    self.pool[index].get_params(self)
-
-    # set pool size
-    self.pool[index].nvme_size.update(size)
-
-    # Create a pool
-    self.pool[index].create()
+    # create a new pool
+    self.pool.append(self.get_pool(namespace=namespace, connect=False))
 
     # display available space before write
-    self.pool[index].display_pool_daos_space("before writes")
-    self.pool[index].connect()
+    self.pool[-1].display_pool_daos_space("before writes")
+    self.pool[-1].connect()
 
-    # create container
-    self.container.append(TestContainer(self.pool[index]))
-    self.container[index].get_params(self)
-    self.container[index].create()
-    self.container[index].open()
+    # create a new container
+    self.container.append(self.get_container(self.pool[-1]))
+    self.container[-1].open()
 
     # initialize dicts to hold threads
     jobs = {"write": [], "read": []}
@@ -87,20 +73,22 @@ def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
     for rec in record_size:
         for _ in range(thread_per_size):
             # create threads using single value type
-            jobs["write"].append(threading.Thread(target=container_write,
-                                                  args=(self.container[index],
-                                                        rec)))
-            jobs["read"].append(threading.Thread(target=container_read,
-                                                 args=(self.container[index],
-                                                       None)))
+            jobs["write"].append(
+                threading.Thread(
+                    target=container_write, args=(self.container[-1], rec)))
+            jobs["read"].append(
+                threading.Thread(
+                    target=container_read, args=(self.container[-1], None)))
 
             # create threads using array value type
-            jobs["write"].append(threading.Thread(target=container_write,
-                                                  args=(self.container[index],
-                                                        rec, array_size)))
-            jobs["read"].append(threading.Thread(target=container_read,
-                                                 args=(self.container[index],
-                                                       array_size)))
+            jobs["write"].append(
+                threading.Thread(
+                    target=container_write,
+                    args=(self.container[-1], rec, array_size)))
+            jobs["read"].append(
+                threading.Thread(
+                    target=container_read,
+                    args=(self.container[-1], array_size)))
 
     # start all the write threads
     for job in jobs["write"]:
@@ -119,15 +107,15 @@ def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
         job.join()
 
     # display free space after reads and writes
-    self.pool[index].display_pool_daos_space("after writes and reads")
+    self.pool[-1].display_pool_daos_space("after writes and reads")
 
     # destroy container
-    if self.container[index] is not None:
-        self.container[index].destroy()
+    if self.container[-1] is not None:
+        self.container[-1].destroy()
 
     # destroy pool
-    if self.pool[index] is not None:
-        self.pool[index].destroy(1)
+    if self.pool[-1] is not None:
+        self.pool[-1].destroy(1)
 
 
 class NvmeObject(TestWithServers):
@@ -151,7 +139,6 @@ class NvmeObject(TestWithServers):
         self.container = []
         # set common params
         self.record_size = self.params.get("record_size", "/run/container/*")
-        self.pool_size = self.params.get("size", "/run/pool/createsize/*")
         self.array_size = self.params.get("array_size", "/run/container/*")
 
     @avocado.fail_on(DaosApiError)
@@ -167,12 +154,13 @@ class NvmeObject(TestWithServers):
             Verify the objects are being created and the data is not
             corrupted.
 
-        :avocado: tags=all,daily_regression,hw,large,nvme_object_single_pool
-        :avocado: tags=nvme_object
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme_object,nvme_object_single_pool
         :avocado: tags=DAOS_5610
         """
         # perform multiple object writes to a single pool
-        test_runner(self, self.pool_size[0], self.record_size[:-1], 0,
+        test_runner(self, "/run/pool_1/*", self.record_size[:-1], 0,
                     self.array_size)
 
     @avocado.fail_on(DaosApiError)
@@ -188,19 +176,19 @@ class NvmeObject(TestWithServers):
             Verify the objects are being created and the data is not
             corrupted.
 
-        :avocado: tags=all,full_regression,hw,large,nvme_object_multiple_pools
-        :avocado: tags=nvme_object
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme_object,nvme_object_multiple_pools
         """
-        # thread to perform simulatneous object writes to multiple pools
+        # thread to perform simultaneous object writes to multiple pools
         threads = []
-        index = 0
-        for size in self.pool_size[:-1]:
+        for index in range(2):
             time.sleep(1)
-            thread = threading.Thread(target=test_runner,
-                                      args=(self, size, self.record_size,
-                                            index, self.array_size))
+            thread = threading.Thread(
+                target=test_runner,
+                args=(self, f"/run/pool_{index + 2}/*", self.record_size,
+                      self.array_size))
             threads.append(thread)
-            index += 1
 
         # starting all the threads
         for job in threads:
@@ -214,5 +202,5 @@ class NvmeObject(TestWithServers):
         # very large nvme_pool size
         # Uncomment the below line after DAOS-3339 is resolved
 
-        # test_runner(self, self.pool_size[2], self.record_size, index,
-        #            self.array_size)
+        # test_runner(
+        #     self, "/run/pool/pool_3", self.record_size, self.array_size)
