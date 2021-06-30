@@ -39,7 +39,7 @@ mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
 
 # run network test
-clush -B -S -o '-i ci_key' -l root -w "${NODELIST[1]}" \
+clush -B -S -o '-i ci_key' -l root -w "${first_node}" \
     "source ci/functional/self_test_8-node.sh '/usr/' $tnodes"
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
