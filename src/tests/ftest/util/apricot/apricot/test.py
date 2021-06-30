@@ -1444,6 +1444,36 @@ class TestWithServers(TestWithoutServers):
         """
         self.pool = self.get_pool(namespace, create, connect, index)
 
+    def add_pool_qty(self, quantity, namespace=None, create=True, connect=True,
+                     index=0):
+        """Add multiple pools to the test case.
+
+        This method requires self.pool to be defined as a list.  If self.pool is
+        undefined it will define it as a list.
+
+        Args:
+            quantity (int): number of pools to create
+            namespace (str, optional): namespace for TestPool parameters in the
+                test yaml file. Defaults to None.
+            create (bool, optional): should the pool be created. Defaults to
+                True.
+            connect (bool, optional): should the pool be connected. Defaults to
+                True.
+            index (int, optional): Server index for dmg command. Defaults to 0.
+
+        Raises:
+            TestFail: if self.pool is defined, but not as a list object.
+
+        """
+        if self.pool is None:
+            self.pool = []
+        if not isinstance(self.pool, list):
+            self.fail(
+                "add_pool_qty(): self.pool must be a list: {}".format(
+                    type(self.pool)))
+        for _ in range(quantity):
+            self.pool.append(self.get_pool(namespace, create, connect, index))
+
     def get_container(self, pool, namespace=None, create=True):
         """Get a test container object.
 
