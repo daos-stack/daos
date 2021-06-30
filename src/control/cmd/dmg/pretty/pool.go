@@ -96,43 +96,38 @@ func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 	}
 
 	// display size of the largest non-empty tier
-	var sizeTier *control.PoolTierUsage
+	var size uint64
 	for ti := len(pool.Usage) - 1; ti >= 0; ti-- {
 		if pool.Usage[ti].Size != 0 {
-			sizeTier = pool.Usage[ti]
+			size = pool.Usage[ti].Size
 			break
 		}
 	}
-	sizeStr := fmt.Sprintf("%s (%s)", humanize.Bytes(sizeTier.Size), sizeTier.TierName)
 
 	// display usage of the most used tier
-	var usedTierName string
-	var usedPercentage int
+	var used int
 	for ti := 0; ti < len(pool.Usage); ti++ {
 		t := pool.Usage[ti]
 		u := float64(t.Size-t.Free) / float64(t.Size)
 
-		if int(u*100) > usedPercentage {
-			usedTierName = t.TierName
-			usedPercentage = int(u * 100)
+		if int(u*100) > used {
+			used = int(u * 100)
 		}
 	}
-	usedStr := fmt.Sprintf("%d%% (%s)", usedPercentage, usedTierName)
 
 	// display imbalance of the most imbalanced tier
-	imbalancedTier := pool.Usage[0]
+	imbalance := pool.Usage[0].Imbalance
 	for ti := 0; ti < len(pool.Usage); ti++ {
-		if pool.Usage[ti].Imbalance > imbalancedTier.Imbalance {
-			imbalancedTier = pool.Usage[ti]
+		if pool.Usage[ti].Imbalance > imbalance {
+			imbalance = pool.Usage[ti].Imbalance
 		}
 	}
-	imbalanceStr := fmt.Sprintf("%d%% (%s)", imbalancedTier.Imbalance, imbalancedTier.TierName)
 
 	row := txtfmt.TableRow{
 		"Pool":      name,
-		"Size":      sizeStr,
-		"Used":      usedStr,
-		"Imbalance": imbalanceStr,
+		"Size":      fmt.Sprintf("%s", humanize.Bytes(size)),
+		"Used":      fmt.Sprintf("%d%%", used),
+		"Imbalance": fmt.Sprintf("%d%%", imbalance),
 		"Disabled":  fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
 	}
 

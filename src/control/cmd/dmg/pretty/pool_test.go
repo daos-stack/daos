@@ -287,10 +287,10 @@ no pools in system
 				},
 			},
 			expPrintStr: `
-Pool     Size          Used       Imbalance Disabled 
-----     ----          ----       --------- -------- 
-00000001 6.0 TB (NVME) 83% (NVME) 12% (SCM) 0/16     
-two      6.0 TB (NVME) 83% (NVME) 12% (SCM) 8/64     
+Pool     Size   Used Imbalance Disabled 
+----     ----   ---- --------- -------- 
+00000001 6.0 TB 83%  12%       0/16     
+two      6.0 TB 83%  12%       8/64     
 
 `,
 		},
@@ -319,10 +319,10 @@ two      6.0 TB (NVME) 83% (NVME) 12% (SCM) 8/64
 				},
 			},
 			expPrintStr: `
-Pool Size          Used       Imbalance Disabled 
----- ----          ----       --------- -------- 
-one  6.0 TB (NVME) 83% (NVME) 12% (SCM) 0/16     
-two  100 GB (SCM)  80% (SCM)  12% (SCM) 8/64     
+Pool Size   Used Imbalance Disabled 
+---- ----   ---- --------- -------- 
+one  6.0 TB 83%  12%       0/16     
+two  100 GB 80%  12%       8/64     
 
 `,
 		},
