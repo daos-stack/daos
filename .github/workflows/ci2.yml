@@ -33,6 +33,7 @@ jobs:
     - name: Prepare base image in Docker
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg DAOS_DEPS_BUILD=no --build-arg UID
+                          --build-arg DAOS_TARGET_TYPE=debug
                           --build-arg DEPS_JOBS=10
     - name: Build dependencies in Docker
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
