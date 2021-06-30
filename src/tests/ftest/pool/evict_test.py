@@ -85,24 +85,30 @@ class EvictTests(TestWithServers):
             "Pool UUID: %s\n Pool handle: %s\n",
             self.pool[0].uuid, self.pool[0].pool.handle.value,)
 
+        original_uuid = self.pool[0].uuid
+
         if test_param == "invalid_uuid":
             # Attempt to evict pool with invalid UUID
             bogus_uuid = self.pool[0].uuid
             # in case uuid4() generates pool.uuid
             while bogus_uuid == self.pool[0].uuid:
                 bogus_uuid = str(uuid.uuid4())
-            # set the UUID directly
-            self.pool[0].pool.set_uuid_str(bogus_uuid)
+
+            # Set the bogus UUID to the pool.
+            self.pool[0].uuid = bogus_uuid
+
             self.log.info(
                 "Evicting pool with Invalid Pool UUID:  %s",
                 self.pool[0].pool.get_uuid_str())
         else:
             self.fail("Invalid yaml parameters - check \"params\" values")
 
+        # Make it not fail at CommandFailure and call.
         self.pool[0].dmg.exit_status_exception = False
         self.pool[0].evict()
 
-        self.pool[0].pool.set_uuid_str(self.pool[0].uuid)
+        # Restore the original UUID.
+        self.pool[0].uuid = original_uuid
 
         result = self.pool[0].dmg.result
         if result.exit_status != 0:
