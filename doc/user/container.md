@@ -78,7 +78,7 @@ container's properties. Refer to the manual page for full usage details.
 
 $ daos cont get-prop --path=/tmp/mycontainer
 Container properties for 419b7562-5bb8-453f-bd52-917c8f5d80d1 :
-label:                  container label not set
+label:                  container_label_not_set
 layout type:            POSIX (1)
 layout version:         1
 checksum type:          off
