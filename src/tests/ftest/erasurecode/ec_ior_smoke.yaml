@@ -39,11 +39,10 @@ server_config:
       scm_mount: /mnt/daos1
       log_mask: ERR
 pool:
-    mode: 146
     name: daos_server
-    scm_size: 200G
-    nvme_size: 700G
     control_method: dmg
+    scm_size: 25%
+    nvme_size: 93%
 container:
     type: POSIX
     control_method: daos
