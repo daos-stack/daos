@@ -1609,7 +1609,7 @@ def install_debuginfos():
     cmds = []
 
     # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['daos', 'systemd', 'ndctl', 'mercury', 'hdf5']:
+    for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5']:
         try:
             debug_pkg = resolve_debuginfo(pkg)
         except RuntimeError as error:
