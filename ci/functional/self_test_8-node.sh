@@ -1,8 +1,8 @@
 #!/bin/sh
 set -x
 
-daospath=$1
-nodes=$2
+#daospath=$1
+#nodes=$2
 IFS=', ' read -r -a nodes_array <<< "$nodes"
 for i in "${nodes_array[@]}"; do
     total_nodes+="${i}:5,"
