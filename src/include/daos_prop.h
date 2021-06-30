@@ -199,7 +199,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_MAX,
 };
 
-/* first citizen objects of a container, stored as container property */
+/** first citizen objects of a container, stored as container property */
 struct daos_prop_co_roots {
 	daos_obj_id_t	cr_oids[4];
 };
@@ -300,11 +300,11 @@ enum {
 /** clear the UNCLEAN status */
 #define DAOS_PROP_CO_CLEAR	(0x1)
 struct daos_co_status {
-	/* DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
+	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
 	uint16_t	dcs_status;
-	/* flags for DAOS internal usage, DAOS_PROP_CO_CLEAR */
+	/** flags for DAOS internal usage, DAOS_PROP_CO_CLEAR */
 	uint16_t	dcs_flags;
-	/* pool map version when setting the dcs_status */
+	/** pool map version when setting the dcs_status */
 	uint32_t	dcs_pm_ver;
 };
 
@@ -418,7 +418,6 @@ daos_prop_alloc(uint32_t entries_nr);
 void
 daos_prop_fini(daos_prop_t *prop);
 
-
 /**
  * Free the DAOS properties and the \a prop.
  *
@@ -442,7 +441,7 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
  * Duplicate a generic pointer value from one DAOS prop entry to another.
  * Convenience function.
  *
- * \param[in][out]	entry_dst	Destination entry
+ * \param[in,out]	entry_dst	Destination entry
  * \param[in]		entry_src	Entry to be copied
  * \param[in]		len		Length of the memory to be copied
  *
@@ -470,7 +469,7 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
  * Duplicate container roots from one DAOS prop entry to another.
  * Convenience function.
  *
- * \param[in][out]	dst		Destination entry
+ * \param[in,out]	dst		Destination entry
  * \param[in]		src		Entry to be copied
  *
  * \return		0		Success
