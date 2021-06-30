@@ -375,9 +375,6 @@ struct evt_entry_array_sm {
 	struct evt_entry_array_sm	 name##_alloc;			\
 	struct evt_entry_array		*name
 
-#define EVT_ENT_ARRAY_PTR_INIT(basename)	\
-	(basename) = &(basename##_alloc).ea_data
-
 D_CASSERT(offsetof(struct evt_entry_array_lg, ea_embedded) ==
 	  offsetof(struct evt_entry_array, ea_embedded_ents));
 D_CASSERT(offsetof(struct evt_entry_array_sm, ea_embedded) ==
