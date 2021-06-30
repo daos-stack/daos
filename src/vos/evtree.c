@@ -598,6 +598,7 @@ evt_split_entry(struct evt_context *tcx, struct evt_entry *current,
 	struct evt_list_entry	*le;
 	daos_off_t		 diff;
 
+	D_ASSERT((current->en_visibility & EVT_REMOVE) == 0);
 	current->en_visibility |= EVT_PARTIAL;
 	*covered = *split = *current;
 	diff = next->en_sel_ext.ex_hi + 1 - split->en_sel_ext.ex_lo;
