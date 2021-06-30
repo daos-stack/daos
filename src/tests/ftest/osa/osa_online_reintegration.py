@@ -63,6 +63,8 @@ class OSAOnlineReintegration(OSAUtils):
                           some data in pool. Defaults to False.
             server_boot (bool) : Perform system stop/start on a rank.
                                  Defults to False.
+            oclass (str) : daos object class string (eg: "RP_2G8").
+                           Defaults to None.
         """
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
