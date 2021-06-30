@@ -59,7 +59,7 @@ class OSAOnlineExtend(OSAUtils):
              num_pool(int) : total pools to create for testing purposes.
              racer(bool) : Run the testing along with daos_racer.
                            Defaults to False.
-             oclass(str) : Object Class (eg: RP_2G1, etc)
+             oclass(str) : Object Class (eg: RP_2G1, etc). Default to None.
              app_name(str) : App (ior or mdtest) to run during the testing.
                              Defaults to ior.
         """
