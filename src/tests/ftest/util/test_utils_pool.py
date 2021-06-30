@@ -357,7 +357,7 @@ class TestPool(TestDaosApiBase):
             self.log.info("Evict all pool connections for pool: %s", self.uuid)
 
             if self.control_method.value == self.USE_DMG and self.dmg:
-                self.dmg.pool_evict(self.uuid, self.name.value)
+                self.dmg.pool_evict(self.uuid)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
