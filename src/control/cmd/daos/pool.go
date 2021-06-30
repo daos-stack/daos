@@ -36,7 +36,8 @@ type PoolID struct {
 
 type poolBaseCmd struct {
 	daosCmd
-	poolUUID uuid.UUID
+	poolUUID  uuid.UUID
+	poolLabel *C.char
 
 	cPoolHandle C.daos_handle_t
 

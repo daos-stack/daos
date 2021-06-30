@@ -1426,7 +1426,11 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 		D_GOTO(err_out, rc);
 	}
 
-	D_PRINT("Container properties for "DF_UUIDF" :\n", DP_UUID(ap->c_uuid));
+	if (ap->cont_label)
+		D_PRINT("Container properties for \"%s\":\n", ap->cont_label);
+	else
+		D_PRINT("Container properties for "DF_UUIDF" :\n",
+			DP_UUID(ap->c_uuid));
 
 	rc = cont_decode_props(ap, prop_query, prop_acl);
 
@@ -3157,8 +3161,7 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		file->type = POSIX;
 	}
 out:
-	if (dattr.da_rel_path)
-		free(dattr.da_rel_path);
+	duns_destroy_attr(&dattr);
 	return rc;
 }
 

@@ -85,7 +85,7 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 			if C.get_dpe_str(e) == nil {
-				return "container label not set"
+				return "container_label_not_set"
 			}
 			return strValStringer(e, name)
 		},

@@ -327,14 +327,25 @@ func (cmd *existingContainerCmd) resolveContainer(ap *C.struct_cmd_args_s) (err 
 		if err = resolveDunsPath(cmd.Path, ap); err != nil {
 			return
 		}
-		cmd.poolBaseCmd.Args.Pool.UUID, err = uuidFromC(ap.p_uuid)
-		if err != nil {
-			return
+
+		if ap.pool_label != nil {
+			cmd.poolBaseCmd.Args.Pool.Label = C.GoString(ap.pool_label)
+			freeString(ap.pool_label)
+		} else {
+			cmd.poolBaseCmd.Args.Pool.UUID, err = uuidFromC(ap.p_uuid)
+			if err != nil {
+				return
+			}
 		}
 
-		cmd.Args.Container.UUID, err = uuidFromC(ap.c_uuid)
-		if err != nil {
-			return
+		if ap.cont_label != nil {
+			cmd.contLabel = C.GoString(ap.cont_label)
+			freeString(ap.cont_label)
+		} else {
+			cmd.Args.Container.UUID, err = uuidFromC(ap.c_uuid)
+			if err != nil {
+				return
+			}
 		}
 		cmd.contUUID = cmd.Args.Container.UUID
 	} else {
