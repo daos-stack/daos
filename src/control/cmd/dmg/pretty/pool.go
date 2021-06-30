@@ -9,6 +9,7 @@ package pretty
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -90,7 +91,8 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 	name := pool.Label
 	if name == "" {
-		name = pool.UUID
+		// use short version of uuid if no label
+		name = strings.Split(pool.UUID, "-")[0]
 	}
 
 	// display size of the largest non-empty tier
