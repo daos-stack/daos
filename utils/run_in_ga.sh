@@ -10,8 +10,8 @@ then
 fi
 
 echo ::group::Rebuild spdk
-rm -rf /opt/daos/prereq/release/spdk
-$SCONS PREFIX=/opt/daos --build-deps=yes --deps-only
+rm -rf /opt/daos/prereq/debug/spdk
+$SCONS PREFIX=/opt/daos TARGET_TYPE=debug --build-deps=yes --deps-only
 echo ::endgroup::
 
 echo ::group::Test client only debug build
