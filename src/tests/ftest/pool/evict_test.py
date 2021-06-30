@@ -98,8 +98,7 @@ class EvictTests(TestWithServers):
             self.pool[0].uuid = bogus_uuid
 
             self.log.info(
-                "Evicting pool with Invalid Pool UUID:  %s",
-                self.pool[0].pool.get_uuid_str())
+                "Evicting pool with Invalid Pool UUID: %s", self.pool[0].uuid)
         else:
             self.fail("Invalid yaml parameters - check \"params\" values")
 
