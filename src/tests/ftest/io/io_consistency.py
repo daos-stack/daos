@@ -32,7 +32,7 @@ class IoConsistency(IorTestBase):
             Repeat the same steps as above for SSF this time.
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio,ioconsistency,mpich
+        :avocado: tags=daosio,ioconsistency,ior
         :avocado: tags=DAOS_5610
         """
 
