@@ -1228,6 +1228,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 			stats_printed = true;
 		break;
 	case D_TM_GAUGE:
+	case D_TM_GAUGE_STATS:
 		rc = d_tm_get_gauge(ctx, &val, &stats, node);
 		if (rc != DER_SUCCESS) {
 			fprintf(stream, "Error on gauge read: %d\n", rc);
@@ -1679,6 +1680,26 @@ d_tm_mark_duration_end(struct d_tm_node_t *metric)
 	d_tm_node_unlock(metric);
 }
 
+static bool
+is_gauge(struct d_tm_node_t *metric)
+{
+	if (metric == NULL)
+		return false;
+
+	return (metric->dtn_type == D_TM_GAUGE ||
+		metric->dtn_type == D_TM_GAUGE_STATS);
+}
+
+static bool
+has_stats(struct d_tm_node_t *metric)
+{
+	if (metric == NULL)
+		return false;
+
+	return (metric->dtn_type & D_TM_DURATION ||
+		metric->dtn_type == D_TM_GAUGE_STATS);
+}
+
 /**
  * Set an arbitrary \a value for the gauge.
  *
@@ -1691,7 +1712,7 @@ d_tm_set_gauge(struct d_tm_node_t *metric, uint64_t value)
 	if (metric == NULL)
 		return;
 
-	if (metric->dtn_type != D_TM_GAUGE) {
+	if (!is_gauge(metric)) {
 		D_ERROR("Failed to set gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
@@ -1700,8 +1721,10 @@ d_tm_set_gauge(struct d_tm_node_t *metric, uint64_t value)
 
 	d_tm_node_lock(metric);
 	metric->dtn_metric->dtm_data.value = value;
-	d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
-	d_tm_compute_histogram(metric, value);
+	if (has_stats(metric)) {
+		d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
+		d_tm_compute_histogram(metric, value);
+	}
 	d_tm_node_unlock(metric);
 }
 
@@ -1717,7 +1740,7 @@ d_tm_inc_gauge(struct d_tm_node_t *metric, uint64_t value)
 	if (metric == NULL)
 		return;
 
-	if (metric->dtn_type != D_TM_GAUGE) {
+	if (!is_gauge(metric)) {
 		D_ERROR("Failed to increment gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
@@ -1726,8 +1749,10 @@ d_tm_inc_gauge(struct d_tm_node_t *metric, uint64_t value)
 
 	d_tm_node_lock(metric);
 	metric->dtn_metric->dtm_data.value += value;
-	d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
-	d_tm_compute_histogram(metric, value);
+	if (has_stats(metric)) {
+		d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
+		d_tm_compute_histogram(metric, value);
+	}
 	d_tm_node_unlock(metric);
 }
 
@@ -1743,7 +1768,7 @@ d_tm_dec_gauge(struct d_tm_node_t *metric, uint64_t value)
 	if (metric == NULL)
 		return;
 
-	if (metric->dtn_type != D_TM_GAUGE) {
+	if (!is_gauge(metric)) {
 		D_ERROR("Failed to decrement gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
@@ -1752,8 +1777,10 @@ d_tm_dec_gauge(struct d_tm_node_t *metric, uint64_t value)
 
 	d_tm_node_lock(metric);
 	metric->dtn_metric->dtm_data.value -= value;
-	d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
-	d_tm_compute_histogram(metric, value);
+	if (has_stats(metric)) {
+		d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
+		d_tm_compute_histogram(metric, value);
+	}
 	d_tm_node_unlock(metric);
 }
 
@@ -1907,7 +1934,7 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 	}
 
 	temp->dtn_metric->dtm_stats = NULL;
-	if ((metric_type == D_TM_GAUGE) || (metric_type & D_TM_DURATION)) {
+	if (has_stats(temp)) {
 		temp->dtn_metric->dtm_stats =
 			shmalloc(shmem, sizeof(struct d_tm_stats_t));
 		if (temp->dtn_metric->dtm_stats == NULL) {
@@ -2502,8 +2529,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 	if (multiplier < 1)
 		return -DER_INVAL;
 
-	if (!((node->dtn_type == D_TM_GAUGE) ||
-	      (node->dtn_type & D_TM_DURATION)))
+	if (!has_stats(node))
 		return -DER_OP_NOT_PERMITTED;
 
 	shmem = get_shmem_for_key(tm_shmem.ctx, node->dtn_shmem_key);
@@ -2652,8 +2678,7 @@ d_tm_get_num_buckets(struct d_tm_context *ctx,
 	if (rc != 0)
 		return rc;
 
-	if (!((node->dtn_type == D_TM_GAUGE) ||
-	      (node->dtn_type & D_TM_DURATION)))
+	if (!has_stats(node))
 		return -DER_OP_NOT_PERMITTED;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
@@ -2712,8 +2737,7 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
 	if (rc != 0)
 		return rc;
 
-	if (!((node->dtn_type == D_TM_GAUGE) ||
-	      (node->dtn_type & D_TM_DURATION)))
+	if (!has_stats(node))
 		return -DER_OP_NOT_PERMITTED;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
@@ -2964,7 +2988,7 @@ d_tm_get_gauge(struct d_tm_context *ctx, uint64_t *val,
 	if (rc != 0)
 		return rc;
 
-	if (node->dtn_type != D_TM_GAUGE)
+	if (!is_gauge(node))
 		return -DER_OP_NOT_PERMITTED;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
@@ -2972,7 +2996,7 @@ d_tm_get_gauge(struct d_tm_context *ctx, uint64_t *val,
 		dtm_stats = conv_ptr(shmem, metric_data->dtm_stats);
 		d_tm_node_lock(node);
 		*val = metric_data->dtm_data.value;
-		if ((stats != NULL) && (dtm_stats != NULL)) {
+		if (has_stats(node) && stats != NULL && dtm_stats != NULL) {
 			stats->dtm_min = dtm_stats->dtm_min;
 			stats->dtm_max = dtm_stats->dtm_max;
 			stats->dtm_sum = dtm_stats->dtm_sum;

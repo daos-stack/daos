@@ -72,6 +72,12 @@ func AddTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 			if rc != 0 {
 				t.Fatalf("failed to add %s: %d", tm.Name, rc)
 			}
+			C.d_tm_set_gauge(tm.node, C.uint64_t(tm.Cur))
+		case MetricTypeGaugeStats:
+			rc := C.add_metric(&tm.node, C.D_TM_GAUGE_STATS, C.CString(tm.desc), C.CString(tm.units), C.CString(tm.Name))
+			if rc != 0 {
+				t.Fatalf("failed to add %s: %d", tm.Name, rc)
+			}
 			for _, val := range []float64{tm.min, tm.max, tm.Cur} {
 				C.d_tm_set_gauge(tm.node, C.uint64_t(val))
 			}
@@ -120,8 +126,15 @@ func setupTestMetrics(t *testing.T) (context.Context, TestMetricsMap) {
 
 	testMetrics := TestMetricsMap{
 		MetricTypeGauge: {
-			Name:   "test_gauge",
-			desc:   "some gauge",
+			Name:  "test_gauge",
+			desc:  "some gauge",
+			units: "rpc/s",
+			Cur:   42,
+			str:   "test_gauge: 42 rpc/s",
+		},
+		MetricTypeGaugeStats: {
+			Name:   "test_gauge_stats",
+			desc:   "some gauge with stats",
 			units:  "rpc/s",
 			min:    1,
 			Cur:    42,
@@ -129,7 +142,7 @@ func setupTestMetrics(t *testing.T) (context.Context, TestMetricsMap) {
 			sum:    107,
 			mean:   35.666666666666664,
 			stddev: 31.973947728319903,
-			str:    "test_gauge: 42 rpc/s, min: 1, max: 64, mean: 35.666667, sample size: 3, std dev: 31.973948",
+			str:    "test_gauge_stats: 42 rpc/s, min: 1, max: 64, mean: 35.666667, sample size: 3, std dev: 31.973948",
 		},
 		MetricTypeCounter: {
 			Name:  "test_counter",
