@@ -405,9 +405,9 @@ struct bio_desc {
 	unsigned int		 bd_inflights;
 	int			 bd_result;
 	unsigned int		 bd_chk_type;
+	unsigned int		 bd_type;
 	/* Flags */
 	unsigned int		 bd_buffer_prep:1,
-				 bd_update:1,
 				 bd_dma_issued:1,
 				 bd_retry:1,
 				 bd_rdma:1;
