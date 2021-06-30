@@ -26,7 +26,8 @@
  *
  * \return	Newly allocated struct drpc
  */
-struct drpc *new_drpc_with_fd(int fd);
+struct drpc *
+new_drpc_with_fd(int fd);
 
 /**
  * Frees a drpc context and cleans up. Not tied to anything in the real file
@@ -34,40 +35,46 @@ struct drpc *new_drpc_with_fd(int fd);
  *
  * \param	ctx	drpc ctx to free
  */
-void free_drpc(struct drpc *ctx);
+void
+free_drpc(struct drpc *ctx);
 
 /**
  * Generates a valid Drpc__Call structure.
  *
  * \return	Newly allocated Drpc__Call
  */
-Drpc__Call *new_drpc_call(void);
+Drpc__Call *
+new_drpc_call(void);
 
 /**
  * Generates a valid Drpc__Call structure with a specific module ID.
  *
  * \return	Newly allocated Drpc__Call
  */
-Drpc__Call *new_drpc_call_with_module(int module_id);
+Drpc__Call *
+new_drpc_call_with_module(int module_id);
 
 /**
  * Using mocks in test_mocks.h, sets up recvmsg mock to populate a valid
  * serialized Drpc__Call as the message received.
  */
-void mock_valid_drpc_call_in_recvmsg(void);
+void
+mock_valid_drpc_call_in_recvmsg(void);
 
 /**
  * Using mocks in test_mocks.h, sets up recvmsg mock to populate a valid
  * serialized Drpc__Response as the message received.
  */
-void mock_valid_drpc_resp_in_recvmsg(Drpc__Status status);
+void
+mock_valid_drpc_resp_in_recvmsg(Drpc__Status status);
 
 /**
  * Generates a valid Drpc__Response structure.
  *
  * \return	Newly allocated Drpc__Response
  */
-Drpc__Response *new_drpc_response(void);
+Drpc__Response *
+new_drpc_response(void);
 
 /*
  * ACL unit test utilities

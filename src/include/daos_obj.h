@@ -14,99 +14,98 @@ extern "C" {
 #include <daos_event.h>
 #include <daos_obj_class.h>
 
-#define DAOS_OBJ_NIL		((daos_obj_id_t){0})
+#define DAOS_OBJ_NIL ((daos_obj_id_t){0})
 
 /** the current OID version */
-#define OID_FMT_VER		1
+#define OID_FMT_VER 1
 
 /** 32 bits for DAOS internal use */
-#define OID_FMT_INTR_BITS	32
+#define OID_FMT_INTR_BITS 32
 /** Number of reserved by daos in object id for version */
-#define OID_FMT_VER_BITS	4
+#define OID_FMT_VER_BITS 4
 /** Number of reserved by daos in object id for features */
-#define OID_FMT_FEAT_BITS	16
+#define OID_FMT_FEAT_BITS 16
 /** Number of reserved by daos in object id for class id */
-#define OID_FMT_CLASS_BITS	(OID_FMT_INTR_BITS - OID_FMT_VER_BITS - \
-				 OID_FMT_FEAT_BITS)
+#define OID_FMT_CLASS_BITS (OID_FMT_INTR_BITS - OID_FMT_VER_BITS - OID_FMT_FEAT_BITS)
 
 /** Bit shift for object version in object id */
-#define OID_FMT_VER_SHIFT	(64 - OID_FMT_VER_BITS)
+#define OID_FMT_VER_SHIFT (64 - OID_FMT_VER_BITS)
 /** Bit shift for object features in object id */
-#define OID_FMT_FEAT_SHIFT	(OID_FMT_VER_SHIFT - OID_FMT_FEAT_BITS)
+#define OID_FMT_FEAT_SHIFT (OID_FMT_VER_SHIFT - OID_FMT_FEAT_BITS)
 /** Bit shift for object class id in object id */
-#define OID_FMT_CLASS_SHIFT	(OID_FMT_FEAT_SHIFT - OID_FMT_CLASS_BITS)
+#define OID_FMT_CLASS_SHIFT (OID_FMT_FEAT_SHIFT - OID_FMT_CLASS_BITS)
 
 /** Maximum valid object version setting */
-#define OID_FMT_VER_MAX		((1ULL << OID_FMT_VER_BITS) - 1)
+#define OID_FMT_VER_MAX ((1ULL << OID_FMT_VER_BITS) - 1)
 /** Maximum valid object feature setting */
-#define OID_FMT_FEAT_MAX	((1ULL << OID_FMT_FEAT_BITS) - 1)
+#define OID_FMT_FEAT_MAX ((1ULL << OID_FMT_FEAT_BITS) - 1)
 /** Maximum valid object class setting */
-#define OID_FMT_CLASS_MAX	((1ULL << OID_FMT_CLASS_BITS) - 1)
+#define OID_FMT_CLASS_MAX ((1ULL << OID_FMT_CLASS_BITS) - 1)
 
 /** Mask for object version */
-#define OID_FMT_VER_MASK	(OID_FMT_VER_MAX << OID_FMT_VER_SHIFT)
+#define OID_FMT_VER_MASK (OID_FMT_VER_MAX << OID_FMT_VER_SHIFT)
 /** Mask for object features */
-#define OID_FMT_FEAT_MASK	(OID_FMT_FEAT_MAX << OID_FMT_FEAT_SHIFT)
+#define OID_FMT_FEAT_MASK (OID_FMT_FEAT_MAX << OID_FMT_FEAT_SHIFT)
 /** Mask for object class id */
-#define OID_FMT_CLASS_MASK	(OID_FMT_CLASS_MAX << OID_FMT_CLASS_SHIFT)
+#define OID_FMT_CLASS_MASK (OID_FMT_CLASS_MAX << OID_FMT_CLASS_SHIFT)
 
 enum {
 	/** DKEY keys not hashed and sorted numerically.   Keys are accepted
 	 *  in client's byte order and DAOS is responsible for correct behavior
 	 */
-	DAOS_OF_DKEY_UINT64	= (1 << 0),
+	DAOS_OF_DKEY_UINT64 = (1 << 0),
 	/** DKEY keys not hashed and sorted lexically */
-	DAOS_OF_DKEY_LEXICAL	= (1 << 1),
+	DAOS_OF_DKEY_LEXICAL = (1 << 1),
 	/** AKEY keys not hashed and sorted numerically.   Keys are accepted
 	 *  in client's byte order and DAOS is responsible for correct behavior
 	 */
-	DAOS_OF_AKEY_UINT64	= (1 << 2),
+	DAOS_OF_AKEY_UINT64 = (1 << 2),
 	/** AKEY keys not hashed and sorted lexically */
-	DAOS_OF_AKEY_LEXICAL	= (1 << 3),
+	DAOS_OF_AKEY_LEXICAL = (1 << 3),
 	/** reserved: 1-level flat KV store */
-	DAOS_OF_KV_FLAT		= (1 << 4),
+	DAOS_OF_KV_FLAT = (1 << 4),
 	/** reserved: 1D Array with metadata stored in the DAOS object */
-	DAOS_OF_ARRAY		= (1 << 5),
+	DAOS_OF_ARRAY = (1 << 5),
 	/** reserved: Multi Dimensional Array */
-	DAOS_OF_ARRAY_MD	= (1 << 6),
+	DAOS_OF_ARRAY_MD = (1 << 6),
 	/** reserved: Byte Array with no metadata (eg DFS/POSIX) */
-	DAOS_OF_ARRAY_BYTE	= (1 << 7),
+	DAOS_OF_ARRAY_BYTE = (1 << 7),
 	/**
 	 * benchmark-only feature bit, I/O is a network echo, no data is going
 	 * to be stored/returned
 	 *
 	 * NB: this is the last feature bits.
 	 */
-	DAOS_OF_ECHO		= (1 << 15),
+	DAOS_OF_ECHO = (1 << 15),
 	/** Mask for convenience (16-bit) */
-	DAOS_OF_MASK		= ((1 << OID_FMT_FEAT_BITS) - 1),
+	DAOS_OF_MASK = ((1 << OID_FMT_FEAT_BITS) - 1),
 };
 
 /** Number of bits reserved in IO flags bitmap for conditional checks.  */
-#define IO_FLAGS_COND_BITS	8
+#define IO_FLAGS_COND_BITS 8
 
 enum {
 	/* Conditional Op: Punch key if it exists, fail otherwise */
-	DAOS_COND_PUNCH		= (1 << 0),
+	DAOS_COND_PUNCH = (1 << 0),
 	/* Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
-	DAOS_COND_DKEY_INSERT	= (1 << 1),
+	DAOS_COND_DKEY_INSERT = (1 << 1),
 	/* Conditional Op: Update dkey if it exists, fail otherwise */
-	DAOS_COND_DKEY_UPDATE	= (1 << 2),
+	DAOS_COND_DKEY_UPDATE = (1 << 2),
 	/* Conditional Op: Fetch dkey if it exists, fail otherwise */
-	DAOS_COND_DKEY_FETCH	= (1 << 3),
+	DAOS_COND_DKEY_FETCH = (1 << 3),
 	/* Conditional Op: Insert akey if it doesn't exist, fail otherwise */
-	DAOS_COND_AKEY_INSERT	= (1 << 4),
+	DAOS_COND_AKEY_INSERT = (1 << 4),
 	/* Conditional Op: Update akey if it exists, fail otherwise */
-	DAOS_COND_AKEY_UPDATE	= (1 << 5),
+	DAOS_COND_AKEY_UPDATE = (1 << 5),
 	/* Conditional Op: Fetch akey if it exists, fail otherwise */
-	DAOS_COND_AKEY_FETCH	= (1 << 6),
+	DAOS_COND_AKEY_FETCH = (1 << 6),
 	/* Inidication of per akey conditional ops.  If set, the global
 	 * flag should not have any akey conditional ops specified. The
 	 * per akey flags will be read from the iod_flags field.
 	 */
-	DAOS_COND_PER_AKEY	= (1 << 7),
+	DAOS_COND_PER_AKEY = (1 << 7),
 	/** Mask for convenience */
-	DAOS_COND_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
+	DAOS_COND_MASK = ((1 << IO_FLAGS_COND_BITS) - 1),
 };
 
 /**
@@ -115,31 +114,31 @@ enum {
  */
 struct daos_obj_attr {
 	/** Optional, affinity target for the object */
-	d_rank_t		 oa_rank;
+	d_rank_t oa_rank;
 	/** Optional, class attributes of object with private class */
-	struct daos_oclass_attr	*oa_oa;
+	struct daos_oclass_attr *oa_oa;
 };
 
 /** Object open modes */
 enum {
 	/** Shared read */
-	DAOS_OO_RO             = (1 << 1),
+	DAOS_OO_RO = (1 << 1),
 	/** Shared read & write, no cache for write */
-	DAOS_OO_RW             = (1 << 2),
+	DAOS_OO_RW = (1 << 2),
 	/** Exclusive write, data can be cached */
-	DAOS_OO_EXCL           = (1 << 3),
+	DAOS_OO_EXCL = (1 << 3),
 	/** unsupported: random I/O */
-	DAOS_OO_IO_RAND        = (1 << 4),
+	DAOS_OO_IO_RAND = (1 << 4),
 	/** unsupported: sequential I/O */
-	DAOS_OO_IO_SEQ         = (1 << 5),
+	DAOS_OO_IO_SEQ = (1 << 5),
 };
 
 struct daos_oid_list {
 	/** Input/output number of oids */
-	uint32_t		 ol_nr;
-	uint32_t		 ol_nr_out;
+	uint32_t ol_nr;
+	uint32_t ol_nr_out;
 	/** OID buffer */
-	daos_obj_id_t		*ol_oids;
+	daos_obj_id_t *ol_oids;
 };
 
 /**
@@ -165,23 +164,23 @@ struct daos_oid_list {
  */
 typedef struct {
 	/** Indice of the first record in the extent */
-	uint64_t	rx_idx;
+	uint64_t rx_idx;
 	/**
 	 * Number of contiguous records in the extent
 	 * If \a rx_nr is equal to 1, the extent is composed of a single record
 	 * at indice \a rx_idx
 	 */
-	uint64_t	rx_nr;
+	uint64_t rx_nr;
 } daos_recx_t;
 
 /** Type of the value accessed in an IOD */
 typedef enum {
 	/** is a dkey */
-	DAOS_IOD_NONE		= 0,
+	DAOS_IOD_NONE = 0,
 	/** one indivisible value update atomically */
-	DAOS_IOD_SINGLE		= 1,
+	DAOS_IOD_SINGLE = 1,
 	/** an array of records where each record is update atomically */
-	DAOS_IOD_ARRAY		= 2,
+	DAOS_IOD_ARRAY = 2,
 } daos_iod_type_t;
 
 /**
@@ -191,7 +190,7 @@ typedef enum {
  */
 typedef struct {
 	/** akey for this iod */
-	daos_key_t		iod_name;
+	daos_key_t iod_name;
 	/*
 	 * Type of the value in an iod can be either a single type that is
 	 * always overwritten when updated, or it can be an array of EQUAL sized
@@ -203,24 +202,24 @@ typedef struct {
 	 * \a iod_size would be the size of the single atomic value. The idx is
 	 * ignored and the rx_nr is also required to be 1.
 	 */
-	daos_iod_type_t		iod_type;
+	daos_iod_type_t iod_type;
 	/** Size of the single value or the record size of the array */
-	daos_size_t		iod_size;
+	daos_size_t iod_size;
 	/** Per akey conditional. If DAOS_COND_PER_AKEY not set, this is
 	 *  ignored.
 	 */
-	uint64_t		iod_flags;
+	uint64_t iod_flags;
 	/*
 	 * Number of entries in the \a iod_recxs for arrays,
 	 * should be 1 if single value.
 	 */
-	uint32_t		iod_nr;
+	uint32_t iod_nr;
 	/*
 	 * Array of extents, where each extent defines the index of the first
 	 * record in the extent and the number of records to access. If the
 	 * type of the iod is single, this is ignored.
 	 */
-	daos_recx_t		*iod_recxs;
+	daos_recx_t *iod_recxs;
 } daos_iod_t;
 
 /**
@@ -238,63 +237,63 @@ typedef struct {
  *			   iom_nr_out). User is responsible for free the
  *			   iom_recxs buffer after using.
  */
-#define DAOS_IOMF_DETAIL		(0x1U)
+#define DAOS_IOMF_DETAIL (0x1U)
 /**
  * A I/O map represents the physical extent mapping inside an array for a
  * given range of indices.
  */
 typedef struct {
 	/** type of akey value (SV or AR)*/
-	daos_iod_type_t		 iom_type;
+	daos_iod_type_t iom_type;
 	/**
 	 * Number of elements allocated in iom_recxs.
 	 */
-	uint32_t		 iom_nr;
+	uint32_t iom_nr;
 	/**
 	 * Number of extents in the mapping. If iom_nr_out is greater than
 	 * iom_nr, iom_recxs will still be populated, but it will be a
 	 * truncated list.
 	 * 1 for SV.
 	 */
-	uint32_t		 iom_nr_out;
-	uint32_t		 iom_flags;
+	uint32_t iom_nr_out;
+	uint32_t iom_flags;
 	/** Size of the single value or the record size */
-	daos_size_t		 iom_size;
+	daos_size_t iom_size;
 	/**
 	 * The recx with the lowest offset within the requested extents
 	 * daos_io_desc::iod_recxs
 	 */
-	daos_recx_t		 iom_recx_lo;
+	daos_recx_t iom_recx_lo;
 	/**
 	 * The recx with the highest offset within the requested extents
 	 * daos_io_desc::iod_recxs. It is set to zero for single value,
 	 * or there is only one returned recx.
 	 */
-	daos_recx_t		 iom_recx_hi;
+	daos_recx_t iom_recx_hi;
 	/** All the returned recxs within the requested extents. Must be
 	 * allocated and freed by caller.
 	 */
-	daos_recx_t		*iom_recxs;
+	daos_recx_t *iom_recxs;
 } daos_iom_t;
 
 /** record status */
 enum {
 	/** Any record size, it is used by fetch */
-	DAOS_REC_ANY		= 0,
+	DAOS_REC_ANY = 0,
 };
 
 /** Mask for daos_obj_query_key() flags to indicate what is being queried */
 enum {
 	/** retrieve the max of dkey, akey, and/or idx of array value */
-	DAOS_GET_MAX		= (1 << 0),
+	DAOS_GET_MAX = (1 << 0),
 	/** retrieve the min of dkey, akey, and/or idx of array value */
-	DAOS_GET_MIN		= (1 << 1),
+	DAOS_GET_MIN = (1 << 1),
 	/** retrieve the dkey */
-	DAOS_GET_DKEY		= (1 << 2),
+	DAOS_GET_DKEY = (1 << 2),
 	/** retrieve the akey */
-	DAOS_GET_AKEY		= (1 << 3),
+	DAOS_GET_AKEY = (1 << 3),
 	/** retrieve the idx of array value */
-	DAOS_GET_RECX		= (1 << 4),
+	DAOS_GET_RECX = (1 << 4),
 };
 
 /**
@@ -303,12 +302,12 @@ enum {
  */
 typedef struct {
 	/** Key length */
-	daos_size_t	kd_key_len;
+	daos_size_t kd_key_len;
 	/**
 	 * Flag for akey value types: DAOS_IOD_SINGLE, DAOS_IOD_ARRAY.
 	 * It is ignored for dkey enumeration.
 	 */
-	uint32_t	kd_val_type;
+	uint32_t kd_val_type;
 } daos_key_desc_t;
 
 /**
@@ -324,9 +323,8 @@ typedef struct {
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
-static inline void  __attribute__ ((deprecated))
-daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
-		     daos_oclass_id_t cid, uint32_t args)
+static inline void __attribute__((deprecated))
+daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats, daos_oclass_id_t cid, uint32_t args)
 {
 	uint64_t hdr;
 
@@ -341,37 +339,37 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	 * | OID_FMT_CLASS_BITS (object class)	 |
 	 * | 96-bit for upper layer ...		 |
 	 */
-	hdr  = ((uint64_t)OID_FMT_VER << OID_FMT_VER_SHIFT);
+	hdr = ((uint64_t)OID_FMT_VER << OID_FMT_VER_SHIFT);
 	hdr |= ((uint64_t)ofeats << OID_FMT_FEAT_SHIFT);
 	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
 	oid->hi |= hdr;
 }
 
-#define DAOS_OCH_RDD_BITS	4
-#define DAOS_OCH_SHD_BITS	6
-#define DAOS_OCH_RDD_SHIFT	0
-#define DAOS_OCH_SHD_SHIFT	DAOS_OCH_RDD_BITS
-#define DAOS_OCH_RDD_MAX_VAL	((1ULL << DAOS_OCH_RDD_BITS) - 1)
-#define DAOS_OCH_SHD_MAX_VAL	((1ULL << DAOS_OCH_SHD_BITS) - 1)
-#define DAOS_OCH_RDD_MASK	(DAOS_OCH_RDD_MAX_VAL << DAOS_OCH_RDD_SHIFT)
-#define DAOS_OCH_SHD_MASK	(DAOS_OCH_SHD_MAX_VAL << DAOS_OCH_SHD_SHIFT)
+#define DAOS_OCH_RDD_BITS    4
+#define DAOS_OCH_SHD_BITS    6
+#define DAOS_OCH_RDD_SHIFT   0
+#define DAOS_OCH_SHD_SHIFT   DAOS_OCH_RDD_BITS
+#define DAOS_OCH_RDD_MAX_VAL ((1ULL << DAOS_OCH_RDD_BITS) - 1)
+#define DAOS_OCH_SHD_MAX_VAL ((1ULL << DAOS_OCH_SHD_BITS) - 1)
+#define DAOS_OCH_RDD_MASK    (DAOS_OCH_RDD_MAX_VAL << DAOS_OCH_RDD_SHIFT)
+#define DAOS_OCH_SHD_MASK    (DAOS_OCH_SHD_MAX_VAL << DAOS_OCH_SHD_SHIFT)
 
 /** Flags for oclass hints */
 enum {
 	/** Flags to control OC Redundancy */
-	DAOS_OCH_RDD_DEF	= (1 << 0),	/** Default - use RF prop */
-	DAOS_OCH_RDD_NO		= (1 << 1),	/** No redundancy */
-	DAOS_OCH_RDD_RP		= (1 << 2),	/** Replication */
-	DAOS_OCH_RDD_EC		= (1 << 3),	/** Erasure Code */
+	DAOS_OCH_RDD_DEF = (1 << 0), /** Default - use RF prop */
+	DAOS_OCH_RDD_NO  = (1 << 1), /** No redundancy */
+	DAOS_OCH_RDD_RP  = (1 << 2), /** Replication */
+	DAOS_OCH_RDD_EC  = (1 << 3), /** Erasure Code */
 	/** Flags to control OC Sharding */
-	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default: Use MAX for array &
-						 * flat KV; 1 grp for others.
-						 */
-	DAOS_OCH_SHD_TINY	= (1 << 5),	/** <= 4 grps */
-	DAOS_OCH_SHD_REG	= (1 << 6),	/** max(128, 25%) */
-	DAOS_OCH_SHD_HI		= (1 << 7),	/** max(256, 50%) */
-	DAOS_OCH_SHD_EXT	= (1 << 8),	/** max(1024, 80%) */
-	DAOS_OCH_SHD_MAX	= (1 << 9),	/** 100% */
+	DAOS_OCH_SHD_DEF = (1 << 4),  /** Default: Use MAX for array &
+				       * flat KV; 1 grp for others.
+				       */
+	DAOS_OCH_SHD_TINY = (1 << 5), /** <= 4 grps */
+	DAOS_OCH_SHD_REG  = (1 << 6), /** max(128, 25%) */
+	DAOS_OCH_SHD_HI   = (1 << 7), /** max(256, 50%) */
+	DAOS_OCH_SHD_EXT  = (1 << 8), /** max(1024, 80%) */
+	DAOS_OCH_SHD_MAX  = (1 << 9), /** 100% */
 };
 
 /**
@@ -401,9 +399,8 @@ enum {
  * \param[in]	args	Reserved.
  */
 int
-daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
-		      daos_ofeat_t ofeats, daos_oclass_id_t cid,
-		      daos_oclass_hints_t hints, uint32_t args);
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid, daos_ofeat_t ofeats,
+		      daos_oclass_id_t cid, daos_oclass_hints_t hints, uint32_t args);
 
 /**
  * Open an DAOS object.
@@ -427,8 +424,8 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
  *					this object
  */
 int
-daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
-	      daos_handle_t *oh, daos_event_t *ev);
+daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode, daos_handle_t *oh,
+	      daos_event_t *ev);
 
 /**
  * Close an opened object.
@@ -467,8 +464,7 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
  *					aggregated. Punch result is undefined.
  */
 int
-daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-	       daos_event_t *ev);
+daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_event_t *ev);
 
 /**
  * Punch dkeys (with all akeys) from an object.
@@ -494,8 +490,8 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					aggregated. Punch result is undefined.
  */
 int
-daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-		     unsigned int nr, daos_key_t *dkeys, daos_event_t *ev);
+daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags, unsigned int nr,
+		     daos_key_t *dkeys, daos_event_t *ev);
 
 /**
  * Punch akeys (with all records) from an object.
@@ -522,9 +518,8 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					aggregated. Punch result is undefined.
  */
 int
-daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-		     daos_key_t *dkey, unsigned int nr, daos_key_t *akeys,
-		     daos_event_t *ev);
+daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_key_t *dkey,
+		     unsigned int nr, daos_key_t *akeys, daos_event_t *ev);
 
 /**
  * Query attributes of an object.
@@ -544,8 +539,7 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
-	       daos_event_t *ev);
+daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks, daos_event_t *ev);
 
 /*
  * Object I/O API
@@ -610,9 +604,9 @@ daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-	       daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-	       d_sg_list_t *sgls, daos_iom_t *ioms, daos_event_t *ev);
+daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_key_t *dkey,
+	       unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls, daos_iom_t *ioms,
+	       daos_event_t *ev);
 
 /**
  * Insert or update object records stored in co-located arrays.
@@ -663,9 +657,8 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					aggregated. Update result is undefined.
  */
 int
-daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-		d_sg_list_t *sgls, daos_event_t *ev);
+daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_key_t *dkey,
+		unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls, daos_event_t *ev);
 
 /**
  * Distribution key enumeration.
@@ -713,9 +706,8 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *					enumerate again.
  */
 int
-daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
-		   daos_key_desc_t *kds, d_sg_list_t *sgl,
-		   daos_anchor_t *anchor, daos_event_t *ev);
+daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr, daos_key_desc_t *kds,
+		   d_sg_list_t *sgl, daos_anchor_t *anchor, daos_event_t *ev);
 
 /**
  * Attribute key enumeration.
@@ -764,9 +756,8 @@ daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
  *					enumerate again.
  */
 int
-daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		   uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
-		   daos_anchor_t *anchor, daos_event_t *ev);
+daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, uint32_t *nr,
+		   daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor, daos_event_t *ev);
 
 /**
  * Extent enumeration of valid records in the array.
@@ -817,11 +808,9 @@ daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		   daos_key_t *akey, daos_size_t *size, uint32_t *nr,
-		   daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		   daos_anchor_t *anchor, bool incr_order,
-		   daos_event_t *ev);
+daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, daos_key_t *akey,
+		   daos_size_t *size, uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		   daos_anchor_t *anchor, bool incr_order, daos_event_t *ev);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
@@ -867,9 +856,8 @@ daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
-		   daos_event_t *ev);
+daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_key_t *dkey,
+		   daos_key_t *akey, daos_recx_t *recx, daos_event_t *ev);
 
 /**
  * Verify object data consistency against the specified epoch.
@@ -947,8 +935,7 @@ daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor);
  *			-DER_INVAL	Invalid parameter
  */
 int
-daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
-	      daos_handle_t *oh, daos_event_t *ev);
+daos_oit_open(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *oh, daos_event_t *ev);
 
 /**
  * Close an opened Object Index Table (OIT).
@@ -985,8 +972,8 @@ daos_oit_close(daos_handle_t oh, daos_event_t *ev);
  *			-DER_INVAL	Invalid parameter
  */
 int
-daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
-	      daos_anchor_t *anchor, daos_event_t *ev);
+daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr, daos_anchor_t *anchor,
+	      daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

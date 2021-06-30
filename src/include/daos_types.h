@@ -36,43 +36,43 @@ extern "C" {
  * Generic data type definition
  */
 
-typedef uint64_t	daos_size_t;
-typedef uint64_t	daos_off_t;
+typedef uint64_t daos_size_t;
+typedef uint64_t daos_off_t;
 
-#define crt_proc_daos_key_t	crt_proc_d_iov_t
-#define crt_proc_daos_size_t	crt_proc_uint64_t
-#define crt_proc_daos_epoch_t	crt_proc_uint64_t
+#define crt_proc_daos_key_t   crt_proc_d_iov_t
+#define crt_proc_daos_size_t  crt_proc_uint64_t
+#define crt_proc_daos_epoch_t crt_proc_uint64_t
 
 /** size of SHA-256 */
-#define DAOS_HKEY_MAX	32
+#define DAOS_HKEY_MAX 32
 
 typedef enum {
-	DAOS_ANCHOR_TYPE_ZERO	= 0,
-	DAOS_ANCHOR_TYPE_HKEY	= 1,
-	DAOS_ANCHOR_TYPE_KEY	= 2,
-	DAOS_ANCHOR_TYPE_EOF	= 3,
+	DAOS_ANCHOR_TYPE_ZERO = 0,
+	DAOS_ANCHOR_TYPE_HKEY = 1,
+	DAOS_ANCHOR_TYPE_KEY  = 2,
+	DAOS_ANCHOR_TYPE_EOF  = 3,
 } daos_anchor_type_t;
 
 /** Iteration Anchor */
-#define DAOS_ANCHOR_BUF_MAX	104
+#define DAOS_ANCHOR_BUF_MAX 104
 typedef struct {
-	uint16_t	da_type; /** daos_anchor_type_t */
-	uint16_t	da_shard;
-	uint32_t	da_flags; /** see enum daos_anchor_flags */
+	uint16_t da_type; /** daos_anchor_type_t */
+	uint16_t da_shard;
+	uint32_t da_flags; /** see enum daos_anchor_flags */
 	/* record the offset for each shards for EC object */
-	uint64_t	da_sub_anchors;
-	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
+	uint64_t da_sub_anchors;
+	uint8_t  da_buf[DAOS_ANCHOR_BUF_MAX];
 } daos_anchor_t;
 
-#define DAOS_ANCHOR_INIT	((daos_anchor_t){DAOS_ANCHOR_TYPE_ZERO})
+#define DAOS_ANCHOR_INIT ((daos_anchor_t){DAOS_ANCHOR_TYPE_ZERO})
 
 /** Generic handle for various DAOS components like container, object, etc. */
 typedef struct {
-	uint64_t	cookie;
+	uint64_t cookie;
 } daos_handle_t;
 
-#define DAOS_HDL_INVAL	((daos_handle_t){0})
-#define DAOS_TX_NONE	DAOS_HDL_INVAL
+#define DAOS_HDL_INVAL ((daos_handle_t){0})
+#define DAOS_TX_NONE   DAOS_HDL_INVAL
 
 static inline bool
 daos_handle_is_inval(daos_handle_t hdl)
@@ -97,27 +97,27 @@ daos_handle_is_valid(daos_handle_t hdl)
  *
  * The three flags above are mutually exclusive.
  */
-#define DAOS_PC_RO	(1U << 0)
-#define DAOS_PC_RW	(1U << 1)
-#define DAOS_PC_EX	(1U << 2)
+#define DAOS_PC_RO (1U << 0)
+#define DAOS_PC_RW (1U << 1)
+#define DAOS_PC_EX (1U << 2)
 
-#define DAOS_PC_NBITS	3
-#define DAOS_PC_MASK	((1U << DAOS_PC_NBITS) - 1)
+#define DAOS_PC_NBITS 3
+#define DAOS_PC_MASK  ((1U << DAOS_PC_NBITS) - 1)
 
 /**
  * Epoch
  */
-typedef uint64_t	daos_epoch_t;
+typedef uint64_t daos_epoch_t;
 
 typedef struct {
 	/** Low bound of the epoch range */
-	daos_epoch_t	epr_lo;
+	daos_epoch_t epr_lo;
 	/** High bound of the epoch range */
-	daos_epoch_t	epr_hi;
+	daos_epoch_t epr_hi;
 } daos_epoch_range_t;
 
 /** Highest possible epoch */
-#define DAOS_EPOCH_MAX	(~0ULL)
+#define DAOS_EPOCH_MAX (~0ULL)
 
 typedef d_iov_t daos_key_t;
 
@@ -126,27 +126,27 @@ typedef d_iov_t daos_key_t;
  */
 
 typedef struct daos_event {
-	int			ev_error;
+	int ev_error;
 	/** Internal use, please do not modify */
 	struct {
-		uint64_t	space[19];
-	}			ev_private;
+		uint64_t space[19];
+	} ev_private;
 	/** Used for debugging */
-	uint64_t		ev_debug;
+	uint64_t ev_debug;
 } daos_event_t;
 
 /** Wait for completion event forever */
-#define DAOS_EQ_WAIT            -1
+#define DAOS_EQ_WAIT -1
 /** Always return immediately */
-#define DAOS_EQ_NOWAIT          0
+#define DAOS_EQ_NOWAIT 0
 
 typedef enum {
 	/** Query outstanding completed event */
-	DAOS_EQR_COMPLETED	= (1),
+	DAOS_EQR_COMPLETED = (1),
 	/** Query # inflight event */
-	DAOS_EQR_WAITING	= (1 << 1),
+	DAOS_EQR_WAITING = (1 << 1),
 	/** Query # inflight + completed events in EQ */
-	DAOS_EQR_ALL		= (DAOS_EQR_COMPLETED | DAOS_EQR_WAITING),
+	DAOS_EQR_ALL = (DAOS_EQR_COMPLETED | DAOS_EQR_WAITING),
 } daos_eq_query_t;
 
 typedef enum {
@@ -162,11 +162,11 @@ typedef enum {
  */
 struct d_tgt_list {
 	/** array of ranks */
-	d_rank_t	*tl_ranks;
+	d_rank_t *tl_ranks;
 	/** array of targets */
-	int32_t		*tl_tgts;
+	int32_t *tl_tgts;
 	/** number of ranks & tgts */
-	uint32_t	tl_nr;
+	uint32_t tl_nr;
 };
 
 struct daos_eq;
@@ -178,14 +178,14 @@ struct daos_eq;
  * set bit 0 to 1.
  */
 enum {
-	DAOS_HTYPE_EQ		= 1, /**< event queue */
-	DAOS_HTYPE_POOL		= 3, /**< pool */
-	DAOS_HTYPE_CO		= 5, /**< container */
-	DAOS_HTYPE_OBJ		= 7, /**< object */
-	DAOS_HTYPE_ARRAY	= 9, /**< array */
-	DAOS_HTYPE_TX		= 11, /**< transaction */
-	DAOS_HTYPE_KV		= 13, /**< KV */
-	/* Must enlarge D_HTYPE_BITS to add more types */
+	DAOS_HTYPE_EQ    = 1,  /**< event queue */
+	DAOS_HTYPE_POOL  = 3,  /**< pool */
+	DAOS_HTYPE_CO    = 5,  /**< container */
+	DAOS_HTYPE_OBJ   = 7,  /**< object */
+	DAOS_HTYPE_ARRAY = 9,  /**< array */
+	DAOS_HTYPE_TX    = 11, /**< transaction */
+	DAOS_HTYPE_KV    = 13, /**< KV */
+			       /* Must enlarge D_HTYPE_BITS to add more types */
 };
 
 /**
@@ -197,8 +197,8 @@ enum {
  * It is put here because it's almost used by everyone.
  */
 typedef struct {
-	uint64_t	lo;
-	uint64_t	hi;
+	uint64_t lo;
+	uint64_t hi;
 } daos_obj_id_t;
 
 #if defined(__cplusplus)

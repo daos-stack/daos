@@ -2,14 +2,18 @@
 ---
 BasedOnStyle: LLVM
 IndentWidth: 8
+ColumnLimit: 100
 UseTab: ForContinuationAndIndentation
 BreakBeforeBraces: Linux
 AllowShortIfStatementsOnASingleLine: false
+AlwaysBreakAfterReturnType: All
 IndentCaseLabels: false
-ForEachMacros: ['d_list_for_each_entry', 'd_list_for_each_entry_safe',
-                'evt_ent_array_for_each']
+ForEachMacros: ['d_list_for_each_entry', 'd_list_for_each_entry_safe', 'evt_ent_array_for_each']
 PointerAlignment: Right
 AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true
 AlignTrailingComments: true
+AlignConsecutiveMacros: true
+SortIncludes: false
+SpaceBeforeParens: ControlStatementsExceptForEachMacros
 ...

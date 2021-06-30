@@ -13,8 +13,6 @@ int
 dedup_get_csum_algo(struct cont_props *cont_props);
 
 void
-dedup_configure_csummer(struct daos_csummer *csummer,
-			struct cont_props *cont_props);
-
+dedup_configure_csummer(struct daos_csummer *csummer, struct cont_props *cont_props);
 
 #endif /** __DAOS_DEDUP_H */

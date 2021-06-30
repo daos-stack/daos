@@ -18,35 +18,35 @@
  * tse_task is used to track single asynchronous operation.
  * 1K bytes all together.
  */
-#define TSE_TASK_SIZE		1024
+#define TSE_TASK_SIZE 1024
 /* 8 bytes used for public members */
-#define TSE_PRIV_SIZE		1016
+#define TSE_PRIV_SIZE 1016
 /* tse_task arguments max length */
-#define TSE_TASK_ARG_LEN		880
+#define TSE_TASK_ARG_LEN 880
 
 typedef struct tse_task {
-	int			dt_result;
+	int dt_result;
 	/** padding bytes */
-	int			dt_pad32;
+	int dt_pad32;
 	/* daos schedule internal */
 	struct {
-		char		dt_space[TSE_PRIV_SIZE];
-	}			dt_private;
+		char dt_space[TSE_PRIV_SIZE];
+	} dt_private;
 } tse_task_t;
 
 /**
  * Track all of the tasks under a scheduler.
  */
 typedef struct {
-	int		ds_result;
+	int ds_result;
 
 	/* user data associated with the scheduler (completion cb data, etc.) */
-	void		*ds_udata;
+	void *ds_udata;
 
 	/* daos schedule internal */
 	struct {
-		uint64_t	ds_space[48];
-	}			ds_private;
+		uint64_t ds_space[48];
+	} ds_private;
 } tse_sched_t;
 
 typedef int (*tse_sched_comp_cb_t)(void *args, int rc);
@@ -77,8 +77,7 @@ tse_task2sched(tse_task_t *task);
  * \return			negative errno if initialization fails.
  */
 int
-tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
-		void *udata);
+tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb, void *udata);
 
 /**
  * Finish the scheduler.
@@ -128,8 +127,7 @@ tse_sched_complete(tse_sched_t *sched, int ret, bool cancel);
  * \return			errno if registration fails.
  */
 int
-tse_sched_register_comp_cb(tse_sched_t *sched,
-			   tse_sched_comp_cb_t comp_cb, void *arg);
+tse_sched_register_comp_cb(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb, void *arg);
 
 /**
  * Make progress on scheduler. Runs tasks that are ready to be executed after
@@ -178,8 +176,7 @@ tse_sched_check_complete(tse_sched_t *sched);
  * \return			negative errno if it fails.
  */
 int
-tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
-		tse_task_t **taskp);
+tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv, tse_task_t **taskp);
 
 /**
  * Add task to scheduler it was initialized with. If task body function should
@@ -223,8 +220,7 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay);
  * \return		negative errno if it fails.
  */
 int
-tse_task_register_comp_cb(tse_task_t *task, tse_task_cb_t comp_cb,
-			  void *arg, size_t arg_size);
+tse_task_register_comp_cb(tse_task_t *task, tse_task_cb_t comp_cb, void *arg, size_t arg_size);
 
 /**
  * Mark task as completed.
@@ -278,8 +274,7 @@ tse_task_set_priv(tse_task_t *task, void *priv);
  *			negative errno if it fails.
  */
 int
-tse_task_register_deps(tse_task_t *task, int num_deps,
-		       tse_task_t *dep_tasks[]);
+tse_task_register_deps(tse_task_t *task, int num_deps, tse_task_t *dep_tasks[]);
 
 /**
  * Register prepare and completion callbacks that will be executed right before
@@ -302,9 +297,8 @@ tse_task_register_deps(tse_task_t *task, int num_deps,
  *			negative errno if it fails.
  */
 int
-tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb,
-		      void *prep_data, size_t prep_data_size,
-		      tse_task_cb_t comp_cb, void *comp_data,
+tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb, void *prep_data,
+		      size_t prep_data_size, tse_task_cb_t comp_cb, void *comp_data,
 		      size_t comp_data_size);
 
 /**

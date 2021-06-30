@@ -15,12 +15,12 @@ extern "C" {
  * It describes schema of data distribution & protection.
  */
 enum {
-	OC_UNKNOWN	= 0,
+	OC_UNKNOWN = 0,
 	/**
 	 * Object classes with no data protection
 	 * NB: The first 50 IDs are reserved for backward compatibility
 	 */
-	OC_BACK_COMPAT	= 50,
+	OC_BACK_COMPAT = 50,
 	/** Single shard object */
 	OC_TINY,
 	/**
@@ -49,7 +49,7 @@ enum {
 	 * Tiny object protected by replication
 	 * This object class has one redundancy group
 	 */
-	OC_RP_TINY	= 60,
+	OC_RP_TINY = 60,
 	/**
 	 * Replicated object with small number of redundancy groups.
 	 * Number of redundancy groups of the class is chosen by DAOS
@@ -79,7 +79,7 @@ enum {
 	 * Tiny object protected by replication
 	 * This object class has one redundancy group
 	 */
-	OC_RP_SF_TINY	= 70,
+	OC_RP_SF_TINY = 70,
 	/**
 	 * (SF) Replicated object with small number of redundancy groups.
 	 * Number of redundancy groups of the class is chosen by DAOS
@@ -103,7 +103,7 @@ enum {
 	 * Replicated object class which is extremely scalable for fetch.
 	 * It has many replicas so it is very slow for update.
 	 */
-	OC_RP_XSF	= 80,
+	OC_RP_XSF = 80,
 
 	/**
 	 * Object classes protected by erasure code
@@ -112,7 +112,7 @@ enum {
 	 * Tiny object protected by EC
 	 * This object class has one redundancy group
 	 */
-	OC_EC_TINY	= 100,
+	OC_EC_TINY = 100,
 	/**
 	 * EC object with small number of redundancy groups.
 	 * Number of redundancy groups of the class is chosen by DAOS
@@ -141,7 +141,7 @@ enum {
 	 * S1 : shards=1, S2 means shards=2, ...
 	 * SX : spreading across all targets within the pool
 	 */
-	OC_S1		= 200,
+	OC_S1 = 200,
 	OC_S2,
 	OC_S4,
 	OC_S6,
@@ -177,7 +177,7 @@ enum {
 	 * 8GX : 8 replicas, it spreads across all targets within the pool
 	 */
 	/** 2-way replicated object classes */
-	OC_RP_2G1	= 240,
+	OC_RP_2G1 = 240,
 	OC_RP_2G2,
 	OC_RP_2G4,
 	OC_RP_2G6,
@@ -204,7 +204,7 @@ enum {
 	OC_RP_2G3,
 
 	/** 3-way replicated object classes */
-	OC_RP_3G1	= 280,
+	OC_RP_3G1 = 280,
 	OC_RP_3G2,
 	OC_RP_3G4,
 	OC_RP_3G6,
@@ -230,7 +230,7 @@ enum {
 	OC_RP_3GX,
 
 	/** 4-way replicated object classes */
-	OC_RP_4G1	= 320,
+	OC_RP_4G1 = 320,
 	OC_RP_4G2,
 	OC_RP_4G4,
 	OC_RP_4G6,
@@ -256,7 +256,7 @@ enum {
 	OC_RP_4GX,
 
 	/** 6-way replicated object classes */
-	OC_RP_6G1	= 360,
+	OC_RP_6G1 = 360,
 	OC_RP_6G2,
 	OC_RP_6G4,
 	OC_RP_6G6,
@@ -282,7 +282,7 @@ enum {
 	OC_RP_6GX,
 
 	/** 8-way replicated object classes */
-	OC_RP_8G1	= 400,
+	OC_RP_8G1 = 400,
 	OC_RP_8G2,
 	OC_RP_8G4,
 	OC_RP_8G6,
@@ -308,7 +308,7 @@ enum {
 	OC_RP_8GX,
 
 	/* OC_XSF will map to one of these */
-	OC_RP_12G1	= 440,
+	OC_RP_12G1 = 440,
 	OC_RP_16G1,
 	OC_RP_24G1,
 	OC_RP_32G1,
@@ -328,7 +328,7 @@ enum {
 	 * - 16P2GX: 16+2 EC object spreads across all targets within the pool
 	 */
 	/** EC 2+1 object classes */
-	OC_EC_2P1G1	= 500,
+	OC_EC_2P1G1 = 500,
 	OC_EC_2P1G2,
 	OC_EC_2P1G4,
 	OC_EC_2P1G6,
@@ -354,7 +354,7 @@ enum {
 	OC_EC_2P1GX,
 
 	/** EC 2+2 object classes */
-	OC_EC_2P2G1	= 540,
+	OC_EC_2P2G1 = 540,
 	OC_EC_2P2G2,
 	OC_EC_2P2G4,
 	OC_EC_2P2G6,
@@ -380,7 +380,7 @@ enum {
 	OC_EC_2P2GX,
 
 	/** EC 4+1 object classes */
-	OC_EC_4P1G1	= 580,
+	OC_EC_4P1G1 = 580,
 	OC_EC_4P1G2,
 	OC_EC_4P1G4,
 	OC_EC_4P1G6,
@@ -406,7 +406,7 @@ enum {
 	OC_EC_4P1GX,
 
 	/** EC 4+2 object classes */
-	OC_EC_4P2G1	= 620,
+	OC_EC_4P2G1 = 620,
 	OC_EC_4P2G2,
 	OC_EC_4P2G4,
 	OC_EC_4P2G6,
@@ -432,7 +432,7 @@ enum {
 	OC_EC_4P2GX,
 
 	/** EC 8+1 object classes */
-	OC_EC_8P1G1	= 660,
+	OC_EC_8P1G1 = 660,
 	OC_EC_8P1G2,
 	OC_EC_8P1G4,
 	OC_EC_8P1G6,
@@ -458,7 +458,7 @@ enum {
 	OC_EC_8P1GX,
 
 	/** EC 8+2 object classes */
-	OC_EC_8P2G1	= 700,
+	OC_EC_8P2G1 = 700,
 	OC_EC_8P2G2,
 	OC_EC_8P2G4,
 	OC_EC_8P2G6,
@@ -484,7 +484,7 @@ enum {
 	OC_EC_8P2GX,
 
 	/** EC 16+1 object classes */
-	OC_EC_16P1G1	= 740,
+	OC_EC_16P1G1 = 740,
 	OC_EC_16P1G2,
 	OC_EC_16P1G4,
 	OC_EC_16P1G6,
@@ -510,7 +510,7 @@ enum {
 	OC_EC_16P1GX,
 
 	/** EC 16+2 object classes */
-	OC_EC_16P2G1	= 780,
+	OC_EC_16P2G1 = 780,
 	OC_EC_16P2G2,
 	OC_EC_16P2G4,
 	OC_EC_16P2G6,
@@ -536,70 +536,70 @@ enum {
 	OC_EC_16P2GX,
 
 	/** Class ID equal or higher than this is reserved */
-	OC_RESERVED		= (1U << 10),
+	OC_RESERVED = (1U << 10),
 };
 
 enum daos_obj_schema {
-	DAOS_OS_SINGLE,		/**< Single stripe object */
-	DAOS_OS_STRIPED,	/**< Fix striped object */
-	DAOS_OS_DYN_STRIPED,	/**< Dynamically striped object */
-	DAOS_OS_DYN_CHUNKED,	/**< Dynamically chunked object */
+	DAOS_OS_SINGLE,      /**< Single stripe object */
+	DAOS_OS_STRIPED,     /**< Fix striped object */
+	DAOS_OS_DYN_STRIPED, /**< Dynamically striped object */
+	DAOS_OS_DYN_CHUNKED, /**< Dynamically chunked object */
 };
 
 enum daos_obj_resil {
-	DAOS_RES_EC,            /**< Erasure code */
-	DAOS_RES_REPL,          /**< Replication */
+	DAOS_RES_EC,   /**< Erasure code */
+	DAOS_RES_REPL, /**< Replication */
 };
 
 /** Object class attributes */
 struct daos_oclass_attr {
 	/** reserved: object placement schema, used by placement algorithm */
-	enum daos_obj_schema		 ca_schema;
+	enum daos_obj_schema ca_schema;
 	/** Resilience method, replication or erasure code */
-	enum daos_obj_resil		 ca_resil;
+	enum daos_obj_resil ca_resil;
 	/** reserved */
-	unsigned int			 ca_resil_degree;
+	unsigned int ca_resil_degree;
 	/** Initial # redundancy group, unnecessary for some schemas */
-	unsigned int			 ca_grp_nr;
+	unsigned int ca_grp_nr;
 	union {
 		/** Replication attributes */
 		struct daos_rp_attr {
 			/** Protocol of replicating, reserved */
-			unsigned int	 r_proto;
+			unsigned int r_proto;
 			/** Number of replicas */
-			unsigned int	 r_num;
+			unsigned int r_num;
 		} rp;
 
 		/** Erasure coding attributes */
 		struct daos_ec_attr {
 			/** number of data cells (k) */
-			unsigned short	 e_k;
+			unsigned short e_k;
 			/** number of parity cells (p) */
-			unsigned short	 e_p;
+			unsigned short e_p;
 			/** length of each block of data (cell) */
-			unsigned int	 e_len;
+			unsigned int e_len;
 		} ec;
 	} u;
 	/** TODO: add more attributes */
 };
 
 /** object class ID */
-typedef uint16_t		daos_oclass_id_t;
+typedef uint16_t daos_oclass_id_t;
 /** object class hints */
-typedef uint16_t		daos_oclass_hints_t;
+typedef uint16_t daos_oclass_hints_t;
 /** object feature bits */
-typedef uint16_t		daos_ofeat_t;
+typedef uint16_t daos_ofeat_t;
 
 /** List of object classes, used for class enumeration */
 struct daos_oclass_list {
 	/** List length, actual buffer size */
-	uint32_t		 cl_nr;
+	uint32_t cl_nr;
 	/** List length, returned buffer size */
-	uint32_t		 cl_nr_out;
+	uint32_t cl_nr_out;
 	/** Actual list of class IDs */
-	daos_oclass_id_t	*cl_cids;
+	daos_oclass_id_t *cl_cids;
 	/** Attributes of each listed class, optional */
-	struct daos_oclass_attr	*cl_cattrs;
+	struct daos_oclass_attr *cl_cattrs;
 };
 
 /**
@@ -666,8 +666,8 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *name);
  *			-DER_EXIST	Object class ID already existed
  */
 int
-daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
-			struct daos_oclass_attr *attr, daos_event_t *ev);
+daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid, struct daos_oclass_attr *attr,
+			daos_event_t *ev);
 
 /**
  * Query attributes of an object class by its ID.
@@ -687,8 +687,8 @@ daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
  *			-DER_NONEXIST	Nonexistent class ID
  */
 int
-daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid,
-		     struct daos_oclass_attr *attr, daos_event_t *ev);
+daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid, struct daos_oclass_attr *attr,
+		     daos_event_t *ev);
 
 /**
  * List existing object classes.
@@ -710,8 +710,8 @@ daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_list_class(daos_handle_t coh, struct daos_oclass_list *list,
-		    daos_anchor_t *anchor, daos_event_t *ev);
+daos_obj_list_class(daos_handle_t coh, struct daos_oclass_list *list, daos_anchor_t *anchor,
+		    daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

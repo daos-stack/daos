@@ -22,17 +22,17 @@ extern "C" {
 /** Range of contiguous records */
 typedef struct {
 	/** Index of the first record in the range */
-	daos_off_t		rg_idx;
+	daos_off_t rg_idx;
 	/** Number of records in the range */
-	daos_size_t		rg_len;
+	daos_size_t rg_len;
 } daos_range_t;
 
 /** IO descriptor of ranges in a DAOS array object to access */
 typedef struct {
 	/** Number of entries in arr_rgs */
-	daos_size_t		arr_nr;
+	daos_size_t arr_nr;
 	/** Array of ranges; each range defines a starting index and length. */
-	daos_range_t	       *arr_rgs;
+	daos_range_t *arr_rgs;
 	/*
 	 * On read only: return the number of records that are short fetched
 	 * from the largest dkey(s). This helps for checking for short reads. If
@@ -40,8 +40,8 @@ typedef struct {
 	 * checked with daos_array_get_size() compared with the indexes being
 	 * read.
 	 */
-	daos_size_t		arr_nr_short_read;
-	daos_size_t		arr_nr_read;
+	daos_size_t arr_nr_short_read;
+	daos_size_t arr_nr_read;
 } daos_array_iod_t;
 
 /**
@@ -61,11 +61,10 @@ typedef struct {
  * \param[in]	args	Reserved.
  */
 static inline int
-daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr,
-		       uint32_t args)
+daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr, uint32_t args)
 {
-	static daos_ofeat_t	feat;
-	uint64_t		hdr;
+	static daos_ofeat_t feat;
+	uint64_t            hdr;
 
 	feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT;
 
@@ -83,7 +82,7 @@ daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr,
 	 * | OID_FMT_CLASS_BITS (object class)	 |
 	 * | 96-bit for upper layer ...		 |
 	 */
-	hdr  = ((uint64_t)OID_FMT_VER << OID_FMT_VER_SHIFT);
+	hdr = ((uint64_t)OID_FMT_VER << OID_FMT_VER_SHIFT);
 	hdr |= ((uint64_t)feat << OID_FMT_FEAT_SHIFT);
 	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
 	oid->hi |= hdr;
@@ -135,9 +134,8 @@ daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
-		  daos_size_t cell_size, daos_size_t chunk_size,
-		  daos_handle_t *oh, daos_event_t *ev);
+daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th, daos_size_t cell_size,
+		  daos_size_t chunk_size, daos_handle_t *oh, daos_event_t *ev);
 
 /**
  * Open an Array object. If the array has not been created before (no array
@@ -168,9 +166,9 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
-		unsigned int mode, daos_size_t *cell_size,
-		daos_size_t *chunk_size, daos_handle_t *oh, daos_event_t *ev);
+daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th, unsigned int mode,
+		daos_size_t *cell_size, daos_size_t *chunk_size, daos_handle_t *oh,
+		daos_event_t *ev);
 
 /**
  * Open an Array object with the array attributes specified by the user. This is
@@ -201,10 +199,9 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			-DER_NO_PERM	Permission denied
  */
 int
-daos_array_open_with_attr(daos_handle_t coh, daos_obj_id_t oid,
-			  daos_handle_t th, unsigned int mode,
-			  daos_size_t cell_size, daos_size_t chunk_size,
-			  daos_handle_t *oh, daos_event_t *ev);
+daos_array_open_with_attr(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th, unsigned int mode,
+			  daos_size_t cell_size, daos_size_t chunk_size, daos_handle_t *oh,
+			  daos_event_t *ev);
 
 /**
  * Convert a local array handle to global representation data which can be
@@ -247,8 +244,7 @@ daos_array_local2global(daos_handle_t oh, d_iov_t *glob);
  *			-DER_NO_HDL	Container handle is nonexistent
  */
 int
-daos_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
-			daos_handle_t *oh);
+daos_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode, daos_handle_t *oh);
 
 /**
  * Close an opened array object.
@@ -288,8 +284,8 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  *					fit into output buffer
  */
 int
-daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
-		d_sg_list_t *sgl, daos_event_t *ev);
+daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod, d_sg_list_t *sgl,
+		daos_event_t *ev);
 
 /**
  * Write data to an array object.
@@ -313,8 +309,8 @@ daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *					fit into output buffer
  */
 int
-daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
-		 d_sg_list_t *sgl, daos_event_t *ev);
+daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod, d_sg_list_t *sgl,
+		 daos_event_t *ev);
 
 /**
  * Query the number of records in the array object.
@@ -333,8 +329,7 @@ daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
-		    daos_event_t *ev);
+daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size, daos_event_t *ev);
 
 /**
  * Set the array size (truncate) in records. If array is shrinking, we punch
@@ -356,8 +351,7 @@ daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size,
-		    daos_event_t *ev);
+daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size, daos_event_t *ev);
 
 /**
  * Destroy the array object by punching all data (keys) in the array object
@@ -400,8 +394,7 @@ daos_array_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
-		 daos_event_t *ev);
+daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod, daos_event_t *ev);
 
 /**
  * Retrieve array cell and chunk size from an open handle.
@@ -419,8 +412,7 @@ daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *			-DER_INVAL	Invalid parameter
  */
 int
-daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
-		    daos_size_t *cell_size);
+daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size, daos_size_t *cell_size);
 
 #if defined(__cplusplus)
 }

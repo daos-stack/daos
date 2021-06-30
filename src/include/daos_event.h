@@ -38,8 +38,7 @@ extern "C" {
  * Given a pointer @ptr to the field @member embedded into type (usually
  * struct) @type, return pointer to the embedding instance of @type.
  */
-# define container_of(ptr, type, member)                \
-		((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+#define container_of(ptr, type, member) ((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 #endif
 
 /**
@@ -52,7 +51,7 @@ extern "C" {
 int
 daos_eq_create(daos_handle_t *eqh);
 
-#define DAOS_EQ_DESTROY_FORCE	1
+#define DAOS_EQ_DESTROY_FORCE 1
 /**
  * Destroy an Event Queue, it waits on -EBUSY if EQ is not empty.
  *
@@ -83,8 +82,8 @@ daos_eq_destroy(daos_handle_t eqh, int flags);
  *			< 0	negative value if error
  */
 int
-daos_eq_poll(daos_handle_t eqh, int wait_running,
-	     int64_t timeout, unsigned int nevents, daos_event_t **events);
+daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout, unsigned int nevents,
+	     daos_event_t **events);
 
 /**
  * Query how many outstanding events in EQ, if \a events is not NULL,
@@ -107,8 +106,8 @@ daos_eq_poll(daos_handle_t eqh, int wait_running,
  *			 < 0	negative value if error
  */
 int
-daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
-	      unsigned int nevents, daos_event_t **events);
+daos_eq_query(daos_handle_t eqh, daos_eq_query_t query, unsigned int nevents,
+	      daos_event_t **events);
 
 /**
  * Initialize a new event for \a eq
@@ -200,8 +199,7 @@ typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
  *			negative rc of associated operation of the event.
  */
 int
-daos_event_register_comp_cb(struct daos_event *ev, daos_event_comp_cb_t cb,
-			    void *arg);
+daos_event_register_comp_cb(struct daos_event *ev, daos_event_comp_cb_t cb, void *arg);
 
 /**
  * Mark the parent event as a launched barrier, meaning no more child events can

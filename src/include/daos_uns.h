@@ -47,15 +47,15 @@ enum {
 /** struct that has the values to make the connection from the UNS to DAOS */
 struct duns_attr_t {
 	/** IN/OUT: Pool uuid of the container. */
-	uuid_t			da_puuid;
+	uuid_t da_puuid;
 	/** IN/OUT: Container uuid that is created for the path. */
-	uuid_t			da_cuuid;
+	uuid_t da_cuuid;
 	/** IN/OUT: Container layout (POSIX, HDF5) */
-	daos_cont_layout_t	da_type;
+	daos_cont_layout_t da_type;
 	/** IN: (Optional) Object Class for all objects in the container */
-	daos_oclass_id_t	da_oclass_id;
+	daos_oclass_id_t da_oclass_id;
 	/** IN: (Optional) Chunk size for all files in container */
-	daos_size_t		da_chunk_size;
+	daos_size_t da_chunk_size;
 	/** OUT: Relative component of path from where the UNS entry is located.
 	 *
 	 * This is returned if the UNS entry is not the last entry in the path,
@@ -63,45 +63,45 @@ struct duns_attr_t {
 	 * the path. To check only the last entry in the path and not return
 	 * this relative path to that entry, set \a da_no_reverse_lookup.
 	 */
-	char			*da_rel_path;
+	char *da_rel_path;
 	/** IN: (Optional Container props to be added with duns_path_create */
-	daos_prop_t		*da_props;
+	daos_prop_t *da_props;
 	/** OUT: This is set to true if path is on Lustre filesystem */
-	bool			da_on_lustre;
+	bool da_on_lustre;
 	/** IN: (Deprecated - use flags) String does not include daos:// prefix
 	 *
 	 * Path that is passed does not have daos: prefix but is direct:
 	 * (/puuid/cuuid/xyz) and does not need to parse a path UNS attrs.
 	 * This is usually set to false.
 	 */
-	bool			da_no_prefix;
+	bool da_no_prefix;
 	/** IN: access flags
 	 *
 	 * DUNS_NO_PREFIX
 	 * DUNS_NO_REVERSE_LOOKUP
 	 * DUNS_NO_CHECK_PATH:
 	 */
-	uint32_t		da_flags;
+	uint32_t da_flags;
 	/** OUT: Pool label returned with a direct path.
 	 *
 	 * If the path is a direct path, we parse the first entry (pool) as
 	 * either a uuid or a label. If the format is not a uuid, then it's
 	 * returned as a label.
 	 */
-	char			*da_pool_label;
+	char *da_pool_label;
 	/** OUT: Container label returned with a direct path.
 	 *
 	 * If the path is a direct path, we parse the second entry (cont) as
 	 * either a uuid or a label. If the format is not a uuid, then it's
 	 * returned as a label.
 	 */
-	char			*da_cont_label;
+	char *da_cont_label;
 };
 
 /** extended attribute name that will container the UNS info */
-#define DUNS_XATTR_NAME		"user.daos"
+#define DUNS_XATTR_NAME "user.daos"
 /** Length of the extended attribute */
-#define DUNS_MAX_XATTR_LEN	170
+#define DUNS_MAX_XATTR_LEN 170
 
 /**
  * Create a special directory (POSIX) or file (HDF5) depending on the container
@@ -126,8 +126,7 @@ struct duns_attr_t {
  * \return		0 on Success. errno code on failure.
  */
 int
-duns_create_path(daos_handle_t poh, const char *path,
-		 struct duns_attr_t *attrp);
+duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp);
 
 /**
  * Retrieve the pool and container uuids from a path corresponding to a DAOS

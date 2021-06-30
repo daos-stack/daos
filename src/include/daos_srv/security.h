@@ -20,8 +20,8 @@
  * respectively.
  */
 struct ownership {
-	char *user;	/** name of the user owner */
-	char *group;	/** name of the group owner */
+	char *user;  /** name of the user owner */
+	char *group; /** name of the group owner */
 };
 
 /**
@@ -60,8 +60,7 @@ ds_sec_alloc_default_daos_cont_acl(void);
  *		-DER_PROTO	Unexpected or corrupt payload from control plane
  */
 int
-ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
-			     struct ownership *ownership,
+ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred, struct ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas);
 
 /**
@@ -83,8 +82,7 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
  *		-DER_NOMEM	Out of memory
  */
 int
-ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
-			     struct ownership *ownership,
+ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas);
 
 /**
@@ -152,8 +150,8 @@ ds_sec_cont_can_open(uint64_t cont_capas);
  *		False		Operation forbidden
  */
 bool
-ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
-		       struct ownership *ownership, struct daos_acl *acl);
+ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred, struct ownership *ownership,
+		       struct daos_acl *acl);
 
 /**
  * Determine if the container properties can be viewed based on the container
