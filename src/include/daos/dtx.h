@@ -15,7 +15,7 @@
  * threshould with considering RPC limitation, PMDK transaction, and
  * CPU schedule efficiency, and so on.
  */
-#define DTX_THRESHOLD_COUNT		(1 << 9)
+#define DTX_THRESHOLD_COUNT		(1 << 6)
 
 /* The time (in second) threshold for batched DTX commit. */
 #define DTX_COMMIT_THRESHOLD_AGE	10
