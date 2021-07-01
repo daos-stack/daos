@@ -35,3 +35,180 @@
    ...
    fun:sock_pe_progress_thread
 }
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:runtime.asyncPreempt
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   ...
+   fun:x_cgo_thread_start
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:runtime.asyncPreempt
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+   ...
+   fun:runtime.copystack
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+   ...
+   fun:runtime.gcDrain
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Value8
+   ...
+   fun:runtime.gcDrain
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   ...
+   fun:runtime.copystack
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:runtime.copystack
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:runtime.gentraceback
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:bufio.(*Reader).*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Value8
+   ...
+   fun:bufio.(*Reader).*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:bufio.(*Reader).*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:runtime.deferreturn
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:os.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:runtime.raceread
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:internal/bytealg.IndexByte
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:internal/bytealg.IndexByte
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:indexbytebody
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:strings.(*Builder).*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:strings.(*Builder).*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:runtime.(*mheap).allo*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:runtime.(*mheap).allo*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:runtime.systemstack
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:runtime.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   fun:runtime.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:runtime.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:runtime.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr32
+   fun:indexbytebody
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:main.createWriteStream.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:main.createWriteStream.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:runtime.memmove
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:fmt.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:github.com/daos-stack/daos/*
+}
