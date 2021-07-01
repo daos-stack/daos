@@ -57,3 +57,19 @@ echo ::group::Container copy test
 export LD_LIBRARY_PATH=/opt/daos/prereq/debug/spdk/lib/
 ./utils/node_local_test.py --no-root --test cont_copy
 echo ::endgroup::
+
+echo ::group::Container copy test2
+./utils/node_local_test.py --no-root --test cont_copy
+echo ::endgroup::
+
+echo ::group::Container copy test3
+./utils/node_local_test.py --no-root --test cont_copy
+echo ::endgroup::
+
+echo ::group::Container copy test4
+./utils/node_local_test.py --no-root --test cont_copy
+echo ::endgroup::
+
+echo ::group::Container copy test5
+./utils/node_local_test.py --no-root --test cont_copy
+echo ::endgroup::
