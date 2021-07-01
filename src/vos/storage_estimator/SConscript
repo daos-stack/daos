@@ -10,7 +10,7 @@ def install_storage_estimator_module(env, lib_prefix):
     denv = env.Clone()
     version = "{}.{}".format(
         sys.version_info.major, sys.version_info.minor)
-    if sys.version_info.major == "3":
+    if sys.version_info.major == 3:
         install_path = lib_prefix + "/python"
         install_path += version + "/site-packages/storage_estimator"
 

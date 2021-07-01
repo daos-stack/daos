@@ -12,7 +12,7 @@ def build_shim_module(env, lib_prefix):
     extra_flags = ""
     version = "{}.{}".format(
         sys.version_info.major, sys.version_info.minor)
-    if sys.version_info.major == "3":
+    if sys.version_info.major == 3:
         tgt_name = 'pydaos_shim'
         extra_flags = " -D__USE_PYTHON3__==1"
         new_env.ParseConfig("pkg-config --cflags --libs python3")
