@@ -40,7 +40,7 @@ struct evt_iterator {
 	/** index */
 	int				it_index;
 	/** For sorted iterators */
-	struct evt_entry_array		it_entries;
+	EVT_ENT_ARRAY_LG_PTR(it_entries);
 };
 
 #define EVT_TRACE_MAX                   32
@@ -256,7 +256,7 @@ evt_tcx_decref(struct evt_context *tcx)
 	if (tcx->tc_ref == 0) {
 		tcx->tc_magic = EVT_HDL_DEAD;
 		/* Free any memory allocated by embedded iterator */
-		evt_ent_array_fini(&tcx->tc_iter.it_entries);
+		evt_ent_array_fini(tcx->tc_iter.it_entries);
 		D_FREE(tcx);
 	}
 }
