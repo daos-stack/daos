@@ -34,6 +34,32 @@ def get_data_parity_number(log, oclass):
     tmp = re.findall(r'\d+', oclass)
     return {'data': tmp[0], 'parity': tmp[1]}
 
+def check_aggregation_status(pool, quick_check=True):
+    """EC Aggregation triggered status.
+    Args:
+        pool(object): pool object to get the query.
+        quick_check(bool): Return immediately when Aggregation starts for any
+                           storage type.
+    return:
+        result(dic): Storage Aggregation stats SCM/NVMe True/False.
+    """
+    agg_status = {'scm': False, 'nvme': False}
+    pool.connect()
+    initial_usage = pool.pool_percentage_used()
+
+    for _tmp in range(20):
+        current_usage = pool.pool_percentage_used()
+        print("pool_percentage during Aggregation = {}".format(current_usage))
+        for storage_type in ['scm', 'nvme']:
+            if current_usage[storage_type] > initial_usage[storage_type]:
+                print("Aggregation Started for {}.....".format(storage_type))
+                agg_status[storage_type] = True
+                #Return immediately once aggregation starts for quick check
+                if quick_check:
+                    return agg_status
+        time.sleep(5)
+    return agg_status
+
 class ErasureCodeIor(ServerFillUp):
     # pylint: disable=too-many-ancestors
     """
@@ -98,28 +124,53 @@ class ErasureCodeIor(ServerFillUp):
         self.ior_cmd.dfs_dir_oclass.update(oclass[0])
         self.ior_cmd.dfs_chunk.update(sizes[0])
 
-    def ior_write_dataset(self):
+    def ior_write_single_dataset(self, oclass, sizes, percent=1):
+        """Write IOR single data set with EC object.
+
+        Args:
+            oclass(list): list of the obj class to use with IOR
+            sizes(list): Update Transfer, Chunk and Block sizes
+            percent(int): %of storage to be filled. Default it will use the
+                          given parameters in yaml file.
+        """
+        self.ior_param_update(oclass, sizes)
+
+        # Create the new container with correct redundancy factor for EC
+        self.ec_container_create(oclass[0])
+        self.update_ior_cmd_with_pool(create_cont=False)
+
+        # Start IOR Write
+        self.container.uuid = self.ec_container.uuid
+        self.start_ior_load(operation="WriteRead", percent=percent,
+                            create_cont=False)
+        self.cont_uuid.append(self.ior_cmd.dfs_cont.value)
+
+    def ior_write_dataset(self, percent=1):
         """Write IOR data set with different EC object and different sizes."""
         for oclass in self.obj_class:
             for sizes in self.ior_chu_trs_blk_size:
-                # Skip the object type if server count does not meet the minimum
-                # EC object server count
+                # Skip the object type if server count does not meet the
+                # minimum EC object server count
                 if oclass[1] > self.server_count:
                     continue
-                self.ior_param_update(oclass, sizes)
+                self.ior_write_single_dataset(oclass, sizes, percent)
 
-                # Create the new container with correct redundancy factor
-                # for EC object type
-                self.ec_container_create(oclass[0])
-                self.update_ior_cmd_with_pool(create_cont=False)
-                # Start IOR Write
-                self.container.uuid = self.ec_container.uuid
-                self.start_ior_load(operation="WriteRead", percent=1,
-                                    create_cont=False)
-                self.cont_uuid.append(self.ior_cmd.dfs_cont.value)
+    def ior_read_single_dataset(self, oclass, sizes, percent=1):
+        """Read IOR single data set with EC object.
+
+        Args:
+            oclass(list): list of the obj class to use with IOR
+            sizes(list): Update Transfer, Chunk and Block sizes
+            percent(int): %of storage to be filled. Default it will use the
+                          given parameters in yaml file
+        """
+        self.ior_param_update(oclass, sizes)
+        # Start IOR Read
+        self.start_ior_load(operation='Read', percent=percent,
+                            create_cont=False)
 
     def ior_read_dataset(self, parity=1):
-        """Read IOR data and verify for different EC object and different sizes.
+        """Read IOR data and verify for different EC object and different sizes
 
         Args:
            data_parity(str): object parity type for reading, default All.
@@ -127,8 +178,8 @@ class ErasureCodeIor(ServerFillUp):
         con_count = 0
         for oclass in self.obj_class:
             for sizes in self.ior_chu_trs_blk_size:
-                # Skip the object type if server count does not meet the minimum
-                # EC object server count
+                # Skip the object type if server count does not meet the
+                # minimum EC object server count.
                 if oclass[1] > self.server_count:
                     continue
                 parity_set = "P{}".format(parity)
@@ -138,11 +189,8 @@ class ErasureCodeIor(ServerFillUp):
                           .format(oclass[0]))
                     con_count += 1
                     continue
-                self.ior_param_update(oclass, sizes)
                 self.container.uuid = self.cont_uuid[con_count]
-                # Start IOR Read
-                self.start_ior_load(operation='Read', percent=1,
-                                    create_cont=False)
+                self.ior_read_single_dataset(oclass, sizes, parity)
                 con_count += 1
 
 class ErasureCodeSingle(TestWithServers):
@@ -266,10 +314,10 @@ class ErasureCodeSingle(TestWithServers):
                     continue
 
                 self.daos_cmd.container_set_prop(
-                              pool=self.pool.uuid,
-                              cont=self.container[cont_count].uuid,
-                              prop="status",
-                              value="healthy")
+                    pool=self.pool.uuid,
+                    cont=self.container[cont_count].uuid,
+                    prop="status",
+                    value="healthy")
 
                 # Read data and verified the content
                 try:
