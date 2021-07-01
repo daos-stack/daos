@@ -3566,11 +3566,11 @@ int
 evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 	       const daos_epoch_range_t *epr)
 {
+	EVT_ENT_ARRAY_SM_PTR(ent_array);
 	struct evt_context	*tcx;
 	struct evt_entry	*ent;
 	struct evt_entry_in	 entry = {0};
 	struct evt_filter	 filter = {0};
-	EVT_ENT_ARRAY_SM_PTR(ent_array);
 	struct evt_rect		 rect;
 	int			 rc = 0;
 
