@@ -17,30 +17,27 @@ $ dmg pool create --size=NTB
 
 This command creates a pool distributed across the DAOS servers with a
 target size on each server that is comprised of N TB of NVMe storage
-and N * 0.06 (i.e. 6% of NVMe) of SCM storage. The default SCM:NVMe ratio
+and N * 0.06 (i.e. 6% of total) of SCM storage. The default SCM:NVMe ratio
 may be adjusted at pool creation time as described below.
 The UUID allocated to the newly created pool is printed to stdout
 (referred to as ${puuid}) as well as the pool service replica ranks.
-
-NB: The --scm-size and --nvme-size options still exist, but should be
-considered deprecated and will likely be removed in a future release.
 
 ```bash
 $ dmg pool create --help
 ...
 [create command options]
-      -g, --group=     DAOS pool to be owned by given group, format name@domain
-      -u, --user=      DAOS pool to be owned by given user, format name@domain
-      -p, --name=      Unique name for pool (set as label)
-      -a, --acl-file=  Access Control List file path for DAOS pool
-      -z, --size=      Total size of DAOS pool (auto)
-      -t, --scm-ratio= Percentage of SCM:NVMe for pool storage (auto) (default: 6)
-      -k, --nranks=    Number of ranks to use (auto) (default: all)
-      -v, --nsvc=      Number of pool service replicas (default: 3)
-      -s, --scm-size=  Per-server SCM allocation for DAOS pool (manual)
-      -n, --nvme-size= Per-server NVMe allocation for DAOS pool (manual)
-      -r, --ranks=     Storage server unique identifiers (ranks) for DAOS pool
-      -S, --sys=       DAOS system that pool is to be a part of (default: daos_server)
+      -g, --group=      DAOS pool to be owned by given group, format name@domain
+      -u, --user=       DAOS pool to be owned by given user, format name@domain
+      -p, --name=       Unique name for pool (set as label)
+      -a, --acl-file=   Access Control List file path for DAOS pool
+      -z, --size=       Total size of DAOS pool (auto)
+      -t, --tier-ratio= Distribution of pool storage allocation over storage tiers (auto)
+      -k, --nranks=     Number of ranks to use (auto) (default: all)
+      -v, --nsvc=       Number of pool service replicas (default: 3)
+      -s, --scm-size=   Per-server SCM allocation for DAOS pool (manual)
+      -n, --nvme-size=  Per-server NVMe allocation for DAOS pool (manual)
+      -r, --ranks=      Storage server unique identifiers (ranks) for DAOS pool
+      -S, --sys=        DAOS system that pool is to be a part of (default: daos_server)
 ```
 
 The typical output of this command is as follows:

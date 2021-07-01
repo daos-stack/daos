@@ -297,6 +297,10 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to create pool on %zu ranks\n", req->n_ranks);
 
+	if (req->n_tierbytes != DAOS_MEDIA_MAX) {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
 	if (req->n_ranks > 0) {
 		targets = uint32_array_to_rank_list(req->ranks, req->n_ranks);
 		if (targets == NULL)
@@ -318,7 +322,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
-				 req->scmbytes, req->nvmebytes,
+				 req->tierbytes[DAOS_MEDIA_SCM],
+				 req->tierbytes[DAOS_MEDIA_NVME],
 				 prop, req->numsvcreps, &svc,
 				 req->n_faultdomains, req->faultdomains);
 	if (rc != 0) {
@@ -656,6 +661,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_t			uuid;
 	uint8_t			*body;
 	size_t			len;
+	uint64_t		scm_bytes, nvme_bytes = 0;
 	int			rc;
 
 	mgmt__pool_extend_resp__init(&resp);
@@ -669,6 +675,17 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (Extend target)\n");
 		return;
+	}
+
+	if (req->n_tierbytes == 0 || req->n_tierbytes > DAOS_MEDIA_MAX) {
+		D_ERROR("Invalid number of storage tiers: "DF_U64"\n",
+			req->n_tierbytes);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	scm_bytes = req->tierbytes[DAOS_MEDIA_SCM];
+	if (req->n_tierbytes > DAOS_MEDIA_NVME) {
+		nvme_bytes = req->tierbytes[DAOS_MEDIA_NVME];
 	}
 
 	rc = uuid_parse(req->uuid, uuid);
@@ -687,7 +704,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
 	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem",
-				 req->scmbytes, req->nvmebytes,
+				 scm_bytes, nvme_bytes,
 				 req->n_faultdomains, req->faultdomains);
 
 	if (rc != 0)
@@ -700,8 +717,8 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	 * In the future, we may need to adjust the allocations somehow and
 	 * this is how we would let the caller know.
 	 */
-	resp.scm_bytes = req->scmbytes;
-	resp.nvme_bytes = req->nvmebytes;
+	resp.n_tier_bytes = req->n_tierbytes;
+	resp.tier_bytes = req->tierbytes;
 
 out_list:
 	d_rank_list_free(rank_list);
@@ -1357,6 +1374,16 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 	}
 }
 
+static void
+pool_query_free_tier_stats(Mgmt__PoolQueryResp *resp)
+{
+	if (resp->tier_stats != NULL) {
+		D_FREE(resp->tier_stats);
+		resp->tier_stats = NULL;
+	}
+	resp->n_tier_stats = 0;
+}
+
 void
 ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -1408,17 +1435,26 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.leader = pool_info.pi_leader;
 	resp.version = pool_info.pi_map_ver;
 
+	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
+	if (resp.tier_stats == NULL) {
+		D_ERROR("Failed to allocate tier_stats for resp\n");
+		D_GOTO(out_tiers, rc = -DER_NOMEM);
+	}
+
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
 					    DAOS_MEDIA_SCM);
-	resp.scm = &scm;
+	resp.tier_stats[DAOS_MEDIA_SCM] = &scm;
+	resp.n_tier_stats++;
 
 	storage_usage_stats_from_pool_space(&nvme, &pool_info.pi_space,
 					    DAOS_MEDIA_NVME);
-	resp.nvme = &nvme;
+	resp.tier_stats[DAOS_MEDIA_NVME] = &nvme;
+	resp.n_tier_stats++;
 
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
+out_tiers:
 out_ranks:
 	d_rank_list_free(svc_ranks);
 out:
@@ -1435,6 +1471,8 @@ out:
 	}
 
 	mgmt__pool_query_req__free_unpacked(req, &alloc.alloc);
+
+	pool_query_free_tier_stats(&resp);
 }
 
 void

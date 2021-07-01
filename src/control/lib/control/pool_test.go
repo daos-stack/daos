@@ -267,16 +267,9 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expErr: drpc.DaosIOError,
 		},
-		"mixture of auto/manual storage params": {
-			req: &PoolCreateReq{
-				TotalBytes: 10,
-				ScmBytes:   20,
-			},
-			expErr: errors.New("can't mix"),
-		},
 		"missing storage params": {
 			req:    &PoolCreateReq{},
-			expErr: errors.New("0 SCM"),
+			expErr: errors.New("size of 0"),
 		},
 		"create -DER_TIMEDOUT is retried": {
 			req: &PoolCreateReq{TotalBytes: 10},
@@ -388,19 +381,21 @@ func TestControl_PoolQuery(t *testing.T) {
 							Objects: 1,
 							Records: 2,
 						},
-						Scm: &mgmtpb.StorageUsageStats{
-							Total: 123456,
-							Free:  0,
-							Min:   1,
-							Max:   2,
-							Mean:  3,
-						},
-						Nvme: &mgmtpb.StorageUsageStats{
-							Total: 123456,
-							Free:  0,
-							Min:   1,
-							Max:   2,
-							Mean:  3,
+						TierStats: []*mgmtpb.StorageUsageStats{
+							{
+								Total: 123456,
+								Free:  0,
+								Min:   1,
+								Max:   2,
+								Mean:  3,
+							},
+							{
+								Total: 123456,
+								Free:  0,
+								Min:   1,
+								Max:   2,
+								Mean:  3,
+							},
 						},
 					},
 				),
@@ -416,19 +411,21 @@ func TestControl_PoolQuery(t *testing.T) {
 						Objects: 1,
 						Records: 2,
 					},
-					Scm: &StorageUsageStats{
-						Total: 123456,
-						Free:  0,
-						Min:   1,
-						Max:   2,
-						Mean:  3,
-					},
-					Nvme: &StorageUsageStats{
-						Total: 123456,
-						Free:  0,
-						Min:   1,
-						Max:   2,
-						Mean:  3,
+					TierStats: []*StorageUsageStats{
+						{
+							Total: 123456,
+							Free:  0,
+							Min:   1,
+							Max:   2,
+							Mean:  3,
+						},
+						{
+							Total: 123456,
+							Free:  0,
+							Min:   1,
+							Max:   2,
+							Mean:  3,
+						},
 					},
 				},
 			},

@@ -49,17 +49,17 @@ type PoolCreateCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	GroupName  string  `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
-	UserName   string  `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
-	PoolLabel  string  `short:"p" long:"label" description:"Unique label for pool"`
-	ACLFile    string  `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
-	Size       string  `short:"z" long:"size" description:"Total size of DAOS pool (auto)"`
-	ScmRatio   float64 `short:"t" long:"scm-ratio" default:"6" description:"Percentage of SCM:NVMe for pool storage (auto)"`
-	NumRanks   uint32  `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
-	NumSvcReps uint32  `short:"v" long:"nsvc" description:"Number of pool service replicas"`
-	ScmSize    string  `short:"s" long:"scm-size" description:"Per-server SCM allocation for DAOS pool (manual)"`
-	NVMeSize   string  `short:"n" long:"nvme-size" description:"Per-server NVMe allocation for DAOS pool (manual)"`
-	RankList   string  `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
+	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
+	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
+	PoolLabel  string `short:"p" long:"label" description:"Unique label for pool"`
+	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
+	Size       string `short:"z" long:"size" description:"Total size of DAOS pool (auto)"`
+	TierRatio  string `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
+	NumRanks   uint32 `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
+	NumSvcReps uint32 `short:"v" long:"nsvc" description:"Number of pool service replicas"`
+	ScmSize    string `short:"s" long:"scm-size" description:"Per-server SCM allocation for DAOS pool (manual)"`
+	NVMeSize   string `short:"n" long:"nvme-size" description:"Per-server NVMe allocation for DAOS pool (manual)"`
+	RankList   string `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
 }
 
 // Execute is run when PoolCreateCmd subcommand is activated
@@ -103,41 +103,57 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		}
 		req.NumRanks = cmd.NumRanks
 
-		if cmd.ScmRatio < 1 || cmd.ScmRatio > 100 {
-			return errors.New("SCM:NVMe ratio must be a value between 1-100")
+		tierRatio, err := parseUint64Array(cmd.TierRatio)
+		if err != nil {
+			return errors.Wrap(err, "failed to parse tier ratios")
 		}
-		req.ScmRatio = cmd.ScmRatio / 100
+
+		req.TierRatio = make([]float64, len(tierRatio))
+		var totalRatios uint64 = 0
+		for tierIdx, ratio := range tierRatio {
+			if ratio > 100 {
+				return errors.New("Storage tier ratio must be a value between 0-100")
+			}
+			totalRatios += ratio
+			req.TierRatio[tierIdx] = float64(ratio) / 100
+		}
+		if totalRatios != 100 {
+			return errors.New("Storage tier ratios must add up to 100")
+		}
 		cmd.log.Infof("Creating DAOS pool with automatic storage allocation: "+
-			"%s NVMe + %0.2f%% SCM", humanize.Bytes(req.TotalBytes), req.ScmRatio*100)
+			"%d total, %s tier ratio", req.TotalBytes, cmd.TierRatio)
 	} else {
 		// manual selection of storage values
 		if cmd.NumRanks > 0 {
 			return errIncompatFlags("nranks", "scm-size")
 		}
 
-		req.ScmBytes, err = humanize.ParseBytes(cmd.ScmSize)
+		ScmBytes, err := humanize.ParseBytes(cmd.ScmSize)
 		if err != nil {
 			return errors.Wrap(err, "failed to parse pool SCM size")
 		}
 
+		var NvmeBytes uint64 = 0
 		if cmd.NVMeSize != "" {
-			req.NvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
+			NvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
 			if err != nil {
 				return errors.Wrap(err, "failed to parse pool NVMe size")
 			}
 		}
 
-		ratio := 1.0
-		if req.NvmeBytes > 0 {
-			ratio = float64(req.ScmBytes) / float64(req.NvmeBytes)
-		}
-		if ratio < storage.MinScmToNVMeRatio {
+		req.TierBytes = []uint64{ScmBytes, NvmeBytes}
+		req.TotalBytes = 0
+		req.TierRatio = nil
+
+		scmRatio := float64(ScmBytes) / float64(NvmeBytes)
+
+		if scmRatio < storage.MinScmToNVMeRatio {
 			cmd.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
 				"performance will suffer!\n", storage.MinScmToNVMeRatio*100)
 		}
 		cmd.log.Infof("Creating DAOS pool with manual per-server storage allocation: "+
-			"%s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(req.ScmBytes),
-			humanize.Bytes(req.NvmeBytes), ratio*100)
+			"%s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(ScmBytes),
+			humanize.Bytes(NvmeBytes), scmRatio*100)
 	}
 
 	resp, err := control.PoolCreate(context.Background(), cmd.ctlInvoker, req)

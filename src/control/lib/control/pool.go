@@ -100,11 +100,15 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		return nil, err
 	}
 
-	if in.TotalBytes > 0 && (in.ScmBytes > 0 || in.NvmeBytes > 0) {
-		return nil, errors.New("can't mix TotalBytes and ScmBytes/NvmeBytes")
-	}
-	if in.TotalBytes == 0 && in.ScmBytes == 0 {
-		return nil, errors.New("can't create pool with 0 SCM")
+	if len(in.TierBytes) > 0 {
+		if in.TotalBytes > 0 {
+			return nil, errors.New("can't mix TotalBytes and ScmBytes/NvmeBytes")
+		}
+		if in.TotalBytes == 0 && in.TierBytes[0] == 0 {
+			return nil, errors.New("can't create pool with 0 SCM")
+		}
+	} else if in.TotalBytes == 0 {
+		return nil, errors.New("can't create pool with size of 0")
 	}
 
 	out = new(mgmtpb.PoolCreateReq)
@@ -130,12 +134,11 @@ type (
 		NumSvcReps uint32
 		// auto-config params
 		TotalBytes uint64
-		ScmRatio   float64
+		TierRatio  []float64
 		NumRanks   uint32
 		// manual params
 		Ranks     []system.Rank
-		ScmBytes  uint64
-		NvmeBytes uint64
+		TierBytes []uint64
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -143,8 +146,7 @@ type (
 		UUID      string   `json:"uuid"`
 		SvcReps   []uint32 `json:"svc_reps"`
 		TgtRanks  []uint32 `json:"tgt_ranks"`
-		ScmBytes  uint64   `json:"scm_bytes"`
-		NvmeBytes uint64   `json:"nvme_bytes"`
+		TierBytes []uint64 `json:"tier_bytes"`
 	}
 )
 
@@ -360,15 +362,14 @@ type (
 
 	// PoolInfo contains information about the pool.
 	PoolInfo struct {
-		TotalTargets    uint32             `json:"total_targets"`
-		ActiveTargets   uint32             `json:"active_targets"`
-		TotalNodes      uint32             `json:"total_nodes"`
-		DisabledTargets uint32             `json:"disabled_targets"`
-		Version         uint32             `json:"version"`
-		Leader          uint32             `json:"leader"`
-		Rebuild         *PoolRebuildStatus `json:"rebuild"`
-		Scm             *StorageUsageStats `json:"scm"`
-		Nvme            *StorageUsageStats `json:"nvme"`
+		TotalTargets    uint32               `json:"total_targets"`
+		ActiveTargets   uint32               `json:"active_targets"`
+		TotalNodes      uint32               `json:"total_nodes"`
+		DisabledTargets uint32               `json:"disabled_targets"`
+		Version         uint32               `json:"version"`
+		Leader          uint32               `json:"leader"`
+		Rebuild         *PoolRebuildStatus   `json:"rebuild"`
+		TierStats       []*StorageUsageStats `json:"tier_stats"`
 	}
 
 	// PoolQueryResp contains the pool query response.

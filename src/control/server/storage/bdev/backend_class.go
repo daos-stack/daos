@@ -62,32 +62,54 @@ func createEmptyFile(log logging.Logger, path string, size uint64) error {
 	return nil
 }
 
-func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *FormatRequest) error {
+func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *storage.BdevWriteNvmeConfigRequest) error {
 	if buf.Len() == 0 {
 		return errors.New("generated file is unexpectedly empty")
 	}
 
-	f, err := os.Create(req.ConfigPath)
+	f, err := os.Create(req.ConfigOutputPath)
 	if err != nil {
 		return errors.Wrap(err, "create")
 	}
 
 	defer func() {
 		if err := f.Close(); err != nil {
-			log.Errorf("closing %q: %s", req.ConfigPath, err)
+			log.Errorf("closing %q: %s", req.ConfigOutputPath, err)
 		}
 	}()
 
 	if _, err := buf.WriteTo(f); err != nil {
+		//=======
+		//// renderTemplate takes NVMe device PCI addresses and generates config content
+		//// (output as string) from template.
+		//func renderTemplate(req *storage.BdevTierProperties, templ string) (out bytes.Buffer, err error) {
+		//	t := template.Must(template.New(req.Class.String()).Parse(templ))
+		//	err = t.Execute(&out, req)
+		//
+		//	return
+		//}
+		//
+		//func appendConf(log logging.Logger, templ string, tier *storage.BdevTierProperties, f *os.File) error {
+		//	confBytes, err := renderTemplate(tier, templ)
+		//	if err != nil {
+		//		return err
+		//	}
+		//
+		//	if confBytes.Len() == 0 {
+		//		return errors.New("generated file is unexpectedly empty")
+		//	}
+		//
+		//	if _, err := confBytes.WriteTo(f); err != nil {
+		//>>>>>>> 247657339daf862e9fffd949f6bef225851011ac
 		return errors.Wrap(err, "write")
 	}
 
-	return errors.Wrapf(os.Chown(req.ConfigPath, req.OwnerUID, req.OwnerGID),
-		"failed to set ownership of %q to %d.%d", req.ConfigPath,
+	return errors.Wrapf(os.Chown(req.ConfigOutputPath, req.OwnerUID, req.OwnerGID),
+		"failed to set ownership of %q to %d.%d", req.ConfigOutputPath,
 		req.OwnerUID, req.OwnerGID)
 }
 
-func writeJsonConfig(log logging.Logger, enableVmd bool, req *FormatRequest) error {
+func writeJsonConfig(log logging.Logger, enableVmd bool, req *storage.BdevWriteNvmeConfigRequest) error {
 	nsc, err := newSpdkConfig(log, enableVmd, req)
 	if err != nil {
 		return err
@@ -107,16 +129,31 @@ func writeJsonConfig(log logging.Logger, enableVmd bool, req *FormatRequest) err
 
 // writeNvmeConf generates nvme config file for given bdev type to be consumed
 // by spdk.
-func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
-	if req.ConfigPath == "" {
+func (sb *spdkBackend) writeNvmeConfig(req *storage.BdevWriteNvmeConfigRequest) error {
+	if len(req.TierProps) == 0 {
+		return nil
+	}
+	if req.ConfigOutputPath == "" {
 		return errors.New("no output config directory set in request")
 	}
 
-	if req.Class == storage.BdevClassNvme && len(req.DeviceList) == 0 {
-		sb.log.Debug("skip write nvme conf for empty device list")
-		return nil
-	}
+	//	if req.Class == storage.BdevClassNvme && len(req.DeviceList) == 0 {
+	//		sb.log.Debug("skip write nvme conf for empty device list")
+	//		return nil
+	//	}
 
 	sb.log.Debugf("write nvme output json config: %+v", req)
 	return writeJsonConfig(sb.log, !sb.IsVMDDisabled(), req)
 }
+
+//=======
+//	f, err := os.Create(req.ConfigOutputPath)
+//	if err != nil {
+//		return errors.Wrap(err, "create")
+//	}
+//
+//	defer func() {
+//		if err := f.Close(); err != nil {
+//			sb.log.Errorf("closing %q: %s", req.ConfigOutputPath, err)
+//		}
+//	}()
