@@ -86,13 +86,12 @@ fi
 function export_pythonpath()
 {
   MAJOR="${1}"
-  MINOR="${2}"
-  PYTHON_VERSION="${MAJOR}.${MINOR}"
-
-  if [ "${PYTHON_VERSION}" = "3.6" ]; then
-    PYTHONPATH=${SL_PREFIX}/lib64/python${PYTHON_VERSION}/site-packages:${PYTHONPATH}
+  MINOR="$(python3 -c 'import sys; print(sys.version_info.minor)')"
+  VERSION="${MAJOR}.${MINOR}"
+  if [ "${MAJOR}" -eq 3 ]; then
+    PYTHONPATH=${SL_PREFIX}/lib64/python${VERSION}/site-packages:${PYTHONPATH}
   else
-    echo "unknown Python version: ${PYTHON_VERSION}"
+    echo "unknown Python version: ${VERSION}"
     return 0
   fi
 
@@ -101,9 +100,8 @@ function export_pythonpath()
 
 # look for a valid installation of python
 if [ -x "$(command -v python3)" ]; then
-  PYTHON_MAJOR_VERSION="$(python3 -c 'import sys; print(sys.version_info.major)')"
-  PYTHON_MINOR_VERSION="$(python3 -c 'import sys; print(sys.version_info.minor)')"
-  export_pythonpath "${PYTHON_MAJOR_VERSION}" "${PYTHON_MINOR_VERSION}"
+  PYTHON_VERSION="$(python3 -c 'import sys; print(sys.version_info.major)')"
+  export_pythonpath "${PYTHON_VERSION}"
 else
   echo "python3 not found"
 fi
