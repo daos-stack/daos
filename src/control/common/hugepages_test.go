@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-package server
+package common
 
 import (
 	"strings"
@@ -11,14 +11,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/common"
 )
 
 func TestServer_getHugePageInfo(t *testing.T) {
 	// Just a simple test to verify that we get something -- it should
 	// pretty much never error.
-	_, err := getHugePageInfo()
+	_, err := GetHugePageInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +80,7 @@ Hugepagesize:       1 GB
 			rdr := strings.NewReader(tc.input)
 
 			gotOut, gotErr := parseHugePageInfo(rdr)
-			common.CmpErr(t, tc.expErr, gotErr)
+			CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
