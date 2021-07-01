@@ -55,21 +55,23 @@ echo ::endgroup::
 
 echo ::group::Container copy test
 export LD_LIBRARY_PATH=/opt/daos/prereq/debug/spdk/lib/
-./utils/node_local_test.py --no-root --test cont_copy
+./utils/node_local_test.py --no-root --memcheck no --test cont_copy
 echo ::endgroup::
 
-echo ::group::Container copy test2
-./utils/node_local_test.py --no-root --test cont_copy
+echo ::group::Fi test
+./utils/node_local_test.py --no-root fi
 echo ::endgroup::
 
-echo ::group::Container copy test3
-./utils/node_local_test.py --no-root --test cont_copy
+echo ::group::All tests
+./utils/node_local_test.py --no-root --memcheck no --test all
 echo ::endgroup::
 
-echo ::group::Container copy test4
-./utils/node_local_test.py --no-root --test cont_copy
-echo ::endgroup::
+x=1
+while [ $x -le 10 ]
+do
+    echo ::group::Container copy test$x
+    ./utils/node_local_test.py --no-root --memcheck no --test cont_copy
+    echo ::endgroup::
 
-echo ::group::Container copy test5
-./utils/node_local_test.py --no-root --test cont_copy
-echo ::endgroup::
+    x=$(( $x + 1 ))
+done
