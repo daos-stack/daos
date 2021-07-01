@@ -76,6 +76,7 @@ class NLTConf():
         self.wf = None
         self.args = None
         self.max_log_size = None
+        self.valgrind_errors = False
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
                                                  prefix='dnt_dfuse_')
         self.tmp_dir = None
@@ -904,6 +905,8 @@ class ValgrindHelper():
         else:
             cmd.append('--leak-check=no')
 
+        cmd.append('--gen-suppressions=all')
+
         src_suppression_file = os.path.join('src',
                                             'cart',
                                             'utils',
@@ -1155,7 +1158,8 @@ def import_daos(server, conf):
 def run_daos_cmd(conf,
                  cmd,
                  show_stdout=False,
-                 valgrind=False):
+                 valgrind=True,
+                 use_json=False):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
@@ -1175,6 +1179,8 @@ def run_daos_cmd(conf,
 
     exec_cmd = vh.get_cmd_prefix()
     exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
+    if use_json:
+        exec_cmd.append('--json')
     exec_cmd.extend(cmd)
 
     cmd_env = get_base_env()
@@ -1213,6 +1219,16 @@ def run_daos_cmd(conf,
                          log_file.name,
                          show_memleaks=show_memleaks)
     vh.convert_xml()
+    # If there are valgrind errors here then mark them for later reporting but
+    # do not abort.  This allows a full-test run to report all valgrind issues
+    # in a single test run.
+    if vh.use_valgrind and rc.returncode == 42:
+        print("Valgrind errors detected")
+        print(rc)
+        conf.valgrind_errors = True
+        rc.returncode = 0
+    if use_json:
+        rc.json = json.loads(rc.stdout.decode('utf-8'))
     return rc
 
 def create_cont(conf, pool, cont=None, posix=False, label=None, path=None):
@@ -1234,10 +1250,11 @@ def create_cont(conf, pool, cont=None, posix=False, label=None, path=None):
     if cont:
         cmd.extend(['--cont', cont])
 
-    rc = run_daos_cmd(conf, cmd)
+    rc = run_daos_cmd(conf, cmd, use_json=True)
     print('rc is {}'.format(rc))
+    print(rc.json)
     assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
-    return rc.stdout.decode().split(' ')[-1].rstrip()
+    return rc.json['response']['container_uuid']
 
 def destroy_container(conf, pool, container):
     """Destroy a container"""
@@ -2955,10 +2972,6 @@ class AllocFailTest():
         self.expected_stdout = None
         self.use_il = False
         self.wf = conf.wf
-        # Should failures be re-run under valgrind for improved diagnostics?
-        # Defaults to on but can be disabled, for example if the code being
-        # tested does not work with valgrind.
-        self.rerun_under_valgrind = True
 
     def launch(self):
         """Run all tests for this command"""
@@ -3016,11 +3029,10 @@ class AllocFailTest():
         print('Completed, fid {}'.format(fid))
         print('Max in flight {}'.format(max_count))
 
-        if self.rerun_under_valgrind:
-            for fid in to_rerun:
-                rerun = self._run_cmd(fid, valgrind=True)
-                print(rerun)
-                rerun.wait()
+        for fid in to_rerun:
+            rerun = self._run_cmd(fid, valgrind=True)
+            print(rerun)
+            rerun.wait()
 
         return fatal_errors
 
@@ -3142,7 +3154,6 @@ def test_alloc_fail(server, conf):
     # the command works.
     container = create_cont(conf, pool)
     test_cmd.check_stderr = True
-    test_cmd.rerun_under_valgrind = False
 
     rc = test_cmd.launch()
     destroy_container(conf, pool, container)
@@ -3288,6 +3299,10 @@ def main():
         wf.add_test_case('Errors', 'Significant errors encountered')
     else:
         wf.add_test_case('Errors')
+
+    if conf.valgrind_errors:
+        print("Valgrind errors detected during execution")
+        fatal_errors.add_result(True)
 
     wf.close()
     wf_server.close()
