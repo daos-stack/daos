@@ -2872,6 +2872,13 @@ dm_connect(struct cmd_args_s *ap,
 		}
 	}
 
+	/* set cont_layout to POSIX type if the source is not in DAOS, if the
+	 * destination is DAOS, and no destination container exists yet,
+	 * then it knows to create a POSIX container
+	 */
+	if (src_file_dfs->type == POSIX)
+		ca->cont_layout = DAOS_PROP_CO_LAYOUT_POSIX;
+
 	/* only need to query if source is not POSIX, since
 	 * this connect call is used by the filesystem and clone
 	 * tools
