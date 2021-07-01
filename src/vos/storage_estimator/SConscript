@@ -1,14 +1,16 @@
 """Install DAOS Storage Estimador"""
 import sys 
 
-def install_storage_estimator_module(env, lib_prefix, version):
+def install_storage_estimator_module(env, lib_prefix):
     """Install Storage Estimador module for the specified python version"""
 
     if GetOption("help"):
         return
 
     denv = env.Clone()
-    if version == "3.6":
+    version = "{}.{}".format(
+        sys.version_info.major, sys.version_info.minor)
+    if sys.version_info.major == "3":
         install_path = lib_prefix + "/python"
         install_path += version + "/site-packages/storage_estimator"
 
@@ -28,9 +30,8 @@ def scons():
 
     denv = env.Clone()
     denv.Install("$PREFIX/bin/", "daos_storage_estimator.py")
-    python_version = "{}.{}".format(
-        sys.version_info.major, sys.version_info.minor)
-    install_storage_estimator_module(env, '$PREFIX/lib64/', python_version)
+
+    install_storage_estimator_module(env, '$PREFIX/lib64/')
 
 if __name__ == "SCons.Script":
     scons()

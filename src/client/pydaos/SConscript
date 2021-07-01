@@ -2,7 +2,7 @@
 import daos_build
 import sys
 
-def build_shim_module(env, lib_prefix, version):
+def build_shim_module(env, lib_prefix):
     """Build PyDAOS shim module for the specified python version"""
 
     if GetOption('help'):
@@ -10,8 +10,9 @@ def build_shim_module(env, lib_prefix, version):
 
     new_env = env.Clone()
     extra_flags = ""
-
-    if version == "3.6":
+    version = "{}.{}".format(
+        sys.version_info.major, sys.version_info.minor)
+    if sys.version_info.major == "3":
         tgt_name = 'pydaos_shim'
         extra_flags = " -D__USE_PYTHON3__==1"
         new_env.ParseConfig("pkg-config --cflags --libs python3")
@@ -50,9 +51,7 @@ def build_shim_module(env, lib_prefix, version):
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
-    python_version = "{}.{}".format(
-        sys.version_info.major, sys.version_info.minor)
-    build_shim_module(env, '$PREFIX/lib64/', python_version)
+    build_shim_module(env, '$PREFIX/lib64/')
 
 if __name__ == "SCons.Script":
     scons()
