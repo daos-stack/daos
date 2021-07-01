@@ -171,7 +171,6 @@ or query/manage an object inside a container.`
 			if opts.JSON {
 				// disable output on stdout other than JSON
 				log.ClearLevel(logging.LogLevelInfo)
-				os.Setenv("D_LOG_MASK", "EMRG")
 			}
 		}
 

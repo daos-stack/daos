@@ -85,6 +85,7 @@ func (cmd *containerBaseCmd) openContainer() error {
 		cLabel := C.CString(cmd.contLabel)
 		defer freeString(cLabel)
 
+		cmd.log.Debugf("opening container: %s", cmd.contLabel)
 		rc = C.daos_cont_open_by_label(cmd.cPoolHandle, cLabel,
 			openFlags, &cmd.cContHandle, &contInfo, nil)
 		if rc == 0 {
@@ -96,6 +97,7 @@ func (cmd *containerBaseCmd) openContainer() error {
 			}
 		}
 	case cmd.contUUID != uuid.Nil:
+		cmd.log.Debugf("opening container: %s", cmd.contUUID)
 		rc = C.daos_cont_open(cmd.cPoolHandle, cmd.contUUIDPtr(),
 			openFlags, &cmd.cContHandle, nil, nil)
 	default:
@@ -106,7 +108,7 @@ func (cmd *containerBaseCmd) openContainer() error {
 }
 
 func (cmd *containerBaseCmd) closeContainer() error {
-	cmd.log.Debugf("closing container %s", cmd.contUUID)
+	cmd.log.Debugf("closing container: %s", cmd.contUUID)
 	return daosError(C.daos_cont_close(cmd.cContHandle, nil))
 }
 
@@ -268,6 +270,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if err := daosError(rc); err != nil {
 		return errors.Wrap(err, "failed to create container")
 	}
+	cmd.log.Debugf("created container: %s", cmd.contUUID)
 
 	if err := cmd.openContainer(); err != nil {
 		return errors.Wrapf(err,
@@ -413,27 +416,29 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 	if err := cmd.resolveContainer(ap); err != nil {
 		return err
 	}
-	if cmd.ContainerID().HasUUID() {
-		cleanup, err := cmd.connectPool(ap)
-		if err != nil {
-			return err
-		}
-		defer cleanup()
-	} else {
-		// When we don't have the container UUID, we
-		// have to open it in order to obtain the UUID
-		// for the destroy operation.
-		cleanup, err := cmd.resolveAndConnect(ap)
-		if err != nil {
-			return err
-		}
-		defer cleanup()
-		// Close the container before destroying.
-		_ = cmd.closeContainer()
-	}
 
-	rc := C.daos_cont_destroy(cmd.cPoolHandle,
-		cmd.contUUIDPtr(), goBool2int(cmd.Force), nil)
+	cleanup, err := cmd.connectPool(ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	cmd.log.Debugf("destroying container %s (force: %t)",
+		cmd.ContainerID(), cmd.Force)
+
+	var rc C.int
+	switch {
+	case cmd.ContainerID().HasUUID():
+		rc = C.daos_cont_destroy(cmd.cPoolHandle,
+			cmd.contUUIDPtr(), goBool2int(cmd.Force), nil)
+	case cmd.ContainerID().Label != "":
+		cLabel := C.CString(cmd.ContainerID().Label)
+		defer freeString(cLabel)
+		rc = C.daos_cont_destroy_by_label(cmd.cPoolHandle,
+			cLabel, goBool2int(cmd.Force), nil)
+	default:
+		return errors.New("no UUID or label for container")
+	}
 
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,

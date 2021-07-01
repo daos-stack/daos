@@ -78,6 +78,7 @@ func (cmd *poolBaseCmd) connectPool() error {
 		cLabel := C.CString(cmd.PoolID().Label)
 		defer freeString(cLabel)
 
+		cmd.log.Debugf("connecting to pool: %s", cmd.PoolID().Label)
 		rc = C.daos_pool_connect_by_label(cLabel, cSysName,
 			C.DAOS_PC_RW, &cmd.cPoolHandle, &poolInfo, nil)
 		if rc == 0 {
@@ -90,6 +91,7 @@ func (cmd *poolBaseCmd) connectPool() error {
 		}
 	case cmd.PoolID().HasUUID():
 		cmd.poolUUID = cmd.PoolID().UUID
+		cmd.log.Debugf("connecting to pool: %s", cmd.poolUUID)
 		rc = C.daos_pool_connect(cmd.poolUUIDPtr(), cSysName,
 			C.DAOS_PC_RW, &cmd.cPoolHandle, nil, nil)
 	default:

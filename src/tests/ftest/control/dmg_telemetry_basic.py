@@ -39,6 +39,9 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         self.container[-1].create()
         self.metrics["open_count"][self.pool_leader_host] += 1
         self.metrics["close_count"][self.pool_leader_host] += 1
+        if posix:
+            self.metrics["open_count"][self.pool_leader_host] += 1
+            self.metrics["close_count"][self.pool_leader_host] += 1
 
     def open_container(self, container):
         """Open the container and update the metrics.
