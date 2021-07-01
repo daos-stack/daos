@@ -26,7 +26,7 @@ class EcodMdtest(MdtestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=ec,ec_smoke,mpich
+        :avocado: tags=ec,ec_smoke,mdtest
         :avocado: tags=ec_mdtest
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
