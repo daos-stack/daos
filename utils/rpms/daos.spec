@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.102
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -234,6 +234,7 @@ This is the package needed to run the DAOS test suite
 %if (0%{?suse_version} >= 1500)
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 %endif
+Requires: libuuid-devel
 Summary: The DAOS development libraries and headers
 
 %description devel
@@ -476,8 +477,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Fri Jun 25 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.102-4
+* Thu Jul 01 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.102-5
 - Add DAOS serialization library that requires hdf5
+
+* Fri Jun 25 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.102-4
+- Add libuuid-devel back as a requirement of daos-devel
 
 * Mon Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
 - Update raft to pick up Pre-Vote

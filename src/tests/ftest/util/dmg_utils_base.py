@@ -219,6 +219,8 @@ class DmgCommandBase(YamlCommand):
                 self.group = FormattedParameter("--group={}", None)
                 self.user = FormattedParameter("--user={}", None)
                 self.acl_file = FormattedParameter("--acl-file={}", None)
+                self.size = FormattedParameter("--size={}", None)
+                self.scm_ratio = FormattedParameter("--scm-ratio={}", None)
                 self.scm_size = FormattedParameter("--scm-size={}", None)
                 self.nvme_size = FormattedParameter("--nvme-size={}", None)
                 self.ranks = FormattedParameter("--ranks={}", None)
@@ -374,6 +376,7 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/storage/format/*", "format")
                 self.verbose = FormattedParameter("--verbose", False)
                 self.reformat = FormattedParameter("--reformat", False)
+                self.force = FormattedParameter("--force", False)
 
         class QuerySubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage query command."""
@@ -496,6 +499,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.StartSubCommand()
             elif self.sub_command.value == "stop":
                 self.sub_command_class = self.StopSubCommand()
+            elif self.sub_command.value == "erase":
+                self.sub_command_class = self.EraseSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -540,6 +545,14 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/system/stop/*", "stop")
                 self.force = FormattedParameter("--force", False)
                 self.ranks = FormattedParameter("--ranks={}")
+
+        class EraseSubCommand(CommandWithParameters):
+            """Defines an object for the dmg system erase command."""
+
+            def __init__(self):
+                """Create a dmg system erase command object."""
+                super().__init__(
+                    "/run/dmg/system/erase/*", "erase")
 
     class TelemetrySubCommand(CommandWithSubCommand):
         """Defines an object for the dmg telemetry sub command."""
