@@ -6,6 +6,7 @@
 
 """
 import re
+import os
 
 from apricot import TestWithServers
 from mpio_utils import MpioUtils, MpioFailed
@@ -64,7 +65,8 @@ class MpiioTests(TestWithServers):
     def run_test(self, test_repo, test_name):
         """Execute function to be used by test functions below.
 
-        test_repo       --location of test repository
+        test_repo       --absolute or relative (to self.mpichinstall) location
+                          of test repository
         test_name       --name of the test to be run
         """
         # Required to run daos command
@@ -77,6 +79,10 @@ class MpiioTests(TestWithServers):
         self.mpio = MpioUtils()
         if not self.mpio.mpich_installed(self.hostlist_clients):
             self.fail("Exiting Test: Mpich not installed")
+
+        # fix up a relative test_repo specification
+        if test_repo[0] != '/':
+            test_repo = os.path.join(self.mpio.mpichinstall, test_repo)
 
         # initialize test specific variables
         client_processes = self.params.get("np", '/run/client_processes/')

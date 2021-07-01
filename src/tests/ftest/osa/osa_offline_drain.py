@@ -127,7 +127,7 @@ class OSAOfflineDrain(OSAUtils):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,osa_drain,checksum,mpich
+        :avocado: tags=osa,osa_drain,checksum,ior
         :avocado: tags=offline_drain,offline_drain_with_csum
         """
         self.log.info("Offline Drain : Basic Drain")
