@@ -37,5 +37,5 @@ git log --format=%s -n 1 HEAD | ssh -i ci_key -l jenkins "${NODELIST%%,*}" \
                                     "cat >/tmp/commit_title"
 git log --pretty=format:%h --abbrev-commit --abbrev=7 |
   ssh -i ci_key -l jenkins "${NODELIST%%,*}" "cat >/tmp/commit_list"
-ssh root@"${NODELIST%%,*}" "mkdir /scratch && " \
+ssh root@"${NODELIST%%,*}" "mkdir -p /scratch && " \
                            "mount wolf-2:/export/scratch /scratch"
