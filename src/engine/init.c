@@ -503,8 +503,15 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
-	if (uid != NULL && d_abt_on)
-		ABT_self_get_thread_id(uid);
+	if (uid != NULL && d_abt_on) {
+		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
+		int rc;
+
+		rc = ABT_self_get_type(&type);
+
+		if (rc == 0 && (type == ABT_UNIT_TYPE_THREAD || type == ABT_UNIT_TYPE_TASK))
+			ABT_self_get_thread_id(uid);
+	}
 
 	if (tid != NULL) {
 		struct dss_thread_local_storage *dtc;
