@@ -2001,6 +2001,11 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 
 			return -DER_INVAL;
 		}
+		if (strlen(names[i]) > DAOS_ATTR_NAME_MAX) {
+			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX",
+				i);
+			return -DER_INVAL;
+		}
 		if (sizes != NULL) {
 			if (values == NULL)
 				sizes[i] = 0;
@@ -2017,6 +2022,15 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 	return 0;
 }
 
+static int
+free_name(tse_task_t *task, void *args)
+{
+	char *name = *(char **)args;
+
+	D_FREE(name);
+	return 0;
+}
+
 int
 dc_pool_get_attr(tse_task_t *task)
 {
@@ -2025,6 +2039,7 @@ dc_pool_get_attr(tse_task_t *task)
 	struct pool_req_arg	 cb_args;
 	int			 rc;
 	int			 i;
+	char			**new_names = NULL;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
@@ -2049,9 +2064,26 @@ dc_pool_get_attr(tse_task_t *task)
 	for (i = 0, in->pagi_key_length = 0; i < args->n; i++)
 		in->pagi_key_length += strlen(args->names[i]) + 1;
 
-	rc = attr_bulk_create(args->n, (char **)args->names,
-			      (void **)args->values, (size_t *)args->sizes,
-			      daos_task2ctx(task), CRT_BULK_RW, &in->pagi_bulk);
+	/* no easy way to determine if a name storage address is likely
+	 * to cause an EFAULT during memory registration, so duplicate
+	 * name in heap
+	 */
+	D_ALLOC_ARRAY(new_names, args->n);
+	if (!new_names)
+		D_GOTO(out, rc = -DER_NOMEM);
+	for (i = 0 ; i < args->n ; i++) {
+		D_STRNDUP(new_names[i], args->names[i], DAOS_ATTR_NAME_MAX);
+		if (new_names[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
+					       sizeof(char *));
+		if (rc)
+			D_GOTO(out, rc);
+	}
+
+	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
+			      (size_t *)args->sizes, daos_task2ctx(task),
+			      CRT_BULK_RW, &in->pagi_bulk);
 	if (rc != 0) {
 		pool_req_cleanup(CLEANUP_RPC, &cb_args);
 		D_GOTO(out, rc);
@@ -2070,6 +2102,8 @@ dc_pool_get_attr(tse_task_t *task)
 
 out:
 	tse_task_complete(task, rc);
+	if (new_names != NULL)
+		D_FREE(new_names);
 	D_DEBUG(DF_DSMC, "Failed to get pool attributes: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
@@ -2080,7 +2114,8 @@ dc_pool_set_attr(tse_task_t *task)
 	daos_pool_set_attr_t	*args;
 	struct pool_attr_set_in	*in;
 	struct pool_req_arg	 cb_args;
-	int			 rc;
+	int			 i, rc;
+	char			**new_names = NULL;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
@@ -2101,6 +2136,25 @@ dc_pool_set_attr(tse_task_t *task)
 
 	in = crt_req_get(cb_args.pra_rpc);
 	in->pasi_count = args->n;
+
+	/* no easy way to determine if a name storage address is likely
+	 * to cause an EFAULT during memory registration, so duplicate
+	 * name in heap
+	 * XXX may need to do the same for values ??
+	 */
+	D_ALLOC_ARRAY(new_names, args->n);
+	if (!new_names)
+		D_GOTO(out, rc = -DER_NOMEM);
+	for (i = 0 ; i < args->n ; i++) {
+		D_STRNDUP(new_names[i], args->names[i], DAOS_ATTR_NAME_MAX);
+		if (new_names[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
+					       sizeof(char *));
+		if (rc)
+			D_GOTO(out, rc);
+	}
+
 	rc = attr_bulk_create(args->n, (char **)args->names,
 			      (void **)args->values, (size_t *)args->sizes,
 			      daos_task2ctx(task), CRT_BULK_RO, &in->pasi_bulk);
@@ -2122,6 +2176,8 @@ dc_pool_set_attr(tse_task_t *task)
 
 out:
 	tse_task_complete(task, rc);
+	if (new_names != NULL)
+		D_FREE(new_names);
 	D_DEBUG(DF_DSMC, "Failed to set pool attributes: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
