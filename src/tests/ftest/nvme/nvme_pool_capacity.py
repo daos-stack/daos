@@ -43,10 +43,11 @@ class NvmePoolCapacity(TestWithServers):
             self.hostlist_clients, self.workdir, None)
         self.out_queue = queue.Queue()
 
-    def ior_thread(self, oclass, api, test, flags, results):
+    def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
 
         Args:
+            pool (TestPool): Pool to run IOR command on.
             oclass (str): IOR object class
             API (str): IOR API
             test (list): IOR test sequence
@@ -66,7 +67,7 @@ class NvmePoolCapacity(TestWithServers):
         # Define the arguments for the ior_runner_thread method
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool)
+        ior_cmd.set_daos_params(self.server_group, pool)
         ior_cmd.dfs_oclass.update(oclass)
         ior_cmd.api.update(api)
         ior_cmd.transfer_size.update(test[2])
@@ -174,12 +175,14 @@ class NvmePoolCapacity(TestWithServers):
                 for thrd in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
-                                                    kwargs={"oclass": oclass,
-                                                            "api": api,
-                                                            "test": test,
-                                                            "flags": flags,
-                                                            "results":
-                                                            self.out_queue}))
+                                                    kwargs={
+                                                        "pool": self.pool[-1],
+                                                        "oclass": oclass,
+                                                        "api": api,
+                                                        "test": test,
+                                                        "flags": flags,
+                                                        "results":
+                                                        self.out_queue}))
             # Launch the IOR threads
             for thrd in threads:
                 self.log.info("Thread : %s", thrd)
