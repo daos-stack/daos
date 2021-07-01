@@ -1091,16 +1091,20 @@ main(int argc, char **argv)
 
 			 if (abt_infos == NULL) {
 				/* filename format is
-				 * "/tmp/daos_dump_YYYYMMDD_hh_mm.txt"
+				 * "/tmp/daos_dump_<PID>_YYYYMMDD_hh_mm.txt"
 				 */
-				char name[34] = "/tmp/daos_dump.txt";
+				char name[50];
 
 				if (rc != -1 && tm != NULL)
-					snprintf(name, 34,
-						 "/tmp/daos_dump_%04d%02d%02d_%02d_%02d.txt",
-						 tm->tm_year + 1900,
+					snprintf(name, 50,
+						 "/tmp/daos_dump_%d_%04d%02d%02d_%02d_%02d.txt",
+						 getpid(), tm->tm_year + 1900,
 						 tm->tm_mon + 1, tm->tm_mday,
 						 tm->tm_hour, tm->tm_min);
+				else
+					snprintf(name, 50,
+						 "/tmp/daos_dump_%d.txt",
+						 getpid());
 
 				abt_infos = fopen(name, "a");
 				if (abt_infos == NULL) {

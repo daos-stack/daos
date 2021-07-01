@@ -27,6 +27,12 @@ distro_custom() {
     if ! rpm -q nfs-utils; then
         dnf -y install nfs-utils
     fi
+
+    # CORCI-1096
+    sed -e 's/^\(hostname *= *\)[^ ].*$/\1 mail.wolf.hpdd.intel.com:25/' < /usr/share/doc/esmtp/sample.esmtprc > /etc/esmtprc
+
+    dnf config-manager --disable powertools
+
 }
 
 post_provision_config_nodes() {
@@ -50,11 +56,13 @@ post_provision_config_nodes() {
     #add_group_repo
     #add_local_repo
 
+    # CORCI-1096
     # workaround until new snapshot images are produced
     # Assume if APPSTREAM is locally proxied so is epel-modular
     # so disable the upstream epel-modular repo
+    : "${DAOS_STACK_EL_8_APPSTREAM_REPO:-}"
     if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO}" ]; then
-        dnf config-manager --disable epel-modular appstream
+        dnf config-manager --disable epel-modular appstream powertools
     fi
     time dnf repolist
 

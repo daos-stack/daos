@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -196,36 +197,56 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 	return nil
 }
 
+type PoolID struct {
+	ui.LabelOrUUIDFlag
+}
+
 // poolCmd is the base struct for all pool commands that work with existing pools.
 type poolCmd struct {
 	logCmd
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	ID   string `long:"pool" required:"1" description:"Unique ID of DAOS pool"`
-	UUID string
+	uuidStr  string
+	PoolFlag PoolID `long:"pool" description:"pool UUID (deprecated; use positional arg)"`
+	Args     struct {
+		Pool PoolID `positional-arg-name:"<pool name or UUID>"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *poolCmd) PoolID() *PoolID {
+	if !cmd.PoolFlag.Empty() {
+		return &cmd.PoolFlag
+	}
+
+	return &cmd.Args.Pool
 }
 
 // resolveID attempts to resolve the supplied pool ID into a UUID.
 func (cmd *poolCmd) resolveID() error {
-	if cmd.ID == "" {
+	if cmd.PoolID().Empty() {
 		return errors.New("no pool ID supplied")
 	}
 
-	if _, err := uuid.Parse(cmd.ID); err == nil {
-		cmd.UUID = cmd.ID
+	if cmd.PoolID().HasUUID() {
+		cmd.uuidStr = cmd.PoolID().UUID.String()
 		return nil
 	}
 
 	req := &control.PoolResolveIDReq{
-		HumanID: cmd.ID,
+		HumanID: cmd.PoolID().Label,
 	}
 
 	resp, err := control.PoolResolveID(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return errors.Wrap(err, "failed to resolve pool ID into UUID")
 	}
-	cmd.UUID = resp.UUID
+	cmd.PoolID().UUID, err = uuid.Parse(resp.UUID)
+	if err != nil {
+		return errors.Wrapf(err, "failed to parse response uuid %q", resp.UUID)
+	}
+	cmd.PoolID().Label = ""
+	cmd.uuidStr = resp.UUID
 
 	return nil
 }
@@ -233,7 +254,6 @@ func (cmd *poolCmd) resolveID() error {
 // PoolDestroyCmd is the struct representing the command to destroy a DAOS pool.
 type PoolDestroyCmd struct {
 	poolCmd
-	// TODO: implement --sys & --svc options (currently unsupported server side)
 	Force bool `short:"f" long:"force" description:"Force removal of DAOS pool"`
 }
 
@@ -245,7 +265,7 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolDestroyReq{UUID: cmd.UUID, Force: cmd.Force}
+	req := &control.PoolDestroyReq{UUID: cmd.uuidStr, Force: cmd.Force}
 
 	err := control.PoolDestroy(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -270,7 +290,7 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolEvictReq{UUID: cmd.UUID}
+	req := &control.PoolEvictReq{UUID: cmd.uuidStr}
 
 	err := control.PoolEvict(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -302,7 +322,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing rank list")
 	}
 
-	req := &control.PoolExcludeReq{UUID: cmd.UUID, Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolExcludeReq{UUID: cmd.uuidStr, Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
 
 	err := control.PoolExclude(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -335,7 +355,7 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolDrainReq{UUID: cmd.UUID, Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolDrainReq{UUID: cmd.uuidStr, Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
 
 	err := control.PoolDrain(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -368,7 +388,7 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 	}
 
 	req := &control.PoolExtendReq{
-		UUID: cmd.UUID, Ranks: ranks,
+		UUID: cmd.uuidStr, Ranks: ranks,
 	}
 
 	err = control.PoolExtend(context.Background(), cmd.ctlInvoker, req)
@@ -402,7 +422,7 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolReintegrateReq{UUID: cmd.UUID, Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolReintegrateReq{UUID: cmd.uuidStr, Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
 
 	err := control.PoolReintegrate(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -426,7 +446,7 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	}
 
 	req := &control.PoolQueryReq{
-		UUID: cmd.UUID,
+		UUID: cmd.uuidStr,
 	}
 
 	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
@@ -461,7 +481,7 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 	}
 
 	req := &control.PoolSetPropReq{
-		UUID:     cmd.UUID,
+		UUID:     cmd.uuidStr,
 		Property: cmd.Property,
 	}
 
@@ -499,19 +519,18 @@ func (cmd *PoolGetACLCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolGetACLReq{UUID: cmd.UUID}
+	req := &control.PoolGetACLReq{UUID: cmd.uuidStr}
 
 	resp, err := control.PoolGetACL(context.Background(), cmd.ctlInvoker, req)
-
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp.ACL, err)
+		return cmd.outputJSON(resp, err)
 	}
 
 	if err != nil {
 		return errors.Wrap(err, "Pool-get-ACL command failed")
 	}
 
-	cmd.log.Debugf("Pool-get-ACL command succeeded, UUID: %s\n", cmd.UUID)
+	cmd.log.Debugf("Pool-get-ACL command succeeded, UUID: %s\n", cmd.uuidStr)
 
 	acl := control.FormatACL(resp.ACL, cmd.Verbose)
 
@@ -576,21 +595,20 @@ func (cmd *PoolOverwriteACLCmd) Execute(args []string) error {
 	}
 
 	req := &control.PoolOverwriteACLReq{
-		UUID: cmd.UUID,
+		UUID: cmd.uuidStr,
 		ACL:  acl,
 	}
 
 	resp, err := control.PoolOverwriteACL(context.Background(), cmd.ctlInvoker, req)
-
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp.ACL, err)
+		return cmd.outputJSON(resp, err)
 	}
 
 	if err != nil {
 		return errors.Wrap(err, "Pool-overwrite-ACL command failed")
 	}
 
-	cmd.log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", cmd.UUID)
+	cmd.log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", cmd.uuidStr)
 
 	cmd.log.Info(control.FormatACLDefault(resp.ACL))
 
@@ -629,21 +647,20 @@ func (cmd *PoolUpdateACLCmd) Execute(args []string) error {
 	}
 
 	req := &control.PoolUpdateACLReq{
-		UUID: cmd.UUID,
+		UUID: cmd.uuidStr,
 		ACL:  acl,
 	}
 
 	resp, err := control.PoolUpdateACL(context.Background(), cmd.ctlInvoker, req)
-
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp.ACL, err)
+		return cmd.outputJSON(resp, err)
 	}
 
 	if err != nil {
 		return errors.Wrap(err, "Pool-update-ACL command failed")
 	}
 
-	cmd.log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", cmd.UUID)
+	cmd.log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", cmd.uuidStr)
 
 	cmd.log.Info(control.FormatACLDefault(resp.ACL))
 
@@ -664,21 +681,20 @@ func (cmd *PoolDeleteACLCmd) Execute(args []string) error {
 	}
 
 	req := &control.PoolDeleteACLReq{
-		UUID:      cmd.UUID,
+		UUID:      cmd.uuidStr,
 		Principal: cmd.Principal,
 	}
 
 	resp, err := control.PoolDeleteACL(context.Background(), cmd.ctlInvoker, req)
-
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp.ACL, err)
+		return cmd.outputJSON(resp, err)
 	}
 
 	if err != nil {
 		return errors.Wrap(err, "Pool-delete-ACL command failed")
 	}
 
-	cmd.log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", cmd.UUID)
+	cmd.log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", cmd.uuidStr)
 
 	cmd.log.Info(control.FormatACLDefault(resp.ACL))
 
