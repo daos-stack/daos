@@ -162,6 +162,8 @@ enum obj_rpc_flags {
 	ORF_DTX_REFRESH		= (1 << 15),
 	/* for EC aggregate (to bypass read perm check related with RF) */
 	ORF_FOR_EC_AGG		= (1 << 16),
+	/* Internal transaction. */
+	ORF_DTX_INTERNAL	= (1 << 17),
 };
 
 /* common for update/fetch */

@@ -76,6 +76,7 @@ struct dc_tx {
 	uint64_t		 tx_flags;
 	uint32_t		 tx_fixed_epoch:1, /** epoch is specified. */
 				 tx_retry:1, /** Retry the commit RPC. */
+				 tx_internal:1, /* Internal transaction. */
 				 tx_set_resend:1; /** Set 'resend' flag. */
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
@@ -1805,6 +1806,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
 	oci->oci_flags = ORF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
+	if (tx->tx_internal)
+		oci->oci_flags |= ORF_DTX_INTERNAL;
 
 	oci->oci_sub_heads.ca_arrays = &tx->tx_head;
 	oci->oci_sub_heads.ca_count = 1;
@@ -2975,6 +2978,7 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 		goto out;
 	}
 
+	tx->tx_internal = 1;
 	tx->tx_pm_ver = dc_pool_get_version(tx->tx_pool);
 
 	switch (opc) {
