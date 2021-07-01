@@ -205,8 +205,9 @@ class ServerFillUp(IorTestBase):
 
         """
         try:
-            sizes = self.server_managers[0].get_available_storage()
-        except ServerFailed as error:
+            sizes_dict = self.server_managers[0].get_available_storage()
+            sizes = [sizes_dict["scm"], sizes_dict["nvme"]]
+        except (ServerFailed, KeyError) as error:
             self.fail(error)
 
         # Return the 96% of storage space as it won't be used 100%

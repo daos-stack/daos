@@ -1,0 +1,25 @@
+name: Doxygen
+
+on:
+   pull_request:
+
+jobs:
+
+  Doxygen:
+    name: Run doxygen
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2.3.4
+      with:
+        fetch-depth: 100
+    - name: Install software
+      run: sudo apt-get install doxygen
+    - name: Check files
+      run: ./ci/copy_doxygen_files.sh
+    - name: Add problem matcher
+      run: echo ::add-matcher::ci/daos-doxygen-matcher.json
+    - name: Run
+      run: doxygen Doxyfile
+    - name: Remove matcher
+      run: echo "::remove-matcher owner=daos-doxygen::"

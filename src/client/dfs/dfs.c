@@ -1358,7 +1358,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	/* should not be freed by daos_prop_free */
 	prop->dpp_entries[prop->dpp_nr - 2].dpe_val_ptr = NULL;
 	if (rc) {
-		D_ERROR("daos_cont_create() failed (%d)\n", rc);
+		D_ERROR("daos_cont_create() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
@@ -4794,7 +4794,7 @@ dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs)
 	rc = uuid_parse(DFS_ROOT_UUID, co_uuid);
 	if (rc) {
 		D_ERROR("Invalid Container uuid\n");
-		return rc;
+		return EINVAL;
 	}
 
 	/** Try to open the DAOS container first (the mountpoint) */
