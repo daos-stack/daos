@@ -1663,6 +1663,8 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
 		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
+		if (rc)
+			rc = daos_errno2der(rc);
 	} else {
 		rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
 	}
@@ -1985,10 +1987,8 @@ out:
 				dir_name, rc);
 		}
 	}
-	if (name != NULL)
-		D_FREE(name);
-	if (dir_name != NULL)
-		D_FREE(dir_name);
+	D_FREE(name);
+	D_FREE(dir_name);
 	return rc;
 }
 
@@ -2074,7 +2074,6 @@ mkdir_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path,
 		/* continue if directory exists, fail otherwise */
 		fprintf(ap->errstream, "dfs_mkdir %s failed, %s\n",
 			name, strerror(rc));
-
 	}
 out:
 	if (parent != NULL) {
@@ -2242,10 +2241,8 @@ out:
 				dir_name, rc);
 		}
 	}
-	if (name != NULL)
-		D_FREE(name);
-	if (dir_name != NULL)
-		D_FREE(dir_name);
+	D_FREE(name);
+	D_FREE(dir_name);
 	return rc;
 }
 
@@ -2440,10 +2437,8 @@ chmod_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file,
 				dir_name, rc);
 		}
 	}
-	if (name != NULL)
-		D_FREE(name);
-	if (dir_name != NULL)
-		D_FREE(dir_name);
+	D_FREE(name);
+	D_FREE(dir_name);
 	return rc;
 }
 
@@ -2779,7 +2774,6 @@ set_dm_args_default(struct dm_args *dm)
 	dm->cont_prop_layout = DAOS_PROP_CO_LAYOUT_TYPE;
 	dm->cont_layout = DAOS_PROP_CO_LAYOUT_UNKOWN;
 	dm->cont_oid = 0;
-
 }
 
 static int
@@ -3001,7 +2995,6 @@ dm_connect(struct cmd_args_s *ap,
 			fprintf(ap->errstream, "failed to open container: "
 				"%d\n", rc);
 			D_GOTO(err_dst_root, rc);
-
 		}
 		if (is_posix_copy) {
 			rc = dfs_mount(ca->dst_poh, ca->dst_coh, O_RDWR,

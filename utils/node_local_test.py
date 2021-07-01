@@ -1213,8 +1213,9 @@ def run_daos_cmd(conf,
         rc.json = json.loads(rc.stdout.decode('utf-8'))
     return rc
 
-def create_cont(conf, pool, cont=None, posix=False, label=None, path=None):
-    """Create a container and return the uuid"""
+def _create_cont(conf, pool, cont=None, posix=False, label=None, path=None, valgrind=False):
+    """Helper function for create_cont"""
+
     cmd = ['container',
            'create',
            '--pool',
@@ -1232,16 +1233,27 @@ def create_cont(conf, pool, cont=None, posix=False, label=None, path=None):
     if cont:
         cmd.extend(['--cont', cont])
 
-    rc = run_daos_cmd(conf, cmd, use_json=True)
+    rc = run_daos_cmd(conf, cmd, use_json=True, valgrind=valgrind)
     print('rc is {}'.format(rc))
     print(rc.json)
+    return rc
+
+def create_cont(conf, pool, cont=None, posix=False, label=None, path=None, valgrind=False):
+    """Create a container and return the uuid"""
+
+    rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
+
+    if rc.returncode == 1 and rc.json['error'] == 'DER_EXIST(-1004): Entity already exists':
+        destroy_container(conf, pool, label)
+        rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
+
     assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
     return rc.json['response']['container_uuid']
 
-def destroy_container(conf, pool, container):
+def destroy_container(conf, pool, container, valgrind=True):
     """Destroy a container"""
     cmd = ['container', 'destroy', '--pool', pool, '--cont', container]
-    rc = run_daos_cmd(conf, cmd)
+    rc = run_daos_cmd(conf, cmd, valgrind=valgrind)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
     return rc.stdout.decode('utf-8').strip()
@@ -1350,7 +1362,7 @@ class posix_tests():
     def test_cache(self):
         """Test with caching enabled"""
 
-        container = create_cont(self.conf, self.pool.uuid, posix=True)
+        container = create_cont(self.conf, self.pool.uuid, posix=True, label='Cache')
         run_daos_cmd(self.conf,
                      ['container', 'query',
                       '--pool', self.pool.uuid, '--cont', container],
@@ -1976,13 +1988,17 @@ def run_posix_tests(server, conf, test=None):
             start = time.time()
             print('Calling {}'.format(fn))
             try:
+                # Do this with valgrind disabled as this code is run often and valgrind has a big
+                # performance impact.  There are other tests that run with valgrind enabled so this
+                # should not reduce coverage.
                 pt.container = create_cont(conf,
                                            pool.uuid,
                                            posix=True,
+                                           valgrind=False,
                                            label=fn)
                 pt.container_label = fn
                 rc = obj()
-                destroy_container(conf, pool.uuid, pt.container)
+                destroy_container(conf, pool.uuid, pt.container, valgrind=False)
                 pt.container = None
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
