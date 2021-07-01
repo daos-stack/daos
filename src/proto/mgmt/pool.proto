@@ -28,11 +28,10 @@ message PoolCreateReq {
 	repeated uint32 faultDomains = 7; // Fault domain tree, minimal format
 	uint32 numsvcreps = 8; // desired number of pool service replicas
 	uint64 totalbytes = 9; // Total pool size in bytes (auto config)
-	double scmratio = 10; // Ratio of SCM:NVMe expressed as % (auto config)
+	repeated double tierratio = 10; // Ratio of storage tiers expressed as % of totalbytes (auto config)
 	uint32 numranks = 11; // Number of target ranks to use (auto config)
 	repeated uint32 ranks = 12; // target ranks (manual config)
-	uint64 scmbytes = 13; // SCM size in bytes (manual config)
-	uint64 nvmebytes = 14; // NVMe size in bytes (manual config)
+	repeated uint64 tierbytes = 13; // Size in bytes of storage tiers (manual config)
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
@@ -40,8 +39,7 @@ message PoolCreateResp {
 	int32 status = 1; // DAOS error code
 	repeated uint32 svc_reps = 2; // pool service replica ranks
 	repeated uint32 tgt_ranks = 3; // pool target ranks
-	uint64 scm_bytes = 4; // total SCM allocated to pool
-	uint64 nvme_bytes = 5; // total NVMe allocated to pool
+	repeated uint64 tier_bytes = 4; // storage tiers allocated to pool
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -104,16 +102,14 @@ message PoolExtendReq {
 	string uuid = 2; // uuid of pool to add target up to
 	repeated uint32 ranks = 3; // ranks
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
-	uint64 scmbytes = 5; // SCM size in bytes
-	uint64 nvmebytes = 6; // NVMe size in bytes
-	repeated uint32 faultDomains = 7; // fault domain tree, minimal format
+	repeated uint64 tierbytes = 5; // Size in bytes of storage tiers
+	repeated uint32 faultDomains = 6; // fault domain tree, minimal format
 }
 
 // PoolExtendResp returns resultant state of Extend operation.
 message PoolExtendResp {
 	int32 status = 1; // DAOS error code
-	uint64 scm_bytes = 2; // SCM allocated on rank(s)
-	uint64 nvme_bytes = 3; // NVMe allocated on rank(s)
+	repeated uint64 tier_bytes = 2; // storage tiers allocated to pool
 }
 
 // PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
@@ -213,11 +209,10 @@ message PoolQueryResp {
 	uint32 active_targets = 5; // active targets in pool
 	uint32 disabled_targets = 6; // number of disabled targets in pool
 	PoolRebuildStatus rebuild = 7; // pool rebuild status
-	StorageUsageStats scm = 8; // SCM storage usage stats
-	StorageUsageStats nvme = 9; // NVMe storage usage stats
-	uint32 total_nodes = 10; // total nodes in pool
-	uint32 version = 11; // latest pool map version
-	uint32 leader = 12; // current raft leader
+	repeated StorageUsageStats tier_stats = 8; // storage tiers usage stats
+	uint32 total_nodes = 9; // total nodes in pool
+	uint32 version = 10; // latest pool map version
+	uint32 leader = 11; // current raft leader
 }
 
 // PoolSetPropReq represents a request to set a pool property.

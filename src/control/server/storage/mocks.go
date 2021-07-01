@@ -14,6 +14,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func concat(base string, idx int32, altSep ...string) string {
@@ -163,4 +164,12 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 		NumaNode:    uint32(idx),
 		Size:        uint64(humanize.TByte) * uint64(idx+1),
 	}
+}
+
+func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {
+	p := DefaultProvider(log, idx, engineStorage)
+	p.Sys = sys
+	p.Scm = scm
+	p.Bdev = bdev
+	return p
 }

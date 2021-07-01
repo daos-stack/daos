@@ -1119,12 +1119,14 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	assert_int_equal(pq_resp->active_targets,
 			 exp_info->pi_space.ps_ntargets);
 
-	assert_non_null(pq_resp->scm);
-	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_SCM, pq_resp->scm);
+	assert_int_equal(pq_resp->n_tier_stats, DAOS_MEDIA_MAX);
+	assert_non_null(pq_resp->tier_stats[DAOS_MEDIA_SCM]);
+	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_SCM,
+		pq_resp->tier_stats[DAOS_MEDIA_SCM]);
 
-	assert_non_null(pq_resp->nvme);
+	assert_non_null(pq_resp->tier_stats[DAOS_MEDIA_NVME]);
 	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_NVME,
-			     pq_resp->nvme);
+			     pq_resp->tier_stats[DAOS_MEDIA_NVME]);
 
 	assert_non_null(pq_resp->rebuild);
 	expect_rebuild_status(&exp_info->pi_rebuild_st, exp_state,
@@ -1562,10 +1564,12 @@ static void
 setup_extend_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__PoolExtendReq req = MGMT__POOL_EXTEND_REQ__INIT;
+	uint64_t tierbytes = 1000000000;
 
 	req.uuid = uuid;
 	req.n_ranks = 3;
-	req.scmbytes = 1000000000;
+	req.n_tierbytes = 1;
+	req.tierbytes = &tierbytes;
 	req.ranks = TEST_RANKS;
 	pack_pool_extend_req(call, &req);
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -66,10 +67,11 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 		}
 		key := fields[0]
 
-		// If we're in a server config, reset the
+		// If we're in a server or a storage tier config, reset the
 		// seen map to allow the same params in different
 		// server configs.
-		if line == "-" {
+		lineTmp := strings.TrimLeft(line, " ")
+		if lineTmp == "-" {
 			seenKeys = make(map[string]struct{})
 		}
 		if _, seen := seenKeys[key]; seen && strings.HasSuffix(key, ":") {
@@ -236,11 +238,15 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithTargetCount(16).
 				WithHelperStreamCount(6).
 				WithServiceThreadCore(0).
-				WithScmMountPoint("/mnt/daos/1").
-				WithScmClass("ram").
-				WithScmRamdiskSize(16).
-				WithBdevClass("nvme").
-				WithBdevDeviceList("0000:81:00.0").
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmMountPoint("/mnt/daos/1").
+						WithScmClass("ram").
+						WithScmRamdiskSize(16),
+					storage.NewTierConfig().
+						WithBdevClass("nvme").
+						WithBdevDeviceList("0000:81:00.0"),
+				).
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode0).
@@ -253,12 +259,16 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithTargetCount(16).
 				WithHelperStreamCount(6).
 				WithServiceThreadCore(22).
-				WithScmMountPoint("/mnt/daos/2").
-				WithScmClass("dcpm").
-				WithScmDeviceList("/dev/pmem0").
-				WithBdevClass("file").
-				WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-				WithBdevFileSize(16).
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmMountPoint("/mnt/daos/2").
+						WithScmClass("dcpm").
+						WithScmDeviceList("/dev/pmem0"),
+					storage.NewTierConfig().
+						WithBdevClass("file").
+						WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
+						WithBdevFileSize(16),
+				).
 				WithFabricInterface("qib1").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode1).
@@ -535,10 +545,15 @@ func TestServerConfig_Parsing(t *testing.T) {
 					engine.NewConfig().
 						WithFabricInterface("qib0").
 						WithFabricInterfacePort(20000).
-						WithScmClass("ram").
-						WithScmRamdiskSize(1).
-						WithScmMountPoint("/mnt/daos/2").
-						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)))
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/mnt/daos/2"),
+							storage.NewTierConfig().
+								WithBdevClass("nvme").
+								WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+						))
 			},
 			expValidateErr: errors.New("bdev_list contains duplicate pci"),
 		},
@@ -655,18 +670,24 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithLogFile("a").
 			WithFabricInterface("a").
 			WithFabricInterfacePort(42).
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithScmMountPoint("a")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("a"),
+			)
 	}
 	configB := func() *engine.Config {
 		return engine.NewConfig().
 			WithLogFile("b").
 			WithFabricInterface("b").
 			WithFabricInterfacePort(42).
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithScmMountPoint("b")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("b"),
+			)
 	}
 
 	for name, tc := range map[string]struct {
@@ -693,32 +714,59 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 		"duplicate scm_mount": {
 			configA: configA(),
 			configB: configB().
-				WithScmMountPoint(configA().Storage.SCM.MountPoint),
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmDeviceList("a").
+						WithScmMountPoint(configA().Storage.Tiers.ScmConfigs()[0].Scm.MountPoint),
+				),
 			expErr: FaultConfigDuplicateScmMount(1, 0),
 		},
 		"duplicate scm_list": {
 			configA: configA().
-				WithScmClass("dcpm").
-				WithScmRamdiskSize(0).
-				WithScmDeviceList("a"),
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmMountPoint("aa").
+						WithScmDeviceList("a"),
+				),
 			configB: configB().
-				WithScmClass("dcpm").
-				WithScmRamdiskSize(0).
-				WithScmDeviceList("a"),
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmMountPoint("bb").
+						WithScmDeviceList("a"),
+				),
 			expErr: FaultConfigDuplicateScmDeviceList(1, 0),
 		},
 		"overlapping bdev_list": {
 			configA: configA().
-				WithBdevDeviceList(MockPCIAddr(1)),
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(1)),
+				),
 			configB: configB().
-				WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
+				),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
 		},
 		"duplicates in bdev_list": {
 			configA: configA().
-				WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+				),
 			configB: configB().
-				WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
+				),
 			expErr: errors.New("bdev_list contains duplicate pci addresses"),
 		},
 	} {
@@ -741,18 +789,24 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	configA := func() *engine.Config {
 		return engine.NewConfig().
 			WithLogFile("a").
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithFabricInterfacePort(42).
-			WithScmMountPoint("a")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("a"),
+			).
+			WithFabricInterfacePort(42)
 	}
 	configB := func() *engine.Config {
 		return engine.NewConfig().
 			WithLogFile("b").
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithFabricInterfacePort(43).
-			WithScmMountPoint("b")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("b"),
+			).
+			WithFabricInterfacePort(43)
 	}
 
 	for name, tc := range map[string]struct {
