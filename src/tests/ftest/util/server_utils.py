@@ -17,12 +17,13 @@ from command_utils_base import CommandFailure, CommonConfig
 from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
-    stop_processes, get_display_size
+    stop_processes, get_display_size, run_pcmd
 from dmg_utils import get_dmg_command
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
 from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
+from ClusterShell.NodeSet import NodeSet
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -302,13 +303,27 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.hugepages.value = hugepages
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, str(cmd), timeout=40)
-        if len(result) > 1 or 0 not in result:
+        results = run_pcmd(self._hosts, str(cmd), timeout=40)
+
+        # gratuitously lifted from pcmd() and get_current_state()
+        result = {}
+        stdouts = ""
+        for res in results:
+            stdouts += '\n'.join(res["stdout"] + [''])
+            if res["exit_status"] not in result:
+                result[res["exit_status"]] = NodeSet()
+            result[res["exit_status"]].add(res["hosts"])
+
+        if len(result) > 1 or 0 not in result or \
+            (using_dcpm and \
+             "No SCM modules detected; skipping operation" in stdouts):
             dev_type = "nvme"
             if using_dcpm and using_nvme:
                 dev_type = "dcpm & nvme"
             elif using_dcpm:
                 dev_type = "dcpm"
+            pcmd(self._hosts, "sudo -n ipmctl show -v -dimm")
+            pcmd(self._hosts, "ndctl list ")
             raise ServerFailed("Error preparing {} storage".format(dev_type))
 
     def detect_format_ready(self, reformat=False):
