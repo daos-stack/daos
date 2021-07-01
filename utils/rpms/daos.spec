@@ -375,11 +375,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_common_pmem.so
 %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
-%{_libdir}/python3.6/site-packages/storage_estimator/*.py
-%dir %{_libdir}/python3.6/site-packages/storage_estimator
+%{python3_sitelib}/storage_estimator/*.py
+%dir %{python3_sitelib}/storage_estimator
 %if (0%{?rhel} >= 7)
-%dir %{_libdir}/python3.6/site-packages/storage_estimator/__pycache__
-%{_libdir}/python3.6/site-packages/storage_estimator/__pycache__/*.pyc
+%dir %{python3_sitelib}/storage_estimator/__pycache__
+%{python3_sitelib}/storage_estimator/__pycache__/*.pyc
 %endif
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
@@ -402,17 +402,17 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
-%dir %{_libdir}/python3.6/site-packages/pydaos
-%{_libdir}/python3.6/site-packages/pydaos/*.py
-%dir %{_libdir}/python3.6/site-packages/pydaos/raw
-%{_libdir}/python3.6/site-packages/pydaos/raw/*.py
+%dir %{python3_sitelib}/pydaos
+%{python3_sitelib}/pydaos/*.py
+%dir %{python3_sitelib}/pydaos/raw
+%{python3_sitelib}/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
-%dir %{_libdir}/python3.6/site-packages/pydaos/__pycache__
-%{_libdir}/python3.6/site-packages/pydaos/__pycache__/*.pyc
-%dir %{_libdir}/python3.6/site-packages/pydaos/raw/__pycache__
-%{_libdir}/python3.6/site-packages/pydaos/raw/__pycache__/*.pyc
+%dir %{python3_sitelib}/pydaos/__pycache__
+%{python3_sitelib}/pydaos/__pycache__/*.pyc
+%dir %{python3_sitelib}/pydaos/raw/__pycache__
+%{python3_sitelib}/pydaos/raw/__pycache__/*.pyc
 %endif
-%{_libdir}/python3.6/site-packages/pydaos/pydaos_shim.so
+%{python3_sitelib}/pydaos/pydaos_shim.so
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos_control.yml
