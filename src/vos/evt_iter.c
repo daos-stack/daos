@@ -120,7 +120,7 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 	int			 mid;
 	int			 cmp = 0;
 
-	enta = &iter->it_entries;
+	enta = iter->it_entries;
 	start = 0;
 	end = enta->ea_ent_nr - 1;
 
@@ -231,12 +231,12 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 			iter->it_index +=
 				iter->it_forward ? 1 : -1;
 			if (iter->it_index < 0 ||
-			    iter->it_index == iter->it_entries.ea_ent_nr) {
+			    iter->it_index == iter->it_entries->ea_ent_nr) {
 				iter->it_state = EVT_ITER_FINI;
 				D_GOTO(out, rc = -DER_NONEXIST);
 			}
 
-			entry = evt_ent_array_get(&iter->it_entries,
+			entry = evt_ent_array_get(iter->it_entries,
 						  iter->it_index);
 			if (entry->en_avail_rc < 0)
 				return entry->en_avail_rc;
@@ -297,7 +297,7 @@ evt_iter_skip_holes(struct evt_context *tcx, struct evt_iterator *iter)
 	struct evt_entry	*entry;
 
 	if (iter->it_options & (EVT_ITER_SKIP_HOLES | EVT_ITER_SKIP_REMOVED)) {
-		enta = &iter->it_entries;
+		enta = iter->it_entries;
 		entry = evt_ent_array_get(enta, iter->it_index);
 
 		if (should_skip(entry, iter))
@@ -328,7 +328,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	rtmp.rc_ex.ex_hi = iter->it_filter.fr_ex.ex_hi;
 	rtmp.rc_epc = DAOS_EPOCH_MAX;
 
-	enta = &iter->it_entries;
+	enta = iter->it_entries;
 	intent = evt_iter_intent(iter);
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, intent, &iter->it_filter,
 				&rtmp, enta);
@@ -395,7 +395,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 	if (iter->it_state < EVT_ITER_INIT)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	enta = &iter->it_entries;
+	enta = iter->it_entries;
 	ent_array_reset(tcx, enta);
 
 	if (evt_iter_is_sorted(iter))
@@ -594,7 +594,7 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 		D_GOTO(out, rc);
 
 	if (evt_iter_is_sorted(iter)) {
-		*entry = *evt_ent_array_get(&iter->it_entries, iter->it_index);
+		*entry = *evt_ent_array_get(iter->it_entries, iter->it_index);
 		evt_ent2rect(&rect, entry);
 		goto set_anchor;
 	}
