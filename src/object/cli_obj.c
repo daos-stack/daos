@@ -1791,8 +1791,11 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 
 	if (nr == 0 || recxs == NULL)
 		return false;
-	if (nr == 1)
+	if (nr == 1) {
+		if (recxs[0].rx_nr == 0)
+			return false;
 		return true;
+	}
 
 	switch (nr) {
 	case 2:
@@ -1820,6 +1823,10 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 
 		overlapped = false;
 		for (idx = 0; idx < nr; idx++) {
+			if (recxs[idx].rx_nr == 0) {
+				overlapped = true;
+				break;
+			}
 			d_iov_set(&key, &recxs[idx], sizeof(daos_recx_t));
 			rc = dbtree_update(bth, &key, NULL);
 			if (rc != 0) {
