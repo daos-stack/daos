@@ -1426,7 +1426,11 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 		D_GOTO(err_out, rc);
 	}
 
-	D_PRINT("Container properties for "DF_UUIDF" :\n", DP_UUID(ap->c_uuid));
+	if (ap->cont_label)
+		D_PRINT("Container properties for \"%s\":\n", ap->cont_label);
+	else
+		D_PRINT("Container properties for "DF_UUIDF" :\n",
+			DP_UUID(ap->c_uuid));
 
 	rc = cont_decode_props(ap, prop_query, prop_acl);
 
@@ -2864,6 +2868,13 @@ dm_connect(struct cmd_args_s *ap,
 		}
 	}
 
+	/* set cont_layout to POSIX type if the source is not in DAOS, if the
+	 * destination is DAOS, and no destination container exists yet,
+	 * then it knows to create a POSIX container
+	 */
+	if (src_file_dfs->type == POSIX)
+		ca->cont_layout = DAOS_PROP_CO_LAYOUT_POSIX;
+
 	/* only need to query if source is not POSIX, since
 	 * this connect call is used by the filesystem and clone
 	 * tools
@@ -2991,7 +3002,7 @@ dm_connect(struct cmd_args_s *ap,
 					"%d\n", rc);
 				D_GOTO(err_dst_root, rc);
 			}
-			fprintf(stdout, "Successfully created container: "
+			fprintf(stdout, "Successfully created container "
 				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
 			fprintf(ap->errstream, "failed to open container: "
@@ -3152,8 +3163,7 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		file->type = POSIX;
 	}
 out:
-	if (dattr.da_rel_path)
-		free(dattr.da_rel_path);
+	duns_destroy_attr(&dattr);
 	return rc;
 }
 
