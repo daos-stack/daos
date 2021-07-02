@@ -161,10 +161,10 @@ RUN dnf -y upgrade && \
         python3-Cython \
         python3-devel \
         python3-distro \
-        python3-pyelftools \
         python3-junit_xml \
         python3-numpy \
         python3-paramiko \
+        python3-pip \
         python3-pylint \
         python3-pyxattr \
         python3-requests \
@@ -176,6 +176,11 @@ RUN dnf -y upgrade && \
         valgrind-devel \
         yasm && \
     dnf clean all
+
+# DPDK/SPDK needs pyelftools now
+# Longer term, we should upload our RPM build of this to the public packaging
+# site and install it by RPM, but for now, we'll just pip install it
+RUN pip3 install pyelftools
 
 ARG UID=1000
 
