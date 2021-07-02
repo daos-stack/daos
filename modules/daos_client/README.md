@@ -52,12 +52,12 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_daos_service_account_scopes"></a> [daos\_service\_account\_scopes](#input\_daos\_service\_account\_scopes) | Scopes for the DAOS server service account | `list(string)` | <pre>[<br>  "userinfo-email",<br>  "compute-ro",<br>  "storage-ro"<br>]</pre> | no |
+| <a name="input_daos_service_account_scopes"></a> [daos\_service\_account\_scopes](#input\_daos\_service\_account\_scopes) | Scopes for the DAOS client service account | `list(string)` | <pre>[<br>  "userinfo-email",<br>  "compute-ro",<br>  "storage-ro"<br>]</pre> | no |
 | <a name="input_instance_base_name"></a> [instance\_base\_name](#input\_instance\_base\_name) | MIG instance base names to use | `string` | `null` | no |
 | <a name="input_machine_type"></a> [machine\_type](#input\_machine\_type) | GCP machine type. ie. e2-medium | `string` | `null` | no |
 | <a name="input_mig_name"></a> [mig\_name](#input\_mig\_name) | MIG name | `string` | `null` | no |
 | <a name="input_network"></a> [network](#input\_network) | GCP network to use | `string` | `null` | no |
-| <a name="input_number_of_instances"></a> [number\_of\_instances](#input\_number\_of\_instances) | Number of daos servers to bring up | `number` | `null` | no |
+| <a name="input_number_of_instances"></a> [number\_of\_instances](#input\_number\_of\_instances) | Number of daos clients to bring up | `number` | `null` | no |
 | <a name="input_os_disk_size_gb"></a> [os\_disk\_size\_gb](#input\_os\_disk\_size\_gb) | OS disk size in GB | `number` | `20` | no |
 | <a name="input_os_disk_type"></a> [os\_disk\_type](#input\_os\_disk\_type) | OS disk type ie. pd-ssd, pd-standard | `string` | `"pd-ssd"` | no |
 | <a name="input_os_family"></a> [os\_family](#input\_os\_family) | OS GCP image family | `string` | `null` | no |

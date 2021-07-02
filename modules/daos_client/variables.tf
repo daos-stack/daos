@@ -96,13 +96,13 @@ variable "instance_base_name" {
 }
 
 variable "number_of_instances" {
-  description = "Number of daos servers to bring up"
+  description = "Number of daos clients to bring up"
   default     = null
   type        = number
 }
 
 variable "daos_service_account_scopes" {
-  description = "Scopes for the DAOS server service account"
+  description = "Scopes for the DAOS client service account"
   default = [
     "userinfo-email",
     "compute-ro",

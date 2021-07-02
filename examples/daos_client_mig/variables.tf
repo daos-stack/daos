@@ -51,19 +51,19 @@ variable "os_disk_type" {
 
 variable "template_name" {
   description = "MIG template name"
-  default     = "daos-server"
+  default     = "daos-client"
   type        = string
 }
 
 variable "mig_name" {
   description = "MIG name "
-  default     = "daos-server"
+  default     = "daos-client"
   type        = string
 }
 
 variable "machine_type" {
   description = "GCP machine type. ie. e2-medium"
-  default     = "n2-custom-20-131072"
+  default     = "n2-highmem-16"
   type        = string
 }
 
@@ -84,18 +84,12 @@ variable "subnetwork_project" {
 
 variable "instance_base_name" {
   description = "MIG instance base names to use"
-  default     = "daos-server"
+  default     = "daos-client"
   type        = string
 }
 
 variable "number_of_instances" {
-  description = "Number of daos servers to bring up"
-  default     = 4
-  type        = number
-}
-
-variable "daos_disk_count" {
-  description = "Number of local ssd's to use"
-  default     = 16
+  description = "Number of daos clients to bring up"
+  default     = 2
   type        = number
 }
