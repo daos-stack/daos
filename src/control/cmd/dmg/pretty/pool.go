@@ -88,6 +88,17 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	return err
 }
 
+func printFailedQueries(out io.Writer, pools []*control.Pool) {
+	for _, p := range pools {
+		if p.QueryErrorMsg != "" {
+			fmt.Fprintf(out, "Pool query failed on %s: %s", getPoolName(p), p.QueryErrorMsg)
+		}
+		if p.QueryStatus != 0 {
+			fmt.Fprintf(out, "Pool query returned bad status on %s: %s", getPoolName(p), p.QueryStatus)
+		}
+	}
+}
+
 func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 	name := pool.Label
 	if name == "" {
@@ -134,16 +145,21 @@ func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 	return row
 }
 
-func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
+func printListPoolsResp(out, outErr io.Writer, resp *control.ListPoolsResp) error {
 	if len(resp.Pools) == 0 {
 		fmt.Fprintln(out, "no pools in system")
 		return nil
 	}
 
+	printFailedQueries(outErr, resp.Pools)
+
 	formatter := txtfmt.NewTableFormatter("Pool", "Size", "Used", "Imbalance", "Disabled")
 
 	var table []txtfmt.TableRow
 	for _, pool := range resp.Pools {
+		if pool.QueryFailed() {
+			continue
+		}
 		table = append(table, poolListCreateRow(pool))
 	}
 
@@ -218,6 +234,9 @@ func validateListPoolsResp(r *control.ListPoolsResp) error {
 	for i, p := range r.Pools {
 		if p.UUID == "" {
 			return errors.Errorf("pool with index %d has no uuid", i)
+		}
+		if p.HasErrors() {
+			continue // no usage stats expected
 		}
 		if len(p.Usage) == 0 {
 			return errors.Errorf("pool %s has no usage info", p.UUID)

@@ -326,6 +326,33 @@ two  100 GB 80%  12%       8/64
 
 `,
 		},
+		"two pools; one failed query": {
+			resp: &control.ListPoolsResp{
+				Pools: []*control.Pool{
+					{
+						Label:           "one",
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{0, 1, 2},
+						Usage:           exampleUsage,
+						TargetsTotal:    16,
+						TargetsDisabled: 0,
+					},
+					{
+						Label:           "two",
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{3, 4, 5},
+						QueryErrorMsg:   "stats unavailable",
+					},
+				},
+			},
+			expPrintStr: `
+Pool     Size   Used Imbalance Disabled 
+----     ----   ---- --------- -------- 
+00000001 6.0 TB 83%  12%       0/16     
+two      6.0 TB 83%  12%       8/64     
+
+`,
+		},
 		"verbose, empty response": {
 			resp:    &control.ListPoolsResp{},
 			verbose: true,

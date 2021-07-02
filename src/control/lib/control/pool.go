@@ -768,6 +768,11 @@ func (p *Pool) setUsage(pqr *PoolQueryResp) {
 		})
 }
 
+// HasErrors indicates whether a pool query operation failed on this pool.
+func (p *Pool) HasErrors() bool {
+	return p.QueryErrorMsg != "" || p.QueryStatus != 0
+}
+
 // ListPoolsReq contains the inputs for the list pools command.
 type ListPoolsReq struct {
 	unaryRequest
