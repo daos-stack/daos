@@ -1,0 +1,57 @@
+{
+    "variables": {
+        "DAOS_VERSION": "1.2.0"
+    },
+    "builders": [
+    {
+      "type": "googlecompute",
+      "account_file": "{{user `account_file`}}",
+      "project_id": "{{user `project_id`}}",
+      "source_image_project_id": [
+        "centos-cloud"
+      ],
+      "source_image_family": "centos-7",
+      "image_name": "daos-server-v{{isotime \"20060102-030405\"}}",
+      "image_family": "daos-server",
+      "machine_type": "n1-standard-16",
+      "disk_size": "20",
+      "ssh_username": "packer",
+      "zone": "us-central1-f",
+      "scopes": [
+        "https://www.googleapis.com/auth/cloud-platform"
+      ],
+      "metadata": {
+        "enable-oslogin": "False"
+      }
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
+      "script": "./scripts/tune.sh"
+    },
+    {
+      "type": "shell",
+      "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
+      "environment_vars": "DAOS_VERSION={{user `DAOS_VERSION`}}",
+      "script": "./scripts/install.sh"
+    },
+    {
+      "type": "file",
+      "source": "./configs",
+      "destination": "/tmp"
+    },
+    {
+      "type": "file",
+      "source": "./scripts/gcp_metadata.sh",
+      "destination": "/tmp/"
+    },
+    {
+      "type": "shell",
+      "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
+      "environment_vars": "DAOS_VERSION={{user `DAOS_VERSION`}}",
+      "script": "./scripts/setup.sh"
+    }
+  ]
+}
