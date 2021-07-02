@@ -61,6 +61,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         """Initialize a DataMoverTestBase object."""
         super().__init__(*args, **kwargs)
         self.tool = None
+        self.api = None
         self.daos_cmd = None
         self.dcp_cmd = None
         self.dsync_cmd = None
@@ -136,6 +137,15 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 error_list.append(
                     "Error removing created directories: {}".format(error))
         return error_list
+
+    def set_api(self, api):
+        """Set the api.
+
+        Args:
+            api (str): the api to use.
+
+        """
+        self.api = api
 
     def set_tool(self, tool):
         """Set the copy tool.
@@ -623,6 +633,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dcp_cmd = DcpCommand(self.hostlist_clients, self.workdir)
         self.dcp_cmd.get_params(self)
 
+        if self.api:
+            self.dcp_cmd.set_params(daos_api=self.api)
+
         # Set the source params
         if src_type == "POSIX":
             self.dcp_cmd.set_params(
@@ -684,6 +697,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # First, initialize a new dsync command
         self.dsync_cmd = DsyncCommand(self.hostlist_clients, self.workdir)
         self.dsync_cmd.get_params(self)
+
+        if self.api:
+            self.dcp_cmd.set_params(daos_api=self.api)
 
         # Set the source params
         if src_type == "POSIX":
