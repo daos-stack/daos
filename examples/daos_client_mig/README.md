@@ -28,7 +28,7 @@ Please make sure you go through the [Requirements section](../../modules/daos_cl
 
 ## Setup
 
-1. Create ```terraform.tfvars`` in this directory or the directory where you're running this example.
+1. Create ```terraform.tfvars``` in this directory or the directory where you're running this example.
 2. Copy the ```terraform.tfvars.example``` content into ```terraform.tfvars``` file and update the contents to match your environment.
 ## Modules
 
