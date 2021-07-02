@@ -7,10 +7,6 @@ on:
        - 'release/*'
    pull_request:
 
-concurrency:
-  group: spelling-${{ github.head_ref }}
-  cancel-in-progress: true
-
 jobs:
 
   Spelling:
