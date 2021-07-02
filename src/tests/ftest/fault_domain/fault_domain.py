@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 
 
 class FaultDomain(TestWithServers):
@@ -21,13 +21,15 @@ class FaultDomain(TestWithServers):
         self.setup_start_servers = False
         super().setUp()
 
+    @skipForTicket("DAOS-7919")
     def test_pools_in_different_domains(self):
         """The aims to:
             Be able to configure daos servers using different fault domains.
             Created pools must be in different fault domains.
 
-           Not coded:
-            If a pool has the same fault domains, a warning should be expected.
+           Not coded, should be available when DAOS-7919 is resolved.
+           If a pool has the same fault domains, a debug message
+             should be expected.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
