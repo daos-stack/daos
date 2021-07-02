@@ -33,7 +33,7 @@ class MdtestSmall(MdtestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=mdtest,checksum,mdtestsmall,mpich
+        :avocado: tags=mdtest,checksum,mdtestsmall,mdtest
         :avocado: tags=DAOS_5610
         """
         # local params

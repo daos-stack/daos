@@ -17,4 +17,4 @@ pool:
 container:
     type: POSIX
 romio:
-    romio_repo: "/usr/lib64/romio/test/"
+    romio_repo: "romio/test/"
