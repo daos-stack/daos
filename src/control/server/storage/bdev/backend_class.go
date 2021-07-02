@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,10 +8,10 @@ package bdev
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"syscall"
-	"text/template"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -22,23 +22,8 @@ import (
 )
 
 const (
-	clsNvmeTemplate = `[Nvme]
-{{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
-{{ end }}    RetryCount 4
-    TimeoutUsec 0
-    ActionOnTimeout None
-    AdminPollRate 100000
-    HotplugEnable No
-    HotplugPollRate 0
-`
 	// device block size hardcoded to 4096
-	clsFileTemplate = `[AIO]
-{{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    AIO {{$e}} AIO_{{$host}}_{{$i}} 4096
-{{ end }}`
-	clsKdevTemplate = `[AIO]
-{{ $host := .Hostname }}{{ range $i, $e := .DeviceList }}    AIO {{$e}} AIO_{{$host}}_{{$i}}
-{{ end }}`
-	clsFileBlkSize = humanize.KiByte * 4
+	aioBlockSize = humanize.KiByte * 4
 )
 
 func createEmptyFile(log logging.Logger, path string, size uint64) error {
@@ -54,7 +39,7 @@ func createEmptyFile(log logging.Logger, path string, size uint64) error {
 	}
 
 	// adjust file size to align with block size
-	size = (size / clsFileBlkSize) * clsFileBlkSize
+	size = (size / aioBlockSize) * aioBlockSize
 
 	log.Debugf("allocating blank file %s of size %s", path, humanize.Bytes(size))
 	file, err := common.TruncFile(path)
@@ -77,22 +62,8 @@ func createEmptyFile(log logging.Logger, path string, size uint64) error {
 	return nil
 }
 
-// renderTemplate takes NVMe device PCI addresses and generates config content
-// (output as string) from template.
-func renderTemplate(req *FormatRequest, templ string) (out bytes.Buffer, err error) {
-	t := template.Must(template.New(req.ConfigPath).Parse(templ))
-	err = t.Execute(&out, req)
-
-	return
-}
-
-func writeConf(log logging.Logger, templ string, req *FormatRequest) error {
-	confBytes, err := renderTemplate(req, templ)
-	if err != nil {
-		return err
-	}
-
-	if confBytes.Len() == 0 {
+func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *FormatRequest) error {
+	if buf.Len() == 0 {
 		return errors.New("generated file is unexpectedly empty")
 	}
 
@@ -107,13 +78,31 @@ func writeConf(log logging.Logger, templ string, req *FormatRequest) error {
 		}
 	}()
 
-	if _, err := confBytes.WriteTo(f); err != nil {
+	if _, err := buf.WriteTo(f); err != nil {
 		return errors.Wrap(err, "write")
 	}
 
 	return errors.Wrapf(os.Chown(req.ConfigPath, req.OwnerUID, req.OwnerGID),
 		"failed to set ownership of %q to %d.%d", req.ConfigPath,
 		req.OwnerUID, req.OwnerGID)
+}
+
+func writeJsonConfig(log logging.Logger, enableVmd bool, req *FormatRequest) error {
+	nsc, err := newSpdkConfig(log, enableVmd, req)
+	if err != nil {
+		return err
+	}
+
+	buf, err := json.MarshalIndent(nsc, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := writeConfFile(log, bytes.NewBuffer(buf), req); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // writeNvmeConf generates nvme config file for given bdev type to be consumed
@@ -123,29 +112,11 @@ func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
 		return errors.New("no output config directory set in request")
 	}
 
-	templ := map[storage.BdevClass]string{
-		storage.BdevClassNvme: clsNvmeTemplate,
-		storage.BdevClassKdev: clsKdevTemplate,
-		storage.BdevClassFile: clsFileTemplate,
-	}[req.Class]
-
-	// special handling for class nvme
-	if req.Class == storage.BdevClassNvme {
-		if len(req.DeviceList) == 0 {
-			sb.log.Debug("skip write nvme conf for empty device list")
-			return nil
-		}
-		if !sb.IsVMDDisabled() {
-			templ = `[Vmd]
-    Enable True
-
-` + templ
-		}
+	if req.Class == storage.BdevClassNvme && len(req.DeviceList) == 0 {
+		sb.log.Debug("skip write nvme conf for empty device list")
+		return nil
 	}
 
-	// spdk ini file expects device size in MBs
-	req.DeviceFileSize = req.DeviceFileSize / humanize.MiByte
-
-	sb.log.Debugf("write nvme output config: %+v", req)
-	return writeConf(sb.log, templ, req)
+	sb.log.Debugf("write nvme output json config: %+v", req)
+	return writeJsonConfig(sb.log, !sb.IsVMDDisabled(), req)
 }
