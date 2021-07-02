@@ -113,13 +113,18 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		return ret;
 	}
 
+	printf("before attempting attach\n");
+	D_ERROR("D_ERROR: before attempting attach\n");
 	while (attach_retries-- > 0) {
 		ret = crt_group_attach(dest_name, srv_grp);
 		if (ret == 0)
 			break;
 		sleep(1);
 	}
+	printf("after attempting attach\n");
+	D_ERROR("D_ERROR: after attempting attach\n");
 
+	
 	if (ret != 0) {
 		D_ERROR("crt_group_attach failed; ret = %d\n", ret);
 		return ret;
@@ -721,6 +726,11 @@ static int test_msg_size(crt_context_t crt_ctx,
 
 		/* Print a header for this endpoint and store number of chars */
 		printf("Master Endpoint %u:%u%n\n",
+		       ms_endpts[m_idx].endpt.ep_rank,
+		       ms_endpts[m_idx].endpt.ep_tag,
+		       &print_count);
+
+		D_ERROR("D_ERROR: Master Endpoint %u:%u%n\n",
 		       ms_endpts[m_idx].endpt.ep_rank,
 		       ms_endpts[m_idx].endpt.ep_tag,
 		       &print_count);
