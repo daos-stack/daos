@@ -142,7 +142,7 @@ RUN dnf -y install deltarpm && \
         patch \
         patchelf \
         pciutils \
-        python3-pyelftools \
+        python3-pip \
         python36-Cython \
         python36-devel \
         python36-distro \
@@ -160,6 +160,11 @@ RUN dnf -y install deltarpm && \
         valgrind-devel \
         yasm && \
     dnf clean all
+
+# DPDK/SPDK needs pyelftools now
+# Longer term, we should upload our RPM build of this to the public packaging
+# site and install it by RPM, but for now, we'll just pip install it
+RUN pip3 install pyelftools
 
 ARG UID=1000
 
