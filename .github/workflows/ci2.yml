@@ -78,7 +78,7 @@ jobs:
                           --tag build-image
     - name: Build and Test
       run: ./utils/run_in_ga_wrapper.sh
-      timeout-minutes: 30
+      timeout-minutes: 60
     - name: Publish NLT test results
       if: always()
       uses: EnricoMi/publish-unit-test-result-action@v1.17
