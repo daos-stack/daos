@@ -109,8 +109,8 @@ co_attribute(void **state)
 				strlen(in_values[0]),
 				strlen(in_values[1]),
 	};
-	int			 n = (int) ARRAY_SIZE(names);
-	int			 m = (int) ARRAY_SIZE(names_get);
+	int			 n = (int)ARRAY_SIZE(names);
+	int			 m = (int)ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
@@ -152,7 +152,7 @@ co_attribute(void **state)
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
 	assert_string_equal(out_buf, names[1]);
 
-	total_size = 10*BUFSIZE;
+	total_size = 10 * BUFSIZE;
 	rc = daos_cont_list_attr(arg->coh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
@@ -431,7 +431,7 @@ co_properties(void **state)
 			      "(will fail)\n");
 		uuid_generate(cuuid2);
 		rc = daos_cont_create(arg->pool.poh, cuuid2, prop, NULL);
-		assert_rc_equal(rc, -DER_INVAL);
+		assert_rc_equal(rc, -DER_EXIST);
 
 		/* Create container: same UUID, different label - fail */
 		print_message("Checking create: same UUID, different label "
@@ -2446,7 +2446,6 @@ delet_container_during_aggregation(void **state)
 	/* Run Pool query at the end */
 	pool_storage_info(state, &pinfo);
 }
-
 
 static int
 co_setup_sync(void **state)
