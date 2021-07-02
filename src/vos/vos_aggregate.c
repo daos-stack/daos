@@ -2096,15 +2096,19 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 	io->ic_csum_recalc_func = func;
 }
 
+struct agg_data {
+	vos_iter_param_t	ad_iter_param;
+	struct vos_agg_param	ad_agg_param;
+	struct vos_iter_anchors	ad_anchors;
+};
+
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      void (*csum_func)(void *),
 	      bool (*yield_func)(void *arg), void *yield_arg, bool full_scan)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
-	vos_iter_param_t	 iter_param = { 0 };
-	struct vos_agg_param	 agg_param = { 0 };
-	struct vos_iter_anchors	 anchors = { 0 };
+	struct agg_data		*ad;
 	int			 rc;
 
 	D_ASSERT(epr != NULL);
@@ -2112,45 +2116,49 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
 		  epr->epr_lo, epr->epr_hi);
 
+	D_ALLOC_PTR(ad);
+	if (ad == NULL)
+		return -DER_NOMEM;
+
 	rc = aggregate_enter(cont, false, epr);
 	if (rc)
-		return rc;
+		goto free_agg_data;
 
 	/* Set iteration parameters */
-	iter_param.ip_hdl = coh;
-	iter_param.ip_epr = *epr;
+	ad->ad_iter_param.ip_hdl = coh;
+	ad->ad_iter_param.ip_epr = *epr;
 	/*
 	 * Iterate in epoch reserve order for SV tree, so that we can know for
 	 * sure the first returned recx in SV tree has highest epoch and can't
 	 * be aggregated.
 	 */
-	iter_param.ip_epc_expr = VOS_IT_EPC_RR;
+	ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_RR;
 	/* EV tree iterator returns all sorted logical rectangles */
-	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_VISIBLE |
+	ad->ad_iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_VISIBLE |
 		VOS_IT_RECX_COVERED;
 
 	/* Set aggregation parameters */
-	agg_param.ap_umm = &cont->vc_pool->vp_umm;
-	agg_param.ap_coh = coh;
-	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
-	agg_param.ap_credits = 0;
-	agg_param.ap_discard = false;
-	agg_param.ap_yield_func = yield_func;
-	agg_param.ap_yield_arg = yield_arg;
-	merge_window_init(&agg_param.ap_window, csum_func);
+	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
+	ad->ad_agg_param.ap_coh = coh;
+	ad->ad_agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
+	ad->ad_agg_param.ap_credits = 0;
+	ad->ad_agg_param.ap_discard = false;
+	ad->ad_agg_param.ap_yield_func = yield_func;
+	ad->ad_agg_param.ap_yield_arg = yield_arg;
+	merge_window_init(&ad->ad_agg_param.ap_window, csum_func);
 	/* A full scan caused by snapshot deletion */
-	agg_param.ap_full_scan = full_scan;
+	ad->ad_agg_param.ap_full_scan = full_scan;
 
-	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
-	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
+	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE;
+	rc = vos_iterate(&ad->ad_iter_param, VOS_ITER_OBJ, true, &ad->ad_anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
-			 &agg_param, NULL);
+			 &ad->ad_agg_param, NULL);
 	if (rc != 0) {
-		close_merge_window(&agg_param.ap_window, rc);
+		close_merge_window(&ad->ad_agg_param.ap_window, rc);
 		goto exit;
-	} else if (agg_param.ap_csum_err) {
+	} else if (ad->ad_agg_param.ap_csum_err) {
 		rc = -DER_CSUM;	/* Inform caller the csum error */
-		close_merge_window(&agg_param.ap_window, rc);
+		close_merge_window(&ad->ad_agg_param.ap_window, rc);
 		/* HAE needs be updated for csum error case */
 	}
 
@@ -2163,11 +2171,14 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 exit:
 	aggregate_exit(cont, false);
 
-	if (agg_param.ap_window.mw_csum_support)
-		D_FREE(agg_param.ap_window.mw_io_ctxt.ic_csum_buf);
+	if (ad->ad_agg_param.ap_window.mw_csum_support)
+		D_FREE(ad->ad_agg_param.ap_window.mw_io_ctxt.ic_csum_buf);
 
-	if (merge_window_status(&agg_param.ap_window) != MW_CLOSED)
+	if (merge_window_status(&ad->ad_agg_param.ap_window) != MW_CLOSED)
 		D_ASSERTF(false, "Merge window resource leaked.\n");
+
+free_agg_data:
+	D_FREE(ad);
 
 	return rc;
 }
@@ -2177,9 +2188,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	    bool (*yield_func)(void *arg), void *yield_arg)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
-	vos_iter_param_t	 iter_param = { 0 };
-	struct vos_agg_param	 agg_param = { 0 };
-	struct vos_iter_anchors	 anchors = { 0 };
+	struct agg_data		*ad;
 	int			 rc;
 
 	D_ASSERT(epr != NULL);
@@ -2187,40 +2196,48 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
 		  epr->epr_lo, epr->epr_hi);
 
+	D_ALLOC_PTR(ad);
+	if (ad == NULL)
+		return -DER_NOMEM;
+
 	rc = aggregate_enter(cont, true, epr);
 	if (rc != 0)
-		return rc;
+		goto free_agg_data;
 
 	D_DEBUG(DB_EPC, "Discard epr "DF_U64"-"DF_U64"\n",
 		epr->epr_lo, epr->epr_hi);
 
 	/* Set iteration parameters */
-	iter_param.ip_hdl = coh;
-	iter_param.ip_epr = *epr;
+	ad->ad_iter_param.ip_hdl = coh;
+	ad->ad_iter_param.ip_epr = *epr;
 	if (epr->epr_lo == epr->epr_hi)
-		iter_param.ip_epc_expr = VOS_IT_EPC_EQ;
+		ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_EQ;
 	else if (epr->epr_hi != DAOS_EPOCH_MAX)
-		iter_param.ip_epc_expr = VOS_IT_EPC_RR;
+		ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_RR;
 	else
-		iter_param.ip_epc_expr = VOS_IT_EPC_GE;
+		ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_GE;
 	/* EV tree iterator returns all sorted logical rectangles */
-	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_VISIBLE |
+	ad->ad_iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_VISIBLE |
 		VOS_IT_RECX_COVERED;
 
 	/* Set aggregation parameters */
-	agg_param.ap_umm = &cont->vc_pool->vp_umm;
-	agg_param.ap_coh = coh;
-	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
-	agg_param.ap_credits = 0;
-	agg_param.ap_discard = true;
-	agg_param.ap_yield_func = yield_func;
-	agg_param.ap_yield_arg = yield_arg;
+	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
+	ad->ad_agg_param.ap_coh = coh;
+	ad->ad_agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
+	ad->ad_agg_param.ap_credits = 0;
+	ad->ad_agg_param.ap_discard = true;
+	ad->ad_agg_param.ap_yield_func = yield_func;
+	ad->ad_agg_param.ap_yield_arg = yield_arg;
 
-	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
-	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
+	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE;
+	rc = vos_iterate(&ad->ad_iter_param, VOS_ITER_OBJ, true, &ad->ad_anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
-			 &agg_param, NULL);
+			 &ad->ad_agg_param, NULL);
 
 	aggregate_exit(cont, true);
+
+free_agg_data:
+	D_FREE(ad);
+
 	return rc;
 }
