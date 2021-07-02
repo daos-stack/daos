@@ -12,13 +12,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-# DAOS Server Simple Example
+# DAOS Client MIG
 
-Creates a managed instance group running ```number_of_instances``` DAOS servers.
+Creates a managed instance group running ```number_of_instances``` DAOS clients.
+
+A DAOS client is simply an instance based on an image containing all DAOS packages and dependencies (can be created with the image scripts).
 
 ## Requirements
 
-Please make sure you go through the [Requirements section](../../modules/daos_server/README.md) of the DAOS server module.
+Please make sure you go through the [Requirements section](../../modules/daos_client/README.md) of the DAOS client module.
 
 | Name | Version |
 |------|---------|
@@ -28,12 +30,11 @@ Please make sure you go through the [Requirements section](../../modules/daos_se
 
 1. Create ```terraform.tfvars`` in this directory or the directory where you're running this example.
 2. Copy the ```terraform.tfvars.example``` content into ```terraform.tfvars``` file and update the contents to match your environment.
-
 ## Modules
 
 | Name | Source | Version |
 |------|--------|---------|
-| <a name="module_daos_server"></a> [daos\_server](#module\_daos\_server) | ../../modules/daos_server | n/a |
+| <a name="module_daos_client"></a> [daos\_client](#module\_daos\_client) | ../../modules/daos_client | n/a |
 
 ## Resources
 

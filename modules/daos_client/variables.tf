@@ -101,20 +101,6 @@ variable "number_of_instances" {
   type        = number
 }
 
-variable "daos_disk_type" {
-  #TODO: At some point we will support more than local-ssd with NVME
-  # interface.  This variable will be useful then. For now its just this.
-  description = "Daos disk type to use. For now only suported one is local-ssd"
-  default     = "local-ssd"
-  type        = string
-}
-
-variable "daos_disk_count" {
-  description = "Number of local ssd's to use"
-  default     = null
-  type        = number
-}
-
 variable "daos_service_account_scopes" {
   description = "Scopes for the DAOS server service account"
   default = [

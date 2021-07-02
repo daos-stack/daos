@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 Google LLC
+ * Copyright 2021 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,32 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 variable "project_id" {
   description = "The GCP project to use "
   type        = string
-  default     = null
 }
 variable "region" {
   description = "The GCP region to create and test resources in"
   type        = string
-  default     = null
 }
 variable "zone" {
   description = "The GCP zone to create and test resources in"
   type        = string
-  default     = null
 }
 
 variable "os_family" {
   description = "OS GCP image family"
   default     = null
-  type        = string
 }
 
 variable "os_project" {
   description = "OS GCP image project name"
   default     = null
-  type        = string
 }
 
 variable "os_disk_size_gb" {
@@ -55,72 +51,51 @@ variable "os_disk_type" {
 
 variable "template_name" {
   description = "MIG template name"
-  default     = null
+  default     = "daos-server"
   type        = string
 }
 
 variable "mig_name" {
   description = "MIG name "
-  default     = null
+  default     = "daos-server"
   type        = string
 }
 
 variable "machine_type" {
   description = "GCP machine type. ie. e2-medium"
-  default     = null
+  default     = "n2-custom-20-131072"
   type        = string
 }
 
 variable "network" {
   description = "GCP network to use"
-  default     = null
   type        = string
 }
 
 variable "subnetwork" {
   description = "GCP sub-network to use"
-  default     = null
   type        = string
 }
 
 variable "subnetwork_project" {
   description = "The GCP project where the subnetwork is defined"
   type        = string
-  default     = null
 }
 
 variable "instance_base_name" {
   description = "MIG instance base names to use"
-  default     = null
+  default     = "daos-server"
   type        = string
 }
 
 variable "number_of_instances" {
   description = "Number of daos servers to bring up"
-  default     = null
+  default     = 4
   type        = number
-}
-
-variable "daos_disk_type" {
-  #TODO: At some point we will support more than local-ssd with NVME
-  # interface.  This variable will be useful then. For now its just this.
-  description = "Daos disk type to use. For now only suported one is local-ssd"
-  default     = "local-ssd"
-  type        = string
 }
 
 variable "daos_disk_count" {
   description = "Number of local ssd's to use"
-  default     = null
+  default     = 16
   type        = number
-}
-
-variable "daos_service_account_scopes" {
-  description = "Scopes for the DAOS server service account"
-  default = [
-    "userinfo-email",
-    "compute-ro",
-    "storage-ro"
-  ]
-  type = list(string)
 }

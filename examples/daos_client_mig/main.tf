@@ -18,8 +18,8 @@ provider "google" {
   region = var.region
 }
 
-module "daos_server" {
-  source             = "../../modules/daos_server"
+module "daos_client" {
+  source             = "../../modules/daos_client"
   project_id         = var.project_id
   network            = var.network
   subnetwork         = var.subnetwork
@@ -28,7 +28,6 @@ module "daos_server" {
   zone               = var.zone
 
   number_of_instances = var.number_of_instances
-  daos_disk_count     = var.daos_disk_count
 
   instance_base_name = var.instance_base_name
   os_disk_size_gb    = var.os_disk_size_gb

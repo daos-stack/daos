@@ -1,0 +1,19 @@
+project_id="<my_project_id>"
+network = "<my_VPC_network>"
+subnetwork = "<my_VPC_subnetwork>"
+subnetwork_project = "<my_project_id>"
+region = "europe-west4"
+zone = "europe-west4-a"
+
+number_of_instances = 5
+
+instance_base_name = "daos-client"
+os_disk_size_gb = 20
+os_disk_type = "pd-ssd"
+template_name = "daos-client"
+mig_name = "daos-client"
+machine_type = "n2-highmem-16" # 10x physical cores, using 8x targets
+
+# the image must be built before (see build folder)
+os_project = "<my_project_id>"
+os_family = "daos_server"
