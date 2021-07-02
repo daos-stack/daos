@@ -414,9 +414,8 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,
 
 d_rank_t
 get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
-
-void
-trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oid, int oid_nr);
+uint32_t
+get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
 
 void
 ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
@@ -479,7 +478,7 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 				   char *expected_state);
 void save_group_state(void **state);
 void trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
-				    int oids_nr);
+				    int oids_nr, uint64_t fail_loc);
 
 enum op_type {
 	PARTIAL_UPDATE	=	1,

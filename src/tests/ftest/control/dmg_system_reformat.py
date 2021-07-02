@@ -4,9 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
-
 from apricot import skipForTicket
 from avocado.core.exceptions import TestFail
 from pool_test_base import PoolTestBase
@@ -29,15 +26,16 @@ class DmgSystemReformatTest(PoolTestBase):
 
         Test Description: Test dmg system reformat functionality.
 
-        :avocado: tags=all,small,daily_regression,hw,control,sys_reformat,dmg
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,small
+        :avocado: tags=control,dmg_system_reformat,dmg
         """
-        # Create pool using 90% of the available SCM capacity
-        self.pool = self.get_pool_list(1, None, 0.9)
-        self.pool[-1].create()
+        # Create pool using 90% of the available NVMe capacity
+        self.add_pool_qty(1)
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
         self.get_dmg_command().exit_status_exception = False
-        self.pool.extend(self.get_pool_list(1, None, 0.9))
+        self.add_pool_qty(1, create=False)
         try:
             self.pool[-1].create()
         except TestFail as error:
@@ -51,8 +49,16 @@ class DmgSystemReformatTest(PoolTestBase):
         if self.get_dmg_command().result.exit_status != 0:
             self.fail("Detected issues performing a system stop: {}".format(
                 self.get_dmg_command().result.stderr_text))
+
         # Remove pools
         self.pool = []
+
+        # Perform a dmg system erase to allow the dmg storage format to succeed
+        self.log.info("Perform dmg system erase on all system ranks:")
+        self.get_dmg_command().system_erase()
+        if self.get_dmg_command().result.exit_status != 0:
+            self.fail("Issues performing system erase: {}".format(
+                self.get_dmg_command().result.stderr_text))
 
         # To verify that we are using the membership information instead of the
         # dmg config explicit hostlist
@@ -61,9 +67,9 @@ class DmgSystemReformatTest(PoolTestBase):
         #     self.server_managers[-1].dmg.set_config_value("hostlist", None))
 
         self.log.info("Perform dmg storage format on all system ranks:")
-        self.get_dmg_command().storage_format(reformat=True)
+        self.get_dmg_command().storage_format(force=True)
         if self.get_dmg_command().result.exit_status != 0:
-            self.fail("Issues performing storage format --reformat: {}".format(
+            self.fail("Issues performing storage format --force: {}".format(
                 self.get_dmg_command().result.stderr_text))
 
         # Check that engine starts up again
@@ -76,8 +82,7 @@ class DmgSystemReformatTest(PoolTestBase):
                 self.get_dmg_command().result.stdout_text))
 
         # Create last pool now that memory has been wiped.
-        self.pool.extend(self.get_pool_list(1, None, 0.9))
-        self.pool[-1].create()
+        self.add_pool_qty(1)
 
         # Lastly, verify that last created pool is in the list
         pool_info = self.get_dmg_command().pool_list()
