@@ -10,20 +10,24 @@
 #include <daos_prop.h>
 
 struct cont_props {
-	uint32_t dcp_chunksize;
-	uint32_t dcp_dedup_size;
-	uint64_t dcp_alloced_oid;
+	uint32_t	 dcp_chunksize;
+	uint32_t	 dcp_dedup_size;
+	uint64_t	 dcp_alloced_oid;
 	/**
 	 * Use more bits for compression type since compression level is
 	 * encoded in there.
 	 */
-	uint32_t dcp_compress_type;
-	uint16_t dcp_csum_type;
-	uint16_t dcp_encrypt_type;
-	uint32_t dcp_redun_fac;
-	uint32_t dcp_ec_cell_sz;
-	uint32_t dcp_csum_enabled : 1, dcp_srv_verify : 1, dcp_dedup_enabled : 1,
-	    dcp_dedup_verify : 1, dcp_compress_enabled : 1, dcp_encrypt_enabled : 1;
+	uint32_t	 dcp_compress_type;
+	uint16_t	 dcp_csum_type;
+	uint16_t	 dcp_encrypt_type;
+	uint32_t	 dcp_redun_fac;
+	uint32_t	 dcp_ec_cell_sz;
+	uint32_t	 dcp_csum_enabled:1,
+			 dcp_srv_verify:1,
+			 dcp_dedup_enabled:1,
+			 dcp_dedup_verify:1,
+			 dcp_compress_enabled:1,
+			 dcp_encrypt_enabled:1;
 };
 
 void
@@ -77,6 +81,7 @@ daos_cont_encrypt_prop_is_enabled(uint16_t val);
 
 uint16_t
 daos_cont_prop2encrypt(daos_prop_t *props);
+
 
 /**
  * Redundancy properties

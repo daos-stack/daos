@@ -9,14 +9,12 @@
 /**
  *  Called during library initialization to extract the jobid.
  */
-int
-dc_job_init(void);
+int dc_job_init(void);
 
 /**
  *  Called during library finalization to free allocated jobid resources
  */
-void
-dc_job_fini(void);
+void dc_job_fini(void);
 
 /**
  * Environment variable name that holds the jobid for this invocation.
@@ -28,6 +26,7 @@ extern char *dc_jobid_env;
  */
 extern char *dc_jobid;
 
+
 /**
  * Environment variable used to contain envar name where jobid is stored
  */
@@ -37,6 +36,7 @@ extern char *dc_jobid;
  * Default environment variable name for jobid when one is not specified
  */
 #define DEFAULT_JOBID_ENV "DAOS_JOBID"
+
 
 /*
  * The answer of what the max length of envvar name is very tricky. Arguments

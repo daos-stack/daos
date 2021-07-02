@@ -12,14 +12,12 @@
 /**
  *  Called during library initialization to craft socket path for agent.
  */
-int
-dc_agent_init(void);
+int dc_agent_init(void);
 
 /**
  *  Called during library finalization to free allocated agent resources
  */
-void
-dc_agent_fini(void);
+void dc_agent_fini(void);
 
 /**
  * Path to be used to communicate with the DAOS Agent set at library init.
@@ -44,6 +42,7 @@ extern char *dc_agent_sockpath;
 /**
  * Default Unix Domain Socket path for the DAOS agent dRPC connection
  */
-#define DEFAULT_DAOS_AGENT_DRPC_SOCK (DAOS_AGENT_DRPC_DIR DAOS_AGENT_DRPC_SOCK_NAME)
+#define DEFAULT_DAOS_AGENT_DRPC_SOCK	(DAOS_AGENT_DRPC_DIR \
+					DAOS_AGENT_DRPC_SOCK_NAME)
 
 #endif /* __DAOS_AGENT_H__ */

@@ -36,8 +36,8 @@ extern "C" {
 #endif
 
 #if defined(__has_warning)
-#define D_HAS_WARNING(gcc_version, warning) __has_warning(warning)
-#else /* !defined(__has_warning) */
+#define D_HAS_WARNING(gcc_version, warning)	__has_warning(warning)
+#else  /* !defined(__has_warning) */
 #define D_HAS_WARNING(gcc_version, warning) ((gcc_version) <= __GNUC__)
 #endif /* defined(__has_warning) */
 
@@ -45,39 +45,39 @@ extern "C" {
  * hide the dark secret that uuid_t is an array not a structure.
  */
 struct d_uuid {
-	uuid_t uuid;
+	uuid_t		uuid;
 };
 
 /** iovec for memory buffer */
 typedef struct {
 	/** buffer address */
-	void *iov_buf;
+	void		*iov_buf;
 	/** buffer length */
-	size_t iov_buf_len;
+	size_t		iov_buf_len;
 	/** data length */
-	size_t iov_len;
+	size_t		iov_len;
 } d_iov_t;
 
 /** Server identification */
-typedef uint32_t d_rank_t;
+typedef uint32_t	d_rank_t;
 
 typedef struct {
 	/** list of ranks */
-	d_rank_t *rl_ranks;
+	d_rank_t	*rl_ranks;
 	/** number of ranks */
-	uint32_t rl_nr;
+	uint32_t	rl_nr;
 } d_rank_list_t;
 
-typedef d_rank_list_t *d_rank_list_ptr_t;
+typedef d_rank_list_t	*d_rank_list_ptr_t;
 
-typedef char *      d_string_t;
-typedef const char *d_const_string_t;
+typedef char		*d_string_t;
+typedef const char	*d_const_string_t;
 
 /** Scatter/gather list for memory buffers */
 typedef struct {
-	uint32_t sg_nr;
-	uint32_t sg_nr_out;
-	d_iov_t *sg_iovs;
+	uint32_t	sg_nr;
+	uint32_t	sg_nr_out;
+	d_iov_t		*sg_iovs;
 } d_sg_list_t;
 
 /**
@@ -85,13 +85,13 @@ typedef struct {
  */
 struct d_string_buffer_t {
 	/** c string status */
-	int status;
+	int	status;
 	/** c string size */
-	size_t str_size;
+	size_t	str_size;
 	/** buffer size */
-	size_t buf_size;
+	size_t	buf_size;
 	/** c string buffer address */
-	char *str;
+	char	*str;
 };
 
 static inline void

@@ -17,16 +17,16 @@
 
 enum {
 	/* Device is plugged */
-	NVME_DEV_FL_PLUGGED = 0x1,
+	NVME_DEV_FL_PLUGGED	= 0x1,
 	/* Device is used by DAOS (present in SMD) */
-	NVME_DEV_FL_INUSE = 0x2,
+	NVME_DEV_FL_INUSE	= 0x2,
 	/* Device is marked as FAULTY */
-	NVME_DEV_FL_FAULTY = 0x4,
+	NVME_DEV_FL_FAULTY	= 0x4,
 };
 
 enum bio_dev_state {
 	/* fully functional and in-use */
-	BIO_DEV_NORMAL = 0,
+	BIO_DEV_NORMAL	= 0,
 	/* evicted device */
 	BIO_DEV_FAULTY,
 	/* unplugged device */
@@ -46,14 +46,10 @@ static inline char *
 bio_dev_state_enum_to_str(enum bio_dev_state state)
 {
 	switch (state) {
-	case BIO_DEV_NORMAL:
-		return "NORMAL";
-	case BIO_DEV_FAULTY:
-		return "EVICTED";
-	case BIO_DEV_OUT:
-		return "UNPLUGGED";
-	case BIO_DEV_NEW:
-		return "NEW";
+	case BIO_DEV_NORMAL: return "NORMAL";
+	case BIO_DEV_FAULTY: return "EVICTED";
+	case BIO_DEV_OUT:    return "UNPLUGGED";
+	case BIO_DEV_NEW:    return "NEW";
 	}
 
 	return "Undefined state";
@@ -65,31 +61,31 @@ bio_dev_state_enum_to_str(enum bio_dev_state state)
  * Also retrieved on request via go-spdk bindings from the control-plane.
  */
 struct nvme_stats {
-	uint64_t timestamp;
+	uint64_t	 timestamp;
 	/* Device space utilization */
-	uint64_t total_bytes;
-	uint64_t avail_bytes;
+	uint64_t	 total_bytes;
+	uint64_t	 avail_bytes;
 	/* Device health details */
-	uint32_t warn_temp_time;
-	uint32_t crit_temp_time;
-	uint64_t ctrl_busy_time;
-	uint64_t power_cycles;
-	uint64_t power_on_hours;
-	uint64_t unsafe_shutdowns;
-	uint64_t media_errs;
-	uint64_t err_log_entries;
+	uint32_t	 warn_temp_time;
+	uint32_t	 crit_temp_time;
+	uint64_t	 ctrl_busy_time;
+	uint64_t	 power_cycles;
+	uint64_t	 power_on_hours;
+	uint64_t	 unsafe_shutdowns;
+	uint64_t	 media_errs;
+	uint64_t	 err_log_entries;
 	/* I/O error counters */
-	uint32_t bio_read_errs;
-	uint32_t bio_write_errs;
-	uint32_t bio_unmap_errs;
-	uint32_t checksum_errs;
-	uint16_t temperature; /* in Kelvin */
+	uint32_t	 bio_read_errs;
+	uint32_t	 bio_write_errs;
+	uint32_t	 bio_unmap_errs;
+	uint32_t	 checksum_errs;
+	uint16_t	 temperature; /* in Kelvin */
 	/* Critical warnings */
-	bool temp_warn;
-	bool avail_spare_warn;
-	bool dev_reliability_warn;
-	bool read_only_warn;
-	bool volatile_mem_warn; /*volatile memory backup*/
+	bool		 temp_warn;
+	bool		 avail_spare_warn;
+	bool		 dev_reliability_warn;
+	bool		 read_only_warn;
+	bool		 volatile_mem_warn; /*volatile memory backup*/
 };
 
 /**
@@ -102,6 +98,5 @@ struct nvme_stats {
  *
  * \return		Zero on success, negative value on error
  */
-int
-copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
+int copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
 #endif /* __CONTROL_H_ */

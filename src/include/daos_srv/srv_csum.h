@@ -25,8 +25,11 @@
  * @return
  */
 bool
-ds_csum_calc_needed(struct daos_csum_range *raw_ext, struct daos_csum_range *req_ext,
-		    struct daos_csum_range *chunk, bool csum_started, bool has_next_biov);
+ds_csum_calc_needed(struct daos_csum_range *raw_ext,
+		    struct daos_csum_range *req_ext,
+		    struct daos_csum_range *chunk,
+		    bool csum_started,
+		    bool has_next_biov);
 
 /**
  * Process the bsgl and create new checksums or use the stored
@@ -43,8 +46,8 @@ ds_csum_calc_needed(struct daos_csum_range *raw_ext, struct daos_csum_range *req
  * @return
  */
 int
-ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist *bsgl,
-		struct dcs_csum_info *biov_csums, size_t *biov_csums_used,
-		struct dcs_iod_csums *iod_csums);
+ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
+		struct bio_sglist *bsgl, struct dcs_csum_info *biov_csums,
+		size_t *biov_csums_used, struct dcs_iod_csums *iod_csums);
 
 #endif

@@ -14,9 +14,7 @@
 #include <daos/tse.h>
 #include <daos_types.h>
 
-int
-dc_debug_set_params(tse_task_t *task);
-int
-dc_debug_add_mark(const char *mark);
+int dc_debug_set_params(tse_task_t *task);
+int dc_debug_add_mark(const char *mark);
 
 #endif
