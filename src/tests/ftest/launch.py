@@ -999,6 +999,17 @@ def run_tests(test_files, tag_filter, args):
                     avocado_logs_dir,
                     get_test_category(test_file["py"]))
 
+                # Archive remote ULTs stacks dump files
+                return_code |= archive_files(
+                    "ULTs stacks dump files",
+                    os.path.join(avocado_logs_dir, "latest", "daos_dumps"),
+                    get_hosts_from_yaml(
+                        test_file["yaml"], args, YAML_KEYS["test_servers"]),
+                    "/tmp/daos_dump*.txt*",
+                    args,
+                    avocado_logs_dir,
+                    get_test_category(test_file["py"]))
+
                 # Archive remote cart log files
                 return_code |= archive_files(
                     "cart log files",
@@ -1141,6 +1152,8 @@ def clean_logs(test_yaml, args):
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
+    # also remove any ABT infos/stacks dumps
+    command += " /tmp/daos_dump*.txt*"
     print("-" * 80)
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
@@ -1607,7 +1620,7 @@ def install_debuginfos():
     cmds = []
 
     # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['daos', 'systemd', 'ndctl', 'mercury', 'hdf5']:
+    for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5']:
         try:
             debug_pkg = resolve_debuginfo(pkg)
         except RuntimeError as error:

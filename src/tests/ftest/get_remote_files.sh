@@ -154,6 +154,7 @@ scp_files() {
         if scp -r "${file}" "${2}"/"${archive_name}"; then
             copied+=("${file}")
             if [[ ! "${file}" =~ /etc/daos/ ]] && \
+               [[ ! "${file}" =~ daos_dump ]] && \
                [[ ! "${file}" =~ test.cov ]]; then
                 if ! rm -fr "${file}"; then
                     echo "  Error removing ${file}"

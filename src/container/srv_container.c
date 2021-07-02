@@ -515,6 +515,12 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	entry_def->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY, 0,
 				     ds_pool_get_version(pool_hdl->sph_pool));
 
+	/* Validate the result */
+	if (!daos_prop_valid(prop_def, false /* pool */, true /* input */)) {
+		D_ERROR("properties validation check failed\n");
+		return -DER_INVAL;
+	}
+
 	return 0;
 }
 
@@ -726,7 +732,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	/* duplicate the default properties, overwrite it with cont create
 	 * parameter (write to rdb below).
 	 */
-	prop_dup = daos_prop_dup(&cont_prop_default, false);
+	prop_dup = daos_prop_dup(&cont_prop_default, false /* pool */,
+				 false /* input */);
 	if (prop_dup == NULL) {
 		D_ERROR(DF_CONT" daos_prop_dup failed.\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
@@ -2623,17 +2630,21 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	if (in_ent == NULL)
 		return 0;
 
-	/* Verify request label is not default ("container label not set")
-	 * Very unlikely / impossible when future limitations placed on
-	 * label string contents (e.g., no spaces).
-	 */
+	/* Verify request label conforms to rules */
 	in_lbl = in_ent->dpe_str;
+	if (!daos_label_is_valid(in_lbl)) {
+		D_ERROR(DF_UUID": invalid label: %s\n", DP_UUID(cont->c_uuid),
+			in_lbl);
+		return -DER_INVAL;
+	}
+
+	/* Verify request label is not default. */
 	def_ent = daos_prop_entry_get(&cont_prop_default, DAOS_PROP_CO_LABEL);
 	D_ASSERT(def_ent != NULL);
 	def_lbl = def_ent->dpe_str;
 	if (strncmp(def_lbl, in_lbl, DAOS_PROP_LABEL_MAX_LEN) == 0) {
-		D_ERROR(DF_UUID": invalid label: %s\n", DP_UUID(cont->c_uuid),
-			in_lbl);
+		D_ERROR(DF_UUID": invalid label matches default: %s\n",
+			DP_UUID(cont->c_uuid), in_lbl);
 		return -DER_INVAL;
 	}
 
