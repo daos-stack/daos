@@ -1,7 +1,7 @@
 # Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of centOS 8
+# 'recipe' for Docker to build an image of centOS 8 based
 # environment for building the DAOS project.
 #
 
@@ -21,7 +21,7 @@ ARG CB0
 # package must be installed and the GPG key it provides must be
 # installed.
 ARG REPO_URL
-ARG REPO_DISTRO=""
+ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
       rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
@@ -48,7 +48,7 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
     dnf clean all
 
 # Currently the appstream REPO can not be part of a repo group
-ARG REPO_APSTREAM=""
+ARG REPO_APSTREAM
 RUN if [ -n "$REPO_APPSTREAM" ]; then                           \
       rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_APPSTREAM}/";                  \
@@ -66,7 +66,7 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
-ARG REPO_DAOS=""
+ARG REPO_DAOS
 RUN if [ -n "$REPO_DAOS" ]; then                                \
       MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
       MY_NAME="${MY_REPO#*//}";                                 \
@@ -158,8 +158,8 @@ RUN echo "daos_agent:daos_agent" | chpasswd
 RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&  \
-    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server && \
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
 # The COPY command has a --chown option but it's not well supported so copy as
@@ -176,6 +176,8 @@ USER daos_server:daos_server
 # ease-of-use for users, however in CI everything is turned off and then
 # selectively enabled.  Turning off any step disables all future steps.
 ARG DAOS_DEPS_BUILD=yes
+ARG DAOS_KEEP_BUILD=no
+ARG DAOS_TARGET_TYPE=release
 
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
@@ -190,9 +192,9 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons-3 --build-deps=yes \
-              --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
-    /bin/rm -rf build *.gz; }
+    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
+      TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
+    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
 # force an upgrade to get any newly built RPMs
 USER root:root
@@ -212,18 +214,20 @@ COPY site_scons site_scons
 COPY utils utils
 COPY src src
 USER root:root
-RUN chown -R daos_server.daos_server /home/daos
+RUN chown -R daos_server.daos_server /home/daos/daos/
 USER daos_server:daos_server
 
 # select compiler to use
 ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
-    /bin/rm -rf build && \
+    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
+      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+    /bin/rm -rf build && go clean -cache && \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
@@ -255,5 +259,6 @@ RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
+ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN rm -rf /home/daos/*
+RUN [ $"DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
