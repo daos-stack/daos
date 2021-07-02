@@ -4006,7 +4006,7 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	if (replacement.rl_nr > 0)
 		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replacement,
 				       ds_rsvc_get_md_cap());
-	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed);
+	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed, false /* stop */);
 	/** `replacement.rl_ranks` is not allocated and shouldn't be freed **/
 	D_FREE(failed.rl_ranks);
 
@@ -5632,7 +5632,7 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 
 	case POOL_REPLICAS_REMOVE:
 		rc = ds_rsvc_remove_replicas(DS_RSVC_CLASS_POOL, &id, ranks,
-					     &out->pmo_hint);
+					     true /* stop */, &out->pmo_hint);
 		break;
 
 	default:
