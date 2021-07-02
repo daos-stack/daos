@@ -48,7 +48,9 @@ RUN apt-get -y update && \
         libyaml-dev \
         locales \
         maven \
+        meson \
         numactl \
+        ninja-build \
         openjdk-8-jdk \
         pandoc \
         patchelf \
@@ -58,6 +60,7 @@ RUN apt-get -y update && \
         python3-distro \
         python3-distutils \
         python3-junit.xml \
+        python3-pyelftools \
         python3-pyxattr \
         python3-tabulate \
         scons \
