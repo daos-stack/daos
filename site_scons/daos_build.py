@@ -25,7 +25,10 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
     rpaths = env.subst("$RPATH_FULL").split()
     prefix = env.get("PREFIX")
     for rpath in rpaths:
-        if install_off is None:
+        if rpath.startswith('/usr'):
+            env.AppendUnique(RPATH=[rpath])
+            continue
+        elif install_off is None:
             env.AppendUnique(RPATH=[os.path.join(prefix, rpath)])
             continue
         relpath = os.path.relpath(rpath, prefix)
