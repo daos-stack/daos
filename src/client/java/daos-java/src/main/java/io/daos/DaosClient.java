@@ -7,7 +7,6 @@
 package io.daos;
 
 import io.daos.dfs.*;
-import org.apache.commons.lang3.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -420,7 +419,12 @@ public class DaosClient implements ForceCloseable {
       if (poolId == null) {
         throw new IllegalArgumentException("need pool UUID");
       }
-      DaosClient client = new DaosClient((DaosClientBuilder) ObjectUtils.clone(this));
+      DaosClient client;
+      try {
+        client = new DaosClient(clone());
+      } catch (CloneNotSupportedException ce) {
+        throw new IllegalStateException("clone not supported.", ce);
+      }
       client.init();
       return client;
     }

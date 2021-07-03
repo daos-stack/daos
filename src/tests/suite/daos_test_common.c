@@ -434,9 +434,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		break;
 	}
 
-	rc = daos_pool_disconnect(poh, NULL);
-	if (rc)
-		print_message("pool disconnect failed: %d\n", rc);
+	daos_pool_disconnect(poh, NULL);
 
 	rc = dmg_pool_destroy(dmg_config_file,
 			      pool->pool_uuid, arg->group, 1);
@@ -948,7 +946,9 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 
 	rc = system(dmg_cmd);
 	print_message(" %s rc %#x\n", dmg_cmd, rc);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
+
+	daos_cont_status_clear(arg->coh, NULL);
 }
 
 struct daos_acl *

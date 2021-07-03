@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -154,7 +155,7 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 	return netDevClass, nil
 }
 
-func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn) error {
+func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := bdev.PrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
@@ -202,6 +203,21 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn
 		// Double-check that we got the requested number of huge pages after prepare.
 		if hugePages.Free < prepReq.HugePageCount {
 			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
+		}
+	}
+
+	for _, engineCfg := range srv.cfg.Engines {
+		// Calculate mem_size per I/O engine (in MB)
+		PageSizeMb := hugePages.PageSizeKb >> 10
+		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines)
+		engineCfg.MemSize *= PageSizeMb
+		// Pass hugepage size, do not assume 2MB is used
+		engineCfg.HugePageSz = PageSizeMb
+		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
+		// Warn if hugepages are not enough to sustain average
+		// I/O workload (~1GB)
+		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
+			srv.log.Errorf("Not enough hugepages are allocated!")
 		}
 	}
 
@@ -365,4 +381,34 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 		grpc.ChainUnaryInterceptor(unaryInterceptors...),
 		grpc.ChainStreamInterceptor(streamInterceptors...),
 	}...), nil
+}
+
+type netInterface interface {
+	Addrs() ([]net.Addr, error)
+}
+
+func checkFabricInterface(name string, lookup func(string) (netInterface, error)) error {
+	if name == "" {
+		return errors.New("no name provided")
+	}
+
+	if lookup == nil {
+		return errors.New("no lookup function provided")
+	}
+
+	netIF, err := lookup(name)
+	if err != nil {
+		return err
+	}
+
+	addrs, err := netIF.Addrs()
+	if err != nil {
+		return err
+	}
+
+	if len(addrs) == 0 {
+		return fmt.Errorf("no network addresses for interface %q", name)
+	}
+
+	return nil
 }

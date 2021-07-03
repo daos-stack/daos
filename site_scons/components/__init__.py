@@ -66,12 +66,13 @@ class installed_comps():
         self.not_installed.append(name)
         return False
 
-def exclude(reqs, name, use_value, exclude_value):
-    """Return True if in exclude list"""
-    if set([name, 'all']).intersection(set(reqs.exclude)):
-        print("Excluding %s from build" % name)
-        return exclude_value
-    return use_value
+def include(reqs, name, use_value, exclude_value):
+    """Return True if in include list"""
+    if set([name, 'all']).intersection(set(reqs.include)):
+        print("Including %s optional component from build" % name)
+        return use_value
+    print("Excluding %s optional component from build" % name)
+    return exclude_value
 
 def inst(reqs, name):
     """Return True if name is in list of installed packages"""
@@ -132,20 +133,24 @@ def define_mercury(reqs):
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
                           '--disable-efa ' +
+                          '--disable-psm3 ' +
                           '--without-gdrcopy ' +
                           OFI_DEBUG +
-                          exclude(reqs, 'psm2',
+                          include(reqs, 'psm2',
                                   '--enable-psm2' +
                                   check(reqs, 'psm2',
                                         "=$PSM2_PREFIX "
                                         'LDFLAGS="-Wl,--enable-new-dtags ' +
                                         '-Wl,-rpath=$PSM2_PREFIX/lib64" ',
                                         ''),
-                                  ''),
+                                  '--disable-psm2 ') +
+                          include(reqs, 'psm3',
+                                  '--enable-psm3 ',
+                                  '--disable-psm3 '),
                           'make $JOBS_OPT',
                           'make install'],
                 libs=['fabric'],
-                requires=exclude(reqs, 'psm2', ['psm2'], []),
+                requires=include(reqs, 'psm2', ['psm2'], []),
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
@@ -186,8 +191,8 @@ def define_mercury(reqs):
                                 '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
                           'make $JOBS_OPT', 'make install'],
                 libs=['mercury', 'na', 'mercury_util'],
+                pkgconfig='mercury',
                 requires=[atomic, 'boost', 'ofi'] + libs,
-                extra_include_path=[os.path.join('include', 'na')],
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 patch_rpath=['lib'])
@@ -196,6 +201,11 @@ def define_mercury(reqs):
 
 def define_common(reqs):
     """common system component definitions"""
+    reqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
+
+    reqs.define('libunwind', libs=['unwind'], headers=['libunwind.h'],
+                package='libunwind-devel')
+
     reqs.define('lz4', headers=['lz4.h'], package='lz4-devel')
 
     reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'],
@@ -286,7 +296,7 @@ def define_components(reqs):
                           ' --enable-stack-unwind',
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],
-                requires=['valgrind_devel'],
+                requires=['valgrind_devel', 'libunwind'],
                 libs=['abt'],
                 headers=['abt.h'])
 
@@ -296,19 +306,25 @@ def define_components(reqs):
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['cd dpdk; '                            \
-                          'git fetch; '                          \
-                          'git checkout origin/spdk-19.11.6',    \
-                          './configure --prefix="$SPDK_PREFIX"'                \
-                          ' --disable-tests --without-vhost --without-crypto'  \
-                          ' --without-pmdk --without-vpp --without-rbd'        \
-                          ' --with-rdma --with-shared'                         \
-                          ' --without-iscsi-initiator --without-isal'          \
-                          ' --without-vtune', 'make $JOBS_OPT', 'make install',
-                          'cp dpdk/build/lib/* "$SPDK_PREFIX/lib"',
+                commands=['./configure --prefix="$SPDK_PREFIX"'                \
+                          ' --disable-tests --disable-unit-tests '             \
+                          ' --disable-examples --disable-apps --without-vhost '\
+                          ' --without-crypto --without-pmdk --without-rbd '    \
+                          ' --with-rdma --without-iscsi-initiator '            \
+                          ' --without-isal --without-vtune --with-shared',
+                          'make $JOBS_OPT', 'make install',
+                          'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
+                          'mkdir -p "$SPDK_PREFIX/include/dpdk"',
+                          'cp -r -P dpdk/build/include/* '                     \
+                          '"$SPDK_PREFIX/include/dpdk"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"'],
-                libs=['rte_bus_pci'], patch_rpath=['lib'])
+                headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
+                extra_include_path=['/usr/include/dpdk',
+                                    '$SPDK_PREFIX/include/dpdk',
+                                    # debian dpdk rpm puts rte_config.h here
+                                    '/usr/include/x86_64-linux-gnu/dpdk'],
+                patch_rpath=['lib'])
 
     retriever = GitRepoRetriever("https://github.com/protobuf-c/protobuf-c.git")
     reqs.define('protobufc',

@@ -45,9 +45,7 @@ pipeline {
 
     triggers {
         cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
-             env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
-             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '' +
-             env.BRANCH_NAME == 'weekly-testing-1.2' ? 'H 0 * * 6' : '')
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '' )
     }
 
     environment {
@@ -74,6 +72,13 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: "",
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestRepeat',
+               defaultValue: "",
+               description: 'Test-repeat to use for this run.  Specifies the ' +
+                            'number of times to repeat each functional test. ' +
+                            'CAUTION: only use in combination with a reduced ' +
+                            'number of tests specified with the TestTag ' +
+                            'parameter.')
     }
 
     stages {
@@ -610,7 +615,7 @@ pipeline {
                         label 'ci_nlt_1'
                     }
                     steps {
-                        unitTest timeout_time: 45,
+                        unitTest timeout_time: 60,
                                  inst_repos: prRepos(),
                                  test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unitPackages()

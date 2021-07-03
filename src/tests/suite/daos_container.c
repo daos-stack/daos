@@ -109,8 +109,8 @@ co_attribute(void **state)
 				strlen(in_values[0]),
 				strlen(in_values[1]),
 	};
-	int			 n = (int) ARRAY_SIZE(names);
-	int			 m = (int) ARRAY_SIZE(names_get);
+	int			 n = (int)ARRAY_SIZE(names);
+	int			 m = (int)ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
@@ -152,7 +152,7 @@ co_attribute(void **state)
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
 	assert_string_equal(out_buf, names[1]);
 
-	total_size = 10*BUFSIZE;
+	total_size = 10 * BUFSIZE;
 	rc = daos_cont_list_attr(arg->coh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
@@ -310,6 +310,14 @@ co_properties(void **state)
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	char			*label = "test_cont_properties";
+	char			*label2 = "test_cont_prop_label2";
+	char			*foo_label = "foo";
+	char			*label2_v2 = "test_cont_prop_label2_version2";
+	uuid_t			 cuuid2;
+	daos_handle_t		 coh2;
+	uuid_t			 cuuid3;
+	daos_handle_t		 coh3;
+	uuid_t			 cuuid4;
 	uint64_t		 snapshot_max = 128;
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
@@ -414,9 +422,108 @@ co_properties(void **state)
 	}
 	D_FREE(exp_owner_grp);
 
-	if (arg->myrank == 0)
+	if (arg->myrank == 0) {
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
+
+		/* Create container: different UUID, same label - fail */
+		print_message("Checking create: different UUID same label "
+			      "(will fail)\n");
+		uuid_generate(cuuid2);
+		rc = daos_cont_create(arg->pool.poh, cuuid2, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* Create container: same UUID, different label - fail */
+		print_message("Checking create: same UUID, different label "
+			      "(will fail)\n");
+		free(prop->dpp_entries[0].dpe_str);
+		prop->dpp_entries[0].dpe_str = strdup(label2);
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* Create container: same UUID, no label - pass (idempotent) */
+		print_message("Checking create: same UUID, no label\n");
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Create container C2: no UUID specified, new label - pass */
+		print_message("Checking create: different UUID and label\n");
+		rc = daos_cont_create_by_label(arg->pool.poh, label2, NULL,
+					       NULL, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("created container C2: %s\n", label2);
+		/* Open by label, and immediately close */
+		rc = daos_cont_open_by_label(arg->pool.poh, label2, DAOS_COO_RW,
+					     &coh2, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_cont_close(coh2, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("opened and closed container %s\n", label2);
+
+		/* Create container: C1 UUID, different label - fail
+		 * uuid matches first container, label matches second container
+		 */
+		print_message("Checking create: same UUID, different label "
+			      "(will fail)\n");
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* destroy the container C2 (will re-create it next) */
+		rc = daos_cont_destroy_by_label(arg->pool.poh, label2,
+						0 /* force */, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("destroyed container C2: %s\n", label2);
+
+		/* Create C3 with an initial label, rename to old C2 label2
+		 * Create container with label2  - fail.
+		 */
+		print_message("Checking set-prop and create label conflict "
+			      "(will fail)\n");
+		rc = daos_cont_create_by_label(arg->pool.poh, foo_label,
+					       NULL /* prop */, &cuuid3,
+					       NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("step1: created container C3: %s : "
+			      "UUID:"DF_UUIDF"\n", foo_label, DP_UUID(cuuid3));
+		rc = daos_cont_open_by_label(arg->pool.poh, foo_label,
+					     DAOS_COO_RW, &coh3, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("step2: C3 set-prop, rename %s -> %s\n",
+			      foo_label, prop->dpp_entries[0].dpe_str);
+		rc = daos_cont_set_prop(coh3, prop, NULL);
+		assert_rc_equal(rc, 0);
+		uuid_generate(cuuid4);
+		print_message("step3: create cont with label: %s (will fail)\n",
+			      prop->dpp_entries[0].dpe_str);
+		rc = daos_cont_create(arg->pool.poh, cuuid4, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* Container 3 set-prop label2_v2,
+		 * container 1 set-prop label2 - pass
+		 */
+		print_message("Checking label rename and reuse\n");
+		free(prop->dpp_entries[0].dpe_str);
+		prop->dpp_entries[0].dpe_str = strdup(label2_v2);
+		print_message("step: C3 set-prop change FROM %s TO %s\n",
+			      label2, label2_v2);
+		rc = daos_cont_set_prop(coh3, prop, NULL);
+		assert_rc_equal(rc, 0);
+		free(prop->dpp_entries[0].dpe_str);
+		prop->dpp_entries[0].dpe_str = strdup(label2);
+		print_message("step: C1 set-prop change FROM %s TO %s\n",
+			      label, label2);
+		rc = daos_cont_set_prop(arg->coh, prop, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* destroy container C3 */
+		rc = daos_cont_close(coh3, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_cont_destroy_by_label(arg->pool.poh, label2_v2,
+						0 /* force */, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("destroyed container C3: %s : "
+			      "UUID:"DF_UUIDF"\n", label2_v2, DP_UUID(cuuid3));
+	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_prop_free(prop);
@@ -1347,7 +1454,7 @@ get_daos_prop_with_label(void)
 	assert_non_null(prop);
 
 	setup_str_prop_entry(&prop->dpp_entries[0], DAOS_PROP_CO_LABEL,
-			     "My container");
+			     "My_container");
 
 	return prop;
 }
@@ -1362,7 +1469,7 @@ get_daos_prop_with_all_prop_categories(void)
 	assert_non_null(prop);
 
 	setup_str_prop_entry(&prop->dpp_entries[0], DAOS_PROP_CO_LABEL,
-			     "Container 1");
+			     "Container_1");
 	setup_str_prop_entry(&prop->dpp_entries[1], DAOS_PROP_CO_OWNER,
 			     "niceuser@");
 	setup_str_prop_entry(&prop->dpp_entries[2], DAOS_PROP_CO_OWNER_GROUP,
@@ -1861,7 +1968,7 @@ co_owner_implicit_access(void **state)
 	print_message("- Verify set-prop denied\n");
 	tmp_prop = daos_prop_alloc(1);
 	tmp_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(tmp_prop->dpp_entries[0].dpe_str, "My Label", 16);
+	D_STRNDUP_S(tmp_prop->dpp_entries[0].dpe_str, "My Label");
 	rc = daos_cont_set_prop(arg->coh, tmp_prop, NULL);
 	assert_rc_equal(rc, -DER_NO_PERM);
 	daos_prop_free(tmp_prop);
@@ -2101,6 +2208,7 @@ co_open_fail_destroy(void **state)
 static void
 co_rf_simple(void **state)
 {
+#define STACK_BUF_LEN	(128)
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	daos_obj_id_t		 oid;
@@ -2110,6 +2218,14 @@ co_rf_simple(void **state)
 	struct daos_prop_entry	*entry;
 	struct daos_co_status	 stat = { 0 };
 	daos_cont_info_t	 info = { 0 };
+	daos_obj_id_t		 io_oid;
+	daos_handle_t		 io_oh;
+	d_iov_t			 dkey;
+	char			 stack_buf[STACK_BUF_LEN];
+	d_sg_list_t		 sgl;
+	d_iov_t			 sg_iov;
+	daos_iod_t		 iod;
+	daos_recx_t		 recx;
 	int			 rc;
 
 	/* needs 3 alive nodes after excluding 3 */
@@ -2188,6 +2304,29 @@ co_rf_simple(void **state)
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 
+	/* IO testing */
+	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+	dts_buf_render(stack_buf, STACK_BUF_LEN);
+	d_iov_set(&sg_iov, stack_buf, STACK_BUF_LEN);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 1;
+	sgl.sg_iovs	= &sg_iov;
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	recx.rx_idx = 0;
+	recx.rx_nr  = STACK_BUF_LEN;
+	iod.iod_size	= 1;
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	print_message("obj update should success before RF broken\n");
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
 	if (arg->myrank == 0)
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, 3);
@@ -2199,6 +2338,14 @@ co_rf_simple(void **state)
 	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_UNCLEAN);
 	rc = daos_cont_open(arg->pool.poh, arg->co_uuid, arg->cont_open_flags,
 			    &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_RF);
+	print_message("obj update should fail after RF broken\n");
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, -DER_RF);
+	print_message("obj fetch should fail after RF broken\n");
+	rc = daos_obj_fetch(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
 	assert_rc_equal(rc, -DER_RF);
 
 	if (arg->myrank == 0) {
@@ -2214,11 +2361,13 @@ co_rf_simple(void **state)
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
+	print_message("obj update should success after re-integrate\n");
+	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
 	/* clear the UNCLEAN status */
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_STATUS;
-	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_STATUS_VAL(
-						DAOS_PROP_CO_HEALTHY, 0);
-	rc = daos_cont_set_prop(arg->coh, prop, NULL);
+	rc = daos_cont_status_clear(arg->coh, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
@@ -2242,6 +2391,9 @@ co_rf_simple(void **state)
 	rc = daos_cont_close(coh_g2l, NULL);
 	assert_int_equal(rc, 0);
 	free(ghdl.iov_buf);
+
+	rc = daos_obj_close(io_oh, NULL);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
@@ -2294,7 +2446,6 @@ delet_container_during_aggregation(void **state)
 	/* Run Pool query at the end */
 	pool_storage_info(state, &pinfo);
 }
-
 
 static int
 co_setup_sync(void **state)

@@ -45,6 +45,7 @@ RDB_STRING_KEY(ds_cont_prop_, co_status);
 RDB_STRING_KEY(ds_cont_attr_, user);
 RDB_STRING_KEY(ds_cont_prop_, handles);
 RDB_STRING_KEY(ds_cont_prop_, roots);
+RDB_STRING_KEY(ds_cont_prop_, ec_cell_sz);
 
 /* dummy value for container roots, avoid malloc on demand */
 static struct daos_prop_co_roots dummy_roots;
@@ -53,7 +54,7 @@ static struct daos_prop_co_roots dummy_roots;
 struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	{
 		.dpe_type	= DAOS_PROP_CO_LABEL,
-		.dpe_str	= "container label not set",
+		.dpe_str	= "container_label_not_set",
 	}, {
 		.dpe_type	= DAOS_PROP_CO_LAYOUT_TYPE,
 		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKOWN,
@@ -74,7 +75,7 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_val	= DAOS_PROP_CO_REDUN_RF0,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_LVL,
-		.dpe_val	= DAOS_PROP_CO_REDUN_RACK,
+		.dpe_val	= DAOS_PROP_CO_REDUN_RANK,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_SNAPSHOT_MAX,
 		.dpe_val	= 0, /* No limitation */
@@ -105,10 +106,13 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_CO_STATUS,
 		.dpe_val	= DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
-							  0),
+							  0, 0),
 	}, {
 		.dpe_type	= DAOS_PROP_CO_ALLOCED_OID,
 		.dpe_val	= 0,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_EC_CELL_SZ,
+		.dpe_val	= 0, /* inherit from pool by default */
 	}
 };
 

@@ -5,6 +5,9 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs', 'libdaos_tgts')
 
+    if not prereqs.server_requested():
+        return
+
     denv = env.Clone()
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
@@ -12,7 +15,7 @@ def scons():
     libraries += ['bio_srv', 'dl', 'uuid', 'pthread', 'abt']
     libraries += ['hwloc', 'pmemobj', 'protobuf-c', 'isal']
 
-    prereqs.require(denv, 'hwloc', 'argobots', 'protobufc', 'isal')
+    prereqs.require(denv, 'hwloc', 'argobots', 'protobufc', 'pmdk', 'isal')
 
     # the "-rdynamic" is to allow other dll to refer symbol defined in
     # daos_engine such as dss_tls_key etc.
@@ -33,7 +36,8 @@ def scons():
                                 LIBS=libraries)
     denv.Install('$PREFIX/bin', engine)
 
-    SConscript('tests/SConscript', exports='denv')
+    if prereqs.test_requested():
+        SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
     scons()

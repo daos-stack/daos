@@ -333,6 +333,7 @@ func TestBackend_Format(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			b := backendWithMockBinding(log, tc.mec, tc.mnc)
+			b.script = mockScriptRunner(log)
 
 			// output path would be set during config validate
 			tc.req.ConfigPath = filepath.Join(testDir, storage.BdevOutConfName)
@@ -377,37 +378,19 @@ func TestBackend_Update(t *testing.T) {
 		mnc     spdk.MockNvmeCfg
 		expErr  error
 	}{
-		"init failed": {
-			pciAddr: controllers[0].PciAddr,
-			mec: spdk.MockEnvCfg{
-				InitErr: errors.New("spdk init says no"),
-			},
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: controllers,
-			},
-			expErr: errors.New("spdk init says no"),
-		},
-		"not found": {
-			pciAddr: "NotReal",
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: controllers,
-			},
-			expErr: FaultPCIAddrNotFound("NotReal"),
+		"no PCI addr": {
+			expErr: FaultBadPCIAddr(""),
 		},
 		"binding update fail": {
 			pciAddr: controllers[0].PciAddr,
 			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: controllers,
-				UpdateErr:      errors.New("spdk says no"),
+				UpdateErr: errors.New("spdk says no"),
 			},
 			expErr: errors.New("spdk says no"),
 		},
 		"binding update success": {
 			pciAddr: controllers[0].PciAddr,
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: controllers,
-			},
-			expErr: nil,
+			expErr:  nil,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

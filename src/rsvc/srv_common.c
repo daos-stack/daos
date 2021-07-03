@@ -90,9 +90,9 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_update(tx, path, &key, &value);
 		if (rc != 0) {
-			D_ERROR("%s: failed to update attribute '"DF_KEY
-				"': %d\n",
-				svc->s_name, DP_KEY(&key), rc);
+			D_ERROR("%s: failed to update attribute "DF_KEY
+				": "DF_RC"\n",
+				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_bulk;
 		}
 	}
@@ -153,9 +153,9 @@ ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_delete(tx, path, &key);
 		if (rc != 0) {
-			D_ERROR("%s: failed to delete attribute '"DF_KEY
-				"': %d\n",
-				svc->s_name, DP_KEY(&key), rc);
+			D_ERROR("%s: failed to delete attribute "DF_KEY
+				": "DF_RC"\n",
+				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_bulk;
 		}
 	}
@@ -183,8 +183,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	char				*names;
 	size_t				*sizes;
 	int				 rc;
-	int				 i;
-	int				 j;
+	uint64_t			 i, j, nonexist = 0;
 
 	rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 	if (rc != 0)
@@ -246,10 +245,11 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 			/* fake crt_sgl_valid() */
 			iovs[j].iov_buf = (void *)(-1);
 
-			D_DEBUG(DB_ANY, "%s: failed to lookup attribute '"DF_KEY"': "DF_RC"\n",
+			D_DEBUG(DB_ANY, "%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
 				svc->s_name, DP_KEY(&key), DP_RC(rc));
+			nonexist++;
 		} else if (rc != 0) {
-			D_ERROR("%s: failed to lookup attribute '"DF_KEY"': "DF_RC"\n",
+			D_ERROR("%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
 				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_iovs;
 		} else {
@@ -273,6 +273,14 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 				0, key_length, count * sizeof(*sizes));
 	if (rc != 0)
 		goto out_iovs;
+
+	/* sizes have been sent back, so if none of attrs exist, just stop here
+	 * and return -DER_NONEXIST
+	 */
+	if (nonexist == count) {
+		rc = -DER_NONEXIST;
+		goto out_iovs;
+	}
 
 	local_offset = count * sizeof(*sizes);
 	remote_offset = key_length + count * sizeof(*sizes);

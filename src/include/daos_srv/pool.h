@@ -22,6 +22,47 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 
+/** Metrics for each individual active pool */
+struct ds_pool_metrics {
+	uuid_t			pm_pool_uuid;
+	ABT_mutex		pm_lock; /* multiple threads may have access */
+
+	struct d_tm_node_t	*pm_started_timestamp;
+	/* TODO: add more per-pool metrics */
+};
+
+/**
+ * Lock a pool metrics structure for synchronized access.
+ *
+ * \param[in]	metrics		Pool metrics
+ */
+static inline void
+ds_pool_metrics_lock(struct ds_pool_metrics *metrics)
+{
+	if (unlikely(metrics == NULL))
+		return;
+
+	ABT_mutex_lock(metrics->pm_lock);
+}
+
+/**
+ * Unlock a pool metrics structure for synchronized access.
+ *
+ * \param[in]	metrics		Pool metrics
+ */
+static inline void
+ds_pool_metrics_unlock(struct ds_pool_metrics *metrics)
+{
+	if (unlikely(metrics == NULL))
+		return;
+
+	ABT_mutex_unlock(metrics->pm_lock);
+}
+
+struct ds_pool_metrics *ds_pool_metrics_get(const uuid_t pool_uuid);
+int ds_pool_metrics_get_path(const uuid_t pool_uuid, char *path,
+			     size_t path_len);
+
 /*
  * Pool object
  *
@@ -33,6 +74,7 @@ struct ds_pool {
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
+	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_mutex;
@@ -54,6 +96,9 @@ struct ds_pool {
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t		sp_stopping:1,
 				sp_fetch_hdls:1;
+
+	struct ds_pool_metrics *sp_metrics; /* Metrics for this pool */
+
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
@@ -255,10 +300,11 @@ int dsc_pool_close(daos_handle_t ph);
 static inline int
 ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
 {
-	int	rc;
+	int	rc = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
-	rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
+	if (last_ver < pool_map_get_version(pool->sp_map))
+		rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return rc;

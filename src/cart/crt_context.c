@@ -468,6 +468,7 @@ int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
 	struct crt_context	*ctx;
+	uint32_t		 timeout_sec;
 	int			 flags;
 	int			 rc = 0;
 	int			 i;
@@ -489,6 +490,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			D_GOTO(out, rc);
 	}
 
+	timeout_sec = crt_swim_rpc_timeout();
 	flags = force ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
 	D_MUTEX_LOCK(&ctx->cc_mutex);
 	for (i = 0; i < CRT_SWIM_FLUSH_ATTEMPTS; i++) {
@@ -502,7 +504,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		/* Flush SWIM RPC already sent */
-		rc = crt_context_flush(crt_ctx, crt_swim_rpc_timeout);
+		rc = crt_context_flush(crt_ctx, timeout_sec);
 		if (rc)
 			/* give a chance to other threads to complete */
 			usleep(1000); /* 1ms */
@@ -868,9 +870,40 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
-	int				 count = 0;
 
 	D_ASSERT(crt_ctx != NULL);
+
+	if (crt_gdata.cg_swim_inited) {
+		struct crt_grp_priv	*gp = crt_gdata.cg_grp->gg_primary_grp;
+		struct crt_swim_membs	*csm = &gp->gp_membs_swim;
+		swim_id_t		 self_id = swim_self_get(csm->csm_ctx);
+
+		/*
+		 * Check for network idle in SWIM context.
+		 * If the time passed from last received RPC till now is more
+		 * than 2/3 of suspicion timeout suspends eviction.
+		 * The max_delay should be less suspicion timeout to guarantee
+		 * the already suspected members will not be expired.
+		 */
+		if (crt_ctx->cc_idx == csm->csm_crt_ctx_idx &&
+		    crt_ctx->cc_last_unpack_hlc != 0 &&
+		    self_id != SWIM_ID_INVALID) {
+			uint64_t delay = crt_hlc2msec(crt_hlc_get() -
+						   crt_ctx->cc_last_unpack_hlc);
+			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
+
+			if (delay > max_delay) {
+				D_ERROR("Network outage detected (idle during "
+					"%lu.%lu sec >  maximum allowed "
+					"%lu.%lu sec). Suspend SWIM eviction "
+					"until network stabilized.\n",
+					delay / 1000, delay % 1000,
+					max_delay / 1000, max_delay % 1000);
+				crt_swim_suspend_all();
+				crt_ctx->cc_last_unpack_hlc = 0;
+			}
+		}
+	}
 
 	D_INIT_LIST_HEAD(&timeout_list);
 	ts_now = d_timeus_secdiff(0);
@@ -887,7 +920,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 		/* +1 to prevent it from being released in timeout_untrack */
 		RPC_ADDREF(rpc_priv);
-		count++;
 		crt_req_timeout_untrack(rpc_priv);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);

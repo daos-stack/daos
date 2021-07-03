@@ -26,10 +26,10 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_POOL_MD_VERSION 2
+#define DS_POOL_MD_VERSION 3
 
 /* Lowest compatible layout version */
-#define DS_POOL_MD_VERSION_LOW 1
+#define DS_POOL_MD_VERSION_LOW 2
 
 /*
  * Root KVS (RDB_KVS_GENERIC): pool properties
@@ -55,6 +55,7 @@ extern d_iov_t ds_pool_prop_owner_group;	/* string */
 extern d_iov_t ds_pool_prop_connectable;	/* uint32_t */
 extern d_iov_t ds_pool_prop_nhandles;		/* uint32_t */
 extern d_iov_t ds_pool_prop_handles;		/* pool handle KVS */
+extern d_iov_t ds_pool_prop_ec_cell_sz;		/* pool EC cell size */
 extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
 
 /*

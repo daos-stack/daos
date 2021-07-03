@@ -24,21 +24,25 @@ def scons():
     for src_file in SRC_FILES:
         cache[src_file] = denv.SharedObject(src_file)
 
+    # dc_security: Security Client
+    dc_security_tgts = get_objects(cache, 'cli_security.c', 'auth.pb-c.c')
+    Export('dc_security_tgts')
+
+    if not prereqs.server_requested():
+        return
+
     denv.AppendUnique(LIBS=['gurt'])
     ds_sec = daos_build.library(denv, 'security',
                                 get_objects(cache, 'srv.c', 'srv_acl.c'),
                                 install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_sec)
 
-    # dc_security: Security Client
-    dc_security_tgts = get_objects(cache, 'cli_security.c', 'auth.pb-c.c')
-    Export('dc_security_tgts')
-
     dc_sectest_tgts = get_objects(cache, 'srv_acl.c', 'cli_security.c',
                                   'auth.pb-c.c')
     Export('dc_sectest_tgts')
 
-    SConscript('tests/SConscript', exports='denv')
+    if prereqs.test_requested():
+        SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
     scons()

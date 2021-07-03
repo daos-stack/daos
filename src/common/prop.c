@@ -50,14 +50,12 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	case DAOS_PROP_CO_OWNER:
 	case DAOS_PROP_PO_OWNER_GROUP:
 	case DAOS_PROP_CO_OWNER_GROUP:
-		if (entry->dpe_str)
-			D_FREE(entry->dpe_str);
+		D_FREE(entry->dpe_str);
 		break;
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
 	case DAOS_PROP_CO_ROOTS:
-		if (entry->dpe_val_ptr)
-			D_FREE(entry->dpe_val_ptr);
+		D_FREE(entry->dpe_val_ptr);
 		break;
 	case DAOS_PROP_PO_SVC_LIST:
 		if (entry->dpe_val_ptr)
@@ -85,7 +83,6 @@ daos_prop_fini(daos_prop_t *prop)
 	}
 
 	D_FREE(prop->dpp_entries);
-	prop->dpp_entries = NULL;
 out:
 	prop->dpp_nr = 0;
 }
@@ -165,21 +162,22 @@ err:
 }
 
 static bool
-daos_prop_str_valid(d_string_t str, const char *prop_name, size_t max_len)
+str_valid(const char *str, const char *prop_name, size_t max_len)
 {
 	size_t len;
 
-	if (str == NULL) {
+	if (unlikely(str == NULL)) {
 		D_ERROR("invalid NULL %s\n", prop_name);
 		return false;
 	}
 	/* Detect if it's longer than max_len */
 	len = strnlen(str, max_len + 1);
 	if (len == 0 || len > max_len) {
-		D_ERROR("invalid %s len=%lu, max=%lu\n",
-			prop_name, len, max_len);
+		D_ERROR("invalid %s len=%lu, max=%lu\n", prop_name, len,
+			max_len);
 		return false;
 	}
+
 	return true;
 }
 
@@ -187,22 +185,14 @@ static bool
 daos_prop_owner_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
-	return daos_prop_str_valid(owner, "owner",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN);
+	return str_valid(owner, "owner", DAOS_ACL_MAX_PRINCIPAL_LEN);
 }
 
 static bool
 daos_prop_owner_group_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
-	return daos_prop_str_valid(owner, "owner-group",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN);
-}
-
-static bool
-daos_prop_label_valid(d_string_t label)
-{
-	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN);
+	return str_valid(owner, "owner-group", DAOS_ACL_MAX_PRINCIPAL_LEN);
 }
 
 /**
@@ -264,9 +254,12 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		/* pool properties */
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
-			if (!daos_prop_label_valid(
-				prop->dpp_entries[i].dpe_str))
+			if (!daos_label_is_valid(
+						prop->dpp_entries[i].dpe_str)) {
+				D_ERROR("invalid label \"%s\"\n",
+					prop->dpp_entries[i].dpe_str);
 				return false;
+			}
 			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
@@ -282,6 +275,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			}
 			break;
 		case DAOS_PROP_PO_SELF_HEAL:
+		case DAOS_PROP_PO_EC_CELL_SZ:
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			val = prop->dpp_entries[i].dpe_val;
@@ -381,10 +375,12 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_REDUN_LVL:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_PROP_CO_REDUN_RACK &&
-			    val != DAOS_PROP_CO_REDUN_NODE) {
-				D_ERROR("invalid redundancy level "DF_U64".\n",
-					val);
+			if (val < DAOS_PROP_CO_REDUN_MIN ||
+			    val > DAOS_PROP_CO_REDUN_MAX) {
+				D_ERROR("invalid redundancy level "DF_U64
+					", must be within [%d - %d]\n",
+					val, DAOS_PROP_CO_REDUN_RANK,
+					DAOS_PROP_CO_REDUN_MAX);
 				return false;
 			}
 			break;
@@ -426,9 +422,10 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 					co_status.dcs_status);
 				return false;
 			}
-		case DAOS_PROP_CO_SNAPSHOT_MAX:
 			break;
+		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_ROOTS:
+		case DAOS_PROP_CO_EC_CELL_SZ:
 			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);
@@ -514,14 +511,14 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
  * \a pool true for pool properties, false for container properties.
  */
 daos_prop_t *
-daos_prop_dup(daos_prop_t *prop, bool pool)
+daos_prop_dup(daos_prop_t *prop, bool pool, bool input)
 {
 	daos_prop_t		*prop_dup;
 	struct daos_prop_entry	*entry, *entry_dup;
 	int			 i;
 	int			 rc;
 
-	if (!daos_prop_valid(prop, pool, true))
+	if (!daos_prop_valid(prop, pool, input))
 		return NULL;
 
 	prop_dup = daos_prop_alloc(prop->dpp_nr);
@@ -715,17 +712,16 @@ int
 daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
 			     struct daos_prop_entry *src)
 {
-	struct daos_prop_co_roots *roots;
-
-	roots = src->dpe_val_ptr;
-	if (!dst->dpe_val_ptr)
-		D_ALLOC(dst->dpe_val_ptr, sizeof(*roots));
-
 	if (dst->dpe_val_ptr == NULL) {
-		D_ERROR("failed to dup roots\n");
-		return -DER_NOMEM;
+		D_ALLOC(dst->dpe_val_ptr, sizeof(struct daos_prop_co_roots));
+
+		if (dst->dpe_val_ptr == NULL)
+			return -DER_NOMEM;
 	}
-	memcpy(dst->dpe_val_ptr, roots, sizeof(*roots));
+
+	memcpy(dst->dpe_val_ptr,
+	       src->dpe_val_ptr,
+	       sizeof(struct daos_prop_co_roots));
 	return 0;
 }
 

@@ -271,8 +271,8 @@ dtx_req_list_cb(void **args)
 					"on %d/%d.\n", DP_DTI(drr->drr_dti),
 					drr->drr_rank, drr->drr_tag);
 				return;
-			case -DER_EVICTED:
-				/* If non-leader is evicted, handle it
+			case -DER_EXCLUDED:
+				/* If non-leader is excluded, handle it
 				 * as 'prepared'. If other non-leaders
 				 * also 'prepared' then related DTX is
 				 * committable. Fall through.
@@ -494,11 +494,17 @@ dtx_dti_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 		d_iov_t			 kiov;
 		d_iov_t			 riov;
 
-		ABT_rwlock_wrlock(pool->sp_lock);
+		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
+		if (rc != 1) {
+			D_WARN("Cannot find target %u at %d/%d, flags %x\n",
+			       mbs->dm_tgts[i].ddt_id, i, mbs->dm_tgt_cnt,
+			       mbs->dm_flags);
+			ABT_rwlock_unlock(pool->sp_lock);
+			return -DER_UNINIT;
+		}
 		ABT_rwlock_unlock(pool->sp_lock);
-		D_ASSERT(rc == 1);
 
 		/* Skip the target that (re-)joined the system after the DTX. */
 		if (target->ta_comp.co_ver > dte->dte_ver)
@@ -756,11 +762,17 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
 		struct pool_target	*target;
 
-		ABT_rwlock_wrlock(pool->sp_lock);
+		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
+		if (rc != 1) {
+			D_WARN("Cannot find target %u at %d/%d, flags %x\n",
+			       mbs->dm_tgts[i].ddt_id, i, mbs->dm_tgt_cnt,
+			       mbs->dm_flags);
+			ABT_rwlock_unlock(pool->sp_lock);
+			D_GOTO(out, rc = -DER_UNINIT);
+		}
 		ABT_rwlock_unlock(pool->sp_lock);
-		D_ASSERT(rc == 1);
 
 		/* Skip the target that (re-)joined the system after the DTX. */
 		if (target->ta_comp.co_ver > dte->dte_ver)
@@ -877,10 +889,15 @@ again:
 			leader_tgt = dsp->dsp_mbs.dm_tgts[0].ddt_id;
 		}
 
-		ABT_rwlock_wrlock(pool->sp_lock);
+		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
+		if (rc != 1) {
+			D_WARN("Cannot find target %u, flags %x\n",
+			       leader_tgt, dsp->dsp_mbs.dm_flags);
+			ABT_rwlock_unlock(pool->sp_lock);
+			D_GOTO(out, rc = -DER_UNINIT);
+		}
 		ABT_rwlock_unlock(pool->sp_lock);
-		D_ASSERT(rc == 1);
 
 		/* If current server is the leader, then two possible cases:
 		 *
@@ -898,7 +915,7 @@ again:
 		}
 
 		/* Usually, we will not elect in-rebuilding server as DTX
-		 * leader. But we may be blocked by the ABT_rwlock_wrlock,
+		 * leader. But we may be blocked by the ABT_rwlock_rdlock,
 		 * then pool map may be refreshed during that. Let's retry
 		 * to find out the new leader.
 		 */
