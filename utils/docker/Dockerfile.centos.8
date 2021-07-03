@@ -6,7 +6,8 @@
 #
 
 # Pull base image
-FROM centos:8
+ARG BASE_DISTRO=centos:8
+FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -79,8 +80,35 @@ repo_gpgcheck=0\n\
 gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
     fi
 
+ARG JENKINS_URL
+ARG REPOS
+RUN for repo in $REPOS; do                                                \
+        branch="master";                                                  \
+        build_number="lastSuccessfulBuild";                               \
+        if [[ $repo = *@* ]]; then                                        \
+            branch="${repo#*@}";                                          \
+            repo="${repo%@*}";                                            \
+            if [[ $branch = *:* ]]; then                                  \
+                build_number="${branch#*:}";                              \
+                branch="${branch%:*}";                                    \
+            fi;                                                           \
+        fi;                                                               \
+        echo -e "[$repo:$branch:$build_number]\n\
+name=$repo:$branch:$build_number\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
+        cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
+        dnf repolist; \
+        dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
+    done
 
-# Install basic tools to build DAOS
+# Install OS updates and package.  Include basic tools and daos dependencies
+# that come from the core repo.
+# Clean up any repos afterwards to save space.
+# Switch to dnf as it seems a bit faster.
+# libatomic should be in this list, but can not for now due to CI
+# post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
 RUN dnf -y upgrade && \
     dnf -y install \
@@ -119,8 +147,10 @@ RUN dnf -y upgrade && \
         make \
         man \
         maven \
+        meson \
         nasm \
         ndctl \
+        ninja-build \
         numactl \
         numactl-devel \
         openmpi-devel \
@@ -135,6 +165,7 @@ RUN dnf -y upgrade && \
         python3-junit_xml \
         python3-numpy \
         python3-paramiko \
+        python3-pip \
         python3-pylint \
         python3-pyxattr \
         python3-requests \
@@ -146,6 +177,11 @@ RUN dnf -y upgrade && \
         valgrind-devel \
         yasm && \
     dnf clean all
+
+# DPDK/SPDK needs pyelftools now
+# Longer term, we should upload our RPM build of this to the public packaging
+# site and install it by RPM, but for now, we'll just pip install it
+RUN pip3 install pyelftools
 
 ARG UID=1000
 
@@ -161,6 +197,29 @@ RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setu
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
     chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
+
+ARG QUICKBUILD=false
+ARG QUICKBUILD_DEPS
+
+RUN if $QUICKBUILD; then                                                      \
+        echo "Installing: $QUICKBUILD_DEPS";                                  \
+        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |             \
+          xargs -0 dnf -y install;                                            \
+        dnf clean all;                                                        \
+    fi
+
+ARG BULLSEYE
+RUN if [ "x$BULLSEYE" != "x" ]; then \
+      curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
+        --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar; \
+      mkdir -p bullseye; \
+      tar -C bullseye --strip-components=1 -xf bullseye.tar; \
+      pushd bullseye; \
+        ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage; \
+      popd; \
+      rm -f bullseye.tar; \
+      rm -rf bullseye; \
+    fi
 
 # The COPY command has a --chown option but it's not well supported so copy as
 # root then run a chown command which is frustrating as the copy can take a few

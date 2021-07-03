@@ -252,17 +252,10 @@ def scons():
                             "-L$BUILD_DIR/src/cart "
                             "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib $_RPATH")
-    # Explicitly link RTE & SPDK libs for CGO access (need for clang build).
-    ldopts = cgolibdirs + " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev" + \
-             " -lspdk_copy -lrte_mempool  -lrte_mempool_ring" + \
-             " -lrte_bus_pci -lrte_pci -lrte_ring -lrte_mbuf" + \
-             " -lrte_eal -lrte_kvargs -lspdk_bdev_aio" + \
-             " -lspdk_bdev_nvme -lspdk_bdev_malloc -lspdk_conf" + \
-             " -lspdk_blob -lspdk_nvme -lspdk_util -lspdk_json" + \
-             " -lspdk_jsonrpc -lspdk_rpc -lspdk_trace" + \
-             " -lspdk_sock -lspdk_log -lspdk_notify" + \
-             " -lspdk_blob_bdev -lspdk_vmd -lnuma -ldl -lgurt"
-
+    # Explicitly link RTE & SPDK libs for CGO access
+    ldopts = cgolibdirs +                                                     \
+             " -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool" +        \
+             " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lnuma -ldl"
     senv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
     senv.AppendENVPath("CGO_CFLAGS",
