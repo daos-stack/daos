@@ -434,9 +434,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		break;
 	}
 
-	rc = daos_pool_disconnect(poh, NULL);
-	if (rc)
-		print_message("pool disconnect failed: %d\n", rc);
+	daos_pool_disconnect(poh, NULL);
 
 	rc = dmg_pool_destroy(dmg_config_file,
 			      pool->pool_uuid, arg->group, 1);
