@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rebuild: rebuild initator
@@ -35,7 +18,7 @@
 #include <daos/container.h>
 #include <daos/pool.h>
 #include <daos_srv/container.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/iv.h>
 #include <cart/iv.h>
 #include "rpc.h"
@@ -98,7 +81,7 @@ rebuild_iv_ent_destroy(d_sg_list_t *sgl)
 
 static int
 rebuild_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
-		     d_sg_list_t *dst, d_sg_list_t *src, void **priv)
+		     d_sg_list_t *dst, void **priv)
 {
 	D_ASSERT(0);
 	return 0;
@@ -115,15 +98,21 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	d_rank_t	  rank;
 	int		  rc;
 
+	D_DEBUG(DB_REBUILD, "rank %d master rank %d\n", src_iv->riv_rank,
+		src_iv->riv_master_rank);
+
+	if (src_iv->riv_master_rank == -1)
+		return -DER_NOTLEADER;
+
 	rc = crt_group_rank(NULL, &rank);
 	if (rc)
 		return rc;
 
-	D_DEBUG(DB_TRACE, "rank %d master rank %d\n", src_iv->riv_rank,
-		src_iv->riv_master_rank);
-
 	if (rank != src_iv->riv_master_rank)
 		return -DER_IVCB_FORWARD;
+
+	if (src_iv->riv_sync)
+		return 0;
 
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
@@ -131,7 +120,10 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	/* Gathering the rebuild status here */
 	rgt = rebuild_global_pool_tracker_lookup(src_iv->riv_pool_uuid,
 						 src_iv->riv_ver);
-	if (rgt && rgt->rgt_leader_term == src_iv->riv_leader_term) {
+	if (rgt == NULL)
+		D_GOTO(out, rc);
+
+	if (rgt->rgt_leader_term == src_iv->riv_leader_term) {
 		/* update the rebuild global status */
 		if (!src_iv->riv_global_done) {
 			rgt->rgt_status.rs_toberb_obj_nr +=
@@ -156,9 +148,10 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			rgt->rgt_status.rs_done, rgt->rgt_status.rs_errno,
 			src_iv->riv_rank);
 	}
-
+	rgt_put(rgt);
+out:
 	D_DEBUG(DB_TRACE, "pool "DF_UUID" master_rank %d\n",
-		 DP_UUID(dst_iv->riv_pool_uuid), dst_iv->riv_master_rank);
+		DP_UUID(dst_iv->riv_pool_uuid), dst_iv->riv_master_rank);
 
 	return 0;
 }
@@ -181,7 +174,6 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done ||
 	    dst_iv->riv_stable_epoch) {
 		struct rebuild_tgt_pool_tracker *rpt;
-		d_rank_t	rank;
 
 		rpt = rpt_lookup(src_iv->riv_pool_uuid, src_iv->riv_ver);
 		if (rpt == NULL)
@@ -204,53 +196,6 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			D_WARN("leader change stable epoch from "DF_U64" to "
 			       DF_U64 "\n", rpt->rt_stable_epoch,
 			       dst_iv->riv_stable_epoch);
-
-		/* on svc nodes update the rebuild status completed list
-		 * to serve rebuild status querying in case of master
-		 * node changed.
-		 */
-		rc = crt_group_rank(NULL, &rank);
-		if (dst_iv->riv_global_done && rc == 0) {
-			struct daos_rebuild_status rs = { 0 };
-			daos_prop_t	*prop = NULL;
-			struct daos_prop_entry *prop_entry;
-			d_rank_list_t	*svc_list;
-
-			D_ALLOC_PTR(prop);
-			if (prop == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-
-			rc = ds_pool_iv_prop_fetch(rpt->rt_pool, prop);
-			if (rc)
-				D_GOTO(free, rc);
-
-			prop_entry = daos_prop_entry_get(prop,
-						    DAOS_PROP_PO_SVC_LIST);
-			D_ASSERT(prop_entry != NULL);
-			svc_list = prop_entry->dpe_val_ptr;
-			if (d_rank_in_rank_list(svc_list, rank)) {
-				rs.rs_version	= src_iv->riv_ver;
-				rs.rs_errno	= src_iv->riv_status;
-				rs.rs_done	= 1;
-				rs.rs_obj_nr	= src_iv->riv_obj_count;
-				rs.rs_rec_nr	= src_iv->riv_rec_count;
-				rs.rs_toberb_obj_nr	=
-					src_iv->riv_toberb_obj_count;
-				rs.rs_size	= src_iv->riv_size;
-				rs.rs_seconds   = src_iv->riv_seconds;
-				rc = rebuild_status_completed_update(
-						src_iv->riv_pool_uuid, &rs);
-				if (rc != 0)
-					D_ERROR("_status_completed_update, "
-						DF_UUID" failed, rc %d.\n",
-						DP_UUID(src_iv->riv_pool_uuid),
-						rc);
-			}
-free:
-			if (prop)
-				daos_prop_free(prop);
-		}
-out:
 		rpt->rt_global_done = dst_iv->riv_global_done;
 		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
 		rpt_put(rpt);
@@ -260,7 +205,8 @@ out:
 }
 
 static int
-rebuild_iv_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
+rebuild_iv_alloc(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		 d_sg_list_t *sgl)
 {
 	return rebuild_iv_alloc_internal(sgl);
 }

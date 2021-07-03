@@ -1,27 +1,10 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import os
 import re
@@ -29,7 +12,6 @@ import random
 from avocado import fail_on
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
-from agent_utils import include_local_host
 from command_utils import CommandFailure
 from general_utils import check_file_exists, get_host_data, get_log_file
 
@@ -47,7 +29,7 @@ class ZeroConfigTest(TestWithServers):
     def setUp(self):
         """Set up for zero-config test."""
         self.setup_start_servers = False
-        super(ZeroConfigTest, self).setUp()
+        super().setUp()
 
     def get_port_cnt(self, hosts, dev, port_counter):
         """Get the port count info for device names specified.
@@ -58,7 +40,7 @@ class ZeroConfigTest(TestWithServers):
             port_counter (str): port counter to get information from
 
         Returns:
-            dict: a dictionary of data values for each NodeSet key
+            list: a list of the data common to each unique NodeSet of hosts
 
         """
         b_path = "/sys/class/infiniband/{}".format(dev)
@@ -72,7 +54,8 @@ class ZeroConfigTest(TestWithServers):
         cmd = "cat {}".format(file)
         text = "port_counter"
         error = "Error obtaining {} info".format(port_counter)
-        return get_host_data(hosts, cmd, text, error, 20)
+        all_host_data = get_host_data(hosts, cmd, text, error, 20)
+        return [host_data["data"] for host_data in all_host_data]
 
     def get_log_info(self, hosts, dev, env_state, log_file):
         """Get information from daos.log file to verify device used.
@@ -87,15 +70,15 @@ class ZeroConfigTest(TestWithServers):
             bool: status of whether correct device was used.
 
         """
-	# anticipate log switch
+        # anticipate log switch
         cmd = "if [ -f {0}.old ]; then head -50 {0}.old; else head -50 {0};" \
               "fi".format(log_file)
         err = "Error getting log data."
         pattern = r"Using\s+client\s+provided\s+OFI_INTERFACE:\s+{}".format(dev)
 
         detected = 0
-        for output in get_host_data(hosts, cmd, log_file, err).values():
-            detected = len(re.findall(pattern, output))
+        for host_data in get_host_data(hosts, cmd, log_file, err):
+            detected = len(re.findall(pattern, host_data["data"]))
         self.log.info(
             "Found %s instances of client setting up OFI_INTERFACE=%s",
             detected, dev)
@@ -156,7 +139,7 @@ class ZeroConfigTest(TestWithServers):
             self.hostlist_clients, hfi_map[exp_iface], "port_rcv_data")
 
         diff = 0
-        for cnt_b, cnt_a in zip(cnt_before.values(), cnt_after.values()):
+        for cnt_b, cnt_a in zip(cnt_before, cnt_after):
             diff = int(cnt_a) - int(cnt_b)
             self.log.info("Port [%s] count difference: %s", exp_iface, diff)
 
@@ -183,21 +166,20 @@ class ZeroConfigTest(TestWithServers):
             or unset. The test expects that the server will have two interfaces
             available: hfi_0 and hfi_1.
 
-        :avocado: tags=all,pr,hw,small,zero_config,env_set
+        :avocado: tags=all,daily_regression,hw,small,zero_config,env_set
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
         dev_info = {"ib0": 0, "ib1": 1}
-        exp_iface = random.choice(dev_info.keys())
+        exp_iface = random.choice(list(dev_info.keys()))
 
         # Configure the daos server
-        config_file = self.get_config_file(self.server_group, "server")
-        self.add_server_manager(config_file)
+        self.add_server_manager()
         self.configure_manager(
             "server",
             self.server_managers[0],
             self.hostlist_servers,
             self.hostfile_servers_slots,
-            self.hostlist_servers)
+            self.access_points)
         self.assertTrue(
             self.server_managers[0].set_config_value(
                 "fabric_iface", exp_iface),

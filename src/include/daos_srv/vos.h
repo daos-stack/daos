@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file describes the API for a versioning object store.
@@ -55,30 +38,44 @@ void
 vos_dtx_rsrvd_fini(struct dtx_handle *dth);
 
 /**
- * Generate DTX entry for the given DTX. It is usually used for read
- * only TX or on the server that only contains read sub operations.
+ * Generate DTX entry for the given DTX.
  *
- * \param dth	[IN]	The dtx handle
+ * \param dth		[IN]	The dtx handle
+ * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
  */
 int
-vos_dtx_pin(struct dtx_handle *dth);
+vos_dtx_pin(struct dtx_handle *dth, bool persistent);
+
+/**
+ * Check whether DTX entry attached to the DTX handle is still valid or not.
+ *
+ * \param dth		[IN]	The dtx handle
+ *
+ * \return		The DTX entry status.
+ */
+int
+vos_dtx_validation(struct dtx_handle *dth);
 
 /**
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
  *
  * \param coh		[IN]	Container open handle.
- * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param dti		[IN]	Pointer to the DTX identifier.
  * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
+ * \param mbs		[OUT	Pointer to the DTX participants information.]
  * \param for_resent	[IN]	The check is for check resent or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
  *					on related replica(s).
  *			DTX_ST_COMMITTED means the DTX has been committed.
+ *			DTX_ST_COMMITTABLE means that the DTX is committable,
+ *					   but not real committed.
+ *			DTX_ST_CORRUPTED means the DTX entry is corrupted.
  *			-DER_MISMATCH	means that the DTX has ever been
  *					processed with different epoch.
  *			-DER_AGAIN means DTX re-index is in processing, not sure
@@ -88,7 +85,7 @@ vos_dtx_pin(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, bool for_resent);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, bool for_resent);
 
 /**
  * Commit the specified DTXs.
@@ -136,9 +133,10 @@ vos_dtx_aggregate(daos_handle_t coh);
  *
  * \param coh	[IN]	Container open handle.
  * \param stat	[OUT]	The structure to hold the DTXs information.
+ * \param flags	[IN]	The flags for stat operation.
  */
 void
-vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
+vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags);
 
 /**
  * Set the DTX committable as committable.
@@ -147,22 +145,6 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
  */
 void
 vos_dtx_mark_committable(struct dtx_handle *dth);
-
-/**
- * Check the latest sync epoch against the specified object.
- *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	The object ID.
- * \param epoch	[IN,OUT] IN: the epoch to be compared with sync epoch.
- *			OUT: the latest sync epoch against the object.
- *
- * \return		Zero on success.
- * \return		-DER_AGAIN	object may be in-dying, retry locally.
- * \return		-DER_TX_RESTART	restart related DTX with newer epoch.
- * \return		Other negative value if error.
- */
-int
-vos_dtx_check_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t *epoch);
 
 /**
  * Mark the object has been synced at the specified epoch.
@@ -199,27 +181,36 @@ void
 vos_dtx_cleanup(struct dtx_handle *dth);
 
 /**
+ * Reset DTX related cached information in VOS.
+ *
+ * \param coh	[IN]	Container open handle.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_cache_reset(daos_handle_t coh);
+
+/**
  * Initialize the environment for a VOS instance
  * Must be called once before starting a VOS instance
  *
- * NB: Required only when using VOS as a standalone
- * library.
+ * NB: Required only when using VOS as a standalone library.
+ *
+ * \param db_path [IN]	path for system DB that stores NVMe metadata
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_init(void);
+vos_self_init(const char *db_path);
 
 /**
  * Finalize the environment for a VOS instance
  * Must be called for clean up at the end of using a vos instance
  *
- * NB: Needs to be called only when VOS is used as a
- * standalone library.
+ * NB: Needs to be called only when VOS is used as a standalone library.
  */
 void
-vos_fini(void);
-
+vos_self_fini(void);
 
 /**
  * Versioning Object Storage Pool (VOSP)
@@ -229,18 +220,21 @@ vos_fini(void);
  */
 
 /**
- * Create a Versioning Object Storage Pool (VOSP) and its root object.
+ * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
+ * NULL
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
  * \param blob_sz[IN]	Size of blob for the pool
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t blob_sz);
+		daos_size_t blob_sz, unsigned int flags, daos_handle_t *poh);
 
 /**
  * Kill a VOS pool before destroy
@@ -266,19 +260,18 @@ int
 vos_pool_destroy(const char *path, uuid_t uuid);
 
 /**
- * Open a Versioning Object Storage Pool (VOSP), load its root object
- * and other internal data structures.
+ * Open a Versioning Object Storage Pool (VOSP)
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
- * \param small	[IN]	Pool is small
- *			(system memory reservation shall be small, to fit)
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  * \param poh	[OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh);
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
+	      daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
@@ -400,13 +393,14 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  * \param csum_func  [IN]	Pointer to csum recalculation function
  * \param yield_func [IN]	Pointer to customized yield function
  * \param yield_arg  [IN]	Argument of yield function
+ * \param full_scan  [IN]	Full scan for snapshot deletion
  *
  * \return			Zero on success, negative value if error
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
-	      void *yield_arg);
+	      void *yield_arg, bool full_scan);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -469,9 +463,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 /**
  * Fetch values for the given keys and their indices.
- * If output buffer is not provided in \a sgl, then this function returns
- * the directly accessible addresses of record data, upper layer can directly
- * read from these addresses (rdma mode).
+ * Output buffer must be provided in \a sgl.  For zero copy, use
+ * vos_fetch_begin/end.
  *
  * TODO: add more detail descriptions for punched or missing records.
  *
@@ -613,6 +606,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 /**
  * Delete an object, this object is unaccessible at any epoch after deletion.
+ * This function is not part of DAOS data model API, it is only used by data
+ * migration protocol.
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	ID of the object being deleted
@@ -623,12 +618,30 @@ int
 vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
 
 /**
+ * Delete a dkey or akey, the key is unaccessible at any epoch after deletion.
+ * This function is not part of DAOS data model API, it is only used by data
+ * migration protocol and system database.
  *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	ID of the object
+ * \param dkey	[IN]	dkey being deleted if \a akey is NULL
+ * \param akey	[IN]	Optional, akey being deleted
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
+		daos_key_t *akey);
+
+/**
+ * I/O APIs
+ */
+/**
  * Find and return I/O source buffers for the data of the specified
  * arrays of the given object. The caller can directly use these buffers
  * for RMA read.
  *
- * The upper layer must explicitly call \a vos_fetch_end to finalise the
+ * The upper layer must explicitly call \a vos_fetch_end to finalize the
  * I/O and release resources.
  *
  * TODO: add more detail descriptions for punched or missing records.
@@ -664,18 +677,19 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * Finish the fetch operation and release the responding resources.
  *
  * \param ioh	[IN]	The I/O handle created by \a vos_fetch_begin
+ * \param size	[OUT]	The total IO size for the fetch.
  * \param err	[IN]	Errno of the current fetch, zero if there is no error.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_fetch_end(daos_handle_t ioh, int err);
+vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
 
 /**
  * Prepare IO sink buffers for the specified arrays of the given
- * object. The caller can directly use thse buffers for RMA write.
+ * object. The caller can directly use those buffers for RMA write.
  *
- * The upper layer must explicitly call \a vos_update_end to finalise the
+ * The upper layer must explicitly call \a vos_update_end to finalize the
  * ZC I/O and release resources.
  *
  * \param coh	[IN]	Container open handle
@@ -689,7 +703,6 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
- * \param dedup [IN]	Whether deduplication is enabled for this I/O
  * \param dedup_th [IN]	Deduplication threshold size
  * \param ioh	[OUT]	The returned handle for the I/O.
  * \param dth	[IN]	Pointer to the DTX handle.
@@ -700,8 +713,7 @@ int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-		 bool dedup, uint32_t dedup_th, daos_handle_t *ioh,
-		 struct dtx_handle *dth);
+		 uint32_t dedup_th, daos_handle_t *ioh, struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -713,13 +725,14 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param err	[IN]	Errno of the current update, zero if there is no error.
  *			All updates will be dropped if this function is called
  *			for \a vos_update_begin with a non-zero error code.
+ * \param size	[OUT]	The total IO size for the update.
  * \param dth	[IN]	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
-	       struct dtx_handle *dth);
+	       daos_size_t *size, struct dtx_handle *dth);
 
 /**
  * Get the recx/epoch list.
@@ -757,6 +770,23 @@ vos_ioh2ci_nr(daos_handle_t ioh);
  */
 struct bio_sglist *
 vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
+
+/**
+ * Get the bulk handle associated with a given I/O descriptor.
+ *
+ * \param ioh		[IN]	The I/O handle
+ * \param sgl_idx	[IN]	SGL index
+ * \param iov_idx	[IN]	IOV index within the SGL
+ * \param bulk_off	[OUT]	Bulk offset
+ *
+ * \return			Bulk handle
+ */
+void *
+vos_iod_bulk_at(daos_handle_t ioh, unsigned int sgl_idx, unsigned int iov_idx,
+		unsigned int *bulk_off);
+
+void
+vos_set_io_csum(daos_handle_t ioh, struct dcs_iod_csums *csums);
 
 /**
  * VOS iterator APIs
@@ -1011,6 +1041,12 @@ vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
 int
 vos_pool_get_msize(void);
 
+/** Return the size of the container metadata in persistent memory on-disk
+ *  format
+ */
+int
+vos_container_get_msize(void);
+
 /** Return the cutoff size for SCM allocation.  Larger blocks are allocated to
  *  NVME.
  */
@@ -1038,8 +1074,8 @@ int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
-vos_gc_pool_run(daos_handle_t poh, int credits,
-		bool (*yield_func)(void *arg), void *yield_arg);
+vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
+	    void *yield_arg);
 bool
 vos_gc_pool_idle(daos_handle_t poh);
 
@@ -1063,12 +1099,34 @@ void
 vos_profile_stop(void);
 
 /**
- * Helper functions to create/free duplicated bsgl for dedup verify.
+ * Helper functions for dedup verify.
  */
 int
-vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
-		   struct bio_sglist *bsgl_dup);
+vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
+		      unsigned int bulk_perm);
+int
+vos_dedup_verify(daos_handle_t ioh);
+
+/** Raise a RAS event on incompatible durable format
+ *
+ * \param[in] type		Type of object with layout format
+ *				incompatibility (e.g. VOS pool)
+ * \param[in] version		Version of the object
+ * \param[in] min_version	Minimum supported version
+ * \param[in] max_version	Maximum supported version
+ * \param[in] pool		(Optional) associated pool uuid
+ */
 void
-vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
+vos_report_layout_incompat(const char *type, int version, int min_version,
+			   int max_version, uuid_t *uuid);
+
+struct sys_db *vos_db_get(void);
+/**
+ * Create the system DB in VOS
+ * System DB is KV store that can support insert/delete/traverse
+ * See \a sys_db for more details.
+ */
+int  vos_db_init(const char *db_path, const char *db_name, bool self_mode);
+void vos_db_fini(void);
 
 #endif /* __VOS_API_H */

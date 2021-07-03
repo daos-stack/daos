@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * MGMT RPC Protocol Serialization Functions
@@ -30,6 +13,13 @@
 
 CRT_GEN_PROC_FUNC(server_entry, DAOS_SEQ_SERVER_ENTRY);
 
+static int
+crt_proc_struct_server_entry(crt_proc_t proc, crt_proc_op_t proc_op,
+			     struct server_entry *data)
+{
+	return crt_proc_server_entry(proc, data);
+}
+
 CRT_RPC_DEFINE(mgmt_svc_rip, DAOS_ISEQ_MGMT_SVR_RIP, DAOS_OSEQ_MGMT_SVR_RIP)
 CRT_RPC_DEFINE(mgmt_params_set, DAOS_ISEQ_MGMT_PARAMS_SET,
 		DAOS_OSEQ_MGMT_PARAMS_SET)
@@ -37,6 +27,8 @@ CRT_RPC_DEFINE(mgmt_profile, DAOS_ISEQ_MGMT_PROFILE,
 	       DAOS_OSEQ_MGMT_PROFILE)
 CRT_RPC_DEFINE(mgmt_pool_get_svcranks, DAOS_ISEQ_MGMT_POOL_GET_SVCRANKS,
 	       DAOS_OSEQ_MGMT_POOL_GET_SVCRANKS)
+CRT_RPC_DEFINE(mgmt_pool_find, DAOS_ISEQ_MGMT_POOL_FIND,
+	       DAOS_OSEQ_MGMT_POOL_FIND)
 CRT_RPC_DEFINE(mgmt_mark, DAOS_ISEQ_MGMT_MARK,
 	       DAOS_OSEQ_MGMT_MARK)
 
@@ -71,7 +63,7 @@ static struct crt_proto_rpc_format mgmt_proto_rpc_fmt[] = {
 #undef X
 
 struct crt_proto_format mgmt_proto_fmt = {
-	.cpf_name  = "mgmt-proto",
+	.cpf_name  = "management",
 	.cpf_ver   = DAOS_MGMT_VERSION,
 	.cpf_count = ARRAY_SIZE(mgmt_proto_rpc_fmt),
 	.cpf_prf   = mgmt_proto_rpc_fmt,

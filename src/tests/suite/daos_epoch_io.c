@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos, to test epoch IO.
@@ -26,6 +9,9 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_iotest.h"
+
+int dts_ec_obj_class;
+int dts_ec_grp_size;
 
 /* the temporary IO dir */
 char *test_io_dir;
@@ -255,8 +241,7 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 out:
 	ioreq_fini(&req);
 	if (op->or_op == TEST_OP_UPDATE) {
-		if (buf != NULL)
-			D_FREE(buf);
+		D_FREE(buf);
 	} else {
 		if (rc == 0) {
 			*rbuf = buf;
@@ -340,11 +325,9 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 		rc = -DER_IO;
 	}
 
-
 out:
 	if (op->or_op == TEST_OP_UPDATE) {
-		if (buf != NULL)
-			D_FREE(buf);
+		D_FREE(buf);
 	} else {
 		if (rc == 0) {
 			*rbuf = buf;
@@ -361,7 +344,7 @@ daos_test_cb_add(test_arg_t *arg, struct test_op_record *op,
 	print_message("add rank %u\n", op->ae_arg.ua_rank);
 	test_rebuild_wait(&arg, 1);
 	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			  NULL /* arg->pool.svc */, op->ae_arg.ua_rank);
+			  op->ae_arg.ua_rank);
 	return 0;
 }
 
@@ -372,13 +355,13 @@ daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 	if (op->ae_arg.ua_tgt == -1) {
 		print_message("exclude rank %u\n", op->ae_arg.ua_rank);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, NULL /* arg->pool.svc */,
+				    arg->dmg_config,
 				    op->ae_arg.ua_rank);
 	} else {
 		print_message("exclude rank %u target %d\n",
 			       op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
 		daos_exclude_target(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, NULL /* arg->pool.svc */,
+				    arg->dmg_config,
 				    op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
 	}
 	return 0;
@@ -635,13 +618,10 @@ recx_parse(char *recx_str, daos_recx_t **recxs, int **values,
 		idx++;
 	}
 
-
 	if (idx == 0 || brace_unmatch) {
 		print_message("bad recx_str %s\n", p);
-		if (recx_allocated)
-			D_FREE(recx_allocated);
-		if (value_allocated)
-			D_FREE(value_allocated);
+		D_FREE(recx_allocated);
+		D_FREE(value_allocated);
 		return -DER_INVAL;
 	}
 
@@ -703,14 +683,11 @@ test_op_rec_free(struct test_op_record *op_rec)
 	switch (op_rec->or_op) {
 	case TEST_OP_UPDATE:
 	case TEST_OP_FETCH:
-		if (op_rec->uf_arg.ua_recxs)
-			D_FREE(op_rec->uf_arg.ua_recxs);
-		if (op_rec->uf_arg.ua_values)
-			D_FREE(op_rec->uf_arg.ua_values);
+		D_FREE(op_rec->uf_arg.ua_recxs);
+		D_FREE(op_rec->uf_arg.ua_values);
 		break;
 	case TEST_OP_PUNCH:
-		if (op_rec->pu_arg.pa_recxs)
-			D_FREE(op_rec->pu_arg.pa_recxs);
+		D_FREE(op_rec->pu_arg.pa_recxs);
 		break;
 	default:
 		break;
@@ -729,10 +706,8 @@ test_key_rec_free(struct test_key_record *key_rec)
 		test_op_rec_free(op_rec);
 	}
 	d_list_del_init(&key_rec->or_list);
-	if (key_rec->or_dkey)
-		D_FREE(key_rec->or_dkey);
-	if (key_rec->or_akey)
-		D_FREE(key_rec->or_akey);
+	D_FREE(key_rec->or_dkey);
+	D_FREE(key_rec->or_akey);
 	if (key_rec->or_fd_array) {
 		close(key_rec->or_fd_array);
 		key_rec->or_fd_array = 0;
@@ -852,7 +827,7 @@ cmd_parse_add_exclude(test_arg_t *arg, int argc, char **argv,
 
 	*op = op_rec;
 out:
-	if (rc && op_rec)
+	if (rc)
 		D_FREE(op_rec);
 	return rc;
 }
@@ -927,10 +902,8 @@ cmd_parse_punch(test_arg_t *arg, int argc, char **argv,
 			      dkey, akey);
 
 out:
-	if (dkey)
-		D_FREE(dkey);
-	if (akey)
-		D_FREE(akey);
+	D_FREE(dkey);
+	D_FREE(akey);
 	if (rc && op_rec)
 		test_op_rec_free(op_rec);
 	return rc;
@@ -1037,10 +1010,8 @@ cmd_parse_update_fetch(test_arg_t *arg, int argc, char **argv, int opc,
 		print_message("test_op_record_bind(dkey %s akey %s failed.\n",
 			      dkey, akey);
 out:
-	if (dkey)
-		D_FREE(dkey);
-	if (akey)
-		D_FREE(akey);
+	D_FREE(dkey);
+	D_FREE(akey);
 	if (rc && op_rec)
 		test_op_rec_free(op_rec);
 	return rc;
@@ -1081,7 +1052,7 @@ cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	type = daos_oclass_name2id(obj_class);
-	eio_arg->op_oid = dts_oid_gen(type, 0, arg->myrank);
+	eio_arg->op_oid = daos_test_oid_gen(arg->coh, type, 0, 0, arg->myrank);
 	if (type == DAOS_OC_R2S_SPEC_RANK || type == DAOS_OC_R3S_SPEC_RANK ||
 	    type == DAOS_OC_R1S_SPEC_RANK) {
 		if (rank == -1) {
@@ -1095,8 +1066,7 @@ cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
 		}
 	}
 out:
-	if (obj_class)
-		D_FREE(obj_class);
+	D_FREE(obj_class);
 
 	return rc;
 }
@@ -1178,10 +1148,9 @@ cmd_parse_pool(test_arg_t *arg, int argc, char *argv[],
 	op_rec->or_op = opc;
 	*op = op_rec;
 out:
-	if (rc && op_rec)
+	if (rc)
 		D_FREE(op_rec);
 	return rc;
-
 
 }
 
@@ -1231,13 +1200,11 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 		}
 	} else if (strcmp(argv[0], "dkey") == 0) {
 		dkey = argv[1];
-		if (arg->eio_args.op_dkey != NULL)
-			D_FREE(arg->eio_args.op_dkey);
+		D_FREE(arg->eio_args.op_dkey);
 		D_STRNDUP(arg->eio_args.op_dkey, dkey, strlen(dkey));
 	} else if (strcmp(argv[0], "akey") == 0) {
 		akey = argv[1];
-		if (arg->eio_args.op_akey != NULL)
-			D_FREE(arg->eio_args.op_akey);
+		D_FREE(arg->eio_args.op_akey);
 		D_STRNDUP(arg->eio_args.op_akey, akey, strlen(akey));
 	} else if (strcmp(argv[0], "iod_size") == 0) {
 		arg->eio_args.op_iod_size = atoi(argv[1]);
@@ -1261,12 +1228,14 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 				print_message("bad parameter");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
-			arg->eio_args.op_oid = dts_oid_gen(dts_ec_obj_class, 0,
-							   arg->myrank);
+			arg->eio_args.op_oid = daos_test_oid_gen(arg->coh,
+							   dts_ec_obj_class,
+							   0, 0, arg->myrank);
 		} else if (strcmp(argv[1], "replica") == 0) {
 			arg->eio_args.op_ec = 0;
-			arg->eio_args.op_oid = dts_oid_gen(dts_obj_class, 0,
-							   arg->myrank);
+			arg->eio_args.op_oid = daos_test_oid_gen(arg->coh,
+							   dts_obj_class, 0,
+							   0, arg->myrank);
 			print_message("the test is for replica object.\n");
 		} else {
 			print_message("bad obj_class %s.\n", argv[1]);
@@ -1479,10 +1448,8 @@ cmd_line_run(test_arg_t *arg, struct test_op_record *op_rec)
 	}
 
 out:
-	if (buf)
-		D_FREE(buf);
-	if (f_buf)
-		D_FREE(f_buf);
+	D_FREE(buf);
+	D_FREE(f_buf);
 	return rc;
 }
 
@@ -1510,6 +1477,7 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 
 	do {
 		size_t	cmd_size;
+
 		memset(cmd_line, 0, CMD_LINE_LEN_MAX);
 		if (cmd_line_get(fp, cmd_line) != 0)
 			break;
@@ -1558,7 +1526,7 @@ epoch_io_predefined(void **state)
 				      test_io_conf, rc);
 		else
 			print_message("io_conf %s succeed.\n", test_io_conf);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		return;
 	}
 
@@ -1572,7 +1540,7 @@ epoch_io_predefined(void **state)
 		else
 			print_message("io_conf %s succeed.\n",
 				     predefined_io_confs[i]);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		test_eio_arg_oplist_free(arg);
 	}
 }
@@ -1596,11 +1564,12 @@ epoch_io_setup(void **state)
 	D_INIT_LIST_HEAD(&eio_arg->op_list);
 	eio_arg->op_lvl = TEST_LVL_DAOS;
 	eio_arg->op_iod_size = 1;
-	eio_arg->op_oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	eio_arg->op_oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0,
+				      arg->myrank);
 
 	/* generate the temporary IO dir for epoch IO test */
 	if (test_io_dir == NULL) {
-		D_STRNDUP(test_io_dir, "/tmp", 5);
+		D_STRNDUP_S(test_io_dir, "/tmp");
 		if (test_io_dir == NULL)
 			return -DER_NOMEM;
 	}
@@ -1667,7 +1636,7 @@ run_daos_epoch_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	int rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS epoch I/O tests",
+	rc = cmocka_run_group_tests_name("DAOS_Epoch_IO",
 			epoch_io_tests, epoch_io_setup,
 			epoch_io_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);

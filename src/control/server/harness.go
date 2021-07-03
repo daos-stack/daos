@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -28,10 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -39,53 +23,52 @@ import (
 )
 
 const (
-	defaultRequestTimeout = 3 * time.Second
-	defaultStartTimeout   = 10 * defaultRequestTimeout
+	rankReqTimeout   = 30 * time.Second
+	rankStartTimeout = 2 * rankReqTimeout
 )
 
-// IOServerHarness is responsible for managing IOServer instances.
-type IOServerHarness struct {
+// EngineHarness is responsible for managing Engine instances.
+type EngineHarness struct {
 	sync.RWMutex
 	log              logging.Logger
-	instances        []*IOServerInstance
+	instances        []*EngineInstance
 	started          atm.Bool
 	rankReqTimeout   time.Duration
 	rankStartTimeout time.Duration
 	faultDomain      *system.FaultDomain
 }
 
-// NewIOServerHarness returns an initialized *IOServerHarness.
-func NewIOServerHarness(log logging.Logger) *IOServerHarness {
-	return &IOServerHarness{
+// NewEngineHarness returns an initialized *EngineHarness.
+func NewEngineHarness(log logging.Logger) *EngineHarness {
+	return &EngineHarness{
 		log:              log,
-		instances:        make([]*IOServerInstance, 0),
-		started:          atm.NewBool(false),
-		rankReqTimeout:   defaultRequestTimeout,
-		rankStartTimeout: defaultStartTimeout,
+		instances:        make([]*EngineInstance, 0),
+		rankReqTimeout:   rankReqTimeout,
+		rankStartTimeout: rankStartTimeout,
 	}
 }
 
-// WithFaultDomain adds a fault domain to the IOServerHarness.
-func (h *IOServerHarness) WithFaultDomain(fd *system.FaultDomain) *IOServerHarness {
+// WithFaultDomain adds a fault domain to the EngineHarness.
+func (h *EngineHarness) WithFaultDomain(fd *system.FaultDomain) *EngineHarness {
 	h.faultDomain = fd
 	return h
 }
 
-// isStarted indicates whether the IOServerHarness is in a running state.
-func (h *IOServerHarness) isStarted() bool {
+// isStarted indicates whether the EngineHarness is in a running state.
+func (h *EngineHarness) isStarted() bool {
 	return h.started.Load()
 }
 
-// Instances safely returns harness' IOServerInstances.
-func (h *IOServerHarness) Instances() []*IOServerInstance {
+// Instances safely returns harness' EngineInstances.
+func (h *EngineHarness) Instances() []*EngineInstance {
 	h.RLock()
 	defer h.RUnlock()
 	return h.instances
 }
 
-// FilterInstancesByRankSet returns harness' IOServerInstances that match any
+// FilterInstancesByRankSet returns harness' EngineInstances that match any
 // of a list of ranks derived from provided rank set string.
-func (h *IOServerHarness) FilterInstancesByRankSet(ranks string) ([]*IOServerInstance, error) {
+func (h *EngineHarness) FilterInstancesByRankSet(ranks string) ([]*EngineInstance, error) {
 	h.RLock()
 	defer h.RUnlock()
 
@@ -93,7 +76,7 @@ func (h *IOServerHarness) FilterInstancesByRankSet(ranks string) ([]*IOServerIns
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*IOServerInstance, 0)
+	out := make([]*EngineInstance, 0)
 
 	for _, i := range h.instances {
 		r, err := i.GetRank()
@@ -108,22 +91,22 @@ func (h *IOServerHarness) FilterInstancesByRankSet(ranks string) ([]*IOServerIns
 	return out, nil
 }
 
-// AddInstance adds a new IOServer instance to be managed.
-func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
+// AddInstance adds a new Engine instance to be managed.
+func (h *EngineHarness) AddInstance(ei *EngineInstance) error {
 	if h.isStarted() {
 		return errors.New("can't add instance to already-started harness")
 	}
 
 	h.Lock()
 	defer h.Unlock()
-	srv.setIndex(uint32(len(h.instances)))
+	ei.setIndex(uint32(len(h.instances)))
 
-	h.instances = append(h.instances, srv)
+	h.instances = append(h.instances, ei)
 	return nil
 }
 
-// CallDrpc calls the supplied dRPC method on a managed I/O server instance.
-func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
+// CallDrpc calls the supplied dRPC method on a managed I/O Engine instance.
+func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
 	if !h.isStarted() {
 		return nil, FaultHarnessNotStarted
 	}
@@ -133,13 +116,13 @@ func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body
 	// If the request fails, that error will be returned.
 	for _, i := range h.Instances() {
 		if !i.isReady() {
-			err = instanceNotReady
+			err = errInstanceNotReady
 			continue
 		}
 		resp, err = i.CallDrpc(ctx, method, body)
 
 		switch errors.Cause(err) {
-		case dRPCNotReady, FaultDataPlaneNotStarted:
+		case errDRPCNotReady, FaultDataPlaneNotStarted:
 			continue
 		default:
 			return
@@ -149,57 +132,47 @@ func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body
 	return
 }
 
-// getMSLeaderInstance returns a managed IO Server instance to be used as a
-// management target and fails if selected instance is not MS Leader.
-func (h *IOServerHarness) getMSLeaderInstance() (*IOServerInstance, error) {
-	if !h.isStarted() {
-		return nil, FaultHarnessNotStarted
-	}
-
-	h.RLock()
-	defer h.RUnlock()
-
-	if len(h.instances) == 0 {
-		return nil, errors.New("harness has no managed instances")
-	}
-
-	// hack for now
-	return h.instances[0], nil
-}
-
 // Start starts harness by setting up and starting dRPC before initiating
 // configured instances' processing loops.
 //
 // Run until harness is shutdown.
-func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membership, db *system.Database, cfg *config.Server) error {
+func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *events.PubSub, cfg *config.Server) error {
 	if h.isStarted() {
 		return errors.New("can't start: harness already started")
 	}
 
+	if cfg == nil {
+		return errors.New("nil cfg supplied to Start()")
+	}
+
 	// Now we want to block any RPCs that might try to mess with storage
-	// (format, firmware update, etc) before attempting to start I/O servers
+	// (format, firmware update, etc) before attempting to start I/O Engines
 	// which are using the storage.
 	h.started.SetTrue()
 	defer h.started.SetFalse()
 
-	if cfg != nil {
-		// Single daos_server dRPC server to handle all iosrv requests
-		if err := drpcServerSetup(ctx, h.log, cfg.SocketDir, h.Instances(),
-			cfg.TransportConfig, db); err != nil {
+	instances := h.Instances()
 
-			return errors.WithMessage(err, "dRPC server setup")
-		}
-		defer func() {
-			if err := drpcCleanup(cfg.SocketDir); err != nil {
-				h.log.Errorf("error during dRPC cleanup: %s", err)
-			}
-		}()
+	drpcSetupReq := &drpcServerSetupReq{
+		log:     h.log,
+		sockDir: cfg.SocketDir,
+		engines: instances,
+		tc:      cfg.TransportConfig,
+		sysdb:   db,
+		events:  ps,
 	}
+	// Single daos_server dRPC server to handle all engine requests
+	if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
+		return errors.WithMessage(err, "dRPC server setup")
+	}
+	defer func() {
+		if err := drpcCleanup(cfg.SocketDir); err != nil {
+			h.log.Errorf("error during dRPC cleanup: %s", err)
+		}
+	}()
 
-	for _, srv := range h.Instances() {
-		// start first time then relinquish control to instance
-		go srv.Run(ctx, membership, cfg)
-		srv.startLoop <- true
+	for _, ei := range instances {
+		ei.Run(ctx, cfg.RecreateSuperblocks)
 	}
 
 	<-ctx.Done()
@@ -210,14 +183,14 @@ func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membersh
 
 // readyRanks returns rank assignment of configured harness instances that are
 // in a ready state. Rank assignments can be nil.
-func (h *IOServerHarness) readyRanks() []system.Rank {
+func (h *EngineHarness) readyRanks() []system.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
 	ranks := make([]system.Rank, 0)
-	for _, srv := range h.instances {
-		if srv.hasSuperblock() && srv.isReady() {
-			ranks = append(ranks, *srv.getSuperblock().Rank)
+	for _, ei := range h.instances {
+		if ei.hasSuperblock() && ei.isReady() {
+			ranks = append(ranks, *ei.getSuperblock().Rank)
 		}
 	}
 

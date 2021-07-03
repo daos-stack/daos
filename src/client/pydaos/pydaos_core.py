@@ -1,23 +1,7 @@
-# (C) Copyright  2019 Intel Corporation.
+# (C) Copyright 2019-2021 Intel Corporation.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# SPDX-License-Identifier: BSD-2-Clause-Patent
 #
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-# The Government's rights to use, modify, reproduce, release, perform, display,
-# or disclose this software are subject to the terms of the Apache License as
-# provided in Contract No. B609815.
-# Any reproduction of computer software, computer software documentation, or
-# portions thereof marked with this legend must also reproduce the markings.
 """
 PyDAOS Module allowing global access to the DAOS containers and objects.
 """
@@ -27,12 +11,9 @@ import uuid
 import pickle
 import sys
 
-# pylint: disable=no-name-in-module
-if sys.version_info < (3, 0):
-    from . import pydaos_shim_27 as pydaos_shim
-else:
-    from . import pydaos_shim_3 as pydaos_shim
-# pylint: enable=no-name-in-module
+# pylint: disable=relative-beyond-top-level
+from . import pydaos_shim
+# pylint: enable=relative-beyond-top-level
 
 from . import DAOS_MAGIC
 from . import PyDError
@@ -41,8 +22,9 @@ from . import DaosClient
 # Import Object class as an enumeration
 ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
-    {key: value for key, value in pydaos_shim.__dict__.items()
+    {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("OC_")})
+
 
 class KvNotFound(Exception):
     """Raised by get_kv_by_name if KV does not exist"""
@@ -54,7 +36,9 @@ class KvNotFound(Exception):
     def __str__(self):
         return "Failed to create '{}'".format(self.name)
 
-class ObjID(object):
+
+class ObjID():
+    # pylint: disable=too-few-public-methods
     """
     Class representing of DAOS 128-bit object identifier
 
@@ -77,7 +61,8 @@ class ObjID(object):
     def __str__(self):
         return "[" + hex(self.hi) + ":" + hex(self.lo) + "]"
 
-class Cont(object):
+
+class Cont():
     """
     Class representing of DAOS Container
     Can be identified via a path or a combination of pool UUID and container
@@ -163,7 +148,7 @@ class Cont(object):
 
         if self._root_kv:
             return self._root_kv
-        (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, cid.value)
+        (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, self.coh, cid.value)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to generate root object identifier", ret)
         oid = ObjID(hi, lo)
@@ -197,7 +182,8 @@ class Cont(object):
     def __str__(self):
         return '{}@{}'.format(self.cuuid, self.puuid)
 
-class _Obj(object):
+
+class _Obj():
     oh = None
 
     def __init__(self, coh, oid, cont):
@@ -209,8 +195,8 @@ class _Obj(object):
         # keep container around until all objects are gone
         self.cont = cont
         # Open to the object
-        (ret, oh) = pydaos_shim.kv_open(DAOS_MAGIC, coh, self.oid.hi,
-                                         self.oid.lo, 0)
+        (ret, oh) = pydaos_shim.kv_open(
+            DAOS_MAGIC, coh, self.oid.hi, self.oid.lo, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to open object", ret)
         self.oh = oh
@@ -229,6 +215,7 @@ class _Obj(object):
     def __str__(self):
         return str(self.oid)
 
+
 # pylint: disable=too-few-public-methods
 class KVIter():
 
@@ -238,7 +225,7 @@ class KVIter():
         self._dc = DaosClient()
         self._entries = []
         self._nr = 256
-        self._size = 4096 # optimized for 16-char strings
+        self._size = 4096  # optimized for 16-char strings
         self._anchor = None
         self._done = False
         self._kv = kv
@@ -274,6 +261,7 @@ class KVIter():
         else:
             raise StopIteration()
 # pylint: enable=too-few-public-methods
+
 
 class KVObj(_Obj):
     """
@@ -332,7 +320,7 @@ class KVObj(_Obj):
     def get(self, key):
         """Retrieve value associated with the key."""
 
-        d = {key : None}
+        d = {key: None}
         self.bget(d)
         if d[key] is None:
             raise KeyError(key)
@@ -343,7 +331,7 @@ class KVObj(_Obj):
 
     def put(self, key, val):
         """Update/insert key-value pair. Both parameters should be strings."""
-        d = {key : val}
+        d = {key: val}
         self.bput(d)
 
     def __setitem__(self, key, val):
@@ -367,7 +355,7 @@ class KVObj(_Obj):
             raise PyDError("failed to store KV value", ret)
 
     def dump(self):
-        """Fetch all the key-value pairs and return them in a python dictionary."""
+        """Fetch all the key-value pairs, return them in a python dictionary."""
         # leverage python iterator, see __iter__/__next__ below
         # could be optimized over the C library in the future
         d = {}

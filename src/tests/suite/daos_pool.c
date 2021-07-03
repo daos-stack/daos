@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -44,9 +27,9 @@ pool_connect_nonexist(void **state)
 
 	/* Contact pool service replicas as returned by pool create */
 	uuid_generate(uuid);
-	rc = daos_pool_connect(uuid, arg->group, NULL /* svc */, DAOS_PC_RW,
+	rc = daos_pool_connect(uuid, arg->group, DAOS_PC_RW,
 			       &poh, NULL /* info */, NULL /* ev */);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 }
 
 /** connect/disconnect to/from a valid pool */
@@ -64,7 +47,7 @@ pool_connect(void **state)
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	if (arg->myrank == 0) {
@@ -72,9 +55,9 @@ pool_connect(void **state)
 		print_message("rank 0 connecting to pool %ssynchronously ... ",
 			      arg->async ? "a" : "");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW, &poh, &info,
+				       DAOS_PC_RW, &poh, &info,
 				       arg->async ? &ev : NULL /* ev */);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
 		assert_memory_equal(info.pi_uuid, arg->pool.pool_uuid,
 				    sizeof(info.pi_uuid));
@@ -87,7 +70,7 @@ pool_connect(void **state)
 		info.pi_bits = DPI_ALL;
 		rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL,
 				     arg->async ? &ev : NULL /* ev */);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
 		assert_int_equal(info.pi_ndisabled, 0);
 		print_message("success\n");
@@ -100,13 +83,13 @@ pool_connect(void **state)
 	print_message("rank %d disconnecting from pool %ssynchronously ... ",
 		      arg->myrank, arg->async ? "a" : "");
 	rc = daos_pool_disconnect(poh, arg->async ? &ev : NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
 
 	if (arg->async) {
 		rc = daos_event_fini(&ev);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		/* disable the async after testing done */
 		arg->async = false;
 	}
@@ -128,36 +111,36 @@ pool_connect_exclusively(void **state)
 	print_message("SUBTEST 1: other connections already exist; shall get "
 		      "%d\n", -DER_BUSY);
 	print_message("establishing a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, NULL /* svc */,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("trying to establish an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, NULL /* svc */,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
-	assert_int_equal(rc, -DER_BUSY);
+	assert_rc_equal(rc, -DER_BUSY);
 	print_message("disconnecting the non-exclusive connection\n");
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	print_message("SUBTEST 2: no other connections; shall succeed\n");
 	print_message("establishing an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, NULL /* svc */,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	print_message("SUBTEST 3: shall prevent other connections (%d)\n",
 		      -DER_BUSY);
 	print_message("trying to establish a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, NULL /* svc */,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
-	assert_int_equal(rc, -DER_BUSY);
+	assert_rc_equal(rc, -DER_BUSY);
 	print_message("disconnecting the exclusive connection\n");
 	rc = daos_pool_disconnect(poh_ex, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 /** exclude a target from the pool */
@@ -185,16 +168,16 @@ pool_exclude(void **state)
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	/** connect to pool */
 	print_message("rank 0 connecting to pool %ssynchronously... ",
 		      arg->async ? "a" : "");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, NULL /* svc */,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 			       DAOS_PC_RW, &poh, &info,
 			       arg->async ? &ev : NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
 
@@ -207,7 +190,7 @@ pool_exclude(void **state)
 	print_message("rank 0 excluding rank %u... ", rank);
 	for (idx = 0; idx < arg->pool.svc->rl_nr; idx++) {
 		daos_exclude_target(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, NULL /* svc */,
+				    arg->dmg_config,
 				    arg->pool.svc->rl_ranks[idx], tgt);
 	}
 	WAIT_ON_ASYNC(arg, ev);
@@ -217,7 +200,7 @@ pool_exclude(void **state)
 	memset(&info, 'D', sizeof(info));
 	rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL,
 			     arg->async ? &ev : NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(info.pi_ndisabled, 1);
 	print_message("success\n");
@@ -227,11 +210,11 @@ disconnect:
 	print_message("rank %d disconnecting from pool %ssynchronously ... ",
 		      arg->myrank, arg->async ? "a" : "");
 	rc = daos_pool_disconnect(poh, arg->async ? &ev : NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	if (arg->async) {
 		rc = daos_event_fini(&ev);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		/* disable the async after testing done */
 		arg->async = false;
 	}
@@ -248,6 +231,7 @@ pool_attribute(void **state)
 	int		 rc;
 
 	char const *const names[] = { "AVeryLongName", "Name" };
+	char const *const names_get[] = { "AVeryLongName", "Wrong", "Name" };
 	size_t const name_sizes[] = {
 				strlen(names[0]) + 1,
 				strlen(names[1]) + 1,
@@ -261,24 +245,26 @@ pool_attribute(void **state)
 				strlen(in_values[1])
 	};
 	int			 n = (int) ARRAY_SIZE(names);
+	int			 m = (int) ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
-						  &out_buf[1 * BUFSIZE]
+						  &out_buf[1 * BUFSIZE],
+						  &out_buf[2 * BUFSIZE]
 						};
-	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE };
+	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE, BUFSIZE };
 	size_t			 total_size;
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	print_message("setting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 	rc = daos_pool_set_attr(arg->pool.poh, n, names, in_values, in_sizes,
 				arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("listing pool attributes %ssynchronously ...\n",
@@ -287,7 +273,7 @@ pool_attribute(void **state)
 	total_size = 0;
 	rc = daos_pool_list_attr(arg->pool.poh, NULL, &total_size,
 				 arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("Verifying Total Name Length..\n");
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
@@ -295,7 +281,7 @@ pool_attribute(void **state)
 	total_size = BUFSIZE;
 	rc = daos_pool_list_attr(arg->pool.poh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("Verifying Small Name..\n");
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
@@ -304,19 +290,19 @@ pool_attribute(void **state)
 	total_size = 10*BUFSIZE;
 	rc = daos_pool_list_attr(arg->pool.poh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("Verifying All Names..\n");
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
-	assert_string_equal(out_buf, names[0]);
-	assert_string_equal(out_buf + name_sizes[0], names[1]);
+	assert_string_equal(out_buf, names[1]);
+	assert_string_equal(out_buf + name_sizes[1], names[0]);
 
 	print_message("getting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 
-	rc = daos_pool_get_attr(arg->pool.poh, n, names, out_values, out_sizes,
-				arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
+	rc = daos_pool_get_attr(arg->pool.poh, m, names_get, out_values,
+				out_sizes, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("Verifying Name-Value (A)..\n");
@@ -324,36 +310,41 @@ pool_attribute(void **state)
 	assert_memory_equal(out_values[0], in_values[0], in_sizes[0]);
 
 	print_message("Verifying Name-Value (B)..\n");
-	assert_true(in_sizes[1] > BUFSIZE);
-	assert_int_equal(out_sizes[1], in_sizes[1]);
-	assert_memory_equal(out_values[1], in_values[1], BUFSIZE);
+	assert_int_equal(out_sizes[1], 0);
 
-	rc = daos_pool_get_attr(arg->pool.poh, n, names, NULL, out_sizes,
+	print_message("Verifying Name-Value (C)..\n");
+	assert_true(in_sizes[1] > BUFSIZE);
+	assert_int_equal(out_sizes[2], in_sizes[1]);
+	assert_memory_equal(out_values[2], in_values[1], BUFSIZE);
+
+	rc = daos_pool_get_attr(arg->pool.poh, m, names_get, NULL, out_sizes,
 				arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("Verifying with NULL buffer..\n");
 	assert_int_equal(out_sizes[0], in_sizes[0]);
-	assert_int_equal(out_sizes[1], in_sizes[1]);
+	assert_int_equal(out_sizes[1], 0);
+	assert_int_equal(out_sizes[2], in_sizes[1]);
 
 	print_message("Deleting all attributes\n");
-	rc = daos_pool_del_attr(arg->pool.poh, n, names,
+	rc = daos_pool_del_attr(arg->pool.poh, m, names_get,
 				arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
+	/* should work even if "Wrong" do not exist */
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("Verifying all attributes deletion\n");
 	total_size = 0;
 	rc = daos_pool_list_attr(arg->pool.poh, NULL, &total_size,
 				 arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(total_size, 0);
 
 	if (arg->async) {
 		rc = daos_event_fini(&ev);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 }
 
@@ -366,29 +357,29 @@ init_fini_conn(void **state)
 
 	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
 	arg->pool.poh = DAOS_HDL_INVAL;
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_eq_destroy(arg->eq, 0);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_fini();
 	if (rc)
 		print_message("daos_fini() failed with %d\n", rc);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_init();
 	if (rc)
 		print_message("daos_init() failed with %d\n", rc);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* the eq should re-create after daos reinit, as the hash-table
 	 * re-inited.
 	 */
 	rc = daos_eq_create(&arg->eq);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       NULL /* svc */, DAOS_PC_RW,
+			       DAOS_PC_RW,
 			       &arg->pool.poh, &arg->pool.pool_info,
 			       NULL /* ev */);
 	if (rc)
@@ -396,7 +387,7 @@ init_fini_conn(void **state)
 	else
 		print_message("connected to pool, ntarget=%d\n",
 			      arg->pool.pool_info.pi_ntargets);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static bool
@@ -474,8 +465,8 @@ pool_properties(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
-#if 0
 	char			*label = "test_pool_properties";
+#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	uint64_t		 space_rb = 36;
 #endif
 	daos_prop_t		*prop = NULL;
@@ -489,42 +480,47 @@ pool_properties(void **state)
 	print_message("create pool with properties, and query it to verify.\n");
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
-/* FIXME (DAOS-5456): label/space_rb props not supported with dmg */
-#if 0
-	prop = daos_prop_alloc(2);
+	prop = daos_prop_alloc(1);
+	/* label - set arg->pool_label to use daos_pool_connect_by_label() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
-	prop->dpp_entries[0].dpe_str = strdup(label);
+	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
+	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
+	D_STRNDUP(arg->pool_label, label, DAOS_PROP_LABEL_MAX_LEN);
+	assert_ptr_not_equal(arg->pool_label, NULL);
+
+#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
+	/* change daos_prop_alloc() above, specify 2 entries not 1 */
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SPACE_RB;
 	prop->dpp_entries[1].dpe_val = space_rb;
 #endif
 
 	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	if (arg->myrank == 0) {
 		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		rc = daos_debug_set_params(arg->group, info.pi_leader,
 			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	prop_query = daos_prop_alloc(0);
 	rc = daos_pool_query(arg->pool.poh, NULL, NULL, prop_query, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	assert_int_equal(prop_query->dpp_nr, DAOS_PROP_PO_NUM);
-#if 0
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
 		print_message("label verification filed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SPACE_RB);
 	if (entry == NULL || entry->dpe_val != space_rb) {
 		print_message("space_rb verification filed.\n");
@@ -599,14 +595,14 @@ pool_op_retry(void **state)
 	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
 	print_message("connecting to pool ... ");
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       NULL /* svc */, DAOS_PC_RW, &poh, &info,
+			       DAOS_PC_RW, &poh, &info,
 			       NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_memory_equal(info.pi_uuid, arg->pool.pool_uuid,
 			    sizeof(info.pi_uuid));
 	assert_int_equal(info.pi_ndisabled, 0);
@@ -616,14 +612,14 @@ pool_op_retry(void **state)
 	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
 	print_message("querying pool info... ");
 	memset(&info, 'D', sizeof(info));
 	info.pi_bits = DPI_ALL;
 	rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(info.pi_ndisabled, 0);
 	print_message("success\n");
 
@@ -631,13 +627,13 @@ pool_op_retry(void **state)
 	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_DISCONNECT_FAIL_CORPC |
 				  DAOS_FAIL_ONCE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
 	/** disconnect from pool */
 	print_message("disconnecting from pool ... ");
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_message("success\n");
 }
 
@@ -703,7 +699,7 @@ setup_containers(void **state, daos_size_t nconts)
 	/* TODO: make test_setup_pool_connect() more generic, call here */
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(lcarg->tpool.pool_uuid, arg->group,
-				       NULL /* svc */, DAOS_PC_RW,
+				       DAOS_PC_RW,
 				       &lcarg->tpool.poh, NULL /* pool info */,
 				       NULL /* ev */);
 		if (rc != 0)
@@ -939,11 +935,11 @@ list_containers_test(void **state)
 
 	/***** Test: retrieve number of containers in pool *****/
 	nconts = nconts_orig = 0xDEF0; /* Junk value (e.g., uninitialized) */
-	assert_false(daos_handle_is_inval(lcarg->tpool.poh));
+	assert_true(daos_handle_is_valid(lcarg->tpool.poh));
 	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, NULL /* conts */,
 			NULL /* ev */);
 	print_message("daos_pool_list_cont returned rc=%d\n", rc);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	verify_cont_info(state, rc, nconts_orig, NULL /* conts */, nconts);
 
 	print_message("success t%d: output nconts=%zu\n", tnum++,
@@ -960,7 +956,7 @@ list_containers_test(void **state)
 	nconts = nconts_alloc;
 	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, conts,
 				 NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(nconts, lcarg->nconts);
 	verify_cont_info(state, rc, nconts_alloc, conts, nconts);
 
@@ -971,7 +967,7 @@ list_containers_test(void **state)
 	nconts = 0;
 	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, conts,
 				 NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(nconts, lcarg->nconts);
 	print_message("success t%d: nconts=0, non-NULL conts[] rc=%d\n",
 		      tnum++, rc);
@@ -983,7 +979,7 @@ list_containers_test(void **state)
 	/***** Test: invalid nconts=NULL *****/
 	rc = daos_pool_list_cont(lcarg->tpool.poh, NULL /* nconts */,
 				  NULL /* conts */, NULL /* ev */);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 	print_message("success t%d: in &nconts NULL, -DER_INVAL\n", tnum++);
 
 
@@ -999,7 +995,7 @@ list_containers_test(void **state)
 		nconts = nconts_alloc;
 		rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, conts,
 					  NULL /* ev */);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_int_equal(nconts, lcarg->nconts);
 		verify_cont_info(state, rc, nconts_alloc, conts, nconts);
 
@@ -1018,7 +1014,7 @@ list_containers_test(void **state)
 		nconts = nconts_alloc;
 		rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, conts,
 					  NULL /* ev */);
-		assert_int_equal(rc, -DER_TRUNC);
+		assert_rc_equal(rc, -DER_TRUNC);
 		verify_cont_info(state, rc, nconts_alloc, conts, nconts);
 
 		print_message("success t%d: conts[] under-sized\n", tnum++);
@@ -1041,7 +1037,7 @@ expect_pool_connect_access(test_arg_t *arg0, uint64_t perms,
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	arg->pool.pool_connect_flags = flags;
 	prop = get_daos_prop_with_owner_acl_perms(perms,
@@ -1052,7 +1048,7 @@ expect_pool_connect_access(test_arg_t *arg0, uint64_t perms,
 
 	/* Make sure we actually got to pool connect */
 	assert_int_equal(arg->setup_state, SETUP_POOL_CONNECT);
-	assert_int_equal(rc, exp_result);
+	assert_rc_equal(rc, exp_result);
 
 	daos_prop_free(prop);
 	test_teardown((void **)&arg);
@@ -1087,6 +1083,79 @@ pool_connect_access(void **state)
 				   0);
 }
 
+static void
+label_strings_test(void **state)
+{
+	int		 i;
+	test_arg_t	*arg = *state;
+	const char	*valid_labels[] = {
+					   "mypool",
+					   "my_pool",
+					   "MyPool",
+					   "MyPool_2",
+					   "cae61c0752f54874ad213c0ec43005cb",
+					   "bash",
+					   "Pool_ProjectA:Team42",
+					   "ProjectA.TeamOne",
+					   "server42.fictionaldomaincae61c07.org",
+					     "0ABC",
+					     "0xDA0S1234",
+					     "0b101010",
+					     /* len=DAOS_PROP_LABEL_MAX_LEN */
+					     "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDE",
+	};
+	const char	*invalid_labels[] = {
+					     "",
+					     "no/slashes\\at\\all",
+					     "no spaces",
+					     "is%20this%20label%20ok",
+					     "No{brackets}",
+					     "Whatsup?",
+					     "'MyLabel'",
+					     "a-b-cde",
+					     "MyPool!",
+					     "cae61c0]7-52f5-4874-ad21-3c0ec43005cb",
+					     /* len=DAOS_PROP_LABEL_MAX_LEN+1 */
+					     "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+					     "A0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789",
+					     "/bin/bash;/bin/ls",
+					     "bash&",
+					     "$VAR",
+					     "@daos_dev",
+					     "#objectstorage",
+					     "container7%BigKVS",
+					     "onethousand^6",
+					     "*myptr",
+					     "Project(small_pool)",
+					     "pool+containers+objects",
+					     "`cmd`",
+					     "~daosuser",
+					     "don't\"quote\"me",
+					     "ooo\bps",
+					     "end of the line\n",
+					     "end of the line\r\n",	};
+	size_t	n_valid = ARRAY_SIZE(valid_labels);
+	size_t	n_invalid = ARRAY_SIZE(invalid_labels);
+
+	if (arg->myrank == 0) {
+		print_message("Verify %zu valid labels\n", n_valid);
+		for (i = 0; i < n_valid; i++) {
+			const char *lbl = valid_labels[i];
+
+			assert_true(daos_label_is_valid(lbl));
+			print_message("confirmed valid: %s\n", lbl);
+		}
+
+		print_message("Verify %zu INvalid labels\n", n_invalid);
+		for (i = 0; i < n_invalid; i++) {
+			const char *lbl = invalid_labels[i];
+
+			assert_false(daos_label_is_valid(lbl));
+			print_message("confirmed NOT valid: %s\n", lbl);
+		}
+	}
+}
+
 static const struct CMUnitTest pool_tests[] = {
 	{ "POOL1: connect to non-existing pool",
 	  pool_connect_nonexist, NULL, test_case_teardown},
@@ -1117,6 +1186,8 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_op_retry, NULL, test_case_teardown},
 	{ "POOL14: pool connect access based on ACL",
 	  pool_connect_access, NULL, test_case_teardown},
+	{ "POOL15: label property string validation",
+	  label_strings_test, NULL, test_case_teardown},
 };
 
 int
@@ -1124,7 +1195,7 @@ run_daos_pool_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("Pool tests", pool_tests,
+	rc = cmocka_run_group_tests_name("DAOS_Pool", pool_tests,
 					 setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

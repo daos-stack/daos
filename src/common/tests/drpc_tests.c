@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /*
@@ -34,6 +17,7 @@
 #include <daos_errno.h>
 #include <daos/drpc.h>
 #include <daos/test_mocks.h>
+#include <daos/tests_lib.h>
 #include <daos/test_utils.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
@@ -84,7 +68,7 @@ test_drpc_connect_returns_null_if_socket_fails(void **state)
 	socket_return = -1; /* < 0 indicates failure */
 	struct drpc *drpc;
 
-	assert_int_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_MISC);
+	assert_rc_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_MISC);
 	assert_null(drpc);
 }
 
@@ -94,7 +78,7 @@ test_drpc_connect_returns_null_if_connect_fails(void **state)
 	connect_return = -1; /* < 0 indicates failure */
 	struct drpc *drpc;
 
-	assert_int_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_MISC);
+	assert_rc_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_MISC);
 	assert_null(drpc);
 
 	/* Closed the socket */
@@ -108,7 +92,7 @@ test_drpc_connect_success(void **state)
 	struct drpc *ctx;
 
 	rc = drpc_connect(TEST_SOCK_ADDR, &ctx);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_non_null(ctx);
 
 	/* created socket with correct input params */
@@ -140,7 +124,7 @@ test_drpc_connect_success(void **state)
 static void
 test_drpc_close_fails_if_ctx_null(void **state)
 {
-	assert_int_equal(drpc_close(NULL), -DER_INVAL);
+	assert_rc_equal(drpc_close(NULL), -DER_INVAL);
 }
 
 static void
@@ -150,7 +134,7 @@ test_drpc_close_fails_if_ctx_comm_null(void **state)
 
 	D_ALLOC_PTR(ctx);
 
-	assert_int_equal(drpc_close(ctx), -DER_INVAL);
+	assert_rc_equal(drpc_close(ctx), -DER_INVAL);
 
 	D_FREE(ctx);
 }
@@ -165,7 +149,7 @@ test_drpc_close_closing_socket_fails(void **state)
 	errno = ENOMEM;
 
 	/* error is logged but ignored */
-	assert_int_equal(drpc_close(ctx), 0);
+	assert_rc_equal(drpc_close(ctx), 0);
 
 	/* called close() */
 	assert_int_equal(close_fd, expected_fd);
@@ -179,7 +163,7 @@ test_drpc_close_success(void **state)
 
 	ctx->ref_count = 1;
 
-	assert_int_equal(drpc_close(ctx), 0);
+	assert_rc_equal(drpc_close(ctx), 0);
 
 	/* called close() with the ctx fd */
 	assert_int_equal(close_fd, expected_fd);
@@ -192,7 +176,7 @@ test_drpc_close_with_unexpected_ref_count(void **state)
 
 	ctx->ref_count = 0;
 
-	assert_int_equal(drpc_close(ctx), -DER_INVAL);
+	assert_rc_equal(drpc_close(ctx), -DER_INVAL);
 
 	free_drpc(ctx);
 }
@@ -204,7 +188,7 @@ test_drpc_close_with_multiple_refs(void **state)
 
 	ctx->ref_count = 2;
 
-	assert_int_equal(drpc_close(ctx), 0);
+	assert_rc_equal(drpc_close(ctx), 0);
 
 	assert_int_equal(close_fd, 0); /* close() wasn't called */
 	assert_int_equal(ctx->ref_count, 1);
@@ -226,7 +210,7 @@ test_drpc_call_fails_if_sendmsg_fails(void **state)
 	sendmsg_return = -1;
 	errno = EINVAL; /* translates to -DER_INVAL */
 
-	assert_int_equal(drpc_call(ctx, 0, call, &resp), -DER_INVAL);
+	assert_rc_equal(drpc_call(ctx, 0, call, &resp), -DER_INVAL);
 	assert_null(resp);
 
 	drpc__call__free_unpacked(call, NULL);
@@ -283,7 +267,7 @@ test_drpc_call_with_no_flags_returns_async(void **state)
 	Drpc__Response	*resp = NULL;
 	Drpc__Call	*call = new_drpc_call();
 
-	assert_int_equal(drpc_call(ctx, 0, call, &resp), DER_SUCCESS);
+	assert_rc_equal(drpc_call(ctx, 0, call, &resp), DER_SUCCESS);
 
 	assert_int_equal(resp->sequence, call->sequence);
 	assert_int_equal(resp->status, DRPC__STATUS__SUBMITTED);
@@ -314,7 +298,7 @@ test_drpc_call_with_sync_flag_gets_socket_response(void **state)
 
 	drpc__response__pack(expected_resp, recvmsg_msg_content);
 
-	assert_int_equal(drpc_call(ctx, R_SYNC, call, &resp), DER_SUCCESS);
+	assert_rc_equal(drpc_call(ctx, R_SYNC, call, &resp), DER_SUCCESS);
 
 	assert_int_equal(resp->sequence, expected_resp->sequence);
 	assert_int_equal(resp->status, expected_resp->status);
@@ -336,7 +320,7 @@ test_drpc_call_with_sync_flag_fails_on_recvmsg_fail(void **state)
 	recvmsg_return = -1;
 	errno = EINVAL;
 
-	assert_int_equal(drpc_call(ctx, R_SYNC, call, &resp), -DER_INVAL);
+	assert_rc_equal(drpc_call(ctx, R_SYNC, call, &resp), -DER_INVAL);
 	assert_null(resp);
 
 	drpc__call__free_unpacked(call, NULL);
@@ -514,7 +498,7 @@ test_drpc_recv_call_null_ctx(void **state)
 {
 	Drpc__Call *msg = NULL;
 
-	assert_int_equal(drpc_recv_call(NULL, &msg), -DER_INVAL);
+	assert_rc_equal(drpc_recv_call(NULL, &msg), -DER_INVAL);
 }
 
 static void
@@ -525,7 +509,7 @@ test_drpc_recv_call_bad_handler(void **state)
 
 	ctx->handler = NULL;
 
-	assert_int_equal(drpc_recv_call(ctx, &call), -DER_INVAL);
+	assert_rc_equal(drpc_recv_call(ctx, &call), -DER_INVAL);
 	assert_null(call);
 
 	free_drpc(ctx);
@@ -536,7 +520,7 @@ test_drpc_recv_call_null_call(void **state)
 {
 	struct drpc *ctx = new_drpc_with_fd(12);
 
-	assert_int_equal(drpc_recv_call(ctx, NULL), -DER_INVAL);
+	assert_rc_equal(drpc_recv_call(ctx, NULL), -DER_INVAL);
 
 	free_drpc(ctx);
 }
@@ -554,7 +538,7 @@ assert_drpc_recv_call_fails_with_recvmsg_errno(int recvmsg_errno,
 	recvmsg_return = -1;
 	errno = recvmsg_errno;
 
-	assert_int_equal(drpc_recv_call(ctx, &call), expected_retval);
+	assert_rc_equal(drpc_recv_call(ctx, &call), expected_retval);
 
 	assert_null(call);
 	assert_int_equal(recvmsg_call_count, 1);
@@ -585,7 +569,7 @@ test_drpc_recv_call_malformed(void **state)
 	recvmsg_return = sizeof(recvmsg_msg_content);
 	memset(recvmsg_msg_content, 1, sizeof(recvmsg_msg_content));
 
-	assert_int_equal(drpc_recv_call(ctx, &call), -DER_PROTO);
+	assert_rc_equal(drpc_recv_call(ctx, &call), -DER_PROTO);
 
 	assert_null(call);
 
@@ -601,7 +585,7 @@ test_drpc_recv_call_success(void **state)
 
 	mock_valid_drpc_call_in_recvmsg();
 
-	assert_int_equal(drpc_recv_call(ctx, &call), 0);
+	assert_rc_equal(drpc_recv_call(ctx, &call), 0);
 
 	assert_int_equal(call->module, expected_call->module);
 	assert_int_equal(call->method, expected_call->method);
@@ -631,7 +615,7 @@ test_drpc_send_response_null_ctx(void **state)
 {
 	Drpc__Response *resp = new_drpc_response();
 
-	assert_int_equal(drpc_send_response(NULL, resp), -DER_INVAL);
+	assert_rc_equal(drpc_send_response(NULL, resp), -DER_INVAL);
 
 	drpc_response_free(resp);
 }
@@ -644,7 +628,7 @@ test_drpc_send_response_bad_handler(void **state)
 
 	ctx->handler = NULL;
 
-	assert_int_equal(drpc_send_response(ctx, resp), -DER_INVAL);
+	assert_rc_equal(drpc_send_response(ctx, resp), -DER_INVAL);
 
 	free_drpc(ctx);
 	drpc_response_free(resp);
@@ -655,7 +639,7 @@ test_drpc_send_response_null_resp(void **state)
 {
 	struct drpc *ctx = new_drpc_with_fd(12);
 
-	assert_int_equal(drpc_send_response(ctx, NULL), -DER_INVAL);
+	assert_rc_equal(drpc_send_response(ctx, NULL), -DER_INVAL);
 
 	free_drpc(ctx);
 }
@@ -669,7 +653,7 @@ test_drpc_send_response_sendmsg_fails(void **state)
 	sendmsg_return = -1;
 	errno = ENOMEM;
 
-	assert_int_equal(drpc_send_response(ctx, resp), -DER_NOMEM);
+	assert_rc_equal(drpc_send_response(ctx, resp), -DER_NOMEM);
 
 	free_drpc(ctx);
 	drpc_response_free(resp);
@@ -683,7 +667,7 @@ test_drpc_send_response_success(void **state)
 	uint8_t		expected_response[UNIXCOMM_MAXMSGSIZE];
 	size_t		expected_response_size;
 
-	assert_int_equal(drpc_send_response(ctx, resp), DER_SUCCESS);
+	assert_rc_equal(drpc_send_response(ctx, resp), DER_SUCCESS);
 
 	/*
 	 * Sent response message - should be the one returned from
@@ -715,7 +699,7 @@ test_drpc_call_create_null_ctx(void **state)
 {
 	Drpc__Call	*call;
 
-	assert_int_equal(drpc_call_create(NULL, 1, 2, &call), -DER_INVAL);
+	assert_rc_equal(drpc_call_create(NULL, 1, 2, &call), -DER_INVAL);
 	assert_null(call);
 }
 
@@ -733,7 +717,7 @@ test_drpc_call_create_free(void **state)
 
 	rc = drpc_call_create(ctx, module, method, &call);
 
-	assert_int_equal(rc, DER_SUCCESS);
+	assert_rc_equal(rc, DER_SUCCESS);
 	assert_non_null(call);
 	assert_memory_equal(call->base.descriptor, &drpc__call__descriptor,
 			sizeof(ProtobufCMessageDescriptor));
@@ -802,7 +786,7 @@ test_drpc_response_free_null(void **state)
 static void
 test_drpc_add_ref_null(void **state)
 {
-	assert_int_equal(drpc_add_ref(NULL), -DER_INVAL);
+	assert_rc_equal(drpc_add_ref(NULL), -DER_INVAL);
 }
 
 static void
@@ -815,7 +799,7 @@ test_drpc_add_ref_success(void **state)
 
 	/* Add a bunch of refs just to see how it goes */
 	for (i = 0; i < 125; i++) {
-		assert_int_equal(drpc_add_ref(ctx), 0);
+		assert_rc_equal(drpc_add_ref(ctx), 0);
 		assert_int_equal(ctx->ref_count, i + 1);
 	}
 
@@ -829,7 +813,7 @@ test_drpc_add_ref_doesnt_update_max_count(void **state)
 
 	ctx->ref_count = UINT_MAX;
 
-	assert_int_equal(drpc_add_ref(ctx), -DER_INVAL);
+	assert_rc_equal(drpc_add_ref(ctx), -DER_INVAL);
 
 	assert_int_equal(ctx->ref_count, UINT_MAX);
 
@@ -892,7 +876,7 @@ main(void)
 		cmocka_unit_test(test_drpc_add_ref_success),
 		cmocka_unit_test(test_drpc_add_ref_doesnt_update_max_count)
 	};
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("common_drpc", tests, NULL, NULL);
 }
 
 #undef DRPC_UTEST

@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package config
@@ -50,7 +33,12 @@ var (
 	FaultConfigBadControlPort = serverConfigFault(
 		code.ServerConfigBadControlPort,
 		"invalid control port in configuration",
-		"specify a nonzero control port in configuration ('port' parameter) and restart the control server",
+		"specify a positive non-zero network port in configuration ('port' parameter) and restart the control server",
+	)
+	FaultConfigBadTelemetryPort = serverConfigFault(
+		code.ServerConfigBadTelemetryPort,
+		"invalid telemetry port in configuration",
+		"specify a positive non-zero network port in configuration ('telemetry_port' parameter) and restart the control server",
 	)
 	FaultConfigBadAccessPoints = serverConfigFault(
 		code.ServerConfigBadAccessPoints,
@@ -67,10 +55,10 @@ var (
 		"provider not specified in configuration",
 		"specify a valid network provider in configuration ('provider' parameter) and restart the control server",
 	)
-	FaultConfigNoServers = serverConfigFault(
-		code.ServerConfigNoServers,
-		"no DAOS IO Servers specified in configuration",
-		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
+	FaultConfigNoEngines = serverConfigFault(
+		code.ServerConfigNoEngines,
+		"no DAOS IO Engines specified in configuration",
+		"specify at least one IO Engine configuration ('engines' list parameter) and restart the control server",
 	)
 	FaultConfigFaultDomainInvalid = serverConfigFault(
 		code.ServerConfigFaultDomainInvalid,
@@ -97,13 +85,18 @@ var (
 		"fault domain callback executed but did not generate output",
 		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
 	)
+	FaultConfigTooManyLayersInFaultDomain = serverConfigFault(
+		code.ServerConfigFaultDomainTooManyLayers,
+		"only a single fault domain layer below the root is supported",
+		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
 )
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigDuplicateFabric,
-		fmt.Sprintf("the fabric configuration in IO server %d is a duplicate of server %d", curIdx, seenIdx),
-		"ensure that each IO server has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
+		fmt.Sprintf("the fabric configuration in I/O Engine %d is a duplicate of server %d", curIdx, seenIdx),
+		"ensure that each I/O Engine has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
 	)
 }
 
@@ -128,24 +121,24 @@ func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
 func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigOverlappingBdevDeviceList,
-		fmt.Sprintf("the bdev_list value in IO server %d overlaps with entries in server %d", curIdx, seenIdx),
-		"ensure that each IO server has a unique set of bdev_list entries and restart",
+		fmt.Sprintf("the bdev_list value in I/O Engine %d overlaps with entries in server %d", curIdx, seenIdx),
+		"ensure that each I/O Engine has a unique set of bdev_list entries and restart",
 	)
 }
 
 func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigInvalidNetDevClass,
-		fmt.Sprintf("IO server %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
+		fmt.Sprintf("I/O Engine %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
 			curIdx, iface, netdetect.DevClassName(thisDevClass), netdetect.DevClassName(primaryDevClass)),
-		"ensure that each IO server specifies a fabric_iface with a matching device class and restart",
+		"ensure that each I/O Engine specifies a fabric_iface with a matching device class and restart",
 	)
 }
 
 func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(code,
-		fmt.Sprintf("the %s value in IO server %d is a duplicate of server %d", name, curIdx, seenIdx),
-		fmt.Sprintf("ensure that each IO server has a unique %s value and restart", name),
+		fmt.Sprintf("the %s value in I/O Engine %d is a duplicate of server %d", name, curIdx, seenIdx),
+		fmt.Sprintf("ensure that each I/O Engine has a unique %s value and restart", name),
 	)
 }
 
@@ -156,6 +149,18 @@ func FaultConfigFaultCallbackFailed(err error) *fault.Fault {
 		code.ServerConfigFaultCallbackFailed,
 		fmt.Sprintf("fault domain callback script failed during execution: %s", err.Error()),
 		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
+	)
+}
+
+// FaultConfigFaultCallbackInsecure creates a fault for the scenario where the
+// fault domain callback path doesn't meet security requirements.
+func FaultConfigFaultCallbackInsecure(requiredDir string) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigFaultCallbackInsecure,
+		"fault domain callback script does not meet security requirements",
+		fmt.Sprintf("ensure that the 'fault_cb' path is under the parent directory %q, "+
+			"not a symbolic link, does not have the setuid bit set, and does not have "+
+			"write permissions for non-owners", requiredDir),
 	)
 }
 

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <pthread.h>
@@ -148,7 +131,9 @@ dfuse_loop(struct dfuse_info *dfuse_info)
 	rc = sem_init(&dtm->tm_finish, 0, 0);
 	if (rc != 0)
 		D_GOTO(out, rc);
-	D_MUTEX_INIT(&dtm->tm_lock, NULL);
+	rc = D_MUTEX_INIT(&dtm->tm_lock, NULL);
+	if (rc != 0)
+		D_GOTO(out_sem, rc);
 
 	D_MUTEX_LOCK(&dtm->tm_lock);
 	for (i = 0 ; i < dfuse_info->di_thread_count ; i++) {
@@ -181,11 +166,12 @@ dfuse_loop(struct dfuse_info *dfuse_info)
 
 	rc = dtm->tm_error;
 
-	pthread_mutex_destroy(&dtm->tm_lock);
-	sem_destroy(&dtm->tm_finish);
+	D_MUTEX_DESTROY(&dtm->tm_lock);
 	fuse_session_reset(se);
-	D_FREE(dtm);
+out_sem:
+	sem_destroy(&dtm->tm_finish);
 out:
+	D_FREE(dtm);
 	return rc;
 }
 

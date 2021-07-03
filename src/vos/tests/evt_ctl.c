@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
@@ -45,6 +28,7 @@
 #include <daos_srv/bio.h>
 #include <daos/tests_lib.h>
 #include <daos_pool.h>
+#include <daos/cmd_parser.h>
 #include <utest_common.h>
 
 /*
@@ -138,7 +122,7 @@ static struct evt_desc_cbs	ts_evt_desc_nofree_cbs  = {
 };
 
 static void
-ts_open_create(void **state)
+ts_open_create(void)
 {
 	bool    create;
 	char    *arg;
@@ -147,7 +131,7 @@ ts_open_create(void **state)
 	create = tst_fn_val.input;
 	arg = tst_fn_val.optval;
 
-	if (!daos_handle_is_inval(ts_toh)) {
+	if (daos_handle_is_valid(ts_toh)) {
 		D_PRINT("Tree has been opened\n");
 		fail();
 	}
@@ -183,7 +167,7 @@ ts_open_create(void **state)
 }
 
 static void
-ts_close_destroy(void **state)
+ts_close_destroy(void)
 {
 	bool destroy;
 	int rc;
@@ -311,10 +295,10 @@ bio_alloc_init(struct utest_context *utx, bio_addr_t *addr, const void *src,
 
 	addr->ba_type = DAOS_MEDIA_SCM;
 	if (src == NULL) {
-		addr->ba_hole = 1;
+		BIO_ADDR_SET_HOLE(addr);
 		return 0;
 	} else {
-		addr->ba_hole = 0;
+		BIO_ADDR_SET_NOT_HOLE(addr);
 	}
 	rc = utest_alloc(utx, &umoff, size, init_mem, src);
 
@@ -338,7 +322,7 @@ bio_strdup(struct utest_context *utx, bio_addr_t *addr, const char *str)
 }
 
 static void
-ts_add_rect(void **state)
+ts_add_rect(void)
 {
 	char			*val;
 	bio_addr_t		 bio_addr = {0}; /* Fake bio addr */
@@ -378,21 +362,25 @@ ts_add_rect(void **state)
 	rc = evt_insert(ts_toh, &entry, NULL);
 	if (rc == 0)
 		total_added++;
+
+	if (rc != 0 && !bio_addr_is_hole(&bio_addr))
+		utest_free(ts_utx, bio_addr.ba_off);
+
 	if (should_pass) {
-		if (rc != 0)
+		if (rc != 0) {
 			D_FATAL("Add rect failed "DF_RC"\n", DP_RC(rc));
+			fail();
+		}
 	} else {
 		if (rc == 0) {
 			D_FATAL("Add rect should have failed\n");
 			fail();
 		}
-		rc = 0;
 	}
-
 }
 
 static void
-ts_delete_rect(void **state)
+ts_delete_rect()
 {
 	char			*val;
 	struct evt_entry	 ent;
@@ -438,7 +426,7 @@ ts_delete_rect(void **state)
 }
 
 static void
-ts_remove_rect(void **state)
+ts_remove_rect(void)
 {
 	char			*arg;
 	struct evt_rect		 rect;
@@ -475,14 +463,14 @@ ts_remove_rect(void **state)
 
 
 static void
-ts_find_rect(void **state)
+ts_find_rect(void)
 {
 	struct evt_entry	*ent;
 	char			*val;
 	struct evt_filter	 filter = {0};
 	bio_addr_t		 addr;
 	struct evt_rect		 rect;
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	int			 rc;
 	bool			 should_pass;
 	char			*arg;
@@ -501,12 +489,12 @@ ts_find_rect(void **state)
 	filter.fr_epr.epr_hi = rect.rc_epc;
 	filter.fr_epoch = filter.fr_epr.epr_hi;
 	filter.fr_ex = rect.rc_ex;
-	evt_ent_array_init(&ent_array);
-	rc = evt_find(ts_toh, &filter, &ent_array);
+	evt_ent_array_init(ent_array, 0);
+	rc = evt_find(ts_toh, &filter, ent_array);
 	if (rc != 0)
 		D_FATAL("Add rect failed "DF_RC"\n", DP_RC(rc));
 
-	evt_ent_array_for_each(ent, &ent_array) {
+	evt_ent_array_for_each(ent, ent_array) {
 		bool punched;
 		addr = ent->en_addr;
 
@@ -519,11 +507,11 @@ ts_find_rect(void **state)
 								 addr.ba_off));
 	}
 
-	evt_ent_array_fini(&ent_array);
+	evt_ent_array_fini(ent_array);
 }
 
 static void
-ts_list_rect(void **state)
+ts_list_rect(void)
 {
 	char			*val;
 	daos_anchor_t		 anchor;
@@ -668,7 +656,7 @@ skip_probe:
 #define TS_VAL_CYCLE	4
 
 static void
-ts_many_add(void **state)
+ts_many_add(void)
 {
 	char			*buf;
 	char			*tmp;
@@ -774,7 +762,7 @@ ts_many_add(void **state)
 }
 
 static void
-ts_tree_debug(void **state)
+ts_tree_debug(void)
 {
 	int	level;
 	char   *arg;
@@ -785,12 +773,12 @@ ts_tree_debug(void **state)
 }
 
 static void
-ts_drain(void **state)
+ts_drain(void)
 {
 	static int const drain_creds = 256;
 	int	rc;
 
-	ts_many_add(state);
+	ts_many_add();
 	while (1) {
 		bool destroyed = false;
 		int creds = drain_creds;
@@ -1082,7 +1070,7 @@ test_evt_iter_flags(void **state)
 	/* Create a evtree */
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
 			&ts_evt_desc_cbs, &toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	D_ALLOC_ARRAY(data, (NUM_EPOCHS + 1));
 	if (data == NULL)
 		goto end;
@@ -1230,7 +1218,7 @@ finish3:
 end:
 	D_FREE(data);
 	rc = evt_destroy(toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -1251,7 +1239,7 @@ test_evt_iter_delete(void **state)
 
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
 			&ts_evt_desc_nofree_cbs, &toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = utest_sync_mem_status(arg->ta_utx);
 	assert_int_equal(rc, 0);
 	/* Insert a bunch of entries */
@@ -1270,7 +1258,7 @@ test_evt_iter_delete(void **state)
 			assert_int_equal(rc, 0);
 
 			rc = evt_insert(toh, &entry, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = utest_check_mem_increase(arg->ta_utx);
 			assert_int_equal(rc, 0);
 			rc = utest_sync_mem_status(arg->ta_utx);
@@ -1279,15 +1267,15 @@ test_evt_iter_delete(void **state)
 	}
 
 	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE, NULL, &ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	sum = 0;
 	for (;;) {
 		rc = evt_iter_fetch(ih, &inob, &ent, NULL);
 		if (rc == -DER_NONEXIST)
 			break;
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		assert_int_equal(inob, sizeof(sum));
 
 		value = utest_off2ptr(arg->ta_utx, ent.en_addr.ba_off);
@@ -1296,12 +1284,12 @@ test_evt_iter_delete(void **state)
 		rc = evt_iter_next(ih);
 		if (rc == -DER_NONEXIST)
 			break;
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 	expected_sum = NUM_EPOCHS + (NUM_EXTENTS * (NUM_EXTENTS + 1) / 2) - 1;
 	assert_int_equal(expected_sum, sum);
 	rc = evt_iter_finish(ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 
 	filter.fr_ex.ex_lo = 0;
@@ -1310,10 +1298,10 @@ test_evt_iter_delete(void **state)
 	filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
 	filter.fr_epoch = filter.fr_epr.epr_hi;
 	rc = evt_iter_prepare(toh, 0, &filter, &ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	sum = 0;
 
@@ -1323,7 +1311,7 @@ test_evt_iter_delete(void **state)
 		if (rc == -DER_NONEXIST)
 			break;
 
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		assert_false(bio_addr_is_hole(&ent.en_addr));
 
@@ -1336,19 +1324,19 @@ test_evt_iter_delete(void **state)
 	assert_int_equal(expected_sum, sum);
 
 	rc = evt_iter_finish(ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* No filter so delete everything */
 	rc = evt_iter_prepare(toh, 0, NULL, &ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Ok, delete the rest */
 	while (!evt_iter_empty(ih)) {
 		rc = evt_iter_delete(ih, &ent);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		assert_false(bio_addr_is_hole(&ent.en_addr));
 
@@ -1362,14 +1350,14 @@ test_evt_iter_delete(void **state)
 		assert_int_equal(rc, 0);
 	}
 	rc = evt_iter_finish(ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	expected_sum = NUM_EPOCHS * (NUM_EXTENTS * (NUM_EXTENTS + 1) / 2);
 	assert_int_equal(expected_sum, sum);
 	rc = utest_check_mem_initial_status(arg->ta_utx);
 	assert_int_equal(rc, 0);
 	rc = evt_destroy(toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -1380,7 +1368,7 @@ test_evt_find_internal(void **state)
 	struct evt_entry_in	 entry = {0};
 	struct evt_entry	 *ent;
 	struct evt_filter	 filter = {0};
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	bio_addr_t		 addr;
 	int			 rc;
 	int			 epoch;
@@ -1391,7 +1379,7 @@ test_evt_find_internal(void **state)
 	/* Create a evtree */
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
 			&ts_evt_desc_cbs, &toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = utest_sync_mem_status(arg->ta_utx);
 	assert_int_equal(rc, 0);
 	srand(time(0));
@@ -1424,7 +1412,7 @@ test_evt_find_internal(void **state)
 				assert_int_equal(rc, 0);
 			}
 			rc = evt_insert(toh, &entry, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = utest_check_mem_increase(arg->ta_utx);
 			assert_int_equal(rc, 0);
 			rc = utest_sync_mem_status(arg->ta_utx);
@@ -1442,11 +1430,11 @@ test_evt_find_internal(void **state)
 		filter.fr_ex.ex_hi = epoch + 9;
 		filter.fr_epr.epr_hi = epoch;
 		filter.fr_epoch = filter.fr_epr.epr_hi;
-		evt_ent_array_init(&ent_array);
-		rc = evt_find(toh, &filter, &ent_array);
+		evt_ent_array_init(ent_array, 1);
+		rc = evt_find(toh, &filter, ent_array);
 		if (rc != 0)
 			D_FATAL("Find rect failed "DF_RC"\n", DP_RC(rc));
-		evt_ent_array_for_each(ent, &ent_array) {
+		evt_ent_array_for_each(ent, ent_array) {
 			bool punched;
 			static char buf[10];
 
@@ -1486,18 +1474,18 @@ test_evt_find_internal(void **state)
 		entry.ei_rect.rc_epc = filter.fr_epr.epr_hi;
 		filter.fr_epoch = filter.fr_epr.epr_hi;
 		rc = evt_delete(toh, &entry.ei_rect, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		rc = utest_check_mem_decrease(arg->ta_utx);
 		assert_int_equal(rc, 0);
 		rc = utest_sync_mem_status(arg->ta_utx);
 		assert_int_equal(rc, 0);
-		evt_ent_array_fini(&ent_array);
+		evt_ent_array_fini(ent_array);
 	}
 	rc = utest_check_mem_initial_status(arg->ta_utx);
 	assert_int_equal(rc, 0);
 	/* Destroy the tree */
 	rc = evt_destroy(toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 /*
 *   10: EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
@@ -1524,7 +1512,7 @@ test_evt_iter_delete_internal(void **state)
 
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
 			&ts_evt_desc_cbs, &toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Insert a bunch of entries */
 	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
@@ -1541,7 +1529,7 @@ test_evt_iter_delete_internal(void **state)
 			assert_int_equal(rc, 0);
 
 			rc = evt_insert(toh, &entry, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 		}
 	}
 	for (iter_count = 0; iter_count < (
@@ -1550,16 +1538,16 @@ test_evt_iter_delete_internal(void **state)
 
 		/* No filter so delete everything */
 		rc = evt_iter_prepare(toh, val[iter_count], NULL, &ih);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		/* Ok, delete the rest */
 		while (!evt_iter_empty(ih)) {
 			rc = evt_iter_delete(ih, &ent);
 			if (val[iter_count] == 0) {
-				assert_int_equal(rc, 0);
+				assert_rc_equal(rc, 0);
 			} else {
 				assert_int_not_equal(rc, 0);
 				/* exit the loop */
@@ -1567,10 +1555,10 @@ test_evt_iter_delete_internal(void **state)
 			}
 		}
 		rc = evt_iter_finish(ih);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 	rc = evt_destroy(toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -1588,7 +1576,7 @@ test_evt_variable_record_size_internal(void **state)
 
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL,
 			arg->ta_uma, &ts_evt_desc_cbs, &toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	for (count = 0; count < sizeof(val)/sizeof(int); count++) {
 		/* Try to insert a bunch of entries with variable data sizes */
 		data_size = val[count];
@@ -1611,12 +1599,12 @@ test_evt_variable_record_size_internal(void **state)
 			if (count > 0)
 				assert_int_not_equal(rc, 0);
 			else
-				assert_int_equal(rc, 0);
+				assert_rc_equal(rc, 0);
 		}
 		D_FREE(data);
 	}
 	rc = evt_destroy(toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -1636,7 +1624,7 @@ test_evt_various_data_size_internal(void **state)
 					D_256M_SIZE};
 	uint64_t		data_size;
 	char                     *data;
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	struct evt_entry	 *ent;
 	bio_addr_t		 addr;
 	struct evt_filter	 filter = {0};
@@ -1645,7 +1633,7 @@ test_evt_various_data_size_internal(void **state)
 	for (count = 0; count < sizeof(val)/sizeof(int); count++) {
 		rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL,
 				arg->ta_uma, &ts_evt_desc_cbs, &toh);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		rc = utest_sync_mem_status(arg->ta_utx);
 		assert_int_equal(rc, 0);
 		data_size = val[count];
@@ -1675,12 +1663,12 @@ test_evt_various_data_size_internal(void **state)
 			rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
 					    data, data_size);
 			if (rc != 0) {
-				assert_int_equal(rc, -DER_NOSPACE);
+				assert_rc_equal(rc, -DER_NOSPACE);
 				break;
 			}
 			rc = evt_insert(toh, &entry, NULL);
 			if (rc != 0) {
-				assert_int_equal(rc, -DER_NOSPACE);
+				assert_rc_equal(rc, -DER_NOSPACE);
 				break;
 			}
 			rc = utest_check_mem_increase(arg->ta_utx);
@@ -1688,16 +1676,16 @@ test_evt_various_data_size_internal(void **state)
 			rc = utest_sync_mem_status(arg->ta_utx);
 			assert_int_equal(rc, 0);
 			if (epoch == 1) {
-				evt_ent_array_init(&ent_array);
+				evt_ent_array_init(ent_array, 0);
 				filter.fr_ex.ex_lo = epoch;
 				filter.fr_ex.ex_hi = epoch + data_size - 1;
 				filter.fr_epr.epr_hi = epoch;
 				filter.fr_epoch = filter.fr_epr.epr_hi;
-				rc = evt_find(toh, &filter, &ent_array);
+				rc = evt_find(toh, &filter, ent_array);
 				if (rc != 0)
 					D_FATAL("Find rect failed "DF_RC"\n",
 						DP_RC(rc));
-				evt_ent_array_for_each(ent, &ent_array) {
+				evt_ent_array_for_each(ent, ent_array) {
 					static char *actual;
 
 					D_ALLOC(actual, data_size);
@@ -1715,7 +1703,7 @@ test_evt_various_data_size_internal(void **state)
 					}
 					D_FREE(actual);
 				}
-				evt_ent_array_fini(&ent_array);
+				evt_ent_array_fini(ent_array);
 			}
 			/* Delete a record*/
 			if (epoch % 10 == 0) {
@@ -1725,7 +1713,7 @@ test_evt_various_data_size_internal(void **state)
 				entry.ei_rect.rc_epc = epoch;
 
 				rc = evt_delete(toh, &entry.ei_rect, NULL);
-				assert_int_equal(rc, 0);
+				assert_rc_equal(rc, 0);
 				rc = utest_check_mem_decrease(arg->ta_utx);
 				assert_int_equal(rc, 0);
 				rc = utest_sync_mem_status(arg->ta_utx);
@@ -1734,24 +1722,24 @@ test_evt_various_data_size_internal(void **state)
 		}
 		/* Delete remaining records: evt_iter_delete */
 		rc = evt_iter_prepare(toh, 0, NULL, &ih);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		print_message("Deleting evtree contents\n");
 		while (!evt_iter_empty(ih)) {
 			rc = evt_iter_delete(ih, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			rc = utest_check_mem_decrease(arg->ta_utx);
 			assert_int_equal(rc, 0);
 			rc = utest_sync_mem_status(arg->ta_utx);
 			assert_int_equal(rc, 0);
 		}
 		rc = evt_iter_finish(ih);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		/* Free allocated memory */
 		D_FREE(data);
 		rc = evt_destroy(toh);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 }
 
@@ -1769,14 +1757,14 @@ test_evt_node_size_internal(void **state)
 				arg->ta_uma, &ts_evt_desc_cbs, &toh);
 		if ((order_size >= EVT_MIN_ORDER) &&
 		(order_size <= EVT_MAX_ORDER)) {
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			evt_created = true;
 		} else {
 			assert_int_not_equal(rc, 0);
 		}
 		if (evt_created) {
 			rc = evt_destroy(toh);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 		}
 	}
 }
@@ -1815,7 +1803,7 @@ set_data(struct test_arg *arg, daos_handle_t toh, char *dest_data,
 			    src, size);
 	assert_int_equal(rc, 0);
 	rc = evt_insert(toh, &entry, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 void
@@ -1868,7 +1856,7 @@ test_evt_overlap_split(struct test_arg *arg, int major_num, int minor_num)
 
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL,
 				arg->ta_uma, &ts_evt_desc_cbs, &toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	/** Arbitrary character array, not too large to create many overlaps */
 	total_size = NUM_EPOCHS * 2;
 	D_ALLOC_ARRAY(expected_epochs, total_size);
@@ -1938,16 +1926,16 @@ test_evt_overlap_split(struct test_arg *arg, int major_num, int minor_num)
 		rc = evt_iter_fetch(ih, &inob, &ent, NULL);
 		if (rc == -DER_NONEXIST)
 			break;
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		check_data(arg, expected_data, expected_epochs, &ent);
 		rc = evt_iter_next(ih);
 		if (rc == -DER_NONEXIST)
 			break;
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	rc = evt_iter_finish(ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	D_PRINT("Tree depth :%d\n", arg->ta_root->tr_depth);
 	if (arg->ta_root->tr_depth < 2)
@@ -1960,7 +1948,7 @@ finish:
 	D_FREE(expected_data);
 	D_FREE(expected_epochs);
 	rc = evt_destroy(toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 #define NUM_MINOR 20
@@ -1987,7 +1975,7 @@ insert_and_check(daos_handle_t toh, struct evt_entry_in *entry, int idx, int nr)
 	entry->ei_rect.rc_epc = epoch;
 	entry->ei_bound = epoch;
 	rc = evt_insert(toh, entry, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	return epoch++;
 }
@@ -2009,7 +1997,7 @@ test_evt_ent_alloc_bug(void **state)
 
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
 			&ts_evt_desc_cbs, &toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	idx1 = 0;
 	nr1  = 500;
@@ -2046,25 +2034,25 @@ test_evt_ent_alloc_bug(void **state)
 	/* Now, do a sorted iteration */
 	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE | EVT_ITER_COVERED, NULL,
 			      &ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Ok, count the entries */
 	while (!evt_iter_fetch(ih, &inob, &entry, NULL)) {
 		rc = evt_iter_next(ih);
 		if (rc == -DER_NONEXIST)
 			break;
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		count++;
 	}
 	print_message("Number of entries is %d\n", count);
 	rc = evt_iter_finish(ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = evt_destroy(toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	assert_in_range(count, last, last * 3);
 }
@@ -2079,7 +2067,7 @@ test_evt_root_deactivate_bug(void **state)
 
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
 			&ts_evt_desc_cbs, &toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	entry_in.ei_ver = 0;
 	entry_in.ei_inob = 0;
@@ -2091,13 +2079,13 @@ test_evt_root_deactivate_bug(void **state)
 	insert_and_check(toh, &entry_in, 0, 1);
 
 	rc = evt_delete(toh, &entry_in.ei_rect, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Insert it again now */
 	insert_and_check(toh, &entry_in, 0, 1);
 
 	rc = evt_destroy(toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -2119,7 +2107,7 @@ test_evt_outer_punch(void **state)
 
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
 			&ts_evt_desc_nofree_cbs, &toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	sum = 1;
 
 	/* Insert a bunch of entries */
@@ -2138,7 +2126,7 @@ test_evt_outer_punch(void **state)
 			assert_int_equal(rc, 0);
 
 			rc = evt_insert(toh, &entry, NULL);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 		}
 	}
 
@@ -2151,16 +2139,16 @@ test_evt_outer_punch(void **state)
 	filter.fr_epoch = filter.fr_epr.epr_hi;
 	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE | EVT_ITER_COVERED,
 			      &filter, &ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	visible = covered = 0;
 
 	for (;;) {
 		rc = evt_iter_fetch(ih, &inob, &ent, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		assert_false(bio_addr_is_hole(&ent.en_addr));
 
@@ -2180,28 +2168,28 @@ test_evt_outer_punch(void **state)
 		rc = evt_iter_next(ih);
 		if (rc == -DER_NONEXIST)
 			break;
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 	assert_int_equal(visible, NUM_EXTENTS);
 	assert_int_equal(covered, (NUM_EPOCHS - 1) * NUM_EXTENTS);
 
 	rc = evt_iter_finish(ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* If user specifies punch for unsorted iterator, it will mark
 	 * punched entries EVT_COVERED
 	 */
 	rc = evt_iter_prepare(toh, 0, &filter, &ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	visible = covered = 0;
 
 	for (;;) {
 		rc = evt_iter_fetch(ih, &inob, &ent, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		assert_false(bio_addr_is_hole(&ent.en_addr));
 
@@ -2219,16 +2207,16 @@ test_evt_outer_punch(void **state)
 		rc = evt_iter_next(ih);
 		if (rc == -DER_NONEXIST)
 			break;
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 	assert_int_equal(visible, NUM_EXTENTS);
 	assert_int_equal(covered, (NUM_EPOCHS - 1) * NUM_EXTENTS);
 
 	rc = evt_iter_finish(ih);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = evt_destroy(toh);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static int
@@ -2296,50 +2284,49 @@ static int
 ts_cmd_run(char opc, char *args)
 {
 	int	 rc = 0;
-	void	 **st = NULL;
 
 	tst_fn_val.optval = args;
 	tst_fn_val.input = true;
 
 	switch (opc) {
 	case 'C':
-		ts_open_create(st);
+		ts_open_create();
 		break;
 	case 'D':
-		ts_close_destroy(st);
+		ts_close_destroy();
 		break;
 	case 'o':
 		tst_fn_val.input = false;
 		tst_fn_val.optval = NULL;
-		ts_open_create(st);
+		ts_open_create();
 		break;
 	case 'c':
 		tst_fn_val.input = false;
-		ts_close_destroy(st);
+		ts_close_destroy();
 		break;
 	case 'a':
-		ts_add_rect(st);
+		ts_add_rect();
 		break;
 	case 'm':
-		ts_many_add(st);
+		ts_many_add();
 		break;
 	case 'e':
-		ts_drain(st);
+		ts_drain();
 		break;
 	case 'f':
-		ts_find_rect(st);
+		ts_find_rect();
 		break;
 	case 'l':
-		ts_list_rect(st);
+		ts_list_rect();
 		break;
 	case 'd':
-		ts_delete_rect(st);
+		ts_delete_rect();
 		break;
 	case 'r':
-		ts_remove_rect(st);
+		ts_remove_rect();
 		break;
 	case 'b':
-		ts_tree_debug(st);
+		ts_tree_debug();
 		break;
 	case 't':
 		break;
@@ -2354,8 +2341,6 @@ ts_cmd_run(char opc, char *args)
 		rc = 0;
 		break;
 	}
-	if (st != NULL)
-		rc = -1;
 
 	return rc;
 }
@@ -2450,7 +2435,7 @@ main(int argc, char **argv)
 	/* Start interactive session*/
 	if ((argc - optind) == 1) {
 		print_message("Starting interactive session...\n");
-		rc = dts_cmd_parser(ts_ops, "$ > ", ts_cmd_run);
+		rc = cmd_parser(ts_ops, "$ > ", ts_cmd_run);
 		goto out;
 	}
 

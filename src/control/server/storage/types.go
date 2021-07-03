@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package storage
@@ -27,10 +10,8 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/dustin/go-humanize"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/system"
@@ -111,8 +92,6 @@ type (
 	// NvmeHealth represents a set of health statistics for a NVMe device
 	// and mirrors C.struct_nvme_stats.
 	NvmeHealth struct {
-		Model           string `json:"model"`
-		Serial          string `json:"serial"`
 		Timestamp       uint64 `json:"timestamp"`
 		TempWarnTime    uint32 `json:"warn_temp_time"`
 		TempCritTime    uint32 `json:"crit_temp_time"`
@@ -137,8 +116,8 @@ type (
 	// NvmeNamespace represents an individual NVMe namespace on a device and
 	// mirrors C.struct_ns_t.
 	NvmeNamespace struct {
-		ID   uint32
-		Size uint64
+		ID   uint32 `json:"id"`
+		Size uint64 `json:"size"`
 	}
 
 	// SmdDevice contains DAOS storage device information, including
@@ -150,24 +129,22 @@ type (
 		Rank       system.Rank `json:"rank"`
 		TotalBytes uint64      `json:"total_bytes"`
 		AvailBytes uint64      `json:"avail_bytes"`
-		TrAddr     string      `json:"trAddr"`
-		// TODO: included only for compatibility with storage_query smd
-		//       commands and should be removed when possible
-		Health *NvmeHealth `json:"health"`
+		Health     *NvmeHealth `json:"health"`
+		TrAddr     string      `json:"tr_addr"`
 	}
 
 	// NvmeController represents a NVMe device controller which includes health
 	// and namespace information and mirrors C.struct_ns_t.
 	NvmeController struct {
-		Info        string
-		Model       string
-		Serial      string `hash:"ignore"`
-		PciAddr     string
-		FwRev       string
-		SocketID    int32
-		HealthStats *NvmeHealth
-		Namespaces  []*NvmeNamespace
-		SmdDevices  []*SmdDevice
+		Info        string           `json:"info"`
+		Model       string           `json:"model"`
+		Serial      string           `hash:"ignore" json:"serial"`
+		PciAddr     string           `json:"pci_addr"`
+		FwRev       string           `json:"fw_rev"`
+		SocketID    int32            `json:"socket_id"`
+		HealthStats *NvmeHealth      `json:"health_stats"`
+		Namespaces  []*NvmeNamespace `hash:"set" json:"namespaces"`
+		SmdDevices  []*SmdDevice     `hash:"set" json:"smd_devices"`
 	}
 
 	// NvmeControllers is a type alias for []*NvmeController.
@@ -307,37 +284,7 @@ func (nch *NvmeHealth) TempC() float32 {
 
 // TempF returns controller temperature in degrees Fahrenheit.
 func (nch *NvmeHealth) TempF() float32 {
-	return nch.TempC()*(9/5) + 32
-}
-
-// genAltKey verifies non-null model and serial identifiers exist and return the
-// concatenated identifier (new key) and error if either is empty.
-func genAltKey(model, serial string) (string, error) {
-	var empty string
-	m := strings.TrimSpace(model)
-	s := strings.TrimSpace(serial)
-
-	if m == "" {
-		empty = "model"
-	} else if s == "" {
-		empty = "serial"
-	}
-	if empty != "" {
-		return "", errors.Errorf("missing %s identifier", empty)
-	}
-
-	return m + s, nil
-}
-
-// GenAltKey generates an alternative key identifier for an NVMe Controller
-// from its returned health statistics.
-func (nch *NvmeHealth) GenAltKey() (string, error) {
-	return genAltKey(nch.Model, nch.Serial)
-}
-
-// GenAltKey generates an alternative key identifier for an NVMe Controller.
-func (nc *NvmeController) GenAltKey() (string, error) {
-	return genAltKey(nc.Model, nc.Serial)
+	return (nch.TempC() * (9.0 / 5.0)) + 32.0
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.

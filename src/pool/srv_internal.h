@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_pool: Pool Server Internal Declarations
@@ -28,8 +11,18 @@
 #define __POOL_SRV_INTERNAL_H__
 
 #include <gurt/list.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_security.h>
+#include <gurt/telemetry_common.h>
+
+/**
+ * Global pool metrics
+ */
+struct pool_metrics {
+	struct d_tm_node_t	*open_hdl_gauge;
+};
+
+extern struct pool_metrics ds_global_pool_metrics;
 
 /**
  * DSM server thread local storage structure
@@ -66,6 +59,7 @@ struct pool_iv_prop {
 	uint64_t	pip_space_rb;
 	uint64_t	pip_self_heal;
 	uint64_t	pip_reclaim;
+	uint64_t	pip_ec_cell_sz;
 	struct daos_acl	*pip_acl;
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;
@@ -136,8 +130,8 @@ void ds_pool_attr_get_handler(crt_rpc_t *rpc);
 void ds_pool_attr_set_handler(crt_rpc_t *rpc);
 void ds_pool_attr_del_handler(crt_rpc_t *rpc);
 void ds_pool_list_cont_handler(crt_rpc_t *rpc);
-int ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank);
 void ds_pool_query_info_handler(crt_rpc_t *rpc);
+void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
 
 /*
  * srv_target.c
@@ -152,7 +146,6 @@ int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_pool_tgt_query_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
-void ds_pool_child_purge(struct pool_tls *tls);
 void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
 int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
@@ -160,9 +153,6 @@ int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
 /*
  * srv_util.c
  */
-int ds_pool_map_tgts_update(struct pool_map *map,
-			    struct pool_target_id_list *tgts, int opc,
-			    bool evict_rank);
 int ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 				  d_rank_list_t *failed, d_rank_list_t *alt);
 extern struct bio_reaction_ops nvme_reaction_ops;
@@ -173,7 +163,6 @@ extern struct bio_reaction_ops nvme_reaction_ops;
 uint32_t pool_iv_map_ent_size(int nr);
 int ds_pool_iv_init(void);
 int ds_pool_iv_fini(void);
-int pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv);
 void ds_pool_map_refresh_ult(void *arg);
 
 int ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
@@ -183,14 +172,24 @@ int ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 			      uuid_t cont_hdl_uuid);
 
 int ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool);
-int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool, uuid_t key_uuid,
-			      d_iov_t *conn_iov);
+int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool);
 int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
 
+int ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool,
+				     uuid_t *srv_cont_hdl,
+				     uuid_t *srv_pool_hdl);
 /*
  * srv_pool_scrub.c
  */
 int ds_start_scrubbing_ult(struct ds_pool_child *child);
 void ds_stop_scrubbing_ult(struct ds_pool_child *child);
+
+/*
+ * srv_metrics.c
+ */
+int ds_pool_metrics_init(void);
+int ds_pool_metrics_fini(void);
+void ds_pool_metrics_start(const uuid_t pool_uuid);
+void ds_pool_metrics_stop(const uuid_t pool_uuid);
 
 #endif /* __POOL_SRV_INTERNAL_H__ */

@@ -1,27 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import traceback
 
@@ -36,7 +19,7 @@ class SameKeyDifferentValue(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(SameKeyDifferentValue, self).setUp()
+        super().setUp()
         self.prepare_pool()
 
         try:
@@ -48,8 +31,8 @@ class SameKeyDifferentValue(TestWithServers):
             self.container.open()
 
         except DaosApiError as excpn:
-            print(excpn)
-            print(traceback.format_exc())
+            self.log.info(excpn)
+            self.log.info(traceback.format_exc())
             self.fail("Test failed during setup.\n")
 
     def test_single_to_array_value(self):
@@ -69,18 +52,19 @@ class SameKeyDifferentValue(TestWithServers):
                Trigger aggregation
                Insert same akey,dkey under same object with array value
                Result: should either pass or return -1001 ERR
-        :avocado: tags=object,samekeydifferentvalue,singletoarray,vm,small
+        :avocado: tags=all,daily_regression,object,samekeydifferentvalue
+        :avocado: tags=singletoarray,vm,small
         """
 
         # define akey,dkey, single value data and array value data
-        single_value_data = "a string that I want to stuff into an object"
+        single_value_data = b"a string that I want to stuff into an object"
         array_value_data = []
-        array_value_data.append("data string one")
-        array_value_data.append("data string two")
-        array_value_data.append("data string tre")
+        array_value_data.append(b"data string one")
+        array_value_data.append(b"data string two")
+        array_value_data.append(b"data string tre")
 
-        dkey = "this is the dkey"
-        akey = "this is the akey"
+        dkey = b"this is the dkey"
+        akey = b"this is the akey"
 
         aggregation = False
 
@@ -95,8 +79,8 @@ class SameKeyDifferentValue(TestWithServers):
                 read_back_data = self.container.read_an_obj(
                     len(single_value_data)+1, dkey, akey, obj)
                 if single_value_data != read_back_data.value:
-                    print("data I wrote:" + single_value_data)
-                    print("data I read back" + read_back_data.value)
+                    self.log.info("wrote data: %s", single_value_data)
+                    self.log.info("read data:  %s", read_back_data.value)
                     self.fail("Write data, read it back, didn't match\n")
 
                 # test case 1
@@ -115,7 +99,7 @@ class SameKeyDifferentValue(TestWithServers):
                     # should fail with -1001 ERR
                     except DaosApiError as excp:
                         if "-1001" not in str(excp):
-                            print(excp)
+                            self.log.info(excp)
                             self.fail("Should have failed with -1001 error"
                                       + " message, but it did not\n")
 
@@ -140,7 +124,7 @@ class SameKeyDifferentValue(TestWithServers):
                     # or fail with -1001 ERR
                     except DaosApiError as excp:
                         if "-1001" not in str(excp):
-                            print(excp)
+                            self.log.info(excp)
                             self.fail("Should have failed with -1001 error"
                                       + " message or the write should have"
                                       + " been successful, but it did not\n")
@@ -173,18 +157,19 @@ class SameKeyDifferentValue(TestWithServers):
                Trigger aggregation
                Insert same akey,dkey under same object with single value
                Result: should either pass or return -1001 ERR
-        :avocado: tags=object,samekeydifferentvalue,arraytosingle,vm,small
+        :avocado: tags=all,daily_regression,object,samekeydifferentvalue
+        :avocado: tags=arraytosingle,vm,small
         """
 
         # define akey,dkey, single value data and array value data
-        single_value_data = "a string that I want to stuff into an object"
+        single_value_data = b"a string that I want to stuff into an object"
         array_value_data = []
-        array_value_data.append("data string one")
-        array_value_data.append("data string two")
-        array_value_data.append("data string tre")
+        array_value_data.append(b"data string one")
+        array_value_data.append(b"data string two")
+        array_value_data.append(b"data string tre")
 
-        dkey = "this is the dkey"
-        akey = "this is the akey"
+        dkey = b"this is the dkey"
+        akey = b"this is the akey"
 
         aggregation = False
 
@@ -202,8 +187,8 @@ class SameKeyDifferentValue(TestWithServers):
                 for j in range(3):
                     if (array_value_data[j][0:length-1] !=
                             read_back_data[j][0:length-1]):
-                        print("Written Data: {}".format(array_value_data[j]))
-                        print("Read Data: {}".format(read_back_data[j]))
+                        self.log.info("Written Data: %s", array_value_data[j])
+                        self.log.info("Read Data:    %s", read_back_data[j])
                         self.fail("Data mismatch\n")
                 # test case 1
                 if i == 0:
@@ -220,7 +205,7 @@ class SameKeyDifferentValue(TestWithServers):
                     # should fail with -1001 ERR
                     except DaosApiError as excp:
                         if "-1001" not in str(excp):
-                            print(excp)
+                            self.log.info(excp)
                             self.fail("Should have failed with -1001 error"
                                       + " message, but it did not\n")
 
@@ -244,7 +229,7 @@ class SameKeyDifferentValue(TestWithServers):
                     # or fail with -1001 ERR
                     except DaosApiError as excp:
                         if "-1001" not in str(excp):
-                            print(excp)
+                            self.log.info(excp)
                             self.fail("Should have failed with -1001 error"
                                       + " message or the write should have"
                                       + " been successful, but it did not\n")

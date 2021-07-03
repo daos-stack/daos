@@ -3,10 +3,17 @@
 DAOS uses a flexible security model that separates authentication from
 authorization. It is designed to have a minimal impact on the I/O path.
 
-There are two areas of DAOS that require access control. At the user level,
-clients must be able to read and modify only _pools_ and _containers_ to which 
-they have been granted access. At the system and administrative levels, only
-authorized components must be able to access the DAOS management network.
+DAOS does not provide any transport security for the fabric network used for I/O
+transfers. When deploying DAOS, the administrator is responsible for secure
+configuration of their specific fabric network. For RDMA over Ethernet, enabling
+IPsec is recommended. See the
+[RDMA protocol spec (RFC 5040)](https://tools.ietf.org/html/rfc5040#section-8.2)
+for more information.
+
+There are two areas where DAOS implements its own layer of security. At the user
+level, clients must be able to read and modify only _pools_ and _containers_ to
+which they have been granted access. At the system and administrative levels,
+only authorized components must be able to access the DAOS management network.
 
 ## Authentication
 
@@ -15,21 +22,32 @@ accessing client resources or the DAOS management network.
 
 ### Client Library
 
-The client library `libdaos` is an untrusted component. The `daos` user-level 
-command that uses the client library is also an untrusted component. 
+The client library `libdaos` is an untrusted component. The `daos` user-level
+command that uses the client library is also an untrusted component.
 A trusted process, the DAOS agent (`daos_agent`),
 runs on each client node and authenticates the user processes.
 
 The DAOS security model is designed to support different authentication methods
-for client processes. Currently, we support AUTH_SYS authentication only.
+for client processes. Currently, we support only the AUTH_SYS authentication
+flavor, as defined for NFS in
+[RFC 2623](https://datatracker.ietf.org/doc/html/rfc2623#section-2.2.1).
 
 ### DAOS Management Network
 
-Each trusted DAOS component (`daos_server`, `daos_agent`, 
-and the `dmg` administrative tool) is
-authenticated by means of a certificate generated for that component. These
-components identify one another over the DAOS management network via
-mutually-authenticated TLS.
+The DAOS management components communicate over the network using the
+[gRPC protocol](https://grpc.io/).
+
+Each trusted DAOS component (`daos_server`, `daos_agent`, and the `dmg`
+administrative tool) is authenticated by means of a certificate generated for
+that component by the system administrator. All of the component certificates
+must be generated with the same root certificate and distributed to the
+appropriate DAOS nodes, as described in the
+[DAOS Administration Guide](https://daos-stack.github.io/admin/deployment/#certificate-configuration).
+
+DAOS components identify one another over the DAOS management network via
+gRPC over mutually-authenticated TLS using their respective component
+certificates. DAOS verifies the certificate chain, as well as the Common Name
+(CN) in the certificate, to authenticate the component's identity.
 
 ## Authorization
 
@@ -53,17 +71,20 @@ and adapted for the unique needs of a distributed system.
 
 The client may request read-only or read-write access to the resource. If the
 resource ACL doesn't grant them the requested access level, they won't
-be able to connect. While connected, their handle to that resource grants 
+be able to connect. While connected, their handle to that resource grants
 permissions for specific actions.
 
 The permissions of a handle last for the duration of its existence, similar to
 an open file descriptor in a POSIX system. A handle cannot currently be revoked.
 
+A DAOS ACL is composed of zero or more Access Control Entries (ACEs). The ACEs
+are the [rules](https://daos-stack.github.io/overview/security/#enforcement)
+used to grant or deny privileges to a user who requests access to a resource.
 
 #### Access Control Entries
 
-In the input and output of DAOS tools, an Access Control Entry (ACE) is defined 
-using a colon-separated string with the following format: 
+In the input and output of DAOS tools, an Access Control Entry (ACE) is defined
+using a colon-separated string with the following format:
 `TYPE:FLAGS:PRINCIPAL:PERMISSIONS`
 
 The contents of all the fields are case-sensitive.
@@ -96,7 +117,7 @@ also have the `G` (group) flag.
 ##### Permissions
 
 The permissions in a resource's ACE permit a certain type of user access to
-the resource. The order of the permission "bits" (characters) within the 
+the resource. The order of the permission "bits" (characters) within the
 `PERMISSIONS` field of the ACE is not significant.
 
 | Permission	| Pool Meaning		| Container Meaning				|
@@ -136,7 +157,7 @@ It is _not_ possible to deny access to a specific group in this way, due to
 * `A::daos_user@:rw`
     * Allow the UNIX user named `daos_user` to have read-write access.
 * `A:G:project_users@:tc`
-    * Allow anyone in the UNIX group `project_users` to access a pool's 
+    * Allow anyone in the UNIX group `project_users` to access a pool's
       contents and create containers.
 * `A::OWNER@:rwdtTaAo`
     * Allow the UNIX user who owns the container to have full control.

@@ -1,10 +1,12 @@
 package io.daos.dfs;
 
-public class DaosFsClientTestBase {
+import io.daos.DaosTestBase;
+import org.junit.Assert;
+import org.junit.Test;
 
-  public static final String DEFAULT_POOL_ID = "07f519b1-f06a-4411-b0f5-638cc39d3825";
-  //  public static final String DEFAULT_CONT_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
-  public static final String DEFAULT_CONT_ID = "9c9de970-2b43-43ec-ad2c-6a3fc33bd389";
+import java.lang.reflect.Field;
+
+public class DaosFsClientTestBase {
 
   public static DaosFsClient prepareFs(String poolId, String contId) throws Exception {
     DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
@@ -37,12 +39,26 @@ public class DaosFsClientTestBase {
     return null;
   }
 
+  @Test
+  public void testClone() throws Exception {
+    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
+    builder.poolId("xyz").containerId("abc").defaultFileChunkSize(1000);
+    DaosFsClient.DaosFsClientBuilder cloned = builder.clone();
+    Assert.assertEquals("xyz", cloned.getPoolId());
+    Assert.assertEquals("abc", cloned.getContId());
+
+    Field field = DaosFsClient.DaosFsClientBuilder.class.getDeclaredField("defaultFileChunkSize");
+    field.setAccessible(true);
+    Assert.assertEquals(1000, (int) field.get(cloned));
+  }
+
   public static void main(String args[]) throws Exception {
     DaosFsClient client = null;
     try {
-      client = prepareFs(DEFAULT_POOL_ID, DEFAULT_CONT_ID);
+      client = prepareFs(System.getProperty("pool_id", DaosTestBase.DEFAULT_POOL_ID),
+          System.getProperty("cont_id", DaosTestBase.DEFAULT_CONT_ID));
     } finally {
-      client.disconnect();
+      client.close();
     }
     if (client != null) {
       System.out.println("quitting");

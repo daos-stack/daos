@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_pool: Pool IV cache
@@ -76,6 +59,7 @@ pool_iv_value_alloc_internal(struct ds_iv_key *key, d_sg_list_t *sgl)
 		D_GOTO(free, rc = -DER_NOMEM);
 
 	sgl->sg_iovs[0].iov_buf_len = buf_size;
+	sgl->sg_iovs[0].iov_len = buf_size;
 	if (key->class_id == IV_POOL_CONN) {
 		struct pool_iv_conns *conns = sgl->sg_iovs[0].iov_buf;
 
@@ -88,6 +72,26 @@ free:
 		d_sgl_fini(sgl, true);
 
 	return rc;
+}
+
+static inline size_t
+pool_iv_conn_size(size_t cred_size)
+{
+	return sizeof(struct pool_iv_conn) + cred_size;
+}
+
+static inline struct pool_iv_conn*
+pool_iv_conn_next(struct pool_iv_conn *conn)
+{
+	return (struct pool_iv_conn *)((char *)conn +
+		pool_iv_conn_size(conn->pic_cred_size));
+}
+
+static inline size_t
+pool_iv_conn_ent_size(size_t cred_size)
+{
+	return sizeof(struct pool_iv_entry) +
+	       pool_iv_conn_size(cred_size);
 }
 
 /* FIXME: Need better handling here, for example retry if the size is not
@@ -131,6 +135,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			iv_prop->pip_reclaim = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_EC_CELL_SZ:
+			iv_prop->pip_ec_cell_sz = prop_entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_ACL:
 			acl = prop_entry->dpe_val_ptr;
@@ -192,29 +199,25 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 				 DAOS_PROP_LABEL_MAX_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_label,
 				  DAOS_PROP_LABEL_MAX_LEN);
-			if (prop_entry->dpe_str)
-				label_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			label_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_PO_OWNER:
 			D_ASSERT(strlen(iv_prop->pip_owner) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner,
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str)
-				owner_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			owner_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_PO_OWNER_GROUP:
 			D_ASSERT(strlen(iv_prop->pip_owner_grp) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner_grp,
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str)
-				owner_grp_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
@@ -225,6 +228,9 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			prop_entry->dpe_val = iv_prop->pip_reclaim;
+			break;
+		case DAOS_PROP_PO_EC_CELL_SZ:
+			prop_entry->dpe_val = iv_prop->pip_ec_cell_sz;
 			break;
 		case DAOS_PROP_PO_ACL:
 			iv_prop->pip_acl =
@@ -264,36 +270,13 @@ out:
 	if (rc) {
 		if (acl_alloc)
 			daos_acl_free(acl_alloc);
-		if (label_alloc)
-			D_FREE(label_alloc);
-		if (owner_alloc)
-			D_FREE(owner_alloc);
-		if (owner_grp_alloc)
-			D_FREE(owner_grp_alloc);
+		D_FREE(label_alloc);
+		D_FREE(owner_alloc);
+		D_FREE(owner_grp_alloc);
 		if (svc_list)
 			d_rank_list_free(dst_list);
 	}
 	return rc;
-}
-
-static inline size_t
-pool_iv_conn_size(size_t cred_size)
-{
-	return sizeof(struct pool_iv_conn) + cred_size;
-}
-
-static inline struct pool_iv_conn*
-pool_iv_conn_next(struct pool_iv_conn *conn)
-{
-	return (struct pool_iv_conn *)((char *)conn +
-		pool_iv_conn_size(conn->pic_cred_size));
-}
-
-static inline size_t
-pool_iv_conn_ent_size(size_t cred_size)
-{
-	return sizeof(struct pool_iv_entry) +
-	       pool_iv_conn_size(cred_size);
 }
 
 static bool
@@ -364,25 +347,137 @@ pool_iv_conn_insert(struct pool_iv_conns *conns, struct pool_iv_conn *new_conn)
 	end = (char *)conns->pic_conns + conns->pic_size;
 	memcpy(end, new_conn, new_conn_size);
 	conns->pic_size += new_conn_size;
+	D_DEBUG(DB_MD, "insert conn %u/%u\n", conns->pic_size,
+		conns->pic_buf_size);
 	return 0;
 }
 
 static int
-pool_iv_conns_resize(d_sg_list_t *sgl, unsigned int new_size)
+pool_iv_conns_buf_insert(struct pool_iv_conns *dst_conns,
+			 struct pool_iv_conns *src_conns)
 {
-	struct pool_iv_entry *iv_ent = sgl->sg_iovs[0].iov_buf;
-	struct pool_iv_conns *old_conns = &iv_ent->piv_conn_hdls;
+	struct pool_iv_conn	*conn;
+	char			*end;
+	int			rc = 0;
+
+	/* Insert all connections from src_conns to dst_sgl */
+	conn = src_conns->pic_conns;
+	end = (char *)conn + src_conns->pic_size;
+	while (pool_iv_conn_valid(conn, end)) {
+		rc = pool_iv_conn_insert(dst_conns, conn);
+		if (rc)
+			break;
+
+		D_DEBUG(DB_MD, "insert conn "DF_UUID": %d\n",
+			DP_UUID(conn->pic_hdl), rc);
+		conn = pool_iv_conn_next(conn);
+	}
+
+	return rc;
+}
+
+static int
+pool_iv_conns_ent_fetch(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
+{
+	struct pool_iv_conns	*src_conns;
+	struct pool_iv_entry	*dst_entry;
+	struct pool_iv_conns	*dst_conns;
+	uint32_t		dst_conns_size;
+	int			rc = 0;
+
+	src_conns = &src_iv->piv_conn_hdls;
+	if (src_conns->pic_size == 0)
+		return 0;
+
+	if (src_conns->pic_size == (uint32_t)(-1)) {
+		struct pool_iv_entry *dst_iv;
+
+		dst_iv = dst_sgl->sg_iovs[0].iov_buf;
+		memcpy(&dst_iv->piv_conn_hdls, &src_iv->piv_conn_hdls,
+		       sizeof(struct pool_iv_conns));
+		return -DER_IVCB_FORWARD;
+	}
+
+	dst_entry = dst_sgl->sg_iovs[0].iov_buf;
+	dst_conns = &dst_entry->piv_conn_hdls;
+	dst_conns_size = dst_conns->pic_size + src_conns->pic_size;
+	if (dst_conns_size > dst_conns->pic_buf_size) {
+		D_DEBUG(DB_MD, "dst_conns_size %d > pic_buf_size %u\n",
+			dst_conns_size, dst_conns->pic_buf_size);
+		dst_conns->pic_size = (uint32_t)(-1);
+		dst_conns->pic_buf_size = dst_conns_size;
+		return 0;
+	}
+
+	rc = pool_iv_conns_buf_insert(dst_conns, src_conns);
+
+	return rc;
+}
+
+static int
+pool_iv_conns_resize(d_sg_list_t *sgl, unsigned int old_size,
+		     unsigned int new_size)
+{
+	struct pool_iv_entry *old_ent = sgl->sg_iovs[0].iov_buf;
+	struct pool_iv_entry *new_ent;
 	struct pool_iv_conns *new_conns;
 
-	D_REALLOC(new_conns, old_conns, new_size);
-	if (new_conns == NULL)
+	D_REALLOC(new_ent, old_ent, old_size, new_size);
+	if (new_ent == NULL)
 		return -DER_NOMEM;
 
-	D_ASSERT(new_size >= sizeof(*new_conns));
+	new_conns = &new_ent->piv_conn_hdls;
 	new_conns->pic_buf_size = new_size - sizeof(*new_conns);
-	sgl->sg_iovs[0].iov_buf = new_conns;
+	D_DEBUG(DB_MD, "reset iv conns to %u/%u\n", new_conns->pic_size,
+		new_conns->pic_buf_size);
+	sgl->sg_iovs[0].iov_buf = new_ent;
 	sgl->sg_iovs[0].iov_buf_len = new_size;
 	return 0;
+}
+
+static int
+pool_iv_conns_ent_update(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
+{
+	struct pool_iv_conns	*src_conns;
+	struct pool_iv_entry	*dst_entry;
+	struct pool_iv_conns	*dst_conns;
+	uint32_t		dst_conns_size;
+	int			rc = 0;
+
+	src_conns = &src_iv->piv_conn_hdls;
+	if (src_conns->pic_size == 0)
+		return 0;
+
+	if (src_conns->pic_size == (uint32_t)(-1)) {
+		struct pool_iv_entry *dst_iv;
+
+		D_DEBUG(DB_MD, "Update -1 entry dst_sgl %p\n", dst_sgl);
+		dst_iv = dst_sgl->sg_iovs[0].iov_buf;
+		memcpy(&dst_iv->piv_conn_hdls, &src_iv->piv_conn_hdls,
+		       sizeof(struct pool_iv_conns));
+		return 0;
+	}
+
+	dst_entry = dst_sgl->sg_iovs[0].iov_buf;
+	dst_conns = &dst_entry->piv_conn_hdls;
+	dst_conns_size = dst_conns->pic_size + src_conns->pic_size;
+	if (dst_conns_size > dst_conns->pic_buf_size) {
+		unsigned int old_size;
+		unsigned int new_size;
+
+		new_size = sizeof(*dst_conns) + dst_conns_size;
+		old_size = sizeof(*dst_conns) + dst_conns->pic_buf_size;
+		rc = pool_iv_conns_resize(dst_sgl, old_size, new_size);
+		if (rc)
+			return rc;
+
+		dst_entry = dst_sgl->sg_iovs[0].iov_buf;
+		dst_conns = &dst_entry->piv_conn_hdls;
+	}
+
+	rc = pool_iv_conns_buf_insert(dst_conns, src_conns);
+
+	return rc;
 }
 
 static int
@@ -420,121 +515,170 @@ pool_iv_ent_destroy(d_sg_list_t *sgl)
 }
 
 static int
-pool_iv_ent_copy(struct ds_iv_key *key, d_sg_list_t *dst, d_sg_list_t *src)
+pool_iv_map_ent_fetch(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 {
-	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
-	struct pool_iv_entry	*dst_iv = dst->sg_iovs[0].iov_buf;
-	int			rc = 0;
+	struct pool_iv_entry	*dst_iv;
+	uint32_t		pb_nr;
+	uint32_t		src_pbuf_size;
+	uint32_t		dst_pbuf_size;
 
-	if (dst_iv == src_iv)
-		return 0;
-
-	D_ASSERT(src_iv != NULL);
-	D_ASSERT(dst_iv != NULL);
-
-	if (key->class_id == IV_POOL_MAP) {
-		if (src_iv->piv_map.piv_pool_buf.pb_nr > 0) {
-			int src_len = pool_buf_size(
-				src_iv->piv_map.piv_pool_buf.pb_nr);
-			int dst_len = dst->sg_iovs[0].iov_buf_len -
-				      sizeof(struct pool_iv_map) +
-				      sizeof(struct pool_buf);
-
-			/* copy pool buf */
-			if (dst_len < src_len) {
-				D_ERROR("dst %d src %d\n", dst_len, src_len);
-				return -DER_REC2BIG;
-			}
-
-			memcpy(&dst_iv->piv_map.piv_pool_buf,
-			       &src_iv->piv_map.piv_pool_buf, src_len);
-		}
-		dst->sg_iovs[0].iov_len = src->sg_iovs[0].iov_len;
-	} else if (key->class_id == IV_POOL_PROP) {
-		daos_prop_t	*prop_fetch;
-
-		prop_fetch = daos_prop_alloc(DAOS_PROP_PO_NUM);
-		if (prop_fetch == NULL)
-			return -DER_NOMEM;
-
-		rc = pool_iv_prop_g2l(&src_iv->piv_prop, prop_fetch);
-		if (rc) {
-			daos_prop_free(prop_fetch);
-			D_ERROR("prop g2l failed: rc %d\n", rc);
-			return rc;
-		}
-
-		pool_iv_prop_l2g(prop_fetch, &dst_iv->piv_prop);
-		daos_prop_free(prop_fetch);
-	} else if (key->class_id == IV_POOL_CONN) {
-		struct pool_iv_conns	*src_conns = &src_iv->piv_conn_hdls;
-		struct pool_iv_conns	*dst_conns = &dst_iv->piv_conn_hdls;
-		struct pool_iv_key	*pik = key2priv(key);
-		struct pool_iv_conn	*conn;
-
-		if (src_conns->pic_size == 0)
-			return 0;
-
-		/* only copy iv conn indicated by the uuid, otherwise copy
-		 * all iv conn.
-		 */
-		if (!uuid_is_null(pik->pik_uuid)) {
-			conn = pool_iv_conn_lookup(src_conns, pik->pik_uuid);
-			if (conn == NULL) {
-				D_ERROR("can not find uuid "DF_UUID"\n",
-					DP_UUID(pik->pik_uuid));
-				return -DER_NONEXIST;
-			}
-
-			rc = pool_iv_conn_insert(dst_conns, conn);
-			if (rc) {
-				if (rc == -DER_REC2BIG)
-					pik->pik_entry_size =
-						sizeof(*src_conns) +
-						src_conns->pic_size +
-						dst_conns->pic_size;
-				D_GOTO(out, rc);
-			}
-		} else {
-			char *end;
-
-			conn = src_conns->pic_conns;
-			end = (char *)conn + src_conns->pic_size;
-			while (pool_iv_conn_valid(conn, end)) {
-				rc = pool_iv_conn_insert(dst_conns, conn);
-				if (rc) {
-					if (rc == -DER_REC2BIG)
-						pik->pik_entry_size =
-							sizeof(*src_conns) +
-							src_conns->pic_size +
-							dst_conns->pic_size;
-					D_GOTO(out, rc);
-				}
-				conn = pool_iv_conn_next(conn);
-			}
-		}
-	} else if (key->class_id == IV_POOL_HDL) {
-		uuid_copy(dst_iv->piv_hdl.pih_pool_hdl,
-			  src_iv->piv_hdl.pih_pool_hdl);
-		uuid_copy(dst_iv->piv_hdl.pih_cont_hdl,
-			  src_iv->piv_hdl.pih_cont_hdl);
-		D_DEBUG(DB_MD, "pool/cont "DF_UUID"/"DF_UUID"\n",
-			DP_UUID(dst_iv->piv_hdl.pih_pool_hdl),
-			DP_UUID(dst_iv->piv_hdl.pih_cont_hdl));
-	} else {
-		D_ERROR("bad class id %d\n", key->class_id);
-		return -DER_INVAL;
+	dst_iv = dst_sgl->sg_iovs[0].iov_buf;
+	if (src_iv->piv_map.piv_pool_buf.pb_target_nr == (uint32_t)(-1)) {
+		memcpy(&dst_iv->piv_map.piv_pool_buf,
+		       &src_iv->piv_map.piv_pool_buf,
+		       sizeof(src_iv->piv_map.piv_pool_buf));
+		return -DER_IVCB_FORWARD;
 	}
 
-out:
+	pb_nr = src_iv->piv_map.piv_pool_buf.pb_nr;
+	D_ASSERT(pb_nr > 0);
+	src_pbuf_size = pool_buf_size(pb_nr);
+	dst_pbuf_size = dst_sgl->sg_iovs[0].iov_buf_len -
+		  sizeof(struct pool_iv_map) + sizeof(struct pool_buf);
+
+	if (src_pbuf_size <= dst_pbuf_size) {
+		memcpy(&dst_iv->piv_map.piv_pool_buf,
+		       &src_iv->piv_map.piv_pool_buf, src_pbuf_size);
+		dst_sgl->sg_iovs[0].iov_len = pool_iv_map_ent_size(pb_nr);
+		return 0;
+	}
+
+	dst_iv->piv_map.piv_pool_buf.pb_target_nr = (uint32_t)(-1);
+	dst_iv->piv_map.piv_pool_buf.pb_nr =
+				src_iv->piv_map.piv_pool_buf.pb_nr;
+	D_DEBUG(DB_MD, "retry pool buf nr %u\n",
+		src_iv->piv_map.piv_pool_buf.pb_nr);
+
+	return 0;
+}
+
+/* update the pool IV map entry */
+static int
+pool_iv_map_ent_update(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
+{
+	struct pool_iv_entry	*dst_iv;
+	uint32_t		pb_nr = src_iv->piv_map.piv_pool_buf.pb_nr;
+	uint32_t		src_pbuf_size;
+	uint32_t		dst_pbuf_size;
+
+	dst_iv = dst_sgl->sg_iovs[0].iov_buf;
+	if (src_iv->piv_map.piv_pool_buf.pb_target_nr == (uint32_t)(-1)) {
+		/* During fetch aggregation, update/refresh callback might
+		 * be called to store these -1 entry.
+		 **/
+		memcpy(&dst_iv->piv_map.piv_pool_buf,
+		       &src_iv->piv_map.piv_pool_buf,
+		       sizeof(src_iv->piv_map.piv_pool_buf));
+		return 0;
+	}
+
+	pb_nr = src_iv->piv_map.piv_pool_buf.pb_nr;
+	src_pbuf_size = pool_buf_size(pb_nr);
+	dst_pbuf_size = dst_sgl->sg_iovs[0].iov_buf_len -
+			sizeof(struct pool_iv_map) + sizeof(struct pool_buf);
+	if (src_pbuf_size > dst_pbuf_size) {
+		void *new_buf;
+		uint32_t new_size;
+
+		new_size = pool_iv_map_ent_size(pb_nr);
+		D_REALLOC_NZ(new_buf, dst_sgl->sg_iovs[0].iov_buf, new_size);
+		if (new_buf == NULL)
+			return -DER_NOMEM;
+
+		dst_sgl->sg_iovs[0].iov_buf = new_buf;
+		dst_sgl->sg_iovs[0].iov_buf_len = new_size;
+		dst_iv = new_buf;
+	}
+
+	memcpy(&dst_iv->piv_map.piv_pool_buf,
+	       &src_iv->piv_map.piv_pool_buf, src_pbuf_size);
+
+	return 0;
+}
+
+static int
+pool_iv_prop_ent_copy(struct pool_iv_entry *dst_iv,
+		      struct pool_iv_entry *src_iv)
+{
+	daos_prop_t	*prop_fetch;
+	int		rc = 0;
+
+	prop_fetch = daos_prop_alloc(DAOS_PROP_PO_NUM);
+	if (prop_fetch == NULL)
+		return -DER_NOMEM;
+
+	rc = pool_iv_prop_g2l(&src_iv->piv_prop, prop_fetch);
+	if (rc) {
+		daos_prop_free(prop_fetch);
+		D_ERROR("prop g2l failed: rc %d\n", rc);
+		return rc;
+	}
+
+	pool_iv_prop_l2g(prop_fetch, &dst_iv->piv_prop);
+	daos_prop_free(prop_fetch);
+
+	return rc;
+}
+
+static void
+pool_iv_srv_hdl_ent_copy(struct pool_iv_entry *dst_iv,
+			 struct pool_iv_entry *src_iv)
+{
+	uuid_copy(dst_iv->piv_hdl.pih_pool_hdl,
+		  src_iv->piv_hdl.pih_pool_hdl);
+	uuid_copy(dst_iv->piv_hdl.pih_cont_hdl,
+		  src_iv->piv_hdl.pih_cont_hdl);
+	D_DEBUG(DB_MD, "pool/cont "DF_UUID"/"DF_UUID"\n",
+		DP_UUID(dst_iv->piv_hdl.pih_pool_hdl),
+		DP_UUID(dst_iv->piv_hdl.pih_cont_hdl));
+}
+
+static int
+pool_iv_ent_copy(struct ds_iv_key *key, d_sg_list_t *dst_sgl,
+		 struct pool_iv_entry *src_iv, bool update)
+{
+	struct pool_iv_entry	*dst_iv = dst_sgl->sg_iovs[0].iov_buf;
+	int			rc = 0;
+
+	D_ASSERT(dst_iv != src_iv);
+	switch (key->class_id) {
+	case IV_POOL_MAP:
+		if (update)
+			rc = pool_iv_map_ent_update(dst_sgl, src_iv);
+		else
+			rc = pool_iv_map_ent_fetch(dst_sgl, src_iv);
+		break;
+	case IV_POOL_PROP:
+		rc = pool_iv_prop_ent_copy(dst_iv, src_iv);
+		break;
+	case IV_POOL_HDL:
+		pool_iv_srv_hdl_ent_copy(dst_iv, src_iv);
+		break;
+	case IV_POOL_CONN:
+		if (update)
+			rc = pool_iv_conns_ent_update(dst_sgl, src_iv);
+		else
+			rc = pool_iv_conns_ent_fetch(dst_sgl, src_iv);
+		break;
+	default:
+		D_ERROR("bad class id %d\n", key->class_id);
+		rc = -DER_INVAL;
+	}
+
+	D_DEBUG(DB_MD, "%u update: %d\n", key->class_id, rc);
 	return rc;
 }
 
 static int
 pool_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
-		  d_sg_list_t *dst, d_sg_list_t *src, void **priv)
+		  d_sg_list_t *dst_sgl, void **priv)
 {
-	return pool_iv_ent_copy(key, dst, src);
+	struct pool_iv_entry	*iv_entry = entry->iv_value.sg_iovs[0].iov_buf;
+	int			rc;
+
+	rc = pool_iv_ent_copy(key, dst_sgl, iv_entry, false);
+
+	return rc;
 }
 
 static int
@@ -544,12 +688,13 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
 	struct ds_pool		*pool;
 	d_rank_t		rank;
-	bool			retried = false;
 	int			rc;
 
 	pool = ds_pool_lookup(entry->ns->iv_pool_uuid);
-	if (pool == NULL)
-		return -DER_NONEXIST;
+	if (pool == NULL) {
+		D_WARN("No pool "DF_UUID"\n", DP_UUID(entry->ns->iv_pool_uuid));
+		D_GOTO(out_put, rc = 0);
+	}
 
 	rc = crt_group_rank(pool->sp_group, &rank);
 	if (rc)
@@ -594,23 +739,10 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			D_GOTO(out_put, rc);
 	}
 
-retry:
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src);
-	if (rc == -DER_REC2BIG && key->class_id == IV_POOL_CONN && !retried) {
-		struct pool_iv_key *pik = key2priv(key);
-
-		rc = pool_iv_conns_resize(&entry->iv_value,
-					  pik->pik_entry_size);
-		if (rc == 0) {
-			D_DEBUG(DB_MD, DF_UUID" retry by %u\n",
-				DP_UUID(entry->ns->iv_pool_uuid),
-				pik->pik_entry_size);
-			retried = true;
-			goto retry;
-		}
-	}
-
+	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
 out_put:
+	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
+		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
 	ds_pool_put(pool);
 	return rc;
 }
@@ -628,7 +760,7 @@ ds_pool_iv_refresh_hdl(struct ds_pool *pool, struct pool_iv_hdl *pih)
 	}
 
 	rc = ds_cont_tgt_open(pool->sp_uuid, pih->pih_cont_hdl, NULL, 0,
-			      ds_sec_get_rebuild_cont_capabilities());
+			      ds_sec_get_rebuild_cont_capabilities(), 0);
 	if (rc == 0) {
 		uuid_copy(pool->sp_srv_cont_hdl, pih->pih_cont_hdl);
 		uuid_copy(pool->sp_srv_pool_hdl, pih->pih_pool_hdl);
@@ -673,81 +805,52 @@ static int
 pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		    d_sg_list_t *src, int ref_rc, void **priv)
 {
-	d_iov_t			*dst_iov = &entry->iv_value.sg_iovs[0];
 	struct pool_iv_entry	*src_iv;
-	struct ds_pool		*pool;
-	bool			retried = false;
-	int			rc;
+	struct ds_pool		*pool = 0;
+	int			rc = 0;
 
-	/* Update pool map version or pool map */
-	if (src == NULL) {
-		rc = pool_iv_ent_invalid(entry, key);
-		return rc;
-	}
-
-	if (dst_iov->iov_buf_len < src->sg_iovs[0].iov_len) {
-		char *buf;
-
-		D_DEBUG(DB_MD, DF_UUID" reallocate class %d %zd-->%zd\n",
-			DP_UUID(entry->ns->iv_pool_uuid),
-			entry->iv_class->iv_class_id, dst_iov->iov_buf_len,
-			src->sg_iovs[0].iov_len);
-		D_REALLOC(buf, dst_iov->iov_buf, src->sg_iovs[0].iov_len);
-		if (buf == NULL)
-			return -DER_NOMEM;
-		dst_iov->iov_buf = buf;
-		dst_iov->iov_buf_len = src->sg_iovs[0].iov_len;
-		if (key->class_id == IV_POOL_CONN) {
-			struct pool_iv_conns *conns = dst_iov->iov_buf;
-
-			D_ASSERT(dst_iov->iov_buf_len > sizeof(*conns));
-			conns->pic_buf_size = dst_iov->iov_buf_len -
-					      sizeof(*conns);
-			conns->pic_size = 0;
-		}
-
-	}
-
-retry:
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src);
-	if (rc == -DER_REC2BIG && key->class_id == IV_POOL_CONN && !retried) {
-		struct pool_iv_key *pik = key2priv(key);
-
-		rc = pool_iv_conns_resize(&entry->iv_value,
-					  pik->pik_entry_size);
-		if (rc == 0) {
-			retried = true;
-			goto retry;
-		}
-	}
-
-	if (rc)
-		return rc;
-
-	src_iv = src->sg_iovs[0].iov_buf;
-	D_ASSERTF(src_iv != NULL, "%d\n", entry->iv_class->iv_class_id);
-	/* Update pool map version or pool map */
 	pool = ds_pool_lookup(entry->ns->iv_pool_uuid);
 	if (pool == NULL) {
 		D_WARN("No pool "DF_UUID"\n", DP_UUID(entry->ns->iv_pool_uuid));
-		return 0;
+		D_GOTO(out_put, rc = 0);
 	}
 
+	if (src == NULL) {
+		rc = pool_iv_ent_invalid(entry, key);
+		D_GOTO(out_put, rc);
+	}
+
+	src_iv = src->sg_iovs[0].iov_buf;
 	if (entry->iv_class->iv_class_id == IV_POOL_PROP) {
 		rc = ds_pool_tgt_prop_update(pool, &src_iv->piv_prop);
 	} else if (entry->iv_class->iv_class_id == IV_POOL_CONN) {
 		struct pool_iv_conn *conn;
 		char *end;
 
+		if (src_iv->piv_conn_hdls.pic_size == (unsigned int)(-1) &&
+		    entry->ns->iv_master_rank == dss_self_rank()) {
+			D_DEBUG(DB_MD, "skip -1 update on master %u\n",
+				entry->ns->iv_master_rank);
+			D_GOTO(out_put, rc);
+		}
+
 		conn = src_iv->piv_conn_hdls.pic_conns;
 		end = (char *)conn + src_iv->piv_conn_hdls.pic_size;
 		while (pool_iv_conn_valid(conn, end)) {
 			rc = ds_pool_tgt_connect(pool, conn);
 			if (rc)
-				D_GOTO(out_put, rc);
+				break;
 			conn = pool_iv_conn_next(conn);
 		}
 	} else if (entry->iv_class->iv_class_id == IV_POOL_MAP) {
+		if (src_iv->piv_map.piv_pool_buf.pb_target_nr ==
+					(unsigned int)(-1) &&
+		    entry->ns->iv_master_rank == dss_self_rank()) {
+			D_DEBUG(DB_MD, "skip -1 update on master %u\n",
+				entry->ns->iv_master_rank);
+			D_GOTO(out_put, rc);
+		}
+
 		rc = ds_pool_tgt_map_update(pool,
 				src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
 				&src_iv->piv_map.piv_pool_buf : NULL,
@@ -755,16 +858,26 @@ retry:
 	} else if (entry->iv_class->iv_class_id == IV_POOL_HDL) {
 		rc = ds_pool_iv_refresh_hdl(pool, &src_iv->piv_hdl);
 	}
+	if (rc)
+		D_GOTO(out_put, rc);
 
+	/* Update IV cache */
+	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+	if (rc)
+		D_GOTO(out_put, rc);
 out_put:
-	ds_pool_put(pool);
+	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
+		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
+	if (pool)
+		ds_pool_put(pool);
 	return rc;
 }
 
 static int
-pool_iv_value_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
+pool_iv_value_alloc(struct ds_iv_entry *entry,
+		    struct ds_iv_key *key, d_sg_list_t *sgl)
 {
-	return pool_iv_value_alloc_internal(&entry->iv_key, sgl);
+	return pool_iv_value_alloc_internal(key, sgl);
 }
 
 static int
@@ -816,36 +929,45 @@ struct ds_iv_class_ops pool_iv_ops = {
 	.ivc_pre_sync		= pool_iv_pre_sync
 };
 
-int
-pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv)
+static int
+pool_iv_map_fetch(void *ns)
 {
 	d_sg_list_t		sgl = { 0 };
 	d_iov_t			iov = { 0 };
 	uint32_t		pool_iv_len = 0;
 	struct ds_iv_key	key;
+	struct pool_iv_entry	iv_entry = { 0 };
 	struct pool_iv_key	*pool_key;
+	int			pb_nr = 128; /* Init tgt nr */
 	int			rc;
 
-	/* pool_iv == NULL, it means only refreshing local IV cache entry,
-	 * i.e. no need fetch the IV value for the caller.
+	/* sizeof(iv_result) < pool_iv_len, so it will only fetch
+	 * the pool map and cache it locally, instead of copying
+	 * out from ds_iv_fetch. see ds_iv_done().
 	 */
-	if (pool_iv != NULL) {
-		pool_iv_len = pool_buf_size(
-				pool_iv->piv_map.piv_pool_buf.pb_nr);
-		d_iov_set(&iov, pool_iv, pool_iv_len);
-		sgl.sg_nr = 1;
-		sgl.sg_nr_out = 0;
-		sgl.sg_iovs = &iov;
-	}
+	d_iov_set(&iov, &iv_entry, sizeof(iv_entry));
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_POOL_MAP;
 	pool_key = (struct pool_iv_key *)key.key_buf;
+retry:
+	pool_iv_len = pool_buf_size(pb_nr);
 	pool_key->pik_entry_size = pool_iv_len;
-	rc = ds_iv_fetch(ns, &key, pool_iv == NULL ? NULL : &sgl,
-			 false /* retry */);
-	if (rc)
+	rc = ds_iv_fetch(ns, &key, &sgl, false /* retry */);
+	if (rc) {
 		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	if (iv_entry.piv_map.piv_pool_buf.pb_target_nr == (unsigned int)(-1)) {
+		D_ASSERT(iv_entry.piv_map.piv_pool_buf.pb_nr > pb_nr);
+		pb_nr = iv_entry.piv_map.piv_pool_buf.pb_nr;
+		D_DEBUG(DB_MD, "retry by %u\n", pb_nr);
+		goto retry;
+	}
 
 	return rc;
 }
@@ -887,34 +1009,39 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		      uint32_t map_ver)
 {
 	struct pool_iv_entry	*iv_entry;
-	uint32_t		 size;
+	uint32_t		 iv_entry_size;
+	uint32_t		 nr;
 	int			 rc;
 
 	D_DEBUG(DB_MD, DF_UUID": map_ver=%u\n", DP_UUID(pool->sp_uuid),
 		map_ver);
 
-	size = pool_iv_map_ent_size(buf->pb_nr);
-	D_ALLOC(iv_entry, size);
+	nr = buf != NULL ? buf->pb_nr : 0;
+	iv_entry_size = pool_iv_map_ent_size(nr);
+	D_ALLOC(iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		return -DER_NOMEM;
 
 	crt_group_rank(pool->sp_group, &iv_entry->piv_map.piv_master_rank);
-	iv_entry->piv_map.piv_pool_map_ver = pool->sp_map_version;
-	memcpy(&iv_entry->piv_map.piv_pool_buf, buf, pool_buf_size(buf->pb_nr));
+	iv_entry->piv_map.piv_pool_map_ver =
+		buf == NULL ? 0 : pool->sp_map_version;
+	if (buf != NULL)
+		memcpy(&iv_entry->piv_map.piv_pool_buf, buf,
+		       pool_buf_size(buf->pb_nr));
 
 	/* FIXME: Let's update the pool map synchronously for the moment,
 	 * since there is no easy way to free the iv_entry buffer. Needs
 	 * to revisit here once pool/cart_group/IV is upgraded.
 	 */
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_MAP, pool->sp_uuid,
-			    iv_entry, size, CRT_IV_SHORTCUT_NONE,
+			    iv_entry, iv_entry_size, CRT_IV_SHORTCUT_NONE,
 			    CRT_IV_SYNC_EAGER, false);
 	if (rc != 0)
 		D_DEBUG(DB_MD, DF_UUID": map_ver=%u: %d\n",
 			DP_UUID(pool->sp_uuid), map_ver, rc);
 
-	D_DEBUG(DB_MD, DF_UUID": map_ver=%u: %d\n",
-		DP_UUID(pool->sp_uuid), map_ver, rc);
+	D_DEBUG(DB_MD, DF_UUID": map_ver=%u: %d\n", DP_UUID(pool->sp_uuid),
+		map_ver, rc);
 
 	D_FREE(iv_entry);
 	return rc;
@@ -926,12 +1053,12 @@ ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 			   d_iov_t *cred)
 {
 	struct pool_iv_entry	*iv_entry;
+	daos_size_t		iv_entry_size;
 	struct pool_iv_conn	*pic;
-	size_t			size;
 	int			rc;
 
-	size = pool_iv_conn_ent_size(cred->iov_len);
-	D_ALLOC(iv_entry, size);
+	iv_entry_size = pool_iv_conn_ent_size(cred->iov_len);
+	D_ALLOC(iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		return -DER_NOMEM;
 
@@ -945,54 +1072,52 @@ ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 	memcpy(&pic->pic_creds[0], cred->iov_buf, cred->iov_len);
 
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_CONN, hdl_uuid,
-			    iv_entry, size, CRT_IV_SHORTCUT_NONE,
+			    iv_entry, iv_entry_size, CRT_IV_SHORTCUT_NONE,
 			    CRT_IV_SYNC_EAGER, false);
 	D_DEBUG(DB_MD, DF_UUID" distribute hdl "DF_UUID" capas "DF_U64" %d\n",
 		DP_UUID(pool->sp_uuid), DP_UUID(hdl_uuid), sec_capas, rc);
+
 	D_FREE(iv_entry);
 	return rc;
 }
 
-/* If uuid is NULL, it means to get all pool connect handles for the pool */
+/* Get all pool connect handles for the pool */
 int
-ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool, uuid_t key_uuid,
-			  d_iov_t *conn_iov)
+ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool)
 {
 	d_sg_list_t		sgl = { 0 };
-	struct ds_iv_key	key;
+	d_iov_t			iov = { 0 };
+	struct pool_iv_entry	iv_entry = { 0 };
 	struct pool_iv_key	*pool_key;
+	struct ds_iv_key	key = { 0 };
+	uint32_t		entry_size;
 	int			rc;
 
-	if (conn_iov == NULL)
-		return -DER_INVAL;
-
+	d_iov_set(&iov, &iv_entry, sizeof(iv_entry));
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = conn_iov;
-	if (conn_iov != NULL && conn_iov->iov_buf) {
-		struct pool_iv_conns *conns;
+	sgl.sg_iovs = &iov;
 
-		conns = conn_iov->iov_buf;
-		conns->pic_size = 0;
-		conns->pic_buf_size = conn_iov->iov_buf_len -
-				      sizeof(*conns);
-	}
-	memset(&key, 0, sizeof(key));
 	key.class_id = IV_POOL_CONN;
 	pool_key = key2priv(&key);
-	pool_key->pik_entry_size = conn_iov->iov_len;
-	if (key_uuid)
-		uuid_copy(pool_key->pik_uuid, key_uuid);
+	entry_size = sizeof(iv_entry);
 
+retry:
+	pool_key->pik_entry_size = entry_size;
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
-		if (rc == -DER_REC2BIG)
-			conn_iov->iov_len = pool_key->pik_entry_size;
 		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+		return rc;
 	}
-out:
-	return rc;
+
+	if (iv_entry.piv_conn_hdls.pic_size == (uint32_t)(-1)) {
+		D_ASSERT(iv_entry.piv_conn_hdls.pic_buf_size > entry_size);
+		entry_size = iv_entry.piv_conn_hdls.pic_buf_size;
+		D_DEBUG(DB_MD, "retry by %u\n", entry_size);
+		goto retry;
+	}
+
+	return 0;
 }
 
 int
@@ -1075,7 +1200,7 @@ ds_pool_map_refresh_ult(void *arg)
 	if (rc)
 		goto unlock;
 
-	rc = pool_iv_map_fetch(pool->sp_iv_ns, NULL);
+	rc = pool_iv_map_fetch(pool->sp_iv_ns);
 
 unlock:
 	ABT_mutex_unlock(pool->sp_mutex);
@@ -1084,7 +1209,7 @@ out:
 		ds_pool_put(pool);
 	if (iv_arg->iua_eventual)
 		ABT_eventual_set(iv_arg->iua_eventual, (void *)&rc, sizeof(rc));
-	D_FREE_PTR(iv_arg);
+	D_FREE(iv_arg);
 }
 
 int
@@ -1106,8 +1231,8 @@ int
 ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 			  uuid_t cont_hdl_uuid)
 {
-	struct pool_iv_entry	iv_entry;
-	int			 rc;
+	struct pool_iv_entry	iv_entry = { 0 };
+	int			rc;
 
 	/* Only happens on xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
@@ -1118,7 +1243,8 @@ ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_HDL, pool_hdl_uuid,
 			    &iv_entry, sizeof(struct pool_iv_entry),
 			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_LAZY, true);
-	if (rc)
+
+	if (rc != 0)
 		D_ERROR("pool_iv_update failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
@@ -1128,14 +1254,14 @@ int
 ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 			 uuid_t *cont_hdl_uuid)
 {
-	struct pool_iv_entry	iv_entry;
+	struct pool_iv_entry	iv_entry = { 0 };
 	d_sg_list_t		sgl = { 0 };
 	d_iov_t			iov = { 0 };
 	struct ds_iv_key	 key;
 	struct pool_iv_key	*pool_key;
 	int			 rc;
 
-	d_iov_set(&iov, &iv_entry, sizeof(struct pool_iv_entry));
+	d_iov_set(&iov, &iv_entry, sizeof(iv_entry));
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
@@ -1146,7 +1272,9 @@ ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 	pool_key->pik_entry_size = sizeof(struct pool_iv_entry);
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
-		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN,
+			 DB_ANY, DLOG_ERR,
+			 "iv fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1158,13 +1286,70 @@ out:
 	return rc;
 }
 
+struct srv_hdl_ult_arg {
+	struct ds_pool	*pool;
+	ABT_eventual	eventual;
+};
+
+static void
+pool_iv_srv_hdl_fetch_ult(void *data)
+{
+	struct srv_hdl_ult_arg *arg = data;
+	int rc;
+
+	rc = ds_pool_iv_srv_hdl_fetch(arg->pool, NULL, NULL);
+
+	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+}
+
+int
+ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool, uuid_t *srv_cont_hdl,
+				 uuid_t *srv_pool_hdl)
+{
+	struct srv_hdl_ult_arg	arg;
+	ABT_eventual		eventual;
+	int			*status;
+	int			rc;
+
+	/* Fetch the capability from the leader. To avoid extra locks,
+	 * all metadatas are maintained by xstream 0, so let's create
+	 * an ULT on xstream 0 to let xstream 0 to handle capa fetch
+	 * and update.
+	 */
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	arg.pool = pool;
+	arg.eventual = eventual;
+	rc = dss_ult_create(pool_iv_srv_hdl_fetch_ult, &arg, DSS_XS_SYS,
+			    0, 0, NULL);
+	if (rc)
+		D_GOTO(out_eventual, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	if (*status != 0)
+		D_GOTO(out_eventual, rc = *status);
+
+	if (srv_cont_hdl)
+		uuid_copy(*srv_cont_hdl, pool->sp_srv_cont_hdl);
+	if (srv_pool_hdl)
+		uuid_copy(*srv_pool_hdl, pool->sp_srv_pool_hdl);
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+	return rc;
+}
+
 int
 ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 {
-	struct pool_iv_entry	*iv_entry;
+	struct pool_iv_entry	*iv_entry = NULL;
+	uint32_t		 iv_entry_size;
 	struct daos_prop_entry	*prop_entry;
 	d_rank_list_t		*svc_list;
-	uint32_t		 size;
 	int			 rc;
 
 	/* Only happens on xstream 0 */
@@ -1177,19 +1362,79 @@ ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 
 	svc_list = prop_entry->dpe_val_ptr;
 
-	size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN, svc_list->rl_nr);
-	D_ALLOC(iv_entry, size);
+	iv_entry_size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN,
+					      svc_list->rl_nr);
+	D_ALLOC(iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	pool_iv_prop_l2g(prop, &iv_entry->piv_prop);
 
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_PROP, pool->sp_uuid,
-			    iv_entry, size, CRT_IV_SHORTCUT_NONE,
+			    iv_entry, iv_entry_size, CRT_IV_SHORTCUT_NONE,
 			    CRT_IV_SYNC_LAZY, true);
-	if (rc)
+	if (rc != 0)
 		D_ERROR("pool_iv_update failed "DF_RC"\n", DP_RC(rc));
+
+	D_FREE(iv_entry);
 out:
+	return rc;
+}
+
+/* parameter for fetching service rank list */
+struct pool_svc_iv_args {
+	struct ds_pool	*ia_pool;
+	d_rank_list_t	*ia_svc;
+};
+
+static int
+cont_pool_svc_ult(void *args)
+{
+	struct pool_svc_iv_args	*iv_args = args;
+	struct daos_prop_entry	*entry;
+	daos_prop_t		 prop;
+	int			 rc;
+
+	memset(&prop, 0, sizeof(prop));
+	rc = ds_pool_iv_prop_fetch(iv_args->ia_pool, &prop);
+	if (rc)
+		return rc;
+
+	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SVC_LIST);
+	D_ASSERT(entry != NULL);
+
+	rc = d_rank_list_dup(&iv_args->ia_svc, entry->dpe_val_ptr);
+	if (rc)
+		D_GOTO(out, rc);
+out:
+	daos_prop_fini(&prop);
+	return rc;
+}
+
+int
+ds_pool_iv_svc_fetch(struct ds_pool *pool, d_rank_list_t **svc_p)
+{
+	struct pool_svc_iv_args	 ia;
+	int			 rc;
+
+	ia.ia_pool = pool;
+	ia.ia_svc  = NULL;
+
+	if (dss_get_module_info()->dmi_xs_id == 0) {
+		/* OK to fetch it from xstream-0 */
+		rc = cont_pool_svc_ult(&ia);
+		if (rc)
+			D_GOTO(failed, rc);
+	} else {
+		/* create a ULT and schedule it on xstream-0 */
+		rc = dss_ult_execute(cont_pool_svc_ult, &ia, NULL, NULL,
+				     DSS_XS_SYS, 0, 0);
+		if (rc)
+			D_GOTO(failed, rc);
+	}
+	*svc_p = ia.ia_svc;
+	return 0;
+failed:
 	return rc;
 }
 
@@ -1198,27 +1443,23 @@ ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 {
 	daos_prop_t		*prop_fetch = NULL;
 	struct pool_iv_entry	*iv_entry;
+	uint32_t		 iv_entry_size;
 	d_sg_list_t		 sgl = { 0 };
 	d_iov_t			 iov = { 0 };
 	struct ds_iv_key	 key;
 	struct pool_iv_key	*pool_key;
-	uint32_t		 size;
 	int			 rc;
 
 	if (prop == NULL)
 		return -DER_INVAL;
 
-	size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN,
-				     PROP_SVC_LIST_MAX_TMP);
-	D_ALLOC(iv_entry, size);
+	iv_entry_size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN,
+					      PROP_SVC_LIST_MAX_TMP);
+	D_ALLOC(iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	prop_fetch = daos_prop_alloc(DAOS_PROP_PO_NUM);
-	if (prop_fetch == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	d_iov_set(&iov, iv_entry, size);
+	d_iov_set(&iov, iv_entry, iv_entry_size);
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
@@ -1226,12 +1467,16 @@ ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_POOL_PROP;
 	pool_key = (struct pool_iv_key *)key.key_buf;
-	pool_key->pik_entry_size = size;
+	pool_key->pik_entry_size = iv_entry_size;
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
 		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
+	prop_fetch = daos_prop_alloc(DAOS_PROP_PO_NUM);
+	if (prop_fetch == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = pool_iv_prop_g2l(&iv_entry->piv_prop, prop_fetch);
 	if (rc) {
@@ -1247,7 +1492,8 @@ ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 
 out:
 	D_FREE(iv_entry);
-	daos_prop_free(prop_fetch);
+	if (prop_fetch)
+		daos_prop_free(prop_fetch);
 	return rc;
 }
 

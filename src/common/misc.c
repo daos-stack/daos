@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos. It implements some miscellaneous functions which
@@ -174,14 +157,14 @@ daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src)
 		return 0;
 
 	total = dst->sg_nr + src->sg_nr;
-	D_REALLOC_ARRAY(new_iovs, dst->sg_iovs, total);
+	D_REALLOC_ARRAY(new_iovs, dst->sg_iovs, dst->sg_nr, total);
 	if (new_iovs == NULL)
 		return -DER_NOMEM;
 
 	for (i = dst->sg_nr; i < total; i++) {
 		int idx = i - dst->sg_nr;
 
-		D_ALLOC(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
+		D_ALLOC_NZ(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
 		if (new_iovs[i].iov_buf == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
 
@@ -254,7 +237,8 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size)
 	if (sgl->sg_iovs[idx].iov_buf_len >= new_size)
 		return 0;
 
-	D_REALLOC(new_buf, sgl->sg_iovs[idx].iov_buf, new_size);
+	D_REALLOC(new_buf, sgl->sg_iovs[idx].iov_buf,
+		  sgl->sg_iovs[idx].iov_buf_len, new_size);
 	if (new_buf == NULL)
 		return -DER_NOMEM;
 
@@ -391,6 +375,7 @@ daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 	if (src == NULL || src->iov_buf == NULL)
 		return 0;
 	D_ASSERT(src->iov_buf_len > 0);
+	D_ASSERT(dst != NULL);
 
 	D_ALLOC(dst->iov_buf, src->iov_buf_len);
 	if (dst->iov_buf == NULL)
@@ -399,6 +384,24 @@ daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 	memcpy(dst->iov_buf, src->iov_buf, src->iov_len);
 	dst->iov_len = src->iov_len;
 	D_DEBUG(DB_TRACE, "iov_len %d\n", (int)dst->iov_len);
+	return 0;
+}
+
+int
+daos_iov_alloc(d_iov_t *iov, daos_size_t size, bool set_full)
+{
+	D_ASSERT(iov != NULL);
+	D_ASSERT(size > 0);
+
+	memset(iov, 0, sizeof(*iov));
+	D_ALLOC(iov->iov_buf, size);
+	if (iov->iov_buf == NULL)
+		return -DER_NOMEM;
+
+	iov->iov_buf_len = size;
+	if (set_full)
+		iov->iov_len = size;
+
 	return 0;
 }
 
@@ -431,7 +434,9 @@ daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2)
 void
 daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len)
 {
-	D_ASSERT(iov->iov_len + buf_len <= iov->iov_buf_len);
+	D_ASSERTF(iov->iov_len + buf_len <= iov->iov_buf_len,
+		  "iov->iov_len(%lu) + buf_len(%lu) <= iov->iov_buf_len(%lu)",
+		  iov->iov_len, buf_len, iov->iov_buf_len);
 	memcpy(iov->iov_buf + iov->iov_len, buf, buf_len);
 	iov->iov_len += buf_len;
 }
@@ -612,11 +617,14 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	crt_phy_addr_t	addr_env;
 	bool		sep = false;
 
+	/** enable statistics on the server side */
+	daos_crt_init_opt.cio_use_sensors = server;
+
+	/** Scalable EndPoint-related settings */
 	d_getenv_bool("CRT_CTX_SHARE_ADDR", &sep);
 	if (!sep)
-		return NULL;
+		goto out;
 
-	daos_crt_init_opt.cio_crt_timeout = 0;
 	daos_crt_init_opt.cio_sep_override = 1;
 
 	/* for socket provider, force it to use regular EP rather than SEP for:
@@ -628,7 +636,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	    strncmp(addr_env, CRT_SOCKET_PROV, strlen(CRT_SOCKET_PROV)) == 0) {
 		D_INFO("for sockets provider force it to use regular EP.\n");
 		daos_crt_init_opt.cio_use_sep = 0;
-		return &daos_crt_init_opt;
+		goto out;
 	}
 
 	/* for psm2 provider, set a reasonable cio_ctx_max_num for cart */
@@ -643,6 +651,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 		daos_crt_init_opt.cio_ctx_max_num = ctx_nr;
 	}
 
+out:
 	return &daos_crt_init_opt;
 }
 

@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -26,11 +9,12 @@ package server
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
-	"golang.org/x/sys/unix"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -62,7 +46,7 @@ func getFaultDomain(cfg *config.Server) (*system.FaultDomain, error) {
 	}
 
 	if cfg.FaultCb != "" {
-		return getFaultDomainFromCallback(cfg.FaultCb)
+		return getFaultDomainFromCallback(cfg.FaultCb, build.ConfigDir)
 	}
 
 	return getDefaultFaultDomain(os.Hostname)
@@ -70,24 +54,22 @@ func getFaultDomain(cfg *config.Server) (*system.FaultDomain, error) {
 
 func newFaultDomainFromConfig(domainStr string) (*system.FaultDomain, error) {
 	fd, err := system.NewFaultDomainFromString(domainStr)
-	if err != nil {
+	if err != nil || fd.NumLevels() == 0 {
 		return nil, config.FaultConfigFaultDomainInvalid
+	}
+	// TODO DAOS-6353: remove when multiple layers supported
+	if fd.NumLevels() != 1 {
+		return nil, config.FaultConfigTooManyLayersInFaultDomain
 	}
 	return fd, nil
 }
 
-func getFaultDomainFromCallback(callbackPath string) (*system.FaultDomain, error) {
-	if callbackPath == "" {
-		return nil, errors.New("no callback path supplied")
+func getFaultDomainFromCallback(path, requiredDir string) (*system.FaultDomain, error) {
+	if err := checkFaultDomainCallback(path, requiredDir); err != nil {
+		return nil, err
 	}
 
-	// Fault callback can't be an arbitrary command. Must point to a
-	// specific executable file.
-	if err := unix.Stat(callbackPath, nil); os.IsNotExist(err) {
-		return nil, config.FaultConfigFaultCallbackNotFound
-	}
-
-	output, err := exec.Command(callbackPath).Output()
+	output, err := exec.Command(path).Output()
 	if os.IsPermission(err) {
 		return nil, config.FaultConfigFaultCallbackBadPerms
 	} else if err != nil {
@@ -100,4 +82,47 @@ func getFaultDomainFromCallback(callbackPath string) (*system.FaultDomain, error
 	}
 
 	return newFaultDomainFromConfig(trimmedOutput)
+}
+
+func checkFaultDomainCallback(path, requiredDir string) error {
+	if path == "" {
+		return errors.New("no callback path supplied")
+	}
+
+	// Must be under the required directory
+	absDir, err := filepath.Abs(requiredDir)
+	if err != nil {
+		return err
+	}
+	absScriptPath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(absScriptPath, absDir) {
+		return config.FaultConfigFaultCallbackInsecure(absDir)
+	}
+
+	// Fault callback can't be an arbitrary command. Must point to a
+	// specific executable file.
+	fi, err := os.Lstat(path)
+	if err != nil {
+		if os.IsPermission(err) {
+			return config.FaultConfigFaultCallbackBadPerms
+		}
+		return config.FaultConfigFaultCallbackNotFound
+	}
+
+	// Symlinks and setuid scripts are potentially dangerous and shouldn't
+	// be automatically run.
+	mode := fi.Mode()
+	if mode&os.ModeSymlink != 0 || mode&os.ModeSetuid != 0 {
+		return config.FaultConfigFaultCallbackInsecure(absDir)
+	}
+
+	// Script shouldn't be writable by non-owners.
+	if mode.Perm()&0022 != 0 {
+		return config.FaultConfigFaultCallbackInsecure(absDir)
+	}
+
+	return nil
 }

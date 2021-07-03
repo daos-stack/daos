@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rebuild: rebuild internal.h
@@ -34,7 +17,7 @@
 #include <daos/rpc.h>
 #include <daos/btree.h>
 #include <daos/pool_map.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rebuild.h>
 
 /* Track the pool rebuild status on each target, which exists on
@@ -45,7 +28,7 @@
 struct rebuild_tgt_pool_tracker {
 	/** pin the pool during the rebuild */
 	struct ds_pool		*rt_pool;
-	struct dss_sleep_ult	*rt_ult;
+	struct sched_request	*rt_ult;
 
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		rt_rebuild_ver;
@@ -116,7 +99,7 @@ struct rebuild_global_pool_tracker {
 	/* rebuild status */
 	struct daos_rebuild_status	rgt_status;
 
-	struct dss_sleep_ult		*rgt_ult;
+	struct sched_request	*rgt_ult;
 	/* link to rebuild_global.rg_global_tracker_list */
 	d_list_t	rgt_list;
 
@@ -139,6 +122,12 @@ struct rebuild_global_pool_tracker {
 
 	/* stable epoch of the rebuild */
 	uint64_t	rgt_stable_epoch;
+
+	ABT_mutex	rgt_lock;
+	/* The current rebuild is done on the leader */
+	ABT_cond	rgt_done_cond;
+
+	uint32_t	rgt_refcount;
 
 	unsigned int	rgt_abort:1,
 			rgt_notify_stable_epoch:1,
@@ -200,8 +189,9 @@ struct rebuild_task {
 	d_list_t			dst_list;
 	uuid_t				dst_pool_uuid;
 	struct pool_target_id_list	dst_tgts;
-	uint32_t			dst_map_ver;
 	daos_rebuild_opc_t		dst_rebuild_op;
+	uint64_t			dst_schedule_time;
+	uint32_t			dst_map_ver;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
@@ -209,12 +199,10 @@ struct rebuild_task {
  */
 struct rebuild_pool_tls {
 	uuid_t		rebuild_pool_uuid;
-	uuid_t		rebuild_poh_uuid;
-	uuid_t		rebuild_coh_uuid;
-	daos_handle_t	rebuild_pool_hdl;
 	daos_handle_t	rebuild_tree_hdl; /*hold objects being rebuilt */
 	d_list_t	rebuild_pool_list;
 	uint64_t	rebuild_pool_obj_count;
+	uint64_t	rebuild_pool_reclaim_obj_count;
 	unsigned int	rebuild_pool_ver;
 	int		rebuild_pool_status;
 	unsigned int	rebuild_pool_scanning:1,
@@ -259,7 +247,8 @@ struct rebuild_iv {
 	uint32_t	riv_global_done:1,
 			riv_global_scan_done:1,
 			riv_scan_done:1,
-			riv_pull_done:1;
+			riv_pull_done:1,
+			riv_sync:1;
 	int		riv_status;
 };
 
@@ -334,15 +323,24 @@ rebuilt_btr_destroy(daos_handle_t btr_hdl);
 struct rebuild_tgt_pool_tracker *
 rpt_lookup(uuid_t pool_uuid, unsigned int ver);
 
+void
+rgt_get(struct rebuild_global_pool_tracker *rgt);
+
+void
+rgt_put(struct rebuild_global_pool_tracker *rgt);
+
 struct rebuild_global_pool_tracker *
 rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver);
 
-int
-rebuild_status_completed_update(const uuid_t pool_uuid,
-				struct daos_rebuild_status *rs);
 int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *master_rpt,
 			     struct rebuild_iv *iv);
 void
 rebuild_hang(void);
+
+int
+rebuild_notify_ras_start(uuid_t *pool, uint32_t map_ver, char *op_str);
+
+int
+rebuild_notify_ras_end(uuid_t *pool, uint32_t map_ver, char *op_str, int op_rc);
 #endif /* __REBUILD_INTERNAL_H_ */

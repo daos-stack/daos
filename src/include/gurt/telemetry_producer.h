@@ -1,46 +1,32 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __TELEMETRY_PRODUCER_H__
 #define __TELEMETRY_PRODUCER_H__
 
+#include <gurt/telemetry_common.h>
+
 /* Developer facing server API to write data */
-int d_tm_increment_counter(struct d_tm_node_t **metric, char *item, ...);
-int d_tm_record_timestamp(struct d_tm_node_t **metric, char *item, ...);
-int d_tm_take_timer_snapshot(struct d_tm_node_t **metric, int clk_id,
-			     char *item, ...);
-int d_tm_mark_duration_start(struct d_tm_node_t **metric, int clk_id,
-			     char *item, ...);
-int d_tm_mark_duration_end(struct d_tm_node_t **metric, char *item, ...);
-int d_tm_set_gauge(struct d_tm_node_t **metric, uint64_t value,
-		   char *item, ...);
-int d_tm_increment_gauge(struct d_tm_node_t **metric, uint64_t value,
-			 char *item, ...);
-int d_tm_decrement_gauge(struct d_tm_node_t **metric, uint64_t value,
-			 char *item, ...);
+void d_tm_set_counter(struct d_tm_node_t *metric, uint64_t value);
+void d_tm_inc_counter(struct d_tm_node_t *metric, uint64_t value);
+void d_tm_record_timestamp(struct d_tm_node_t *metric);
+void d_tm_take_timer_snapshot(struct d_tm_node_t *metric, int clk_id);
+void d_tm_mark_duration_start(struct d_tm_node_t *metric, int clk_id);
+void d_tm_mark_duration_end(struct d_tm_node_t *metric);
+void d_tm_set_gauge(struct d_tm_node_t *metric, uint64_t value);
+void d_tm_inc_gauge(struct d_tm_node_t *metric, uint64_t value);
+void d_tm_dec_gauge(struct d_tm_node_t *metric, uint64_t value);
 
 /* Other server functions */
-int d_tm_init(int rank, uint64_t mem_size);
-int d_tm_add_metric(struct d_tm_node_t **node, char *metric, int metric_type,
-		    char *sh_desc, char *lng_desc);
+int d_tm_init(int id, uint64_t mem_size, int flags);
+int d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
+			int initial_width, int multiplier);
+int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
+		    char *units, const char *fmt, ...);
+int d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
+			   const char *fmt, ...);
+int d_tm_del_ephemeral_dir(const char *fmt, ...);
 void d_tm_fini(void);
 #endif /* __TELEMETRY_PRODUCER_H__ */

@@ -1,18 +1,30 @@
 # Go language bindings for the SPDK API
 
-This is a Go interface for [SPDK](https://github.com/spdk/spdk) which is also a work in progress.
+Go bindings for the [SPDK](https://github.com/spdk/spdk) native-C library
+to facilitate management of NVMe SSDs from an application written in Go.
 
-To clone the 18.07 SPDK branch:
+The bindings require libspdk-devel (or distro equivalent) package to be
+installed.
+To install please follow steps in the
+[SPDK github instructions](https://github.com/spdk/spdk).
 
-    git clone --single-branch --branch v18.07.x git@github.com:spdk/spdk.git
+These bindings are currently working against SPDK 21.07-pre and DPDK 21.02.0
+which are the versions pinned in the DAOS 2.0 release.
 
-## Current Status
-  * Initial support will be for NVMe driver utilities.
+This is not a general purpose set of SPDK go bindings but provides a set of
+capabilities tailored to the specific needs of DAOS, the NVMe SSD related
+features are as follows:
 
-Using these bindings assumes SPDK shared lib is installed in `${SPDK_REPO}/install/lib/libspdk.so`.
-In order to use some of the SPDK API, please also follow [Hugepages and Device Binding](https://github.com/spdk/spdk#hugepages-and-device-binding).
+* device discovery (SPDK environment initialization and device probing)
+* device firmware update
+* VMD enablement and discovery
+* format (wipe) of device namespaces
 
-### How to build binding requirements
+### How to build these bindings
+
+Using these bindings assumes SPDK shared lib is installed in
+`${SPDK_REPO}/build/lib/libspdk.so`, please also follow
+[Hugepages and Device Binding](https://github.com/spdk/spdk#hugepages-and-device-binding).
 
 Setup environment:
 
@@ -20,12 +32,13 @@ Setup environment:
     export SPDK_LIB=${DAOS_ROOT}/opt/spdk
     export LD_LIBRARY_PATH=${SPDK_LIB}/build/lib:${SPDK_LIB}/include:${GOSPDK}/spdk:${LD_LIBRARY_PATH}
     export CGO_CFLAGS="-I${SPDK_LIB}/include"
-    export CGO_LDFLAGS="-L${SPDK_LIB}/build/lib -lspdk"
+    LIBS="-lspdk_nvme -lnvme_control -lspdk_env_dpdk -lspdk_vmd -lrte_mempool -lrte_mempool_ring -lrte_bus_pci"
+    export CGO_LDFLAGS="-L${SPDK_LIB}/build/lib ${LIBS}"
 
 Build NVMe libs:
 
     cd ${GOSPDK}
-    gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -Werror -g -Wshadow -Wall -Wno-missing-braces -c -fpic -Iinclude src/*.c -lspdk
+    gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -Werror -g -Wshadow -Wall -Wno-missing-braces -c -fpic -Iinclude src/*.c ${libs}
     gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -shared -o libnvme_control.so *.o
 
 Build go spdk bindings:

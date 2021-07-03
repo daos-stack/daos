@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_DTX_H__
@@ -48,11 +31,11 @@ enum dtx_grp_flags {
 };
 
 enum dtx_mbs_flags {
-	/* The targets that are modified by the distributed transaction
-	 * are in the same single redundancy group.
+	/* The targets modified via the DTX belong to replicated object
+	 * within single redundancy group.
 	 */
-	DMF_MODIFY_SRDG			= (1 << 0),
-	/* The MDS contains the leader information, used for distributed
+	DMF_SRDG_REP			= (1 << 0),
+	/* The MBS contains the leader information, used for distributed
 	 * transaction. For stand-alone modification, leader information
 	 * is not stored inside MBS as optimization.
 	 */
@@ -177,7 +160,7 @@ daos_dti_copy(struct dtx_id *des, const struct dtx_id *src)
 }
 
 static inline bool
-daos_is_zero_dti(struct dtx_id *dti)
+daos_is_zero_dti(const struct dtx_id *dti)
 {
 	return dti->dti_hlc == 0;
 }
@@ -196,11 +179,28 @@ enum daos_ops_intent {
 	DAOS_INTENT_PURGE		= 1, /* purge/aggregation */
 	DAOS_INTENT_UPDATE		= 2, /* write/insert */
 	DAOS_INTENT_PUNCH		= 3, /* punch/delete */
-	DAOS_INTENT_REBUILD		= 4, /* for rebuild related scan */
+	DAOS_INTENT_MIGRATION		= 4, /* for migration related scan */
 	DAOS_INTENT_CHECK		= 5, /* check aborted or not */
 	DAOS_INTENT_KILL		= 6, /* delete object/key */
-	DAOS_INTENT_COS			= 7, /* add something into CoS cache. */
-	DAOS_INTENT_IGNORE_NONCOMMITTED	= 8, /* ignore non-committed DTX. */
+	DAOS_INTENT_IGNORE_NONCOMMITTED	= 7, /* ignore non-committed DTX. */
+};
+
+/**
+ * DAOS two-phase commit transaction status.
+ */
+enum dtx_status {
+	/* DTX is pre-allocated, not prepared yet. */
+	DTX_ST_INITED		= 0,
+	/** Local participant has done the modification. */
+	DTX_ST_PREPARED		= 1,
+	/** The DTX has been committed. */
+	DTX_ST_COMMITTED	= 2,
+	/** The DTX is corrupted, some participant RDG(s) may be lost. */
+	DTX_ST_CORRUPTED	= 3,
+	/** The DTX is committable, but not committed, non-persistent status. */
+	DTX_ST_COMMITTABLE	= 4,
+	/** The DTX is aborted. */
+	DTX_ST_ABORTED		= 5,
 };
 
 enum daos_dtx_alb {
@@ -208,9 +208,28 @@ enum daos_dtx_alb {
 	ALB_UNAVAILABLE		= 0,
 	/* available, no (or not care) pending modification */
 	ALB_AVAILABLE_CLEAN	= 1,
-	/* available but with dirty modification or garbage */
+	/* available but with dirty modification */
 	ALB_AVAILABLE_DIRTY	= 2,
+	/* available, aborted or garbage */
+	ALB_AVAILABLE_ABORTED	= 3,
 };
+
+static inline unsigned int
+dtx_alb2state(int alb)
+{
+	switch (alb) {
+	case ALB_UNAVAILABLE:
+	case ALB_AVAILABLE_DIRTY:
+		return DTX_ST_PREPARED;
+	case ALB_AVAILABLE_CLEAN:
+		return DTX_ST_COMMITTED;
+	case ALB_AVAILABLE_ABORTED:
+		return DTX_ST_ABORTED;
+	default:
+		D_ASSERTF(0, "Invalid alb:%d\n", alb);
+		return DTX_ST_PREPARED;
+	}
+}
 
 enum daos_tx_flags {
 	DTF_RETRY_COMMIT	= 1, /* TX commit will be retry. */

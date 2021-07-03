@@ -1,0 +1,21 @@
+# (C) Copyright 2021 Intel Corporation.
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+"""DAOS metrics utility"""
+
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    denv = env.Clone()
+
+    daos_metrics = daos_build.program(denv, 'daos_metrics',
+                                      ['daos_metrics.c'], LIBS=['gurt'])
+
+    denv.Install('$PREFIX/bin', daos_metrics)
+
+if __name__ == "SCons.Script":
+    scons()

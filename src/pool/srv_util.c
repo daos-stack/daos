@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_pool: Pool Server Utilities
@@ -177,7 +160,7 @@ free:
 int
 ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     enum daos_module_id module, crt_opcode_t opcode,
-		     crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
+		     uint32_t version, crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
 		     d_rank_list_t *excluded_list)
 {
 	d_rank_list_t	excluded;
@@ -196,7 +179,7 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	if (excluded_list != NULL)
 		map_ranks_merge(&excluded, excluded_list);
 
-	opc = DAOS_RPC_OPCODE(opcode, module, 1);
+	opc = DAOS_RPC_OPCODE(opcode, module, version);
 	rc = crt_corpc_req_create(ctx, pool->sp_group,
 			  excluded.rl_nr == 0 ? NULL : &excluded,
 			  opc, bulk_hdl/* co_bulk_hdl */, NULL /* priv */,
@@ -205,267 +188,6 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 
 	map_ranks_fini(&excluded);
 	return rc;
-}
-
-/*
- * Updates a single target by the operation given in opc
- * If something changed, *version is incremented
- * Returns 0 on success or if there's nothing to do. -DER_BUSY if the operation
- * is valid but needs to wait for rebuild to finish, -DER_INVAL if the state
- * transition is invalid
- */
-static int
-update_one_tgt(struct pool_map *map, struct pool_target *target,
-	       struct pool_domain *dom, int opc, bool evict_rank,
-	       uint32_t *version) {
-	int rc;
-
-	D_ASSERTF(target->ta_comp.co_status == PO_COMP_ST_UP ||
-		  target->ta_comp.co_status == PO_COMP_ST_NEW ||
-		  target->ta_comp.co_status == PO_COMP_ST_UPIN ||
-		  target->ta_comp.co_status == PO_COMP_ST_DOWN ||
-		  target->ta_comp.co_status == PO_COMP_ST_DRAIN ||
-		  target->ta_comp.co_status == PO_COMP_ST_DOWNOUT,
-		  "%u\n", target->ta_comp.co_status);
-
-	switch (opc) {
-	case POOL_EXCLUDE:
-		switch (target->ta_comp.co_status) {
-		case PO_COMP_ST_DOWN:
-		case PO_COMP_ST_DOWNOUT:
-			/* Nothing to do, already excluded */
-			D_INFO("Skip exclude down target (rank %u idx %u)\n",
-			       target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			break;
-		case PO_COMP_ST_UP:
-		case PO_COMP_ST_UPIN:
-		case PO_COMP_ST_DRAIN:
-			D_DEBUG(DF_DSMS, "change target %u/%u to DOWN %p\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_DOWN;
-			target->ta_comp.co_fseq = ++(*version);
-
-			D_PRINT("Target (rank %u idx %u) is down.\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			break;
-		case PO_COMP_ST_NEW:
-			/*
-			 * TODO: Add some handling for what happens when
-			 * addition fails. Probably need to remove these
-			 * targets from the pool map, rather than setting them
-			 * to a different state
-			 */
-			return -DER_NOSYS;
-		}
-		break;
-
-	case POOL_DRAIN:
-		switch (target->ta_comp.co_status) {
-		case PO_COMP_ST_DOWN:
-		case PO_COMP_ST_DRAIN:
-		case PO_COMP_ST_DOWNOUT:
-			/* Nothing to do, already excluded / draining */
-			D_INFO("Skip drain down target (rank %u idx %u)\n",
-			       target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			break;
-		case PO_COMP_ST_NEW:
-			D_ERROR("Can't drain new target (rank %u idx %u)\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			return -DER_BUSY;
-		case PO_COMP_ST_UP:
-			D_ERROR("Can't drain reint target (rank %u idx %u)\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			return -DER_BUSY;
-		case PO_COMP_ST_UPIN:
-			D_DEBUG(DF_DSMS, "change target %u/%u to DRAIN %p\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_DRAIN;
-			target->ta_comp.co_fseq = ++(*version);
-
-			D_PRINT("Target (rank %u idx %u) is draining.\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			break;
-		}
-		break;
-
-	case POOL_REINT:
-		switch (target->ta_comp.co_status) {
-		case PO_COMP_ST_NEW:
-			/* Nothing to do, already added */
-			D_INFO("Can't reint new target (rank %u idx %u)\n",
-			       target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			return -DER_BUSY;
-		case PO_COMP_ST_UP:
-		case PO_COMP_ST_UPIN:
-			/* Nothing to do, already added */
-			D_INFO("Skip reint up target (rank %u idx %u)\n",
-			       target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			break;
-		case PO_COMP_ST_DOWN:
-		case PO_COMP_ST_DRAIN:
-			D_ERROR("Can't reint rebuilding tgt (rank %u idx %u)\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			return -DER_BUSY;
-		case PO_COMP_ST_DOWNOUT:
-			D_DEBUG(DF_DSMS, "change target %u/%u to UP %p\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_UP;
-			++(*version);
-
-			D_PRINT("Target (rank %u idx %u) start reintegration\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			D_DEBUG(DF_DSMS, "change rank %u to UP\n",
-				dom->do_comp.co_rank);
-			dom->do_comp.co_status = PO_COMP_ST_UP;
-			break;
-		}
-		break;
-
-	case POOL_ADD_IN:
-		switch (target->ta_comp.co_status) {
-		case PO_COMP_ST_UPIN:
-			/* Nothing to do, already UPIN */
-			D_INFO("Skip ADD_IN UPIN target (rank %u idx %u)\n",
-			       target->ta_comp.co_rank,
-			       target->ta_comp.co_index);
-			break;
-		case PO_COMP_ST_DOWN:
-		case PO_COMP_ST_DRAIN:
-		case PO_COMP_ST_DOWNOUT:
-			D_ERROR("Can't ADD_IN non-up target (rank %u idx %u)\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			return -DER_INVAL;
-		case PO_COMP_ST_UP:
-		case PO_COMP_ST_NEW:
-			D_DEBUG(DF_DSMS, "change target %u/%u to UPIN %p\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index, map);
-			/*
-			 * Need to update this target AND all of its parents
-			 * domains from NEW -> UPIN
-			 */
-			rc = pool_map_activate_new_target(map,
-					target->ta_comp.co_id);
-			D_ASSERT(rc != 0); /* This target must be findable */
-			(*version)++;
-			break;
-		}
-		break;
-
-	case POOL_EXCLUDE_OUT:
-		switch (target->ta_comp.co_status) {
-		case PO_COMP_ST_DOWNOUT:
-			/* Nothing to do, already DOWNOUT */
-			D_INFO("Skip EXCLUDEOUT DOWNOUT tgt (rank %u idx %u)\n",
-			       target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			break;
-		case PO_COMP_ST_UP:
-		case PO_COMP_ST_UPIN:
-		case PO_COMP_ST_NEW:
-			D_ERROR("Can't EXCLOUT non-down tgt (rank %u idx %u)\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			return -DER_INVAL;
-		case PO_COMP_ST_DRAIN:
-		case PO_COMP_ST_DOWN:
-			D_DEBUG(DF_DSMS, "change target %u/%u to DOWNOUT %p\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
-			(*version)++;
-			D_PRINT("Target (rank %u idx %u) is excluded.\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-		}
-		break;
-	default:
-		D_ERROR("Invalid pool target operation: %d\n", opc);
-		D_ASSERT(0);
-	}
-
-	return DER_SUCCESS;
-}
-
-/*
- * Update "tgts" in "map". A new map version is generated only if actual
- * changes have been made.
- */
-int
-ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
-			int opc, bool evict_rank)
-{
-	uint32_t	version;
-	int		i;
-	int		rc;
-
-	D_ASSERT(tgts != NULL);
-
-	version = pool_map_get_version(map);
-	for (i = 0; i < tgts->pti_number; i++) {
-		struct pool_target	*target = NULL;
-		struct pool_domain	*dom = NULL;
-
-		rc = pool_map_find_target(map, tgts->pti_ids[i].pti_id,
-					  &target);
-		if (rc <= 0) {
-			D_DEBUG(DF_DSMS, "not find target %u in map %p\n",
-				tgts->pti_ids[i].pti_id, map);
-			continue;
-		}
-
-		dom = pool_map_find_node_by_rank(map, target->ta_comp.co_rank);
-		if (dom == NULL) {
-			D_DEBUG(DF_DSMS, "not find rank %u in map %p\n",
-				target->ta_comp.co_rank, map);
-			continue;
-		}
-
-		rc = update_one_tgt(map, target, dom, opc, evict_rank,
-				    &version);
-		if (rc != 0)
-			return rc;
-
-		if (evict_rank &&
-		    !(dom->do_comp.co_status & (PO_COMP_ST_DOWN |
-						PO_COMP_ST_DOWNOUT)) &&
-		    pool_map_node_status_match(dom, PO_COMP_ST_DOWN |
-					       PO_COMP_ST_DOWNOUT)) {
-			if (opc == POOL_EXCLUDE)
-				dom->do_comp.co_status = PO_COMP_ST_DOWN;
-			else if (opc == POOL_EXCLUDE_OUT)
-				dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
-			else
-				D_ASSERTF(false, "evict rank by %d\n", opc);
-			dom->do_comp.co_fseq = target->ta_comp.co_fseq;
-			D_DEBUG(DF_DSMS, "change rank %u to DOWN\n",
-				dom->do_comp.co_rank);
-			version++;
-		}
-	}
-	/* Set the version only if actual changes have been made. */
-	if (version > pool_map_get_version(map)) {
-		D_DEBUG(DF_DSMS, "generating map %p version %u:\n",
-			map, version);
-		rc = pool_map_set_version(map, version);
-		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	}
-
-	return 0;
 }
 
 #define SWAP_RANKS(ranks, i, j)					\
@@ -539,8 +261,6 @@ ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 	 * in the pool map and not present in the list of replicas.
 	 **/
 	for (i = 0, nreplaced = 0; i < nnodes && nreplaced < nfailed; i++) {
-		if (nodes[i].do_comp.co_rank == 0 /* Skip rank 0 */)
-			continue;
 		if (!map_ranks_include(MAP_RANKS_UP,
 				       nodes[i].do_comp.co_status))
 			continue;
@@ -647,6 +367,7 @@ static int
 check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 		   d_rank_t *pl_rank)
 {
+	struct ds_pool_child	*pool_child;
 	struct ds_pool		*pool;
 	struct pool_target	*target = NULL;
 	d_rank_t		 rank = dss_self_rank();
@@ -654,11 +375,24 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	int			 i, nr, rc = 0;
 
 	/* Get pool map to check the target status */
-	pool = ds_pool_lookup(pool_id);
-	if (pool == NULL) {
+	pool_child = ds_pool_child_lookup(pool_id);
+	if (pool_child == NULL) {
 		D_ERROR(DF_UUID": Pool cache not found\n", DP_UUID(pool_id));
-		return -DER_UNINIT;
+		/*
+		 * The SMD pool info could be inconsistent with global pool
+		 * info when pool creation/destroy partially succeed or fail.
+		 * For example: If a pool destroy happened after a blobstore
+		 * is torndown for faulty SSD, the blob and SMD info for the
+		 * affected pool targets will be left behind.
+		 *
+		 * SSD faulty/reint reaction should tolerate such kind of
+		 * inconsistency, otherwise, state transition for the SSD
+		 * won't be able to moving forward.
+		 */
+		return 0;
 	}
+	pool = pool_child->spc_pool;
+	D_ASSERT(pool != NULL);
 
 	nr_downout = nr_down = nr_upin = nr_up = 0;
 	ABT_rwlock_rdlock(pool->sp_lock);
@@ -700,7 +434,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	}
 
 	ABT_rwlock_unlock(pool->sp_lock);
-	ds_pool_put(pool);
+	ds_pool_child_put(pool_child);
 
 	if (rc)
 		return rc;
@@ -797,9 +531,10 @@ update_targets_ult(void *arg)
 		rc = dsc_pool_tgt_exclude(uta->uta_pool_id, NULL /* grp */,
 					  &svc, &tgt_list);
 	if (rc)
-		D_ERROR(DF_UUID": %s targets failed. %d\n",
+		D_ERROR(DF_UUID": %s targets failed. "DF_RC"\n",
+			DP_UUID(uta->uta_pool_id),
 			uta->uta_reint ? "Reint" : "Exclude",
-			DP_UUID(uta->uta_pool_id), rc);
+			DP_RC(rc));
 
 	free_update_targets_arg(uta);
 }
@@ -823,8 +558,7 @@ update_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	if (uta == NULL)
 		return -DER_NOMEM;
 
-	rc = dss_ult_create(update_targets_ult, uta, DSS_ULT_MISC,
-			    DSS_TGT_SELF, 0, NULL);
+	rc = dss_ult_create(update_targets_ult, uta, DSS_XS_SELF, 0, 0, NULL);
 	if (rc) {
 		D_ERROR(DF_UUID": Failed to start targets updating ULT. %d\n",
 			DP_UUID(pool_id), rc);
@@ -862,8 +596,8 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 			 * to transit BIO BS state to now.
 			 */
 			D_DEBUG(DB_MGMT, DF_UUID": Targets are all in %s\n",
-				reint ? "UP/UPIN" : "DOWN/DOWNOUT",
-				DP_UUID(pool_info->spi_id));
+				DP_UUID(pool_info->spi_id),
+				reint ? "UP/UPIN" : "DOWN/DOWNOUT");
 			break;
 		case 1:
 			/*
@@ -871,8 +605,8 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 			 * need to send exclude/reint RPC.
 			 */
 			D_DEBUG(DB_MGMT, DF_UUID": Trigger targets %s.\n",
-				reint ? "reint" : "exclude",
-				DP_UUID(pool_info->spi_id));
+				DP_UUID(pool_info->spi_id),
+				reint ? "reint" : "exclude");
 			rc = update_pool_targets(pool_info->spi_id, tgt_ids,
 						 tgt_cnt, reint, pl_rank);
 			if (rc == 0)
@@ -888,7 +622,7 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 		}
 
 		d_list_del(&pool_info->spi_link);
-		smd_free_pool_info(pool_info);
+		smd_pool_free_info(pool_info);
 	}
 
 	D_DEBUG(DB_MGMT, "Faulty reaction done. tgt_cnt:%d, rc:%d\n",
@@ -913,7 +647,7 @@ nvme_bio_error(int media_err_type, int tgt_id)
 {
 	int rc;
 
-	rc = notify_bio_error(media_err_type, tgt_id);
+	rc = ds_notify_bio_error(media_err_type, tgt_id);
 
 	return rc;
 }

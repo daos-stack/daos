@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package txtfmt
@@ -27,6 +10,10 @@ import (
 	"bytes"
 	"fmt"
 	"text/tabwriter"
+)
+
+const (
+	defEntityRowIndent = 2
 )
 
 // EntityFormatter can be used for neatly displaying attributes
@@ -57,9 +44,10 @@ func (f *EntityFormatter) formatHeader() {
 func (f *EntityFormatter) Format(table []TableRow) string {
 	f.formatHeader()
 
+	iw := NewIndentWriter(f.writer, WithPadCount(defEntityRowIndent))
 	for _, row := range table {
 		for key, val := range row {
-			fmt.Fprintf(f.writer, "%s\t%s%s\t\n", key, f.Separator, val)
+			fmt.Fprintf(iw, "%s\t%s%s\t\n", key, f.Separator, val)
 		}
 	}
 
@@ -99,6 +87,6 @@ func GetEntityPadding(table []TableRow) (padding int) {
 // FormatEntity returns a formatted string from the supplied entity title
 // and table of attributes.
 func FormatEntity(title string, attrs []TableRow) string {
-	f := NewEntityFormatter(title, GetEntityPadding(attrs))
+	f := NewEntityFormatter(title, GetEntityPadding(attrs)+defEntityRowIndent)
 	return f.Format(attrs)
 }

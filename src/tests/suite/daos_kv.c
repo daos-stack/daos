@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -65,7 +48,7 @@ list_keys(daos_handle_t oh, int *num_keys)
 		memset(buf, 0, ENUM_DESC_BUF);
 		rc = daos_kv_list(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor,
 				  NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		if (nr == 0)
 			continue;
@@ -96,7 +79,7 @@ simple_put_get(void **state)
 	daos_size_t	buf_size = 1024, size;
 	daos_event_t	ev;
 	const char      *key_fmt = "key%d";
-	char		key[10];
+	char		key[32] = {0};
 	char		*buf;
 	char		*buf_out;
 	int		i, num_keys;
@@ -109,25 +92,25 @@ simple_put_get(void **state)
 	D_ALLOC(buf_out, buf_size);
 	assert_non_null(buf_out);
 
-	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	/** open the object */
 	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_kv_put(oh, DAOS_TX_NONE, 0, NULL, buf_size, buf, NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 	rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key, 0, NULL, NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 	rc = daos_kv_get(oh, DAOS_TX_NONE, 0, NULL, NULL, NULL, NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 	rc = daos_kv_remove(oh, DAOS_TX_NONE, 0, NULL, NULL);
-	assert_int_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	print_message("Inserting %d Keys\n", NUM_KEYS);
 	/** Insert Keys */
@@ -140,7 +123,7 @@ simple_put_get(void **state)
 			bool ev_flag;
 
 			rc = daos_event_test(&ev, DAOS_EQ_WAIT, &ev_flag);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			assert_int_equal(ev_flag, true);
 			assert_int_equal(ev.ev_error, 0);
 		}
@@ -159,7 +142,7 @@ simple_put_get(void **state)
 			bool ev_flag;
 
 			rc = daos_event_test(&ev, DAOS_EQ_WAIT, &ev_flag);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			assert_int_equal(ev_flag, true);
 			assert_int_equal(ev.ev_error, 0);
 		}
@@ -183,12 +166,12 @@ simple_put_get(void **state)
 		size = DAOS_REC_ANY;
 		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, key, &size, NULL,
 				 arg->async ? &ev : NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		if (arg->async) {
 			bool ev_flag;
 
 			rc = daos_event_test(&ev, DAOS_EQ_WAIT, &ev_flag);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			assert_int_equal(ev_flag, true);
 			assert_int_equal(ev.ev_error, 0);
 		}
@@ -204,15 +187,15 @@ simple_put_get(void **state)
 			bool ev_flag;
 
 			rc = daos_event_test(&ev, DAOS_EQ_WAIT, &ev_flag);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			assert_int_equal(ev_flag, true);
 			rc = ev.ev_error;
 		}
 		if (i != NUM_KEYS - 1) {
-			assert_int_equal(rc, -DER_REC2BIG);
+			assert_rc_equal(rc, -DER_REC2BIG);
 			assert_int_equal(tmp_size, buf_size);
 		} else {
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			assert_int_equal(tmp_size, sizeof(int));
 			assert_int_equal(NUM_KEYS, tmp_buf[0]);
 		}
@@ -220,12 +203,12 @@ simple_put_get(void **state)
 		/** 3rd test: get value with exact buffer*/
 		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, key, &size, buf_out,
 				 arg->async ? &ev : NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		if (arg->async) {
 			bool ev_flag;
 
 			rc = daos_event_test(&ev, DAOS_EQ_WAIT, &ev_flag);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			assert_int_equal(ev_flag, true);
 			assert_int_equal(ev.ev_error, 0);
 		}
@@ -243,7 +226,7 @@ simple_put_get(void **state)
 	for (i = 0; i < 10; i++) {
 		sprintf(key, key_fmt, i);
 		rc = daos_kv_remove(oh, DAOS_TX_NONE, 0, key, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 
 	print_message("Enumerating Keys\n");
@@ -252,17 +235,17 @@ simple_put_get(void **state)
 
 	print_message("Destroying KV\n");
 	rc = daos_kv_destroy(oh, DAOS_TX_NONE, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_kv_close(oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	D_FREE(buf_out);
 	D_FREE(buf);
 
 	if (arg->async) {
 		rc = daos_event_fini(&ev);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 	}
 	print_message("all good\n");
 } /* End simple_put_get */
@@ -277,60 +260,60 @@ kv_cond_ops(void **state)
 	size_t		size;
 	int		rc;
 
-	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
 
 	/** open the object */
 	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	val_out = 5;
 	size = sizeof(int);
 	print_message("Conditional FETCH of non existent Key(should fail)\n");
 	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key2",
 			 &size, &val_out, NULL);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 	assert_int_equal(val_out, 5);
 
 	val = 1;
 	print_message("Conditional UPDATE of non existent Key(should fail)\n");
 	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_UPDATE, "Key1",
 			 sizeof(int), &val, NULL);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	print_message("Conditional INSERT of non existent Key\n");
 	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1",
 			 sizeof(int), &val, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	val = 2;
 	print_message("Conditional INSERT of existing Key (Should fail)\n");
 	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1",
 			 sizeof(int), &val, NULL);
-	assert_int_equal(rc, -DER_EXIST);
+	assert_rc_equal(rc, -DER_EXIST);
 
 	size = sizeof(int);
 	print_message("Conditional FETCH of existing Key\n");
 	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key1",
 			 &size, &val_out, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_int_equal(val_out, 1);
 
 	print_message("Conditional Remove non existing Key (should fail)\n");
 	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key2",
 			    NULL);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	print_message("Conditional Remove existing Key\n");
 	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key1",
 			    NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	print_message("Destroying KV\n");
 	rc = daos_kv_destroy(oh, DAOS_TX_NONE, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_kv_close(oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	print_message("all good\n");
 } /* End simple_put_get */
@@ -356,7 +339,7 @@ run_daos_kv_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DAOS KV API tests", kv_tests,
+	rc = cmocka_run_group_tests_name("DAOS_KV_API", kv_tests,
 					 kv_setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

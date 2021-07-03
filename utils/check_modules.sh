@@ -41,35 +41,36 @@ set -e
 if [ ! -d "utils/sl" ];then
   cd ..
 fi
-# Set PYTHONPATH for source files not installed files
-PYTHONPATH=$PWD/utils:$PWD/src/tests/ftest/util/
-PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/cart/util/
-PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util/apricot/
-PYTHONPATH=$PYTHONPATH:$PWD/src/client/
+
+/bin/rm -f pylint.log
+TOPDIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd)"
+
+PYTHONPATH=$TOPDIR/site_scons/
 export PYTHONPATH
 
-if [ -z "$*" ]; then
-  flist="-c utils/daos_build.py -s SConstruct"
-  # Exclude raft and utils/sl
-  scripts=$(find . -name SConscript | grep -v -e utils/sl -e raft \
-          -e build/external | sort)
-  for file in $scripts; do
-    flist+=" -s $file "
-  done
-  # the functional test code
-  flist+=" $(find src/tests/ftest/ -name \*.py | sort)"
-  flist+=" $(find src/client/pydaos/ -name \*.py | sort)"
-  flist+=" $(find src/client/dfuse/test/ -name \*.py | sort)"
-  flist+=" $(find src/cart/ -name \*.py | sort)"
-  flist+=" $(find utils/ -name \*.py | sort)"
+./utils/sl/check_script.py -s
+
+./utils/sl/check_script.py -w SConstruct
+
+if [ -n "$CHANGE_TARGET" ]; then
+    mapfile -t sfiles < <(git diff --name-only \
+			      origin/"$CHANGE_TARGET"... -- "*/SConscript")
+    mapfile -t pfiles < <(git diff --name-only \
+			      origin/"$CHANGE_TARGET"... -- "*.py")
 else
-  flist=$*
+    mapfile -t sfiles < <(git ls-files -i -x SConscript)
+    mapfile -t pfiles < <(git ls-files "*.py")
 fi
 
-# $flist is a list of switches and arguments; quoting will make it a
-# single argument
-# shellcheck disable=SC2086
-if ! ./utils/sl/check_python.sh $flist; then
-  exit 1
-fi
-exit 0
+./utils/sl/check_script.py -w "${sfiles[@]}"
+
+# Set PYTHONPATH for source files not installed files
+PYTHONPATH=$TOPDIR/utils:$TOPDIR/src/tests/ftest
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/util
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/soak
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/cart/util
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/util/apricot
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/client
+export PYTHONPATH
+
+./utils/sl/check_script.py "${pfiles[@]}"

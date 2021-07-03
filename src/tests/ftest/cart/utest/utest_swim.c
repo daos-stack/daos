@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT testing.
@@ -41,7 +24,11 @@ test_swim(void **state)
 {
 	int rc;
 
-	rc = crt_init_opt("utest_swim", CRT_FLAG_BIT_SERVER, NULL);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
+			    CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	assert_int_equal(rc, 0);
+
+	rc = crt_swim_init(0);
 	assert_int_equal(rc, 0);
 
 	rc = crt_rank_self_set(0);
@@ -59,6 +46,7 @@ test_swim(void **state)
 	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 0);
 	assert_int_equal(rc, -DER_ALREADY);
 
+	crt_swim_fini();
 	rc = crt_finalize();
 	assert_int_equal(rc, 0);
 }

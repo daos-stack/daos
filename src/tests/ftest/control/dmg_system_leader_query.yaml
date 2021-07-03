@@ -1,0 +1,8 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+timeout: 120
+server_config:
+  name: daos_server

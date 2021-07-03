@@ -29,7 +29,7 @@ pool:
     scm_size: 40000000000
     nvme_size: 400000000000 # large nvme_size for mdtest 1M file creation
   createsvc:
-    svcn: 1
+    svcn: 3
   control_method: dmg
 container:
   type: POSIX
@@ -40,9 +40,7 @@ largefilecount:
     - POSIX
   object_class:
     - SX
-# Uncomment when DAOS-5841 is resolved.
-# Ticket for re-enabling this is DAOS-5911
-#    - RP_3GX
+    - RP_3GX
 ior:
   np: 30
   dfs_destroy: False

@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package storage
@@ -84,34 +67,36 @@ func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 	idx := common.GetIndex(varIdx...)
 	return &NvmeNamespace{
 		ID:   uint32(idx),
-		Size: uint64(idx),
+		Size: uint64(humanize.TByte) * uint64(idx+1),
 	}
 }
 
 // MockSmdDevice returns struct with examples values.
-func MockSmdDevice(varIdx ...int32) *SmdDevice {
+func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 	idx := common.GetIndex(varIdx...)
 	startTgt := (idx * 4) + 1
 	return &SmdDevice{
 		UUID:      common.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
 		State:     "NORMAL",
+		TrAddr:    parentTrAddr,
 	}
 }
 
 // MockNvmeController returns struct with examples values.
 func MockNvmeController(varIdx ...int32) *NvmeController {
 	idx := common.GetIndex(varIdx...)
+	pciAddr := concat("0000:80:00", idx, ".")
 
 	return &NvmeController{
 		Model:       concat("model", idx),
 		Serial:      concat("serial", getRandIdx()),
-		PciAddr:     concat("0000:80:00", idx, "."),
+		PciAddr:     pciAddr,
 		FwRev:       concat("fwRev", idx),
-		SocketID:    idx,
+		SocketID:    idx % 2,
 		HealthStats: MockNvmeHealth(idx),
-		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(idx)},
-		SmdDevices:  []*SmdDevice{MockSmdDevice(idx)},
+		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(1)},
+		SmdDevices:  []*SmdDevice{MockSmdDevice(pciAddr, idx)},
 	}
 }
 
@@ -136,7 +121,7 @@ func MockScmModule(varIdx ...int32) *ScmModule {
 		ControllerID:     idx,
 		SocketID:         idx,
 		PhysicalID:       idx,
-		Capacity:         uint64(idx),
+		Capacity:         uint64(humanize.GByte),
 		UID:              fmt.Sprintf("Device%d", idx),
 		PartNumber:       fmt.Sprintf("PartNumber%d", idx),
 		FirmwareRevision: fmt.Sprintf("FWRev%d", idx),
@@ -176,6 +161,6 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 		BlockDevice: fmt.Sprintf("pmem%d", idx),
 		Name:        fmt.Sprintf("namespace%d.0", idx),
 		NumaNode:    uint32(idx),
-		Size:        uint64(idx + 1),
+		Size:        uint64(humanize.TByte) * uint64(idx+1),
 	}
 }

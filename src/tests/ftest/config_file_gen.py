@@ -1,29 +1,13 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import logging
-from argparse import ArgumentParser, RawDescriptionHelpFormatter
+import sys
 
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from util.command_utils_base import CommonConfig, CommandFailure
 from util.agent_utils_params import \
     DaosAgentYamlParameters, DaosAgentTransportCredentials
@@ -113,14 +97,14 @@ def create_config(args, config):
 def main():
     """Launch DAOS functional tests."""
     # Setup logging
-    log = logging.getLogger(__name__)
-    log.setLevel(logging.DEBUG)
+    log_format = "%(asctime)s - %(levelname)-5s - %(funcName)-15s: %(message)s"
     console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(levelname)-5s - %(funcName)-15s: %(message)s")
-    console.setFormatter(formatter)
-    log.addHandler(console)
+    console.setLevel(logging.DEBUG)
+    console.setFormatter(logging.Formatter(log_format))
+    logging.basicConfig(
+        format=log_format, datefmt=r"%Y/%m/%d %I:%M:%S", level=logging.DEBUG,
+        handlers=[console])
+    log = logging.getLogger()
 
     # Parse the command line arguments
     description = [
@@ -130,7 +114,7 @@ def main():
         "",
         "Examples:",
         "\tconfig_file_gen.py -n host-10 -g daos_server -a "
-        "/usr/etc/daos_agent.yml -s /usr/etc/daos_server.yml",
+        "/etc/daos/daos_agent.yml -s /etc/daos/daos_server.yml",
         "",
         "Return codes:",
         "\t0 - all configuration files generated successfully",
@@ -204,7 +188,7 @@ def main():
         if not generate_dmg_config(args):
             status += 1
 
-    exit(status)
+    sys.exit(status)
 
 
 if __name__ == "__main__":

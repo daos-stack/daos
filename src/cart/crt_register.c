@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the RPC register related APIs and
@@ -45,18 +28,19 @@ crt_opc_map_L2_create(struct crt_opc_map_L2 *L2_entry)
 
 /* bits is the number of bits for protocol portion of the opcode */
 int
-crt_opc_map_create(unsigned int bits)
+crt_opc_map_create()
 {
 	struct crt_opc_map	*map;
-	uint32_t		 count;
-	int			 rc = 0, i;
+	uint32_t		count;
+	int			rc;
+	int			i;
+	unsigned int		bits = 8;
 
 	D_ALLOC_PTR(map);
 	if (map == NULL)
 		return -DER_NOMEM;
 
-	map->com_pid = getpid();
-	map->com_bits = bits;
+	D_INIT_LIST_HEAD(&map->com_coq_list);
 
 	count = ~(0xFFFFFFFFUL >> bits << bits) + 1;
 	D_ALLOC_ARRAY(map->com_map, count);
@@ -80,13 +64,7 @@ crt_opc_map_create(unsigned int bits)
 		D_GOTO(out, rc);
 	}
 
-	map->com_lock_init = 1;
 	crt_gdata.cg_opc_map = map;
-
-	rc = crt_internal_rpc_register();
-	if (rc != 0)
-		D_ERROR("crt_internal_rpc_register() failed, " DF_RC "\n",
-			DP_RC(rc));
 
 out:
 	if (rc != 0)
@@ -94,7 +72,7 @@ out:
 	return rc;
 }
 
-void
+static void
 crt_opc_map_L3_destroy(struct crt_opc_map_L3 *L3_entry)
 {
 	if (L3_entry == NULL)
@@ -102,11 +80,10 @@ crt_opc_map_L3_destroy(struct crt_opc_map_L3 *L3_entry)
 
 	L3_entry->L3_num_slots_total = 0;
 	L3_entry->L3_num_slots_used = 0;
-	if (L3_entry->L3_map)
-		D_FREE(L3_entry->L3_map);
+	D_FREE(L3_entry->L3_map);
 }
 
-void
+static void
 crt_opc_map_L2_destroy(struct crt_opc_map_L2 *L2_entry)
 {
 	int	i;
@@ -120,17 +97,15 @@ crt_opc_map_L2_destroy(struct crt_opc_map_L2 *L2_entry)
 	L2_entry->L2_num_slots_total = 0;
 	L2_entry->L2_num_slots_used = 0;
 
-	if (L2_entry->L2_map)
-		D_FREE(L2_entry->L2_map);
+	D_FREE(L2_entry->L2_map);
 }
 
 void
 crt_opc_map_destroy(struct crt_opc_map *map)
 {
-	/* struct crt_opc_info	*info; */
+	struct crt_opc_queried *coq, *next;
 	int			i;
 
-	/* map = crt_gdata.cg_opc_map; */
 	D_ASSERT(map != NULL);
 
 	if (map->com_map == NULL) {
@@ -142,9 +117,11 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 		crt_opc_map_L2_destroy(&map->com_map[i]);
 	D_FREE(map->com_map);
 
+	d_list_for_each_entry_safe(coq, next, &map->com_coq_list, coq_list)
+		D_FREE(coq);
+
 skip:
-	if (map->com_lock_init && map->com_pid == getpid())
-		D_RWLOCK_DESTROY(&map->com_rwlock);
+	D_RWLOCK_DESTROY(&map->com_rwlock);
 
 	crt_gdata.cg_opc_map = NULL;
 	D_FREE(map);
@@ -208,17 +185,17 @@ crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc, int locked)
 
 	if (L1_idx >= map->com_num_slots_total) {
 		D_WARN("base opc %d out of range [0, %d]\n", L1_idx,
-			map->com_num_slots_total);
+		       map->com_num_slots_total);
 		D_GOTO(out, 0);
 	}
 	if (L2_idx >= map->com_map[L1_idx].L2_num_slots_total) {
 		D_WARN("version number %d out of range [0, %d]\n", L2_idx,
-			map->com_map[L1_idx].L2_num_slots_total);
+		       map->com_map[L1_idx].L2_num_slots_total);
 		D_GOTO(out, 0);
 	}
 	if (L3_idx >= map->com_map[L1_idx].L2_map[L2_idx].L3_num_slots_total) {
 		D_WARN("rpc id %d out of range [0, %d]\n", L3_idx,
-			map->com_map[L1_idx].L2_map[L2_idx].L3_num_slots_total);
+		       map->com_map[L1_idx].L2_map[L2_idx].L3_num_slots_total);
 		D_GOTO(out, 0);
 	}
 
@@ -292,10 +269,9 @@ out:
 	return rc;
 }
 
-
 static int
 crt_opc_reg_internal(struct crt_opc_info *opc_info, crt_opcode_t opc,
-		struct crt_proto_rpc_format *prf)
+		     struct crt_proto_rpc_format *prf)
 {
 	struct crt_req_format	*crf = prf->prf_req_fmt;
 	int			 rc = 0;
@@ -320,8 +296,6 @@ reg_opc:
 out:
 	return rc;
 }
-
-
 
 static inline bool
 validate_base_opcode(crt_opcode_t base_opc)
@@ -350,14 +324,10 @@ crt_proto_reg_L3(struct crt_opc_map_L3 *L3_map,
 
 	/* make sure array is big enough, realloc if necessary */
 	if (L3_map->L3_num_slots_total < cpf->cpf_count) {
-
-		D_REALLOC_ARRAY(info_array, L3_map->L3_map, cpf->cpf_count);
+		D_REALLOC_ARRAY(info_array, L3_map->L3_map,
+				L3_map->L3_num_slots_total, cpf->cpf_count);
 		if (info_array == NULL)
 			return -DER_NOMEM;
-		/* set new space to 0 */
-		memset(&info_array[L3_map->L3_num_slots_total], 0,
-		       (cpf->cpf_count - L3_map->L3_num_slots_total)
-		       *sizeof(struct crt_opc_info));
 		L3_map->L3_map = info_array;
 		L3_map->L3_num_slots_total = cpf->cpf_count;
 	}
@@ -387,12 +357,10 @@ get_L3_map(struct crt_opc_map_L2 *L2_map, struct crt_proto_format *cpf)
 	struct crt_opc_map_L3 *new_map;
 
 	if (L2_map->L2_num_slots_total < cpf->cpf_ver + 1) {
-		D_REALLOC_ARRAY(new_map, L2_map->L2_map, (cpf->cpf_ver + 1));
+		D_REALLOC_ARRAY(new_map, L2_map->L2_map,
+				L2_map->L2_num_slots_total, cpf->cpf_ver + 1);
 		if (new_map == NULL)
 			return NULL;
-		memset(&new_map[L2_map->L2_num_slots_total], 0,
-		       (cpf->cpf_ver + 1 - L2_map->L2_num_slots_total)
-		       *sizeof(struct crt_opc_map_L3));
 		L2_map->L2_map = new_map;
 		L2_map->L2_num_slots_total = cpf->cpf_ver + 1;
 	}
@@ -410,9 +378,8 @@ crt_proto_reg_L2(struct crt_opc_map_L2 *L2_map,
 
 	/* get entry pointer, realloc if array not big enough */
 	L3_map = get_L3_map(L2_map, cpf);
-	if (L3_map == NULL) {
+	if (L3_map == NULL)
 		return -DER_NOMEM;
-	}
 
 	if (L3_map->L3_num_slots_total == 0)
 		L2_map->L2_num_slots_used++;
@@ -422,7 +389,6 @@ crt_proto_reg_L2(struct crt_opc_map_L2 *L2_map,
 
 	return rc;
 }
-
 
 static int
 crt_proto_reg_L1(struct crt_opc_map *map, struct crt_proto_format *cpf)
@@ -476,6 +442,38 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 		return -DER_INVAL;
 	}
 
+	/* Check the list of previously queried protocols, and log a warning if
+	 * a client is using a protocol without checking the version.
+	 */
+	if (!crt_gdata.cg_server) {
+		struct crt_opc_queried	*coq;
+		bool			found = false;
+
+		/* Allow the internal protocol to be registered, it contains the
+		 * proto query RPC so needs to be
+		 */
+		if (cpf->cpf_base == CRT_OPC_INTERNAL_BASE)
+			found = true;
+
+		d_list_for_each_entry(coq, &crt_gdata.cg_opc_map->com_coq_list,
+				      coq_list) {
+			if ((coq->coq_base == cpf->cpf_base) &&
+			    (coq->coq_version == cpf->cpf_ver)) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+
+			/* TODO: Make this a D_WARN and resolve client issues
+			 * after the 1.2 release.
+			 */
+			D_DEBUG(DB_ALL, "Registering protocol without checking"
+				" %s.%#x %d\n",
+				cpf->cpf_name, cpf->cpf_base, cpf->cpf_ver);
+	}
+
 	/* reg L1 */
 	rc = crt_proto_reg_L1(crt_gdata.cg_opc_map, cpf);
 	if (rc != 0)
@@ -516,6 +514,9 @@ crt_proto_register_internal(struct crt_proto_format *cpf)
 	}
 
 	/* validate base_opc is in range */
+	/* TODO: This doesn't make any sense, a XOR used as a truth value is
+	 * just checking equlity so only one mask would be allowed here
+	 */
 	if (cpf->cpf_base ^ CRT_PROTO_BASEOPC_MASK) {
 		D_ERROR("Invalid base_opc: %#x.\n", cpf->cpf_base);
 		return -DER_INVAL;
@@ -525,8 +526,9 @@ crt_proto_register_internal(struct crt_proto_format *cpf)
 }
 
 struct proto_query_t {
-	crt_proto_query_cb_t	 pq_user_cb;
+	crt_proto_query_cb_t	pq_user_cb;
 	void			*pq_user_arg;
+	struct crt_opc_queried  *pq_coq;
 };
 
 static void
@@ -536,7 +538,7 @@ proto_query_cb(const struct crt_cb_info *cb_info)
 	struct crt_proto_query_in	*rpc_req_input;
 	struct crt_proto_query_out	*rpc_req_output;
 	struct proto_query_t		*proto_query = cb_info->cci_arg;
-	struct crt_proto_query_cb_info	 user_cb_info;
+	struct crt_proto_query_cb_info	 user_cb_info = {};
 
 	if (cb_info->cci_rc != 0) {
 		D_ERROR("rpc (opc: %#x failed, rc: %d.\n", rpc_req->cr_opc,
@@ -553,8 +555,17 @@ proto_query_cb(const struct crt_cb_info *cb_info)
 	user_cb_info.pq_arg = proto_query->pq_user_arg;
 
 out:
-	if (proto_query->pq_user_cb)
-		proto_query->pq_user_cb(&user_cb_info);
+	if (user_cb_info.pq_rc == 0) {
+		struct crt_opc_queried *coq = proto_query->pq_coq;
+
+		coq->coq_version = user_cb_info.pq_ver;
+		d_list_add(&coq->coq_list,
+			   &crt_gdata.cg_opc_map->com_coq_list);
+	} else {
+		D_FREE(proto_query->pq_coq);
+	}
+
+	proto_query->pq_user_cb(&user_cb_info);
 
 	D_FREE(proto_query);
 }
@@ -567,7 +578,7 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 	crt_context_t			 crt_ctx;
 	struct crt_proto_query_in	*rpc_req_input;
 	struct proto_query_t		*proto_query = NULL;
-	uint32_t			*tmp_array;
+	uint32_t			*tmp_array = NULL;
 	int				 rc = DER_SUCCESS;
 
 	if (ver == NULL) {
@@ -595,7 +606,7 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 	D_ALLOC_ARRAY(tmp_array, count);
 	if (tmp_array == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	memcpy(tmp_array, ver, sizeof(tmp_array[0])*count);
+	memcpy(tmp_array, ver, sizeof(tmp_array[0]) * count);
 
 	/* set input */
 	d_iov_set_safe(&rpc_req_input->pq_ver, tmp_array, sizeof(*ver) * count);
@@ -604,18 +615,29 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 
 	D_ALLOC_PTR(proto_query);
 	if (proto_query == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_ALLOC_PTR(proto_query->pq_coq);
+	if (proto_query->pq_coq == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	proto_query->pq_user_cb = cb;
 	proto_query->pq_user_arg = arg;
+	proto_query->pq_coq->coq_base = base_opc;
 
 	rc = crt_req_send(rpc_req, proto_query_cb, proto_query);
 	if (rc != 0)
 		D_ERROR("crt_req_send() failed, rc: %d.\n", rc);
 
 out:
-	if (rc != DER_SUCCESS)
-		D_FREE(proto_query);
+	if (rc != DER_SUCCESS) {
+		if (proto_query) {
+			D_FREE(proto_query->pq_coq);
+			D_FREE(proto_query);
+		}
+
+		D_FREE(tmp_array);
+	}
 
 	return rc;
 }

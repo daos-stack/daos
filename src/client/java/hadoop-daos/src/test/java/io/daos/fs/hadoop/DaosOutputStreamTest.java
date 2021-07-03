@@ -1,24 +1,13 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 package io.daos.fs.hadoop;
 
+import io.daos.BufferAllocator;
 import io.daos.dfs.DaosFile;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.Assert;
 import org.junit.Test;
@@ -35,7 +24,8 @@ public class DaosOutputStreamTest {
   @Test(expected = IllegalArgumentException.class)
   public void testNonDirectBuffer() throws Exception {
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
-    DaosOutputStream dos = new DaosOutputStream(null, null, ByteBuffer.allocate(100), stats);
+    DaosOutputStream dos = new DaosOutputStream(null, ByteBufAllocator.DEFAULT.heapBuffer(), stats,
+        false);
     dos.close();
   }
 
@@ -43,7 +33,7 @@ public class DaosOutputStreamTest {
   public void testWriteLenIllegal() throws Exception {
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
-    DaosOutputStream os = new DaosOutputStream(file, "/zjf", 100, stats);
+    DaosOutputStream os = new DaosOutputStream(file, 100, stats, false);
     byte[] buf = new byte[10];
     os.write(buf, 0, -10);
   }
@@ -52,7 +42,7 @@ public class DaosOutputStreamTest {
   public void testWriteOverflowException() throws Exception {
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
-    DaosOutputStream os = new DaosOutputStream(file, "/zjf", 100, stats);
+    DaosOutputStream os = new DaosOutputStream(file, 100, stats, false);
     byte[] buf = new byte[10];
     os.write(buf, 0, 200);
   }
@@ -61,9 +51,10 @@ public class DaosOutputStreamTest {
     int bufCap = 100;
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
-    ByteBuffer byteBuffer = ByteBuffer.allocateDirect(bufCap);
-    ByteBuffer sbuffer = spy(byteBuffer);
-    DaosOutputStream daos = new DaosOutputStream(file, "/zjf", sbuffer, stats);
+    ByteBuf byteBuffer = BufferAllocator.directNettyBuf(bufCap);
+    ByteBuf sbuffer = spy(byteBuffer);
+    doReturn(true).when(sbuffer).release();
+    DaosOutputStream daos = new DaosOutputStream(file, sbuffer, stats, false);
     byte buf[] = new byte[writeLen];
     for (int i = 0; i < buf.length; i++) {
       buf[i] = (byte) i;
@@ -77,10 +68,13 @@ public class DaosOutputStreamTest {
     verify(file, times(fullBufferTimes)).write(sbuffer, 0L, 0L,
         bufCap);
     daos.close();
-    verify(sbuffer, times(fullBufferTimes)).put(buf, 0, bufCap);
-    verify(sbuffer, times(writeTimes - fullBufferTimes)).put(buf, 0, writeLen % bufCap);
+    verify(sbuffer, times(fullBufferTimes)).writeBytes(buf, 0, bufCap);
+    verify(sbuffer, times(writeTimes - fullBufferTimes)).writeBytes(buf, 0,
+        writeLen % bufCap);
     verify(file, times(writeTimes - fullBufferTimes)).write(sbuffer, 0L, 0L,
         writeLen % bufCap);
+
+    byteBuffer.release();
   }
 
   @Test
@@ -97,15 +91,16 @@ public class DaosOutputStreamTest {
     int bufCap = 100;
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
-    ByteBuffer byteBuffer = ByteBuffer.allocateDirect(bufCap);
-    ByteBuffer sbuffer = spy(byteBuffer);
-    DaosOutputStream daos = new DaosOutputStream(file, "/zjf", sbuffer, stats);
+    ByteBuf byteBuffer = BufferAllocator.directNettyBuf(bufCap);
+    ByteBuf sbuffer = spy(byteBuffer);
+    doReturn(true).when(sbuffer).release();
+    DaosOutputStream daos = new DaosOutputStream(file, sbuffer, stats, false);
 
     daos.write('e');
 
     verify(file, times(0)).write(sbuffer, 0L, 0L,
         bufCap);
-    verify(sbuffer, times(1)).put((byte) 'e');
+//    verify(sbuffer, times(1)).writeByte((byte) 'e');
 
     if (flush) {
       daos.flush();
@@ -113,6 +108,7 @@ public class DaosOutputStreamTest {
       daos.close();
     }
     verify(file, times(1)).write(sbuffer, 0L, 0L, 1);
+    byteBuffer.release();
   }
 
   @Test
@@ -129,16 +125,17 @@ public class DaosOutputStreamTest {
     int bufCap = 100;
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
-    ByteBuffer byteBuffer = ByteBuffer.allocateDirect(bufCap);
-    ByteBuffer sbuffer = spy(byteBuffer);
-    DaosOutputStream daos = new DaosOutputStream(file, "/zjf", sbuffer, stats);
+    ByteBuf byteBuffer = BufferAllocator.directNettyBuf(bufCap);
+    ByteBuf sbuffer = spy(byteBuffer);
+    doReturn(true).when(sbuffer).release();
+    DaosOutputStream daos = new DaosOutputStream(file, sbuffer, stats, false);
     byte buf[] = new byte[writeLen];
     for (int i = 0; i < buf.length; i++) {
       buf[i] = (byte) i;
     }
 
-    when(file.write(any(ByteBuffer.class), anyLong(), anyLong(), eq((long) bufCap))).thenReturn((long) bufCap);
-    when(file.write(any(ByteBuffer.class), anyLong(), anyLong(),
+    when(file.write(any(ByteBuf.class), anyLong(), anyLong(), eq((long) bufCap))).thenReturn((long) bufCap);
+    when(file.write(any(ByteBuf.class), anyLong(), anyLong(),
         eq((long) writeLen % bufCap))).thenReturn((long) writeLen % bufCap);
     daos.write(buf, 0, buf.length);
 
@@ -151,9 +148,10 @@ public class DaosOutputStreamTest {
         eq((long) bufCap));
 
     ArgumentCaptor<Integer> bufCaptor1 = ArgumentCaptor.forClass(Integer.class);
-    verify(sbuffer, times(fullBufferTimes)).put(eq(buf), bufCaptor1.capture(), eq(bufCap));
+    verify(sbuffer, times(fullBufferTimes)).writeBytes(eq(buf), bufCaptor1.capture(), eq(bufCap));
     ArgumentCaptor<Integer> bufCaptor2 = ArgumentCaptor.forClass(Integer.class);
-    verify(sbuffer, times(writeTimes - fullBufferTimes)).put(eq(buf), bufCaptor2.capture(),
+    verify(sbuffer, times(writeTimes - fullBufferTimes)).writeBytes(eq(buf),
+        bufCaptor2.capture(),
         eq(writeLen % bufCap));
 
     daos.close();
@@ -178,6 +176,7 @@ public class DaosOutputStreamTest {
       Assert.assertEquals(fullBufferTimes * bufCap, bufCaptor2.getValue().intValue());
       Assert.assertEquals(fullBufferTimes * bufCap, writeCaptor2.getValue().intValue());
     }
+    byteBuffer.release();
   }
 
   @Test
@@ -194,13 +193,15 @@ public class DaosOutputStreamTest {
     int bufCap = 100;
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
-    ByteBuffer byteBuffer = ByteBuffer.allocateDirect(bufCap);
-    ByteBuffer sbuffer = spy(byteBuffer);
-    DaosOutputStream daos = new DaosOutputStream(file, "/zjf", sbuffer, stats);
+    ByteBuf byteBuffer = BufferAllocator.directNettyBuf(bufCap);
+    ByteBuf sbuffer = spy(byteBuffer);
+    doReturn(true).when(sbuffer).release();
+    DaosOutputStream daos = new DaosOutputStream(file, sbuffer, stats, false);
 
     daos.close();
     daos.close();
     verify(file, times(1)).release();
+    byteBuffer.release();
     return daos;
   }
 

@@ -1,25 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers, skipForTicket
 from daos_utils import DaosCommand
@@ -52,7 +35,7 @@ class DaosSnapshotTest(TestWithServers):
     """
     def __init__(self, *args, **kwargs):
         """Initialize a DaosSnapshotTest object."""
-        super(DaosSnapshotTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.daos_cmd = None
 
     def create_snapshot(self, pool_uuid, cont_uuid, count):
@@ -94,13 +77,13 @@ class DaosSnapshotTest(TestWithServers):
             pool_uuid=self.pool.uuid,
             cont_uuid=self.container.uuid, count=count)
         expected_epochs.sort()
-        self.log.info("Expected Epochs = {}".format(expected_epochs))
+        self.log.info("Expected Epochs = %s", expected_epochs)
 
         # List the snapshots and verify their epochs.
         actual_epochs = self.daos_cmd.container_list_snaps(
             pool=self.pool.uuid, cont=self.container.uuid)["epochs"]
         actual_epochs.sort()
-        self.log.info("Actual Epochs = {}".format(actual_epochs))
+        self.log.info("Actual Epochs = %s", actual_epochs)
         self.assertEqual(expected_epochs, actual_epochs)
 
         return actual_epochs
@@ -121,7 +104,7 @@ class DaosSnapshotTest(TestWithServers):
         # Create snapshots.
         snapshot_count = self.params.get(
             "snapshot_count", "/run/stress_test/*/")
-        self.log.info("Creating {} snapshots".format(snapshot_count))
+        self.log.info("Creating %s snapshots", snapshot_count)
         actual_epochs = self.create_verify_snapshots(snapshot_count)
 
         # Destroy all the snapshots.
@@ -151,7 +134,7 @@ class DaosSnapshotTest(TestWithServers):
         # Create snapshots.
         snapshot_count = self.params.get(
             "snapshot_count", "/run/stress_test/*/")
-        self.log.info("Creating {} snapshots".format(snapshot_count))
+        self.log.info("Creating %s snapshots", snapshot_count)
         actual_epochs = self.create_verify_snapshots(snapshot_count)
 
         # Destroy all snapshots with --epcrange.

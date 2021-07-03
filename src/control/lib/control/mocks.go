@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -29,8 +12,10 @@ import (
 	"testing"
 
 	"github.com/dustin/go-humanize"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/runtime/protoimpl"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -45,21 +30,27 @@ type MockMessage struct{}
 func (mm *MockMessage) Reset()         {}
 func (mm *MockMessage) String() string { return "mock" }
 func (mm *MockMessage) ProtoMessage()  {}
+func (mm *MockMessage) ProtoReflect() protoreflect.Message {
+	return (&protoimpl.MessageInfo{}).MessageOf(mm)
+}
 
 type (
 	// MockInvokerConfig defines the configured responses
 	// for a MockInvoker.
 	MockInvokerConfig struct {
-		UnaryError    error
-		UnaryResponse *UnaryResponse
-		HostResponses HostResponseChan
+		Sys              string
+		UnaryError       error
+		UnaryResponse    *UnaryResponse
+		UnaryResponseSet []*UnaryResponse
+		HostResponses    HostResponseChan
 	}
 
 	// MockInvoker implements the Invoker interface in order
 	// to enable unit testing of API functions.
 	MockInvoker struct {
-		log debugLogger
-		cfg MockInvokerConfig
+		log         debugLogger
+		cfg         MockInvokerConfig
+		invokeCount int
 	}
 )
 
@@ -86,26 +77,52 @@ func (mi *MockInvoker) Debugf(fmtStr string, args ...interface{}) {
 	mi.log.Debugf(fmtStr, args...)
 }
 
-func (mi *MockInvoker) InvokeUnaryRPC(_ context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
-	if mi.cfg.UnaryResponse != nil || mi.cfg.UnaryError != nil {
-		return mi.cfg.UnaryResponse, mi.cfg.UnaryError
-	}
-
-	// If the config didn't define a response, just dummy one up for
-	// tests that don't care.
-	return &UnaryResponse{
-		fromMS: uReq.isMSRequest(),
-		Responses: []*HostResponse{
-			{
-				Addr:    "dummy",
-				Message: &MockMessage{},
-			},
-		},
-	}, nil
+func (mi *MockInvoker) GetSystem() string {
+	return mi.cfg.Sys
 }
 
-func (mi *MockInvoker) InvokeUnaryRPCAsync(_ context.Context, _ UnaryRequest) (HostResponseChan, error) {
-	return mi.cfg.HostResponses, mi.cfg.UnaryError
+func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
+	return invokeUnaryRPC(ctx, mi.log, mi, uReq, nil)
+}
+
+func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryRequest) (HostResponseChan, error) {
+	if mi.cfg.HostResponses != nil || mi.cfg.UnaryError != nil {
+		return mi.cfg.HostResponses, mi.cfg.UnaryError
+	}
+
+	responses := make(HostResponseChan)
+
+	ur := mi.cfg.UnaryResponse
+	if len(mi.cfg.UnaryResponseSet) > mi.invokeCount {
+		ur = mi.cfg.UnaryResponseSet[mi.invokeCount]
+	}
+	if ur == nil {
+		// If the config didn't define a response, just dummy one up for
+		// tests that don't care.
+		ur = &UnaryResponse{
+			fromMS: uReq.isMSRequest(),
+			Responses: []*HostResponse{
+				{
+					Addr:    "dummy",
+					Message: &MockMessage{},
+				},
+			},
+		}
+	}
+
+	mi.invokeCount++
+	go func() {
+		for _, hr := range ur.Responses {
+			select {
+			case <-ctx.Done():
+				return
+			case responses <- hr:
+			}
+		}
+		close(responses)
+	}()
+
+	return responses, nil
 }
 
 func (mi *MockInvoker) SetConfig(_ *Config) {}
@@ -249,6 +266,23 @@ func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 // defined by the variant input string parameter.
 func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 	ssr := standardServerScanResponse(t)
+	nss := func(idxs ...int) storage.ScmNamespaces {
+		nss := make(storage.ScmNamespaces, 0, len(idxs))
+		for _, i := range idxs {
+			ns := storage.MockScmNamespace(int32(i))
+			nss = append(nss, ns)
+		}
+		return nss
+	}
+	ctrlrs := func(idxs ...int) storage.NvmeControllers {
+		ncs := make(storage.NvmeControllers, 0, len(idxs))
+		for _, i := range idxs {
+			nc := storage.MockNvmeController(int32(i))
+			ncs = append(ncs, nc)
+		}
+		return ncs
+	}
+
 	switch variant {
 	case "withSpaceUsage":
 		snss := make(storage.ScmNamespaces, 0)
@@ -263,33 +297,22 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 		ncs := make(storage.NvmeControllers, 0)
 		for _, i := range []int{1, 2, 3, 4, 5, 6, 7, 8} {
-			sd := storage.MockSmdDevice(int32(i))
+			nc := storage.MockNvmeController(int32(i))
+			nc.SocketID = int32(i % 2)
+			sd := storage.MockSmdDevice(nc.PciAddr, int32(i))
 			sd.TotalBytes = uint64(humanize.TByte) * uint64(i)
 			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i) // 25% used
-			nc := storage.MockNvmeController(int32(i))
 			nc.SmdDevices = append(nc.SmdDevices, sd)
-			nc.SocketID = int32(i % 2)
 			ncs = append(ncs, nc)
 		}
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
 			t.Fatal(err)
 		}
-	case "withNamespace":
-		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(0),
-		}
-		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+	case "pmemSingle":
+		if err := convert.Types(nss(0), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-	case "withNamespaces":
-		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(1), // verify out of order works
-			storage.MockScmNamespace(0),
-		}
-		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
-			t.Fatal(err)
-		}
-	case "withNamespacesNumaZero":
+	case "pmemDupNuma":
 		ns1 := storage.MockScmNamespace(1)
 		ns1.NumaNode = 0
 		scmNamespaces := storage.ScmNamespaces{
@@ -299,18 +322,68 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-	case "withSingleSSD":
-		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(0),
-			storage.MockScmNamespace(1),
-		}
-		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+	case "pmemA":
+		// verify out of order namespace ids
+		if err := convert.Types(nss(1, 0), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-		ssr.Nvme.Ctrlrs[0].Socketid = 0
-	case "noNVME":
+	case "pmemB":
+		ns := nss(0, 1)
+		for _, n := range ns {
+			n.Size += uint64(humanize.GByte * 100)
+		}
+		if err := convert.Types(ns, &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeSingle":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ssr.Nvme.Ctrlrs[0].SocketId = 0
+	case "nvmeA":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		if err := convert.Types(ctrlrs(1, 2, 3, 4), &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeB":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		if err := convert.Types(ctrlrs(1, 2, 5, 4), &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeBasicA":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ncs := ctrlrs(1, 4)
+		for _, c := range ncs {
+			c.Model = ""
+			c.FwRev = ""
+			c.Serial = ""
+		}
+		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeBasicB":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ncs := ctrlrs(1, 4)
+		for _, c := range ncs {
+			c.Model = ""
+			c.FwRev = ""
+			c.Serial = ""
+			c.Namespaces[0].Size += uint64(humanize.GByte * 100)
+		}
+		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "noNvme":
 		ssr.Nvme.Ctrlrs = nil
-	case "noSCM":
+	case "noScm":
 		ssr.Scm.Modules = nil
 	case "noStorage":
 		ssr.Nvme.Ctrlrs = nil
@@ -340,7 +413,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "standard":
 	default:
-		t.Fatalf("MockServerScanResp(): variant %s unrecognised", variant)
+		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)
 	}
 	return ssr
 }

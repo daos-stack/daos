@@ -37,11 +37,11 @@ The workflow is as follows:
 4.  The DAOS Agent then passes this credential back to the DAOS client library,
     where it is used in the pool connect request, passing the security
     credential as an argument to the pool connect RPC.
-5.  The DAOS IO Server receives the pool connect RPC and passes the security
+5.  The DAOS I/O Engine receives the pool connect RPC and passes the security
     credential to the Control Plane component of the DAOS Server to validate the
     authenticity of the credential. If the credential is not valid, the request
     will be denied.
-6.  If the security credential is deemed valid, the IO Server will compare the
+6.  If the security credential is deemed valid, the I/O Engine will compare the
     identity against the ACL for the pool, as described in the Access Control
     Enforcement section. If the identity has access, a pool handle is returned.
     Otherwise the error DER_NO_PERM is returned.

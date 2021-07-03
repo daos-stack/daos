@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(st)
 
@@ -72,8 +55,8 @@ static const char * const crt_st_msg_type_str[] = { "EMPTY",
 
 /* Global shutdown flag, used to terminate the progress thread */
 static int g_shutdown_flag;
-
 static bool g_randomize_endpoints;
+static bool g_group_inited;
 
 static void *progress_fn(void *arg)
 {
@@ -141,6 +124,9 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		D_ERROR("crt_group_attach failed; ret = %d\n", ret);
 		return ret;
 	}
+
+	g_group_inited = true;
+
 	D_ASSERTF(*srv_grp != NULL,
 		  "crt_group_attach succeeded but returned group is NULL\n");
 
@@ -520,7 +506,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 
 	/*
 	 * Launch self-test 1:many sessions on each master endpoint
-	 * as simultaneously as possible (don't wait for acknowledgement)
+	 * as simultaneously as possible (don't wait for acknowledgment)
 	 */
 	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
 		crt_endpoint_t *endpt = &ms_endpts[m_idx].endpt;
@@ -912,8 +898,8 @@ static int run_self_test(struct st_size_params all_params[],
 		if (num_ms_endpts != num_ms_endpts_in) {
 			struct st_master_endpt *realloc_ptr;
 
-			D_REALLOC(realloc_ptr, ms_endpts,
-				  num_ms_endpts * sizeof(*ms_endpts));
+			D_REALLOC_ARRAY(realloc_ptr, ms_endpts,
+					num_ms_endpts_in, num_ms_endpts);
 			if (realloc_ptr == NULL)
 				D_GOTO(cleanup, ret = -DER_NOMEM);
 			ms_endpts = realloc_ptr;
@@ -1022,7 +1008,7 @@ cleanup_nothread:
 		D_FREE(latencies);
 	}
 
-	if (srv_grp != NULL) {
+	if (srv_grp != NULL && g_group_inited) {
 		cleanup_ret = crt_group_detach(srv_grp);
 		if (cleanup_ret != 0)
 			D_ERROR("crt_group_detach failed; ret = %d\n",
@@ -1334,7 +1320,7 @@ int parse_endpoint_string(char *const opt_arg,
 	uint32_t		 num_ranks = 0;
 	char			*tag_valid_str = NULL;
 	uint32_t		 num_tags = 0;
-	void			*realloced_mem;
+	struct st_endpoint	*realloced_mem;
 	struct st_endpoint	*next_endpoint;
 
 	/*
@@ -1415,11 +1401,11 @@ int parse_endpoint_string(char *const opt_arg,
 	printf("  tags: %s (# tags = %u)\n", tag_valid_str, num_tags);
 
 	/* Reallocate/expand the endpoints array */
-	*num_endpts += num_ranks * num_tags;
-	D_REALLOC(realloced_mem, *endpts,
-		  sizeof(struct st_endpoint) * (*num_endpts));
+	D_REALLOC_ARRAY(realloced_mem, *endpts, *num_endpts,
+			*num_endpts + num_ranks * num_tags);
 	if (realloced_mem == NULL)
 		D_GOTO(cleanup, ret = -DER_NOMEM);
+	*num_endpts += num_ranks * num_tags;
 	*endpts = (struct st_endpoint *)realloced_mem;
 
 	/* Populate the newly expanded values in the endpoints array */
@@ -1839,11 +1825,11 @@ int main(int argc, char *argv[])
 
 	/* Shrink the buffer if some of the user's tokens weren't kept */
 	if (num_msg_sizes < num_tokens + 1) {
-		void *realloced_mem;
+		struct st_size_params *realloced_mem;
 
 		/* This should always succeed since the buffer is shrinking.. */
-		D_REALLOC(realloced_mem, all_params,
-			  num_msg_sizes * sizeof(all_params[0]));
+		D_REALLOC_ARRAY(realloced_mem, all_params, num_tokens + 1,
+				num_msg_sizes);
 		if (realloced_mem == NULL)
 			D_GOTO(cleanup, ret = -DER_NOMEM);
 		all_params = (struct st_size_params *)realloced_mem;
@@ -1910,6 +1896,14 @@ int main(int argc, char *argv[])
 
 	/********************* Clean up *********************/
 cleanup:
+	if (ms_endpts != NULL) {
+		D_FREE(ms_endpts);
+		ms_endpts = NULL;
+	}
+	if (endpts != NULL) {
+		D_FREE(endpts);
+		endpts = NULL;
+	}
 	if (all_params != NULL)
 		D_FREE(all_params);
 	d_log_fini();

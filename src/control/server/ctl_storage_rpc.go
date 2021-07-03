@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -28,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -56,111 +40,33 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 	return rs
 }
 
-// doNvmePrepare issues prepare request and returns response.
-func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) *ctlpb.PrepareNvmeResp {
-	_, err := c.NvmePrepare(bdev.PrepareRequest{
-		HugePageCount: int(req.GetNrhugepages()),
-		TargetUser:    req.GetTargetuser(),
-		PCIWhitelist:  req.GetPciwhitelist(),
-		ResetOnly:     req.GetReset_(),
-	})
-
-	pnr := new(ctlpb.PrepareNvmeResp)
-	pnr.State = newResponseState(err, ctlpb.ResponseStatus_CTL_ERR_NVME, "")
-
-	return pnr
-}
-
-// newPrepareScmResp sets protobuf SCM prepare response with results.
-func newPrepareScmResp(inResp *scm.PrepareResponse, inErr error) (*ctlpb.PrepareScmResp, error) {
-	outResp := new(ctlpb.PrepareScmResp)
-	outResp.State = new(ctlpb.ResponseState)
-
-	if inErr != nil {
-		outResp.State = newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_SCM, "")
-		return outResp, nil
-	}
-
-	if inResp.RebootRequired {
-		outResp.Rebootrequired = true
-		outResp.State.Info = scm.MsgRebootRequired
-	}
-
-	outResp.Namespaces = make(proto.ScmNamespaces, 0, len(inResp.Namespaces))
-	if err := (*proto.ScmNamespaces)(&outResp.Namespaces).FromNative(inResp.Namespaces); err != nil {
-		return nil, err
-	}
-
-	return outResp, nil
-}
-
-func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (*ctlpb.PrepareScmResp, error) {
-	scmState, err := c.GetScmState()
-	if err != nil {
-		return newPrepareScmResp(nil, err)
-	}
-	c.log.Debugf("SCM state before prep: %s", scmState)
-
-	resp, err := c.ScmPrepare(scm.PrepareRequest{Reset: pbReq.Reset_})
-
-	return newPrepareScmResp(resp, err)
-}
-
-// StoragePrepare configures SSDs for user specific access with SPDK and
-// groups SCM modules in AppDirect/interleaved mode as kernel "pmem" devices.
-func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (*ctlpb.StoragePrepareResp, error) {
-	c.log.Debug("received StoragePrepare RPC; proceeding to instance storage preparation")
-
-	resp := new(ctlpb.StoragePrepareResp)
-
-	if req.Nvme != nil {
-		resp.Nvme = c.doNvmePrepare(req.Nvme)
-	}
-	if req.Scm != nil {
-		respScm, err := c.doScmPrepare(req.Scm)
-		if err != nil {
-			return nil, err
-		}
-		resp.Scm = respScm
-	}
-
-	return resp, nil
-}
-
-// mapCtrlrs maps controllers to an alternate (as opposed to PCI address) key.
+// mapCtrlrs maps each controller to it's PCI address.
 func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeController, error) {
 	ctrlrMap := make(map[string]*storage.NvmeController)
 
 	for _, ctrlr := range ctrlrs {
-		key, err := ctrlr.GenAltKey()
-		if err != nil {
-			return nil, errors.Wrapf(err, "generate alternate key for controller %s",
+		if _, exists := ctrlrMap[ctrlr.PciAddr]; exists {
+			return nil, errors.Errorf("duplicate entries for controller %s",
 				ctrlr.PciAddr)
 		}
 
-		if _, exists := ctrlrMap[key]; exists {
-			return nil, errors.Errorf("duplicate entries for controller %s, key %s",
-				ctrlr.PciAddr, key)
-		}
-
-		ctrlrMap[key] = ctrlr
+		ctrlrMap[ctrlr.PciAddr] = ctrlr
 	}
 
 	return ctrlrMap, nil
 }
 
 // scanInstanceBdevs retrieves up-to-date NVMe controller info including
-// health statistics and stored server meta-data. If I/O servers are running
+// health statistics and stored server meta-data. If I/O Engines are running
 // then query is issued over dRPC as go-spdk bindings cannot be used to access
 // controller claimed by another process. Only update info for controllers
-// assigned to I/O servers.
+// assigned to I/O Engines.
 func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanResponse, error) {
 	var ctrlrs storage.NvmeControllers
 	instances := c.harness.Instances()
 
 	for _, srv := range instances {
 		nvmeDevs := c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs()
-
 		if len(nvmeDevs) == 0 {
 			continue
 		}
@@ -214,8 +120,7 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 func stripNvmeDetails(pbc *ctlpb.NvmeController) {
 	pbc.Serial = ""
 	pbc.Model = ""
-	pbc.Fwrev = ""
-	pbc.Namespaces = nil
+	pbc.FwRev = ""
 }
 
 // newScanBdevResp populates protobuf NVMe scan response with controller info
@@ -237,10 +142,10 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 	// trim unwanted fields so responses can be coalesced from hash map
 	for _, pbc := range pbCtrlrs {
 		if !req.GetHealth() {
-			pbc.Healthstats = nil
+			pbc.HealthStats = nil
 		}
 		if !req.GetMeta() {
-			pbc.Smddevices = nil
+			pbc.SmdDevices = nil
 		}
 		if req.GetBasic() {
 			stripNvmeDetails(pbc)
@@ -255,6 +160,10 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 // scanBdevs updates transient details if health statistics or server metadata
 // is requested otherwise just retrieves cached static controller details.
 func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
+	if req == nil {
+		return nil, errors.New("nil bdev request")
+	}
+
 	if req.Health || req.Meta {
 		// filter results based on config file bdev_list contents
 		resp, err := c.scanInstanceBdevs(ctx)
@@ -266,49 +175,6 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 	resp, err := c.NvmeScan(bdev.ScanRequest{})
 
 	return newScanNvmeResp(req, resp, err)
-}
-
-func pmemNameInList(paths []string, name string) bool {
-	if strings.TrimSpace(name) == "" {
-		return false
-	}
-
-	for _, path := range paths {
-		if filepath.Base(path) == name {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (c *ControlService) scanInstanceScm(ctx context.Context, resp *scm.ScanResponse) (*scm.ScanResponse, error) {
-	instances := c.harness.Instances()
-
-	// get utilisation for any mounted namespaces
-	for _, ns := range resp.Namespaces {
-		for _, srv := range instances {
-			if !srv.isReady() {
-				continue
-			}
-
-			cfg := srv.scmConfig()
-			if !pmemNameInList(cfg.DeviceList, ns.BlockDevice) {
-				continue
-			}
-
-			mount, err := srv.scmProvider.GetfsUsage(cfg.MountPoint)
-			if err != nil {
-				return nil, err
-			}
-			ns.Mount = mount
-
-			c.log.Debugf("updating scm fs usage on device %s mounted at %s: %+v",
-				ns.BlockDevice, cfg.MountPoint, ns.Mount)
-		}
-	}
-
-	return resp, nil
 }
 
 // newScanScmResp sets protobuf SCM scan response with module or namespace info.
@@ -338,22 +204,93 @@ func newScanScmResp(inResp *scm.ScanResponse, inErr error) (*ctlpb.ScanScmResp, 
 	return outResp, nil
 }
 
-func (c *ControlService) scanScm(ctx context.Context) (*ctlpb.ScanScmResp, error) {
-	// rescan scm storage details by default
-	scmReq := scm.ScanRequest{Rescan: true}
-	ssr, scanErr := c.ScmScan(scmReq)
-	if scanErr == nil && len(ssr.Namespaces) > 0 {
-		// update namespace info if storage is online
-		ssr, scanErr = c.scanInstanceScm(ctx, ssr)
+func findPMemInScan(ssr *scm.ScanResponse, cfg *storage.ScmConfig) *storage.ScmNamespace {
+	for _, scanned := range ssr.Namespaces {
+		for _, path := range cfg.DeviceList {
+			if strings.TrimSpace(path) == "" {
+				continue
+			}
+			if filepath.Base(path) == scanned.BlockDevice {
+				return scanned
+			}
+		}
 	}
 
-	return newScanScmResp(ssr, scanErr)
+	return nil
+}
+
+// getScmUsage will retrieve usage statistics (how much space is available for
+// new DAOS pools) for either PMem namespaces or SCM emulation with ramdisk.
+//
+// Usage is only retrieved for active mountpoints being used by online DAOS I/O
+// Server instances.
+func (c *ControlService) getScmUsage(ssr *scm.ScanResponse) (*scm.ScanResponse, error) {
+	instances := c.harness.Instances()
+
+	nss := make(storage.ScmNamespaces, len(instances))
+	for idx, srv := range instances {
+		if !srv.isReady() {
+			continue // skip if not running
+		}
+
+		cfg := srv.scmConfig()
+
+		mount, err := srv.scmProvider.GetfsUsage(cfg.MountPoint)
+		if err != nil {
+			return nil, err
+		}
+
+		switch cfg.Class {
+		case storage.ScmClassRAM: // generate fake namespace for emulated ramdisk mounts
+			nss[idx] = &storage.ScmNamespace{
+				Mount:       mount,
+				BlockDevice: "ramdisk",
+				Size:        uint64(humanize.GiByte * cfg.RamdiskSize),
+			}
+		case storage.ScmClassDCPM: // update namespace mount info for online storage
+			ns := findPMemInScan(ssr, &cfg)
+			if ns == nil {
+				return nil, errors.Errorf("instance %d: no pmem namespace for mount %s",
+					srv.Index(), cfg.MountPoint)
+			}
+			ns.Mount = mount
+			nss[idx] = ns
+		default:
+			return nil, errors.Errorf("instance %d: unsupported scm class %q",
+				srv.Index(), cfg.Class)
+		}
+
+		c.log.Debugf("updated scm fs usage on device %s mounted at %s: %+v",
+			nss[idx].BlockDevice, cfg.MountPoint, nss[idx].Mount)
+	}
+
+	return &scm.ScanResponse{Namespaces: nss}, nil
+}
+
+// scanScm will return mount details and usage for either emulated RAM or real PMem.
+func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*ctlpb.ScanScmResp, error) {
+	if req == nil {
+		return nil, errors.New("nil scm request")
+	}
+
+	// scan SCM, rescan scm storage details by default
+	scmReq := scm.ScanRequest{Rescan: true}
+	ssr, scanErr := c.ScmScan(scmReq)
+
+	if scanErr != nil || !req.GetUsage() {
+		return newScanScmResp(ssr, scanErr)
+	}
+
+	return newScanScmResp(c.getScmUsage(ssr))
 }
 
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
-	c.log.Debug("received StorageScan RPC")
+	c.log.Debugf("received StorageScan RPC %v", req)
 
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
 	resp := new(ctlpb.StorageScanResp)
 
 	respNvme, err := c.scanBdevs(ctx, req.Nvme)
@@ -362,7 +299,7 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	}
 	resp.Nvme = respNvme
 
-	respScm, err := c.scanScm(ctx)
+	respScm, err := c.scanScm(ctx, req.Scm)
 	if err != nil {
 		return nil, err
 	}
@@ -388,14 +325,14 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	resp.Crets = make([]*ctlpb.NvmeControllerResult, 0, len(instances))
 	scmChan := make(chan *ctlpb.ScmMountResult, len(instances))
 
-	c.log.Debugf("received StorageFormat RPC %v; proceeding to instance storage format", req)
+	c.log.Debugf("received StorageFormat RPC %v", req)
 
 	// TODO: enable per-instance formatting
 	formatting := 0
 	for _, srv := range instances {
 		formatting++
-		go func(s *IOServerInstance) {
-			scmChan <- s.StorageFormatSCM(req.Reformat)
+		go func(s *EngineInstance) {
+			scmChan <- s.StorageFormatSCM(ctx, req.Reformat)
 		}(srv)
 	}
 
@@ -417,11 +354,9 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	for _, srv := range instances {
 		if instanceErrored[srv.Index()] {
 			// if scm errored, indicate skipping bdev format
-			if len(srv.bdevConfig().DeviceList) > 0 {
-				ret := srv.newCret("", nil)
-				ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, srv.Index())
-				resp.Crets = append(resp.Crets, ret)
-			}
+			ret := srv.newCret("", nil)
+			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, srv.Index())
+			resp.Crets = append(resp.Crets, ret)
 			continue
 		}
 		// SCM formatted correctly on this instance, format NVMe
@@ -434,7 +369,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 	// Notify storage ready for instances formatted without error.
 	// Block until all instances have formatted NVMe to avoid
-	// VFIO device or resource busy when starting IO servers
+	// VFIO device or resource busy when starting I/O Engines
 	// because devices have already been claimed during format.
 	// TODO: supply whitelist of instance.Devs to init() on format.
 	for _, srv := range instances {

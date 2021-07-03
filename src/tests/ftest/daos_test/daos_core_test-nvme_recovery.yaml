@@ -9,7 +9,7 @@ pool:
   scm_size: 8G
   nvme_size: 16G
 server_config:
-  servers_per_host: 2
+  engines_per_host: 2
   name: daos_server
   servers:
     0:
@@ -45,22 +45,26 @@ dmg:
   transport_config:
     allow_insecure: True
 daos_tests:
-  num_clients:
-    num_clients: 1
-  Tests: !mux
-    test_n_1:
-      daos_test: N
-      test_name: nvme_recovery tests 1
-      args: -u subtests="1"
-    test_n_2:
-      daos_test: N
-      test_name: nvme_recovery tests 2
-      args: -u subtests="2"
-    test_n_3:
-      daos_test: N
-      test_name: nvme_recovery tests 3
-      args: -u subtests="3"
-    test_n_4:
-      daos_test: N
-      test_name: nvme_recovery tests 4
-      args: -u subtests="4"
+  num_clients: 1
+  test_name:
+    test_daos_nvme_recovery_1: DAOS_Nvme_Recovery_1
+    test_daos_nvme_recovery_2: DAOS_Nvme_Recovery_2
+    test_daos_nvme_recovery_3: DAOS_Nvme_Recovery_3
+    test_daos_nvme_recovery_4: DAOS_Nvme_Recovery_4
+    test_daos_nvme_recovery_5: DAOS_Nvme_Recovery_5
+    test_daos_nvme_recovery_6: DAOS_Nvme_Recovery_6
+  daos_test:
+    test_daos_nvme_recovery_1: N
+    test_daos_nvme_recovery_2: N
+    test_daos_nvme_recovery_3: N
+    test_daos_nvme_recovery_4: N
+    test_daos_nvme_recovery_5: N
+    test_daos_nvme_recovery_6: N
+  args:
+    test_daos_nvme_recovery_1: -u subtests="0"
+    test_daos_nvme_recovery_2: -u subtests="1"
+    test_daos_nvme_recovery_3: -u subtests="2"
+    test_daos_nvme_recovery_4: -u subtests="3"
+    test_daos_nvme_recovery_5: -u subtests="4"
+    test_daos_nvme_recovery_6: -u subtests="5"
+

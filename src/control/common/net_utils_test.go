@@ -1,29 +1,13 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package common
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
@@ -152,46 +136,71 @@ func TestCommon_IsLocalAddr(t *testing.T) {
 	}
 }
 
-func TestCommon_ParsePCIAddress(t *testing.T) {
+func TestCommon_ParseHostList(t *testing.T) {
+	testPort := 12345
+
+	mockHostList := func(hosts ...string) []string {
+		return hosts
+	}
+
 	for name, tc := range map[string]struct {
-		addrStr string
-		expDom  uint64
-		expBus  uint64
-		expDev  uint64
-		expFun  uint64
-		expErr  error
+		in     []string
+		expOut []string
+		expErr error
 	}{
-		"valid": {
-			addrStr: "0000:80:00.0",
-			expBus:  0x80,
+		"nil in, nil out": {},
+		"empty in, nil out": {
+			in: []string{},
 		},
-		"invalid": {
-			addrStr: "0000:gg:00.0",
-			expErr:  errors.New("parsing \"gg\""),
+		"host with too many :": {
+			in:     mockHostList("foo::10"),
+			expErr: errors.New("invalid host"),
 		},
-		"vmd address": {
-			addrStr: "0000:5d:05.5",
-			expBus:  0x5d,
-			expDev:  0x05,
-			expFun:  0x05,
+		"host with non-numeric port": {
+			in:     mockHostList("foo:bar"),
+			expErr: errors.New("invalid host"),
 		},
-		"vmd backing device address": {
-			addrStr: "5d0505:01:00.0",
-			expDom:  0x5d0505,
-			expBus:  0x01,
+		"host with just a port": {
+			in:     mockHostList(":42"),
+			expErr: errors.New("invalid host"),
+		},
+		"should append missing port": {
+			in:     mockHostList("foo"),
+			expOut: mockHostList(fmt.Sprintf("foo:%d", testPort)),
+		},
+		"should append missing port (multiple)": {
+			in: mockHostList("foo", "bar:4242", "baz"),
+			expOut: mockHostList(
+				"bar:4242",
+				fmt.Sprintf("baz:%d", testPort),
+				fmt.Sprintf("foo:%d", testPort),
+			),
+		},
+		"should append missing port (ranges)": {
+			in: mockHostList("foo-[1-4]", "bar[2-4]", "baz[8-9]:4242"),
+			expOut: mockHostList(
+				fmt.Sprintf("bar2:%d", testPort),
+				fmt.Sprintf("bar3:%d", testPort),
+				fmt.Sprintf("bar4:%d", testPort),
+				"baz8:4242",
+				"baz9:4242",
+				fmt.Sprintf("foo-1:%d", testPort),
+				fmt.Sprintf("foo-2:%d", testPort),
+				fmt.Sprintf("foo-3:%d", testPort),
+				fmt.Sprintf("foo-4:%d", testPort),
+			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			dom, bus, dev, fun, err := ParsePCIAddress(tc.addrStr)
-			CmpErr(t, tc.expErr, err)
+			gotOut, gotErr := ParseHostList(tc.in, testPort)
+			CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
-
-			AssertEqual(t, tc.expDom, dom, "bad domain")
-			AssertEqual(t, tc.expBus, bus, "bad bus")
-			AssertEqual(t, tc.expDev, dev, "bad device")
-			AssertEqual(t, tc.expFun, fun, "bad func")
+			if diff := cmp.Diff(tc.expOut, gotOut); diff != "" {
+				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
+
 }

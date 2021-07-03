@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
 
@@ -36,8 +19,7 @@ struct blob_cp_arg {
 	 * Completion could run on different xstream when NVMe
 	 * device is shared by multiple xstreams.
 	 */
-	ABT_mutex		 bca_mutex;
-	ABT_cond		 bca_done;
+	ABT_eventual		 bca_eventual;
 	unsigned int		 bca_inflights;
 	int			 bca_rc;
 };
@@ -51,28 +33,22 @@ struct blob_msg_arg {
 	bool			 bma_async;
 };
 
-static int
+static inline int
 blob_cp_arg_init(struct blob_cp_arg *ba)
 {
 	int	rc;
 
-	rc = ABT_mutex_create(&ba->bca_mutex);
+	rc = ABT_eventual_create(0, &ba->bca_eventual);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
-	rc = ABT_cond_create(&ba->bca_done);
-	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&ba->bca_mutex);
-		return dss_abterr2der(rc);
-	}
 	return 0;
 }
 
-static void
+static inline void
 blob_cp_arg_fini(struct blob_cp_arg *ba)
 {
-	ABT_cond_free(&ba->bca_done);
-	ABT_mutex_free(&ba->bca_mutex);
+	ABT_eventual_free(&ba->bca_eventual);
 }
 
 static void
@@ -104,15 +80,11 @@ blob_msg_arg_alloc()
 static void
 blob_common_cb(struct blob_cp_arg *ba, int rc)
 {
-	ABT_mutex_lock(ba->bca_mutex);
-
 	ba->bca_rc = daos_errno2der(-rc);
 
 	D_ASSERT(ba->bca_inflights == 1);
 	ba->bca_inflights--;
-	ABT_cond_broadcast(ba->bca_done);
-
-	ABT_mutex_unlock(ba->bca_mutex);
+	ABT_eventual_set(ba->bca_eventual, NULL, 0);
 }
 
 /*
@@ -144,11 +116,17 @@ blob_open_cb(void *arg, struct spdk_blob *blob, int rc)
 {
 	struct blob_msg_arg	*bma = arg;
 	struct blob_cp_arg	*ba = &bma->bma_cp_arg;
+	bool			 async = bma->bma_async;
 
 	ba->bca_blob = blob;
 	blob_common_cb(ba, rc);
 
-	if (bma->bma_async) {
+	/*
+	 * When sync open caller is on different xstream, the 'bma' could
+	 * be changed/freed after blob_common_cb(), so we have to use the
+	 * saved 'async' here.
+	 */
+	if (async) {
 		struct bio_io_context	*ioc = bma->bma_ioc;
 
 		ioc->bic_opening = 0;
@@ -163,10 +141,12 @@ blob_close_cb(void *arg, int rc)
 {
 	struct blob_msg_arg	*bma = arg;
 	struct blob_cp_arg	*ba = &bma->bma_cp_arg;
+	bool			 async = bma->bma_async;
 
 	blob_common_cb(ba, rc);
 
-	if (bma->bma_async) {
+	/* See comments in blob_open_cb() */
+	if (async) {
 		struct bio_io_context	*ioc = bma->bma_ioc;
 
 		ioc->bic_closing = 0;
@@ -188,15 +168,17 @@ blob_cb(void *arg, int rc)
 static void
 blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 {
+	int	rc;
+
 	D_ASSERT(xs_ctxt != NULL);
 	if (xs_ctxt->bxc_tgt_id == -1) {
 		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
-		xs_poll_completion(xs_ctxt, &ba->bca_inflights);
+		rc = xs_poll_completion(xs_ctxt, &ba->bca_inflights, 0);
+		D_ASSERT(rc == 0);
 	} else {
-		ABT_mutex_lock(ba->bca_mutex);
-		if (ba->bca_inflights)
-			ABT_cond_wait(ba->bca_done, ba->bca_mutex);
-		ABT_mutex_unlock(ba->bca_mutex);
+		rc = ABT_eventual_wait(ba->bca_eventual, NULL);
+		if (rc != ABT_SUCCESS)
+			D_ERROR("ABT eventual wait failed. %d", rc);
 	}
 }
 
@@ -260,8 +242,8 @@ bio_bs_hold(struct bio_blobstore *bbs)
 	if (bbs->bb_state == BIO_BS_STATE_TEARDOWN ||
 	    bbs->bb_state == BIO_BS_STATE_OUT ||
 	    bbs->bb_state == BIO_BS_STATE_SETUP) {
-		D_ERROR("Blobstore %p is in %d state, reject request.\n",
-			bbs, bbs->bb_state);
+		D_ERROR("Blobstore %p is in %s state, reject request.\n",
+			bbs, bio_state_enum_to_str(bbs->bb_state));
 		rc = -DER_DOS;
 		goto out;
 	}
@@ -338,7 +320,7 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 		D_DEBUG(DB_MGMT, "Successfully deleted blobID "DF_U64" for "
 			"pool:"DF_UUID" xs:%p\n", blob_id, DP_UUID(uuid),
 			xs_ctxt);
-		rc = smd_pool_unassign(uuid, xs_ctxt->bxc_tgt_id);
+		rc = smd_pool_del_tgt(uuid, xs_ctxt->bxc_tgt_id);
 		if (rc)
 			D_ERROR("Failed to unassign blob:"DF_U64" from pool: "
 				""DF_UUID":%d. %d\n", blob_id, DP_UUID(uuid),
@@ -377,7 +359,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 		return -DER_INVAL;
 	}
 
-	spdk_blob_opts_init(&bma.bma_opts);
+	spdk_blob_opts_init(&bma.bma_opts, sizeof(bma.bma_opts));
 	bma.bma_opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
 
 	/**
@@ -419,8 +401,8 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 			ba->bca_id, xs_ctxt, DP_UUID(uuid),
 			bma.bma_opts.num_clusters);
 
-		rc = smd_pool_assign(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id,
-				     blob_sz);
+		rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id,
+				      blob_sz);
 		if (rc != 0) {
 			D_ERROR("Failed to assign pool blob:"DF_U64" to pool: "
 				""DF_UUID":%d. %d\n", ba->bca_id, DP_UUID(uuid),
@@ -519,7 +501,7 @@ bio_blob_open(struct bio_io_context *ctxt, bool async)
 
 int
 bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
-		struct umem_instance *umem, uuid_t uuid)
+		struct umem_instance *umem, uuid_t uuid, bool skip_blob)
 {
 	struct bio_io_context	*ctxt;
 	int			 rc;
@@ -534,8 +516,8 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	ctxt->bic_xs_ctxt = xs_ctxt;
 	uuid_copy(ctxt->bic_pool_id, uuid);
 
-	/* NVMe isn't configured */
-	if (xs_ctxt == NULL) {
+	/* NVMe isn't configured or pool doesn't have NVMe partition */
+	if (!bio_nvme_configured() || skip_blob) {
 		*pctxt = ctxt;
 		return 0;
 	}
@@ -618,14 +600,14 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 }
 
 int
-bio_ioctxt_close(struct bio_io_context *ctxt)
+bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob)
 {
 	struct bio_xs_context	*xs_ctxt;
 	int			 rc;
 
 	xs_ctxt = ctxt->bic_xs_ctxt;
-	/* NVMe isn't configured */
-	if (xs_ctxt == NULL) {
+	/* NVMe isn't configured or pool doesn't have NVMe partition */
+	if (!bio_nvme_configured() || skip_blob) {
 		d_list_del_init(&ctxt->bic_link);
 		D_FREE(ctxt);
 		return 0;
@@ -732,7 +714,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	struct smd_dev_info	*dev_info;
 	spdk_blob_id		 blob_id;
 	d_iov_t			 iov;
-	bio_addr_t		 addr;
+	bio_addr_t		 addr = { 0 };
 	uint64_t		 off = 0; /* byte offset in SPDK blob */
 	uint16_t		 dev_type = DAOS_MEDIA_NVME;
 	int			 rc = 0;
@@ -771,7 +753,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	}
 
 	uuid_copy(bio_bh->bbh_blobstore, dev_info->sdi_id);
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 
 	/* Create an iov to store blob header structure */
 	d_iov_set(&iov, (void *)bio_bh, sizeof(*bio_bh));

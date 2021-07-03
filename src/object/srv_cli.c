@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file includes functions to call client daos API on the server side.
@@ -34,46 +17,7 @@
 #include <daos_errno.h>
 #include <daos_event.h>
 #include <daos_task.h>
-#include <daos_srv/daos_server.h>
-
-static int
-dsc_obj_retry_cb(tse_task_t *task, void *arg)
-{
-	daos_handle_t *oh = arg;
-	int rc;
-
-	if (task->dt_result != -DER_NO_HDL || oh == NULL)
-		return 0;
-
-	/* If the remote rebuild pool/container is not ready,
-	 * or the remote target has been evicted from pool.
-	 * Note: the pool map will redistributed by IV
-	 * automatically, so let's just keep refreshing the
-	 * layout.
-	 */
-	rc = dc_obj_layout_refresh(*oh);
-	if (rc) {
-		D_ERROR("task %p, dc_obj_layout_refresh failed rc %d\n",
-			task, rc);
-		task->dt_result = rc;
-		return rc;
-	}
-
-	D_DEBUG(DB_REBUILD, "retry task %p\n", task);
-	rc = dc_task_resched(task);
-	if (rc != 0) {
-		D_ERROR("Failed to re-init task (%p)\n", task);
-		return rc;
-	}
-
-	/*
-	 * Register the retry callback again, because it has been removed
-	 * from the completion callback list. If this registration failed,
-	 * the task will just stop retry on next run.
-	 */
-	rc = dc_task_reg_comp_cb(task, dsc_obj_retry_cb, oh, sizeof(*oh));
-	return rc;
-}
+#include <daos_srv/daos_engine.h>
 
 int
 dsc_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
@@ -87,7 +31,7 @@ dsc_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
 	if (rc)
 		return rc;
 
-	return dsc_task_run(task, dsc_obj_retry_cb, NULL, 0, true);
+	return dsc_task_run(task, NULL, NULL, 0, true);
 }
 
 int
@@ -100,7 +44,7 @@ dsc_obj_close(daos_handle_t oh)
 	if (rc)
 		return rc;
 
-	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
+	return dsc_task_run(task, NULL, &oh, sizeof(oh), true);
 }
 
 static int
@@ -122,7 +66,7 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, DAOS_TF_RDONLY, &th);
+	rc = dc_tx_local_open(coh, epoch, 0, &th);
 	if (rc)
 		return rc;
 
@@ -138,26 +82,27 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		return rc;
 	}
 
-	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
+	return dsc_task_run(task, NULL, &oh, sizeof(oh), true);
 }
 
 int
 dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	      unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
-	      daos_iom_t *maps, uint32_t extra_flag, uint32_t *extra_arg)
+	      daos_iom_t *maps, uint32_t extra_flag, uint32_t *extra_arg,
+	      d_iov_t *csum_iov)
 {
 	tse_task_t	*task;
 	daos_handle_t	coh, th;
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, DAOS_TF_RDONLY, &th);
+	rc = dc_tx_local_open(coh, epoch, 0, &th);
 	if (rc)
 		return rc;
 
 	rc = dc_obj_fetch_task_create(oh, th, 0, dkey, nr, extra_flag,
-				      iods, sgls, maps, extra_arg, NULL,
-				      dsc_scheduler(), &task);
+				      iods, sgls, maps, extra_arg, csum_iov,
+				      NULL, dsc_scheduler(), &task);
 	if (rc)
 		return rc;
 
@@ -168,7 +113,22 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		return rc;
 	}
 
-	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
+	return dsc_task_run(task, NULL, &oh, sizeof(oh), true);
+}
+
+int
+dsc_obj_update(daos_handle_t oh, uint64_t flags, daos_key_t *dkey,
+	       unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls)
+{
+	tse_task_t	*task;
+	int		rc;
+
+	rc = dc_obj_update_task_create(oh, DAOS_TX_NONE, flags, dkey, nr, iods,
+				       sgls, NULL, dsc_scheduler(), &task);
+	if (rc)
+		return rc;
+
+	return dsc_task_run(task, NULL, &oh, sizeof(oh), true);
 }
 
 int
@@ -188,5 +148,25 @@ dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 	if (rc)
 		return rc;
 
-	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
+	return dsc_task_run(task, NULL, &oh, sizeof(oh), true);
+}
+
+int
+dsc_obj_id2oc_attr(daos_obj_id_t oid, struct cont_props *prop,
+		   struct daos_oclass_attr *oca)
+{
+	struct daos_oclass_attr *tmp;
+	bool			 priv;
+
+	tmp = daos_oclass_attr_find(oid, &priv);
+	if (!tmp)
+		return -DER_NOSCHEMA;
+
+	*oca = *tmp;
+	if (daos_oclass_is_ec(oca) && !priv) {
+		/* don't ovewrite cell size of private class */
+		D_ASSERT(prop->dcp_ec_cell_sz > 0);
+		oca->u.ec.e_len = prop->dcp_ec_cell_sz;
+	}
+	return 0;
 }

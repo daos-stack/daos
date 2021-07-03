@@ -1,30 +1,9 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-from __future__ import print_function
-
-import sys
 import time
 import tempfile
 import json
@@ -34,14 +13,8 @@ import codecs
 import subprocess
 import shlex
 
-from avocado  import Test
-from avocado  import main
+from cart_utils import CartTest
 
-sys.path.append('./util')
-
-# Can't all this import before setting sys.path
-# pylint: disable=wrong-import-position
-from cart_utils import CartUtils
 
 def _check_value(expected_value, received_value):
     """
@@ -56,8 +29,8 @@ def _check_value(expected_value, received_value):
     received_value = received_value.lower()
 
     # Convert the expected value to hex characters
-    expected_value_hex = "".join("{:02x}".format(ord(c)) \
-                                 for c in expected_value).lower()
+    expected_value_hex = "".join(
+        "{:02x}".format(ord(c)) for c in expected_value).lower()
 
     # Make sure received value is at least as long as expected
     if len(received_value) < len(expected_value_hex):
@@ -74,13 +47,13 @@ def _check_value(expected_value, received_value):
 
     return True
 
+
 def _check_key(key_rank, key_idx, received_key_hex):
     """
         Checks that the received key is the same as the sent key
         key_rank and key_idx are 32-bit integers
         received_key_hex is hex(key_rank|key_idx)
     """
-
     if len(received_key_hex) != 16:
         return False
 
@@ -91,45 +64,37 @@ def _check_key(key_rank, key_idx, received_key_hex):
 
     return (rank == key_rank) and (idx == key_idx)
 
-class CartIvTwoNodeTest(Test):
-    """
-    Runs basic CaRT tests on one-node
 
-    :avocado: tags=all,cart,pr,iv,two_node
-    """
-    def setUp(self):
-        """ Test setup """
-        print("Running setup\n")
-        self.utils = CartUtils()
-        self.env = self.utils.get_env(self)
+class CartIvTwoNodeTest(CartTest):
+    # pylint: disable=too-few-public-methods
+    """Run basic CaRT tests on one-node.
 
-    def tearDown(self):
-        """ Test tear down """
-        print("Run TearDown\n")
+    :avocado: recursive
+    """
 
     def _verify_action(self, action):
-        """verify the action"""
+        """Verify the action."""
         if (('operation' not in action) or
                 ('rank' not in action) or
                 ('key' not in action)):
-            self.utils.print("Error happened during action check")
-            raise ValueError("Each action must contain an operation," \
-                             " rank, and key")
+            self.print("Error happened during action check")
+            raise ValueError(
+                "Each action must contain an operation, rank, and key")
 
         if len(action['key']) != 2:
-            self.utils.print("Error key should be tuple of (rank, idx)")
+            self.print("Error key should be tuple of (rank, idx)")
             raise ValueError("key should be a tuple of (rank, idx)")
 
     def _verify_fetch_operation(self, action):
-        """verify fetch operation"""
+        """Verify fetch operation."""
         if (('return_code' not in action) or
                 ('expected_value' not in action)):
-            self.utils.print("Error: fetch operation was malformed")
+            self.print("Error: fetch operation was malformed")
             raise ValueError("Fetch operation malformed")
 
     def _iv_test_actions(self, cmd, actions):
-        #pylint: disable=too-many-locals
-        """Go through each action and perform the test"""
+        # pylint: disable=too-many-locals
+        """Go through each action and perform the test."""
         for action in actions:
             clicmd = cmd
             command = 'tests/iv_client'
@@ -157,12 +122,13 @@ class CartIvTwoNodeTest(Test):
                             log_path)
                 clicmd += command
 
-                self.utils.print("\nClient cmd : %s\n" % clicmd)
+                self.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
-                    raise ValueError('Error code {!s} running command "{!s}"' \
-                        .format(cli_rtn, command))
+                    raise ValueError(
+                        'Error code {!s} running command "{!s}"'.format(
+                            cli_rtn, command))
 
                 # Read the result into test_result and remove the temp file
                 log_file = open(log_path)
@@ -173,10 +139,9 @@ class CartIvTwoNodeTest(Test):
 
                 # Parse return code and make sure it matches
                 if expected_rc != test_result["return_code"]:
-                    raise ValueError("Fetch returned return code {!s} != " \
-                                     "expected value {!s}".format(
-                                         test_result["return_code"],
-                                         expected_rc))
+                    raise ValueError(
+                        "Fetch returned return code {!s} != expected value "
+                        "{!s}".format(test_result["return_code"], expected_rc))
 
                 # Other values will be invalid if return code is failure
                 if expected_rc != 0:
@@ -195,122 +160,123 @@ class CartIvTwoNodeTest(Test):
                 if 'value' not in action:
                     raise ValueError("Update operation requires value")
 
-                command = " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}' -v '{!s}'" \
-                        .format(command, operation, rank, key_rank, key_idx,
-                                action['value'])
+                command = \
+                    " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}' -v '{!s}'".format(
+                        command, operation, rank, key_rank, key_idx,
+                        action['value'])
                 clicmd += command
 
-                self.utils.print("\nClient cmd : %s\n" % clicmd)
+                self.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
-                    raise ValueError('Error code {!s} running command "{!s}"' \
-                            .format(cli_rtn, command))
+                    raise ValueError(
+                        'Error code {!s} running command "{!s}"'.format(
+                            cli_rtn, command))
 
             if "invalidate" in operation:
                 command = " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}'".format(
                     command, operation, rank, key_rank, key_idx)
                 clicmd += command
 
-                self.utils.print("\nClient cmd : %s\n" % clicmd)
+                self.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
-                    raise ValueError('Error code {!s} running command "{!s}"' \
-                            .format(cli_rtn, command))
+                    raise ValueError(
+                        'Error code {!s} running command "{!s}"'.format(
+                            cli_rtn, command))
 
     def test_cart_iv(self):
         """
         Test CaRT IV
 
-        :avocado: tags=all,cart,pr,iv,two_node
+        :avocado: tags=all,cart,pr,daily_regression,iv,two_node
         """
-
-        srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
+        srvcmd = self.build_cmd(self.env, "test_servers")
 
         try:
-            srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
+            srv_rtn = self.launch_cmd_bg(srvcmd)
         # pylint: disable=broad-except
         except Exception as e:
-            self.utils.print("Exception in launching server : {}".format(e))
+            self.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
-        if not self.utils.check_process(srv_rtn):
-            procrtn = self.utils.stop_process(srv_rtn)
-            self.fail("Server did not launch, return code %s" \
-                       % procrtn)
+        if not self.check_process(srv_rtn):
+            procrtn = self.stop_process(srv_rtn)
+            self.fail("Server did not launch, return code {}".format(procrtn))
 
         actions = [
             # Fetch, expect fail, no variable yet
-            {"operation":"fetch", "rank":0, "key":(0, 42), "return_code":-1,
-             "expected_value":""},
+            {"operation": "fetch", "rank": 1, "key": (0, 42), "return_code": -1,
+             "expected_value": ""},
             # Add variable 0:42
-            {"operation":"update", "rank":0, "key":(0, 42), "value":"potato"},
+            {"operation": "update", "rank": 0, "key": (0, 42),
+             "value": "potato"},
             # Fetch the value and verify it
-            {"operation":"fetch", "rank":0, "key":(0, 42), "return_code":0,
-             "expected_value":"potato"},
+            {"operation": "fetch", "rank": 0, "key": (0, 42), "return_code": 0,
+             "expected_value": "potato"},
             # Invalidate the value
-            {"operation":"invalidate", "rank":0, "key":(0, 42)},
+            {"operation": "invalidate", "rank": 0, "key": (0, 42)},
             # Fetch the value again expecting failure
-            {"operation":"fetch", "rank":0, "key":(0, 42), "return_code":-1,
-             "expected_value":""},
+            {"operation": "fetch", "rank": 0, "key": (0, 42), "return_code": -1,
+             "expected_value": ""},
         ]
 
-        time.sleep(2)
+        ###### Wait for servers to come up ######
+        # Only 32 retries allowed. May exceed this limit
+        # Not required but results in cleaner log files.
+        # Don't see the client retries
+        time.sleep(4)
 
         failed = False
 
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients")
+        clicmd = self.build_cmd(self.env, "test_clients")
 
         ########## Launch Client Actions ##########
-
         try:
             self._iv_test_actions(clicmd, actions)
         except ValueError as exception:
             failed = True
-            self.utils.print("TEST FAILED: %s" % str(exception))
+            self.print("TEST FAILED: {}".format(exception))
 
         ########## Shutdown Servers ##########
-
-        num_servers = self.utils.get_srv_cnt(self, "test_servers")
+        num_servers = self.get_srv_cnt("test_servers")
 
         srv_ppn = self.params.get("test_servers_ppn", '/run/tests/*/')
 
         # Note: due to CART-408 issue, rank 0 needs to shutdown last
         # Request each server shut down gracefully
-        for rank in reversed(range(1, int(srv_ppn) * num_servers)):
-            clicmd += " -o shutdown -r " + str(rank)
-            self.utils.print("\nClient cmd : %s\n" % clicmd)
+        for rank in reversed(list(range(1, int(srv_ppn) * num_servers))):
+            clicmdt = clicmd + " -o shutdown -r " + str(rank)
+            self.print("\nClient cmd : {}\n".format(clicmdt))
             try:
-                subprocess.call(shlex.split(clicmd))
+                subprocess.call(shlex.split(clicmdt))
             # pylint: disable=broad-except
             except Exception as e:
                 failed = True
-                self.utils.print("Exception in launching client : {}".format(e))
+                self.print("Exception in launching client : {}".format(e))
 
         time.sleep(1)
 
         # Shutdown rank 0 separately
         clicmd += " -o shutdown -r 0"
-        self.utils.print("\nClient cmd : %s\n" % clicmd)
+        self.print("\nClient cmd : {}\n".format(clicmd))
         try:
             subprocess.call(shlex.split(clicmd))
         # pylint: disable=broad-except
         except Exception as e:
             failed = True
-            self.utils.print("Exception in launching client : {}".format(e))
+            self.print("Exception in launching client : {}".format(e))
 
+        # Give some time for completion before forcing servers shut down
         time.sleep(2)
 
         # Stop the server if it is still running
-        if self.utils.check_process(srv_rtn):
+        if self.check_process(srv_rtn):
             # Return value is meaningless with --continuous
-            self.utils.stop_process(srv_rtn)
+            self.stop_process(srv_rtn)
 
         if failed:
             self.fail("Test failed.\n")
-
-
-if __name__ == "__main__":
-    main()

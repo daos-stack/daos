@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS stoarge pool types and functions
@@ -177,6 +160,7 @@ typedef struct {
 /** DAOS pool container information */
 struct daos_pool_cont_info {
 	uuid_t		pci_uuid;
+	char		pci_label[DAOS_PROP_LABEL_MAX_LEN+1];
 };
 
 /**
@@ -186,8 +170,6 @@ struct daos_pool_cont_info {
  *
  * \param[in]	uuid	UUID to identify a pool.
  * \param[in]	grp	Process set name of the DAOS servers managing the pool
- * \param[in]	svc	Optional, pool service replica ranks, as reported by
- *			daos_pool_create().
  * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
  * \param[out]	poh	Returned open handle.
  * \param[in,out]
@@ -206,8 +188,37 @@ struct daos_pool_cont_info {
  */
 int
 daos_pool_connect(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, unsigned int flags,
+		  unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
+
+/**
+ * Connect to the DAOS pool identified by \a label. Upon a successful
+ * completion, \a poh returns the pool handle, and \a info returns the latest
+ * pool information.
+ *
+ * \param[in]	label	label string to identify a pool.
+ * \param[in]	grp	Process set name of the DAOS servers managing the pool
+ * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
+ * \param[out]	poh	Returned open handle.
+ * \param[in,out]
+ *		info	Optional, returned pool information,
+ *			see daos_pool_info_bit.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Pool is nonexistent
+ */
+int
+daos_pool_connect_by_label(const char *label, const char *grp,
+			   unsigned int flags,
+			   daos_handle_t *poh, daos_pool_info_t *info,
+			   daos_event_t *ev);
 
 /**
  * Disconnect from the DAOS pool. It should revoke all the container open
@@ -225,25 +236,6 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
  */
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
-
-/**
- * Evict all connections to a pool.
- *
- * \param uuid	[IN]	UUID of the pool
- * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NONEXIST	Pool is nonexistent
- */
-int
-daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
-		daos_event_t *ev);
 
 /*
  * Handle API

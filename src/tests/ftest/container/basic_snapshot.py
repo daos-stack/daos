@@ -1,31 +1,14 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
 
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError
-from general_utils import get_random_string
+from general_utils import get_random_bytes
 
 
 class BasicSnapshot(TestWithServers):
@@ -47,7 +30,7 @@ class BasicSnapshot(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a BasicSnapshot object."""
-        super(BasicSnapshot, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.snapshot = None
 
     def test_basic_snapshot(self):
@@ -62,7 +45,7 @@ class BasicSnapshot(TestWithServers):
             Verify the snapshot is still available and the contents remain in
             their original state.
 
-        :avocado: tags=snap,basicsnap
+        :avocado: tags=all,daily_regression,snap,basicsnap
         """
         # Set up the pool and container.
         try:
@@ -84,10 +67,10 @@ class BasicSnapshot(TestWithServers):
         try:
             # create an object and write some data into it
             obj_cls = self.params.get("obj_class", '/run/object_class/*')
-            thedata = "Now is the winter of our discontent made glorious"
+            thedata = b"Now is the winter of our discontent made glorious"
             datasize = len(thedata) + 1
-            dkey = "dkey"
-            akey = "akey"
+            dkey = b"dkey"
+            akey = b"akey"
             obj = self.container.write_an_obj(thedata,
                                               datasize,
                                               dkey,
@@ -111,7 +94,7 @@ class BasicSnapshot(TestWithServers):
             more_transactions = 500
             while more_transactions:
                 size = random.randint(1, 250) + 1
-                new_data = get_random_string(size)
+                new_data = get_random_bytes(size)
                 new_obj = self.container.write_an_obj(
                     new_data, size, dkey, akey, obj_cls=obj_cls)
                 new_obj.close()

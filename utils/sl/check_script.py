@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright (c) 2016-2019 Intel Corporation
+#!/usr/bin/python3
+# Copyright (c) 2016-2021 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -58,7 +58,7 @@ class WrapScript():
             if match:
                 if not scons_header:
                     scons_header = True
-                    self.write_header(outfile)
+                    new_lineno += self.write_header(outfile)
                 variables = []
                 for var in match.group(2).split():
                     newvar = var.strip("\",     '")
@@ -102,8 +102,9 @@ class WrapScript():
     @staticmethod
     def write_variables(outfile, prefix, variables):
         """Add code to define fake variables for pylint"""
-        newlines = 2
+        newlines = 4
         outfile.write("# pylint: disable=invalid-name\n")
+        outfile.write("# pylint: disable=import-outside-toplevel\n")
 
         for variable in variables:
             if variable.upper() == 'PREREQS':
@@ -135,17 +136,20 @@ class WrapScript():
                 outfile.write("%s%s = None\n" % (prefix, variable))
 
         outfile.write("# pylint: enable=invalid-name\n")
+        outfile.write("# pylint: enable=import-outside-toplevel\n")
         return newlines
 
     @staticmethod
     def write_header(outfile):
         """write the header"""
         outfile.write("""# pylint: disable=wildcard-import
+# pylint: disable=import-outside-toplevel
 from __future__ import print_function
 from SCons.Script import *
 from SCons.Variables import *
-# pylint: enable=wildcard-import\n""")
-        return 5
+# pylint: enable=wildcard-import
+# pylint: enable=import-outside-toplevel\n""")
+        return 7
 
     def fix_log(self, log_file, fname):
         """Get the line number"""
@@ -171,10 +175,8 @@ from SCons.Variables import *
             output.write(line)
         return output
 
-
 def parse_report(log_file):
     """Create the report"""
-    error_count = 0
     log_file.seek(0)
     with open("pylint.log", "a") as pylint:
         for line in log_file.readlines():
@@ -183,24 +185,8 @@ def parse_report(log_file):
             elif re.search("^[WECR]:", line):
                 sys.stdout.write(line[3:])
                 pylint.write(line[3:])
-                error_count += 1
             else:
                 sys.stdout.write(line)
-    return error_count
-
-def find_pylint(version):
-    """find pylint version"""
-    pylint = find_executable("pylint-%d" % version)
-    if pylint:
-        return pylint
-    python = find_executable("python%d" % version)
-    pylint = find_executable("pylint")
-
-    if python and pylint:
-        return "%s %s" % (python, pylint)
-
-    print("No python%d pylint found" % version)
-    return None
 
 def create_rc(src_name):
     """Create a temporary rc file with python path set"""
@@ -210,19 +196,19 @@ def create_rc(src_name):
     with open(name, "w") as tmp:
         tmp.write("[MASTER]\n")
         tmp.write("init-hook='import sys; ")
-        tmp.write("sys.path.insert(0, \"%s\"); " % root)
-        tmp.write("sys.path.insert(0, \"%s/fake_scons\")'\n" % root)
+        tmp.write("sys.path.insert(0, \"%s/fake_scons\"); " % root)
+        tmp.write("sys.path.insert(0, \"%s/../../site_scons\")'\n" % root)
         with open(src_path, "r") as src:
             for line in src.readlines():
                 tmp.write(line)
 
     return name
 
-
 #pylint: disable=too-many-branches
 def check_script(fname, *args, **kw):
     """Check a python script for errors"""
     tmp_fname = fname
+    print('Checking {}'.format(fname))
     wrapper = None
     wrap = kw.get("wrap", False)
     if wrap:
@@ -232,12 +218,12 @@ def check_script(fname, *args, **kw):
     else:
         pylint_path = "{path}"
 
-    #Python 2 checking is no longer supported
-    pycmd = find_pylint(3)
+    # Python 2 checking is no longer supported
+    pycmd = find_executable("pylint-3")
     rc_file = "tmp_pylint3.rc"
     if pycmd is None:
         print("Required pylint isn't installed on this machine")
-        return 0
+        return
 
     rc_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -261,66 +247,48 @@ def check_script(fname, *args, **kw):
     except OSError as exception:
         if exception.errno == errno.ENOENT:
             print("pylint could not be found")
-            return 1
+            return
         raise
     except subprocess.CalledProcessError:
         pass
 
     if wrap:
         log_file = wrapper.fix_log(log_file, fname)
-    error_count = parse_report(log_file)
-    print("")
-    return error_count
+    parse_report(log_file)
 #pylint: enable=too-many-branches
 
 def main():
     """Run the actual code in a function"""
     parser = argparse.ArgumentParser("Check a Python script for errors")
-    parser.add_argument("fname", metavar='FILENAME', type=str, nargs='?',
+    parser.add_argument("fname", metavar='FILENAME', type=str, nargs='*',
                         default=None, help="Filename of script to check")
     parser.add_argument("-w", dest='wrap', action='store_true',
                         help='Wrap the SCons script before checking')
+    parser.add_argument('-x', dest='exclude', help='Path to exclude')
     parser.add_argument("-s", dest='self_check', action='store_true',
                         help='Perform a self check')
-    parser.add_argument("-p3", dest='P3', action='store_true',
-                        help='Perform check using python3 (default)')
 
     args = parser.parse_args()
 
-    error_count = 0
-
-    pylint_rc = create_rc("pylint.rc")
     pylint3_rc = create_rc("pylint3.rc")
 
     if args.self_check:
-        print("Checking SCons")
-        error_count += check_script("SCons",
-                                    "-d", "too-few-public-methods",
-                                    "-d", "too-many-public-methods",
-                                    "-d", "invalid-name",
-                                    "-d", "unused-argument",
-                                    "-d", "no-self-use")
-        print("Checking prereq_tools")
-        error_count += check_script("prereq_tools",
-                                    "-d", "too-many-lines",
-                                    "-d", "unused-argument")
-        print("Checking components")
-        error_count += check_script("components")
-        print("Checking build_info")
-        error_count += check_script("build_info")
-        print("Checking check_script.py")
-        error_count += check_script("check_script")
+        check_script("SCons",
+                     "-d", "too-few-public-methods",
+                     "-d", "too-many-public-methods",
+                     "-d", "invalid-name",
+                     "-d", "unused-argument",
+                     "-d", "no-self-use")
 
     if args.fname:
-        error_count += check_script(args.fname, wrap=args.wrap,
-                                    P3=args.P3)
+        for fname in args.fname:
+            if args.exclude and fname.startswith(args.exclude):
+                continue
+            if not os.path.exists(fname):
+                continue
+            check_script(fname, wrap=args.wrap)
 
-    os.unlink(pylint_rc)
     os.unlink(pylint3_rc)
-
-    if error_count:
-        sys.exit(1)
-
 
 if __name__ == '__main__':
     main()

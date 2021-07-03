@@ -1,73 +1,12 @@
 # Software Installation
 
-DAOS runs on both Intel x86_64 and ARM64 platforms,
- and has been successfully tested
-on CentOS 7, OpenSUSE Leap 15.1, and Ubuntu 20.04 distributions.
-
-The majority of testing has been performed on Centos 7.7 and SLES 15,
-with Centos being used in the majority of the test cycles.
-
-## Software Dependencies
-
-DAOS requires a C99-capable compiler, a Go compiler, and the scons build tool.
-Moreover, the DAOS stack leverages the following open source projects:
-
--   [*CaRT*](https://github.com/daos-stack/cart) for high-performance
-    communication leveraging advanced network capabilities.
-
--   [*gRPC*](https://grpc.io/) provides a secured out-of-band channel for
-    DAOS administration.
-
--   [*PMDK*](https://github.com/pmem/pmdk.git) for persistent memory
-    programming.
-
--   [*SPDK*](http://spdk.io/) for userspace NVMe device access and management.
-
--   [*FIO*](https://github.com/axboe/fio) for flexible testing of Linux I/O
-    subsystems, specifically enabling validation of userspace NVMe device
-    performance through fio-spdk plugin.
-
--   [*ISA-L*](https://github.com/01org/isa-l) for checksum and erasure code
--   [*ISA-L_Crypto*](https://github.com/01org/isa-l_crypto) for checksum
-    computation.
-
--   [*Argobots*](https://github.com/pmodels/argobots) for thread management.
-
--   [*hwloc*](https://github.com/open-mpi/hwloc) for discovering system devices,
-    detecting their NUMA node affinity and for CPU binding
-
--   [*libfabric*](https://github.com/ofiwg/libfabric) for detecting fabric
-    interfaces, providers, and connection management.
-
-The DAOS build system can be configured to download and build any missing
-dependencies automatically.
+Please check the [support matrix](https://daos-stack.github.io/release/support_matrix)
+to select the appropriate software combination.
 
 ## Distribution Packages
 
-DAOS RPM packaging is currently available, and DEB packaging is under development and will be available in a future DAOS release. Integration with the [Spack](https://spack.io/) package manager is also
-under consideration.
-
-### Installing DAOS from RPMs
-
-DAOS RPMs are available from the Intel&copy; Registration Center.
-Clicking the [Intel&copy; Registration Center](https://registrationcenter.intel.com/forms/?productid=3412) link will take you to the registration center, where you will create an account. After creating an account, the following files can be downloaded:
-
-- daos_debug.tar - _debuginfo_ packages
-- daos_packages.tar - client and server main packages
-- daos_source.tar - source RPMs
-
-**Recommended steps after download:**
-
-	sudo tar -C / -xf daos_packages.tar
-	sudo cp /opt/intel/daos_rpms/packages/daos_packages.repo /etc/yum.repos.d
-	rm /opt/intel/daos_rpms/packages/libabt*
-	(cd /opt/intel/daos_rpms/packages/ && createrepo .)
-	sudo yum install epel-release
-	sudo yum install daos-server
-	sudo yum install daos-client
-
-**Note:** *Only daos-client OR daos-server needs to be specified on the yum command line.*
-
+DAOS packages will be available for CentOS7, CentOS8 and openSUSE Leap 15
+when DAOS 2.0 is released (planned for September 2021).
 
 ## DAOS from Scratch
 
@@ -85,37 +24,33 @@ packages usually available on all the Linux distributions. Moreover, a Go
 version of at least 1.10 is required.
 
 An exhaustive list of packages for each supported Linux distribution is
-maintained in the Docker files:
+maintained in the Docker files (please click on the link):
 
--    [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L76)
--    [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L16-L42)
--    [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.20.04#L21-L39)
+-    [CentOS 7](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L19-L79)
+-    [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L36-L85)
+-    [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/master/1.2/utils/docker/Dockerfile.ubuntu.20.04#L14-L22)
 
 The command lines to install the required packages can be extracted from
 the Docker files by removing the "RUN" command, which is specific to Docker.
-Check the [utils/docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
+Check the [utils/docker](https://github.com/daos-stack/daos/blob/master/utils/docker)
 directory for different Linux distribution versions.
 
-Some DAOS tests use MPI.   The DAOS build process
-uses the environment modules package to detect the presence of MPI.  If none
-is found, the build will skip building those tests.
+Some DAOS tests use MPI. The DAOS build process uses the environment modules
+package to detect the presence of MPI. If none is found, the build will skip
+building those tests.
 
 ### DAOS Source Code
 
-To check out the DAOS source code, run the following command:
+The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
+
+To checkout the latest development version, simply run:
 
 ```bash
-$ git clone https://github.com/daos-stack/daos.git
+$ git clone --recurse-submodules https://github.com/daos-stack/daos.git
 ```
 
 This command clones the DAOS git repository (path referred as ${daospath}
-below). Then initialize the submodules with:
-
-```bash
-$ cd ${daospath}
-$ git submodule init
-$ git submodule update
-```
+below) and initializes all the submodules automatically.
 
 ### Building DAOS & Dependencies
 
@@ -123,17 +58,18 @@ If all the software dependencies listed previously are already satisfied, then
 type the following command in the top source directory to build the DAOS stack:
 
 ```bash
-$ scons --config=force install
+ scons-3 --config=force install
 ```
 
 If you are a developer of DAOS, we recommend following the instructions in the
-[DAOS for Development](https://daos-stack.github.io/dev/development/#building-daos-for-development) section.
+[DAOS for Development](https://daos-stack.github.io/dev/development/#building-daos-for-development)
+section.
 
 Otherwise, the missing dependencies can be built automatically by invoking scons
 with the following parameters:
 
 ```bash
-$ scons --config=force --build-deps=yes install
+ scons-3 --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under ${daospath}/install.
@@ -142,7 +78,7 @@ command line (e.g., PREFIX=/usr/local).
 
 !!! note
     Several parameters can be set (e.g., COMPILER=clang or COMPILER=icc) on the
-    scons command line. Please see `scons --help` for all the possible options.
+    scons command line. Please see `scons-3 --help` for all the possible options.
     Those options are also saved for future compilations.
 
 ### Environment setup
@@ -158,7 +94,7 @@ export CPATH PATH
 ```
 
 If using bash, PATH can be set up for you after a build by sourcing the script
-utils/sl/utils/setup_local.sh from the daos root. This script utilizes a file
+utils/sl/setup_local.sh from the daos root. This script utilizes a file
 generated by the build to determine the location of daos and its dependencies.
 
 If required, ${daospath}/install must be replaced with the alternative path
@@ -171,13 +107,19 @@ container. A minimum of 5GB of DRAM and 16GB of disk space will be required.
 On Mac, please make sure that the Docker settings under
 "Preferences/{Disk, Memory}" are configured accordingly.
 
-### Building from GitHub
+### Building a Docker Image
 
 To build the Docker image directly from GitHub, run the following command:
 
 ```bash
-$ curl -L https://raw.githubusercontent.com/daos-stack/daos/master/utils/docker/Dockerfile.centos.7 | \
-        docker build --no-cache -t daos -
+$ docker build https://github.com/daos-stack/daos.git#master \
+        -f utils/docker/Dockerfile.centos.7 -t daos
+```
+
+or from a local tree:
+
+```bash
+$ docker build  . -f utils/docker/Dockerfile.centos.7 -t daos
 ```
 
 This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
@@ -185,49 +127,25 @@ builds it, and installs it in the image.
 For Ubuntu and other Linux distributions, replace Dockerfile.centos.7 with
 Dockerfile.ubuntu.20.04 and the appropriate version of interest.
 
+### Simple Docker Setup
+
 Once the image created, one can start a container that will eventually run
 the DAOS service:
 
 ```bash
-$ docker run -it -d --privileged --name server \
-        -v /dev/hugepages:/dev/hugepages \
-        daos
+$ docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev daos
 ```
 
-If Docker is being run on a non-Linux system (e.g., OSX), the export of /dev/hugepages
-should be removed since it is not supported.
+!!! note
+    If you want to be more selective with the devices that are exported to the
+    container, individual devices should be listed and exported as volume via
+    the -v option. In this case, the hugepages devices should also be added
+    to the command line via -v /dev/hugepages:/dev/hugepages and
+    -v /dev/hugepages-1G:/dev/hugepages-1G
 
-### Building from a Local Tree
-
-To build from a local tree stored on the host, a volume must be created to share
-the source tree with the Docker container. To do so, execute the following
-command to create a docker image without checking out the DAOS source tree:
-
-```bash
-$ docker build -t daos -f utils/docker/Dockerfile.centos.7 --build-arg NOBUILD=1 .
-```
-
-Then create a container that can access the local DAOS source tree:
-
-```bash
-$ docker run -it -d --privileged --name server \
-        -v ${daospath}:/home/daos/daos:Z \
-        -v /dev/hugepages:/dev/hugepages \
-        daos
-```
-
-${daospath} should be replaced with the full path to your DAOS source tree.
-As mentioned above, the export of /dev/hugepages should be removed if the
-host is not a Linux system.
-
-Then execute the following command to build and install DAOS in the
-container:
-
-```bash
-$ docker exec server scons --build-deps=yes install PREFIX=/usr
-```
-
-### Simple Docker Setup
+!!! warning
+    If Docker is being run on a non-Linux system (e.g., OSX), -v /dev:/dev
+    should be removed from the command line.
 
 The `daos_server_local.yml` configuration file sets up a simple local DAOS
 system with a single server instance running in the container. By default, it
@@ -237,10 +155,12 @@ uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under
 The DAOS service can be started in the docker container as follows:
 
 ```bash
-$ docker exec server mkdir /var/run/daos_server
 $ docker exec server daos_server start \
         -o /home/daos/daos/utils/config/examples/daos_server_local.yml
 ```
+
+!!! note
+    Please make sure that the uio_pci_generic module is loaded on the host.
 
 Once started, the DAOS server waits for the administrator to format the system.
 This can be triggered in a different shell, using the following command:
@@ -251,9 +171,6 @@ $ docker exec server dmg -i storage format
 
 Upon successful completion of the format, the storage engine is started, and pools
 can be created using the daos admin tool (see next section).
-
-!!! note
-    Please make sure that the uio_pci_generic module is loaded.
 
 For more advanced configurations involving SCM, SSD or a real fabric, please
 refer to the next section.

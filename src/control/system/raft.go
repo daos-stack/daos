@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -31,7 +14,7 @@ import (
 
 	transport "github.com/Jille/raft-grpc-transport"
 	"github.com/hashicorp/raft"
-	boltdb "github.com/hashicorp/raft-boltdb"
+	boltdb "github.com/hashicorp/raft-boltdb/v2"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
@@ -55,10 +38,6 @@ const (
 	raftOpAddPoolService
 	raftOpUpdatePoolService
 	raftOpRemovePoolService
-
-	// raftTimeout sets an upper limit for how long an Apply
-	// operation may take (TODO: tuning required?).
-	raftTimeout = 1 * time.Second
 
 	sysDBFile = "daos_system.db"
 )
@@ -89,6 +68,9 @@ func (ro raftOp) String() string {
 		"addMember",
 		"updateMember",
 		"removeMember",
+		"addPoolService",
+		"updatePoolService",
+		"removePoolService",
 	}[ro]
 }
 
@@ -113,7 +95,23 @@ func (db *Database) ResignLeadership(cause error) error {
 func (db *Database) ShutdownRaft() error {
 	db.log.Debug("shutting down raft instance")
 	return db.raft.withReadLock(func(svc raftService) error {
-		return svc.Shutdown().Error()
+		// Call the raft implementation's shutdown and block
+		// until it completes.
+		shutdownErr := svc.Shutdown().Error()
+
+		// Try to run all of the defined shutdown callbacks. Logging
+		// any failures is the best we can do, as we really want to
+		// run as many of them as possible in order to clean things
+		// up.
+		if shutdownErr == nil {
+			for _, cb := range db.onRaftShutdown {
+				if cbErr := cb(); cbErr != nil {
+					db.log.Errorf("onRaftShutdown callback failed: %s", cbErr)
+				}
+			}
+		}
+
+		return shutdownErr
 	})
 }
 
@@ -125,11 +123,14 @@ func (db *Database) configureRaft() error {
 
 	rc := raft.DefaultConfig()
 	rc.Logger = newHcLogger(db.log)
-	rc.SnapshotThreshold = 16 // arbitrarily low to exercise snapshots
-	//rc.SnapshotInterval = 5 * time.Second
-	rc.HeartbeatTimeout = 250 * time.Millisecond
-	rc.ElectionTimeout = 250 * time.Millisecond
-	rc.LeaderLeaseTimeout = 125 * time.Millisecond
+	// The default threshold is 8192, ehich is way too high for
+	// this use case. Our MS DB shouldn't be particularly high
+	// volume, so set this value to strike a balance between
+	// creating snapshots too frequently and not often enough.
+	rc.SnapshotThreshold = 32
+	rc.HeartbeatTimeout = 2000 * time.Millisecond
+	rc.ElectionTimeout = 2000 * time.Millisecond
+	rc.LeaderLeaseTimeout = 1000 * time.Millisecond
 	rc.LocalID = raft.ServerID(db.serverAddress())
 	rc.NotifyCh = db.raftLeaderNotifyCh
 
@@ -144,6 +145,17 @@ func (db *Database) configureRaft() error {
 		return err
 	}
 
+	// Rank 0 is reserved for the first instance on the bootstrap server.
+	// NB: This is a bit of a hack. It would be better to persist this
+	// as a log entry, but there isn't a safe way to guarantee that it's
+	// the first log applied to the bootstrap instance to be replicated
+	// to peers as they're added. Instead, we just set everyone to start
+	// at rank 1 and increment from there as memberUpdate logs are applied.
+	db.data.NextRank = 1
+	db.OnRaftShutdown(func() error {
+		return boltDB.Close()
+	})
+
 	r, err := raft.NewRaft(rc, (*fsm)(db), boltDB, boltDB, snaps, db.raftTransport)
 	if err != nil {
 		return err
@@ -154,15 +166,13 @@ func (db *Database) configureRaft() error {
 }
 
 // startRaft is responsible for configuring and starting the raft service
-// on this node. If shouldBootstrap is true, then the service will be started
-// in a special bootstrap mode that does not require a quorum.
-func (db *Database) startRaft(shouldBootstrap bool) error {
-	db.log.Debugf("isBootstrap: %t, shouldBootstrap: %t", db.IsBootstrap(), shouldBootstrap)
+// on this node. If the database is new and the node is designated as the
+// bootstrap instance, then the service will be started in a special bootstrap
+// mode that does not require a quorum.
+func (db *Database) startRaft(newDB bool) error {
+	db.log.Debugf("isBootstrap: %t, newDB: %t", db.IsBootstrap(), newDB)
 
-	if db.IsBootstrap() && shouldBootstrap {
-		// Rank 0 is reserved for the first instance on the bootstrap server.
-		db.data.NextRank = 1
-
+	if db.IsBootstrap() && newDB {
 		db.log.Debugf("bootstrapping MS on %s", db.replicaAddr)
 		bsc := raft.Configuration{
 			Servers: []raft.Server{
@@ -275,7 +285,7 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *PoolService) error {
 // submitRaftUpdate submits the serialized operation to the raft service.
 func (db *Database) submitRaftUpdate(data []byte) error {
 	return db.raft.withReadLock(func(svc raftService) error {
-		return svc.Apply(data, raftTimeout).Error()
+		return svc.Apply(data, 0).Error()
 	})
 }
 
@@ -286,33 +296,38 @@ func (db *Database) submitRaftUpdate(data []byte) error {
 // NB: This type alias allows us to use a Database object as a raft.FSM.
 type fsm Database
 
+// EmergencyShutdown is called when a FSM Apply fails or in some other
+// situation where the only safe response is to immediately shut down
+// the raft instance and prevent it from participating in the cluster.
+// After a shutdown, the control plane server must be restarted in order
+// to bring this node back into the raft cluster.
+func (f *fsm) EmergencyShutdown(err error) {
+	f.log.Errorf("EMERGENCY RAFT SHUTDOWN due to %s", err)
+	_ = f.raft.withReadLock(func(svc raftService) error {
+		// Call .Error() on the future returned from
+		// raft.Shutdown() in order to block on completion.
+		// The error returned from this future is always nil.
+		return svc.Shutdown().Error()
+	})
+}
+
 // Apply is called after the log entry has been committed. This is the
 // only place that direct modification of the data should occur.
-//
-// NB: Per Hashicorp (https://github.com/hashicorp/raft/issues/307),
-// the only reasonable response to an Apply() failure is to panic,
-// because the Raft algorithm does not specify a recovery mechanism
-// for this scenario.
-//
-// TODO: This approach feels too heavy-handed, given that the control
-// plane is responsible for more than just hosting the raft service.
-// It's not clear how we can meaningfully handle errors though, and it
-// seems risky to allow a replica to continue in an indeterminite state.
-// For the moment, let's just use the nuclear option on the theory that
-// these are "can't happen" errors, e.g. ENOMEM or corrupt snapshot.
 func (f *fsm) Apply(l *raft.Log) interface{} {
 	c := new(raftUpdate)
 	if err := json.Unmarshal(l.Data, c); err != nil {
-		panic(errors.Wrapf(err, "failed to unmarshal %+v", l.Data))
+		f.EmergencyShutdown(errors.Wrapf(err, "failed to unmarshal %+v", l.Data))
+		return nil
 	}
 
 	switch c.Op {
 	case raftOpAddMember, raftOpUpdateMember, raftOpRemoveMember:
-		f.data.applyMemberUpdate(c.Op, c.Data)
+		f.data.applyMemberUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	case raftOpAddPoolService, raftOpUpdatePoolService, raftOpRemovePoolService:
-		f.data.applyPoolUpdate(c.Op, c.Data)
+		f.data.applyPoolUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	default:
-		panic(errors.Errorf("unhandled Apply operation: %d", c.Op))
+		f.EmergencyShutdown(errors.Errorf("unhandled Apply operation: %d", c.Op))
+		return nil
 	}
 
 	return nil
@@ -320,10 +335,11 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 
 // applyMemberUpdate is responsible for applying the membership update
 // operation to the database.
-func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
+func (d *dbData) applyMemberUpdate(op raftOp, data []byte, panicFn func(error)) {
 	m := new(memberUpdate)
 	if err := json.Unmarshal(data, m); err != nil {
-		panic(errors.Wrap(err, "failed to decode member update"))
+		panicFn(errors.Wrap(err, "failed to decode member update"))
+		return
 	}
 
 	d.Lock()
@@ -337,7 +353,8 @@ func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
 	case raftOpRemoveMember:
 		d.Members.removeMember(m.Member)
 	default:
-		panic(errors.Errorf("unhandled Member Apply operation: %d", op))
+		panicFn(errors.Errorf("unhandled Member Apply operation: %d", op))
+		return
 	}
 
 	if m.NextRank {
@@ -348,10 +365,11 @@ func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
 
 // applyPoolUpdate is responsible for applying the pool service update
 // operation to the database.
-func (d *dbData) applyPoolUpdate(op raftOp, data []byte) {
+func (d *dbData) applyPoolUpdate(op raftOp, data []byte, panicFn func(error)) {
 	ps := new(PoolService)
 	if err := json.Unmarshal(data, ps); err != nil {
-		panic(errors.Wrap(err, "failed to decode pool service update"))
+		panicFn(errors.Wrap(err, "failed to decode pool service update"))
+		return
 	}
 
 	d.Lock()
@@ -363,13 +381,15 @@ func (d *dbData) applyPoolUpdate(op raftOp, data []byte) {
 	case raftOpUpdatePoolService:
 		cur, found := d.Pools.Uuids[ps.PoolUUID]
 		if !found {
-			panic(errors.Errorf("pool service update for unknown pool %+v", ps))
+			panicFn(errors.Errorf("pool service update for unknown pool %+v", ps))
+			return
 		}
 		d.Pools.updateService(cur, ps)
 	case raftOpRemovePoolService:
 		d.Pools.removeService(ps)
 	default:
-		panic(errors.Errorf("unhandled Pool Service Apply operation: %d", op))
+		panicFn(errors.Errorf("unhandled Pool Service Apply operation: %d", op))
+		return
 	}
 
 	d.MapVersion++
@@ -404,10 +424,12 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 			db.data.SchemaVersion, CurrentSchemaVersion)
 	}
 
+	f.data.Lock()
 	f.data.Members = db.data.Members
 	f.data.Pools = db.data.Pools
 	f.data.NextRank = db.data.NextRank
 	f.data.MapVersion = db.data.MapVersion
+	f.data.Unlock()
 	f.log.Debugf("db snapshot loaded (map version %d)", db.data.MapVersion)
 	return nil
 }

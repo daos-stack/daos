@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
@@ -124,6 +107,7 @@ main(int argc, char **argv)
 	uint64_t		*keys;
 	struct daos_llink	*link_ret[3] = {NULL};
 	struct daos_lru_cache	*tcache = NULL;
+	int			csize;
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
@@ -134,13 +118,15 @@ main(int argc, char **argv)
 		exit(-1);
 	}
 
-	rc = daos_lru_cache_create(atoi(argv[1]), D_HASH_FT_RWLOCK,
+	csize	 = (int)strtol(argv[1], (char **)NULL, 10);
+	num_keys = (int)strtol(argv[2], (char **)NULL, 10);
+
+	rc = daos_lru_cache_create(csize, D_HASH_FT_RWLOCK,
 				   &uint_ref_llink_ops,
 				   &tcache);
 	if (rc)
 		D_ASSERTF(0, "Error in creating lru cache\n");
 
-	num_keys = atoi(argv[2]);
 	D_ALLOC_ARRAY(keys, (num_keys + 2));
 	if (keys == NULL)
 		D_ASSERTF(0, "Error in allocating keys_array\n");

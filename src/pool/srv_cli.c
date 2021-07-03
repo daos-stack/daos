@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file includes functions to call client daos API on the server side.
@@ -33,7 +16,7 @@
 #include <daos_errno.h>
 #include <daos_event.h>
 #include <daos_task.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include "cli_internal.h"
 
 int
@@ -46,6 +29,9 @@ dsc_pool_close(daos_handle_t ph)
 		return 0;
 
 	pl_map_disconnect(pool->dp_pool);
+	dc_pool_hdl_unlink(pool); /* -1 ref from dc_pool_hdl_link(pool); */
+	dc_pool_put(pool);	  /* -1 ref from dc_pool2hdl(pool, ph); */
+
 	dc_pool_put(pool);
 	return 0;
 }
@@ -58,7 +44,7 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	struct dc_pool	*pool;
 	int		rc = 0;
 
-	if (!daos_handle_is_inval(*ph)) {
+	if (daos_handle_is_valid(*ph)) {
 		pool = dc_hdl2pool(*ph);
 		if (pool != NULL)
 			D_GOTO(out, rc = 0);
@@ -92,8 +78,9 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	D_DEBUG(DF_DSMC, DF_UUID": create: hdl="DF_UUIDF" flags=%x\n",
 		DP_UUID(pool_uuid), DP_UUID(pool->dp_pool_hdl), flags);
 
-	dc_pool_hdl_link(pool);
-	dc_pool2hdl(pool, ph);
+	dc_pool_hdl_link(pool); /* +1 ref */
+	dc_pool2hdl(pool, ph);  /* +1 ref */
+
 out:
 	if (pool != NULL)
 		dc_pool_put(pool);

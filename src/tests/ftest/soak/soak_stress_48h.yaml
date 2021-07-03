@@ -8,7 +8,7 @@ hosts:
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
-    client_reservation:
+    # client_reservation: daos-test
 orterun:
     allow_run_as_root: True
 # This timeout must be longer than the test_timeout param (+15minutes)
@@ -19,7 +19,8 @@ setup:
     start_agents: True
 server_config:
     name: daos_server
-    provider: ofi+sockets
+    provider: ofi+verbs;ofi_rxm
+    nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:
@@ -33,45 +34,33 @@ server_config:
         scm_class: dcpm
         scm_list: [/dev/pmem0]
         bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
         env_vars:
             - FI_UNIVERSE_SIZE=2048
 # pool_params - attributes of the pools to create; Currently only create one
-pool_ior:
+pool_jobs:
     mode: 146
     name: daos_server
-    scm_size: 200000000000
-    nvme_size: 300000000000
-    svcn: 1
-    control_method: dmg
-pool_fio:
-    mode: 146
-    name: daos_server
-    scm_size: 100000000000
-    nvme_size: 200000000000
+    scm_size: 160GB
+    nvme_size: 800GB
     svcn: 1
     control_method: dmg
 pool_reserved:
     mode: 511
     name: daos_server
-    scm_size: 3000000000
-    nvme_size: 50000000000
+    scm_size: 3GB
+    nvme_size: 50GB
     control_method: dmg
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    oclass: SX
     control_method: daos
 container_reserved:
-    akey_size: 5
-    dkey_size: 5
-    data_size: 4096
-    object_qty: 20
-    record_qty: 1
-    record_size: 100
-    array_size: 1
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: API
+    oclass: SX
+    control_method: daos
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -88,55 +77,54 @@ soak_stress:
     name: soak_stress
     # stress test timeout in hours
     test_timeout: 48
-    # maximum timeout for a single job in test in minutes
-    job_timeout: 30
-    nodesperjob:
-        - -1
-        - 2
-        - 4
-    # used for performance benchmarks
-    taskspernode:
-        - 1
-        - 16
-        - 32
-    poollist:
-        - pool_ior
-        - pool_fio
     joblist:
-        - ior_stress
         - fio_stress
+        - daos_racer
+        - ior_stress
+        - mdtest_stress
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
 # sequential
 ior_stress:
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 30
+    nodesperjob:
+        - 1
+        - 4
+        - 8
+    # used for performance benchmarks
+    taskspernode:
+        - 1
+        - 16
+        - 32
     api:
         - DFS
         - MPIIO
+        - POSIX
         - HDF5
         - HDF5-VOL
     test_file: daos:testFile
-    flags: -v -w -W -r -R
+    flags: -v -w -W -r -R -k
     block_size:
         - '64M'
-        - '4M'
-        - '32M'
     repetitions: 5
     transfer_size:
-        - '4k'
-        - '128k'
         - '1m'
-        - '512K'
-        - '64k'
+        - '4k'
     dfs_oclass:
-        - "SX"
-    dfs_destroy: True
+        - 'SX'
+    dfs_dir_oclass:
+        - 'SX'
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/ior/"
+        disable_caching: True
 fio_stress:
   names:
     - global
     - test
   global:
-    directory: "/tmp/daos_dfuse/"
+    directory: "/tmp/daos_dfuse/fio/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -155,8 +143,53 @@ fio_stress:
     rw:
         - 'rw'
         - 'randrw'
-dfuse:
-    mount_dir: "/tmp/daos_dfuse/"
-    disable_direct_io: True
+    oclass:
+        - 'SX'
+  dfuse:
+    mount_dir: "/tmp/daos_dfuse/fio/"
+    disable_wb_caching: True
+daos_racer:
+    runtime: 120
+    container:
+        type: POSIX
+        oclass: SX
+        control_method: daos
+mdtest_stress:
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 40
+    nodesperjob:
+        - 1
+        - 4
+        - 8
+    taskspernode:
+        - 16
+    test_dir: "/"
+    api:
+        - 'DFS'
+        - 'POSIX'
+    iteration: 1
+    num_of_files_dirs: 3000
+    branching_factor: 1
+    flags: '-v'
+    write_bytes:
+        - 3901
+    read_bytes:
+        - 3901
+    depth:
+        - 10
+        - 0
+    dfs_oclass: 'SX'
+    dfs_dir_oclass: 'S1'
+    dfs_destroy: False
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/mdtest/"
+        disable_caching: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
+events:
+    - "mce: [Hardware Error]: Machine check events logged"
+    - "Package temperature above threshold"
+monitor:
+    - "/usr/bin/free -h"
+    - "/usr/bin/vmstat -w"
+    - "ps -C daos_engine -o %mem,%cpu,cmd"

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * Epoch Tests
@@ -68,10 +51,11 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
 
 			MUST(daos_tx_commit(ths[i], NULL));
 			if (snaps_in && i == snaps_in[k]) {
-				MUST(daos_cont_create_snap(coh, &snaps[k++],
+				MUST(daos_cont_create_snap(coh, &snaps[k],
 							   NULL, arg->async ?
 							   &ev : NULL));
 				WAIT_ON_ASYNC(arg, ev);
+				k++;
 			}
 		}
 
@@ -162,7 +146,7 @@ test_epoch_aggregate(void **argp)
 	MUST(cont_create(arg, cont_uuid));
 	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
 
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
 
 	D_ALLOC_ARRAY(ths, 100);
@@ -229,7 +213,7 @@ test_snapshots(void **argp)
 	MUST(cont_create(arg, co_uuid));
 	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
 
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
 
 	D_ALLOC_ARRAY(ths, num_records);
@@ -248,7 +232,6 @@ test_snapshots(void **argp)
 	MUST(daos_cont_list_snap(coh, &snap_count_out, NULL, NULL, &anchor,
 				 arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
-	daos_anchor_is_eof(&anchor);
 	assert_int_equal(snap_count_out, snap_count);
 
 	print_message("Snapshot listing shall succeed with a small buffer\n");
@@ -258,7 +241,6 @@ test_snapshots(void **argp)
 	MUST(daos_cont_list_snap(coh, &snap_count_out, snaps_out, NULL, &anchor,
 				 arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
-	daos_anchor_is_eof(&anchor);
 	assert_int_equal(snap_count_out, snap_count);
 	for (i = 0; i < snap_split_index; i++)
 		assert_int_equal(snaps_out[i], snaps[i]);
@@ -272,7 +254,6 @@ test_snapshots(void **argp)
 	MUST(daos_cont_list_snap(coh, &snap_count_out, snaps_out, NULL, &anchor,
 				 arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
-	daos_anchor_is_eof(&anchor);
 	assert_int_equal(snap_count_out, snap_count);
 	for (i = 0; i < snap_count; i++)
 		assert_int_not_equal(snaps_out[i], garbage);
@@ -351,7 +332,7 @@ run_daos_epoch_test(int rank, int size)
 	int	rc;
 
 	if (rank == 0)
-		rc = cmocka_run_group_tests_name("DAOS epoch tests",
+		rc = cmocka_run_group_tests_name("DAOS_Epoch",
 						 epoch_tests, setup,
 						 test_teardown);
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);

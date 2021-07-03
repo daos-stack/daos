@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -35,8 +18,16 @@ import (
 func TestDmg_ConfigCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"Generate with defaults",
+			"Generate with no access point",
 			"config generate",
+			strings.Join([]string{
+				printRequest(t, &control.NetworkScanReq{}),
+			}, " "),
+			errors.New("no access points"),
+		},
+		{
+			"Generate with defaults",
+			"config generate -a foo",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -44,7 +35,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with no nvme",
-			"config generate --num-nvme 0",
+			"config generate -a foo --min-ssds 0",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -52,7 +43,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with storage parameters",
-			"config generate --num-pmem 2 --num-nvme 4",
+			"config generate -a foo --num-engines 2 --min-ssds 4",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -60,7 +51,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with short option storage parameters",
-			"config generate -p 2 -n 4",
+			"config generate -a foo -e 2 -s 4",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -68,7 +59,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with ethernet network device class",
-			"config generate --net-class ethernet",
+			"config generate -a foo --net-class ethernet",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -76,7 +67,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with infiniband network device class",
-			"config generate --net-class infiniband",
+			"config generate -a foo --net-class infiniband",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -84,7 +75,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with best-available network device class",
-			"config generate --net-class best-available",
+			"config generate -a foo --net-class best-available",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -92,7 +83,7 @@ func TestDmg_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with unsupported network device class",
-			"config generate --net-class loopback",
+			"config generate -a foo --net-class loopback",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),

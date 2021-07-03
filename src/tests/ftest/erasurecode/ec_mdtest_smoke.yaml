@@ -9,9 +9,9 @@ hosts:
     - server-F
     - server-G
     - server-H
-timeout: 300
+timeout: 600
 server_config:
-  servers_per_host: 2
+  engines_per_host: 2
   name: daos_server
   servers:
     0:
@@ -39,11 +39,10 @@ server_config:
       scm_mount: /mnt/daos1
       log_mask: ERR
 pool:
-    mode: 146
     name: daos_server
-    scm_size: 200G
-    nvme_size: 400G
     control_method: dmg
+    size: 53%
+    scm_ratio: 50
 container:
     type: POSIX
     control_method: daos
@@ -75,7 +74,12 @@ mdtest:
   objectclass:
       dfs_oclass:
       - "EC_2P1G1"
+      - "EC_2P1GX"
       - "EC_2P2G1"
+      - "EC_2P2GX"
       - "EC_4P1G1"
+      - "EC_4P1GX"
       - "EC_4P2G1"
+      - "EC_4P2GX"
       - "EC_8P2G1"
+      - "EC_8P2GX"

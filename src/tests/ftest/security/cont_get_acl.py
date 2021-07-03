@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. 8F-30005.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
@@ -40,7 +23,7 @@ class GetContainerACLTest(ContSecurityTestBase):
     """
     def setUp(self):
         """Set up each test case."""
-        super(GetContainerACLTest, self).setUp()
+        super().setUp()
         self.daos_cmd = self.get_daos_command()
         self.prepare_pool()
         self.add_container(self.pool)
@@ -54,7 +37,8 @@ class GetContainerACLTest(ContSecurityTestBase):
             expected with valid inputs and verify that we can't overwrite
             an already existing file when using the --outfile argument.
 
-        :avocado: tags=all,pr,security,container_acl,cont_get_acl_inputs
+        :avocado: tags=all,pr,daily_regression,security,container_acl
+        :avocado: tags=cont_get_acl_inputs
         """
         test_errs = []
         for verbose in [True, False]:
@@ -84,7 +68,7 @@ class GetContainerACLTest(ContSecurityTestBase):
                     outfile=path_to_file)
                 test_errs.extend(
                     self.error_handling(
-                        self.daos_cmd.result, "File already exists"))
+                        self.daos_cmd.result, "ile exists"))
 
         if test_errs:
             self.fail("container get-acl command expected to fail: \
@@ -97,7 +81,8 @@ class GetContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container get-acl command doesn't
             get ACL information without permission.
 
-        :avocado: tags=all,pr,security,container_acl,cont_get_acl_noperms
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_get_acl_noperms
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(

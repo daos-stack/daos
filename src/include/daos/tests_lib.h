@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_TESTS_LIB_H__
@@ -29,25 +12,29 @@
 #include <daos/common.h>
 #include <daos_mgmt.h>
 #include <daos/object.h>
-#include <daos_srv/bio.h>
-#ifdef DAOS_HAS_VALGRIND
-#include <valgrind/valgrind.h>
-#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
-#else
-#define DAOS_ON_VALGRIND 0
-#endif
+#include <daos/credit.h>
 
-#define assert_success(r) do {\
-	int __rc = (r); \
-	if (__rc != 0) \
-		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
+#define assert_success(r)						\
+	do {								\
+		int __rc = (r);						\
+		if (__rc != 0)						\
+			fail_msg("Not successful!! Error code: "	\
+				 DF_RC, DP_RC(__rc));			\
 	} while (0)
 
-/** Read a command line from stdin. */
-char *dts_readline(const char *prompt);
+#define assert_rc_equal(rc, expected_rc)				\
+	do {								\
+		if ((rc) == (expected_rc))				\
+			break;						\
+		print_message("Failure assert_rc_equal %s:%d "		\
+			      "%s(%d) != %s(%d)\n", __FILE__, __LINE__, \
+			      d_errstr(rc), rc,				\
+			      d_errstr(expected_rc), expected_rc);	\
+		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
+		assert_int_equal(rc, expected_rc);			\
+	} while (0)
 
-/** release a line buffer returned by dts_readline */
-void  dts_freeline(char *line);
+#define DTS_OCLASS_DEF OC_RP_XSF
 
 /** Fill in readable random bytes into the buffer */
 void dts_buf_render(char *buf, unsigned int buf_len);
@@ -59,10 +46,10 @@ void dts_buf_render_uppercase(char *buf, unsigned int buf_len);
 void dts_key_gen(char *key, unsigned int key_len, const char *prefix);
 
 /** generate a random and unique object ID */
-daos_obj_id_t dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed);
+daos_obj_id_t dts_oid_gen(unsigned seed);
 
 /** generate a random and unique baseline object ID */
-daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint8_t ofeats,
+daos_unit_oid_t dts_unit_oid_gen(daos_oclass_id_t oclass, uint8_t ofeats,
 				 uint32_t shard);
 
 /** Set rank into the oid */
@@ -87,98 +74,30 @@ dts_time_now(void)
 	return (tv.tv_sec + tv.tv_usec / 1000000.0);
 }
 
-/**
- * Readline a command line from stdin, parse and execute it.
- *
- * \param [IN]	opts		valid operations
- * \param [IN]	prompt		prompt string
- * \param [IN]	cmd_func	command functions
- */
-int dts_cmd_parser(struct option *opts, const char *prompt,
-		   int (*cmd_func)(char opc, char *args));
-
 void dts_reset_key(void);
 
-#define DTS_KEY_LEN		64
+static inline bool
+tsc_create_pool(struct credit_context *tsc)
+{
+	return !tsc->tsc_skip_pool_create;
+}
 
-/**
- * I/O credit, the utility can only issue \a ts_credits_avail concurrent I/Os,
- * each credit can carry all parameters for the asynchronous I/O call.
- */
-struct dts_io_credit {
-	char			*tc_vbuf;	/**< value buffer address */
-	char			 tc_dbuf[DTS_KEY_LEN];	/**< dkey buffer */
-	char			 tc_abuf[DTS_KEY_LEN];	/**< akey buffer */
-	daos_key_t		 tc_dkey;		/**< dkey iov */
-	d_iov_t			 tc_val;		/**< value iov */
-	/** sgl for the value iov */
-	d_sg_list_t		 tc_sgl;
-	/** I/O descriptor for input akey */
-	daos_iod_t		 tc_iod;
-	/** recx for the I/O, there is only one recx in \a tc_iod */
-	daos_recx_t		 tc_recx;
-	/** daos event for I/O */
-	daos_event_t		 tc_ev;
-	/** points to \a tc_ev in async mode, otherwise it's NULL */
-	daos_event_t		*tc_evp;
-};
-
-#define DTS_CRED_MAX		1024
-/**
- * I/O test context
- * It is input parameter which carries pool and container uuid etc, and output
- * parameter which returns pool and container open handle.
- *
- * If \a tsc_pmem_file is set, then it is VOS I/O test context, otherwise
- * it is DAOS I/O test context and \a ts_svc should be set.
- */
-struct dts_context {
-	/** INPUT: should be initialized by caller */
-	/** optional, pmem file name, only for VOS test */
-	char			*tsc_pmem_file;
-	/** optional, pool service ranks, only for DAOS test */
-	d_rank_list_t		 tsc_svc;
-	/** MPI rank of caller */
-	int			 tsc_mpi_rank;
-	/** # processes in the MPI program */
-	int			 tsc_mpi_size;
-	uuid_t			 tsc_pool_uuid;	/**< pool uuid */
-	uuid_t			 tsc_cont_uuid;	/**< container uuid */
-	/** pool SCM partition size */
-	uint64_t		 tsc_scm_size;
-	/** pool NVMe partition size */
-	uint64_t		 tsc_nvme_size;
-	/** number of I/O credits (tsc_credits) */
-	int			 tsc_cred_nr;
-	/** value size for \a tsc_credits */
-	int			 tsc_cred_vsize;
-	/** INPUT END */
-
-	/** OUTPUT: initialized within \a dts_ctx_init() */
-	daos_handle_t		 tsc_poh;	/**< pool open handle */
-	daos_handle_t		 tsc_coh;	/**< container open handle */
-	daos_handle_t		 tsc_eqh;	/**< EQ handle */
-	/** # available I/O credits */
-	int			 tsc_cred_avail;
-	/** # inflight I/O credits */
-	int			 tsc_cred_inuse;
-	/** all pre-allocated I/O credits */
-	struct dts_io_credit	 tsc_cred_buf[DTS_CRED_MAX];
-	/** pointers of all available I/O credits */
-	struct dts_io_credit	*tsc_credits[DTS_CRED_MAX];
-	/** initialization steps, internal use only */
-	int			 tsc_init;
-	/** OUTPUT END */
-};
+static inline bool
+tsc_create_cont(struct credit_context *tsc)
+{
+	/* Can't skip container if pool isn't also skipped */
+	return tsc_create_pool(tsc) || !tsc->tsc_skip_cont_create;
+}
 
 /* match BIO_XS_CNT_MAX, which is the max VOS xstreams mapped to a device */
 #define MAX_TEST_TARGETS_PER_DEVICE 48
+#define DSS_HOSTNAME_MAX_LEN	255
 
 typedef struct {
 	uuid_t		device_id;
 	char		state[10];
 	int		rank;
-	char		host[50];
+	char		host[DSS_HOSTNAME_MAX_LEN];
 	int		tgtidx[MAX_TEST_TARGETS_PER_DEVICE];
 	int		n_tgtidx;
 }  device_list;
@@ -210,7 +129,7 @@ dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...);
  */
 void
 dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
-	uint32_t count, char *d, ...);
+				 uint32_t count, char *d, ...);
 
 #define DTS_CFG_MAX 256
 __attribute__ ((__format__(__printf__, 2, 3)))
@@ -322,6 +241,19 @@ int dmg_pool_destroy(const char *dmg_config_file,
 		     const uuid_t uuid, const char *grp, int force);
 
 /**
+ * Set property of the pool with \a pool_uuid.
+ *
+ * \param dmg_config_file	[IN] DMG config file.
+ * \param pool_uuid		[IN] UUID of the pool.
+ * \param prop_name		[IN] the name of the property.
+ * \param prop_value		[IN] the value of the property.
+ */
+int
+dmg_pool_set_prop(const char *dmg_config_file,
+		  const char *prop_name, const char *prop_value,
+		  const uuid_t pool_uuid);
+
+/**
  * List all disks in the specified DAOS system.
  *
  * \param dmg_config_file
@@ -376,6 +308,6 @@ int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
  */
 int verify_blobstore_state(int state, const char *state_str);
 
-const char * daos_target_state_enum_to_str(int state);
+const char *daos_target_state_enum_to_str(int state);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
@@ -141,6 +124,29 @@ dfs_test_cond(void **state)
 		print_error("Failed concurrent rename\n");
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	/* Verify TX consistency semantics. */
+	if (op_rc == 0 && arg->myrank == 0) {
+		/* New name entry should have been removed. */
+		rc = dfs_open(dfs_mt, NULL, filename,
+			      S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY,
+			      0, 0, NULL, &file);
+		if (rc != ENOENT)
+			print_error("Open old name %s after rename got %d\n",
+				    filename, rc);
+		assert_int_equal(rc, ENOENT);
+		dfs_release(file);
+
+		/* New name entry should have been created. */
+		rc = dfs_open(dfs_mt, NULL, newfilename,
+			      S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY,
+			      0, 0, NULL, &file);
+		if (rc != 0)
+			print_error("Open new name %s after rename got %d\n",
+				    newfilename, rc);
+		assert_int_equal(rc, 0);
+		dfs_release(file);
+	}
 }
 
 #define NUM_SEGS 10
@@ -242,7 +248,7 @@ dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
 	/** truncate the buffer to a large size, read should return all */
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = dfs_punch(dfs_mt, obj, 1048576 * 2, 0);
+		rc = dfs_punch(dfs_mt, obj, 1048576 * 2, DFS_MAX_FSIZE);
 		assert_int_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -578,6 +584,56 @@ dfs_test_hole_mgmt(void **state)
 	D_FREE(rsgl.sg_iovs);
 }
 
+static void
+dfs_test_cont_atomic(void **state)
+{
+	test_arg_t		*arg = *state;
+	uuid_t			cuuid;
+	daos_cont_info_t	co_info;
+	daos_handle_t		coh;
+	dfs_t			*dfs;
+	int			rc, op_rc;
+
+	if (arg->myrank == 0)
+		uuid_generate(cuuid);
+	/** share uuid with other ranks */
+	MPI_Bcast(cuuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+	/** All create a DFS container with POSIX layout */
+	if (arg->myrank == 0)
+		print_message("All ranks create the same POSIX container\n");
+
+	op_rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
+	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("one rank Created POSIX Container "DF_UUIDF"\n",
+			      DP_UUID(cuuid));
+
+	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+			    &coh, &co_info, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+		assert_int_equal(rc, 0);
+		print_message("Destroyed POSIX Container "DF_UUIDF"\n",
+			      DP_UUID(cuuid));
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest dfs_par_tests[] = {
 	{ "DFS_PAR_TEST1: Conditional OPs",
 	  dfs_test_cond, async_disable, test_case_teardown},
@@ -587,6 +643,8 @@ static const struct CMUnitTest dfs_par_tests[] = {
 	  dfs_test_ec_short_read, async_disable, test_case_teardown},
 	{ "DFS_PAR_TEST4: DFS hole management",
 	  dfs_test_hole_mgmt, async_disable, test_case_teardown},
+	{ "DFS_PAR_TEST5: DFS Container create atomicity",
+	  dfs_test_cont_atomic, async_disable, test_case_teardown},
 };
 
 static int
@@ -624,12 +682,12 @@ dfs_teardown(void **state)
 	rc = dfs_umount(dfs_mt);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(co_hdl, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		printf("Destroyed DFS Container "DF_UUIDF"\n",
 		       DP_UUID(co_uuid));
 	}
@@ -644,7 +702,7 @@ run_dfs_par_test(int rank, int size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) parallel tests",
+	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Parallel",
 					 dfs_par_tests, dfs_setup,
 					 dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);

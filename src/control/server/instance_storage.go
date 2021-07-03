@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -32,27 +15,29 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // scmConfig returns the scm configuration assigned to this instance.
-func (srv *IOServerInstance) scmConfig() storage.ScmConfig {
-	return srv.runner.GetConfig().Storage.SCM
+func (ei *EngineInstance) scmConfig() storage.ScmConfig {
+	return ei.runner.GetConfig().Storage.SCM
 }
 
 // bdevConfig returns the block device configuration assigned to this instance.
-func (srv *IOServerInstance) bdevConfig() storage.BdevConfig {
-	return srv.runner.GetConfig().Storage.Bdev
+func (ei *EngineInstance) bdevConfig() storage.BdevConfig {
+	return ei.runner.GetConfig().Storage.Bdev
 }
 
 // MountScmDevice mounts the configured SCM device (DCPM or ramdisk emulation)
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
-func (srv *IOServerInstance) MountScmDevice() error {
-	scmCfg := srv.scmConfig()
+func (ei *EngineInstance) MountScmDevice() error {
+	scmCfg := ei.scmConfig()
 
-	isMount, err := srv.scmProvider.IsMounted(scmCfg.MountPoint)
+	isMount, err := ei.scmProvider.IsMounted(scmCfg.MountPoint)
 	if err != nil && !os.IsNotExist(errors.Cause(err)) {
 		return errors.WithMessage(err, "failed to check SCM mount")
 	}
@@ -60,74 +45,87 @@ func (srv *IOServerInstance) MountScmDevice() error {
 		return nil
 	}
 
-	srv.log.Debugf("attempting to mount existing SCM dir %s\n", scmCfg.MountPoint)
+	ei.log.Debugf("attempting to mount existing SCM dir %s\n", scmCfg.MountPoint)
 
 	var res *scm.MountResponse
 	switch scmCfg.Class {
 	case storage.ScmClassRAM:
-		res, err = srv.scmProvider.MountRamdisk(scmCfg.MountPoint, uint(scmCfg.RamdiskSize))
+		res, err = ei.scmProvider.MountRamdisk(scmCfg.MountPoint, uint(scmCfg.RamdiskSize))
 	case storage.ScmClassDCPM:
 		if len(scmCfg.DeviceList) != 1 {
 			err = scm.FaultFormatInvalidDeviceCount
 			break
 		}
-		res, err = srv.scmProvider.MountDcpm(scmCfg.DeviceList[0], scmCfg.MountPoint)
+		res, err = ei.scmProvider.MountDcpm(scmCfg.DeviceList[0], scmCfg.MountPoint)
 	default:
 		err = errors.New(scm.MsgClassNotSupported)
 	}
 	if err != nil {
 		return errors.WithMessage(err, "mounting existing scm dir")
 	}
-	srv.log.Debugf("%s mounted: %t", res.Target, res.Mounted)
+	ei.log.Debugf("%s mounted: %t", res.Target, res.Mounted)
 
 	return nil
 }
 
 // NeedsScmFormat probes the configured instance storage and determines whether
 // or not it requires a format operation before it can be used.
-func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
-	scmCfg := srv.scmConfig()
+func (ei *EngineInstance) NeedsScmFormat() (bool, error) {
+	scmCfg := ei.scmConfig()
 
-	srv.log.Debugf("%s: checking formatting", scmCfg.MountPoint)
+	ei.log.Debugf("%s: checking formatting", scmCfg.MountPoint)
 
-	srv.RLock()
-	defer srv.RUnlock()
+	ei.RLock()
+	defer ei.RUnlock()
 
 	req, err := scm.CreateFormatRequest(scmCfg, false)
 	if err != nil {
 		return false, err
 	}
 
-	res, err := srv.scmProvider.CheckFormat(*req)
+	res, err := ei.scmProvider.CheckFormat(*req)
 	if err != nil {
 		return false, err
 	}
 
 	needsFormat := !res.Mounted && !res.Mountable
-	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, needsFormat)
+	ei.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, needsFormat)
 	return needsFormat, nil
 }
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
-func (srv *IOServerInstance) NotifyStorageReady() {
+func (ei *EngineInstance) NotifyStorageReady() {
 	go func() {
-		srv.storageReady <- true
+		ei.storageReady <- true
 	}()
 }
 
-// awaitStorageReady blocks until instance has storage available and ready to be used.
-func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
-	idx := srv.Index()
+// publishFormatRequiredFn returns onAwaitFormatFn which will publish an
+// event using the provided publish function to indicate that host is awaiting
+// storage format.
+func publishFormatRequiredFn(publishFn func(*events.RASEvent), hostname string) onAwaitFormatFn {
+	return func(_ context.Context, engineIdx uint32, formatType string) error {
+		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx, formatType).
+			WithRank(uint32(system.NilRank))
+		publishFn(evt)
 
-	if srv.isStarted() {
+		return nil
+	}
+}
+
+// awaitStorageReady blocks until instance has storage available and ready to be used.
+func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
+	idx := ei.Index()
+
+	if ei.isStarted() {
 		return errors.Errorf("can't wait for storage: instance %d already started", idx)
 	}
 
-	srv.log.Infof("Checking %s instance %d storage ...", build.DataPlaneName, idx)
+	ei.log.Infof("Checking %s instance %d storage ...", build.DataPlaneName, idx)
 
-	needsScmFormat, err := srv.NeedsScmFormat()
+	needsScmFormat, err := ei.NeedsScmFormat()
 	if err != nil {
-		srv.log.Errorf("instance %d: failed to check storage formatting: %s", idx, err)
+		ei.log.Errorf("instance %d: failed to check storage formatting: %s", idx, err)
 		needsScmFormat = true
 	}
 
@@ -135,19 +133,19 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 		if skipMissingSuperblock {
 			return nil
 		}
-		srv.log.Debugf("instance %d: no SCM format required; checking for superblock", idx)
-		needsSuperblock, err := srv.NeedsSuperblock()
+		ei.log.Debugf("instance %d: no SCM format required; checking for superblock", idx)
+		needsSuperblock, err := ei.NeedsSuperblock()
 		if err != nil {
-			srv.log.Errorf("instance %d: failed to check instance superblock: %s", idx, err)
+			ei.log.Errorf("instance %d: failed to check instance superblock: %s", idx, err)
 		}
 		if !needsSuperblock {
-			srv.log.Debugf("instance %d: superblock not needed", idx)
+			ei.log.Debugf("instance %d: superblock not needed", idx)
 			return nil
 		}
 	}
 
 	if skipMissingSuperblock {
-		return FaultScmUnmanaged(srv.scmConfig().MountPoint)
+		return FaultScmUnmanaged(ei.scmConfig().MountPoint)
 	}
 
 	// by this point we need superblock and possibly scm format
@@ -155,35 +153,42 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 	if !needsScmFormat {
 		formatType = "Metadata"
 	}
-	srv.log.Infof("%s format required on instance %d", formatType, srv.Index())
+	ei.log.Infof("%s format required on instance %d", formatType, idx)
 
-	srv.waitFormat.SetTrue()
+	ei.waitFormat.SetTrue()
+	// After we know that the instance is awaiting format, fire off
+	// any callbacks that are waiting for this state.
+	for _, fn := range ei.onAwaitFormat {
+		if err := fn(ctx, idx, formatType); err != nil {
+			return err
+		}
+	}
 
 	select {
 	case <-ctx.Done():
-		srv.log.Infof("%s instance %d storage not ready: %s", build.DataPlaneName, srv.Index(), ctx.Err())
-	case <-srv.storageReady:
-		srv.log.Infof("%s instance %d storage ready", build.DataPlaneName, srv.Index())
+		ei.log.Infof("%s instance %d storage not ready: %s", build.DataPlaneName, idx, ctx.Err())
+	case <-ei.storageReady:
+		ei.log.Infof("%s instance %d storage ready", build.DataPlaneName, idx)
 	}
 
-	srv.waitFormat.SetFalse()
+	ei.waitFormat.SetFalse()
 
 	return ctx.Err()
 }
 
-func (srv *IOServerInstance) logScmStorage() error {
-	scmMount := path.Dir(srv.superblockPath())
+func (ei *EngineInstance) logScmStorage() error {
+	scmMount := path.Dir(ei.superblockPath())
 
-	if scmMount != srv.scmConfig().MountPoint {
+	if scmMount != ei.scmConfig().MountPoint {
 		return errors.New("superblock path doesn't match config mountpoint")
 	}
 
-	mp, err := srv.scmProvider.GetfsUsage(scmMount)
+	mp, err := ei.scmProvider.GetfsUsage(scmMount)
 	if err != nil {
 		return err
 	}
 
-	srv.log.Infof("SCM @ %s: %s Total/%s Avail", mp.Path,
+	ei.log.Infof("SCM @ %s: %s Total/%s Avail", mp.Path,
 		humanize.Bytes(mp.TotalBytes), humanize.Bytes(mp.AvailBytes))
 
 	return nil

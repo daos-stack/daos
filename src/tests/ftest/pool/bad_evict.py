@@ -1,31 +1,14 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import traceback
 import ctypes
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError
+from command_utils import CommandFailure
 from test_utils_pool import TestPool
 
 
@@ -88,12 +71,12 @@ class BadEvictTest(TestWithServers):
                 pool.pool.uuid[4] = 244
 
             # evict the pool
-            pool.pool.evict()
+            self.get_dmg_command().pool_evict(pool.pool.get_uuid_str())
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except DaosApiError as excep:
+        except CommandFailure as excep:
             self.log.error(str(excep))
             self.log.error(traceback.format_exc())
             if expected_result in ['PASS']:

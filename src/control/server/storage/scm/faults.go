@@ -1,25 +1,9 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
-//
+
 package scm
 
 import (
@@ -75,8 +59,8 @@ var (
 	// on SCM storage that was already formatted.
 	FaultFormatNoReformat = scmFault(
 		code.StorageAlreadyFormatted,
-		"format request for already-formatted storage and reformat not specified",
-		"retry the operation with reformat option to overwrite existing format",
+		"format request for already-formatted storage",
+		"retry the operation with force option to overwrite existing data",
 	)
 
 	// FaultDeviceAlreadyMounted represents an error where a format was requested
@@ -115,6 +99,8 @@ var (
 		"adjust or relax the filters and try again")
 )
 
+// FaultIpmctlBadVersion represents an error where an incompatible version of
+// ipmctl is installed.
 func FaultIpmctlBadVersion(version string) *fault.Fault {
 	return scmFault(
 		code.BadVersionSoftwareDependency,
@@ -130,6 +116,16 @@ func FaultFormatMissingDevice(device string) *fault.Fault {
 		code.ScmFormatMissingDevice,
 		fmt.Sprintf("configured SCM device %s does not exist", device),
 		"check the configured value and/or perform the SCM preparation procedure",
+	)
+}
+
+// FaultPathAccessDenied represents an error where a mount point or device path for
+// a SCM storage target is inaccessible because of a permissions issue.
+func FaultPathAccessDenied(path string) *fault.Fault {
+	return scmFault(
+		code.ScmPathAccessDenied,
+		fmt.Sprintf("path %q has incompatible access permissions", path),
+		"verify the path is accessible by the user running daos_server and try again",
 	)
 }
 

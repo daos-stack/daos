@@ -8,15 +8,9 @@ Containers can be created and destroyed through the daos_cont_create/destroy()
 functions exported by the DAOS API. A user tool called `daos` is also
 provided to manage containers.
 
-!!! note
-    In DAOS 1.0, in order to use the `daos` command the following environment
-    variables need to be set (this is no longer needed in later versions of DAOS):
-     * For Omni-Path: `export OFI_INTERFACE="ib0"; export CRT_PHY_ADDR_STR="ofi+psm2"`
-     * For InfiniBand: `export OFI_INTERFACE="ib0"; export CRT_PHY_ADDR_STR="ofi+verbs;ofi_rxm"; export OFI_DOMAIN="mlx5_0"`
-
 To create a container:
 ```bash
-$ daos cont create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0
+$ daos cont create --pool=a171434a-05a5-4671-8fe2-615aa0d05094
 Successfully created container 008123fc-6b6c-4768-a88a-a2a5ef34a1a2
 ```
 
@@ -28,11 +22,11 @@ to the POSIX file or directory.
 
 ```bash
 $ daos cont create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 \
-      --svc=0 --path=/tmp/mycontainer --type=POSIX --oclass=large \
+      --path=/tmp/mycontainer --type=POSIX --oclass=SX \
       --chunk_size=4K
 Successfully created container 419b7562-5bb8-453f-bd52-917c8f5d80d1 type POSIX
 
-$ daos container query --svc=0 --path=/tmp/mycontainer
+$ daos container query --path=/tmp/mycontainer
 Pool UUID:      a171434a-05a5-4671-8fe2-615aa0d05094
 Container UUID: 419b7562-5bb8-453f-bd52-917c8f5d80d1
 Number of snapshots: 0
@@ -47,18 +41,70 @@ Chunk Size:     4096
 
 At creation time, a list of container properties can be specified:
 
-| **Container Property**     | **Description** |
-| -------------------------  | --------------- |
+| **Container Property**            | **Description** |
+| -------------------------         | --------------- |
 | `DAOS_PROP_CO_LABEL`<img width=400/>| A string that a user can associate with a container. e.g., "Cat Pics" or "ResNet-50 training data"|
-| `DAOS_PROP_CO_LAYOUT_TYPE` | The container type (POSIX, MPI-IO, HDF5, ...)|
-| `DAOS_PROP_CO_LAYOUT_VER`  | A version of the layout that can be used by I/O middleware and application to handle interoperability.|
-| `DAOS_PROP_CO_REDUN_FAC`   | The redundancy factor that drives the minimal data protection required for objects stored in the container. e.g., RF1 means no data protection, RF3 only allows 3-way replication or erasure code N+2.|
-| `DAOS_PROP_CO_REDUN_LVL`   | The fault domain level that should be used to place data redundancy information (e.g., storage nodes, racks...). This information will be eventually consumed to determine object placement.|
+| `DAOS_PROP_CO_LAYOUT_TYPE`        | The container type (POSIX, HDF5, ...)|
+| `DAOS_PROP_CO_LAYOUT_VER`         | A version of the layout that can be used by I/O middleware and application to handle interoperability.|
+| `DAOS_PROP_CO_REDUN_FAC`          | The redundancy factor that drives the minimal data protection required for objects stored in the container. e.g., RF1 means no data protection, RF3 only allows 3-way replication or erasure code N+2.|
+| `DAOS_PROP_CO_REDUN_LVL`          | The fault domain level that should be used to place data redundancy information (e.g., storage nodes, racks...). This information will be eventually consumed to determine object placement.|
+| `DAOS_PROP_CO_CSUM`               | Checksum off, or algorithm to use.|
+| `DAOS_PROP_CO_CSUM_CHUNK_SIZE`    | Checksum chunk size.|
+| `DAOS_PROP_CO_CSUM_SERVER_VERIFY` | Perform additional checksum verification on server (default: off).|
+| `DAOS_PROP_CO_SNAPSHOT_MAX`       | Impose a limit on number of snapshots to retain (default: 0, no limitation).|
+| `DAOS_PROP_CO_ACL                 | Container access control list.|
+| `DAOS_PROP_CO_OWNER`              | User acting as the owner of the container.|
+| `DAOS_PROP_CO_OWNER_GROUP`        | Group acting as the owner of the container.|
+
+Refer to the Data Integrity and Access Control Lists sections for more
+details on the checksum and access-related properties.
+
+Refer to the Inline Deduplication section for details about additional
+properties for that preview feature that are not listed here.
 
 While those properties are currently stored persistently with container
 metadata, many of them are still under development. The ability to modify some
 of these properties on an existing container will also be provided in a future
 release.
+
+### Querying a container's properties
+
+The user-level administration `daos` utility may be used to query a
+container's properties. Refer to the manual page for full usage details.
+
+```bash
+# daos cont get-prop --pool=<UUID> --cont=<UUID>
+# -OR- --path interface shown below
+
+$ daos cont get-prop --path=/tmp/mycontainer
+Container properties for 419b7562-5bb8-453f-bd52-917c8f5d80d1 :
+label:                  container_label_not_set
+layout type:            POSIX (1)
+layout version:         1
+checksum type:          off
+checksum chunk-size:    32768
+cksum verif. on server: off
+deduplication:          off
+dedup threshold:        4096
+redundancy factor:      rf0
+redundancy level:       rack
+max snapshots:          0
+compression type:       off
+encryption type:        off
+Allocated OID:          0
+owner:                  username@
+owner-group:            groupname@
+status:                 HEALTHY
+acl:
+# Entries:
+A::OWNER@:rwdtTaAo
+A:G:GROUP@:rwtT
+```
+
+Additionally, a container's properties may be retrieved using the
+libdaos API daos_cont_query() function. Refer to the file
+src/include/daos_cont.h Doxygen comments and the online documentation
+available [here](https://daos-stack.github.io/html/).
 
 ## Data Integrity
 
@@ -104,9 +150,6 @@ during container create.
     Note that currently, once a container is created, its checksum configuration
     cannot be changed.
 
-!!! warning
-    The checksum feature is only supported in DAOS 1.2.
-
 ## Inline Deduplication (Preview)
 
 Data deduplication (dedup) is a process that allows to eliminate duplicated
@@ -142,11 +185,13 @@ configure dedup, the following container properties are used:
   the I/O for dedup (default is 4K).
 
 !!! warning
-    Dedup is a feature preview in 1.2 (i.e. master) and has some known
+    Dedup is a feature preview in 2.0 and has some known
     limitations. Aggregation of deduplicated extents isn't supported and the
     checksum tree isn't persistent yet. This means that aggregation is disabled
     for a container with dedplication enabled and duplicated extents won't be
     matched after a server restart.
+    NVMe isn't supported for dedup enabled container, so please make sure not
+    using dedup on the pool with NVMe enabled.
 
 ## Compression & Encryption
 
@@ -160,12 +205,16 @@ Similar to container create/destroy, a container can be snapshotted through the
 DAOS API by calling daos_cont_create_snap(). Additional functions are provided
 to destroy and list container snapshots.
 
-The API also provides the ability to subscribe to container snapshot events and
+The API also provides interfaces to subscribe to container snapshot events and
 to rollback the content of a container to a previous snapshot, but those
 operations are not yet fully implemented.
 
-This section will be updated once support for container snapshot is supported by
-the `daos` tool.
+The `daos` tool provides container {create/destroy}-snap and list-snaps
+commands. It provides access to basic snapshot create/destroy according
+to the constraints of the implementation (e.g., no named snapshots).
+It provides interfaces (commands and arguments) for the broader set of
+snapshot features, for when they are implemented later (e.g., specified
+epoch/epoch range, rollback).
 
 The `DAOS_PROP_CO_SNAPSHOT_MAX` property is used to limit the maximum number of
 snapshots to retain. When a new snapshot is taken, and the threshold is reached,
@@ -177,7 +226,8 @@ versions.
 ## User Attributes
 
 Similar to POSIX extended attributes, users can attach some metadata to each
-container through the daos_cont_{list/get/set}_attr() API.
+container through the daos_cont_{list/get/set}_attr() API, and through the
+utility commands: daos cont {get/set}-attr and list-attrs.
 
 ## Access Control Lists
 
@@ -227,27 +277,23 @@ If the user does not have Delete permission on the pool, they will only be able
 to delete containers for which they have been explicitly granted Delete
 permission in the container's ACL.
 
-!!! note:
-    In DAOS version 1.0, permissions are set on the _pool_ level and all containers
-    in the pool inherit the permissions of the pool. Starting with DAOS version 1.2,
-    pool and container permissions are controlled individually.
-
 ### Creating Containers with Custom ACL
 
 To create a container with a custom ACL:
 
 ```bash
-$ daos cont create --pool=<UUID> --svc=<rank> --acl-file=<path>
+$ daos cont create --pool=<UUID> --acl-file=<path>
 ```
 
-The ACL file format is detailed in the [ACL section](https://daos-stack.github.io/overview/security/#acl-file).
+The ACL file format is detailed in the
+[security overview](https://daos-stack.github.io/overview/security/#acl-file).
 
 ### Displaying a Container's ACL
 
 To view a container's ACL:
 
 ```bash
-$ daos cont get-acl --pool=<UUID> --svc=<rank> --cont=<UUID>
+$ daos cont get-acl --pool=<UUID> --cont=<UUID>
 ```
 
 The output is in the same string format used in the ACL file during creation,
@@ -263,7 +309,7 @@ noted above for container creation.
 To replace a container's ACL with a new ACL:
 
 ```bash
-$ daos cont overwrite-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
+$ daos cont overwrite-acl --pool=<UUID> --cont=<UUID> \
       --acl-file=<path>
 ```
 
@@ -272,14 +318,14 @@ $ daos cont overwrite-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
 To add or update multiple entries in an existing container ACL:
 
 ```bash
-$ daos cont update-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
+$ daos cont update-acl --pool=<UUID> --cont=<UUID> \
       --acl-file=<path>
 ```
 
 To add or update a single entry in an existing container ACL:
 
 ```bash
-$ daos cont update-acl --pool=<UUID> --svc=<rank> --cont=<UUID> --entry <ACE>
+$ daos cont update-acl --pool=<UUID> --cont=<UUID> --entry <ACE>
 ```
 
 If there is no existing entry for the principal in the ACL, the new entry is
@@ -291,13 +337,15 @@ is replaced with the new one.
 To delete an entry for a given principal in an existing container ACL:
 
 ```bash
-$ daos cont delete-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
+$ daos cont delete-acl --pool=<UUID> --cont=<UUID> \
       --principal=<principal>
 ```
 
-The principal corresponds to the principal portion of an ACE that was
-set during container creation or a previous container ACL operation. For the
-delete operation, the principal argument must be formatted as follows:
+The `principal` argument refers to the
+[principal](https://daos-stack.github.io/overview/security/#principal), or
+identity, of the entry to be removed.
+
+For the delete operation, the `principal` argument must be formatted as follows:
 
 * Named user: `u:username@`
 * Named group: `g:groupname@`
@@ -318,17 +366,26 @@ They may be set on container creation and changed later.
 
 #### Privileges
 
-The owner-user (`OWNER@`) has implicit privileges on their container. The
-owner-user can always open the container, and has set-ACL (A) and get-ACL (a)
-permissions. These permissions are included alongside any permissions that the
+The owner-user (`OWNER@`) has some implicit privileges on their container.
+These permissions are silently included alongside any permissions that the
 user was explicitly granted by entries in the ACL.
 
-Because the owner's special permissions are implicit, they apply to access
-control decisions even if they do not appear in the `OWNER@` entry, and even if
-the `OWNER@` entry is deleted.
+The owner-user will always have the following implicit capabilities:
 
-The owner-group (`GROUP@`) has no special permissions outside what they are
-granted by the ACL.
+* Open container
+* Set ACL (A)
+* Get ACL (a)
+
+Because the owner's special permissions are implicit, they do not need to be
+specified in the `OWNER@` entry. After
+[determining](https://daos-stack.github.io/overview/security/#enforcement)
+the user's privileges from the container ACL, DAOS checks whether the user
+requesting access is the owner-user. If so, DAOS grants the owner's
+implicit permissions to that user, in addition to any permissions granted by
+the ACL.
+
+In contrast, the owner-group (`GROUP@`) has no special permissions beyond those
+explicitly granted by the `GROUP@` entry in the ACL.
 
 #### Creating Containers with Specific Ownership
 
@@ -337,7 +394,7 @@ creating the container. However, a specific user and/or group may be specified
 at container creation time.
 
 ```bash
-$ daos cont create --pool=<UUID> --svc=<rank> --user=<owner-user> \
+$ daos cont create --pool=<UUID> --user=<owner-user> \
       --group=<owner-group>
 ```
 
@@ -349,14 +406,14 @@ The user and group names are case sensitive and must be formatted as
 To change the owner user:
 
 ```bash
-$ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> \
+$ daos cont set-owner --pool=<UUID> --cont=<UUID> \
       --user=<owner-user>
 ```
 
 To change the owner group:
 
 ```bash
-$ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> \
+$ daos cont set-owner --pool=<UUID> --cont=<UUID> \
       --group=<owner-group>
 ```
 

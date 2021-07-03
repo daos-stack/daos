@@ -153,10 +153,14 @@ scp_files() {
         archive_name="${file_name%%.*}.$(hostname -s).${file_name#*.}"
         if scp -r "${file}" "${2}"/"${archive_name}"; then
             copied+=("${file}")
-            if ! rm -fr "${file}"; then
-                echo "  Error removing ${file}"
-                echo "    $(ls -al ${file})"
-                rc=1
+            if [[ ! "${file}" =~ /etc/daos/ ]] && \
+               [[ ! "${file}" =~ daos_dump ]] && \
+               [[ ! "${file}" =~ test.cov ]]; then
+                if ! rm -fr "${file}"; then
+                    echo "  Error removing ${file}"
+                    echo "    $(ls -al ${file})"
+                    rc=1
+                fi
             fi
         else
             echo "  Failed to archive ${file} to ${2}"
@@ -269,6 +273,11 @@ if ! ret=$(check_files_input "${FILES_TO_PROCESS}"); then
         exit 1
     elif [[ ${ret} -eq 2 ]]; then
         echo "No files matched ${FILES_TO_PROCESS}. Nothing to do."
+        if ! "${VERBOSE}" && [ -n "${ARCHIVE_DEST}" ]; then
+            if ! scp_files "${log_file}" "${ARCHIVE_DEST}"; then
+                exit 1
+            fi
+        fi
         exit 0
     fi
 fi

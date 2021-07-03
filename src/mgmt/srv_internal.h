@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_mgmt: Internal Declarations
@@ -34,7 +17,7 @@
 #include <daos/common.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/smd.h>
@@ -42,7 +25,7 @@
 #include <daos_prop.h>
 
 #include "svc.pb-c.h"
-#include "storage_query.pb-c.h"
+#include "smd.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
 
@@ -52,6 +35,7 @@ void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc);
+void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_system.c */
@@ -82,11 +66,12 @@ int ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in);
 int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 			d_rank_list_t *targets, size_t scm_size,
 			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
-			d_rank_list_t **svcp);
+			d_rank_list_t **svcp, int domains_nr,
+			uint32_t *domains);
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			 const char *group, uint32_t force);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		       const char *group);
+		       uuid_t *handles, size_t n_handles, const char *group);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				     uint32_t rank,
 				     struct pool_target_id_list *tgt_list,
@@ -96,7 +81,8 @@ int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			     struct pool_target_id_list *reint_list);
 int ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			d_rank_list_t *rank_list, char *tgt_dev,
-			size_t scm_size, size_t nvme_size);
+			size_t scm_size, size_t nvme_size,
+			size_t domains_nr, uint32_t *domains);
 int ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			  daos_prop_t *prop, daos_prop_t **result);
 int ds_mgmt_pool_get_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
@@ -126,14 +112,15 @@ struct mgmt_bio_health {
 
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
 			     char *tgt_id);
-int ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp);
-int ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp);
-int ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp);
-int ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp);
+int ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp);
+int ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp);
+int ds_mgmt_dev_state_query(uuid_t uuid, Ctl__DevStateResp *resp);
+int ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevStateResp *resp);
 int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state);
 void ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req);
 int ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
-			Mgmt__DevReplaceResp *resp);
+			Ctl__DevReplaceResp *resp);
+int ds_mgmt_dev_identify(uuid_t uuid, Ctl__DevIdentifyResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_setup(void);
@@ -142,6 +129,7 @@ void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv);
+int ds_mgmt_tgt_create_post_reply(crt_rpc_t *rpc, void *priv);
 void ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc);
 int ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg);
 void ds_mgmt_hdlr_tgt_map_update(crt_rpc_t *rpc);

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <pwd.h>
@@ -29,6 +12,7 @@
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+#include <daos_srv/bio.h>
 
 static void
 cmd_free_args(char **args, int argcount)
@@ -58,7 +42,7 @@ cmd_push_arg(char *args[], int *argcount, const char *fmt, ...)
 		return NULL;
 	}
 
-	D_REALLOC(tmp, args, sizeof(char *) * (*argcount + 1));
+	D_REALLOC_ARRAY(tmp, args, *argcount, *argcount + 1);
 	if (tmp == NULL) {
 		D_ERROR("realloc failed\n");
 		D_FREE(arg);
@@ -77,13 +61,13 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 {
 	char		*tmp = NULL;
 	char		*cmd_str = NULL;
-	size_t		size;
+	size_t		size, old;
 	int		i;
 
 	if (cmd_base == NULL)
 		return NULL;
 
-	size = strnlen(cmd_base, ARG_MAX - 1) + 1;
+	old = size = strnlen(cmd_base, ARG_MAX - 1) + 1;
 	D_STRNDUP(cmd_str, cmd_base, size);
 	if (cmd_str == NULL)
 		return NULL;
@@ -96,13 +80,14 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 			return NULL;
 		}
 
-		D_REALLOC(tmp, cmd_str, size);
+		D_REALLOC(tmp, cmd_str, old, size);
 		if (tmp == NULL) {
 			D_FREE(cmd_str);
 			return NULL;
 		}
 		strncat(tmp, args[i], size);
 		cmd_str = tmp;
+		old = size;
 	}
 
 	return cmd_str;
@@ -166,7 +151,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 				D_GOTO(out_jbuf, rc = -DER_REC2BIG);
 			}
 
-			D_REALLOC(temp, jbuf, size);
+			D_REALLOC(temp, jbuf, total, size);
 			if (temp == NULL)
 				D_GOTO(out_jbuf, rc = -DER_NOMEM);
 			jbuf = temp;
@@ -179,7 +164,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		total += n;
 	}
 
-	D_REALLOC(temp, jbuf, total + 1);
+	D_REALLOC(temp, jbuf, total, total + 1);
 	if (temp == NULL)
 		D_GOTO(out_jbuf, rc = -DER_NOMEM);
 	jbuf = temp;
@@ -254,7 +239,7 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 	if (json_pool == NULL || pool_info == NULL)
 		return -DER_INVAL;
 
-	if (!json_object_object_get_ex(json_pool, "UUID", &tmp)) {
+	if (!json_object_object_get_ex(json_pool, "uuid", &tmp)) {
 		D_ERROR("unable to extract pool UUID from JSON\n");
 		return -DER_INVAL;
 	}
@@ -269,12 +254,16 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 		return -DER_INVAL;
 	}
 
-	if (!json_object_object_get_ex(json_pool, "Svcreps", &tmp)) {
+	if (!json_object_object_get_ex(json_pool, "svc_reps", &tmp)) {
 		D_ERROR("unable to parse pool svcreps from JSON\n");
 		return -DER_INVAL;
 	}
 
 	n_svcranks = json_object_array_length(tmp);
+	if (n_svcranks <= 0) {
+		D_ERROR("unexpected svc_reps length: %d\n", n_svcranks);
+		return -DER_INVAL;
+	}
 	if (pool_info->mgpi_svc == NULL) {
 		pool_info->mgpi_svc = d_rank_list_alloc(n_svcranks);
 		if (pool_info->mgpi_svc == NULL) {
@@ -355,6 +344,45 @@ out:
 }
 
 int
+dmg_pool_set_prop(const char *dmg_config_file,
+		  const char *prop_name, const char *prop_value,
+		  const uuid_t pool_uuid)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	uuid_unparse_lower(pool_uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "--pool=%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "--name=%s ", prop_name);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "--value=%s ", prop_value);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool set-prop", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
 dmg_pool_create(const char *dmg_config_file,
 		uid_t uid, gid_t gid, const char *grp,
 		const d_rank_list_t *tgts,
@@ -367,11 +395,11 @@ dmg_pool_create(const char *dmg_config_file,
 	struct passwd		*passwd = NULL;
 	struct group		*group = NULL;
 	struct daos_prop_entry	*entry;
-	char			tmp_buf[L_tmpnam], *tmp_name = tmp_buf;
+	char			tmp_name[] = "/tmp/acl_XXXXXX";
 	FILE			*tmp_file = NULL;
 	daos_mgmt_pool_info_t	pool_info = {};
 	struct json_object	*dmg_out = NULL;
-	int			rc = 0;
+	int			fd = -1, rc = 0;
 
 	if (grp != NULL) {
 		args = cmd_push_arg(args, &argcount,
@@ -431,14 +459,16 @@ dmg_pool_create(const char *dmg_config_file,
 	if (prop != NULL) {
 		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 		if (entry != NULL) {
-			tmp_name = tmpnam(tmp_buf);
-			if (tmp_name == NULL) {
-				D_ERROR("failed to create tmpfile name\n");
+			fd = mkstemp(tmp_name);
+			if (fd < 0) {
+				D_ERROR("failed to create tmpfile file\n");
 				D_GOTO(out_cmd, rc = -DER_NOMEM);
 			}
-			tmp_file = fopen(tmp_name, "w");
+			tmp_file = fdopen(fd, "w");
 			if (tmp_file == NULL) {
-				D_ERROR("failed to open %s\n", tmp_name);
+				D_ERROR("failed to associate stream: %s\n",
+					strerror(errno));
+				close(fd);
 				D_GOTO(out_cmd, rc = -DER_MISC);
 			}
 
@@ -450,6 +480,14 @@ dmg_pool_create(const char *dmg_config_file,
 			}
 			args = cmd_push_arg(args, &argcount,
 					    "--acl-file=%s ", tmp_name);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_LABEL);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--label=%s ",
+					    entry->dpe_str);
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
@@ -479,6 +517,11 @@ dmg_pool_create(const char *dmg_config_file,
 	if (svc == NULL)
 		goto out_svc;
 
+	if (pool_info.mgpi_svc->rl_nr == 0) {
+		D_ERROR("unexpected zero-length pool svc ranks list\n");
+		rc = -DER_INVAL;
+		goto out_svc;
+	}
 	rc = d_rank_list_copy(svc, pool_info.mgpi_svc);
 	if (rc != 0) {
 		D_ERROR("failed to dup svc rank list\n");
@@ -493,7 +536,7 @@ out_json:
 out_cmd:
 	cmd_free_args(args, argcount);
 out:
-	if (tmp_file != NULL)
+	if (fd >= 0)
 		unlink(tmp_name);
 	return rc;
 }
@@ -557,7 +600,7 @@ dmg_pool_list(const char *dmg_config_file, const char *group,
 		goto out_json;
 	}
 
-	json_object_object_get_ex(dmg_out, "Pools", &pool_list);
+	json_object_object_get_ex(dmg_out, "pools", &pool_list);
 	if (pool_list == NULL)
 		*npools = 0;
 	else
@@ -595,10 +638,20 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 	struct json_object	*targets;
 	int			tgts_len;
 	int			i, j;
+	char		*tmp_var;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
-		strcpy(devices[*disks].host, strtok(host, ":") + 1);
+
+		tmp_var =  strtok(host, ":");
+		if (tmp_var == NULL) {
+			D_ERROR("Hostname is empty\n");
+			return -DER_INVAL;
+		}
+
+		snprintf(devices[*disks].host, sizeof(devices[*disks].host),
+			 "%s", tmp_var + 1);
+
 		if (!json_object_object_get_ex(dev, "uuid", &tmp)) {
 			D_ERROR("unable to extract uuid from JSON\n");
 			return -DER_INVAL;
@@ -623,7 +676,9 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 			D_ERROR("unable to extract state from JSON\n");
 			return -DER_INVAL;
 		}
-		strcpy(devices[*disks].state, json_object_to_json_string(tmp));
+
+		snprintf(devices[*disks].state, sizeof(devices[*disks].state),
+			 "%s", json_object_to_json_string(tmp));
 
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
 			D_ERROR("unable to extract rank from JSON\n");
@@ -645,7 +700,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 	struct json_object	*hosts = NULL;
 	struct json_object	*smd_info = NULL;
 	struct json_object	*smd_dev = NULL;
-	char		host[100];
+	char		*host;
 	int			dev_length = 0;
 	int			rc = 0;
 	int			*disk;
@@ -657,6 +712,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 	rc = daos_dmg_json_pipe("storage query list-devices", dmg_config_file,
 				NULL, 0, &dmg_out);
 	if (rc != 0) {
+		D_FREE(disk);
 		D_ERROR("dmg failed");
 		goto out_json;
 	}
@@ -664,7 +720,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
 				       &storage_map)) {
 		D_ERROR("unable to extract host_storage_map from JSON\n");
-		return -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	json_object_object_foreach(storage_map, key, val) {
@@ -673,9 +729,10 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 
 		if (!json_object_object_get_ex(val, "hosts", &hosts)) {
 			D_ERROR("unable to extract hosts from JSON\n");
-			return -DER_INVAL;
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 
+		D_ALLOC(host, strlen(json_object_to_json_string(hosts)) + 1);
 		strcpy(host, json_object_to_json_string(hosts));
 
 		json_object_object_foreach(val, key1, val1) {
@@ -687,7 +744,8 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 				if (!json_object_object_get_ex(
 					smd_info, "devices", &smd_dev)) {
 					D_ERROR("unable to extract devices\n");
-					return -DER_INVAL;
+					D_FREE(host);
+					D_GOTO(out, rc = -DER_INVAL);
 				}
 
 				if (smd_dev != NULL)
@@ -701,17 +759,21 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 					rc = parse_device_info(smd_dev, devices,
 							       host, dev_length,
 							       disk);
-					if (rc != 0)
+					if (rc != 0) {
+						D_FREE(host);
 						goto out_json;
+					}
 				}
 			}
 		}
+		D_FREE(host);
 	}
 
 out_json:
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
 
+out:
 	D_FREE(disk);
 	return rc;
 }
@@ -791,7 +853,7 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
 				       &storage_map)) {
 		D_ERROR("unable to extract host_storage_map from JSON\n");
-		return -DER_INVAL;
+		D_GOTO(out_json, rc = -DER_INVAL);
 	}
 
 	json_object_object_foreach(storage_map, key, val) {
@@ -799,12 +861,12 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 			json_object_to_json_string(val));
 		if (!json_object_object_get_ex(val, "storage", &storage_info)) {
 			D_ERROR("unable to extract hosts from JSON\n");
-			return -DER_INVAL;
+			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 		if (!json_object_object_get_ex(storage_info, "smd_info",
 					       &smd_info)) {
 			D_ERROR("unable to extract hosts from JSON\n");
-			return -DER_INVAL;
+			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 		json_object_object_foreach(smd_info, key1, val1) {
 			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,

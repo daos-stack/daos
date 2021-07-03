@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_DTX_SRV_H__
@@ -30,6 +13,16 @@
 #include <daos_srv/vos_types.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
+
+#define DTX_REFRESH_MAX 4
+
+struct dtx_share_peer {
+	d_list_t		dsp_link;
+	struct dtx_id		dsp_xid;
+	daos_unit_oid_t		dsp_oid;
+	daos_epoch_t		dsp_epoch;
+	struct dtx_memberships	dsp_mbs;
+};
 
 /**
  * DAOS two-phase commit transaction handle in DRAM.
@@ -64,6 +57,10 @@ struct dtx_handle {
 	daos_unit_oid_t			 dth_leader_oid;
 
 	uint32_t			 dth_sync:1, /* commit synchronously. */
+					 /* Pin the DTX entry in DRAM. */
+					 dth_pinned:1,
+					 /* DTXs in CoS list are committed. */
+					 dth_cos_done:1,
 					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
@@ -76,7 +73,17 @@ struct dtx_handle {
 					 /* Local TX is started. */
 					 dth_local_tx_started:1,
 					 /* Retry with this server. */
-					 dth_local_retry:1;
+					 dth_local_retry:1,
+					 /* The DTX share lists are inited. */
+					 dth_shares_inited:1,
+					 /* Distributed transaction. */
+					 dth_dist:1,
+					 /* For data migration. */
+					 dth_for_migration:1,
+					 /* Force refresh for non-committed */
+					 dth_force_refresh:1,
+					 /* Ignore other uncommitted DTXs. */
+					 dth_ignore_uncommitted:1;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -108,7 +115,16 @@ struct dtx_handle {
 	struct dtx_rsrvd_uint		*dth_rsrvds;
 	void				**dth_deferred;
 	/* NVME extents to release */
-	d_list_t			dth_deferred_nvme;
+	d_list_t			 dth_deferred_nvme;
+	/* Committed or comittable DTX list */
+	d_list_t			 dth_share_cmt_list;
+	/* Aborted DTX list */
+	d_list_t			 dth_share_abt_list;
+	/* Active DTX list */
+	d_list_t			 dth_share_act_list;
+	/* DTX list to be checked */
+	d_list_t			 dth_share_tbd_list;
+	int				 dth_share_tbd_count;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
@@ -146,26 +162,34 @@ struct dtx_stat {
 	uint64_t	dtx_oldest_committable_time;
 	uint64_t	dtx_committed_count;
 	uint64_t	dtx_oldest_committed_time;
+	uint64_t	dtx_oldest_active_time;
 };
 
-/**
- * DAOS two-phase commit transaction status.
- */
-enum dtx_status {
-	/** Local participant has done the modification. */
-	DTX_ST_PREPARED		= 1,
-	/** The DTX has been committed. */
-	DTX_ST_COMMITTED	= 2,
+enum dtx_flags {
+	/** Single operand. */
+	DTX_SOLO		= (1 << 0),
+	/** Sync mode transaction. */
+	DTX_SYNC		= (1 << 1),
+	/** Distributed transaction.  */
+	DTX_DIST		= (1 << 2),
+	/** For data migration. */
+	DTX_FOR_MIGRATION	= (1 << 3),
+	/** Ignore other uncommitted DTXs. */
+	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
+	/** Resent request. */
+	DTX_RESEND		= (1 << 5),
+	/** Force DTX refresh if hit non-committed DTX on non-leader. */
+	DTX_FORCE_REFRESH	= (1 << 6),
 };
 
 int
 dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash);
 int
-dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
-		 struct daos_shard_tgt *tgts, int tgt_cnt, bool solo, bool sync,
+		 struct daos_shard_tgt *tgts, int tgt_cnt, uint32_t flags,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle *dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
@@ -177,10 +201,10 @@ typedef int (*dtx_sub_func_t)(struct dtx_leader_handle *dlh, void *arg, int idx,
 			      dtx_sub_comp_cb_t comp_cb);
 
 int
-dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
-	  struct dtx_id *dti_cos, int dti_cos_cnt,
+	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
 	  struct dtx_memberships *mbs, struct dtx_handle *dth);
 int
 dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result);
@@ -197,6 +221,10 @@ void dtx_batched_commit_deregister(struct ds_cont_child *cont);
 
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);
+
+int dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
+	      struct dtx_entry **dtes, int count);
+int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 
 /**
  * Check whether the given DTX is resent one or not.
@@ -215,6 +243,9 @@ int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
  *					committable.
  *			-DER_MISMATCH	means that the DTX has ever been
  *					processed with different epoch.
+ *			-DER_DATA_LOSS	means that related DTX is marked as
+ *					'corrupted', not sure whether former
+ *					sent has even succeed or not.
  *			Other negative value if error.
  */
 int dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti,
@@ -246,7 +277,7 @@ dtx_entry_put(struct dtx_entry *dte)
 }
 
 static inline bool
-dtx_is_valid_handle(struct dtx_handle *dth)
+dtx_is_valid_handle(const struct dtx_handle *dth)
 {
 	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid);
 }

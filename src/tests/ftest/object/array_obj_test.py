@@ -1,27 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2017-2020 Intel Corporation.
+  (C) Copyright 2017-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import time
 import traceback
@@ -38,7 +21,7 @@ class ArrayObjTest(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(ArrayObjTest, self).setUp()
+        super().setUp()
         self.plog = logging.getLogger("progress")
 
     def test_array_obj(self):
@@ -48,7 +31,7 @@ class ArrayObjTest(TestWithServers):
         Test Description: Writes an array to an object and then reads it
         back and verifies it.
 
-        :avocado: tags=all,smoke,pr,object,tiny,basicobject
+        :avocado: tags=all,smoke,daily_regression,object,tiny,basicobject
         """
         self.prepare_pool()
 
@@ -71,15 +54,14 @@ class ArrayObjTest(TestWithServers):
 
             # create an object and write some data into it
             thedata = []
-            thedata.append("data string one")
-            thedata.append("data string two")
-            thedata.append("data string tre")
-            dkey = "this is the dkey"
-            akey = "this is the akey"
+            thedata.append(b"data string one")
+            thedata.append(b"data string two")
+            thedata.append(b"data string tre")
+            dkey = b"this is the dkey"
+            akey = b"this is the akey"
 
             self.plog.info("writing array to dkey >%s< akey >%s<.", dkey, akey)
-            oid = container.write_an_array_value(thedata, dkey, akey,
-                                                 obj_cls=3)
+            oid = container.write_an_array_value(thedata, dkey, akey, obj_cls=3)
 
             # read the data back and make sure its correct
             length = len(thedata[0])

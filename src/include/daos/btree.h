@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -443,6 +426,45 @@ struct btr_instance {
 	btr_ops_t			*ti_ops;
 };
 
+/**
+ * Inline data structure for embedding the key bundle and key into an anchor
+ * for serialization.
+ */
+#define	EMBEDDED_KEY_MAX	100
+struct btr_embedded_key {
+	/** Inlined iov key references */
+	uint32_t	ek_size;
+	/** Inlined buffer the key references*/
+	unsigned char	ek_key[EMBEDDED_KEY_MAX];
+};
+
+D_CASSERT(sizeof(struct btr_embedded_key) == DAOS_ANCHOR_BUF_MAX);
+
+static inline void
+embedded_key_encode(d_iov_t *key, daos_anchor_t *anchor)
+{
+	struct btr_embedded_key *embedded =
+		(struct btr_embedded_key *)anchor->da_buf;
+
+	D_ASSERT(key->iov_len <= sizeof(embedded->ek_key));
+
+	memcpy(embedded->ek_key, key->iov_buf, key->iov_len);
+	/** Pointers will have to be set on decode. */
+	embedded->ek_size = key->iov_len;
+}
+
+static inline void
+embedded_key_decode(d_iov_t *key, daos_anchor_t *anchor)
+{
+	struct btr_embedded_key *embedded =
+		(struct btr_embedded_key *)anchor->da_buf;
+
+	/* Fix the pointer first */
+	key->iov_buf = &embedded->ek_key[0];
+	key->iov_len = embedded->ek_size;
+	key->iov_buf_len = embedded->ek_size;
+}
+
 /* Features are passed as 64-bit unsigned integer.   Only the bits below are
  * reserved.   A specific class can define its own bits to customize behavior.
  * For example, VOS can use bits to indicate the type of key comparison used
@@ -536,8 +558,6 @@ int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 		      uint32_t intent, d_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
-int dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent);
-int dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent);
 int dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 		      d_iov_t *val, daos_anchor_t *anchor);
 int dbtree_iter_delete(daos_handle_t ih, void *args);

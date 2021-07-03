@@ -28,6 +28,7 @@ pool:
     nvme_size: 10000000000
   createsvc:
     svcn: 1
+  control_method: dmg
 container:
   type: POSIX
   control_method: daos

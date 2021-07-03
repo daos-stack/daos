@@ -8,7 +8,7 @@ from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'DAOS_VERSION', 'CONF_DIR', 'gurt_lib')
+Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -49,11 +49,24 @@ def is_release_build(benv):
     return benv.get("BUILD_TYPE") == "release"
 
 def get_build_flags(benv):
+    """Return string of build flags"""
     flags = ""
     if not is_release_build(benv):
         # enable race detector for non-release builds
         flags += "-race"
     return flags
+
+def install_go_manpage(menv, name):
+    """
+    Dynamically generate a manpage for a tool.
+    """
+    gen_bin = join('$BUILD_DIR', 'src/control/bin', name)
+    build_path = join('$BUILD_DIR', 'src/control', name+'.8')
+    install_path = join(menv.subst("$PREFIX"), "share/man/man8", name+'.8')
+    menv.Command(build_path, [gen_bin, gurt_lib],
+                '%s manpage -o %s' % (gen_bin, build_path))
+    menv.InstallAs(install_path, build_path)
+    return install_path
 
 #pylint: disable=too-many-arguments
 def install_go_bin(denv, gosrc, libs, name, install_name):
@@ -70,8 +83,11 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     install_bin = get_install_bin_path(denv, install_name)
     build_bin = join('$BUILD_DIR', 'src/control/bin', name)
     src = [mod_src]
-    if libs is not None:
-        src.extend(libs)
+
+    if libs is None:
+        libs = []
+    libs.extend(gurt_lib)
+
     def gen_build_id():
         """generate a unique build id per binary for use by RPM
            https://fedoraproject.org/wiki/PackagingDrafts/Go#Build_ID"""
@@ -85,21 +101,23 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
 
     def go_ldflags():
         "Create the ldflags option for the Go build."
+        path = 'github.com/daos-stack/daos/src/control/build'
         return ' '.join(['-ldflags',
-                         '"-X github.com/daos-stack/daos/src/control/build.DaosVersion=%s' % DAOS_VERSION,
-                         '-X github.com/daos-stack/daos/src/control/build.ConfigDir=%s' % CONF_DIR,
+                         '"-X {}.DaosVersion={}'.format(path, daos_version),
+                         '-X {}.ConfigDir={}'.format(path, conf_dir),
                          '-B %s"' % gen_build_id()])
     # Must be run from the top of the source dir in order to
     # pick up the vendored modules.
     # Propagate useful GO environment variables from the caller
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
-    denv.Command(build_bin, src + gurt_lib,
+    denv.Command(build_bin, src + libs,
                  'cd %s; %s build -mod vendor -v %s %s %s -o %s %s' %
-                 (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv), get_build_tags(denv),
-                  build_bin, install_src))
+                 (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv),
+                  get_build_tags(denv), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
+    denv.Requires(build_bin, ['gurt_lib'])
     denv.InstallAs(install_bin, build_bin)
     return install_bin
 #pylint: enable=too-many-arguments
@@ -176,43 +194,68 @@ def scons():
     # Version-controlled DAOS Go source directory src/control
     gosrc = Dir('.').srcnode().abspath
 
-    prereqs.require(denv, 'ofi', 'hwloc', 'spdk')
-
+    prereqs.require(denv, 'ofi', 'hwloc')
     old_cgold = denv["ENV"].get("CGO_LDFLAGS", "")
     # Sets CGO_LDFLAGS for rpath options
     daos_build.add_rpaths(denv, "..", True, True)
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
+    if prereqs.client_requested():
+        agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
+        dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
+        if prereqs.test_requested():
+            drpcbin = install_go_bin(denv, gosrc, None, "drpc_test",
+                                     "hello_drpc")
+            AlwaysBuild(drpcbin)
 
-    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
-                       sep=" ")
+        AlwaysBuild([agentbin, dmgbin])
 
-    agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
-    dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
-    drpcbin = install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
+        Import('daos_hdlrs_lib')
+        dbenv = denv.Clone()
+        dblibs = dbenv.subst("-L$BUILD_DIR/src/gurt "
+                            "-L$BUILD_DIR/src/cart "
+                            "-L$BUILD_DIR/src/client/dfs "
+                            "-L$BUILD_DIR/src/utils $_RPATH")
+        dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
+        daosbin = install_go_bin(dbenv, gosrc, [daos_hdlrs_lib], "daos", "daos")
+        AlwaysBuild([daosbin])
 
-    AlwaysBuild([agentbin, dmgbin, drpcbin])
+        menv = denv.Clone()
+        menv["ENV"]["LD_LIBRARY_PATH"] = menv.subst(
+            "$BUILD_DIR/src/gurt" + \
+            ":$BUILD_DIR/src/cart" + \
+            ":$BUILD_DIR/src/common" + \
+            ":$BUILD_DIR/src/utils" + \
+            ":$OFI_PREFIX/lib" + \
+            ":$BUILD_DIR/src/client/dfs" + \
+            ":$BUILD_DIR/src/client/api")
+        dmg_man = install_go_manpage(menv, "dmg")
+        daos_man = install_go_manpage(menv, "daos")
+        AlwaysBuild([dmg_man, daos_man])
+
+    if not prereqs.server_requested():
+        return
+
+    senv = denv.Clone()
+    denv = senv
+    prereqs.require(denv, 'spdk')
+
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
 
     SConscript('lib/spdk/SConscript', exports='denv')
 
-    senv = denv.Clone()
     denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    daos_build.add_rpaths(denv, "..", True, True)
 
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/gurt "
                             "-L$BUILD_DIR/src/cart "
                             "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib $_RPATH")
-    # Explicitly link RTE & SPDK libs for CGO access (need for clang build).
-    ldopts = cgolibdirs + " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev" + \
-             " -lspdk_copy -lrte_mempool  -lrte_mempool_ring" + \
-             " -lrte_bus_pci -lrte_pci -lrte_ring -lrte_mbuf" + \
-             " -lrte_eal -lrte_kvargs -lspdk_bdev_aio" + \
-             " -lspdk_bdev_nvme -lspdk_bdev_malloc -lspdk_conf" + \
-             " -lspdk_blob -lspdk_nvme -lspdk_util -lspdk_json" + \
-             " -lspdk_jsonrpc -lspdk_rpc -lspdk_trace" + \
-             " -lspdk_sock -lspdk_log -lspdk_notify" + \
-             " -lspdk_blob_bdev -lspdk_vmd -lnuma -ldl"
-
+    # Explicitly link RTE & SPDK libs for CGO access
+    ldopts = cgolibdirs +                                                     \
+             " -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool" +        \
+             " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lnuma -ldl"
     senv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
     senv.AppendENVPath("CGO_CFLAGS",

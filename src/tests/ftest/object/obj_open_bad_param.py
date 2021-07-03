@@ -1,27 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import traceback
 
@@ -37,7 +20,7 @@ class ObjOpenBadParam(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        super(ObjOpenBadParam, self).setUp()
+        super().setUp()
         self.prepare_pool()
 
         try:
@@ -49,10 +32,10 @@ class ObjOpenBadParam(TestWithServers):
             self.container.open()
 
             # create an object and write some data into it
-            thedata = "a string that I want to stuff into an object"
+            thedata = b"a string that I want to stuff into an object"
             self.datasize = len(thedata) + 1
-            self.dkey = "this is the dkey"
-            self.akey = "this is the akey"
+            self.dkey = b"this is the dkey"
+            self.akey = b"this is the akey"
             self.obj = self.container.write_an_obj(thedata,
                                                    self.datasize,
                                                    self.dkey,
@@ -62,8 +45,8 @@ class ObjOpenBadParam(TestWithServers):
             thedata2 = self.container.read_an_obj(self.datasize, self.dkey,
                                                   self.akey, self.obj)
             if thedata not in thedata2.value:
-                print(thedata)
-                print(thedata2.value)
+                self.log.info("thedata:  %s", thedata)
+                self.log.info("thedata2: %s", thedata2.value)
                 err_str = "Error reading back data, test failed during the " \
                           "initial setup."
                 self.d_log.error(err_str)

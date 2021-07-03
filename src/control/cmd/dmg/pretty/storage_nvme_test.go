@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package pretty
@@ -49,7 +32,7 @@ func TestPretty_PrintNVMeHealthMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	controllerAwTS.HealthStats.Timestamp = tt
-	ttStr := time.Unix(int64(tt), 0).Format(time.UnixDate)
+	ttStr := getTimestampString(tt)
 
 	for name, tc := range map[string]struct {
 		hsm         control.HostStorageMap
@@ -299,23 +282,25 @@ host1
 -----
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s [TrAddr:]
+    UUID:%s [TrAddr:%s]
       Targets:%v Rank:%d State:%s
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s [TrAddr:]
+    UUID:%s [TrAddr:%s]
       Targets:%v Rank:%d State:%s
 
 `,
 				controllerC.PciAddr, controllerC.Model, controllerC.FwRev,
 				controllerC.SocketID, humanize.Bytes(controllerC.Capacity()),
-				controllerC.SmdDevices[0].UUID, controllerC.SmdDevices[0].TargetIDs,
+				controllerC.SmdDevices[0].UUID, controllerC.PciAddr,
+				controllerC.SmdDevices[0].TargetIDs,
 				controllerC.SmdDevices[0].Rank, controllerC.SmdDevices[0].State,
 
 				controllerD.PciAddr, controllerD.Model, controllerD.FwRev,
 				controllerD.SocketID, humanize.Bytes(controllerD.Capacity()),
-				controllerD.SmdDevices[0].UUID, controllerD.SmdDevices[0].TargetIDs,
+				controllerD.SmdDevices[0].UUID, controllerD.PciAddr,
+				controllerD.SmdDevices[0].TargetIDs,
 				controllerD.SmdDevices[0].Rank, controllerD.SmdDevices[0].State),
 		},
 		"multiple smd devices on each controller": {

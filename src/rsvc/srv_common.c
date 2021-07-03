@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Replicated Service Common Functions
@@ -27,7 +10,7 @@
 #define D_LOGFAC DD_FAC(rsvc)
 
 #include <sys/stat.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
 
 struct attr_list_iter_args {
@@ -107,8 +90,9 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_update(tx, path, &key, &value);
 		if (rc != 0) {
-			D_ERROR("%s: failed to update attribute '%s': %d\n",
-				 svc->s_name, (char *) key.iov_buf, rc);
+			D_ERROR("%s: failed to update attribute "DF_KEY
+				": "DF_RC"\n",
+				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_bulk;
 		}
 	}
@@ -169,8 +153,9 @@ ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_delete(tx, path, &key);
 		if (rc != 0) {
-			D_ERROR("%s: failed to delete attribute '%s': %d\n",
-				svc->s_name, (char *) key.iov_buf, rc);
+			D_ERROR("%s: failed to delete attribute "DF_KEY
+				": "DF_RC"\n",
+				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_bulk;
 		}
 	}
@@ -191,14 +176,14 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	crt_bulk_t			 local_bulk;
 	daos_size_t			 bulk_size;
 	daos_size_t			 input_size;
+	daos_size_t			 local_offset, remote_offset;
 	d_iov_t			*iovs;
 	d_sg_list_t			 sgl;
 	void				*data;
 	char				*names;
 	size_t				*sizes;
 	int				 rc;
-	int				 i;
-	int				 j;
+	uint64_t			 i, j, nonexist = 0;
 
 	rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 	if (rc != 0)
@@ -252,13 +237,25 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_lookup(tx, path, &key, &iovs[j]);
 
-		if (rc != 0) {
-			D_ERROR("%s: failed to lookup attribute '%s': %d\n",
-				 svc->s_name, (char *) key.iov_buf, rc);
+		if (rc == -DER_NONEXIST) {
+			/* attribute do not exist */
+			iovs[j].iov_buf_len = sizes[i];
+			iovs[j].iov_len = 0;
+			sizes[i] = 0;
+			/* fake crt_sgl_valid() */
+			iovs[j].iov_buf = (void *)(-1);
+
+			D_DEBUG(DB_ANY, "%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
+				svc->s_name, DP_KEY(&key), DP_RC(rc));
+			nonexist++;
+		} else if (rc != 0) {
+			D_ERROR("%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
+				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_iovs;
+		} else {
+			iovs[j].iov_buf_len = sizes[i];
+			sizes[i] = iovs[j].iov_len;
 		}
-		iovs[j].iov_buf_len = sizes[i];
-		sizes[i] = iovs[j].iov_len;
 
 		/* If buffer length is zero, send only size */
 		if (iovs[j].iov_buf_len > 0)
@@ -273,7 +270,38 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		goto out_iovs;
 
 	rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk, remote_bulk,
-				0, key_length, bulk_size - key_length);
+				0, key_length, count * sizeof(*sizes));
+	if (rc != 0)
+		goto out_iovs;
+
+	/* sizes have been sent back, so if none of attrs exist, just stop here
+	 * and return -DER_NONEXIST
+	 */
+	if (nonexist == count) {
+		rc = -DER_NONEXIST;
+		goto out_iovs;
+	}
+
+	local_offset = count * sizeof(*sizes);
+	remote_offset = key_length + count * sizeof(*sizes);
+
+	for (i = 1; i < sgl.sg_nr; i++) {
+		daos_size_t size;
+
+		size = min(sgl.sg_iovs[i].iov_len,
+				       sgl.sg_iovs[i].iov_buf_len);
+		/* only xfer if attr exists and there is a dest buffer */
+		if (iovs[i].iov_buf_len > 0 && sizes[i - 1] != 0)
+			rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
+						remote_bulk, local_offset,
+						remote_offset, size);
+		if (rc != 0)
+			goto out_iovs;
+
+		local_offset += sgl.sg_iovs[i].iov_buf_len;
+		remote_offset += sgl.sg_iovs[i].iov_buf_len;
+	}
+
 	crt_bulk_free(local_bulk);
 	if (rc != 0)
 		goto out_iovs;
@@ -422,7 +450,7 @@ attr_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 		if (i_args->iov_index == i_args->iov_count) {
 			void *ptr;
 
-			D_REALLOC_ARRAY(ptr, i_args->iovs,
+			D_REALLOC_ARRAY(ptr, i_args->iovs, i_args->iov_count,
 					i_args->iov_count * 2);
 			/*
 			 * TODO: Fail or continue transferring

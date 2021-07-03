@@ -39,6 +39,7 @@
 This provides consistency checking for CaRT log files.
 """
 
+import sys
 import time
 import argparse
 HAVE_TABULATE = True
@@ -163,112 +164,9 @@ class RegionCounter():
 # error lines.
 shown_logs = set()
 
-# List of known locations where there may be a mismatch, this is a
-# dict of functions, each with a unordered list of variables that are
-# freed by the function.
-# Typically this is where memory is allocated in one file, and freed in
-# another.
-# pylint: disable=line-too-long
-mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
-                     'crt_rpc_handler_common': ('rpc_priv'),
-                     'crt_proc_d_iov_t': ('div->iov_buf'),
-                     'grp_add_to_membs_list': ('tmp'),
-                     'grp_regen_linear_list': ('tmp_ptr'),
-                     'crt_proc_d_string_t': ('*data'),
-                     'crt_hg_init': ('*addr'),
-                     'create_pool_props': ('out_owner',
-                                           'out_owner_grp'),
-                     'crt_proc_d_rank_list_t': ('rank_list',
-                                                'rank_list->rl_ranks'),
-                     'path_gen': ('*fpath'),
-                     'gen_pool_buf': ('uuids'),
-                     'ds_pool_tgt_map_update': ('arg'),
-                     'get_attach_info': ('reqb'),
-                     'iod_fetch': ('biovs'),
-                     'bio_sgl_init': ('sgl->bs_iovs'),
-                     'process_credential_response': ('bytes'),
-                     'pool_map_find_tgts': ('*tgt_pp'),
-                     'daos_acl_dup': ('acl_copy'),
-                     'cont_iv_ent_init': ('entry->iv_value.sg_iovs[0].iov_buf'),
-                     'dfuse_pool_lookup': ('ie', 'dfs', 'dfp'),
-                     'pool_prop_read': ('prop->dpp_entries[idx].dpe_str',
-                                        'prop->dpp_entries[idx].dpe_val_ptr'),
-                     'cont_prop_read': ('prop->dpp_entries[idx].dpe_str',
-                                        'prop->dpp_entries[idx].dpe_val_ptr'),
-                     'cont_prop_default_copy': ('entry_def->dpe_str'),
-                     'cont_iv_prop_g2l': ('prop_entry->dpe_str'),
-                     'ds_mgmt_drpc_group_update': ('body'),
-                     'enum_cont_cb': ('ptr'),
-                     'pool_iv_conns_resize': ('new_conns'),
-                     'obj_enum_prep_sgls': ('dst_sgls[i].sg_iovs',
-                                            'dst_sgls[i].sg_iovs[j].iov_buf'),
-                     'notify_ready': ('reqb'),
-                     'test_iv_fetch': ('buf'),
-                     'iv_on_get': ('iv_value->sg_iovs[0].iov_buf'),
-                     'oid_iv_ent_init': ('oid_entry'),
-                     'pool_svc_name_cb': ('s'),
-                     'daos_iov_copy': ('dst->iov_buf'),
-                     'local_name_to_principal_name': ('*name'),
-                     'pack_daos_response': ('body'),
-                     'ds_mgmt_drpc_get_attach_info': ('body'),
-                     'ds_mgmt_drpc_pool_create': ('body'),
-                     'mgmt_svc_locate_cb': ('s'),
-                     'mgmt_svc_name_cb': ('s'),
-                     'pool_prop_default_copy': ('entry_def->dpe_str'),
-                     'pool_iv_prop_g2l': ('prop_entry->dpe_str'),
-                     'pool_iv_value_alloc_internal': ('sgl->sg_iovs[0].iov_buf'),
-                     'daos_prop_entry_copy': ('entry_dup->dpe_str'),
-                     'daos_prop_dup': ('entry_dup->dpe_str'),
-                     'rank_list_to_uint32_array': ('*ints'),
-                     'auth_cred_to_iov': ('packed'),
-                     'd_sgl_init': ('sgl->sg_iovs'),
-                     'daos_csummer_alloc_iods_csums': ('buf'),
-                     'get_pool_svc_ranks': ('req')}
-# pylint: enable=line-too-long
-
-mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
-                    'crt_group_psr_set': ('uri'),
-                    'crt_hdlr_uri_lookup': ('tmp_uri'),
-                    'crt_rpc_priv_free': ('rpc_priv'),
-                    'crt_group_config_save': ('url'),
-                    'get_self_uri': ('uri'),
-                    'tc_srv_start_basic': ('my_uri'),
-                    'crt_init_opt': ('crt_gdata.cg_addr'),
-                    'cont_prop_default_copy': ('entry_def->dpe_str'),
-                    'ds_pool_list_cont_handler': ('cont_buf'),
-                    'dtx_resync_ult': ('arg'),
-                    'init_pool_metadata': ('uuids'),
-                    'fini_free': ('svc->s_name',
-                                  'svc->s_db_path'),
-                    'd_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
-                                   'sgl->sg_iovs'),
-                    'd_rank_list_free': ('rank_list',
-                                         'rank_list->rl_ranks'),
-                    'pool_prop_default_copy': ('entry_def->dpe_str'),
-                    'pool_svc_store_uuid_cb': ('path'),
-                    'ds_mgmt_svc_start': ('uri'),
-                    'ds_mgmt_drpc_pool_create': ('resp.svcreps'),
-                    'ds_rsvc_lookup': ('path'),
-                    'daos_acl_free': ('acl'),
-                    'update_done': ('iv_value->sg_iovs'),
-                    'daos_drpc_free': ('pointer'),
-                    'pool_child_add_one': ('path'),
-                    'bio_sgl_fini': ('sgl->bs_iovs'),
-                    'daos_iov_free': ('iov->iov_buf'),
-                    'daos_prop_entry_free_value': ('entry->dpe_str',
-                                                   'entry->dpe_val_ptr'),
-                    'main': ('dfs'),
-                    'start_one': ('path'),
-                    'pool_svc_load_uuid_cb': ('path'),
-                    'ie_sclose': ('ie', 'dfs', 'dfp'),
-                    'notify_ready': ('req.uri'),
-                    'get_tgt_rank': ('tgts'),
-                    'obj_rw_reply': ('orwo->orw_iod_csums.ca_arrays'),
-                    'ds_csum_agg_recalc': ('sgl.sg_iovs')}
-
 wf = None
 
-def show_line(line, sev, msg):
+def show_line(line, sev, msg, custom=None):
     """Output a log line in gcc error format"""
 
     # Only report each individual line once.
@@ -281,7 +179,9 @@ def show_line(line, sev, msg):
     if log in shown_logs:
         return
     print(log)
-    if wf:
+    if custom:
+        custom.add(line, sev, msg)
+    elif wf:
         wf.add(line, sev, msg)
     shown_logs.add(log)
 
@@ -300,11 +200,11 @@ class hwm_counter():
         return self.__hwm != 0
 
     def __str__(self):
-        return "Total:{:,} HWM:{:,} {} allocations, {} frees".\
-            format(self.__val,
-                   self.__hwm,
-                   self.__acount,
-                   self.__fcount)
+        return 'Total:{:,} HWM:{:,} {} allocations, '.format(self.__val,
+                                                             self.__hwm,
+                                                             self.__acount) + \
+            '{} frees {} possible leaks'.format(self.__fcount,
+                                                self.__acount - self.__fcount)
 
     def add(self, val):
         """Add a value"""
@@ -327,7 +227,8 @@ class hwm_counter():
 class LogTest():
     """Log testing"""
 
-    def __init__(self, log_iter):
+    def __init__(self, log_iter, quiet=False):
+        self.quiet = quiet
         self._li = log_iter
         self.hide_fi_calls = False
         self.fi_triggered = False
@@ -338,12 +239,16 @@ class LogTest():
         self.log_fac = Counter()
         self.log_levels = Counter()
         self.log_count = 0
+        self._common_shown = False
 
     def __del__(self):
-        self.show_common_logs()
+        if not self.quiet and not self._common_shown:
+            self.show_common_logs()
 
     def save_log_line(self, line):
         """Record a single line of logging"""
+        if self.quiet:
+            return
         self.log_count += 1
         function = getattr(line, 'filename', None)
         if function:
@@ -381,18 +286,32 @@ class LogTest():
             print('{}: {} ({:.1f}%)'.format(cart_logparse.LOG_NAMES[level],
                                             count,
                                             100*count/self.log_count))
+        self._common_shown = True
 
-    def check_log_file(self, abort_on_warning, show_memleaks=True):
+    def check_log_file(self,
+                       abort_on_warning,
+                       show_memleaks=True,
+                       leak_wf=None):
         """Check a single log file for consistency"""
-
+        to_raise = None
         for pid in self._li.get_pids():
             if wf:
                 wf.reset_pending()
-            self.rpc_reporting(pid)
-            if wf:
-                wf.reset_pending()
-            self._check_pid_from_log_file(pid, abort_on_warning,
-                                          show_memleaks=show_memleaks)
+            if not self.quiet:
+                self.rpc_reporting(pid)
+                if wf:
+                    wf.reset_pending()
+            try:
+                self._check_pid_from_log_file(pid,
+                                              abort_on_warning,
+                                              leak_wf,
+                                              show_memleaks=show_memleaks)
+            except LogCheckError as error:
+                if to_raise is None:
+                    to_raise = error
+        self.show_common_logs()
+        if to_raise:
+            raise to_raise
 
     def check_dfuse_io(self):
         """Parse dfuse i/o"""
@@ -419,11 +338,14 @@ class LogTest():
                 else:
                     client_pids[pid].add(start, end, line.ts)
 
-            for pid in client_pids:
-                print('{}:{}'.format(pid, client_pids[pid]))
+            for cpid in client_pids:
+                print('{}:{}'.format(cpid, client_pids[pid]))
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
-    def _check_pid_from_log_file(self, pid, abort_on_warning,
+    def _check_pid_from_log_file(self,
+                                 pid,
+                                 abort_on_warning,
+                                 leak_wf,
                                  show_memleaks=True):
         """Check a pid from a single log file for consistency"""
 
@@ -437,6 +359,7 @@ class LogTest():
         err_count = 0
         warnings_strict = False
         warnings_mode = False
+        server_shutdown = False
 
         regions = OrderedDict()
         memsize = hwm_counter()
@@ -463,6 +386,9 @@ class LogTest():
             except AttributeError:
                 pass
             if abort_on_warning:
+                if not server_shutdown and \
+                   line.fac != 'external' and line.function == 'server_fini':
+                    server_shutdown = True
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
                     if self.hide_fi_calls:
@@ -476,12 +402,14 @@ class LogTest():
 
                             src_offset = line.lineno - self.fi_location.lineno
                             if line.filename == self.fi_location.filename:
-                                src_offset = line.lineno - self.fi_location.lineno
-                                if src_offset > 0 and src_offset < 5:
+                                src_offset = line.lineno
+                                src_offset -= self.fi_location.lineno
+                                if 0 < src_offset < 5:
                                     show_line(line, 'NORMAL',
                                               'Logging allocation failure')
 
-                            if not line.get_msg().endswith("DER_NOMEM(-1009): 'Out of memory'"):
+                            if not line.get_msg().endswith(
+                                    "DER_NOMEM(-1009): 'Out of memory'"):
                                 show_line(line, 'LOW',
                                           'Error does not use DF_RC')
                             # For the fault injection test do not report
@@ -489,12 +417,31 @@ class LogTest():
                             # this highlights other errors and lines which
                             # report an error, but not a fault code.
                             show = False
+                        elif line.get_msg().endswith(' 12'):
+                            # dfs and dfuse use system error numbers, rather
+                            # than daos, so allow ENOMEM as well as
+                            # -DER_NOMEM
+                            show = False
                     elif line.rpc:
                         # Ignore the SWIM RPC opcode, as this often sends RPCs
                         # that fail during shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
+                    # Disable checking for a number of conditions, either
+                    # because these errors/lines are badly formatted or because
+                    # they're intermittent and we don't want noise in the test
+                    # results.
                     if line.fac == 'external':
+                        show = False
+                    elif show and server_shutdown and \
+                         (line.get_msg().endswith(
+                             "DER_SHUTDOWN(-2017): 'Service should shut down'") or \
+                          line.get_msg().endswith(
+                              "DER_NOTLEADER(-2008): 'Not service leader'")):
+                        show = False
+                    elif show and line.function == 'rdb_stop':
+                        show = False
+                    elif show and line.function == 'sched_watchdog_post':
                         show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
@@ -558,7 +505,7 @@ class LogTest():
                 # there are more than two fields to work with.
                 non_trace_lines += 1
                 if line.is_calloc():
-                    pointer = line.get_field(-1).rstrip('.')
+                    pointer = line.calloc_pointer()
                     if pointer in regions:
                         show_line(regions[pointer], 'NORMAL',
                                   'new allocation seen for same pointer')
@@ -566,33 +513,12 @@ class LogTest():
                     regions[pointer] = line
                     memsize.add(line.calloc_size())
                 elif line.is_free():
-                    pointer = line.get_field(-1).rstrip('.')
+                    pointer = line.free_pointer()
                     # If a pointer is freed then automatically remove the
                     # descriptor
                     if pointer in active_desc:
                         del active_desc[pointer]
                     if pointer in regions:
-                        if line.fac != regions[pointer].fac:
-                            fvar = line.get_field(3).strip("'")
-                            afunc = regions[pointer].function
-                            avar = regions[pointer].get_field(3).strip("':")
-                            if line.function in mismatch_free_ok and \
-                               fvar in mismatch_free_ok[line.function] and \
-                               afunc in mismatch_alloc_ok and \
-                               avar in mismatch_alloc_ok[afunc]:
-                                pass
-                            else:
-                                show_line(regions[pointer], 'LOW',
-                                          'facility mismatch in alloc/free')
-                                show_line(line, 'LOW',
-                                          'facility mismatch in alloc/free')
-                                err_count += 1
-                        if line.level != regions[pointer].level:
-                            show_line(regions[pointer], 'LOW',
-                                      'level mismatch in alloc/free')
-                            show_line(line, 'LOW',
-                                      'level mismatch in alloc/free')
-                            err_count += 1
                         memsize.subtract(regions[pointer].calloc_size())
                         old_regions[pointer] = [regions[pointer], line]
                         del regions[pointer]
@@ -608,14 +534,25 @@ class LogTest():
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
                 elif line.is_realloc():
-                    new_pointer = line.get_field(-3)
-                    old_pointer = line.get_field(-1)[:-2].split(':')[-1]
+                    (new_pointer, old_pointer) = line.realloc_pointers()
+                    (new_size, old_size) = line.realloc_sizes()
                     if new_pointer != '(nil)' and old_pointer != '(nil)':
-                        memsize.subtract(regions[old_pointer].calloc_size())
+                        if old_pointer not in regions:
+                            show_line(line, 'HIGH', 'realloc of unknown memory')
+                        else:
+                            # Use calloc_size() here as the memory might not
+                            # come from a realloc() call.
+                            exp_sz = regions[old_pointer].calloc_size()
+                            if old_size not in (0, exp_sz, new_size):
+                                show_line(line, 'HIGH',
+                                          'realloc used invalid old size')
+                            memsize.subtract(exp_sz)
                     regions[new_pointer] = line
-                    memsize.add(line.calloc_size())
+                    memsize.add(new_size)
                     if old_pointer not in (new_pointer, '(nil)'):
                         if old_pointer in regions:
+                            old_regions[old_pointer] = [regions[old_pointer],
+                                                        line]
                             del regions[old_pointer]
                         else:
                             show_line(line, 'NORMAL',
@@ -631,10 +568,9 @@ class LogTest():
         total_lines = trace_lines + non_trace_lines
         p_trace = trace_lines * 1.0 / total_lines * 100
 
-        print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(pid,
-                                                                  total_lines,
-                                                                  trace_lines,
-                                                                  p_trace))
+        if not self.quiet:
+            print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(
+                pid, total_lines, trace_lines, p_trace))
 
         if memsize.has_data():
             print("Memsize: {}".format(memsize))
@@ -645,22 +581,23 @@ class LogTest():
         # once this is stable.
         lost_memory = False
         if show_memleaks:
-            for (_, line) in regions.items():
+            for (_, line) in list(regions.items()):
                 pointer = line.get_field(-1).rstrip('.')
                 if pointer in active_desc:
                     show_line(line, 'NORMAL', 'descriptor not freed')
                     del active_desc[pointer]
                 else:
-                    show_line(line, 'NORMAL', 'memory not freed')
+                    show_line(line, 'NORMAL', 'memory not freed',
+                              custom=leak_wf)
                 lost_memory = True
 
         if active_desc:
-            for (_, line) in active_desc.items():
+            for (_, line) in list(active_desc.items()):
                 show_line(line, 'NORMAL', 'desc not deregistered')
             raise ActiveDescriptors()
 
         if active_rpcs:
-            for (_, line) in active_rpcs.items():
+            for (_, line) in list(active_rpcs.items()):
                 show_line(line, 'NORMAL', 'rpc not deregistered')
         if error_files or err_count:
             raise LogError()
@@ -791,23 +728,33 @@ def run():
     parser.add_argument('--dfuse',
                         help='Summarise dfuse I/O',
                         action='store_true')
+    parser.add_argument('--warnings', action='store_true')
     parser.add_argument('file', help='input file')
     args = parser.parse_args()
     try:
         log_iter = cart_logparse.LogIter(args.file)
-    except IsADirectoryError:
-        print('Log tracing on directory not possible')
-        return
+    except UnicodeDecodeError:
+        # If there is a unicode error in the log file then retry with checks
+        # enabled which should both report the error and run in latin-1 so
+        # perform the log parsing anyway.  The check for log_iter.file_corrupt
+        # later on will ensure that this error does not get logged, then
+        # ignored.
+        # The only possible danger here is the file is simply too big to check
+        # the encoding on, in which case this second attempt would fail with
+        # an out-of-memory error.
+        log_iter = cart_logparse.LogIter(args.file, check_encoding=True)
     test_iter = LogTest(log_iter)
     if args.dfuse:
         test_iter.check_dfuse_io()
     else:
         try:
-            test_iter.check_log_file(False)
+            test_iter.check_log_file(args.warnings)
         except LogError:
             print('Errors in log file, ignoring')
         except NotAllFreed:
             print('Memory leaks, ignoring')
+    if log_iter.file_corrupt:
+        sys.exit(1)
 
 if __name__ == '__main__':
     run()

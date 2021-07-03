@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Management RPC Protocol Definitions
@@ -35,7 +18,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_MGMT_VERSION 1
+#define DAOS_MGMT_VERSION 2
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -52,6 +35,9 @@
 	X(MGMT_POOL_GET_SVCRANKS,					\
 		0, &CQF_mgmt_pool_get_svcranks,				\
 		ds_mgmt_pool_get_svcranks_hdlr, NULL),			\
+	X(MGMT_POOL_FIND,						\
+		0, &CQF_mgmt_pool_find,					\
+		ds_mgmt_pool_find_hdlr, NULL),				\
 	X(MGMT_MARK,							\
 		0, &CQF_mgmt_mark,					\
 		ds_mgmt_mark_hdlr, NULL),				\
@@ -140,6 +126,22 @@ CRT_RPC_DECLARE(mgmt_profile, DAOS_ISEQ_MGMT_PROFILE,
 
 CRT_RPC_DECLARE(mgmt_pool_get_svcranks, DAOS_ISEQ_MGMT_POOL_GET_SVCRANKS,
 		DAOS_OSEQ_MGMT_POOL_GET_SVCRANKS)
+
+#define DAOS_ISEQ_MGMT_POOL_FIND /* input fields */		 \
+	((int32_t)		(pfi_bylabel)		CRT_VAR) \
+	((int32_t)		(pfi_pad32)		CRT_VAR) \
+	((d_const_string_t)	(pfi_label)		CRT_VAR) \
+	((uuid_t)		(pfi_puuid)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_POOL_FIND /* output fields */		 \
+	((uuid_t)		(pfo_puuid)		CRT_VAR) \
+	((d_rank_list_t)	(pfo_ranks)		CRT_PTR) \
+	((int32_t)		(pfo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_pool_find, DAOS_ISEQ_MGMT_POOL_FIND,
+		DAOS_OSEQ_MGMT_POOL_FIND)
+
+#define MGMT_POOL_FIND_DUMMY_LABEL "NO LABEL, FINDING BY UUID"
 
 #define DAOS_ISEQ_MGMT_TGT_CREATE /* input fields */		 \
 	((uuid_t)		(tc_pool_uuid)		CRT_VAR) \

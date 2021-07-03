@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It gives out the data types internally used by
@@ -37,58 +20,93 @@
 #include <gurt/hash.h>
 #include <gurt/heap.h>
 #include <gurt/atomic.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 struct crt_hg_gdata;
 struct crt_grp_gdata;
 
+struct crt_na_ofi_config {
+	int32_t		 noc_port;
+	char		*noc_interface;
+	char		*noc_domain;
+	/* IP addr str for the noc_interface */
+	char		 noc_ip_str[INET_ADDRSTRLEN];
+};
+
+struct crt_prov_gdata {
+	/** NA plugin type */
+	int			cpg_provider;
+
+	struct crt_na_ofi_config cpg_na_ofi_config;
+	/** Context0 URI */
+	char			cpg_addr[CRT_ADDR_STR_MAX_LEN];
+
+	/** CaRT contexts list */
+	d_list_t		cpg_ctx_list;
+	/** actual number of items in CaRT contexts list */
+	int			cpg_ctx_num;
+	/** maximum number of contexts user wants to create */
+	uint32_t		cpg_ctx_max_num;
+
+	/** Set of flags */
+	unsigned int		cpg_sep_mode		: 1,
+				cpg_contig_ports	: 1,
+				cpg_inited		: 1;
+
+};
+
+
 /* CaRT global data */
 struct crt_gdata {
-	/*
-	 * TODO: Temporary storage for context0 URI, used during group
-	 * attach info file population for self address. Per-provider
-	 * context0 URIs need to be stored for multi-provider support
-	 */
-	char			cg_addr[CRT_ADDR_STR_MAX_LEN];
+	/** Provider initialized at crt_init() time */
+	int			cg_init_prov;
 
-	/* Flag indicating whether it is a client or server */
-	bool			cg_server;
-	/* Flag indicating whether scalable endpoint mode is enabled */
-	bool			cg_sep_mode;
-	/* Flag indicating to use contiguous port ranges for contexts */
-	bool			cg_contig_ports;
-	int			cg_na_plugin; /* NA plugin type */
+	/** Provider specific data */
+	struct crt_prov_gdata	cg_prov_gdata[CRT_NA_OFI_COUNT];
 
-	/* global timeout value (second) for all RPCs */
+	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
-	/* credits limitation for #inflight RPCs per target EP CTX */
+
+	/** credits limitation for #inflight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
 
-	/* CaRT contexts list */
-	d_list_t		cg_ctx_list;
-	/* actual number of items in CaRT contexts list */
-	int			cg_ctx_num;
-	/* maximum number of contexts user wants to create */
-	uint32_t		cg_ctx_max_num;
-	/* the global opcode map */
+	/** the global opcode map */
 	struct crt_opc_map	*cg_opc_map;
-	/* HG level global data */
+	/** HG level global data */
 	struct crt_hg_gdata	*cg_hg;
 
 	struct crt_grp_gdata	*cg_grp;
 
-	/* refcount to protect crt_init/crt_finalize */
+	/** refcount to protect crt_init/crt_finalize */
 	volatile unsigned int	cg_refcount;
 
-	/* flags to keep track of states */
-	volatile unsigned int	cg_inited		: 1,
+	/** flags to keep track of states */
+	unsigned int		cg_inited		: 1,
 				cg_grp_inited		: 1,
 				cg_swim_inited		: 1,
-				cg_auto_swim_disable	: 1;
+				cg_auto_swim_disable	: 1,
+				/** whether it is a client or server */
+				cg_server		: 1,
+				/** whether scalable endpoint is enabled */
+				cg_use_sensors		: 1;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
 	/* protects crt_gdata */
 	pthread_rwlock_t	cg_rwlock;
+
+	/** Global statistics (when cg_use_sensors = true) */
+	/**
+	 * Total number of successfully served URI lookup for self,
+	 * of type counter
+	 */
+	struct d_tm_node_t	*cg_uri_self;
+	/**
+	 * Total number of successfully served (from cache) URI lookup for
+	 * others, of type counter
+	 */
+	struct d_tm_node_t	*cg_uri_other;
 };
 
 extern struct crt_gdata		crt_gdata;
@@ -132,6 +150,10 @@ struct crt_plugin_gdata {
 	struct crt_event_cb_priv	*cpg_event_cbs;
 	struct crt_event_cb_priv	*cpg_event_cbs_old;
 	uint32_t			 cpg_inited:1;
+	/* hlc error event callback */
+	crt_hlc_error_cb		 hlc_error_cb;
+	void				*hlc_error_cb_arg;
+
 	/* mutex to protect all callbacks change only */
 	pthread_mutex_t			 cpg_mutex;
 };
@@ -145,24 +167,38 @@ extern struct crt_plugin_gdata		crt_plugin_gdata;
 
 /* crt_context */
 struct crt_context {
-	d_list_t		 cc_link; /* link to gdata.cg_ctx_list */
-	int			 cc_idx; /* context index */
-	struct crt_hg_context	 cc_hg_ctx; /* HG context */
+	d_list_t		 cc_link;	/** link to gdata.cg_ctx_list */
+	int			 cc_idx;	/** context index */
+	struct crt_hg_context	 cc_hg_ctx;	/** HG context */
+
+	/* callbacks */
 	void			*cc_rpc_cb_arg;
-	crt_rpc_task_t		 cc_rpc_cb; /* rpc callback */
+	crt_rpc_task_t		 cc_rpc_cb;	/** rpc callback */
 	crt_rpc_task_t		 cc_iv_resp_cb;
-	/* in-flight endpoint tracking hash table */
+
+	/** RPC tracking */
+	/** in-flight endpoint tracking hash table */
 	struct d_hash_table	 cc_epi_table;
-	/* binheap for inflight RPC timeout tracking */
+	/** binheap for inflight RPC timeout tracking */
 	struct d_binheap	 cc_bh_timeout;
-	/* mutex to protect cc_epi_table and timeout binheap */
+	/** mutex to protect cc_epi_table and timeout binheap */
 	pthread_mutex_t		 cc_mutex;
-	/* timeout per-context */
+
+	/** timeout per-context */
 	uint32_t		 cc_timeout_sec;
-	/* Stores self uri for the current context */
+	/** HLC time of last received RPC */
+	uint64_t		 cc_last_unpack_hlc;
+
+	/** Per-context statistics (server-side only) */
+	/** Total number of timed out requests, of type counter */
+	struct d_tm_node_t	*cc_timedout;
+	/** Total number of timed out URI lookup requests, of type counter */
+	struct d_tm_node_t	*cc_timedout_uri;
+	/** Total number of failed address resolution, of type counter */
+	struct d_tm_node_t	*cc_failed_addr;
+
+	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
-	/* provider on which context is allocated */
-	int			provider;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */
@@ -191,9 +227,6 @@ struct crt_ep_inflight {
 
 #define CRT_UNLOCK			(0)
 #define CRT_LOCKED			(1)
-
-#define CRT_OPC_MAP_BITS	8
-#define CRT_OPC_MAP_BITS_LEGACY	12
 
 /* highest protocol version allowed */
 #define CRT_PROTO_MAX_VER	(0xFFUL)
@@ -239,26 +272,21 @@ struct crt_opc_map_L2 {
 	struct crt_opc_map_L3	*L2_map;
 };
 
+struct crt_opc_queried {
+	uint32_t		coq_version;
+	crt_opcode_t		coq_base;
+	d_list_t		coq_list;
+};
+
 struct crt_opc_map {
-	pthread_rwlock_t	 com_rwlock;
-	unsigned int		 com_lock_init:1;
-	unsigned int		 com_pid;
-	unsigned int		 com_bits;
-	unsigned int		 com_num_slots_total;
+	pthread_rwlock_t	com_rwlock;
+	unsigned int		com_num_slots_total;
+	d_list_t		com_coq_list;
 	struct crt_opc_map_L2	*com_map;
 };
 
-struct na_ofi_config {
-	int32_t		 noc_port;
-	char		*noc_interface;
-	char		*noc_domain;
-	/* IP addr str for the noc_interface */
-	char		 noc_ip_str[INET_ADDRSTRLEN];
-};
 
-int crt_na_ofi_config_init(void);
-void crt_na_ofi_config_fini(void);
-
-extern struct na_ofi_config crt_na_ofi_conf;
+int crt_na_ofi_config_init(int provider);
+void crt_na_ofi_config_fini(int provider);
 
 #endif /* __CRT_INTERNAL_TYPES_H__ */

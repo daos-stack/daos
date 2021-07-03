@@ -6,7 +6,10 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
-    libs = ['daos', 'daos_common', 'gurt', 'cart', 'uuid', 'cmocka',
+    if not prereqs.test_requested():
+        return
+
+    libs = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka',
             'daos_tests']
 
     denv = env.Clone()
@@ -22,7 +25,7 @@ def scons():
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
     denv.Append(CPPPATH=[Dir('suite').srcnode()])
-    prereqs.require(denv, 'argobots', 'hwloc', 'protobufc')
+    prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk')
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)
     daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs)
@@ -38,8 +41,9 @@ def scons():
                                     LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_racer)
 
+    Import('mpi_cmd_parser')
     obj_ctl = daos_build.program(denv, 'obj_ctl',
-                                 ['obj_ctl.c'],
+                                 ['obj_ctl.c', mpi_cmd_parser],
                                  LIBS=libs)
     denv.Install('$PREFIX/bin/', obj_ctl)
 

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * VOS object table definition
@@ -134,6 +117,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct vos_obj_df	*obj;
 	struct ilog_desc_cbs	 cbs;
+	daos_handle_t		 coh;
 	int			 rc;
 
 	obj = umem_off2ptr(umm, rec->rec_off);
@@ -149,8 +133,9 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ);
 
 	D_ASSERT(tins->ti_priv);
-	return gc_add_item((struct vos_pool *)tins->ti_priv, GC_OBJ,
-			   rec->rec_off, 0);
+
+	coh = vos_cont2hdl(args);
+	return gc_add_item(tins->ti_priv, coh, GC_OBJ, rec->rec_off, 0);
 }
 
 static int
@@ -268,6 +253,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	}
 	obj = val_iov.iov_buf;
 
+	vos_ilog_ts_ignore(vos_cont2umm(cont), &obj->vo_ilog);
 	vos_ilog_ts_mark(ts_set, &obj->vo_ilog);
 do_log:
 	if (!log)
@@ -337,8 +323,7 @@ vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid)
 
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 
-	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov,
-			   cont->vc_pool);
+	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, cont);
 	if (rc == -DER_NONEXIST)
 		return 0;
 
@@ -366,7 +351,7 @@ oi_iter_fini(struct vos_iterator *iter)
 
 	oiter = iter2oiter(iter);
 
-	if (!daos_handle_is_inval(oiter->oit_hdl)) {
+	if (daos_handle_is_valid(oiter->oit_hdl)) {
 		rc = dbtree_iter_finish(oiter->oit_hdl);
 		if (rc)
 			D_ERROR("oid_iter_fini failed:"DF_RC"\n", DP_RC(rc));
@@ -485,8 +470,8 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->oit_flags = param->ip_flags;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->oit_iter.it_for_purge = 1;
-	if (param->ip_flags & VOS_IT_FOR_REBUILD)
-		oiter->oit_iter.it_for_rebuild = 1;
+	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
+		oiter->oit_iter.it_for_migration = 1;
 
 	rc = dbtree_iter_prepare(cont->vc_btr_hdl, 0, &oiter->oit_hdl);
 	if (rc)
@@ -625,6 +610,7 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 	it_entry->ie_oid = obj->vo_id;
 	it_entry->ie_punch = oiter->oit_ilog_info.ii_next_punch;
+	it_entry->ie_obj_punch = it_entry->ie_punch;
 	it_entry->ie_epoch = epr.epr_hi;
 	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
 	if (oiter->oit_ilog_info.ii_create == 0) {
@@ -632,6 +618,9 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
 	}
 	it_entry->ie_child_type = VOS_ITER_DKEY;
+
+	vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
+			     &it_entry->ie_last_update);
 	return 0;
 }
 
@@ -685,7 +674,7 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog,
-				&oiter->oit_epr, discard, 0,
+				&oiter->oit_epr, discard, NULL,
 				&oiter->oit_ilog_info);
 	if (rc == 1) {
 		/* Incarnation log is empty, delete the object */

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Record timestamp table
@@ -279,18 +262,24 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry **entryp,
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		    uint16_t cflags, uint32_t akey_nr,
-		    const struct dtx_id *tx_id)
+		    const struct dtx_handle *dth)
 {
-	uint32_t	size;
-	uint64_t	array_size;
-	uint64_t	cond_mask = VOS_COND_FETCH_MASK | VOS_COND_UPDATE_MASK |
-		VOS_OF_COND_PER_AKEY;
+	const struct dtx_id	*tx_id = NULL;
+	uint32_t		 size;
+	uint64_t		 array_size;
+	uint64_t		 cond_mask = VOS_COND_FETCH_MASK |
+					     VOS_COND_UPDATE_MASK |
+					     VOS_OF_COND_PER_AKEY;
 
 	vos_kh_clear();
 
 	*ts_set = NULL;
-	if (tx_id == NULL && (flags & cond_mask) == 0)
-		return 0;
+	if (!dtx_is_valid_handle(dth)) {
+		if ((flags & cond_mask) == 0)
+			return 0;
+	} else {
+		tx_id = &dth->dth_xid;
+	}
 
 	size = VOS_TS_TYPE_AKEY + akey_nr;
 	array_size = size * sizeof((*ts_set)->ts_entries[0]);

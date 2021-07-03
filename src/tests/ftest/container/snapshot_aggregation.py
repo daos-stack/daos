@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
@@ -39,7 +22,7 @@ class SnapshotAggregation(IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a SnapshotAggregation object."""
-        super(SnapshotAggregation, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg = None
         self.free_space = {"scm": [], "nvme": []}
 
@@ -47,7 +30,7 @@ class SnapshotAggregation(IorTestBase):
         """Append the free space list with the current pool capacities."""
         for index, name in enumerate(("scm", "nvme")):
             self.free_space[name].append({
-                "dmg": self.pool.query_data[name]["free"],
+                "dmg": self.pool.query_data["response"][name]["free"],
                 "api": int(self.pool.info.pi_space.ps_space.s_free[index])
             })
 
@@ -60,7 +43,10 @@ class SnapshotAggregation(IorTestBase):
             the writes and confirm that deleting the snapshot reduces the pool
             capacity by half.
 
-        :avocado: tags=all,pr,hw,large,container,snapshot,snapshot_aggregation
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=container,snapshot,snap
+        :avocado: tags=snapshot_aggregation
         """
         self.dmg = self.get_dmg_command()
         daos = DaosCommand(self.bin)

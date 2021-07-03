@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of vos
@@ -49,8 +32,7 @@
 
 enum {
 	TCX_NONE,
-	TCX_PO_CREATE,
-	TCX_PO_OPEN,
+	TCX_PO_CREATE_OPEN,
 	TCX_CO_CREATE,
 	TCX_CO_OPEN,
 	TCX_READY,
@@ -122,22 +104,14 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	uuid_generate_time_safe(tcx->tc_co_uuid);
 
 	/* specify @psize as both NVMe size and SCM size */
-	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize);
+	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, 0,
+			     &tcx->tc_po_hdl);
 	if (rc) {
 		print_error("vpool create %s failed with error : %d\n",
 			    tcx->tc_po_name, rc);
 		goto failed;
 	}
-	tcx->tc_step = TCX_PO_CREATE;
-
-	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, false,
-			   &tcx->tc_po_hdl);
-	if (rc) {
-		print_error("vos pool open %s "DF_UUIDF" error: %d\n",
-			    tcx->tc_po_name, DP_UUID(tcx->tc_po_uuid), rc);
-		goto failed;
-	}
-	tcx->tc_step = TCX_PO_OPEN;
+	tcx->tc_step = TCX_PO_CREATE_OPEN;
 
 	rc = vos_cont_create(tcx->tc_po_hdl, tcx->tc_co_uuid);
 	if (rc) {
@@ -175,20 +149,19 @@ vts_ctx_fini(struct vos_test_ctx *tcx)
 	case TCX_READY:
 	case TCX_CO_OPEN:
 		rc = vos_cont_close(tcx->tc_co_hdl);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		/* fallthrough */
 	case TCX_CO_CREATE:
 		rc = vos_cont_destroy(tcx->tc_po_hdl, tcx->tc_co_uuid);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		/* fallthrough */
-	case TCX_PO_OPEN:
+	case TCX_PO_CREATE_OPEN:
 		rc = vos_pool_close(tcx->tc_po_hdl);
-		assert_int_equal(rc, 0);
-	case TCX_PO_CREATE:
+		assert_rc_equal(rc, 0);
 		rc = vos_pool_destroy(tcx->tc_po_name, tcx->tc_po_uuid);
-		assert_int_equal(rc, 0);
-		/* fallthrough */
+		assert_rc_equal(rc, 0);
 		free(tcx->tc_po_name);
+		/* fallthrough */
 	}
 	memset(tcx, 0, sizeof(*tcx));
 }
@@ -203,23 +176,50 @@ enum {
 };
 
 /** try to obtain a free credit */
-struct dts_io_credit *
-dts_credit_take(struct dts_context *tsc)
+struct io_credit *
+dts_credit_take(struct credit_context *tsc)
 {
-	return &tsc->tsc_cred_buf[0];
+	int	i;
+
+	for (i = 0; i < tsc->tsc_cred_nr; i++) {
+		if (tsc->tsc_credits[i] == NULL) {
+			D_ASSERT(tsc->tsc_cred_avail > 0);
+			tsc->tsc_cred_avail--;
+			tsc->tsc_credits[i] = &tsc->tsc_cred_buf[i];
+			return tsc->tsc_credits[i];
+		}
+	}
+	D_ASSERT(tsc->tsc_cred_avail == 0);
+	return NULL;
+}
+
+void
+dts_credit_return(struct credit_context *tsc, struct io_credit *cred)
+{
+	int	i;
+
+	D_ASSERT(tsc->tsc_cred_avail < tsc->tsc_cred_nr);
+
+	for (i = 0; i < tsc->tsc_cred_nr; i++) {
+		if (tsc->tsc_credits[i] == cred) {
+			tsc->tsc_credits[i] = NULL;
+			tsc->tsc_cred_avail++;
+			return;
+		}
+	}
+	D_ASSERT(0);
 }
 
 static int
-credits_init(struct dts_context *tsc)
+vts_credits_init(struct credit_context *tsc)
 {
 	int	i;
 
 	tsc->tsc_eqh		= DAOS_HDL_INVAL;
-	tsc->tsc_cred_nr	= 1;  /* take one slot in the buffer */
-	tsc->tsc_cred_avail	= -1; /* always available */
+	tsc->tsc_cred_avail	= tsc->tsc_cred_nr;
 
 	for (i = 0; i < tsc->tsc_cred_nr; i++) {
-		struct dts_io_credit *cred = &tsc->tsc_cred_buf[i];
+		struct io_credit *cred = &tsc->tsc_cred_buf[i];
 
 		memset(cred, 0, sizeof(*cred));
 		D_ALLOC(cred->tc_vbuf, tsc->tsc_cred_vsize);
@@ -228,13 +228,12 @@ credits_init(struct dts_context *tsc)
 				tsc->tsc_cred_vsize);
 			return -1;
 		}
-		tsc->tsc_credits[i] = cred;
 	}
 	return 0;
 }
 
 static void
-credits_fini(struct dts_context *tsc)
+vts_credits_fini(struct credit_context *tsc)
 {
 	int	i;
 
@@ -245,7 +244,7 @@ credits_fini(struct dts_context *tsc)
 }
 
 static int
-pool_init(struct dts_context *tsc)
+pool_init(struct credit_context *tsc)
 {
 	char		*pmem_file = tsc->tsc_pmem_file;
 	daos_handle_t	 poh = DAOS_HDL_INVAL;
@@ -267,14 +266,16 @@ pool_init(struct dts_context *tsc)
 	}
 
 	/* Use pool size as blob size for this moment. */
-	rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
-			     tsc->tsc_nvme_size);
-	if (rc)
-		goto out;
-
-	rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, false, &poh);
-	if (rc)
-		goto out;
+	if (tsc_create_pool(tsc)) {
+		rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
+				     tsc->tsc_nvme_size, 0, &poh);
+		if (rc)
+			goto out;
+	} else {
+		rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, 0, &poh);
+		if (rc)
+			goto out;
+	}
 
 	tsc->tsc_poh = poh;
  out:
@@ -282,24 +283,29 @@ pool_init(struct dts_context *tsc)
 }
 
 static void
-pool_fini(struct dts_context *tsc)
+pool_fini(struct credit_context *tsc)
 {
 	int	rc;
 
 	vos_pool_close(tsc->tsc_poh);
-	rc = vos_pool_destroy(tsc->tsc_pmem_file, tsc->tsc_pool_uuid);
-	D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc="DF_RC"\n", DP_RC(rc));
+	if (tsc_create_pool(tsc)) {
+		rc = vos_pool_destroy(tsc->tsc_pmem_file, tsc->tsc_pool_uuid);
+		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc="DF_RC"\n",
+			  DP_RC(rc));
+	}
 }
 
 static int
-cont_init(struct dts_context *tsc)
+cont_init(struct credit_context *tsc)
 {
 	daos_handle_t	coh = DAOS_HDL_INVAL;
 	int		rc;
 
-	rc = vos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid);
-	if (rc)
-		goto out;
+	if (tsc_create_cont(tsc)) {
+		rc = vos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid);
+		if (rc)
+			goto out;
+	}
 
 	rc = vos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid, &coh);
 	if (rc)
@@ -311,7 +317,7 @@ cont_init(struct dts_context *tsc)
 }
 
 static void
-cont_fini(struct dts_context *tsc)
+cont_fini(struct credit_context *tsc)
 {
 	if (tsc->tsc_pmem_file) /* VOS mode */
 		vos_cont_close(tsc->tsc_coh);
@@ -319,7 +325,7 @@ cont_fini(struct dts_context *tsc)
 
 /* see comments in dts_common.h */
 int
-dts_ctx_init(struct dts_context *tsc)
+dts_ctx_init(struct credit_context *tsc)
 {
 	int	rc;
 
@@ -329,7 +335,7 @@ dts_ctx_init(struct dts_context *tsc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
-	rc = vos_init();
+	rc = vos_self_init("/mnt/daos");
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_MODULE;
@@ -345,7 +351,7 @@ dts_ctx_init(struct dts_context *tsc)
 	tsc->tsc_init = DTS_INIT_CONT;
 
 	/* initialize I/O credits, which include EQ, event, I/O buffers... */
-	rc = credits_init(tsc);
+	rc = vts_credits_init(tsc);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_CREDITS;
@@ -360,11 +366,11 @@ dts_ctx_init(struct dts_context *tsc)
 
 /* see comments in dts_common.h */
 void
-dts_ctx_fini(struct dts_context *tsc)
+dts_ctx_fini(struct credit_context *tsc)
 {
 	switch (tsc->tsc_init) {
 	case DTS_INIT_CREDITS:	/* finalize credits */
-		credits_fini(tsc);
+		vts_credits_fini(tsc);
 		/* fall through */
 	case DTS_INIT_CONT:	/* close and destroy container */
 		cont_fini(tsc);
@@ -373,7 +379,7 @@ dts_ctx_fini(struct dts_context *tsc)
 		pool_fini(tsc);
 		/* fall through */
 	case DTS_INIT_MODULE:	/* finalize module */
-		vos_fini();
+		vos_self_fini();
 		/* fall through */
 	case DTS_INIT_DEBUG:	/* finalize debug system */
 		daos_debug_fini();

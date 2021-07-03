@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -72,13 +55,44 @@ iov2rec_bundle(d_iov_t *val_iov)
  * @{
  */
 
+/** Inline key is max of 15 bytes.  The extra byte in the struct is used
+ *  to encode the type (hash or inline) and the length of the inline key.
+ */
+#define KH_INLINE_MAX 15
+
 /**
  * hashed key for the key-btree, it is stored in btr_record::rec_hkey
  */
 struct ktr_hkey {
 	/** murmur64 hash */
-	uint64_t		kh_hash[2];
+	union {
+		/** NB: This assumes little endian.  We already have little
+		 *  endian assumptions with integer keys so this isn't the
+		 *  first violation.  The hkey_gen code will trigger an
+		 *  assertion if this is violated.
+		 */
+		struct {
+			/** Length of key shifted left by 2 bits. */
+			uint32_t	kh_len;
+			/** string32 hash of key */
+			uint32_t	kh_str32;
+			/** Murmur hash of key */
+			uint64_t	kh_murmur64;
+		};
+		struct {
+			/** length shifted left by 2 bits. Low bit means inline
+			 *  key.  An extra bit is reserved for future use.
+			 */
+			char		kh_inline_len;
+			/** Inline key */
+			char		kh_inline[KH_INLINE_MAX];
+		};
+		/** For comparison convenience */
+		uint64_t		kh_hash[2];
+	};
 };
+
+D_CASSERT(sizeof(struct ktr_hkey) == 16);
 
 /**
  * Store a key and its checksum as a durable struct.
@@ -176,11 +190,25 @@ ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	struct ktr_hkey		*kkey  = (struct ktr_hkey *)hkey;
 
-	kkey->kh_hash[0] = d_hash_murmur64(key_iov->iov_buf, key_iov->iov_len,
-					   VOS_BTR_MUR_SEED);
-	kkey->kh_hash[1] = d_hash_string_u32(key_iov->iov_buf,
-					     key_iov->iov_len);
-	vos_kh_set(kkey->kh_hash[0]);
+	if (key_iov->iov_len <= KH_INLINE_MAX) {
+		kkey->kh_hash[0] = 0;
+		kkey->kh_hash[1] = 0;
+
+		/** Set the lowest bit for inline key */
+		kkey->kh_inline_len = (key_iov->iov_len << 2) | 1;
+		memcpy(&kkey->kh_inline[0], key_iov->iov_buf, key_iov->iov_len);
+		D_ASSERT(kkey->kh_len & 1);
+		return;
+	}
+
+	kkey->kh_murmur64 = d_hash_murmur64(key_iov->iov_buf, key_iov->iov_len,
+					    VOS_BTR_MUR_SEED);
+	kkey->kh_str32 = d_hash_string_u32(key_iov->iov_buf, key_iov->iov_len);
+	/** Lowest bit is clear for hashed key */
+	kkey->kh_len = key_iov->iov_len << 2;
+
+	vos_kh_set(kkey->kh_murmur64);
+	D_ASSERT(!(kkey->kh_inline_len & 1));
 }
 
 /** compare the hashed key */
@@ -190,6 +218,11 @@ ktr_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	struct ktr_hkey *k1 = (struct ktr_hkey *)&rec->rec_hkey[0];
 	struct ktr_hkey *k2 = (struct ktr_hkey *)hkey;
 
+	/** Since the low bit is set for inline keys, there will never be
+	 *  a conflict between an inline key and a hashed key so we can
+	 *  simply compare as if they are hashed.  Order doesn't matter
+	 *  as long as it's consistent.
+	 */
 	if (k1->kh_hash[0] < k2->kh_hash[0])
 		return BTR_CMP_LT;
 
@@ -265,28 +298,15 @@ static void
 ktr_key_encode(struct btr_instance *tins, d_iov_t *key,
 	       daos_anchor_t *anchor)
 {
-	if (key) {
-		struct vos_embedded_key *embedded =
-			(struct vos_embedded_key *)anchor->da_buf;
-		D_ASSERT(key->iov_len <= sizeof(embedded->ek_key));
-
-		memcpy(embedded->ek_key, key->iov_buf, key->iov_len);
-		/** Pointers will have to be set on decode. */
-		embedded->ek_kiov.iov_len = key->iov_len;
-		embedded->ek_kiov.iov_buf_len = sizeof(embedded->ek_key);
-	}
+	if (key)
+		embedded_key_encode(key, anchor);
 }
 
 static void
 ktr_key_decode(struct btr_instance *tins, d_iov_t *key,
 	       daos_anchor_t *anchor)
 {
-	struct vos_embedded_key *embedded =
-		(struct vos_embedded_key *) anchor->da_buf;
-
-	/* Fix the pointer first */
-	embedded->ek_kiov.iov_buf = &embedded->ek_key[0];
-	*key = embedded->ek_kiov;
+	embedded_key_decode(key, anchor);
 }
 
 /** create a new key-record, or install an externally allocated key-record */
@@ -327,6 +347,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	struct vos_krec_df	*krec;
 	struct umem_attr	 uma;
 	struct ilog_desc_cbs	 cbs;
+	daos_handle_t		 coh;
 	int			 gc;
 	int			 rc;
 
@@ -346,7 +367,8 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	D_ASSERT(tins->ti_priv);
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
-	return gc_add_item((struct vos_pool *)tins->ti_priv, gc,
+	coh = vos_cont2hdl(args);
+	return gc_add_item((struct vos_pool *)tins->ti_priv, coh, gc,
 			   rec->rec_off, 0);
 }
 
@@ -493,6 +515,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	rbund->rb_rsize	= irec->ir_size;
 	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
+	rbund->rb_dtx_state = vos_dtx_ent_state(irec->ir_dtx);
 	return 0;
 }
 
@@ -1019,6 +1042,8 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		/** Key hash may already be calculated but isn't for some key
 		 * types so pass it in here.
 		 */
+		if (ilog != NULL && (flags & SUBTR_CREATE))
+			vos_ilog_ts_ignore(vos_obj2umm(obj), &krec->kr_ilog);
 		tmprc = vos_ilog_ts_add(ts_set, ilog, key->iov_buf,
 					(int)key->iov_len);
 		if (tmprc != 0) {
@@ -1042,6 +1067,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 			goto out;
 		}
 		krec = rbund.rb_krec;
+		vos_ilog_ts_ignore(vos_obj2umm(obj), &krec->kr_ilog);
 		vos_ilog_ts_mark(ts_set, &krec->kr_ilog);
 		created = true;
 	}
@@ -1104,6 +1130,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			ilog = &krec->kr_ilog;
 		}
 
+		if (ilog)
+			vos_ilog_ts_ignore(vos_obj2umm(obj), ilog);
 		lrc = vos_ilog_ts_add(ts_set, ilog, key_iov->iov_buf,
 				      (int)key_iov->iov_len);
 		if (lrc != 0) {
@@ -1138,8 +1166,10 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	krec = rbund->rb_krec;
 	ilog = &krec->kr_ilog;
 
-	if (mark)
+	if (mark) {
+		vos_ilog_ts_ignore(vos_obj2umm(obj), ilog);
 		vos_ilog_ts_mark(ts_set, ilog);
+	}
 
 	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, bound, parent,
 			    info, ts_set, true,
@@ -1151,6 +1181,13 @@ done:
 	return rc;
 }
 
+int
+key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov)
+{
+	/* Delete a dkey or akey from tree @toh */
+	return dbtree_delete(toh, BTR_PROBE_EQ, key_iov, obj->obj_cont);
+}
+
 /** initialize tree for an object */
 int
 obj_tree_init(struct vos_object *obj)
@@ -1158,7 +1195,7 @@ obj_tree_init(struct vos_object *obj)
 	struct vos_btr_attr *ta	= &vos_btr_attrs[0];
 	int		     rc;
 
-	if (!daos_handle_is_inval(obj->obj_toh))
+	if (daos_handle_is_valid(obj->obj_toh))
 		return 0;
 
 	D_ASSERT(obj->obj_df);
@@ -1199,7 +1236,7 @@ obj_tree_fini(struct vos_object *obj)
 	int	rc = 0;
 
 	/* NB: tree is created inplace, so don't need to destroy */
-	if (!daos_handle_is_inval(obj->obj_toh)) {
+	if (daos_handle_is_valid(obj->obj_toh)) {
 		D_ASSERT(obj->obj_df);
 		rc = dbtree_close(obj->obj_toh);
 		obj->obj_toh = DAOS_HDL_INVAL;

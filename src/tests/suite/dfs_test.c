@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -35,7 +18,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "pu"
+#define TESTS "pus"
 static const char *all_tests = TESTS;
 
 static void
@@ -48,6 +31,7 @@ print_usage(int rank)
 	print_message("Tests: Use one of these arg(s) for specific test\n");
 	print_message("dfs_test -p|--parallel\n");
 	print_message("dfs_test -u|--unit\n");
+	print_message("dfs_test -s|--sys\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("dfs_test -E|--exclude TESTS\n");
 	print_message("dfs_test -n|--dmg_config\n");
@@ -75,7 +59,13 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DFS unit tests..");
 			daos_test_print(rank, "=====================");
-			nr_failed = run_dfs_unit_test(rank, size);
+			nr_failed += run_dfs_unit_test(rank, size);
+			break;
+		case 's':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DFS Sys unit tests..");
+			daos_test_print(rank, "=====================");
+			nr_failed += run_dfs_sys_unit_test(rank, size);
 			break;
 
 		default:
@@ -115,6 +105,7 @@ main(int argc, char **argv)
 		{"dmg_config",	required_argument,	NULL,	'n'},
 		{"parallel",	no_argument,		NULL,	'p'},
 		{"unit",	no_argument,		NULL,	'u'},
+		{"sys",		no_argument,		NULL,	's'},
 		{NULL,		0,			NULL,	0}
 	};
 
@@ -126,7 +117,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "aE:n:pu",
+	while ((opt = getopt_long(argc, argv, "aE:n:pus",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;

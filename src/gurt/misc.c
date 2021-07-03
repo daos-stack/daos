@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements some miscellaneous functions which
@@ -27,7 +10,64 @@
 #define D_LOGFAC	DD_FAC(misc)
 
 #include <stdarg.h>
+#include <math.h>
 #include <gurt/common.h>
+
+void
+d_free(void *ptr)
+{
+	free(ptr);
+}
+
+void *
+d_calloc(size_t count, size_t eltsize)
+{
+	return calloc(count, eltsize);
+}
+
+void *
+d_malloc(size_t size)
+{
+	return malloc(size);
+}
+
+
+void *
+d_realloc(void *ptr, size_t size)
+{
+	return realloc(ptr, size);
+}
+
+char *
+d_strndup(const char *s, size_t n)
+{
+	return strndup(s, n);
+}
+
+int
+d_asprintf(char **strp, const char *fmt, ...)
+{
+	va_list	ap;
+	int	rc;
+
+	va_start(ap, fmt);
+	rc = vasprintf(strp, fmt, ap);
+	va_end(ap);
+
+	return rc;
+}
+
+char *
+d_realpath(const char *path, char *resolved_path)
+{
+	return realpath(path, resolved_path);
+}
+
+void *
+d_aligned_alloc(size_t alignment, size_t size)
+{
+	return aligned_alloc(alignment, size);
+}
 
 int
 d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
@@ -77,7 +117,7 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 
 	rc = d_rank_list_dup(dst, src);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("d_rank_list_dup() failed, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, 0);
 	}
 
@@ -201,12 +241,11 @@ d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size)
 		d_rank_list_free(ptr);
 		return NULL;
 	}
-	D_REALLOC_ARRAY(new_rl_ranks, ptr->rl_ranks, size);
+	D_REALLOC_ARRAY(new_rl_ranks, ptr->rl_ranks, ptr->rl_nr, size);
 	if (new_rl_ranks != NULL) {
 		ptr->rl_ranks = new_rl_ranks;
 		ptr->rl_nr = size;
 	} else {
-		D_ERROR("d_rank_list_realloc() failed.\n");
 		ptr = NULL;
 	}
 
@@ -331,11 +370,10 @@ out:
 int
 d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank)
 {
-	uint32_t		 old_num;
+	uint32_t		 old_num = rank_list->rl_nr;
 	d_rank_list_t		*new_rank_list;
 	int			 rc = 0;
 
-	old_num = rank_list->rl_nr;
 	new_rank_list = d_rank_list_realloc(rank_list, old_num + 1);
 	if (new_rank_list == NULL) {
 		D_ERROR("d_rank_list_realloc() failed.\n");
@@ -624,7 +662,7 @@ d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 		}
 
 		size = buf->buf_size * 2;
-		D_REALLOC(new_buf, buf->str, size);
+		D_REALLOC(new_buf, buf->str, buf->buf_size, size);
 		if (new_buf == NULL) {
 			buf->status = -DER_NOMEM;
 			return -DER_NOMEM;
@@ -746,4 +784,22 @@ d_backoff_seq_next(struct d_backoff_seq *seq)
 
 	/* Return a random backoff in [0, next]. */
 	return (next * ((double)rand() / RAND_MAX));
+}
+
+double
+d_stand_div(double *array, int nr)
+{
+	double		avg = 0;
+	double		std = 0;
+	int		i;
+
+	for (i = 0; i < nr; i++)
+		avg += array[i];
+
+	avg /= nr;
+	for (i = 0; i < nr; i++)
+		std += pow(array[i] - avg, 2);
+
+	std /= nr;
+	return sqrt(std);
 }

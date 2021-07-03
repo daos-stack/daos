@@ -2,8 +2,9 @@
 
 This section lists the environment variables used by DAOS. 
 
-!!!warning Many of these variables are used for development purposes only,
-           and may be removed or changed in the future.
+!!! warning
+    Many of these variables are used for development purposes only,
+    and may be removed or changed in the future.
 
 The description of each variable follows the following format:
 
@@ -32,17 +33,15 @@ Environment variables in this section only apply to the server side.
 
 |Variable              |Description|
 |----------------------|-----------|
-|VOS\_CHECKSUM         |Checksum algorithm used by VOS. STRING. Default to disabling checksums. The following checksum algorithms are supported: crc64 and crc32.|
-|VOS\_MEM\_CLASS       |Memory class used by VOS. STRING. Default to persistent memory. If the value is set to DRAM, all data is stored in volatile memory. Otherwise, all data is stored in persistent memory.|
 |RDB\_ELECTION\_TIMEOUT|Raft election timeout used by RDBs in milliseconds. INTEGER. Default to 7000 ms.|
 |RDB\_REQUEST\_TIMEOUT |Raft request timeout used by RDBs in milliseconds. INTEGER. Default to 3000 ms.|
 |DAOS\_REBUILD         |Determines whether to start rebuilds when excluding targets. BOOL2. Default to true.|
 |DAOS\_MD\_CAP         |Size of a metadata pmem pool/file in MBs. INTEGER. Default to 128 MB.|
 |DAOS\_START\_POOL\_SVC|Determines whether to start existing pool services when starting a daos\_server. BOOL. Default to true.|
-|DAOS\_IMPLICIT\_PURGE |Whether to aggregate unreferenced epochs. BOOL. Default to false.|
-|DAOS\_PURGE\_CREDITS  |The number of credits for probing object trees when aggregating unreferenced epochs. INTEGER. Default to 1000.|
 |CRT\_DISABLE\_MEM\_PIN|Disable memory pinning workaround on a server side. BOOL. Default to 0.|
-
+|DAOS\_SCHED\_PRIO\_DISABLED|Disable server ULT prioritizing. BOOL. Default to 0.|
+|DAOS\_SCHED\_RELAX\_MODE|The mode of CPU relaxing on idle. "disabled":disable relaxing; "net":wait on network request for INTVL; "sleep":sleep for INTVL. STRING. Default to "net"|
+|DAOS\_SCHED\_RELAX\_INTVL|CPU relax interval in milliseconds. INTEGER. Default to 1 ms.|
 
 ## Server and Client environment variables
 
@@ -67,7 +66,9 @@ Environment variables in this section only apply to the client side.
 
 |Variable    |Description|
 |------------|-----------|
-|D\_LOG\_FILE|DAOS debug logs (both server and client) are written to `/tmp/daos.log` by default. The debug location can be modified by setting this environment variable ("D\_LOG\_FILE=/tmp/daos_debug.log").|
+|D\_LOG\_FILE|DAOS debug logs (both server and client) are written to stdout by default. The debug location can be modified by setting this environment variable ("D\_LOG\_FILE=/tmp/daos_debug.log").|
+|D\_LOG\_FILE\_APPEND\_PID|If set and not 0, causes the main PID to be appended at the end of D\_LOG\_FILE path name (both server and client).|
+|D\_LOG\_STDERR\_IN\_LOG|If set and not 0, causes stderr messages to be merged in D\_LOG\_FILE.|
 |D\_LOG\_SIZE|DAOS debug logs (both server and client) have a 1GB file size limit by default. When this limit is reached, the current log file is closed and renamed with a .old suffix, and a new one is opened. This mechanism will repeat each time the limit is reached, meaning that available saved log records could be found in both ${D_LOG_FILE} and last generation of ${D_LOG_FILE}.old files, to a maximum of the most recent 2*D_LOG_SIZE records.  This can be modified by setting this environment variable ("D_LOG_SIZE=536870912"). Sizes can also be specified in human-readable form using `k`, `m`, `g`, `K`, `M`, and `G`. The lower-case specifiers are base-10 multipliers and the upper case specifiers are base-2 multipliers.|
 |DD\_SUBSYS  |Used to specify which subsystems to enable. DD\_SUBSYS can be set to individual subsystems for finer-grained debugging ("DD\_SUBSYS=vos"), multiple facilities ("DD\_SUBSYS=eio,mgmt,misc,mem"), or all facilities ("DD\_SUBSYS=all") which is also the default setting. If a facility is not enabled, then only ERR messages or more severe messages will print.|
 |DD\_STDERR  |Used to specify the priority level to output to stderr. Options in decreasing priority level order: FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG. By default, all CRIT and more severe DAOS messages will log to stderr ("DD\_STDERR=CRIT"), and the default for CaRT/GURT is FATAL.|

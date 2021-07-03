@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __DAOS_OBJ_H__
 #define __DAOS_OBJ_H__
@@ -31,15 +14,7 @@ extern "C" {
 #include <daos_event.h>
 #include <daos_obj_class.h>
 
-/**
- * ID of an object, 128 bits
- * The high 32-bit of daos_obj_id_t::hi are reserved for DAOS, the rest is
- * provided by the user and assumed to be unique inside a container.
- */
-typedef struct {
-	uint64_t	lo;
-	uint64_t	hi;
-} daos_obj_id_t;
+#define DAOS_OBJ_NIL		((daos_obj_id_t){0})
 
 /** the current OID version */
 #define OID_FMT_VER		1
@@ -203,7 +178,7 @@ typedef struct {
 typedef enum {
 	/** is a dkey */
 	DAOS_IOD_NONE		= 0,
-	/** one indivisble value update atomically */
+	/** one indivisible value update atomically */
 	DAOS_IOD_SINGLE		= 1,
 	/** an array of records where each record is update atomically */
 	DAOS_IOD_ARRAY		= 2,
@@ -239,7 +214,7 @@ typedef struct {
 	 * Number of entries in the \a iod_recxs for arrays,
 	 * should be 1 if single value.
 	 */
-	unsigned int		iod_nr;
+	uint32_t		iod_nr;
 	/*
 	 * Array of extents, where each extent defines the index of the first
 	 * record in the extent and the number of records to access. If the
@@ -345,11 +320,11 @@ typedef struct {
  *			the container. [out]: Fully populated DAOS object
  *			identifier with the the low 96 bits untouched and the
  *			DAOS private bits (the high 32 bits) encoded.
- * \param[in]	ofeat	Feature bits specific to object
+ * \param[in]	ofeats	Feature bits specific to object
  * \param[in]	cid	Class Identifier
  * \param[in]	args	Reserved.
  */
-static inline void
+static inline void  __attribute__ ((deprecated))
 daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 		     daos_oclass_id_t cid, uint32_t args)
 {
@@ -371,6 +346,64 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
 	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
 	oid->hi |= hdr;
 }
+
+#define DAOS_OCH_RDD_BITS	4
+#define DAOS_OCH_SHD_BITS	6
+#define DAOS_OCH_RDD_SHIFT	0
+#define DAOS_OCH_SHD_SHIFT	DAOS_OCH_RDD_BITS
+#define DAOS_OCH_RDD_MAX_VAL	((1ULL << DAOS_OCH_RDD_BITS) - 1)
+#define DAOS_OCH_SHD_MAX_VAL	((1ULL << DAOS_OCH_SHD_BITS) - 1)
+#define DAOS_OCH_RDD_MASK	(DAOS_OCH_RDD_MAX_VAL << DAOS_OCH_RDD_SHIFT)
+#define DAOS_OCH_SHD_MASK	(DAOS_OCH_SHD_MAX_VAL << DAOS_OCH_SHD_SHIFT)
+
+/** Flags for oclass hints */
+enum {
+	/** Flags to control OC Redundancy */
+	DAOS_OCH_RDD_DEF	= (1 << 0),	/** Default - use RF prop */
+	DAOS_OCH_RDD_NO		= (1 << 1),	/** No redundancy */
+	DAOS_OCH_RDD_RP		= (1 << 2),	/** Replication */
+	DAOS_OCH_RDD_EC		= (1 << 3),	/** Erasure Code */
+	/** Flags to control OC Sharding */
+	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default: Use MAX for array &
+						 * flat KV; 1 grp for others.
+						 */
+	DAOS_OCH_SHD_TINY	= (1 << 5),	/** <= 4 grps */
+	DAOS_OCH_SHD_REG	= (1 << 6),	/** max(128, 25%) */
+	DAOS_OCH_SHD_HI		= (1 << 7),	/** max(256, 50%) */
+	DAOS_OCH_SHD_EXT	= (1 << 8),	/** max(1024, 80%) */
+	DAOS_OCH_SHD_MAX	= (1 << 9),	/** 100% */
+};
+
+/**
+ * Generate a DAOS object ID by encoding the private DAOS bits of the object
+ * address space. This allows the user to either select an object class
+ * manually, or ask DAOS to generate one based on some hints provided.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in,out]
+ *		oid	[in]: Object ID with low 96 bits set and unique inside
+ *			the container.
+ *			[out]: Fully populated DAOS object identifier with the
+ *			the low 96 bits untouched and the DAOS private bits
+ *			(the high 32 bits) encoded.
+ * \param[in]	ofeats	Feature bits specific to object
+ * \param[in]	cid	Class Identifier. This setting is for advanced users who
+ *			are knowledgeable on the specific oclass being set and
+ *			what that means for the object in the current system and
+ *			the container it's in.
+ *			Setting this to 0 (unknown) will check if there are any
+ *			hints specified and use an oclass accordingly. If there
+ *			are no hints specified we use the container properties
+ *			to select the object class.
+ * \param[in]   hints	Optional hints to select oclass with redundancy type
+ *			and sharding. This will be ignored if cid is not
+ *			OC_UNKNOWN (0).
+ * \param[in]	args	Reserved.
+ */
+int
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
+		      daos_ofeat_t ofeats, daos_oclass_id_t cid,
+		      daos_oclass_hints_t hints, uint32_t args);
 
 /**
  * Open an DAOS object.
@@ -443,7 +476,7 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Optional transaction handle to punch dkeys in.
  *			Use DAOS_TX_NONE for an independent transaction.
- * \param[in]	flags	Punch flags (currently ignored).
+ * \param[in]	flags	Punch flags (conditional ops).
  * \param[in]	nr	number of dkeys to punch.
  * \param[in]	dkeys	Array of dkeys to punch.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -470,7 +503,7 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Optional transaction handle to punch akeys in.
  *			Use DAOS_TX_NONE for an independent transaction.
- * \param[in]	flags	Punch flags (currently ignored).
+ * \param[in]	flags	Punch flags (conditional ops).
  * \param[in]	dkey	dkey to punch akeys from.
  * \param[in]	nr	number of akeys to punch.
  * \param[in]	akeys	Array of akeys to punch.
@@ -526,7 +559,7 @@ daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
  * \param[in]	th	Optional transaction handle to fetch with.
  *			Use DAOS_TX_NONE for an independent transaction.
  *
- * \param[in]	flags	Fetch flags (currently ignored).
+ * \param[in]	flags	Fetch flags (conditional ops).
  *
  * \param[in]	dkey	Distribution key associated with the fetch operation.
  *
@@ -589,7 +622,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	th	Optional transaction handle to update with.
  *			Use DAOS_TX_NONE for an independent transaction.
  *
- * \param[in]	flags	Update flags (currently ignored).
+ * \param[in]	flags	Update flags (conditional ops).
  *
  * \param[in]	dkey	Distribution key associated with the update operation.
  *
@@ -882,8 +915,8 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors);
 
 /**
  * Set an anchor with an index based on split done with daos_obj_anchor_split.
- * The anchor passed will be re-intialized and set to start and finish iteration
- * based on the specified index.
+ * The anchor passed will be re-initialized and set to start and finish
+ * iteration based on the specified index.
  *
  * \param[in]   oh	Open object handle.
  * \param[in]	index	Index of set this anchor for iteration.
@@ -897,6 +930,63 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors);
  */
 int
 daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor);
+
+/**
+ * Open Object Index Table (OIT) of an container
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	epoch	epoch of a snapshot
+ * \param[out]	oh	Returned OIT open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
+	      daos_handle_t *oh, daos_event_t *ev);
+
+/**
+ * Close an opened Object Index Table (OIT).
+ *
+ * \param[in]	oh	OIT open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ */
+int
+daos_oit_close(daos_handle_t oh, daos_event_t *ev);
+
+/**
+ * Enumerate object IDs snapshotted by the Object Index Table (OIT)
+ *
+ * \param[in]	oh	OIT open handle.
+ * \param[out]	oids	Returned OIDs
+ * \param[out]	oids_nr	Number of returned OIDs
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
+	      daos_anchor_t *anchor, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

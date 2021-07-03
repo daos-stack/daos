@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 // Package code is a central repository for all control plane fault codes.
@@ -59,23 +42,27 @@ func (c *Code) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
+// general fault codes
 const (
-	// general fault codes
 	Unknown Code = iota
 	MissingSoftwareDependency
 	BadVersionSoftwareDependency
 	PrivilegedHelperNotPrivileged
 	PrivilegedHelperNotAvailable
 	PrivilegedHelperRequestFailed
+)
 
-	// generic storage fault codes
+// generic storage fault codes
+const (
 	StorageUnknown Code = iota + 100
 	StorageAlreadyFormatted
 	StorageFilesystemAlreadyMounted
 	StorageDeviceAlreadyMounted
 	StorageTargetAlreadyMounted
+)
 
-	// SCM fault codes
+// SCM fault codes
+const (
 	ScmUnknown Code = iota + 200
 	ScmFormatInvalidSize
 	ScmFormatInvalidDeviceCount
@@ -83,11 +70,14 @@ const (
 	ScmFormatMissingDevice
 	ScmFormatMissingParam
 	ScmFormatConflictingParam
+	ScmPathAccessDenied
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
+)
 
-	// Bdev fault codes
+// Bdev fault codes
+const (
 	BdevUnknown Code = iota + 300
 	BdevFormatUnknownClass
 	BdevFormatFailure
@@ -95,11 +85,16 @@ const (
 	BdevPCIAddressNotFound
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
+)
 
-	// DAOS system fault codes
+// DAOS system fault codes
+const (
 	SystemUnknown Code = iota + 400
+	SystemBadFaultDomainDepth
+)
 
-	// client fault codes
+// client fault codes
+const (
 	ClientUnknown Code = iota + 500
 	ClientConfigBadControlPort
 	ClientConfigBadAccessPoints
@@ -108,15 +103,20 @@ const (
 	ClientConnectionNoRoute
 	ClientConnectionRefused
 	ClientConnectionClosed
+	ClientFormatRunningSystem
+)
 
-	// server fault codes
+// server fault codes
+const (
 	ServerUnknown Code = iota + 600
 	ServerScmUnmanaged
 	ServerBdevNotFound
 	ServerIommuDisabled
+	ServerWrongSystem
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks
+	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
 	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
@@ -124,16 +124,19 @@ const (
 	ServerInstancesNotStopped
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
+)
 
-	// server config fault codes
+// server config fault codes
+const (
 	ServerConfigUnknown Code = iota + 700
 	ServerBadConfig
 	ServerNoConfigPath
 	ServerConfigBadControlPort
+	ServerConfigBadTelemetryPort
 	ServerConfigBadAccessPoints
 	ServerConfigEvenAccessPoints
 	ServerConfigBadProvider
-	ServerConfigNoServers
+	ServerConfigNoEngines
 	ServerConfigDuplicateFabric
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount
@@ -141,17 +144,23 @@ const (
 	ServerConfigOverlappingBdevDeviceList
 	ServerConfigFaultDomainInvalid
 	ServerConfigFaultCallbackNotFound
+	ServerConfigFaultCallbackInsecure
 	ServerConfigFaultCallbackBadPerms
 	ServerConfigFaultCallbackFailed
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
+	ServerConfigFaultDomainTooManyLayers
+)
 
-	// SPDK library bindings codes
+// SPDK library bindings codes
+const (
 	SpdkUnknown Code = iota + 800
 	SpdkCtrlrNoHealth
 	SpdkBindingRetNull
 	SpdkBindingFailed
+)
 
-	// security fault codes
+// security fault codes
+const (
 	SecurityUnknown Code = iota + 900
 )

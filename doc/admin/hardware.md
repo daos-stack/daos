@@ -41,7 +41,7 @@ systems for ARM platforms.
 ## Network Requirements
 
 The DAOS network layer relies on libfabrics and supports OFI providers
-for Ethernet/sockets, InfiniBand/verbs, RoCE, Cray GNI, and Intel
+for Ethernet/sockets, InfiniBand/verbs, RoCE, and Intel
 Omni-Path Architecture (OPA). An RDMA-capable fabric is preferred for better
 performance. DAOS can support multiple rails by binding different
 instances of the DAOS server to individual network cards.
@@ -108,11 +108,11 @@ performance.
 Therefore, when running in a multi-socket and multi-rail environment,
 the DAOS service must be able to detect the CPU to PCIe device and
 persistent memory affinity and minimize as much as possible non-local
-access. This can be achieved by spawning one instance of the I/O server
+access. This can be achieved by spawning one instance of the I/O Engine
 per CPU, then accessing only the persistent memory and PCI devices
 local to that CPU from that server instance. The DAOS control plane is
 responsible for detecting the storage and network affinity and
-starting the I/O servers accordingly.
+starting the I/O Engines accordingly.
 
 ![](./media/Fig_075.png)
 

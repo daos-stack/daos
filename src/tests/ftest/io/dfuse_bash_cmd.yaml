@@ -14,7 +14,6 @@ pool:
   mode: 146
   name: daos_server
   scm_size: 1000000000
-  svcn: 1
   control_method: dmg
   pool_count: 5
 container:

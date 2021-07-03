@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -30,6 +13,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <daos/tests_lib.h>
 #include <daos/drpc.h>
 #include <daos_pool.h>
 #include <daos_security.h>
@@ -147,7 +131,7 @@ new_access_prop(struct daos_acl *acl, const char *owner, const char *group)
 		return NULL;
 
 	prop = daos_prop_alloc(num_entries);
-	entry = &(prop->dpp_entries[0]);
+	entry = &prop->dpp_entries[0];
 
 	if (acl != NULL) {
 		entry->dpe_type = DAOS_PROP_PO_ACL;
@@ -175,7 +159,7 @@ get_valid_acl(void)
 {
 	struct daos_acl	*acl = NULL;
 
-	assert_int_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR, &acl), 0);
+	assert_rc_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR, &acl), 0);
 
 	return acl;
 }
@@ -725,6 +709,7 @@ expect_drpc_list_cont_resp_with_containers(Drpc__Response *resp,
 		uuid_unparse(exp_cont[i].pci_uuid, exp_uuid);
 		assert_string_equal(cont_resp->containers[i]->uuid, exp_uuid);
 	}
+	mgmt__list_cont_resp__free_unpacked(cont_resp, NULL);
 }
 
 static void
@@ -1129,9 +1114,9 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	assert_non_null(pq_resp);
 	assert_int_equal(pq_resp->status, 0);
 	assert_string_equal(pq_resp->uuid, TEST_UUID);
-	assert_int_equal(pq_resp->totaltargets, exp_info->pi_ntargets);
-	assert_int_equal(pq_resp->disabledtargets, exp_info->pi_ndisabled);
-	assert_int_equal(pq_resp->activetargets,
+	assert_int_equal(pq_resp->total_targets, exp_info->pi_ntargets);
+	assert_int_equal(pq_resp->disabled_targets, exp_info->pi_ndisabled);
+	assert_int_equal(pq_resp->active_targets,
 			 exp_info->pi_space.ps_ntargets);
 
 	assert_non_null(pq_resp->scm);
@@ -1303,7 +1288,6 @@ test_drpc_pool_create_invalid_acl(void **state)
 	size_t			num_acl = 2;
 	size_t			i;
 	char			**bad_acl;
-	const char		*ace = "A::myuser@:rw"; /* to be duplicated */
 
 	pc_req.uuid = TEST_UUID;
 
@@ -1311,7 +1295,7 @@ test_drpc_pool_create_invalid_acl(void **state)
 	D_ALLOC_ARRAY(bad_acl, num_acl);
 	assert_non_null(bad_acl);
 	for (i = 0; i < num_acl; i++) {
-		D_STRNDUP(bad_acl[i], ace, DAOS_ACL_MAX_ACE_STR_LEN);
+		D_STRNDUP_S(bad_acl[i], "A::myuser@:rw");
 		assert_non_null(bad_acl[i]);
 	}
 
@@ -1325,13 +1309,11 @@ test_drpc_pool_create_invalid_acl(void **state)
 	expect_create_resp_with_error(&resp, -DER_INVAL);
 
 	/* clean up */
-	for (i = 0; i < num_acl; i++) {
+	for (i = 0; i < num_acl; i++)
 		D_FREE(bad_acl[i]);
-	}
 	D_FREE(bad_acl);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
-
 }
 
 /*
@@ -1864,7 +1846,6 @@ test_drpc_ping_rank_success(void **state)
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
-
 }
 
 /*
@@ -2083,7 +2064,6 @@ test_drpc_cont_set_owner_success(void **state)
 						drpc_pool_set_prop_setup, \
 						drpc_pool_set_prop_teardown)
 
-
 #define QUERY_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_pool_query_setup)
 
@@ -2102,7 +2082,6 @@ test_drpc_cont_set_owner_success(void **state)
 
 #define POOL_EVICT_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_evict_setup)
-
 
 #define PING_RANK_TEST(x)	cmocka_unit_test(x)
 
@@ -2170,5 +2149,5 @@ main(void)
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_success),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("mgmt_srv_drpc", tests, NULL, NULL);
 }

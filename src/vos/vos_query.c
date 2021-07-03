@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -51,6 +34,8 @@ struct open_query {
 	uint32_t		 qt_flags;
 	struct vos_pool		*qt_pool;
 	daos_handle_t		 qt_coh;
+	daos_anchor_t		 qt_dkey_anchor;
+	daos_anchor_t		 qt_akey_anchor;
 };
 
 static int
@@ -126,12 +111,18 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		ci_set_null(rbund.rb_csum);
 
 		rc = dbtree_iter_fetch(ih, &kiov, &riov, anchor);
+		if (vos_dtx_continue_detect(rc))
+			goto next;
+
 		if (rc != 0)
 			break;
 
 		rc = check_key(query, rbund.rb_krec);
 		if (rc == 0)
 			break;
+
+		if (vos_dtx_continue_detect(rc))
+			continue;
 
 		if (rc != -DER_NONEXIST)
 			break;
@@ -140,6 +131,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		query->qt_epr = epr;
 		query->qt_punch = punch;
 
+next:
 		if (query->qt_flags & VOS_GET_MAX)
 			rc = dbtree_iter_prev(ih);
 		else
@@ -151,7 +143,7 @@ out:
 	if (rc == 0)
 		rc = fini_rc;
 
-	return rc;
+	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
 }
 
 static int
@@ -264,7 +256,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 		tclass = VOS_BTR_AKEY;
 	}
 
-	if (!daos_handle_is_inval(*toh)) {
+	if (daos_handle_is_valid(*toh)) {
 		dbtree_close(*toh);
 		*toh = DAOS_HDL_INVAL;
 	}
@@ -327,12 +319,10 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 {
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
-	struct open_query	 query;
+	struct open_query	*query;
 	daos_epoch_t		 bound;
 	daos_epoch_range_t	 dkey_epr;
 	struct vos_punch_record	 dkey_punch;
-	daos_anchor_t		 dkey_anchor;
-	daos_anchor_t		 akey_anchor;
 	daos_ofeat_t		 obj_feats;
 	daos_epoch_range_t	 obj_epr = {0};
 	struct vos_ts_set	 akey_save = {0};
@@ -362,14 +352,18 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		return -DER_INVAL;
 	}
 
-	query.qt_ts_set = NULL;
+	D_ALLOC_PTR(query);
+	if (query == NULL)
+		return -DER_NOMEM;
+
+	query->qt_ts_set = NULL;
 
 	if (flags & VOS_GET_DKEY) {
 		if (dkey == NULL) {
 			D_ERROR("dkey can't be NULL with VOS_GET_DKEY\n");
-			return -DER_INVAL;
+			D_GOTO(free_query, rc = -DER_INVAL);
 		}
-		daos_anchor_set_zero(&dkey_anchor);
+		daos_anchor_set_zero(&query->qt_dkey_anchor);
 
 		cflags = VOS_TS_READ_OBJ;
 	}
@@ -377,7 +371,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	if (flags & VOS_GET_AKEY) {
 		if (akey == NULL) {
 			D_ERROR("akey can't be NULL with VOS_GET_AKEY\n");
-			return -DER_INVAL;
+			D_GOTO(free_query, rc = -DER_INVAL);
 		}
 
 		if (cflags == 0)
@@ -387,7 +381,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	if (flags & VOS_GET_RECX) {
 		if (recx == NULL) {
 			D_ERROR("recx can't be NULL with VOS_GET_RECX\n");
-			return -DER_INVAL;
+			D_GOTO(free_query, rc = -DER_INVAL);
 		}
 
 		nr_akeys = 1;
@@ -396,22 +390,21 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	}
 
 	vos_dth_set(dth);
-	rc = vos_ts_set_allocate(&query.qt_ts_set, 0, cflags, nr_akeys,
-				 dth ? &dth->dth_xid : NULL);
+	rc = vos_ts_set_allocate(&query->qt_ts_set, 0, cflags, nr_akeys, dth);
 	if (rc != 0) {
 		D_ERROR("Failed to allocate timestamp set: "DF_RC"\n",
 			DP_RC(rc));
-		return rc;
+		goto free_query;
 	}
 
 	cont = vos_hdl2cont(coh);
 
-	vos_ts_set_add(query.qt_ts_set, cont->vc_ts_idx, NULL, 0);
+	vos_ts_set_add(query->qt_ts_set, cont->vc_ts_idx, NULL, 0);
 
-	query.qt_bound = MAX(obj_epr.epr_hi, bound);
+	query->qt_bound = MAX(obj_epr.epr_hi, bound);
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
-			  &obj_epr, query.qt_bound, VOS_OBJ_VISIBLE,
-			  DAOS_INTENT_DEFAULT, &obj, query.qt_ts_set);
+			  &obj_epr, query->qt_bound, VOS_OBJ_VISIBLE,
+			  DAOS_INTENT_DEFAULT, &obj, query->qt_ts_set);
 	if (rc != 0) {
 		LOG_RC(rc, "Could not hold object: %s\n", d_errstr(rc));
 		goto out;
@@ -438,26 +431,26 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		goto out;
 	}
 
-	vos_ilog_fetch_init(&query.qt_info);
-	query.qt_dkey_toh   = DAOS_HDL_INVAL;
-	query.qt_akey_toh   = DAOS_HDL_INVAL;
-	query.qt_obj	    = obj;
-	query.qt_flags	    = flags;
-	query.qt_dkey_root  = &obj->obj_df->vo_tree;
-	query.qt_coh	    = coh;
-	query.qt_pool	    = vos_obj2pool(obj);
+	vos_ilog_fetch_init(&query->qt_info);
+	query->qt_dkey_toh   = DAOS_HDL_INVAL;
+	query->qt_akey_toh   = DAOS_HDL_INVAL;
+	query->qt_obj	    = obj;
+	query->qt_flags	    = flags;
+	query->qt_dkey_root  = &obj->obj_df->vo_tree;
+	query->qt_coh	    = coh;
+	query->qt_pool	    = vos_obj2pool(obj);
 
 	/** We may read a dkey/akey that has no valid akey/recx and will need to
 	 *  reset the timestamp cache state to cache the new dkey/akey
 	 *  timestamps.
 	 */
-	vos_ts_set_save(query.qt_ts_set, &dkey_save);
+	vos_ts_set_save(query->qt_ts_set, &dkey_save);
 	for (;;) {
 		/* Reset the epoch range */
-		query.qt_epr = obj_epr;
-		query.qt_punch = obj->obj_ilog_info.ii_prior_punch;
-		rc = open_and_query_key(&query, dkey, VOS_GET_DKEY,
-					&dkey_anchor);
+		query->qt_epr = obj_epr;
+		query->qt_punch = obj->obj_ilog_info.ii_prior_punch;
+		rc = open_and_query_key(query, dkey, VOS_GET_DKEY,
+					&query->qt_dkey_anchor);
 		if (rc != 0) {
 			LOG_RC(rc, "Could not query dkey: %s\n", d_errstr(rc));
 			break;
@@ -466,15 +459,15 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		if ((flags & (VOS_GET_AKEY | VOS_GET_RECX)) == 0)
 			break;
 
-		if (query.qt_flags & VOS_GET_AKEY)
-			daos_anchor_set_zero(&akey_anchor);
+		if (query->qt_flags & VOS_GET_AKEY)
+			daos_anchor_set_zero(&query->qt_akey_anchor);
 
-		dkey_punch = query.qt_punch;
-		dkey_epr = query.qt_epr;
-		vos_ts_set_save(query.qt_ts_set, &akey_save);
+		dkey_punch = query->qt_punch;
+		dkey_epr = query->qt_epr;
+		vos_ts_set_save(query->qt_ts_set, &akey_save);
 		for (;;) {
-			rc = open_and_query_key(&query, akey, VOS_GET_AKEY,
-						&akey_anchor);
+			rc = open_and_query_key(query, akey, VOS_GET_AKEY,
+						&query->qt_akey_anchor);
 			if (rc != 0) {
 				LOG_RC(rc, "Could not query akey: %s\n",
 				       d_errstr(rc));
@@ -484,22 +477,22 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 			if ((flags & VOS_GET_RECX) == 0)
 				break;
 
-			rc = query_recx(&query, recx);
+			rc = query_recx(query, recx);
 
 			if (rc != 0) {
 				LOG_RC(rc, "Could not query recx: %s\n",
 				       d_errstr(rc));
 				if (rc == -DER_NONEXIST &&
-				    query.qt_flags & VOS_GET_AKEY) {
+				    query->qt_flags & VOS_GET_AKEY) {
 					/* Reset the epoch range to last dkey */
-					query.qt_epr = dkey_epr;
-					query.qt_punch = dkey_punch;
+					query->qt_epr = dkey_epr;
+					query->qt_punch = dkey_punch;
 					/** Go ahead and save timestamps for
 					 * things we read
 					 */
-					vos_ts_set_update(query.qt_ts_set,
+					vos_ts_set_update(query->qt_ts_set,
 							  obj_epr.epr_hi);
-					vos_ts_set_restore(query.qt_ts_set,
+					vos_ts_set_restore(query->qt_ts_set,
 							   &akey_save);
 					continue;
 				}
@@ -507,35 +500,37 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 			break;
 		}
 		if (rc == -DER_NONEXIST &&
-		    query.qt_flags & VOS_GET_DKEY) {
+		    query->qt_flags & VOS_GET_DKEY) {
 			/** Go ahead and save timestamps for things we read */
-			vos_ts_set_update(query.qt_ts_set, obj_epr.epr_hi);
-			vos_ts_set_restore(query.qt_ts_set, &dkey_save);
+			vos_ts_set_update(query->qt_ts_set, obj_epr.epr_hi);
+			vos_ts_set_restore(query->qt_ts_set, &dkey_save);
 			continue;
 		}
 		break;
 	}
 
-	vos_ilog_fetch_finish(&query.qt_info);
-	if (!daos_handle_is_inval(query.qt_akey_toh))
-		dbtree_close(query.qt_akey_toh);
-	if (!daos_handle_is_inval(query.qt_dkey_toh))
-		dbtree_close(query.qt_dkey_toh);
+	vos_ilog_fetch_finish(&query->qt_info);
+	if (daos_handle_is_valid(query->qt_akey_toh))
+		dbtree_close(query->qt_akey_toh);
+	if (daos_handle_is_valid(query->qt_dkey_toh))
+		dbtree_close(query->qt_dkey_toh);
 out:
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, false);
 
 	vos_dth_set(NULL);
 	if (rc == 0 || rc == -DER_NONEXIST) {
-		if (vos_ts_wcheck(query.qt_ts_set, obj_epr.epr_hi,
-				  query.qt_bound))
+		if (vos_ts_wcheck(query->qt_ts_set, obj_epr.epr_hi,
+				  query->qt_bound))
 			rc = -DER_TX_RESTART;
 	}
 
 	if (rc == 0 || rc == -DER_NONEXIST)
-		vos_ts_set_update(query.qt_ts_set, obj_epr.epr_hi);
+		vos_ts_set_update(query->qt_ts_set, obj_epr.epr_hi);
 
-	vos_ts_set_free(query.qt_ts_set);
+	vos_ts_set_free(query->qt_ts_set);
+free_query:
+	D_FREE(query);
 
 	return rc;
 }

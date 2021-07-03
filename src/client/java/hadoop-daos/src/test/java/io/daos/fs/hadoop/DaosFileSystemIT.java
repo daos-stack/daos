@@ -1,19 +1,5 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 package io.daos.fs.hadoop;
@@ -33,6 +19,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
+import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -69,9 +56,7 @@ public class DaosFileSystemIT {
   @Test
   public void testServiceLoader() throws Exception {
     Configuration cfg = new Configuration();
-    cfg.set(Constants.DAOS_POOL_UUID, DaosFSFactory.pooluuid);
-    cfg.set(Constants.DAOS_CONTAINER_UUID, DaosFSFactory.contuuid);
-    cfg.set(Constants.DAOS_POOL_SVC, DaosFSFactory.svc);
+    DaosFSFactory.config(cfg);
     FileSystem fileSystem = FileSystem.get(URI.create("daos://2345:567/"), cfg);
     Assert.assertTrue(fileSystem instanceof DaosFileSystem);
   }
@@ -86,9 +71,9 @@ public class DaosFileSystemIT {
     File file = Files.createTempDirectory("uns").toFile();
     try {
       String path = file.getAbsolutePath();
-      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
-          DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
-      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      String daosAttr = String.format(io.daos.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+          DaosFSFactory.getPooluuid(), DaosFSFactory.getContuuid());
+      DaosUns.setAppInfo(path, io.daos.Constants.DUNS_XATTR_NAME, daosAttr);
       DaosUns.setAppInfo(path, Constants.UNS_ATTR_NAME_HADOOP,
           Constants.DAOS_POOL_FLAGS + "=2:");
 
@@ -114,13 +99,49 @@ public class DaosFileSystemIT {
   }
 
   @Test
+  public void testNewDaosFileSystemFromUnsWithUUIDs() throws Exception {
+      String path = "/" + DaosFSFactory.getPooluuid() + "/" + DaosFSFactory.getContuuid();
+      URI uri = URI.create("daos://" + path);
+      try (FileSystem fs = FileSystem.get(uri, new Configuration(false))) {
+        Assert.assertNotNull(fs);
+        DaosFileSystem dfs = (DaosFileSystem)fs;
+        Assert.assertEquals(path, dfs.getUnsPrefix());
+        // create and delete file with full path
+        Path newFilePath = new Path(path + "/12345" + (new Random().nextInt(100)));
+        Assert.assertTrue(fs.createNewFile(newFilePath));
+        fs.delete(newFilePath, true);
+        // create and delete file with relative path
+        newFilePath = new Path("/54321" + (new Random().nextInt(100)));
+        Assert.assertTrue(fs.createNewFile(newFilePath));
+        fs.delete(newFilePath, true);
+      }
+      // filesystem from long path
+      String longPath = path + "/98765" +
+          (new Random().nextInt(100));
+      uri = URI.create("daos://" + longPath);
+      try (FileSystem fs = FileSystem.get(uri, new Configuration(false))) {
+        Assert.assertNotNull(fs);
+        DaosFileSystem dfs = (DaosFileSystem)fs;
+        Assert.assertEquals(path, dfs.getUnsPrefix());
+        // create and delete file with full path
+        Path newFilePath = new Path(longPath + "/12345" + (new Random().nextInt(100)));
+        Assert.assertTrue(fs.createNewFile(newFilePath));
+        fs.delete(newFilePath, true);
+        // create and delete file with relative path
+        newFilePath = new Path("/54321" + (new Random().nextInt(100)));
+        Assert.assertTrue(fs.createNewFile(newFilePath));
+        fs.delete(newFilePath, true);
+      }
+  }
+
+  @Test
   public void testWriteReadAbsolutePathFromHybridUnsPath() throws Exception {
     File file = Files.createTempDirectory("uns").toFile();
     try {
       String path = file.getAbsolutePath();
-      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
-          DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
-      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      String daosAttr = String.format(io.daos.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+          DaosFSFactory.getPooluuid(), DaosFSFactory.getContuuid());
+      DaosUns.setAppInfo(path, io.daos.Constants.DUNS_XATTR_NAME, daosAttr);
       String originPath = path;
       path += "/abc";
       String uriStr = "daos://" + unsId.getAndIncrement() +
@@ -168,9 +189,9 @@ public class DaosFileSystemIT {
     File file = Files.createTempDirectory("uns").toFile();
     try {
       String path = file.getAbsolutePath();
-      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
-          DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
-      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      String daosAttr = String.format(io.daos.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+          DaosFSFactory.getPooluuid(), DaosFSFactory.getContuuid());
+      DaosUns.setAppInfo(path, io.daos.Constants.DUNS_XATTR_NAME, daosAttr);
       String originPath = path;
       path += "/abc/def";
       String uriStr = "daos://" + ":" + unsId.getAndIncrement() +
@@ -201,9 +222,9 @@ public class DaosFileSystemIT {
     File file = Files.createTempDirectory("uns").toFile();
     try {
       String path = file.getAbsolutePath();
-      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
-          DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
-      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      String daosAttr = String.format(io.daos.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+          DaosFSFactory.getPooluuid(), DaosFSFactory.getContuuid());
+      DaosUns.setAppInfo(path, io.daos.Constants.DUNS_XATTR_NAME, daosAttr);
       String originPath = path;
       path += "/hij/klm";
       String uriStr = "daos://" + ":" + unsId.getAndIncrement() +
@@ -232,9 +253,9 @@ public class DaosFileSystemIT {
     File file = Files.createTempDirectory("uns").toFile();
     try {
       String path = file.getAbsolutePath();
-      String daosAttr = String.format(io.daos.dfs.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
-          DaosFSFactory.getPoolUuid(), DaosFSFactory.getContUuid());
-      DaosUns.setAppInfo(path, io.daos.dfs.Constants.DUNS_XATTR_NAME, daosAttr);
+      String daosAttr = String.format(io.daos.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+          DaosFSFactory.getPooluuid(), DaosFSFactory.getContuuid());
+      DaosUns.setAppInfo(path, io.daos.Constants.DUNS_XATTR_NAME, daosAttr);
       String originPath = path;
       path += "";
       String uriStr = "daos://" + ":" + unsId.getAndIncrement() +

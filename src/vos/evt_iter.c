@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(vos)
 
@@ -30,14 +13,15 @@
 static int
 evt_validate_options(unsigned int options)
 {
-	if ((options & EVT_ITER_SKIP_HOLES) == 0)
+	if ((options & (EVT_ITER_SKIP_HOLES | EVT_ITER_SKIP_REMOVED)) == 0)
 		return 0;
 	if (options & EVT_ITER_COVERED)
 		goto error;
 	if (options & EVT_ITER_VISIBLE)
 		return 0;
 error:
-	D_ERROR("EVT_ITER_SKIP_HOLES is only valid with EVT_ITER_VISIBLE\n");
+	/* EVT_ITER_SKIP* should be used only with EVT_ITER_VISIBLE */
+	D_ERROR("Misuse of EVT_ITER_SKIP_{HOLES,REMOVED}\n");
 	return -DER_INVAL;
 }
 
@@ -136,7 +120,7 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 	int			 mid;
 	int			 cmp = 0;
 
-	enta = &iter->it_entries;
+	enta = iter->it_entries;
 	start = 0;
 	end = enta->ea_ent_nr - 1;
 
@@ -209,9 +193,25 @@ evt_iter_intent(struct evt_iterator *iter)
 {
 	if (iter->it_options & EVT_ITER_FOR_PURGE)
 		return DAOS_INTENT_PURGE;
-	if (iter->it_options & EVT_ITER_FOR_REBUILD)
-		return DAOS_INTENT_REBUILD;
+	if (iter->it_options & EVT_ITER_FOR_MIGRATION)
+		return DAOS_INTENT_MIGRATION;
 	return DAOS_INTENT_DEFAULT;
+}
+
+static inline bool
+should_skip(struct evt_entry *entry, struct evt_iterator *iter)
+{
+	if ((iter->it_options &
+	    (EVT_ITER_SKIP_HOLES | EVT_ITER_SKIP_REMOVED)) == 0)
+		return false;
+
+	if (bio_addr_is_hole(&entry->en_addr)) {
+		if ((iter->it_options & EVT_ITER_SKIP_HOLES) ||
+		    entry->en_minor_epc == EVT_MINOR_EPC_MAX)
+			return true;
+	}
+
+	return false;
 }
 
 static int
@@ -231,12 +231,12 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 			iter->it_index +=
 				iter->it_forward ? 1 : -1;
 			if (iter->it_index < 0 ||
-			    iter->it_index == iter->it_entries.ea_ent_nr) {
+			    iter->it_index == iter->it_entries->ea_ent_nr) {
 				iter->it_state = EVT_ITER_FINI;
 				D_GOTO(out, rc = -DER_NONEXIST);
 			}
 
-			entry = evt_ent_array_get(&iter->it_entries,
+			entry = evt_ent_array_get(iter->it_entries,
 						  iter->it_index);
 			if (entry->en_avail_rc < 0)
 				return entry->en_avail_rc;
@@ -244,8 +244,7 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 			if (entry->en_avail_rc == ALB_UNAVAILABLE)
 				continue;
 
-			if (iter->it_options & EVT_ITER_SKIP_HOLES &&
-			    bio_addr_is_hole(&entry->en_addr))
+			if (should_skip(entry, iter))
 				continue;
 
 			break;
@@ -297,11 +296,11 @@ evt_iter_skip_holes(struct evt_context *tcx, struct evt_iterator *iter)
 	struct evt_entry_array	*enta;
 	struct evt_entry	*entry;
 
-	if (iter->it_options & EVT_ITER_SKIP_HOLES) {
-		enta = &iter->it_entries;
+	if (iter->it_options & (EVT_ITER_SKIP_HOLES | EVT_ITER_SKIP_REMOVED)) {
+		enta = iter->it_entries;
 		entry = evt_ent_array_get(enta, iter->it_index);
 
-		if (bio_addr_is_hole(&entry->en_addr))
+		if (should_skip(entry, iter))
 			return evt_iter_move(tcx, iter);
 	}
 	return 0;
@@ -329,7 +328,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	rtmp.rc_ex.ex_hi = iter->it_filter.fr_ex.ex_hi;
 	rtmp.rc_epc = DAOS_EPOCH_MAX;
 
-	enta = &iter->it_entries;
+	enta = iter->it_entries;
 	intent = evt_iter_intent(iter);
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, intent, &iter->it_filter,
 				&rtmp, enta);
@@ -396,7 +395,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 	if (iter->it_state < EVT_ITER_INIT)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	enta = &iter->it_entries;
+	enta = iter->it_entries;
 	ent_array_reset(tcx, enta);
 
 	if (evt_iter_is_sorted(iter))
@@ -595,7 +594,7 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 		D_GOTO(out, rc);
 
 	if (evt_iter_is_sorted(iter)) {
-		*entry = *evt_ent_array_get(&iter->it_entries, iter->it_index);
+		*entry = *evt_ent_array_get(iter->it_entries, iter->it_index);
 		evt_ent2rect(&rect, entry);
 		goto set_anchor;
 	}

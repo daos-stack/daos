@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the main interfaces to mercury.
@@ -106,7 +89,7 @@ crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
 		hg_ret = HG_Create(hg_ctx->chc_hgctx, NULL,
 				   CRT_HG_RPCID, &hdl->chh_hdl);
 		if (hg_ret != HG_SUCCESS) {
-			D_FREE_PTR(hdl);
+			D_FREE(hdl);
 			D_ERROR("HG_Create() failed, hg_ret: %d.\n", hg_ret);
 			rc = -DER_HG;
 			break;
@@ -258,7 +241,7 @@ crt_hg_pool_put(struct crt_rpc_priv *rpc_priv)
 			hg_pool, hg_pool->chp_num);
 		rc = true;
 	} else {
-		D_FREE_PTR(hdl);
+		D_FREE(hdl);
 		D_DEBUG(DB_NET, "hg_pool %p, chp_num %d, max_num %d, "
 			"enabled %d, cannot put.\n", hg_pool, hg_pool->chp_num,
 			hg_pool->chp_max_num, hg_pool->chp_enabled);
@@ -349,16 +332,26 @@ out:
  * Currently we ignore the provider. Per-provider info will
  * be returned during multi-provider support implementation
  */
+static struct crt_prov_gdata *
+crt_get_prov_gdata(int provider)
+{
+	return &crt_gdata.cg_prov_gdata[provider];
+}
+
 static int
 crt_provider_ctx0_port_get(int provider)
 {
-	return crt_na_ofi_conf.noc_port;
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_na_ofi_config.noc_port;
 }
 
 static char*
 crt_provider_domain_get(int provider)
 {
-	return crt_na_ofi_conf.noc_domain;
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_na_ofi_config.noc_domain;
 }
 
 static char*
@@ -370,7 +363,9 @@ crt_provider_name_get(int provider)
 static char*
 crt_provider_ip_str_get(int provider)
 {
-	return crt_na_ofi_conf.noc_ip_str;
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_na_ofi_config.noc_ip_str;
 }
 
 static bool
@@ -391,22 +386,69 @@ crt_provider_is_contig_ep(int provider)
 	return crt_na_dict[provider].nad_port_bind;
 }
 
-static bool
+bool
 crt_provider_is_sep(int provider)
 {
-	return crt_gdata.cg_sep_mode;
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_sep_mode;
+}
+
+void
+crt_provider_set_sep(int provider, bool enable)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	prov_data->cpg_sep_mode = (enable) ? 1 : 0;
+}
+
+int
+crt_provider_get_cur_ctx_num(int provider)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_ctx_num;
+}
+
+int
+crt_provider_get_max_ctx_num(int provider)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return prov_data->cpg_ctx_max_num;
+}
+
+void
+crt_provider_inc_cur_ctx_num(int provider)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	prov_data->cpg_ctx_num++;
+}
+
+void
+crt_provider_dec_cur_ctx_num(int provider)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	prov_data->cpg_ctx_num--;
+}
+
+d_list_t
+*crt_provider_get_ctx_list(int provider)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
+
+	return &(prov_data->cpg_ctx_list);
 }
 
 static int
-crt_get_info_string(char **string, int ctx_idx)
+crt_get_info_string(int provider, char **string, int ctx_idx)
 {
-	int	 provider;
 	char	*provider_str;
 	int	 start_port;
 	char	*domain_str;
 	char	*ip_str;
-
-	provider = crt_gdata.cg_na_plugin;
 
 	provider_str = crt_provider_name_get(provider);
 	start_port = crt_provider_ctx0_port_get(provider);
@@ -456,6 +498,7 @@ int
 crt_hg_init(void)
 {
 	int	rc = 0;
+	char	*env;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -463,6 +506,15 @@ crt_hg_init(void)
 	}
 
 	#define EXT_FAC DD_FAC(external)
+
+	/* If mercury log level is not set, set it to warning by default */
+	env = getenv("HG_LOG_LEVEL");
+	if (!env)
+		HG_Set_log_level("warning");
+
+	env = getenv("HG_NA_LOG_LEVEL");
+	if (!env)
+		NA_Set_log_level("warning");
 
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
@@ -514,9 +566,11 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	hg_class_t		*hg_class = NULL;
 	char			addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 	na_size_t		str_size = CRT_ADDR_STR_MAX_LEN;
+	struct crt_prov_gdata	*prov_data;
 	int			rc = DER_SUCCESS;
 
-	rc = crt_get_info_string(&info_string, idx);
+	prov_data = crt_get_prov_gdata(provider);
+	rc = crt_get_info_string(provider, &info_string, idx);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -526,10 +580,12 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 		init_info.na_init_info.progress_mode = NA_NO_BLOCK;
 
 	if (crt_provider_is_sep(provider))
-		init_info.na_init_info.max_contexts = crt_gdata.cg_ctx_max_num;
+		init_info.na_init_info.max_contexts =
+					crt_provider_get_max_ctx_num(provider);
 	else
 		init_info.na_init_info.max_contexts = 1;
 
+	init_info.request_post_incr = 0;
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
@@ -548,7 +604,7 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 
 	/* TODO: Need to store per provider addr for multi-provider support */
 	if (idx == 0)
-		strncpy(crt_gdata.cg_addr, addr_str, str_size);
+		strncpy(prov_data->cpg_addr, addr_str, str_size);
 
 	rc = crt_hg_reg_rpcid(hg_class);
 	if (rc != 0) {
@@ -579,9 +635,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx)
 	D_ASSERT(hg_ctx != NULL);
 	crt_ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
 
-	D_DEBUG(DB_NET, "crt_gdata.cg_sep_mode %d, crt_is_service() %d\n",
-		crt_gdata.cg_sep_mode, crt_is_service());
-
+	hg_ctx->chc_provider = provider;
 	sep_mode = crt_provider_is_sep(provider);
 
 	/* In SEP mode all contexts share same hg_class*/
@@ -677,26 +731,6 @@ out:
 	return rc;
 }
 
-struct crt_context *
-crt_hg_context_lookup(hg_context_t *hg_ctx)
-{
-	struct crt_context	*crt_ctx;
-	int			found = 0;
-
-	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
-
-	d_list_for_each_entry(crt_ctx, &crt_gdata.cg_ctx_list, cc_link) {
-		if (crt_ctx->cc_hg_ctx.chc_hgctx == hg_ctx) {
-			found = 1;
-			break;
-		}
-	}
-
-	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-
-	return (found == 1) ? crt_ctx : NULL;
-}
-
 int
 crt_rpc_handler_common(hg_handle_t hg_hdl)
 {
@@ -714,14 +748,13 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	struct crt_rpc_priv	 rpc_tmp = {0};
 
 	hg_info = HG_Get_info(hg_hdl);
-	if (hg_info == NULL) {
+	if (unlikely(hg_info == NULL)) {
 		D_ERROR("HG_Get_info failed.\n");
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
 
-	crt_ctx = (struct crt_context *)HG_Context_get_data(
-			hg_info->context);
-	if (crt_ctx == NULL) {
+	crt_ctx = HG_Context_get_data(hg_info->context);
+	if (unlikely(crt_ctx == NULL)) {
 		D_ERROR("HG_Context_get_data failed.\n");
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
@@ -734,7 +767,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_tmp.crp_pub.cr_ctx = crt_ctx;
 
 	rc = crt_hg_unpack_header(hg_hdl, &rpc_tmp, &proc);
-	if (rc != 0) {
+	if (unlikely(rc != 0)) {
 		D_ERROR("crt_hg_unpack_header failed, rc: %d.\n", rc);
 		crt_hg_reply_error_send(&rpc_tmp, -DER_MISC);
 		/** safe to return here because relevant portion of rpc_tmp is
@@ -752,7 +785,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_tmp.crp_pub.cr_opc = opc;
 
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
-	if (opc_info == NULL) {
+	if (unlikely(opc_info == NULL)) {
 		D_ERROR("opc: %#x, lookup failed.\n", opc);
 		/*
 		 * The RPC is not registered on the server, we don't know how to
@@ -761,14 +794,13 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		 */
 		crt_hg_reply_error_send(&rpc_tmp, -DER_UNREG);
 		crt_hg_unpack_cleanup(proc);
-
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 	D_ASSERT(opc_info->coi_opc == opc);
 
 	D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
-	if (rpc_priv == NULL) {
+	if (unlikely(rpc_priv == NULL)) {
 		crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
 		crt_hg_unpack_cleanup(proc);
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
@@ -783,6 +815,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 
 	rpc_priv->crp_opc_info = opc_info;
+	rpc_priv->crp_fail_hlc = rpc_tmp.crp_fail_hlc;
 	rpc_pub->cr_opc = rpc_tmp.crp_pub.cr_opc;
 	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
@@ -793,10 +826,12 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		  &rpc_priv->crp_pub);
 
 	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
-	if (rc != 0) {
+	if (unlikely(rc != 0)) {
 		D_ERROR("crt_rpc_priv_init rc=%d, opc=%#x\n", rc, opc);
-		crt_hg_reply_error_send(rpc_priv, -DER_MISC);
+		crt_hg_reply_error_send(&rpc_tmp, -DER_MISC);
+		crt_hg_unpack_cleanup(proc);
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
+		D_FREE(rpc_priv);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 
@@ -821,9 +856,14 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		crt_hg_unpack_cleanup(proc);
 	}
 
-	if (opc_info->coi_rpc_cb == NULL) {
+	if (unlikely(opc_info->coi_rpc_cb == NULL)) {
 		D_ERROR("NULL crp_hg_hdl, opc: %#x.\n", opc);
 		crt_hg_reply_error_send(rpc_priv, -DER_UNREG);
+		D_GOTO(decref, hg_ret = HG_SUCCESS);
+	}
+
+	if (unlikely(rpc_priv->crp_fail_hlc)) {
+		crt_hg_reply_error_send(rpc_priv, -DER_HLC_SYNC);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
@@ -831,19 +871,16 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		rc = crt_rpc_common_hdlr(rpc_priv);
 	else
 		rc = crt_corpc_common_hdlr(rpc_priv);
-	if (rc != 0) {
+	if (unlikely(rc != 0)) {
 		RPC_ERROR(rpc_priv,
-			  "failed to invoke RPC handler, rc: %d, opc: %#x\n",
-			  rc, opc);
+			  "failed to invoke RPC handler, rc: "DF_RC"\n",
+			  DP_RC(rc));
 		crt_hg_reply_error_send(rpc_priv, rc);
+		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
 decref:
-	/* If rpc call back is customized, then it might be handled
-	 * asynchronously, Let's hold the RPC, and the real handler
-	 * (crt_handle_rpc())will release it
-	 */
-	if (rc != 0 || !crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub))
+	if (rc != 0)
 		RPC_DECREF(rpc_priv);
 out:
 	return hg_ret;
@@ -878,7 +915,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Create failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	} else {
 		rpc_priv->crp_hg_hdl = rpc_priv->crp_hdl_reuse->chh_hdl;
@@ -889,11 +926,11 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Reset failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	}
 
-	if (crt_gdata.cg_sep_mode == true) {
+	if (crt_provider_is_sep(hg_ctx->chc_provider)) {
 		hg_ret = HG_Set_target_id(rpc_priv->crp_hg_hdl,
 					  rpc_priv->crp_pub.cr_ep.ep_tag);
 		if (hg_ret != HG_SUCCESS) {
@@ -902,10 +939,10 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			RPC_ERROR(rpc_priv,
 				  "HG_Set_target_id failed, hg_ret: %d\n",
 				  hg_ret);
-			rc = -DER_HG;
+			D_GOTO(out, rc = -DER_HG);
 		}
 	}
-
+out:
 	return rc;
 }
 
@@ -939,7 +976,6 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 		(rpc_priv->crp_input_got == 0)) {
 		if (!rpc_priv->crp_srv &&
 		    !rpc_priv->crp_opc_info->coi_no_reply) {
-
 			if (crt_hg_pool_put(rpc_priv)) {
 				RPC_TRACE(DB_NET, rpc_priv,
 					  "hg_hdl %p put to pool.\n",
@@ -992,8 +1028,9 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	case HG_CANCELED:
 		if (!CRT_RANK_PRESENT(rpc_pub->cr_ep.ep_grp,
 				     rpc_pub->cr_ep.ep_rank)) {
-			RPC_TRACE(DB_NET, rpc_priv, "request target evicted\n");
-			rc = -DER_EVICTED;
+			RPC_TRACE(DB_NET, rpc_priv,
+				  "request target excluded\n");
+			rc = -DER_EXCLUDED;
 		} else if (crt_req_timedout(rpc_priv)) {
 			RPC_TRACE(DB_NET, rpc_priv, "request timedout\n");
 			rc = -DER_TIMEDOUT;
@@ -1039,6 +1076,10 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				}
 			}
 		}
+
+		/* HLC is checked during unpacking of the response */
+		if (rpc_priv->crp_fail_hlc)
+			rc = -DER_HLC_SYNC;
 	}
 
 	crt_cbinfo.cci_rpc = rpc_pub;
@@ -1068,11 +1109,6 @@ out:
 	return hg_ret;
 }
 
-static bool crt_hg_network_error(hg_return_t hg_ret)
-{
-	return (hg_ret == HG_NA_ERROR || hg_ret == HG_PROTOCOL_ERROR);
-}
-
 int
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
@@ -1100,18 +1136,8 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_tgt_uri);
 	}
 
-	/* HG_Forward can return 2 types of errors - network errors and generic
-	 * ones, such as out of memory, bad parameters passed, invalid handle
-	 * etc...
-	 *
-	 * For network errors, we do not want to return error back to the caller
-	 * of crt_req_send(), but instead we want to invoke completion callback
-	 * manually with 'node unreachable' (DER_UNREACH) error.
-	 *
-	 * HG_NA_ERROR and HG_PROTOCOL_ERROR are both network-level errors
-	 * that can be raised by mercury.
-	 */
-	if (crt_hg_network_error(hg_ret)) {
+	/* For any error to be reported via completion callback */
+	if (hg_ret != HG_SUCCESS) {
 		if (!crt_req_timedout(rpc_priv)) {
 			/* error will be reported to the completion callback in
 			 * crt_req_timeout_hdlr()
@@ -1119,8 +1145,6 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			crt_req_force_timeout(rpc_priv);
 		}
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
-	} else if (hg_ret != HG_SUCCESS) {
-		rc = -DER_HG;
 	} else {
 		rpc_priv->crp_on_wire = 1;
 	}
@@ -1203,7 +1227,6 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 {
 	void	*hg_out_struct;
 	int	 hg_ret;
-
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(error_code != 0);
@@ -1489,8 +1512,8 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 		D_ERROR("bulk_cbinfo->bci_cb failed, rc: %d.\n", rc);
 
 out:
-	D_FREE_PTR(bulk_cbinfo);
-	D_FREE_PTR(bulk_desc);
+	D_FREE(bulk_cbinfo);
+	D_FREE(bulk_desc);
 	return hg_ret;
 }
 
@@ -1520,7 +1543,7 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 		D_GOTO(out, rc = -DER_NOMEM);
 	D_ALLOC_PTR(bulk_desc_dup);
 	if (bulk_desc_dup == NULL) {
-		D_FREE_PTR(bulk_cbinfo);
+		D_FREE(bulk_cbinfo);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	crt_bulk_desc_dup(bulk_desc_dup, bulk_desc);
@@ -1557,8 +1580,8 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 				HG_OP_ID_IGNORE);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: %d.\n", hg_ret);
-		D_FREE_PTR(bulk_cbinfo);
-		D_FREE_PTR(bulk_desc_dup);
+		D_FREE(bulk_cbinfo);
+		D_FREE(bulk_desc_dup);
 		rc = crt_hgret_2_der(hg_ret);
 	}
 

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- "
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS server erasure-coded object IO handling.
@@ -62,8 +45,8 @@ obj_ec_is_valid_tgt(struct daos_cpd_ec_tgts *tgt_map, uint32_t map_size,
  */
 int
 obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
-		    uint32_t iod_nr, uint32_t start_shard,
-		    void *tgt_map, uint32_t map_size,
+		    uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
+		    uint32_t leader_id, void *tgt_map, uint32_t map_size,
 		    uint32_t tgt_nr, struct daos_shard_tgt *tgts,
 		    struct obj_ec_split_req **split_req)
 {
@@ -85,6 +68,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 	bool			 with_csums = (iod_csums != NULL);
 	void			*buf = NULL;
 	uint32_t		 tgt_idx;
+	uint32_t		 leader;
 	int			 count = 0;
 	int			 rc = 0;
 
@@ -100,7 +84,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 	if (tgt_map != NULL)
 		tgt_max_idx = 0;
 	else
-		tgt_max_idx = oid.id_shard - start_shard;
+		tgt_max_idx = max_shard;
 
 	req_size = roundup(sizeof(struct obj_ec_split_req), 8);
 	iods_size = roundup(sizeof(daos_iod_t) * iod_nr, 8);
@@ -134,7 +118,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 				tgt_max_idx = tgt_idx;
 		} else {
 			tgt_idx = tgts[i].st_shard - start_shard;
-			D_ASSERT(tgt_idx < tgt_max_idx);
+			D_ASSERT(tgt_idx <= tgt_max_idx);
 		}
 
 		setbit(tgt_bit_map, tgt_idx);
@@ -143,8 +127,19 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 
 	if (tgt_map != NULL) {
 		D_ASSERT(count == map_size);
+
+		/* If leader is not any EC shard, neither parity nor data,
+		 * then temporarily set leader as tgt_max_idx, that is not
+		 * important since current server will not take part in EC
+		 * update, the temporary leader is only for split handling.
+		 */
+		if (!obj_ec_is_valid_tgt(tgt_map, map_size, leader_id, &leader))
+			leader = tgt_max_idx;
 	} else {
-		setbit(tgt_bit_map, tgt_max_idx);
+		D_ASSERT(leader_id == PO_COMP_ID_ALL);
+
+		leader = oid.id_shard - start_shard;
+		setbit(tgt_bit_map, leader);
 		count++;
 	}
 
@@ -154,8 +149,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	req->osr_tgt_oiods = tgt_oiods;
-	tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, count, tgt_max_idx);
-	D_ASSERT(tgt_oiod != NULL && tgt_oiod->oto_tgt_idx == tgt_max_idx);
+	tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, count, leader);
+	D_ASSERT(tgt_oiod != NULL && tgt_oiod->oto_tgt_idx == leader);
 
 	req->osr_offs = tgt_oiod->oto_offs;
 	split_iods = req->osr_iods;
@@ -196,7 +191,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 					split_iod_csum->ic_data = split_ci;
 					split_ci->cs_nr = 1;
 					split_ci->cs_csum +=
-						tgt_max_idx * ci->cs_len;
+						leader * ci->cs_len;
 					split_ci->cs_buf_len = ci->cs_len;
 				}
 			}

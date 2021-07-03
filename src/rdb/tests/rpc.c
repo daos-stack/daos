@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(rdb)
 
@@ -26,19 +9,20 @@
 #include "rpc.h"
 
 static int
-crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
+crt_proc_struct_rsvc_hint(crt_proc_t proc, crt_proc_op_t proc_op,
+			  struct rsvc_hint *hint)
 {
 	int rc;
 
-	rc = crt_proc_uint32_t(proc, &hint->sh_flags);
+	rc = crt_proc_uint32_t(proc, proc_op, &hint->sh_flags);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &hint->sh_rank);
+	rc = crt_proc_uint32_t(proc, proc_op, &hint->sh_rank);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint64_t(proc, &hint->sh_term);
+	rc = crt_proc_uint64_t(proc, proc_op, &hint->sh_term);
 	if (rc != 0)
 		return -DER_HG;
 

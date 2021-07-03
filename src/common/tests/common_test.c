@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <stddef.h>
@@ -48,7 +31,8 @@ static struct option l_opts[] = {
 	{"help",    no_argument,       NULL, 'h'}
 };
 
-bool show_help(int argc, char *argv[])
+static bool
+show_help(int argc, char *argv[])
 {
 	bool result = false;
 	int t_optind = optind;
@@ -72,7 +56,9 @@ bool show_help(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
 	int	opt;
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 	char	filter[1024];
+#endif
 
 	if (show_help(argc, argv)) {
 		print_usage(argv[0]);
@@ -102,7 +88,7 @@ int main(int argc, char *argv[])
 			cmocka_set_test_filter(filter);
 		}
 #else
-			D_PRINT("filter not enabled. %s not applied", filter);
+			D_PRINT("filter not enabled");
 #endif
 			break;
 		default:

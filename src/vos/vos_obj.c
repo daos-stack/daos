@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -58,6 +41,7 @@ static int
 tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	      const daos_epoch_range_t *epr, vos_iter_type_t type)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	bool			 empty = true;
 	int			 rc;
 
@@ -65,7 +49,7 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	 *  when there are no committed entries
 	 */
 	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
-			     &empty, NULL);
+			     &empty, dth);
 
 	if (rc < 0)
 		return rc;
@@ -78,7 +62,7 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	 *  are, this will return -DER_INPROGRESS.
 	 */
 	rc = vos_iterate_key(obj, toh, type, epr, false, empty_tree_check,
-			     &empty, NULL);
+			     &empty, dth);
 
 	if (rc < 0)
 		return rc;
@@ -140,11 +124,17 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 		return 1;
 	}
 
-	VOS_TX_LOG_FAIL(rc, "Could not check emptiness on punch: " DF_RC"\n",
+	VOS_TX_LOG_FAIL(rc, "Could not check emptiness on punch: "DF_RC"\n",
 			DP_RC(rc));
 
 	return rc;
 }
+
+struct key_ilog_info {
+	struct vos_ilog_info	ki_obj;
+	struct vos_ilog_info	ki_dkey;
+	struct vos_ilog_info	ki_akey;
+};
 
 /**
  * @} vos_tree_helper
@@ -157,24 +147,26 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	struct vos_krec_df	*krec;
 	struct vos_rec_bundle	 rbund;
 	struct dcs_csum_info	 csum;
-	struct vos_ilog_info	 obj_info = {0};
-	struct vos_ilog_info	 dkey_info = {0};
-	struct vos_ilog_info	 akey_info = {0};
+	struct key_ilog_info	*info;
 	daos_epoch_range_t	 epr = {0, epoch};
 	d_iov_t			 riov;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i;
 	int			 rc;
 
-	vos_ilog_fetch_init(&obj_info);
-	vos_ilog_fetch_init(&dkey_info);
-	vos_ilog_fetch_init(&akey_info);
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		return -DER_NOMEM;
+
+	vos_ilog_fetch_init(&info->ki_obj);
+	vos_ilog_fetch_init(&info->ki_dkey);
+	vos_ilog_fetch_init(&info->ki_akey);
 	rc = obj_tree_init(obj);
 	if (rc)
 		D_GOTO(out, rc);
 
 	rc = vos_ilog_punch(obj->obj_cont, &obj->obj_df->vo_ilog, &epr, bound,
-			    NULL, &obj_info, ts_set, false, false);
+			    NULL, &info->ki_obj, ts_set, false, false);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -197,7 +189,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	}
 
 	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, bound,
-			    &obj_info, &dkey_info, ts_set, false,
+			    &info->ki_obj, &info->ki_dkey, ts_set, false,
 			    false);
 	if (rc)
 		D_GOTO(out, rc);
@@ -211,8 +203,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	for (i = 0; i < akey_nr; i++) {
 		rbund.rb_iov = &akeys[i];
 		rc = key_tree_punch(obj, toh, epoch, bound, &akeys[i], &riov,
-				    flags, ts_set, &dkey_info,
-				    &akey_info);
+				    flags, ts_set, &info->ki_dkey,
+				    &info->ki_akey);
 		if (rc != 0) {
 			VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
 					DF_RC"\n", DP_RC(rc));
@@ -235,7 +227,7 @@ punch_dkey:
 	rbund.rb_tclass	= VOS_BTR_DKEY;
 
 	rc = key_tree_punch(obj, obj->obj_toh, epoch, bound, dkey, &riov,
-			    flags, ts_set, &obj_info, &dkey_info);
+			    flags, ts_set, &info->ki_obj, &info->ki_dkey);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -245,12 +237,14 @@ punch_dkey:
 					 &epr, VOS_ITER_DKEY);
 	}
  out:
-	vos_ilog_fetch_finish(&obj_info);
-	vos_ilog_fetch_finish(&dkey_info);
-	vos_ilog_fetch_finish(&akey_info);
+	vos_ilog_fetch_finish(&info->ki_obj);
+	vos_ilog_fetch_finish(&info->ki_dkey);
+	vos_ilog_fetch_finish(&info->ki_akey);
 
-	if (!daos_handle_is_inval(toh))
+	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, 0);
+
+	D_FREE(info);
 
 	return rc;
 }
@@ -261,13 +255,16 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 {
 	struct daos_lru_cache	*occ  = vos_obj_cache_current();
 	struct vos_container	*cont;
-	struct vos_ilog_info	 info;
+	struct vos_ilog_info	*info;
 	int			 rc;
 
-	vos_ilog_fetch_init(&info);
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		return -DER_NOMEM;
+	vos_ilog_fetch_init(info);
 	cont = vos_hdl2cont(coh);
 	rc = vos_oi_punch(cont, obj->obj_id, epoch, bound, flags, obj->obj_df,
-			  &info, ts_set);
+			  info, ts_set);
 	if (rc)
 		D_GOTO(failed, rc);
 
@@ -276,7 +273,8 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 	 */
 	vos_obj_evict(occ, obj);
 failed:
-	vos_ilog_fetch_finish(&info);
+	vos_ilog_fetch_finish(info);
+	D_FREE(info);
 	return rc;
 }
 
@@ -304,6 +302,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent	**daes = NULL;
+	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
@@ -313,6 +312,9 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	daos_epoch_t		 bound;
 	int			 rc = 0;
 	uint64_t		 cflags = 0;
+
+	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
+		return -DER_IO;
 
 	if (dtx_is_valid_handle(dth)) {
 		epr.epr_hi = dth->dth_epoch;
@@ -345,9 +347,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	}
 
-	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr,
-				 dtx_is_valid_handle(dth) ?
-				 &dth->dth_xid : NULL);
+	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr, dth);
 	if (rc != 0)
 		goto reset;
 
@@ -360,14 +360,19 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto reset;
 
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
+	    !dth->dth_cos_done) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
-			D_GOTO(abort, rc = -DER_NOMEM);
+			D_GOTO(reset, rc = -DER_NOMEM);
+
+		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
+		if (dces == NULL)
+			D_GOTO(reset, rc = -DER_NOMEM);
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
 					     dth->dth_dti_cos_count,
-					     0, NULL, daes);
+					     0, NULL, daes, dces);
 		if (rc <= 0)
 			D_FREE(daes);
 	}
@@ -381,7 +386,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (dkey) { /* key punch */
 			rc = key_punch(obj, epr.epr_hi, bound, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
-
 			if (rc > 0)
 				punch_obj = true;
 		} else {
@@ -391,38 +395,49 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (punch_obj)
 			rc = obj_punch(coh, obj, epr.epr_hi, bound, flags,
 				       ts_set);
+		if (obj != NULL)
+			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 	}
-abort:
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
 
-	if (obj != NULL)
-		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 reset:
 	if (rc != 0)
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
-	else if (daes != NULL)
-		vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count, false);
 
-	D_FREE(daes);
-
-	vos_dth_set(NULL);
-
-	if (rc == 0)
-		vos_ts_set_upgrade(ts_set);
-
-	if (rc == -DER_NONEXIST || rc == 0) {
-		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound)) {
+	if (rc == 0 || rc == -DER_NONEXIST) {
+		/** We must prevent underpunch with regular I/O */
+		if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0)
+			bound = DAOS_EPOCH_MAX;
+		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound))
 			rc = -DER_TX_RESTART;
-		} else {
-			vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
-			vos_ts_set_update(ts_set, epr.epr_hi);
-			if (rc == 0)
-				vos_ts_set_wupdate(ts_set, epr.epr_hi);
-		}
 	}
 
+	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
+
+	if (rc == 0) {
+		vos_ts_set_upgrade(ts_set);
+		if (daes != NULL) {
+			vos_dtx_post_handle(cont, daes, NULL,
+					    dth->dth_dti_cos_count, false);
+			dth->dth_cos_done = 1;
+		}
+	} else if (daes != NULL) {
+		vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
+				    false);
+		dth->dth_cos_done = 1;
+	}
+
+	if (rc == -DER_NONEXIST || rc == 0) {
+		vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
+		vos_ts_set_update(ts_set, epr.epr_hi);
+		if (rc == 0)
+			vos_ts_set_wupdate(ts_set, epr.epr_hi);
+	}
+
+	D_FREE(daes);
+	D_FREE(dces);
 	vos_ts_set_free(ts_set);
+	vos_dth_set(NULL);
 
 	return rc;
 }
@@ -458,10 +473,75 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	rc = umem_tx_end(umm, rc);
 	if (rc)
 		goto out;
-
-	/* NB: noop for full-stack mode */
-	gc_wait();
 out:
+	vos_obj_release(occ, obj, true);
+	return rc;
+}
+
+/* Delete a key in its parent tree.
+ * NB: there is no "delete" in DAOS data model, this is really for the
+ * system DB, or space reclaim after data movement.
+ */
+int
+vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
+		daos_key_t *akey)
+{
+	struct daos_lru_cache	*occ  = vos_obj_cache_current();
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct umem_instance	*umm  = vos_cont2umm(cont);
+	struct vos_object	*obj;
+	daos_key_t		*key;
+	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
+	daos_handle_t		 toh;
+	int			 rc;
+
+	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+			  DAOS_INTENT_KILL, &obj, NULL);
+	if (rc == -DER_NONEXIST)
+		return 0;
+
+	if (rc) {
+		D_ERROR("object hold error: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc) {
+		D_ERROR("memory TX start error: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	rc = obj_tree_init(obj);
+	if (rc) {
+		D_ERROR("init dkey tree error: "DF_RC"\n", DP_RC(rc));
+		goto out_tx;
+	}
+
+	if (akey) { /* delete akey */
+		key = akey;
+		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
+				      dkey, 0, DAOS_INTENT_PUNCH, NULL,
+				      &toh, NULL);
+		if (rc) {
+			D_ERROR("open akey tree error: "DF_RC"\n", DP_RC(rc));
+			goto out_tx;
+		}
+	} else { /* delete dkey */
+		key = dkey;
+		toh = obj->obj_toh;
+	}
+
+	key_tree_delete(obj, toh, key);
+	if (rc) {
+		D_ERROR("delete key error: "DF_RC"\n", DP_RC(rc));
+		goto out_tx;
+	}
+out_tx:
+	rc = umem_tx_end(umm, rc);
+out:
+	if (akey)
+		key_tree_release(toh, false);
+
 	vos_obj_release(occ, obj, true);
 	return rc;
 }
@@ -569,6 +649,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	struct vos_krec_df	*krec;
 	struct vos_rec_bundle	 rbund;
 	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
+	uint32_t		 ts_type;
 	int			 rc;
 
 	rc = key_iter_fetch_helper(oiter, &rbund, &ent->ie_key, anchor);
@@ -586,8 +667,10 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		} else {
 			ent->ie_child_type = VOS_ITER_NONE;
 		}
+		ts_type = VOS_TS_TYPE_AKEY;
 	} else {
 		ent->ie_child_type = VOS_ITER_AKEY;
+		ts_type = VOS_TS_TYPE_DKEY;
 	}
 
 	krec = rbund.rb_krec;
@@ -601,11 +684,13 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 
 	ent->ie_epoch = epr.epr_hi;
 	ent->ie_punch = oiter->it_ilog_info.ii_next_punch;
+	ent->ie_obj_punch = oiter->it_obj->obj_ilog_info.ii_next_punch;
 	ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
 	if (oiter->it_ilog_info.ii_create == 0) {
 		/* The key has no visible subtrees so mark it covered */
 		ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
 	}
+	vos_ilog_last_update(&krec->kr_ilog, ts_type, &ent->ie_last_update);
 
 	return 0;
 }
@@ -739,7 +824,7 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 	int	rc;
 
 	while (1) {
-		vos_iter_entry_t	entry;
+		static __thread vos_iter_entry_t	entry;
 
 		rc = key_iter_match(oiter, &entry);
 		switch (rc) {
@@ -1069,6 +1154,7 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_ver	 = rbund.rb_ver;
 	it_entry->ie_recx.rx_idx = 0;
 	it_entry->ie_recx.rx_nr  = 1;
+	it_entry->ie_dtx_state	 = rbund.rb_dtx_state;
  out:
 	return rc;
 }
@@ -1126,7 +1212,14 @@ recx_get_flags(struct vos_obj_iter *oiter)
 		D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_COVERED));
 		goto done;
 	}
+	if (recx_flags_set(oiter->it_flags,
+			   VOS_IT_RECX_VISIBLE | VOS_IT_SKIP_REMOVED)) {
+		options |= EVT_ITER_VISIBLE | EVT_ITER_SKIP_REMOVED;
+		D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_COVERED));
+		goto done;
+	}
 	D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_SKIP_HOLES));
+	D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_SKIP_REMOVED));
 	if (oiter->it_flags & VOS_IT_RECX_VISIBLE)
 		options |= EVT_ITER_VISIBLE;
 	if (oiter->it_flags & VOS_IT_RECX_COVERED)
@@ -1137,8 +1230,8 @@ done:
 		options |= EVT_ITER_REVERSE;
 	if (oiter->it_flags & VOS_IT_FOR_PURGE)
 		options |= EVT_ITER_FOR_PURGE;
-	if (oiter->it_flags & VOS_IT_FOR_REBUILD)
-		options |= EVT_ITER_FOR_REBUILD;
+	if (oiter->it_flags & VOS_IT_FOR_MIGRATION)
+		options |= EVT_ITER_FOR_MIGRATION;
 	return options;
 }
 
@@ -1237,9 +1330,12 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_orig_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_orig_recx.rx_nr	 = evt_extent_width(ext);
 	it_entry->ie_vis_flags = entry.en_visibility;
+	if (it_entry->ie_minor_epc == EVT_MINOR_EPC_MAX)
+		it_entry->ie_vis_flags &= ~VOS_VIS_FLAG_VISIBLE;
 	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;
 	it_entry->ie_csum	= entry.en_csum;
+	it_entry->ie_dtx_state	= dtx_alb2state(entry.en_avail_rc);
 	bio_iov_set(&it_entry->ie_biov, entry.en_addr,
 		    it_entry->ie_recx.rx_nr * it_entry->ie_rsize);
  out:
@@ -1318,8 +1414,8 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->it_recx = param->ip_recx;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
-	if (param->ip_flags & VOS_IT_FOR_REBUILD)
-		oiter->it_iter.it_for_rebuild = 1;
+	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
+		oiter->it_iter.it_for_migration = 1;
 	if (param->ip_flags == VOS_IT_KEY_TREE) {
 		/** Prepare the iterator from an already open tree handle.   See
 		 *  vos_iterate_key
@@ -1510,8 +1606,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		oiter->it_obj = obj;
 	if (info->ii_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
-	if (info->ii_flags & VOS_IT_FOR_REBUILD)
-		oiter->it_iter.it_for_rebuild = 1;
+	if (info->ii_flags & VOS_IT_FOR_MIGRATION)
+		oiter->it_iter.it_for_migration = 1;
 
 	switch (type) {
 	default:
@@ -1717,7 +1813,8 @@ obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 	rc = umem_tx_end(umm, rc);
 exit:
 	if (rc != 0)
-		D_ERROR("Failed to delete iter entry: "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_TX_BUSY, DB_TRACE, DLOG_ERR,
+			 "Failed to delete iter entry: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -1754,25 +1851,25 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog,
 				&oiter->it_epr, discard,
-				oiter->it_punched.pr_epc, &oiter->it_ilog_info);
+				&oiter->it_punched, &oiter->it_ilog_info);
 
 	if (rc == 1) {
 		/* Incarnation log is empty so delete the key */
 		reprobe = true;
 		D_DEBUG(DB_IO, "Removing %s from tree\n",
 			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
-		if (krec->kr_bmap & KREC_BF_BTR &&
-		    !dbtree_is_empty_inplace(&krec->kr_btr)) {
-			/* This should be an assert eventually but we can't
-			 * at present prevent underpunch
-			 */
-			D_ERROR("Removing orphaned single value tree\n");
-		} else if (krec->kr_bmap & KREC_BF_EVT &&
-			   !evt_is_empty(&krec->kr_evt)) {
-			/* This should be an assert eventually but we can't
-			 * at present prevent underpunch
-			 */
-			D_ERROR("Removing orphaned array value tree\n");
+		/** Orphaned values indicate an incarnation log bug.  It happens
+		 *  when the key containing the subtree doesn't have a creation
+		 *  timestamp for updates in the subtree.
+		 */
+		if (krec->kr_bmap & KREC_BF_BTR) {
+			D_ASSERTF(dbtree_is_empty_inplace(&krec->kr_btr),
+				  "Orphaned %s detected\n",
+				  iter->it_type == VOS_ITER_DKEY ?
+				  "akey" : "single value");
+		} else if (krec->kr_bmap & KREC_BF_EVT) {
+			D_ASSERTF(evt_is_empty(&krec->kr_evt),
+				  "Orphaned array value detected\n");
 		}
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);

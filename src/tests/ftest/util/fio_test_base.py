@@ -1,30 +1,12 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from dfuse_test_base import DfuseTestBase
 from fio_utils import FioCommand
-# from daos_utils import DaosCommand
-
+from daos_utils import DaosCommand
 
 class FioBase(DfuseTestBase):
     # pylint: disable=too-many-ancestors
@@ -35,7 +17,7 @@ class FioBase(DfuseTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a FioBase object."""
-        super(FioBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fio_cmd = None
         self.processes = None
         self.manager = None
@@ -46,7 +28,7 @@ class FioBase(DfuseTestBase):
         self.update_log_file_names()
 
         # Start the servers and agents
-        super(FioBase, self).setUp()
+        super().setUp()
 
         # Get the parameters for Fio
         self.fio_cmd = FioCommand()
@@ -74,6 +56,15 @@ class FioBase(DfuseTestBase):
                     "fio --name=global --directory")
             else:
                 self.add_container(self.pool)
+
+                daos_cmd = DaosCommand(self.bin)
+
+                # Instruct dfuse to disable direct-io for this container
+                daos_cmd.container_set_attr(pool=self.pool.uuid,
+                                            cont=self.container.uuid,
+                                            attr='dfuse-direct-io-disable',
+                                            val='on')
+
                 self.start_dfuse(
                     self.hostlist_clients, self.pool, self.container)
                 self.fio_cmd.update(

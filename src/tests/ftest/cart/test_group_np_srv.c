@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This is a simple example of cart test_group server, running with no pmix.
@@ -35,6 +18,46 @@
 #include "test_group_rpc.h"
 #include "test_group_np_common.h"
 
+/* Callback to process a SWIM message */
+static void
+swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+		  enum crt_event_type type, void *arg)
+{
+	int maxlen;
+	char swim_state_str[2];
+
+	/* Example output for SWIM CRT_EVT_DEAD on rank #2:
+	 *	 rank = 2, crt_event_source = 1, crt_event_type = 1
+	 *
+	 *		enum crt_event_type {
+	 *			CRT_EVT_ALIVE,
+	 *			CRT_EVT_DEAD,
+	 *		};
+	 *		enum crt_event_source {
+	 *			CRT_EVS_UNKNOWN,
+	 *			CRT_EVS_SWIM,
+	 *		};
+	 */
+
+	D_DEBUG(DB_TEST, "Cart callback event: "
+		"rank = %d, "
+		"crt_event_source = %d, "
+		"crt_event_type = %d\n",
+		rank, src, type);
+
+	swim_state_str[0] = type + '0';
+	swim_state_str[1] = 0;
+
+	maxlen = MAX_SWIM_STATUSES - strlen(swim_state_str);
+	if (strlen(swim_seq_by_rank[rank]) < maxlen)
+		strcat(swim_seq_by_rank[rank], swim_state_str);
+
+	/* Remove rank from context, so we stop sending swim RPCs to it. */
+	if (src == CRT_EVS_SWIM && type == CRT_EVT_DEAD) {
+		crt_group_rank_remove(NULL, rank);
+	}
+}
+
 void
 test_run(d_rank_t my_rank)
 {
@@ -46,6 +69,11 @@ test_run(d_rank_t my_rank)
 	tc_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
 			   &test_g.t_tid[0], &grp, &grp_size, NULL);
 
+	/* Register event callback after CaRT has initialized */
+	if (test_g.t_register_swim_callback) {
+		crt_register_event_cb(swim_crt_event_cb, NULL);
+	}
+
 	DBG_PRINT("Basic server started, group_size=%d\n", grp_size);
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -56,6 +84,9 @@ test_run(d_rank_t my_rank)
 	rc = crt_proto_register(&my_proto_fmt_test_group1);
 	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
 			rc);
+
+	/* Do not delay shutdown for this server */
+	tc_set_shutdown_delay(test_g.t_shutdown_delay);
 
 	DBG_PRINT("Protocol registered\n");
 	for (i = 1; i < test_g.t_srv_ctx_num; i++) {
@@ -77,10 +108,12 @@ test_run(d_rank_t my_rank)
 		DBG_PRINT("Group config file saved\n");
 	}
 
+
 	if (test_g.t_hold)
 		sleep(test_g.t_hold_time);
 
 	for (i = 0; i < test_g.t_srv_ctx_num; i++) {
+
 		rc = pthread_join(test_g.t_tid[i], NULL);
 		if (rc != 0)
 			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
@@ -112,6 +145,7 @@ int main(int argc, char **argv)
 	int		 rc;
 
 	rc = test_parse_args(argc, argv);
+
 	if (rc != 0) {
 		fprintf(stderr, "test_parse_args() failed, rc: %d.\n", rc);
 		return rc;
@@ -122,6 +156,9 @@ int main(int argc, char **argv)
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	tc_test_init(my_rank, 20, true, true);
+
+	if (test_g.t_register_swim_callback)
+		tc_test_swim_enable(true);
 
 	DBG_PRINT("STARTING SERVER\n");
 	test_run(my_rank);

@@ -1,27 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import os
 import pwd
@@ -31,15 +14,16 @@ from pool_security_test_base import PoolSecurityTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
 
+
 class DaosRunPoolSecurityTest(PoolSecurityTestBase):
     """Test daos_pool acl for primary and secondary groups.
 
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
 
+    # pylint: disable=too-many-ancestors
     def test_daos_pool_acl_enforcement(self):
-        '''
+        """
         Epic:
             DAOS-1961: Testing related to DAOS security features.
         Testcase description:
@@ -58,7 +42,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
             permissions enforcement with all forms of input under different
             test sceanrios.
         :avocado: tags=all,full_regression,security,pool_acl,sec_acl
-        '''
+        """
         user_uid = os.geteuid()
         user_gid = os.getegid()
         current_user = pwd.getpwuid(user_uid)[0]
@@ -79,17 +63,19 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         if permission.lower() == "none":
             permission = ""
         if permission not in PERMISSIONS:
-            self.fail("##permission %s is invalid, valid permissions are:"
-                      "'none', 'r', w', 'rw'", permission)
+            self.fail(
+                "##permission {} is invalid, valid permissions are:"
+                "'none', 'r', w', 'rw'".format(permission))
         if user_type not in user_types:
-            self.fail("##user_type %s is invalid, valid user_types are: "
-                      "%s", user_type, user_types)
+            self.fail(
+                "##user_type {} is invalid, valid user_types are: "
+                "{}".format(user_type, user_types))
         user_type_ind = user_types.index(user_type)
         self.log.info("===>Start DAOS pool acl enforcement order Testcase: "
                       " user_type: %s, permission: %s, expect_read: %s,"
                       " expect_write: "
                       "%s.", user_type, permission, read, write)
-        #take care of the user_type which have higher privilege
+        # take care of the user_type which have higher privilege
         for ind in range(5):
             if ind < user_type_ind:
                 test_acl_entries[ind] = ""
@@ -98,18 +84,18 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
             else:
                 test_acl_entries[ind] = default_acl_entries[ind]
         test_permission = permission
-        #take care of rest of the user-type permission
+        # take care of rest of the user-type permission
         group_acl = ""
         for ind in range(user_type_ind, 5):
             if ind != user_type_ind:
-                #setup opposite test_permission with permission
+                # setup opposite test_permission with permission
                 test_permission = "rw"
                 if permission == "rw":
                     test_permission = ""
                 if user_types[ind] == "group":
                     group_acl = test_permission
             test_acl_entries[ind] = default_acl_entries[ind] + test_permission
-        #union of ownergroup and group permission
+        # union of ownergroup and group permission
         if user_type == "ownergroup":
             if permission != group_acl:
                 union_acl = "".join(list(set().union(permission, group_acl)))

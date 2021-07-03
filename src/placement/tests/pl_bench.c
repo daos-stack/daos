@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC        DD_FAC(tests)
 
@@ -32,6 +15,9 @@
 
 #define USE_TIME_PROFILING
 #include "benchmark_util.h"
+
+extern int  obj_class_init(void);
+extern void obj_class_fini(void);
 
 /*
  * These are only at the top of the file for reference / easy changing
@@ -227,7 +213,7 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 		memset(&obj_table[i], 0, sizeof(obj_table[i]));
 		obj_table[i].omd_id.lo = rand();
 		obj_table[i].omd_id.hi = 5;
-		daos_obj_generate_id(&obj_table[i].omd_id, 0, OC_RP_4G2, 0);
+		daos_obj_set_oid(&obj_table[i].omd_id, 0, OC_RP_4G2, 0);
 		obj_table[i].omd_ver = 1;
 	}
 
@@ -485,8 +471,8 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 		memset(&obj_table[obj_idx], 0, sizeof(obj_table[obj_idx]));
 		obj_table[obj_idx].omd_id.lo = rand();
 		obj_table[obj_idx].omd_id.hi = 5;
-		daos_obj_generate_id(&obj_table[obj_idx].omd_id, 0,
-				     OC_RP_4G2, 0);
+		daos_obj_set_oid(&obj_table[obj_idx].omd_id, 0,
+				 OC_RP_4G2, 0);
 		obj_table[obj_idx].omd_ver = 1;
 	}
 
@@ -586,7 +572,7 @@ main(int argc, char **argv)
 	uint32_t                 nodes_per_domain = DEFAULT_NODES_PER_DOMAIN;
 	uint32_t                 vos_per_target = DEFAULT_VOS_PER_TARGET;
 
-	int                      rc;
+	int                      rc = -1;
 	int                      i;
 
 	test_op_t operation = NULL;
@@ -658,7 +644,7 @@ main(int argc, char **argv)
 					optarg);
 				print_usage(argv[0], op_names,
 					    ARRAY_SIZE(op_names));
-				return -1;
+				goto out;
 			}
 			break;
 		case 'g':
@@ -678,7 +664,7 @@ main(int argc, char **argv)
 		case '?':
 		default:
 			print_usage(argv[0], op_names, ARRAY_SIZE(op_names));
-			return -1;
+			goto out;
 		}
 	}
 
@@ -686,22 +672,27 @@ main(int argc, char **argv)
 		D_PRINT("ERROR: operation argument is required!\n");
 
 		print_usage(argv[0], op_names, ARRAY_SIZE(op_names));
-		return -1;
+		goto out;
 	}
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc != 0)
-		return rc;
+	if (rc)
+		goto out;
+
+	rc = obj_class_init();
+	if (rc)
+		goto out_debug;
 
 	rc = pl_init();
-	if (rc != 0) {
-		daos_debug_fini();
-		return rc;
-	}
+	if (rc)
+		goto out_class;
 
 	operation(argc, argv, num_domains, nodes_per_domain, vos_per_target);
 
 	pl_fini();
+out_class:
+	obj_class_fini();
+out_debug:
 	daos_debug_fini();
-
-	return 0;
+out:
+	return rc;
 }

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -37,6 +20,14 @@
 #define TXD_CB_NUM		(1 << 5)	/* 32 callbacks */
 #define TXD_CB_MAX		(1 << 20)	/* 1 million callbacks */
 
+
+struct umem_tx_stage_item {
+	int		 txi_magic;
+	umem_tx_cb_t	 txi_fn;
+	void		*txi_data;
+};
+
+#ifdef DAOS_PMEM_BUILD
 /** Convert an offset to an id.   No invalid flags will be maintained
  *  in the conversion.
  *
@@ -74,12 +65,6 @@ umem_id2off(const struct umem_instance *umm, PMEMoid oid)
 
 	return oid.off;
 }
-
-struct umem_tx_stage_item {
-	int		 txi_magic;
-	umem_tx_cb_t	 txi_fn;
-	void		*txi_data;
-};
 
 /** persistent memory operations (depends on pmdk) */
 
@@ -339,7 +324,7 @@ pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 		}
 
 		new_max = min((*cnt_max) << 1, TXD_CB_MAX);
-		D_REALLOC_ARRAY(txi, *pvec, new_max);
+		D_REALLOC_ARRAY(txi, *pvec, *cnt_max, new_max);
 		if (txi == NULL)
 			return -DER_NOMEM;
 
@@ -396,9 +381,9 @@ umem_tx_errno(int err)
 
 	return daos_errno2der(err);
 }
+#endif
 
 /* volatile memory operations */
-
 static int
 vmem_free(struct umem_instance *umm, umem_off_t umoff)
 {
@@ -411,7 +396,7 @@ umem_off_t
 vmem_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
 	   unsigned int type_num)
 {
-	return (uint64_t)((flags & POBJ_FLAG_ZERO) ?
+	return (uint64_t)((flags & VMEM_FLAG_ZERO) ?
 			  calloc(1, size) : malloc(size));
 }
 
@@ -426,9 +411,9 @@ vmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 	 * vmem doesn't support transaction, so we just execute the commit
 	 * callback & end callback instantly and drop the abort callback.
 	 */
-	if (stage == TX_STAGE_ONCOMMIT || stage == TX_STAGE_NONE)
+	if (stage == VT_STAGE_ONCOMMIT || stage == VT_STAGE_NONE)
 		cb(data, false);
-	else if (stage == TX_STAGE_ONABORT)
+	else if (stage == VT_STAGE_ONABORT)
 		cb(data, true);
 	else
 		return -DER_INVAL;
@@ -442,33 +427,6 @@ static umem_ops_t	vmem_ops = {
 	.mo_tx_add	= NULL,
 	.mo_tx_abort	= NULL,
 	.mo_tx_add_callback = vmem_tx_add_callback,
-};
-
-static int
-pmem_no_tx_add(struct umem_instance *umm, umem_off_t umoff,
-	       uint64_t offset, size_t size)
-{
-	return 0;
-}
-
-static int
-pmem_no_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
-{
-	return 0;
-}
-
-static umem_ops_t	pmem_no_snap_ops = {
-	.mo_tx_free		= pmem_tx_free,
-	.mo_tx_alloc		= pmem_tx_alloc,
-	.mo_tx_add		= pmem_no_tx_add,
-	.mo_tx_add_ptr		= pmem_no_tx_add_ptr,
-	.mo_tx_abort		= pmem_tx_abort,
-	.mo_tx_begin		= pmem_tx_begin,
-	.mo_tx_commit		= pmem_tx_commit,
-	.mo_reserve		= pmem_reserve,
-	.mo_cancel		= pmem_cancel,
-	.mo_tx_publish		= pmem_tx_publish,
-	.mo_tx_add_callback	= pmem_tx_add_callback,
 };
 
 /** Unified memory class definition */
@@ -485,16 +443,13 @@ static struct umem_class umem_class_defined[] = {
 		.umc_ops	= &vmem_ops,
 		.umc_name	= "vmem",
 	},
+#ifdef DAOS_PMEM_BUILD
 	{
 		.umc_id		= UMEM_CLASS_PMEM,
 		.umc_ops	= &pmem_ops,
 		.umc_name	= "pmem",
 	},
-	{
-		.umc_id		= UMEM_CLASS_PMEM_NO_SNAP,
-		.umc_ops	= &pmem_no_snap_ops,
-		.umc_name	= "pmem_no_snap",
-	},
+#endif
 	{
 		.umc_id		= UMEM_CLASS_UNKNOWN,
 		.umc_ops	= NULL,
@@ -506,15 +461,17 @@ static struct umem_class umem_class_defined[] = {
 static void
 set_offsets(struct umem_instance *umm)
 {
+#ifdef DAOS_PMEM_BUILD
 	char		*root;
 	PMEMoid		 root_oid;
-
+#endif
 	if (umm->umm_id == UMEM_CLASS_VMEM) {
 		umm->umm_base = 0;
 		umm->umm_pool_uuid_lo = 0;
 		return;
 	}
 
+#ifdef DAOS_PMEM_BUILD
 	root_oid = pmemobj_root(umm->umm_pool, 0);
 	D_ASSERTF(!OID_IS_NULL(root_oid),
 		  "You must call pmemobj_root before umem_class_init\n");
@@ -523,6 +480,7 @@ set_offsets(struct umem_instance *umm)
 
 	umm->umm_pool_uuid_lo = root_oid.pool_uuid_lo;
 	umm->umm_base = (uint64_t)root - root_oid.off;
+#endif
 }
 
 /**
@@ -558,8 +516,10 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	umm->umm_pool		= uma->uma_pool;
 	umm->umm_nospc_rc	= umc->umc_id == UMEM_CLASS_VMEM ?
 		-DER_NOMEM : -DER_NOSPACE;
+#ifdef DAOS_PMEM_BUILD
 	memcpy(umm->umm_slabs, uma->uma_slabs,
 	       sizeof(struct pobj_alloc_class_desc) * UMM_SLABS_CNT);
+#endif
 
 	set_offsets(umm);
 	return 0;

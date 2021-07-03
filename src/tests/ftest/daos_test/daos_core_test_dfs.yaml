@@ -11,11 +11,15 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 450
+timeout: 1000
+timeouts:
+  test_daos_dfs_unit: 1000
+  test_daos_dfs_parallel: 200
+  test_daos_dfs_sys: 60
 pool:
   scm_size: 8G
 server_config:
-  servers_per_host: 2
+  engines_per_host: 2
   name: daos_server
   servers:
     0:
@@ -24,8 +28,6 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      bdev_class: nvme
-      bdev_list: ["0000:81:00.0"]
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
@@ -35,8 +37,6 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      bdev_class: nvme
-      bdev_list: ["0000:da:00.0"]
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
@@ -49,14 +49,15 @@ dmg:
   transport_config:
     allow_insecure: True
 daos_tests:
-  Tests: !mux
-    test_u:
-      daos_test: u
-      num_clients: 1
-      test_name: DFS unit tests
-      test_timeout: 250
-    test_p:
-      daos_test: p
-      num_clients: 32
-      test_name: DFS parallel tests
-      test_timeout: 200
+  test_name:
+    test_daos_dfs_unit: DAOS_DFS_Unit
+    test_daos_dfs_parallel: DAOS_DFS_Parallel
+    test_daos_dfs_sys: DAOS_DFS_Sys
+  daos_test:
+    test_daos_dfs_unit: u
+    test_daos_dfs_parallel: p
+    test_daos_dfs_sys: s
+  num_clients:
+    test_daos_dfs_unit: 1
+    test_daos_dfs_parallel: 32
+    test_daos_dfs_sys: 1

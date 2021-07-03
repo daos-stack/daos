@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -48,6 +31,7 @@ enum btr_probe_rc {
 	PROBE_RC_OK,
 	PROBE_RC_ERR,
 	PROBE_RC_INPROGRESS,
+	PROBE_RC_DATA_LOSS,
 	PROBE_RC_UNAVAILABLE	= PROBE_RC_UNKNOWN,
 };
 
@@ -394,10 +378,10 @@ do {									\
 		(trace)->tr_at,	## __VA_ARGS__);			\
 } while (0)
 
-static inline int
+static inline uint32_t
 btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
 {
-	int size;
+	uint32_t size;
 
 	if (BTR_IS_DIRECT_KEY(feats))
 		return sizeof(umem_off_t);
@@ -414,7 +398,7 @@ btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
 /**
  * Wrapper for customized tree functions
  */
-static int
+static uint32_t
 btr_hkey_size(struct btr_context *tcx)
 {
 	return btr_hkey_size_const(btr_ops(tcx), tcx->tc_feats);
@@ -493,6 +477,12 @@ static int
 btr_rec_alloc(struct btr_context *tcx, d_iov_t *key, d_iov_t *val,
 	       struct btr_record *rec)
 {
+	if (btr_is_direct_key(tcx) && (key->iov_len > EMBEDDED_KEY_MAX)) {
+		D_ERROR("Key size (%zd) > Anchor size (%u)\n",
+			key->iov_len, EMBEDDED_KEY_MAX);
+		return -DER_KEY2BIG;
+	}
+
 	return btr_ops(tcx)->to_rec_alloc(&tcx->tc_tins, key, val, rec);
 }
 
@@ -557,7 +547,7 @@ btr_rec_string(struct btr_context *tcx, struct btr_record *rec,
 					   buf_len);
 }
 
-static inline int
+static inline uint32_t
 btr_rec_size(struct btr_context *tcx)
 {
 	return btr_hkey_size(tcx) + sizeof(struct btr_record);
@@ -593,7 +583,7 @@ btr_rec_copy_hkey(struct btr_context *tcx, struct btr_record *dst_rec,
 	btr_hkey_copy(tcx, &dst_rec->rec_hkey[0], &src_rec->rec_hkey[0]);
 }
 
-static inline int
+static inline uint32_t
 btr_node_size(struct btr_context *tcx)
 {
 	return sizeof(struct btr_node) +
@@ -950,8 +940,11 @@ btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
 	rec = btr_node_rec_at(tcx, alb->nd_off, alb->at);
 	rc = btr_ops(tcx)->to_check_availability(&tcx->tc_tins, rec,
 						 alb->intent);
-	if (rc == -DER_INPROGRESS) /* Unceration */
+	if (rc == -DER_INPROGRESS) /* Uncertain */
 		return PROBE_RC_INPROGRESS;
+
+	if (rc == -DER_DATA_LOSS)
+		return PROBE_RC_DATA_LOSS;
 
 	if (rc < 0) /* Failure */
 		return PROBE_RC_ERR;
@@ -970,6 +963,8 @@ btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
 		 *	for the case in the new aggregation logic.
 		 *	But before that, just make it fall through.
 		 */
+	case ALB_AVAILABLE_ABORTED:
+		/** NB: Entry is aborted flag set and we can purge it */
 	case ALB_AVAILABLE_CLEAN:
 		return PROBE_RC_OK;
 	case ALB_UNAVAILABLE:
@@ -1336,13 +1331,11 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	int			 at;
 	int			 rc;
 	int			 cmp;
-	int			 level;
+	int			 level = -1;
 	int			 saved = -1;
 	bool			 next_level;
 	struct btr_node		*nd;
 	struct btr_check_alb	 alb;
-	struct btr_trace	 traces[BTR_TRACE_MAX];
-	struct btr_trace	*trace = NULL;
 	umem_off_t		 nd_off;
 
 	if (!btr_probe_valid(probe_opc)) {
@@ -1350,7 +1343,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		goto out;
 	}
 
-	level = -1;
 	memset(&tcx->tc_traces[0], 0,
 	       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
 
@@ -1531,13 +1523,7 @@ again:
 				saved = at + 1;
 		}
 
-		/* backup the probe trace because probe_next will change it */
-		if (trace == NULL)
-			memcpy(traces, tcx->tc_trace,
-			       sizeof(*trace) * tcx->tc_depth);
-
 		if (btr_probe_next(tcx)) {
-			trace = traces;
 			cmp = BTR_CMP_UNKNOWN;
 			break;
 		}
@@ -1589,7 +1575,7 @@ again:
  out:
 	tcx->tc_probe_rc = rc;
 	if (rc == PROBE_RC_ERR)
-		D_ERROR("Failed to probe\n");
+		D_ERROR("Failed to probe: rc = %d\n", tcx->tc_probe_rc);
 	else if (level >= 0)
 		btr_trace_debug(tcx, &tcx->tc_trace[level], "\n");
 
@@ -1756,14 +1742,23 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		return -DER_NO_HDL;
 
 	rc = btr_probe_key(tcx, opc, intent, key);
-	if (rc == PROBE_RC_INPROGRESS) {
+	switch (rc) {
+	case PROBE_RC_INPROGRESS:
 		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
 		return -DER_INPROGRESS;
-	}
-	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
-		D_DEBUG(DB_TRACE, "Cannot find key\n");
+	case PROBE_RC_DATA_LOSS:
+		D_DEBUG(DB_TRACE, "Fetch hit some corrupted transaction.\n");
+		return -DER_DATA_LOSS;
+	case PROBE_RC_NONE:
+		D_DEBUG(DB_TRACE, "Key does not exist.\n");
 		return -DER_NONEXIST;
+	case PROBE_RC_ERR:
+		D_DEBUG(DB_TRACE, "Cannot find key: %d\n", tcx->tc_probe_rc);
+		return -DER_NONEXIST;
+	default:
+		break;
 	}
+
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
 
 	return btr_rec_fetch(tcx, rec, key_out, val_out);
@@ -1917,6 +1912,9 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	case PROBE_RC_INPROGRESS:
 		D_DEBUG(DB_TRACE, "The target is in some uncommitted DTX.");
 		return -DER_INPROGRESS;
+	case PROBE_RC_DATA_LOSS:
+		D_DEBUG(DB_TRACE, "Upsert hit some corrupted transaction.\n");
+		return -DER_DATA_LOSS;
 	}
 
 	tcx->tc_probe_rc = PROBE_RC_UNKNOWN; /* path changed */
@@ -2801,6 +2799,11 @@ dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 		return -DER_INPROGRESS;
 	}
 
+	if (rc == PROBE_RC_DATA_LOSS) {
+		D_DEBUG(DB_TRACE, "Delete hit some corrupted transaction.\n");
+		return -DER_DATA_LOSS;
+	}
+
 	if (rc != PROBE_RC_OK) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
@@ -3418,7 +3421,7 @@ dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 }
 
 /**
- * Finalise iterator.
+ * Finalize iterator.
  */
 int
 dbtree_iter_finish(daos_handle_t ih)
@@ -3498,14 +3501,19 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 		rc = btr_probe(tcx, opc, intent, key, hkey);
 	}
 
-	if (rc == PROBE_RC_INPROGRESS) {
+	switch (rc) {
+	case PROBE_RC_INPROGRESS:
 		itr->it_state = BTR_ITR_FINI;
 		return -DER_INPROGRESS;
-	}
-
-	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
+	case PROBE_RC_DATA_LOSS:
+		itr->it_state = BTR_ITR_FINI;
+		return -DER_DATA_LOSS;
+	case PROBE_RC_NONE:
+	case PROBE_RC_ERR:
 		itr->it_state = BTR_ITR_FINI;
 		return -DER_NONEXIST;
+	default:
+		break;
 	}
 
 	itr->it_state = BTR_ITR_READY;
@@ -3568,58 +3576,6 @@ int
 dbtree_iter_prev(daos_handle_t ih)
 {
 	return btr_iter_move(ih, false);
-}
-
-static int
-btr_iter_move_with_intent(daos_handle_t ih, uint32_t intent, bool forward)
-{
-	struct btr_context	*tcx;
-	struct btr_trace	*trace;
-	struct btr_iterator	*itr;
-	struct btr_check_alb	 alb;
-	int			 rc;
-
-	tcx = btr_hdl2tcx(ih);
-	if (tcx == NULL)
-		return -DER_NO_HDL;
-
-	itr = &tcx->tc_itr;
-	alb.intent = intent;
-
-again:
-	rc = btr_iter_move(ih, forward);
-	if (rc != 0)
-		return rc;
-
-	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-	alb.nd_off = trace->tr_node;
-	alb.at = trace->tr_at;
-	rc = btr_check_availability(tcx, &alb);
-	switch (rc) {
-	case PROBE_RC_UNAVAILABLE:
-		goto again;
-	case PROBE_RC_INPROGRESS:
-		itr->it_state = BTR_ITR_FINI;
-		return -DER_INPROGRESS;
-	case PROBE_RC_OK:
-		return 0;
-	case PROBE_RC_ERR:
-	default:
-		itr->it_state = BTR_ITR_FINI;
-		return -DER_INVAL;
-	}
-}
-
-int
-dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent)
-{
-	return btr_iter_move_with_intent(ih, intent, true);
-}
-
-int
-dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent)
-{
-	return btr_iter_move_with_intent(ih, intent, false);
 }
 
 /**

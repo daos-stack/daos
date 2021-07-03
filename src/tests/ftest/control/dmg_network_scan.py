@@ -1,28 +1,9 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
-
 import os
 import re
 import socket
@@ -31,7 +12,7 @@ from avocado.utils import process
 from apricot import TestWithServers
 
 
-class NetDev(object):
+class NetDev():
     # pylint: disable=too-few-public-methods
     """A class to represent the information of a network device"""
 
@@ -101,7 +82,7 @@ class NetDev(object):
         # Parse the list and divide the info
         # pylint: disable=no-member
         prov = re.findall(
-            r"(?:provider:|domain:)\s+([A-Za-z0-9;_+]+)", out.stdout, re.M)
+            r"(?:provider:|domain:)\s+([A-Za-z0-9;_+]+)", out.stdout_text, re.M)
         # pylint: enable=no-member
         info = [prov[i:(i + 2)] for i in range(0, len(prov), 2)]
 
@@ -133,16 +114,19 @@ class DmgNetworkScanTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DmgNetworkScanTest object."""
-        super(DmgNetworkScanTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
+        self.start_agents_once = False
+        self.start_servers_once = False
         self.setup_start_agents = False
         self.setup_start_servers = False
 
     def setUp(self):
         """Set up each test case."""
-        super(DmgNetworkScanTest, self).setUp()
+        super().setUp()
 
         # Run the dmg command locally, unset config to run locally
         self.hostlist_servers = socket.gethostname().split(".")[0].split(",")
+        self.access_points = self.hostlist_servers[:1]
         self.start_servers()
         self.dmg = self.get_dmg_command()
 
@@ -232,31 +216,34 @@ class DmgNetworkScanTest(TestWithServers):
         dmg_net_devs = []
 
         # Get dmg info
-        scan_info = self.dmg.get_output("network_scan")
+        network_out = self.dmg.network_scan()
 
-        # Get index range to break up information by hostname
-        r = [idx for idx, info in enumerate(scan_info) if info[0] != ""]
-        r = r[1] - r[0] if len(r) > 1 else len(scan_info)
+        # Get devices divided into dictionaries, with iface being the key. e.g.,
+        # temp_net_devs =
+        # [
+        #     {
+        #         'ib0': [['ofi+sockets'], 'wolf-154', '0'],
+        #         'ib1': [['ofi+sockets'], 'wolf-154', '1'],
+        #         'eth0': [['ofi+sockets'], 'wolf-154', '0']
+        #     }
+        # ]
+        host_fabrics = network_out["response"]["HostFabrics"]
+        struct_hash = list(host_fabrics.keys())[0]
+        interfaces = host_fabrics[struct_hash]["HostFabric"]["Interfaces"]
 
-        # Clean up the output, i.e. remove empty string items from lists
-        for idx, info in enumerate(scan_info):
-            scan_info[idx] = [i for i in info if i]
+        # Fill in the dictionary.
+        parsed_devs = {}
+        for interface in interfaces:
+            device = interface["Device"]
+            provider = interface["Provider"]
+            if device in parsed_devs:
+                parsed_devs[device][0].append(provider)
+            else:
+                host = host_fabrics[struct_hash]["HostSet"].split(":")[0]
+                parsed_devs[device] = [
+                    [provider], host, str(interface["NumaNode"])]
 
-        # Get devices divided into dictionaries, with iface being the key
-        info = [scan_info[dev:(dev + r)] for dev in range(0, len(scan_info), r)]
-        for host_info in info:
-            parsed_devs = {}
-            host = host_info[0][0]
-            for dev_info in host_info[1:]:
-                if len(dev_info) == 1:
-                    numa = dev_info[0]
-                    continue
-                for iface in dev_info[1].replace(" ", "").split(","):
-                    if iface in parsed_devs:
-                        parsed_devs[iface][0].extend(dev_info[0].split())
-                    else:
-                        parsed_devs[iface] = [dev_info[0].split(), host, numa]
-            temp_net_devs.append(parsed_devs)
+        temp_net_devs.append(parsed_devs)
 
         # Create NetDev objects
         for d in temp_net_devs:
@@ -272,7 +259,7 @@ class DmgNetworkScanTest(TestWithServers):
         JIRA ID: DAOS-2516
         Test Description: Test basic dmg functionality to scan the network
         devices on the system.
-        :avocado: tags=all,small,pr,hw,dmg,network_scan,basic
+        :avocado: tags=all,small,daily_regression,hw,dmg,network_scan,basic
         """
         # Get info, both these functions will return a list of NetDev objects
         dmg_info = sorted(

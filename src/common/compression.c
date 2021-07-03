@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #define D_LOGFAC	DD_FAC(csum)
@@ -41,15 +24,15 @@ daos_contprop2compresstype(int contprop_compress_val)
 	case DAOS_PROP_CO_COMPRESS_LZ4:
 		return COMPRESS_TYPE_LZ4;
 	case DAOS_PROP_CO_COMPRESS_DEFLATE:
-		return DAOS_PROP_CO_COMPRESS_DEFLATE;
+		return COMPRESS_TYPE_DEFLATE;
 	case DAOS_PROP_CO_COMPRESS_DEFLATE1:
-		return DAOS_PROP_CO_COMPRESS_DEFLATE1;
+		return COMPRESS_TYPE_DEFLATE1;
 	case DAOS_PROP_CO_COMPRESS_DEFLATE2:
-		return DAOS_PROP_CO_COMPRESS_DEFLATE2;
+		return COMPRESS_TYPE_DEFLATE2;
 	case DAOS_PROP_CO_COMPRESS_DEFLATE3:
-		return DAOS_PROP_CO_COMPRESS_DEFLATE3;
+		return COMPRESS_TYPE_DEFLATE3;
 	case DAOS_PROP_CO_COMPRESS_DEFLATE4:
-		return DAOS_PROP_CO_COMPRESS_DEFLATE4;
+		return COMPRESS_TYPE_DEFLATE4;
 	default:
 		return COMPRESS_TYPE_UNKNOWN;
 	}
@@ -196,6 +179,45 @@ daos_compressor_decompress(struct daos_compressor *obj,
 			src_buf, src_len,
 			dst_buf, dst_len,
 			produced);
+
+	return DC_STATUS_ERR;
+}
+
+
+int
+daos_compressor_compress_async(struct daos_compressor *obj,
+			       uint8_t *src_buf, size_t src_len,
+			       uint8_t *dst_buf, size_t dst_len,
+			       dc_callback_fn cb_fn, void *cb_data)
+{
+	if (obj->dc_algo->cf_compress_async)
+		return obj->dc_algo->cf_compress_async(
+				obj->dc_ctx,
+				src_buf, src_len,
+				dst_buf, dst_len,
+				cb_fn, cb_data);
+
+	return DC_STATUS_ERR;
+}
+
+int
+daos_compressor_decompress_async(struct daos_compressor *obj,
+				 uint8_t *src_buf, size_t src_len,
+				 uint8_t *dst_buf, size_t dst_len,
+				 dc_callback_fn cb_fn, void *cb_data)
+{
+	if (obj->dc_algo->cf_decompress_async)
+		return obj->dc_algo->cf_decompress_async(obj->dc_ctx,
+			src_buf, src_len, dst_buf, dst_len, cb_fn, cb_data);
+
+	return DC_STATUS_ERR;
+}
+
+int
+daos_compressor_poll_response(struct daos_compressor *obj)
+{
+	if (obj->dc_algo->cf_poll_response)
+		return obj->dc_algo->cf_poll_response(obj->dc_ctx);
 
 	return DC_STATUS_ERR;
 }

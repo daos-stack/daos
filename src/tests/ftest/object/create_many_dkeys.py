@@ -1,27 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import sys
 import ctypes
@@ -29,7 +12,7 @@ import avocado
 
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, IORequest, DaosApiError
-
+from general_utils import create_string_buffer
 
 class CreateManyDkeys(TestWithServers):
     """
@@ -56,9 +39,9 @@ class CreateManyDkeys(TestWithServers):
         inc = 50000
         last_key = inc
         for key in range(how_many):
-            c_dkey = ctypes.create_string_buffer("dkey {0}".format(key))
-            c_akey = ctypes.create_string_buffer("akey {0}".format(key))
-            c_value = ctypes.create_string_buffer(
+            c_dkey = create_string_buffer("dkey {0}".format(key))
+            c_akey = create_string_buffer("akey {0}".format(key))
+            c_value = create_string_buffer(
                 "some data that gets stored with the key {0}".format(key))
             c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
             ioreq.single_insert(c_dkey,
@@ -74,8 +57,8 @@ class CreateManyDkeys(TestWithServers):
         print("Started Verification of the Dataset-----------\n")
         last_key = inc
         for key in range(how_many):
-            c_dkey = ctypes.create_string_buffer("dkey {0}".format(key))
-            c_akey = ctypes.create_string_buffer("akey {0}".format(key))
+            c_dkey = create_string_buffer("dkey {0}".format(key))
+            c_akey = create_string_buffer("akey {0}".format(key))
             the_data = "some data that gets stored with the key {0}".format(key)
             val = ioreq.single_fetch(c_dkey,
                                      c_akey,

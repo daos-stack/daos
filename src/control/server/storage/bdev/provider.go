@@ -1,32 +1,17 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package bdev
 
 import (
 	"fmt"
+	"os"
 	"sync"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -41,8 +26,8 @@ type (
 	ScanRequest struct {
 		pbin.ForwardableRequest
 		DeviceList []string
-		DisableVMD bool
 		NoCache    bool
+		DisableVMD bool // set by provider during request forwarding
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -53,13 +38,14 @@ type (
 	// PrepareRequest defines the parameters for a Prepare operation.
 	PrepareRequest struct {
 		pbin.ForwardableRequest
-		HugePageCount int
-		PCIWhitelist  string
-		PCIBlacklist  string
-		TargetUser    string
-		ResetOnly     bool
-		DisableVFIO   bool
-		DisableVMD    bool
+		HugePageCount         int
+		DisableCleanHugePages bool
+		PCIAllowlist          string
+		PCIBlocklist          string
+		TargetUser            string
+		ResetOnly             bool
+		DisableVMD            bool // set by caller
+		DisableVFIO           bool
 	}
 
 	// PrepareResponse contains the results of a successful Prepare operation.
@@ -70,17 +56,20 @@ type (
 	// FormatRequest defines the parameters for a Format operation.
 	FormatRequest struct {
 		pbin.ForwardableRequest
-		Class      storage.BdevClass
-		DeviceList []string
-		MemSize    int // size MiB memory to be used by SPDK proc
-		DisableVMD bool
+		ConfigPath     string
+		Class          storage.BdevClass
+		DeviceList     []string
+		DeviceFileSize uint64 // size in bytes for NVMe device emulation
+		Hostname       string
+		OwnerUID       int
+		OwnerGID       int
+		DisableVMD     bool // set by provider during request forwarding
 	}
 
 	// DeviceFormatRequest designs the parameters for a device-specific format.
 	DeviceFormatRequest struct {
-		MemSize int // size MiB memory to be used by SPDK proc
-		Device  string
-		Class   storage.BdevClass
+		Device string
+		Class  storage.BdevClass
 	}
 
 	// DeviceFormatResponse contains device-specific Format operation results.
@@ -273,13 +262,32 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	return p.backend.Prepare(req)
 }
 
+// FormatRequestFromConfig returns a format request populated from a bdev
+// storage configuration.
+func FormatRequestFromConfig(log logging.Logger, cfg *storage.BdevConfig) FormatRequest {
+	fr := FormatRequest{
+		ConfigPath: cfg.OutputPath,
+		Class:      cfg.Class,
+		DeviceList: cfg.DeviceList,
+		// cfg size in nr GiBytes
+		DeviceFileSize: uint64(humanize.GiByte * cfg.FileSize),
+		OwnerUID:       os.Geteuid(),
+		OwnerGID:       os.Getegid(),
+	}
+
+	hn, err := os.Hostname()
+	if err != nil {
+		log.Errorf("get hostname: %s", err)
+		return fr
+	}
+	fr.Hostname = hn
+
+	return fr
+}
+
 // Format attempts to initialize NVMe devices for use by DAOS.
 // Note that this is a no-op for non-NVMe devices.
 func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
-	if len(req.DeviceList) == 0 {
-		return nil, errors.New("empty DeviceList in FormatRequest")
-	}
-
 	if p.shouldForward(req) {
 		req.DisableVMD = p.IsVMDDisabled()
 		return p.fwd.Format(req)

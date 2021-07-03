@@ -5,6 +5,7 @@
 |[ABT](https://github.com/pmodels/argobots/wiki/Introduction-to-Argobots)|Argobots|
 |ACL|Access Control List|
 |ACE|Access Control Entry|
+|ACID|Atomicity, consistency, isolation, durability|
 |BIO|Blob I/O|
 |CART|Collective and RPC Transport|
 |CGO|Go tools that enable creation of Go packages that call C code|
@@ -13,7 +14,7 @@
 |CPU|Central Processing Unit|
 |Daemon|A process offering system-level resources.|
 |[DAOS](http://www.daos.io)|Distributed Asynchronous Object Storage |
-|DCPM|Intel Optane DC Persistent Memory|
+|PMEM|Intel Optane Persistent Memory|
 |DPDK|Data Plane Development Kit|
 |dRPC|DAOS Remote Procedure Call|
 |[gRPC](https://grpc.io)|gRPC Remote Procedure Calls|
@@ -23,14 +24,14 @@
 |[ISA-L](https://01.org/intel®-storage-acceleration-library-open-source-version)|Intel Storage Acceleration Library|
 |I/O|Input/Output|
 |KV store|Key-Value store|
-|libfabric|A user-space library that exports the Open Fabrics Interface|
+|[libfabric](https://ofiwg.github.io/libfabric/)|Open Fabrics Interface|
 |Mercury|A user-space RPC library that can use libfabrics as a transport|
 |MTBF|Mean Time Between Failures|
 |NVM|Non-Volatile Memory|
 |NVMe|Non-Volatile Memory express|
 |[OFI](https://ofiwg.github.io/libfabric/)|Open Fabrics Interface|
 |OS|Operating System|
-|PM/PMEM|Persistent Memory|
+|PM|Persistent Memory|
 |[PMDK](https://pmem.io/pmdk/)|Persistent Memory Devevelopment Kit|
 |RAFT|Raft is a consensus algorithm used to distribute state transitions among DAOS server nodes.|
 |RAS|Reliability, Availability & Serviceability|

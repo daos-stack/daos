@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It is the header file of bridging to mercury.
@@ -105,6 +88,7 @@ struct crt_hg_context {
 	hg_class_t		*chc_bulkcla; /* bulk class */
 	hg_context_t		*chc_bulkctx; /* bulk context */
 	struct crt_hg_pool	 chc_hg_pool; /* HG handle pool */
+	int			 chc_provider; /* provider */
 };
 
 /* crt_hg.c */
@@ -135,6 +119,14 @@ int crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data);
 int crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data);
 
 bool crt_provider_is_contig_ep(int provider);
+bool crt_provider_is_sep(int provider);
+void crt_provider_set_sep(int provider, bool enable);
+int crt_provider_get_cur_ctx_num(int provider);
+void crt_provider_inc_cur_ctx_num(int provider);
+void crt_provider_dec_cur_ctx_num(int provider);
+
+int crt_provider_get_max_ctx_num(int provider);
+d_list_t *crt_provider_get_ctx_list(int provider);
 
 static inline int
 crt_hgret_2_der(int hg_ret)

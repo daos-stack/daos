@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -40,7 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 )
 
 func testExpectedError(t *testing.T, expected, actual error) {
@@ -58,8 +41,8 @@ func genMinimalConfig() *config.Server {
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithGetNetworkDeviceClass(getDeviceClassStub).
-		WithServers(
-			ioserver.NewConfig().
+		WithEngines(
+			engine.NewConfig().
 				WithScmClass("ram").
 				WithScmRamdiskSize(1).
 				WithScmMountPoint("/mnt/daos").
@@ -71,11 +54,9 @@ func genMinimalConfig() *config.Server {
 }
 
 func genDefaultExpected() *config.Server {
-	hostname, _ := os.Hostname()
 	return genMinimalConfig().
-		WithServers(
-			ioserver.NewConfig().
-				WithHostname(hostname).
+		WithEngines(
+			engine.NewConfig().
 				WithScmClass("ram").
 				WithScmRamdiskSize(1).
 				WithScmMountPoint("/mnt/daos").
@@ -84,7 +65,7 @@ func genDefaultExpected() *config.Server {
 		)
 }
 
-func cmpArgs(t *testing.T, wantConfig, gotConfig *ioserver.Config) {
+func cmpArgs(t *testing.T, wantConfig, gotConfig *engine.Config) {
 	t.Helper()
 
 	wantArgs, err := wantConfig.CmdLineArgs()
@@ -101,7 +82,7 @@ func cmpArgs(t *testing.T, wantConfig, gotConfig *ioserver.Config) {
 	}
 }
 
-func cmpEnv(t *testing.T, wantConfig, gotConfig *ioserver.Config) {
+func cmpEnv(t *testing.T, wantConfig, gotConfig *engine.Config) {
 	t.Helper()
 
 	wantEnv, err := wantConfig.CmdLineEnv()
@@ -153,14 +134,14 @@ func TestStartOptions(t *testing.T) {
 		"Storage Path (short)": {
 			argList: []string{"-s", "/foo/bar"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithScmMountPoint("/foo/bar")
+				cfg.Engines[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},
 		"Storage Path (long)": {
 			argList: []string{"--storage=/foo/bar"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithScmMountPoint("/foo/bar")
+				cfg.Engines[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},
@@ -179,42 +160,42 @@ func TestStartOptions(t *testing.T) {
 		"Targets (short)": {
 			argList: []string{"-t", "42"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithTargetCount(42)
+				cfg.Engines[0].WithTargetCount(42)
 				return cfg
 			},
 		},
 		"Targets (long)": {
 			argList: []string{"--targets=42"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithTargetCount(42)
+				cfg.Engines[0].WithTargetCount(42)
 				return cfg
 			},
 		},
 		"XS Helpers (short)": {
 			argList: []string{"-x", "0"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithHelperStreamCount(0)
+				cfg.Engines[0].WithHelperStreamCount(0)
 				return cfg
 			},
 		},
 		"XS Helpers (long)": {
 			argList: []string{"--xshelpernr=1"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithHelperStreamCount(1)
+				cfg.Engines[0].WithHelperStreamCount(1)
 				return cfg
 			},
 		},
 		"First Core (short)": {
 			argList: []string{"-f", "42"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithServiceThreadCore(42)
+				cfg.Engines[0].WithServiceThreadCore(42)
 				return cfg
 			},
 		},
 		"First Core (long)": {
 			argList: []string{"--firstcore=42"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Servers[0].WithServiceThreadCore(42)
+				cfg.Engines[0].WithServiceThreadCore(42)
 				return cfg
 			},
 		},
@@ -295,8 +276,8 @@ func TestStartOptions(t *testing.T) {
 				t.Fatalf("(-want +got):\n%s", diff)
 			}
 
-			cmpArgs(t, wantConfig.Servers[0], gotConfig.Servers[0])
-			cmpEnv(t, wantConfig.Servers[0], gotConfig.Servers[0])
+			cmpArgs(t, wantConfig.Engines[0], gotConfig.Engines[0])
+			cmpEnv(t, wantConfig.Engines[0], gotConfig.Engines[0])
 		})
 	}
 }

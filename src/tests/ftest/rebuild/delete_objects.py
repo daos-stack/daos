@@ -1,30 +1,14 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2019-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from rebuild_test_base import RebuildTestBase
+from daos_utils import DaosCommand
 
-
-class RebuildDeleteObjects(RebuildTestBase):
+class RbldDeleteObjects(RebuildTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class for deleting objects during pool rebuild.
 
     Test Class Description:
@@ -36,13 +20,21 @@ class RebuildDeleteObjects(RebuildTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildDeleteObjects object."""
-        super(RebuildDeleteObjects, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.punched_indices = None
         self.punched_qty = 0
         self.punch_type = None
+        self.daos_cmd = None
 
     def execute_during_rebuild(self):
         """Delete half of the objects from the container during rebuild."""
+        self.daos_cmd = DaosCommand(self.bin)
+        self.daos_cmd.container_set_prop(
+                      pool=self.pool.uuid,
+                      cont=self.container.uuid,
+                      prop="status",
+                      value="healthy")
+
         if self.punch_type == "object":
             # Punch half of the objects
             self.punched_indices = [
@@ -80,7 +72,7 @@ class RebuildDeleteObjects(RebuildTestBase):
                 self.punch_type, self.punched_qty, expected_qty))
 
         # Read objects from the last transaction
-        super(RebuildDeleteObjects, self).verify_container_data(txn)
+        super().verify_container_data(txn)
 
     def test_rebuild_delete_objects(self):
         """JIRA ID: DAOS-2572.
@@ -94,7 +86,9 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,medium,full_regression,rebuild,rebuilddeleteobject
+        :avocado: tags=all,full_regression
+        :avocado: tags=large
+        :avocado: tags=rebuild,delete_objects,rebuilddeleteobject
         """
         self.punch_type = "object"
         self.execute_rebuild_test()
@@ -111,7 +105,9 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,medium,full_regression,rebuild,rebuilddeleterecord
+        :avocado: tags=all,full_regression
+        :avocado: tags=large
+        :avocado: tags=rebuild,delete_objects,rebuilddeleterecord
         """
         self.punch_type = "record"
         self.execute_rebuild_test()

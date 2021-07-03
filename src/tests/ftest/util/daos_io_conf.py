@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import random
@@ -48,7 +31,7 @@ class IoConfGen(ExecutableCommand):
             path (str, optional): path to location of command binary file.
                 Defaults to ""
         """
-        super(IoConfGen, self).__init__("/run/gen_io_conf/*",
+        super().__init__("/run/gen_io_conf/*",
                                         "daos_gen_io_conf", path)
         self.verbose = True
         self.env = env
@@ -82,11 +65,11 @@ class IoConfGen(ExecutableCommand):
             out = manager.run()
 
             #Return False if "ERROR" in stdout
-            for line in out.stdout.splitlines():
+            for line in out.stdout_text.splitlines():
                 if 'ERROR' in line:
                     return False
             #Return False if not expected message to confirm test completed.
-            if success_msg not in out.stdout.splitlines()[-1]:
+            if success_msg not in out.stdout_text.splitlines()[-1]:
                 return False
 
         #Return False if Command failed.
@@ -132,7 +115,7 @@ class IoConfTestBase(TestWithServers):
     """
     def __init__(self, *args, **kwargs):
         """Initialize a IoConfTestBase object."""
-        super(IoConfTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.testfile = None
         self.dmg = None
         self.dmg_config_file = None

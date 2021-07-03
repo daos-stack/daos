@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 package server
 
@@ -33,7 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -65,6 +48,14 @@ var (
 	)
 )
 
+func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {
+	return serverFault(
+		code.ServerPoolInvalidServiceReps,
+		fmt.Sprintf("pool service replicas number should be an odd number between 1 and %d", maxSvcReps),
+		"retry the request with a valid number of pool service replicas",
+	)
+}
+
 func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
 	return serverFault(
 		code.ServerInstancesNotStopped,
@@ -76,22 +67,22 @@ func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
 func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 	return serverFault(
 		code.ServerPoolNvmeTooSmall,
-		fmt.Sprintf("requested NVMe capacity (%s) is too small (min %s)",
-			humanize.IBytes(reqBytes),
-			humanize.IBytes(ioserver.NvmeMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("requested NVMe capacity (%s / %d) is too small (min %s per target)",
+			humanize.Bytes(reqBytes), targetCount,
+			humanize.IBytes(engine.NvmeMinBytesPerTarget)),
 		fmt.Sprintf("NVMe capacity should be larger than %s",
-			humanize.IBytes(ioserver.NvmeMinBytesPerTarget*uint64(targetCount))),
+			humanize.Bytes(engine.NvmeMinBytesPerTarget*uint64(targetCount))),
 	)
 }
 
 func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 	return serverFault(
 		code.ServerPoolScmTooSmall,
-		fmt.Sprintf("requested SCM capacity (%s) is too small (min %s)",
-			humanize.IBytes(reqBytes),
-			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("requested SCM capacity (%s / %d) is too small (min %s per target)",
+			humanize.Bytes(reqBytes), targetCount,
+			humanize.IBytes(engine.ScmMinBytesPerTarget)),
 		fmt.Sprintf("SCM capacity should be larger than %s",
-			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+			humanize.Bytes(engine.ScmMinBytesPerTarget*uint64(targetCount))),
 	)
 }
 
@@ -138,6 +129,14 @@ func FaultBdevNotFound(bdevs []string) *fault.Fault {
 		code.ServerBdevNotFound,
 		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
 		fmt.Sprintf("check SSD%s %v that are specified in server config exist", common.Pluralise("", len(bdevs)), bdevs),
+	)
+}
+
+func FaultWrongSystem(reqName, sysName string) *fault.Fault {
+	return serverFault(
+		code.ServerWrongSystem,
+		fmt.Sprintf("request system does not match running system (%s != %s)", reqName, sysName),
+		"retry the request with the correct system name",
 	)
 }
 

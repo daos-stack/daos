@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -30,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -77,15 +60,9 @@ func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
 	tmpDir, tmpCleanup := common.CreateTestDir(t)
 	defer tmpCleanup()
 
-	path := filepath.Join(tmpDir, "drpc_test.sock")
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	f.Close()
-	defer os.Remove(path)
+	path := common.CreateTestFile(t, tmpDir, "")
 
-	err = checkDrpcClientSocketPath(path)
+	err := checkDrpcClientSocketPath(path)
 
 	if err == nil {
 		t.Fatal("Expected an error, got nil")
@@ -162,9 +139,9 @@ func TestDrpcCleanup_Single(t *testing.T) {
 
 	for _, sockName := range []string{
 		"daos_server.sock",
-		"daos_io_server.sock",
-		"daos_io_server0.sock",
-		"daos_io_server_2345.sock",
+		"daos_engine.sock",
+		"daos_engine0.sock",
+		"daos_engine_2345.sock",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
 		_, cleanup := common.CreateTestSocket(t, sockPath)
@@ -189,7 +166,7 @@ func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
 		"12345.sock",
 		"myfile",
 		"daos_server",
-		"daos_io_server",
+		"daos_engine",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
 		_, cleanup := common.CreateTestSocket(t, sockPath)
@@ -214,12 +191,12 @@ func TestDrpcCleanup_Multiple(t *testing.T) {
 
 	sockNames := []string{
 		"daos_server.sock",
-		"daos_io_server.sock",
-		"daos_io_server12.sock",
-		"daos_io_serverF.sock",
-		"daos_io_server_5678.sock",
-		"daos_io_server_256.sock",
-		"daos_io_server_abc.sock",
+		"daos_engine.sock",
+		"daos_engine12.sock",
+		"daos_engineF.sock",
+		"daos_engine_5678.sock",
+		"daos_engine_256.sock",
+		"daos_engine_abc.sock",
 	}
 
 	var sockPaths []string
@@ -300,7 +277,7 @@ func TestServer_DrpcRetryCancel(t *testing.T) {
 		shouldCancel bool
 		expErr       error
 	}{
-		"wrapped request": {
+		"retries exceed deadline": {
 			req: &retryableDrpcReq{
 				Message:    &mgmtpb.PoolDestroyReq{},
 				RetryAfter: 1 * time.Microsecond,
@@ -330,24 +307,6 @@ func TestServer_DrpcRetryCancel(t *testing.T) {
 			timeout:      1 * time.Second,
 			shouldCancel: true,
 			expErr:       context.Canceled,
-		},
-		"pool create retries on -DER_TIMEDOUT": {
-			req: &mgmtpb.PoolCreateReq{},
-			resp: &mgmtpb.PoolCreateResp{
-				Status: int32(drpc.DaosTimedOut),
-			},
-			method:  drpc.MethodPoolCreate,
-			timeout: defaultRetryAfter * 2,
-			expErr:  context.DeadlineExceeded,
-		},
-		"pool create retries on -DER_GRPVER": {
-			req: &mgmtpb.PoolCreateReq{},
-			resp: &mgmtpb.PoolCreateResp{
-				Status: int32(drpc.DaosGroupVersionMismatch),
-			},
-			method:  drpc.MethodPoolCreate,
-			timeout: defaultRetryAfter * 2,
-			expErr:  context.DeadlineExceeded,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

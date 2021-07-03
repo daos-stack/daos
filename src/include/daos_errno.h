@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS Error numbers
@@ -135,9 +118,9 @@ extern "C" {
 	/** version mismatch */						\
 	ACTION(DER_MISMATCH,		(DER_ERR_GURT_BASE + 31),	\
 	       Version mismatch)					\
-	/** rank has been evicted */					\
-	ACTION(DER_EVICTED,		(DER_ERR_GURT_BASE + 32),	\
-	       Rank has been evicted)					\
+	/** rank has been excluded */					\
+	ACTION(DER_EXCLUDED,		(DER_ERR_GURT_BASE + 32),	\
+	       Rank has been excluded)					\
 	/** user-provided RPC handler didn't send reply back */		\
 	ACTION(DER_NOREPLY,		(DER_ERR_GURT_BASE + 33),	\
 	       User provided RPC handler did not send reply back)	\
@@ -170,7 +153,11 @@ extern "C" {
 	       Path name exceeds permitted length)			\
 	/** Metric was not found.*/					\
 	ACTION(DER_METRIC_NOT_FOUND,    (DER_ERR_GURT_BASE + 43),	\
-	       Read failed because metric not found)
+	       Read failed because metric not found)			\
+	/** Invalid user/group permissions.*/				\
+	ACTION(DER_SHMEM_PERMS,         (DER_ERR_GURT_BASE + 44),	\
+	       Unable to access shared memory segment due to		\
+	       incompatible user or group permissions)
 	/** TODO: add more error numbers */
 
 #define D_FOREACH_DAOS_ERR(ACTION)					\
@@ -263,7 +250,10 @@ extern "C" {
 	       Agent is incompatible with libdaos)			\
 	/** Multiple shards locate on the same target */		\
 	ACTION(DER_SHARDS_OVERLAP,	(DER_ERR_DAOS_BASE + 30),	\
-	       Shards overlap)
+	       Shards overlap)						\
+	/** #failures exceed RF(Redundancy Factor), data possibly lost */ \
+	ACTION(DER_RF,			(DER_ERR_DAOS_BASE + 31),	\
+	       Failures exceed RF)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
@@ -347,6 +337,14 @@ const char *d_errdesc(int errnum);
 
 /** @}
  */
+
+#define DO_PRAGMA(str)	_Pragma(#str)
+#define DEPRECATE_ERROR(olde, newe)				\
+({								\
+	DO_PRAGMA(message(#olde " is deprecated, use " #newe)); \
+	newe;							\
+})
+#define DER_EVICTED DEPRECATE_ERROR(DER_EVICTED, DER_EXCLUDED)
 
 #ifndef DF_RC
 #define DF_RC "%s(%d): '%s'"

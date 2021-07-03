@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_pool: Pool Server
@@ -30,11 +13,12 @@
 
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+bool ec_agg_disabled;
 
 static int
 init(void)
@@ -57,6 +41,16 @@ init(void)
 	if (rc)
 		D_GOTO(err_pool_iv, rc);
 
+	rc = ds_pool_metrics_init();
+	if (rc)
+		D_WARN("Unable to initialize pool metrics, " DF_RC "\n",
+		       DP_RC(rc));
+
+	ec_agg_disabled = false;
+	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
+	if (unlikely(ec_agg_disabled))
+		D_WARN("EC aggregation is disabled.\n");
+
 	ds_pool_rsvc_class_register();
 
 	bio_register_ract_ops(&nvme_reaction_ops);
@@ -76,10 +70,11 @@ static int
 fini(void)
 {
 	ds_pool_rsvc_class_unregister();
-	ds_pool_iv_fini();
 	ds_pool_hdl_hash_fini();
+	ds_pool_iv_fini();
 	ds_pool_cache_fini();
 	ds_pool_prop_default_fini();
+	ds_pool_metrics_fini();
 	return 0;
 }
 
@@ -97,7 +92,13 @@ setup(void)
 static int
 cleanup(void)
 {
-	return ds_pool_stop_all();
+	int rc;
+
+	rc = ds_pool_stop_all();
+	if (rc)
+		D_ERROR("Stop pools failed. "DF_RC"\n", DP_RC(rc));
+
+	return rc;
 }
 
 static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
@@ -128,8 +129,7 @@ static struct daos_rpc_handler pool_handlers[] = {
 #undef X
 
 static void *
-pool_tls_init(const struct dss_thread_local_storage *dtls,
-	      struct dss_module_key *key)
+pool_tls_init(int xs_id, int tgt_id)
 {
 	struct pool_tls *tls;
 
@@ -142,13 +142,21 @@ pool_tls_init(const struct dss_thread_local_storage *dtls,
 }
 
 static void
-pool_tls_fini(const struct dss_thread_local_storage *dtls,
-	      struct dss_module_key *key, void *data)
+pool_tls_fini(void *data)
 {
-	struct pool_tls *tls = data;
+	struct pool_tls		*tls = data;
+	struct ds_pool_child	*child;
 
-	ds_pool_child_purge(tls);
-	D_ASSERT(d_list_empty(&tls->dt_pool_list));
+	D_ASSERT(tls != NULL);
+	/* pool child cache should be empty now */
+
+	d_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
+		D_ERROR(DF_UUID": ref: %d\n",
+			DP_UUID(child->spc_uuid), child->spc_ref);
+	}
+
+	if (!d_list_empty(&tls->dt_pool_list))
+		D_ERROR("pool list not empty\n");
 	D_FREE(tls);
 }
 

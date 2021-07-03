@@ -1,5 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers:
     - server-A
@@ -26,8 +24,8 @@ dmg:
 pool:
   control_method: dmg
   mode: 146
-  scm_size: "16GB"
-  nvme_size: "32GB"
+  scm_size: 16GB
+  nvme_size: 32GB
   name: daos_server
 container:
     type: POSIX
@@ -39,28 +37,22 @@ ior:
   dfs_destroy: False
 
 exp_vals:
-  uuid: "TBD"
-  ntarget: "8"
-  disabled: "0"
-  leader: "0"
-  version: "1"
-  target_count: "8"
+  pool_status: 0
+  total_targets: 8
+  active_targets: 8
+  total_nodes: 1
+  disabled_targets: 0
+  version: 1
+  leader: 0
   scm:
-    total: "16 GB"
-    free: "16 GB"
-    free_min: "2.0 GB"
-    free_max: "2.0 GB"
-    free_mean: "2.0 GB"
+    total: 16000000000
   nvme:
-    total: "32 GB"
-    free: "32 GB"
-    free_min: "4.0 GB"
-    free_max: "4.0 GB"
-    free_mean: "4.0 GB"
+    total: 32000000000
   rebuild:
-    status: "idle"
-    objects: "0"
-    records: "0"
+    rebuild_status: 0
+    state: "idle"
+    objects: 0
+    records: 0
 
 pool_uuids:
   uuids:

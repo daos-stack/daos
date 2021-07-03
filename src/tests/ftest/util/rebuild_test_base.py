@@ -1,38 +1,20 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
 from command_utils_base import ObjectWithParameters, BasicParameter
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
-
+from daos_utils import DaosCommand
 
 class RebuildTestParams(ObjectWithParameters):
+    # pylint: disable=too-few-public-methods
     """Class for gathering test parameters."""
 
     def __init__(self):
         """Initialize a RebuildTestParams object."""
-        super(RebuildTestParams, self).__init__("/run/rebuild/*")
+        super().__init__("/run/rebuild/*")
         self.object_class = BasicParameter(None)
         self.rank = BasicParameter(None)
 
@@ -45,35 +27,34 @@ class RebuildTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildTestBase object."""
-        super(RebuildTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.inputs = RebuildTestParams()
         self.targets = None
         self.server_count = 0
         self.info_checks = None
         self.rebuild_checks = None
+        self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(RebuildTestBase, self).setUp()
+        super().setUp()
 
         # Get the test parameters
         self.inputs.get_params(self)
 
-        # Get the number of targets per server for pool info calculations
+        # Get the number of targets per engine for pool info calculations
         self.targets = self.params.get("targets", "/run/server_config/*")
 
         self.server_count = len(self.hostlist_servers)
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
+        self.add_pool(create=False)
 
     def setup_test_container(self):
         """Define a TestContainer object."""
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
+        self.add_container(self.pool, create=False)
 
     def setup_pool_verify(self):
         """Set up pool verification initial expected values."""
@@ -147,16 +128,17 @@ class RebuildTestBase(TestWithServers):
         """Start the rebuild process."""
         # Exclude the rank from the pool to initiate rebuild
         if isinstance(self.inputs.rank.value, list):
-            self.pool.start_rebuild(self.inputs.rank.value, self.d_log)
+            self.server_managers[0].stop_ranks(
+                self.inputs.rank.value, self.d_log, force=True)
         else:
-            self.pool.start_rebuild([self.inputs.rank.value], self.d_log)
+            self.server_managers[0].stop_ranks(
+                [self.inputs.rank.value], self.d_log, force=True)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True, 1)
 
     def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
-        pass
 
     def verify_container_data(self, txn=None):
         """Verify the container data.
@@ -179,6 +161,7 @@ class RebuildTestBase(TestWithServers):
         """
         # Get the test params
         self.setup_test_pool()
+        self.daos_cmd = DaosCommand(self.bin)
         if create_container:
             self.setup_test_container()
 
@@ -199,6 +182,17 @@ class RebuildTestBase(TestWithServers):
 
         # Confirm rebuild completes
         self.pool.wait_for_rebuild(False, 1)
+
+        # clear container status for the RF issue
+        self.daos_cmd.container_set_prop(
+                      pool=self.pool.uuid,
+                      cont=self.container.uuid,
+                      prop="status",
+                      value="healthy")
+
+        # Refresh local pool and container
+        self.pool.check_pool_info()
+        self.container.check_container_info()
 
         # Verify the excluded rank is no longer used with the objects
         self.verify_rank_has_no_objects()

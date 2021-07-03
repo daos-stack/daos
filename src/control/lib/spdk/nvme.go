@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package spdk
@@ -28,13 +11,16 @@ package spdk
 
 /*
 #cgo CFLAGS: -I .
-#cgo LDFLAGS: -L . -lnvme_control -lspdk
+#cgo LDFLAGS: -L . -lnvme_control
+#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool
+#cgo LDFLAGS: -lrte_mempool_ring -lrte_bus_pci
 
 #include "stdlib.h"
 #include "daos_srv/control.h"
 #include "spdk/stdinc.h"
-#include "spdk/nvme.h"
+#include "spdk/string.h"
 #include "spdk/env.h"
+#include "spdk/nvme.h"
 #include "include/nvme_control.h"
 #include "include/nvme_control_common.h"
 */
@@ -50,7 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
+const lockfilePathPrefix = "/var/tmp/spdk_pci_lock_"
 
 // Nvme is the interface that provides SPDK NVMe functionality.
 type Nvme interface {
@@ -226,20 +212,28 @@ func clean(retPtr *C.struct_ret_t) {
 	C.free(unsafe.Pointer(retPtr))
 }
 
-// collectCtrlrs parses return struct to collect slice of nvme.Controller.
-func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeControllers, err error) {
+// checkRet returns early if return struct is nil or rc is non-zero.
+func checkRet(retPtr *C.struct_ret_t, failMsg string) error {
 	if retPtr == nil {
-		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
+		return errors.Wrap(FaultBindingRetNull, failMsg)
 	}
-
-	defer clean(retPtr)
 
 	if retPtr.rc != 0 {
-		err = errors.Wrap(FaultBindingFailed(int(retPtr.rc),
-			C.GoString(&retPtr.info[0])), failMsg)
+		clean(retPtr)
 
-		return
+		return errors.Wrap(FaultBindingFailed(int(retPtr.rc),
+			C.GoString(&retPtr.info[0])), failMsg)
 	}
+
+	return nil
+}
+
+// collectCtrlrs parses return struct to collect slice of nvme.Controller.
+func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeControllers, err error) {
+	if err := checkRet(retPtr, failMsg); err != nil {
+		return nil, err
+	}
+	defer clean(retPtr)
 
 	ctrlrPtr := retPtr.ctrlrs
 	for ctrlrPtr != nil {
@@ -272,16 +266,10 @@ func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeC
 // collectFormatResults parses return struct to collect slice of
 // nvme.FormatResult.
 func collectFormatResults(retPtr *C.struct_ret_t, failMsg string) ([]*FormatResult, error) {
-	if retPtr == nil {
-		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
+	if err := checkRet(retPtr, failMsg); err != nil {
+		return nil, err
 	}
-
 	defer clean(retPtr)
-
-	if retPtr.rc != 0 {
-		return nil, errors.Wrap(FaultBindingFailed(int(retPtr.rc),
-			C.GoString(&retPtr.info[0])), failMsg)
-	}
 
 	var fmtResults []*FormatResult
 	fmtResult := retPtr.wipe_results

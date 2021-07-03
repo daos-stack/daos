@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -27,6 +10,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
@@ -46,8 +30,8 @@ type configGenCmd struct {
 	hostListCmd
 	jsonOutputCmd
 	AccessPoints string `short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
-	NumPmem      int    `short:"p" long:"num-pmem" description:"Minimum number of SCM (pmem) devices required per storage host in DAOS system"`
-	NumNvme      int    `default:"1" short:"n" long:"num-nvme" description:"Minimum number of NVMe devices required per storage host in DAOS system, set to 0 to generate pmem-only config"`
+	NrEngines    int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
+	MinNrSSDs    int    `default:"1" short:"s" long:"min-ssds" description:"Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine). Set to 0 to generate a config with no NVMe."`
 	NetClass     string `default:"best-available" short:"c" long:"net-class" description:"Network class preferred" choice:"best-available" choice:"ethernet" choice:"infiniband"`
 }
 
@@ -59,12 +43,14 @@ type configGenCmd struct {
 func (cmd *configGenCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
+	cmd.log.Debugf("configGenCmd input control config: %+v", cmd.config)
+
 	req := control.ConfigGenerateReq{
-		NumPmem:  cmd.NumPmem,
-		NumNvme:  cmd.NumNvme,
-		HostList: cmd.hostlist,
-		Client:   cmd.ctlInvoker,
-		Log:      cmd.log,
+		NrEngines: cmd.NrEngines,
+		MinNrSSDs: cmd.MinNrSSDs,
+		HostList:  cmd.config.HostList,
+		Client:    cmd.ctlInvoker,
+		Log:       cmd.log,
 	}
 	switch cmd.NetClass {
 	case "ethernet":
@@ -80,17 +66,25 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 
 	// TODO: decide whether we want meaningful JSON output
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(new(control.ConfigGenerateResp), nil)
+		return cmd.outputJSON(nil, errors.New("JSON output not supported"))
 	}
 
 	resp, err := control.ConfigGenerate(ctx, req)
+	if err != nil {
+		cge, ok := errors.Cause(err).(*control.ConfigGenerateError)
+		if !ok {
+			// includes hardware validation errors e.g. hardware across hostset differs
+			return err
+		}
 
-	// host level errors e.g. unresponsive daos_server process
-	var bld strings.Builder
-	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+		// host level errors e.g. unresponsive daos_server process
+		var bld strings.Builder
+		if err := pretty.PrintResponseErrors(cge, &bld); err != nil {
+			return err
+		}
+		cmd.log.Error(bld.String())
 		return err
 	}
-	cmd.log.Error(bld.String()) // no-op if no host level errors
 
 	// includes hardware validation errors e.g. hardware across hostset differs
 	if err != nil {

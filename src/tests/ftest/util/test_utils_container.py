@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
 from time import time
@@ -27,13 +10,13 @@ from time import time
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
-from command_utils_base import BasicParameter
+from command_utils_base import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
                         c_uuid_to_str, str_to_c_uuid)
-from general_utils import get_random_string, DaosTestError
+from general_utils import get_random_bytes, DaosTestError
 
 
-class TestContainerData(object):
+class TestContainerData():
     """A class for storing data written to DaosContainer objects."""
 
     def __init__(self, debug=False):
@@ -84,9 +67,9 @@ class TestContainerData(object):
 
         Args:
             container (TestContainer): container in which to write the object
-            akey (str): the akey
-            dkey (str): the dkey
-            data (object): the data to write as a string or list
+            akey (bytes): the akey
+            dkey (bytes): the dkey
+            data (object): the data to write as a list bytes
             rank (int, optional): rank. Defaults to None.
             obj_class (int, optional): daos object class. Defaults to None.
 
@@ -116,7 +99,7 @@ class TestContainerData(object):
                 "Error writing {}data (dkey={}, akey={}, data={}) to "
                 "container {}: {}".format(
                     "array " if isinstance(data, list) else "", dkey, akey,
-                    data, container.uuid, error))
+                    data, container.uuid, error)) from error
 
     def write_object(self, container, record_qty, akey_size, dkey_size,
                      data_size, rank=None, obj_class=None, data_array_size=0):
@@ -135,13 +118,13 @@ class TestContainerData(object):
 
         """
         for _ in range(record_qty):
-            akey = get_random_string(akey_size, self.get_akeys())
-            dkey = get_random_string(dkey_size, self.get_dkeys())
+            akey = get_random_bytes(akey_size, self.get_akeys())
+            dkey = get_random_bytes(dkey_size, self.get_dkeys())
             if data_array_size == 0:
-                data = get_random_string(data_size)
+                data = get_random_bytes(data_size)
             else:
                 data = [
-                    get_random_string(data_size)
+                    get_random_bytes(data_size)
                     for _ in range(data_array_size)]
             # Write single data to the container
             self.write_record(container, akey, dkey, data, rank, obj_class)
@@ -159,8 +142,8 @@ class TestContainerData(object):
 
         Args:
             container (TestContainer): container in which to write the object
-            akey (str): the akey
-            dkey (str): the dkey
+            akey (bytes): the akey
+            dkey (bytes): the dkey
             data_size (int): size of the data to read
             data_array_size (int): size of array item
             txn (int, optional): transaction timestamp to read. Defaults to None
@@ -194,7 +177,7 @@ class TestContainerData(object):
                 "Error reading {}data (dkey={}, akey={}, size={}) from "
                 "container {}: {}".format(
                     "array " if data_array_size > 0 else "", dkey, akey,
-                    data_size, container.uuid, error))
+                    data_size, container.uuid, error)) from error
         return [data[:-1] for data in read_data] \
             if data_array_size > 0 else read_data.value
 
@@ -218,7 +201,6 @@ class TestContainerData(object):
                 "container": container,
                 "akey": record_info["akey"],
                 "dkey": record_info["dkey"],
-                "data_size": len(data[0].split()),
                 "txn": txn,
             }
             try:
@@ -239,7 +221,7 @@ class TestContainerData(object):
                 status = False
                 continue
 
-            expect = "" if record_info["punched"] else record_info["data"]
+            expect = b"" if record_info["punched"] else record_info["data"]
             if actual != expect:
                 self.log.error(
                     "    Error data mismatch (akey=%s, dkey=%s, punched=%s): "
@@ -254,14 +236,14 @@ class TestContainer(TestDaosApiBase):
     """A class for functional testing of DaosContainer objects."""
 
     def __init__(self, pool, cb_handler=None, daos_command=None):
-        """Create a TeestContainer object.
+        """Create a TestContainer object.
 
         Args:
             pool (TestPool): the test pool in which to create the container
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestContainer, self).__init__("/run/container/*", cb_handler)
+        super().__init__("/run/container/*", cb_handler)
         self.pool = pool
 
         self.object_qty = BasicParameter(None)
@@ -284,6 +266,7 @@ class TestContainer(TestDaosApiBase):
         self.oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
+        self.daos_timeout = BasicParameter(None)
 
         self.container = None
         self.uuid = None
@@ -301,9 +284,28 @@ class TestContainer(TestDaosApiBase):
         """
         if self.container is not None and self.uuid is not None:
             return str(self.uuid)
-        return super(TestContainer, self).__str__()
+        return super().__str__()
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Sets each BasicParameter object's value to the yaml key that matches
+        the assigned name of the BasicParameter object in this class. For
+        example, the self.block_size.value will be set to the value in the yaml
+        file with the key 'block_size'.
+
+        If no key matches are found in the yaml file the BasicParameter object
+        will be set to its default value.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super().get_params(test)
+        if self.daos:
+            self.daos.timeout = self.daos_timeout.value
 
     @fail_on(DaosApiError)
+    @fail_on(CommandFailure)
     def create(self, uuid=None, con_in=None, acl_file=None):
         """Create a container.
 
@@ -356,10 +358,11 @@ class TestContainer(TestDaosApiBase):
             self._log_method("daos.container_create", kwargs)
             uuid = self.daos.get_output("container_create", **kwargs)[0]
 
-            # Populte the empty DaosContainer object with the properties of the
+            # Populate the empty DaosContainer object with the properties of the
             # container created with daos container create.
             self.container.uuid = str_to_c_uuid(uuid)
             self.container.attached = 1
+            self.container.poh = self.pool.pool.handle
 
         elif self.control_method.value == self.USE_DAOS:
             self.log.error("Error: Undefined daos command")
@@ -373,8 +376,9 @@ class TestContainer(TestDaosApiBase):
         self.log.info("  Container created with uuid %s", self.uuid)
 
     @fail_on(DaosApiError)
+    @fail_on(CommandFailure)
     def create_snap(self, snap_name=None, epoch=None):
-        """Create Snapshot using daos utility
+        """Create Snapshot using daos utility.
 
         Args:
             snap_name (str, optional): Snapshot name. Defaults to None.
@@ -384,10 +388,10 @@ class TestContainer(TestDaosApiBase):
         if self.control_method.value == self.USE_DAOS and self.daos:
             # create snapshot using daos utility
             kwargs = {
-                "pool" : self.pool.uuid,
-                "cont" : self.uuid,
-                "snap_name" : snap_name,
-                "epoch" : epoch,
+                "pool": self.pool.uuid,
+                "cont": self.uuid,
+                "snap_name": snap_name,
+                "epoch": epoch,
                 "sys_name": self.pool.name.value
             }
             self._log_method("daos.container_create_snap", kwargs)
@@ -404,8 +408,9 @@ class TestContainer(TestDaosApiBase):
         self.epoch = data["epoch"]
 
     @fail_on(DaosApiError)
+    @fail_on(CommandFailure)
     def destroy_snap(self, snap_name=None, epc=None, epcrange=None):
-        """Destroy Snapshot using daos utility
+        """Destroy Snapshot using daos utility.
 
         Args:
             snap_name (str, optional): Snapshot name
@@ -420,10 +425,10 @@ class TestContainer(TestDaosApiBase):
         if self.control_method.value == self.USE_DAOS and self.daos:
             # destroy snapshot using daos utility
             kwargs = {
-                "pool" : self.pool.uuid,
-                "cont" : self.uuid,
-                "snap_name" : snap_name,
-                "epc" : epc,
+                "pool": self.pool.uuid,
+                "cont": self.uuid,
+                "snap_name": snap_name,
+                "epc": epc,
                 "epcrange": epcrange,
                 "sys_name": self.pool.name.value,
             }
@@ -491,6 +496,7 @@ class TestContainer(TestDaosApiBase):
         return False
 
     @fail_on(DaosApiError)
+    @fail_on(CommandFailure)
     def destroy(self, force=1):
         """Destroy the container.
 
@@ -586,7 +592,7 @@ class TestContainer(TestDaosApiBase):
              c_uuid_to_str(getattr(self.info, key))
              if key == "ci_uuid" else getattr(self.info, key),
              val)
-            for key, val in locals().items()
+            for key, val in list(locals().items())
             if key != "self" and val is not None]
         return self._check_info(checks)
 
@@ -692,13 +698,14 @@ class TestContainer(TestDaosApiBase):
         for data in self.written_data:
             try:
                 data.obj.get_layout()
-                # Convert the list of longs into a list of ints
+                # Convert the list of longs into a list of integers
                 target_rank_lists.append(
                     [int(rank) for rank in data.obj.tgt_rank_list])
             except DaosApiError as error:
                 raise DaosTestError(
                     "Error obtaining target rank list for object {} in "
-                    "container {}: {}".format(data.obj, self.uuid, error))
+                    "container {}: {}".format(
+                        data.obj, self.uuid, error)) from error
         if message is not None:
             self.log.info("Target rank lists%s:", message)
             for ranks in target_rank_lists:
@@ -747,9 +754,10 @@ class TestContainer(TestDaosApiBase):
                 txn = 0
                 try:
                     obj = self.written_data[index].obj
-                except IndexError:
+                except IndexError as error:
                     raise DaosTestError(
-                        "Invalid index {} for written data".format(index))
+                        "Invalid index {} for written data".format(
+                            index)) from error
 
                 # Close the object
                 self.log.info(
@@ -774,7 +782,7 @@ class TestContainer(TestDaosApiBase):
                 for record in self.written_data[index].records:
                     record["punched"] = True
 
-        # Retutrn the number of punched objects
+        # Return the number of punched objects
         return count
 
     def punch_records(self, indices, punch_dkey=True):
@@ -814,10 +822,10 @@ class TestContainer(TestDaosApiBase):
             for index in indices:
                 try:
                     rec = data.records[index]
-                except IndexError:
+                except IndexError as error:
                     raise DaosTestError(
                         "Invalid record index {} for object {}".format(
-                            index, data.obj))
+                            index, data.obj)) from error
 
                 # Punch the record
                 self.log.info(

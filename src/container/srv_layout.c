@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_cont: Container Server Storage Layout Definitions
@@ -30,13 +13,15 @@
 #include "srv_layout.h"
 
 /* Root KVS */
+RDB_STRING_KEY(ds_cont_prop_, version);
+RDB_STRING_KEY(ds_cont_prop_, cuuids);
 RDB_STRING_KEY(ds_cont_prop_, conts);
 RDB_STRING_KEY(ds_cont_prop_, cont_handles);
 
 /* Container properties KVS */
 RDB_STRING_KEY(ds_cont_prop_, ghce);
 RDB_STRING_KEY(ds_cont_prop_, ghpce);
-RDB_STRING_KEY(ds_cont_prop_, max_oid);
+RDB_STRING_KEY(ds_cont_prop_, alloced_oid);
 RDB_STRING_KEY(ds_cont_prop_, label);
 RDB_STRING_KEY(ds_cont_prop_, layout_type);
 RDB_STRING_KEY(ds_cont_prop_, layout_ver);
@@ -56,14 +41,20 @@ RDB_STRING_KEY(ds_cont_prop_, owner_group);
 RDB_STRING_KEY(ds_cont_prop_, lres);
 RDB_STRING_KEY(ds_cont_prop_, lhes);
 RDB_STRING_KEY(ds_cont_prop_, snapshots);
+RDB_STRING_KEY(ds_cont_prop_, co_status);
 RDB_STRING_KEY(ds_cont_attr_, user);
 RDB_STRING_KEY(ds_cont_prop_, handles);
+RDB_STRING_KEY(ds_cont_prop_, roots);
+RDB_STRING_KEY(ds_cont_prop_, ec_cell_sz);
+
+/* dummy value for container roots, avoid malloc on demand */
+static struct daos_prop_co_roots dummy_roots;
 
 /** default properties, should cover all optional container properties */
 struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	{
 		.dpe_type	= DAOS_PROP_CO_LABEL,
-		.dpe_str	= "container label not set",
+		.dpe_str	= "container_label_not_set",
 	}, {
 		.dpe_type	= DAOS_PROP_CO_LAYOUT_TYPE,
 		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKOWN,
@@ -81,10 +72,10 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_val	= DAOS_PROP_CO_CSUM_SV_OFF,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_FAC,
-		.dpe_val	= DAOS_PROP_CO_REDUN_RF1,
+		.dpe_val	= DAOS_PROP_CO_REDUN_RF0,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_LVL,
-		.dpe_val	= DAOS_PROP_CO_REDUN_RACK,
+		.dpe_val	= DAOS_PROP_CO_REDUN_RANK,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_SNAPSHOT_MAX,
 		.dpe_val	= 0, /* No limitation */
@@ -109,6 +100,19 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_CO_DEDUP_THRESHOLD,
 		.dpe_val	= 4096,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_ROOTS,
+		.dpe_val_ptr	= &dummy_roots, /* overwritten by middlewares */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_STATUS,
+		.dpe_val	= DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
+							  0, 0),
+	}, {
+		.dpe_type	= DAOS_PROP_CO_ALLOCED_OID,
+		.dpe_val	= 0,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_EC_CELL_SZ,
+		.dpe_val	= 0, /* inherit from pool by default */
 	}
 };
 

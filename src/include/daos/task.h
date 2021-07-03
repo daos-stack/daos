@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -39,11 +22,8 @@ struct daos_task_args {
 	uint32_t			ta_opc;
 	union {
 		/** Management */
-		daos_svc_rip_t		svc_rip;
 		daos_pool_create_t	pool_create;
 		daos_pool_destroy_t	pool_destroy;
-		daos_pool_extend_t	pool_extend;
-		daos_pool_evict_t	pool_evict;
 		daos_set_params_t	mgmt_set_params;
 		daos_pool_replicas_t	pool_add_replicas;
 		daos_pool_replicas_t	pool_remove_replicas;
@@ -60,6 +40,7 @@ struct daos_task_args {
 		daos_pool_get_attr_t	pool_get_attr;
 		daos_pool_set_attr_t	pool_set_attr;
 		daos_pool_stop_svc_t	pool_stop_svc;
+		daos_pool_list_cont_t	pool_list_cont;
 
 		/** Container */
 		daos_cont_create_t	cont_create;
@@ -229,8 +210,8 @@ int
 dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t api_flags,
 			 daos_key_t *dkey, uint32_t nr, uint32_t extra_flags,
 			 daos_iod_t *iods, d_sg_list_t *sgls, daos_iom_t *ioms,
-			 void *extra_arg, daos_event_t *ev, tse_sched_t *tse,
-			 tse_task_t **task);
+			 void *extra_arg, d_iov_t *csum, daos_event_t *ev,
+			 tse_sched_t *tse, tse_task_t **task);
 int
 dc_obj_update_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 			  daos_key_t *dkey, unsigned int nr,

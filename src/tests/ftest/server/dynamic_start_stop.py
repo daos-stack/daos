@@ -1,27 +1,9 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import json
 from apricot import TestWithServers
 
 
@@ -37,7 +19,7 @@ class DynamicStartStop(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DynamicStartStop object."""
-        super(DynamicStartStop, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg_cmd = None
         self.stopped_ranks = set()
 
@@ -48,23 +30,40 @@ class DynamicStartStop(TestWithServers):
         rank is in self.stopped_ranks, verify that its status is Stopped.
         Otherwise, Joined.
         """
-        output = self.dmg_cmd.system_query().stdout
-        data = json.loads(output)
-        members = data["response"]["Members"]
-        for member in members:
-            if member["Rank"] in self.stopped_ranks:
+        output = self.dmg_cmd.system_query()
+        for member in output["response"]["members"]:
+            if member["rank"] in self.stopped_ranks:
+                self.assertIn(
+                    member["state"], ["stopped", "excluded"],
+                    "State isn't stopped! Actual: {}".format(member["state"]))
                 self.assertEqual(
-                    member["State"],
-                    self.dmg_cmd.SYSTEM_QUERY_STATES["STOPPED"],
-                    "State isn't Stopped! Actual: {}".format(member["State"]))
-                self.assertEqual(
-                    member["Info"], "system stop",
+                    member["info"], "system stop",
                     "Info (Reason) isn't system stop! Actual: {}".format(
-                        member["Info"]))
+                        member["info"]))
             else:
                 self.assertEqual(
-                    member["State"], self.dmg_cmd.SYSTEM_QUERY_STATES["JOINED"],
-                    "State isn't Joined! Actual: {}".format(member["State"]))
+                    member["state"], "joined",
+                    "State isn't joined! Actual: {}".format(member["state"]))
+
+    def stop_server_ranks(self, ranks):
+        """Stop one or more server ranks.
+
+        Args:
+            ranks (list): [description]
+        """
+        # Stop the requested server ranks
+        ranks_str = ",".join([str(rank) for rank in ranks])
+        self.dmg_cmd.system_stop(ranks=ranks_str)
+
+        # Mark which ranks are now stopped
+        for manager in self.server_managers:
+            manager.update_expected_states(ranks, ["stopped", "excluded"])
+        for rank in ranks:
+            self.stopped_ranks.add(rank)
+
+        # Verify that the State of the stopped servers is Stopped and Reason is
+        # system stop.
+        self.verify_system_query()
 
     def test_dynamic_server_addition(self):
         """JIRA ID: DAOS-3598
@@ -93,29 +92,13 @@ class DynamicStartStop(TestWithServers):
         self.verify_system_query()
 
         # Stop one of the added servers - Single stop.
-        self.dmg_cmd.system_stop(ranks="4")
-
-        # Verify that the State of the stopped server is Stopped and Reason is
-        # system stop.
-        self.stopped_ranks.add(4)
-        self.verify_system_query()
+        self.stop_server_ranks([4])
 
         # Stop two of the added servers - Multiple stop.
-        self.dmg_cmd.system_stop(ranks="2,3")
-
-        # Verify that the State of the stopped servers is Stopped and Reason is
-        # system stop.
-        self.stopped_ranks.add(2)
-        self.stopped_ranks.add(3)
-        self.verify_system_query()
+        self.stop_server_ranks([2, 3])
 
         # Stop one of the original servers.
-        self.dmg_cmd.system_stop(ranks="1")
-
-        # Verify that the State of the stopped servers is Stopped and Reason is
-        # system stop.
-        self.stopped_ranks.add(1)
-        self.verify_system_query()
+        self.stop_server_ranks([1])
 
         # Stopping newly added server and destroy pool causes -1006. DAOS-5606
         self.pool = None

@@ -1,31 +1,14 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
-  (C) Copyright 2017-2020 Intel Corporation.
+  (C) Copyright 2017-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 from apricot import TestWithServers
 import check_for_pool
 
-RESULT_PASS = "PASS"
+RESULT_PASS = "PASS" # nosec
 RESULT_FAIL = "FAIL"
 
 
@@ -45,7 +28,10 @@ class MultiServerCreateDeleteTest(TestWithServers):
 
         Destroy the pool and verify that the directory is deleted.
 
-        :avocado: tags=all,pool,full_regression,small,multitarget
+        :avocado: tags=all,full_regression
+        :avocado: tags=small
+        :avocado: tags=pool,multitarget
+        :avocado: tags=multiserver_create_delete
         """
         # Create a dmg command object
         dmg = self.get_dmg_command()
@@ -66,11 +52,6 @@ class MultiServerCreateDeleteTest(TestWithServers):
         group = os.getlogin() if grouplist[0] == 'valid' else grouplist[0]
         expected_for_param.append(grouplist[1])
 
-        systemnamelist = self.params.get(
-            "systemname", '/run/tests/systemnames/*')
-        system_name = systemnamelist[0]
-        expected_for_param.append(systemnamelist[1])
-
         tgtlistlist = self.params.get("tgt", '/run/tests/tgtlist/*')
         tgtlist = tgtlistlist[0]
         expected_for_param.append(tgtlistlist[1])
@@ -84,7 +65,7 @@ class MultiServerCreateDeleteTest(TestWithServers):
         host2 = self.hostlist_servers[1]
         test_destroy = True
         data = dmg.pool_create(
-            "1GB", user, group, None, tgtlist, None, system_name)
+            "1GB", user, group, None, tgtlist, None)
         if dmg.result.exit_status == 0:
             if expected_result == RESULT_FAIL:
                 self.fail(

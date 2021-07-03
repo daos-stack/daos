@@ -62,6 +62,10 @@ struct  _Mgmt__GetACLReq
 {
   ProtobufCMessage base;
   /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
    * Target UUID
    */
   char *uuid;
@@ -73,7 +77,7 @@ struct  _Mgmt__GetACLReq
 };
 #define MGMT__GET_ACLREQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_aclreq__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*
@@ -83,6 +87,10 @@ struct  _Mgmt__GetACLReq
 struct  _Mgmt__ModifyACLReq
 {
   ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
   /*
    * Target UUID
    */
@@ -100,7 +108,7 @@ struct  _Mgmt__ModifyACLReq
 };
 #define MGMT__MODIFY_ACLREQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__modify_aclreq__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
 
 
 /*
@@ -109,6 +117,10 @@ struct  _Mgmt__ModifyACLReq
 struct  _Mgmt__DeleteACLReq
 {
   ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
   /*
    * Target UUID
    */
@@ -125,7 +137,7 @@ struct  _Mgmt__DeleteACLReq
 };
 #define MGMT__DELETE_ACLREQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__delete_aclreq__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /* Mgmt__ACLResp methods */

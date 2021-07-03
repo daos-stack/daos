@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rdb: Utilities
@@ -30,7 +13,7 @@
 
 #include <daos_types.h>
 #include <daos_api.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include "rdb_internal.h"
 
@@ -189,7 +172,7 @@ rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 	if ((oid & RDB_OID_CLASS_MASK) != RDB_OID_CLASS_GENERIC)
 		feat = DAOS_OF_AKEY_UINT64;
 
-	daos_obj_generate_id(&uoid->id_pub, feat, 0 /* cid */, 0);
+	daos_obj_set_oid(&uoid->id_pub, feat, 0 /* cid */, 0);
 }
 
 void
@@ -249,6 +232,7 @@ rdb_vos_set_iods(enum rdb_vos_op op, int n, d_iov_t akeys[],
 		iods[i].iod_name = akeys[i];
 		iods[i].iod_type = DAOS_IOD_SINGLE;
 		iods[i].iod_size = 0;
+		iods[i].iod_flags = 0;
 		iods[i].iod_recxs = NULL;
 		if (op == RDB_VOS_UPDATE) {
 			D_ASSERT(values[i].iov_len > 0);
@@ -342,7 +326,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	if (rc != 0)
 		return rc;
 
-	rc = bio_iod_prep(vos_ioh2desc(io));
+	rc = bio_iod_prep(vos_ioh2desc(io), BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc) {
 		D_ERROR("prep io descriptor error:"DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -373,7 +357,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	rc = bio_iod_post(vos_ioh2desc(io));
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 out:
-	rc = vos_fetch_end(io, 0 /* err */);
+	rc = vos_fetch_end(io, NULL, 0 /* err */);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	return rdb_vos_fetch_check(value, &value_orig);
@@ -557,7 +541,7 @@ rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 	epr.epr_lo = 0;
 	epr.epr_hi = high;
 
-	return vos_aggregate(cont, &epr, NULL, NULL, NULL);
+	return vos_aggregate(cont, &epr, NULL, NULL, NULL, true);
 }
 
 /* Return amount of vos pool SCM memory available accounting for

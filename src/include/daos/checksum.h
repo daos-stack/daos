@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_CHECKSUM_H
@@ -32,6 +15,33 @@
 
 #define	CSUM_NO_CHUNK -1
 
+/*
+ * Tag used in debug logs to easily find important checksum info, making it
+ * easier to trace checksums through the log files
+ */
+#define CSTAG "[CSUM]"
+
+#define DF_C_IOD CSTAG"IOD {akey: "DF_KEY", type: %s, nr: %d, size: %lu} CSUM"
+#define DP_C_IOD(i) DP_KEY(&(i)->iod_name), \
+	(i)->iod_type == DAOS_IOD_SINGLE ? "SINGLE" : \
+	(i)->iod_type == DAOS_IOD_ARRAY ? "ARRAY" : "UNKNOWN", \
+	(i)->iod_nr, (i)->iod_size
+
+#define DF_C_UOID_DKEY CSTAG"OBJ ("DF_UOID", "DF_KEY")"
+#define DP_C_UOID_DKEY(oid, dkey) DP_UOID(oid), DP_KEY(dkey)
+
+#define DF_C_OID_DKEY CSTAG"OBJ ("DF_OID", "DF_KEY")"
+#define DP_C_OID_DKEY(oid, dkey) DP_OID(oid), DP_KEY(dkey)
+
+#define DF_LAYOUT "{bytes: %lu, nr: %d, even_dist: %s, cell_align: %s}"
+#define DP_LAYOUT(l) (l).cs_bytes, (l).cs_nr, DP_BOOL((l).cs_even_dist), \
+			DP_BOOL((l).cs_cell_align)
+#define	DF_CI_BUF "%"PRIu64
+#define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
+#define	DF_CI "{nr: %d, len: %d, first_csum: %lu, csum_buf_len: %d}"
+#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci), (ci).cs_buf_len
+#define DF_RANGE "{lo: %lu, hi: %lu, nr: %lu}"
+#define DP_RANGE(r) (r).dcr_lo, (r).dcr_hi, (r).dcr_nr
 /**
  * -----------------------------------------------------------
  * DAOS Checksummer
@@ -98,6 +108,7 @@ struct daos_csummer {
 	bool		 dcs_skip_key_calc;
 	bool		 dcs_skip_key_verify;
 	bool		 dcs_skip_data_verify;
+	pthread_mutex_t	 dcs_lock;
 };
 
 /**
@@ -105,6 +116,7 @@ struct daos_csummer {
  * daos_csummer Functions
  * -----------------------------------------------------------------------------
  */
+
 /**
  * Initialize the daos_csummer
  *
@@ -151,6 +163,17 @@ daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_HASH_TYPE type,
  */
 int
 daos_csummer_init_with_props(struct daos_csummer **obj, daos_prop_t *props);
+
+/**
+ * Initialize the daos_csummer using information that's packed into the iov
+ * @param obj		daos_csummer to be initialized. Memory will be allocated
+ *			for it.
+ * @param csums_iov	iov that has csum_info structures in it.
+ * @return
+ */
+int
+daos_csummer_csum_init_with_packed(struct daos_csummer **csummer,
+				   const d_iov_t *csums_iov);
 
 /**
  * Initialize a daos_csummer as a copy of an existing daos_csummer
@@ -361,7 +384,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  *				distributed to multiple targets. When it is NULL
  *				it means replica object, or EC object located
  *				in single target.
- * @param[out]	p_iods_csums	pointer that will reference the
+ * @param[out]	p_cds		pointer that will reference the
  *				the memory allocated
  * @return			number of iod_csums allocated, or
  *				negative if error
@@ -370,7 +393,25 @@ int
 daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			      uint32_t nr, bool akey_only,
 			      struct dcs_layout *singv_los,
-			      struct dcs_iod_csums **p_iods_csums);
+			      struct dcs_iod_csums **p_cds);
+
+/**
+ * Using the information from the iods and csums packed into the csum_iov
+ * allocate the memory for iod_csums structures and populate it appropriately
+ *
+ * @param iods_csums[out]		structure that will be allocated and
+ *					populated
+ * @param iods[in]			list of iod structures
+ * @param iod_cnt[in]			Number of iods
+ * @param csum_iov[in]			packed csum infos
+ * @param csummer			csummer
+ * @return
+ */
+int
+daos_csummer_alloc_iods_csums_with_packed(struct daos_csummer *csummer,
+					  daos_iod_t *iods, int iod_cnt,
+					  d_iov_t *csum_iov,
+					  struct dcs_iod_csums **iods_csums);
 
 /** Destroy the iods csums */
 void
@@ -407,6 +448,13 @@ ci_set(struct dcs_csum_info *csum_buf, void *buf, uint32_t csum_buf_size,
 	uint16_t csum_size, uint32_t csum_count, uint32_t chunksize,
 	uint16_t type);
 
+/**
+ * Setup the daos_csum_info with an existing daos_csum_info. This is not a copy,
+ * meaning that the same csum buf from the source is used in the destination.
+ */
+void
+ci_set_from_ci(struct dcs_csum_info *csum_buf, struct dcs_csum_info *csum2copy);
+
 /** Set the csum buf to a NULL value */
 void
 ci_set_null(struct dcs_csum_info *csum_buf);
@@ -441,10 +489,6 @@ ci_buf2uint64(const uint8_t *buf, uint16_t len);
 uint64_t
 ci2csum(struct dcs_csum_info ci);
 
-#define	DF_CI_BUF "%"PRIu64
-#define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
-#define	DF_CI "{nr: %d, len: %d, first_csum: %lu, csum_buf_len: %d}"
-#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci), (ci).cs_buf_len
 
 /**
  * return the number of bytes needed to serialize a dcs_csum_info into a
@@ -495,9 +539,11 @@ static inline bool
 csum_iod_is_supported(daos_iod_t *iod)
 {
 	/**
-	 * iod_size must be greater than 1
+	 * Needs to have something to actually checksum
+	 * iod_size must be greater than 1 and have records if it's an array
 	 */
-	return iod->iod_size > 0;
+	return iod->iod_size > 0 &&
+	       !(iod->iod_type == DAOS_IOD_ARRAY && iod->iod_nr == 0);
 }
 
 /**

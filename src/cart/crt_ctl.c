@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the server side of the cart_ctl
@@ -200,6 +183,8 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 	uint32_t			 addr_buf_len;
 	int				 count;
 	struct crt_context		*ctx = NULL;
+	d_list_t			*ctx_list;
+	int				 provider;
 	int				 rc = 0;
 
 	D_ASSERTF(crt_is_service(), "Must be called in a service process\n");
@@ -215,9 +200,15 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 	addr_buf_len = 0;
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
-	out_args->cel_ctx_num = crt_gdata.cg_ctx_num;
 
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
+	/* TODO: Need to derive provider from rpc struct */
+	provider = crt_gdata.cg_init_prov;
+
+	ctx_list = crt_provider_get_ctx_list(provider);
+
+	out_args->cel_ctx_num = crt_provider_get_cur_ctx_num(provider);
+
+	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		str_size = CRT_ADDR_STR_MAX_LEN;
 
 		D_MUTEX_LOCK(&ctx->cc_mutex);
@@ -240,7 +231,7 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 
 	count = 0;
 
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
+	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		str_size = CRT_ADDR_STR_MAX_LEN;
 		rc = 0;
 

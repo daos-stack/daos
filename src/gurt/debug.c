@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of gurt, it implements the debug subsystem based on clog.
@@ -145,7 +128,7 @@ d_log_dbg_bit_dealloc(char *name)
 				d->db_lname = NULL;
 				d->db_name_size = 0;
 				d->db_lname_size = 0;
-				*(d->db_bit) = 0;
+				*d->db_bit = 0;
 
 				D_ASSERT(d_dbglog_data.dbg_bit_cnt > 0);
 				d_dbglog_data.dbg_bit_cnt--;
@@ -214,16 +197,16 @@ d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname)
 		d = &d_dbg_bit_dict[i];
 		if (d->db_name != NULL) {
 			if (strncasecmp(d->db_name, name, name_sz) == 0) {
-				if (*(d->db_bit) == 0) {
+				if (*d->db_bit == 0) {
 					/* DB_ALL = DLOG_DBG */
 					if (strncasecmp(name, DB_ALL_BITS,
 							name_sz) == 0)
 						*dbgbit = DLOG_DBG;
 					else
 						*dbgbit = bit;
-					*(d->db_bit) = bit;
+					*d->db_bit = bit;
 				} else /* debug bit already assigned */
-					*dbgbit = *(d->db_bit);
+					*dbgbit = *d->db_bit;
 				return 0;
 			}
 		/* Allocate configurable debug bit along with name */
@@ -232,7 +215,7 @@ d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname)
 			d->db_lname = lname;
 			d->db_name_size = name_sz;
 			d->db_lname_size = lname_sz;
-			*(d->db_bit) = bit;
+			*d->db_bit = bit;
 
 			*dbgbit = bit;
 			return 0;
@@ -308,13 +291,13 @@ debug_mask_load(const char *mask_name)
 			if (d->db_name != NULL &&
 			    strncasecmp(cur, d->db_name,
 					d->db_name_size) == 0) {
-				d_dbglog_data.dd_mask |= *(d->db_bit);
+				d_dbglog_data.dd_mask |= *d->db_bit;
 				break;
 			}
 			if (d->db_lname != NULL &&
 			    strncasecmp(cur, d->db_lname,
 					d->db_lname_size) == 0) {
-				d_dbglog_data.dd_mask |= *(d->db_bit);
+				d_dbglog_data.dd_mask |= *d->db_bit;
 				break;
 			}
 		}
@@ -441,8 +424,10 @@ d_log_sync_mask(void)
 
 	/* load facility mask environment (D_LOG_MASK) */
 	log_mask = getenv(D_LOG_MASK_ENV);
-	if (log_mask != NULL)
+	if (log_mask != NULL) {
+		/* Prevent checkpatch warning */
 		d_log_setmasks(log_mask, -1);
+	}
 
 	D_MUTEX_UNLOCK(&d_log_lock);
 }
@@ -478,7 +463,7 @@ cleanup_dbg_namebit(void)
 			 */
 			if (strncasecmp(d->db_name, DB_ALL_BITS,
 					d->db_name_size) != 0) {
-				*(d->db_bit) = 0;
+				*d->db_bit = 0;
 
 				D_ASSERT(d_dbglog_data.dbg_bit_cnt > 0);
 				d_dbglog_data.dbg_bit_cnt--;
@@ -486,7 +471,6 @@ cleanup_dbg_namebit(void)
 		}
 	}
 }
-
 
 /**
  * Setup the debug names and mask bits.
@@ -515,7 +499,7 @@ setup_dbg_namebit(void)
 				return -DER_UNINIT;
 			}
 
-			*(d->db_bit) = allocd_dbg_bit;
+			*d->db_bit = allocd_dbg_bit;
 		}
 	}
 
@@ -524,7 +508,7 @@ setup_dbg_namebit(void)
 
 int
 d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
-		 d_dbug_t def_mask, d_dbug_t err_mask)
+	       d_dbug_t def_mask, d_dbug_t err_mask, d_log_id_cb_t id_cb)
 {
 	int rc = 0;
 
@@ -540,7 +524,8 @@ d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 	if (d_dbglog_data.dd_prio_err != 0)
 		err_mask = d_dbglog_data.dd_prio_err;
 
-	rc = d_log_open(log_tag, 0, def_mask, err_mask, log_file, flavor);
+	rc = d_log_open(log_tag, 0, def_mask, err_mask, log_file, flavor,
+			id_cb);
 	if (rc != 0) {
 		D_PRINT_ERR("d_log_open failed: %d\n", rc);
 		D_GOTO(out, rc = -DER_UNINIT);
@@ -575,7 +560,8 @@ d_log_init(void)
 		log_file = NULL;
 	}
 
-	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG);
+	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG,
+			    NULL);
 	if (rc != DER_SUCCESS) {
 		D_PRINT_ERR("d_log_init_adv failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
@@ -622,7 +608,7 @@ int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname)
 		d = &d_dbg_bit_dict[i];
 		if (d->db_name != NULL &&
 		    strncasecmp(bitname, d->db_name, d->db_name_size) == 0) {
-			*dbgbit = *(d->db_bit);
+			*dbgbit = *d->db_bit;
 			return 0;
 		}
 	}
@@ -631,7 +617,7 @@ int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname)
 }
 
 int d_register_alt_assert(void (*alt_assert)(const int, const char*,
-			  const char*, const int))
+					     const char*, const int))
 {
 	if (alt_assert != NULL) {
 		d_alt_assert = alt_assert;

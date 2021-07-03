@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #define D_LOGFAC	DD_FAC(csum)
@@ -110,6 +93,44 @@ deflate_decompress(void *daos_dc_ctx, uint8_t *src, size_t src_len,
 		dst, dst_len, produced, DIR_DECOMPRESS);
 }
 
+static int
+deflate_compress_async(void *daos_dc_ctx, uint8_t *src, size_t src_len,
+		       uint8_t *dst, size_t dst_len,
+		       dc_callback_fn cb_fn, void *cb_data)
+{
+	struct deflate_ctx *ctx = daos_dc_ctx;
+
+	return qat_dc_compress_async(
+		&ctx->dc_inst_hdl,
+		&ctx->session_hdl,
+		src, src_len,
+		dst, dst_len, DIR_COMPRESS,
+		cb_fn, cb_data);
+}
+
+static int
+deflate_decompress_async(void *daos_dc_ctx, uint8_t *src, size_t src_len,
+			 uint8_t *dst, size_t dst_len,
+			 dc_callback_fn cb_fn, void *cb_data)
+{
+	struct deflate_ctx *ctx = daos_dc_ctx;
+
+	return qat_dc_compress_async(
+		&ctx->dc_inst_hdl,
+		&ctx->session_hdl,
+		src, src_len,
+		dst, dst_len, DIR_DECOMPRESS,
+		cb_fn, cb_data);
+}
+
+static int
+deflate_poll_response(void *daos_dc_ctx)
+{
+	struct deflate_ctx *ctx = daos_dc_ctx;
+
+	return qat_dc_poll_response(&ctx->dc_inst_hdl);
+}
+
 static void
 deflate_destroy(void *daos_dc_ctx)
 {
@@ -134,6 +155,9 @@ struct compress_ft qat_deflate_algo = {
 	.cf_init = deflate_init,
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
+	.cf_compress_async = deflate_compress_async,
+	.cf_decompress_async = deflate_decompress_async,
+	.cf_poll_response = deflate_poll_response,
 	.cf_destroy = deflate_destroy,
 	.cf_available = is_available,
 	.cf_level = 1,
@@ -145,6 +169,9 @@ struct compress_ft qat_deflate1_algo = {
 	.cf_init = deflate_init,
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
+	.cf_compress_async = deflate_compress_async,
+	.cf_decompress_async = deflate_decompress_async,
+	.cf_poll_response = deflate_poll_response,
 	.cf_destroy = deflate_destroy,
 	.cf_available = is_available,
 	.cf_level = 1,
@@ -156,6 +183,9 @@ struct compress_ft qat_deflate2_algo = {
 	.cf_init = deflate_init,
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
+	.cf_compress_async = deflate_compress_async,
+	.cf_decompress_async = deflate_decompress_async,
+	.cf_poll_response = deflate_poll_response,
 	.cf_destroy = deflate_destroy,
 	.cf_available = is_available,
 	.cf_level = 2,
@@ -167,6 +197,9 @@ struct compress_ft qat_deflate3_algo = {
 	.cf_init = deflate_init,
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
+	.cf_compress_async = deflate_compress_async,
+	.cf_decompress_async = deflate_decompress_async,
+	.cf_poll_response = deflate_poll_response,
 	.cf_destroy = deflate_destroy,
 	.cf_available = is_available,
 	.cf_level = 3,
@@ -178,6 +211,9 @@ struct compress_ft qat_deflate4_algo = {
 	.cf_init = deflate_init,
 	.cf_compress = deflate_compress,
 	.cf_decompress = deflate_decompress,
+	.cf_compress_async = deflate_compress_async,
+	.cf_decompress_async = deflate_decompress_async,
+	.cf_poll_response = deflate_poll_response,
 	.cf_destroy = deflate_destroy,
 	.cf_available = is_available,
 	.cf_level = 4,

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is for testing DAOS event queue
@@ -142,7 +125,7 @@ eq_test_2()
 	DAOS_TEST_ENTRY("2", "Event Query & Poll");
 
 	for (i = 0; i < EQT_EV_COUNT; i++) {
-		events[i] = malloc(sizeof(*events[i]));
+		D_ALLOC_PTR_NZ(events[i]);
 		if (events[i] == NULL) {
 			rc = -ENOMEM;
 			goto out;
@@ -229,7 +212,7 @@ out:
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		if (events[i] != NULL) {
 			daos_event_fini(events[i]);
-			free(events[i]);
+			D_FREE(events[i]);
 		}
 	}
 	DAOS_TEST_EXIT(rc);
@@ -255,7 +238,7 @@ eq_test_3()
 
 	print_message("Initialize & launch child events");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
-		child_events[i] = malloc(sizeof(*child_events[i]));
+		D_ALLOC_PTR_NZ(child_events[i]);
 		if (child_events[i] == NULL) {
 			rc = -ENOMEM;
 			goto out;
@@ -399,7 +382,7 @@ eq_test_3()
 out_free:
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		if (child_events[i] != NULL) {
-			free(child_events[i]);
+			D_FREE(child_events[i]);
 		}
 	}
 out:
@@ -485,14 +468,14 @@ do {								\
 static void *
 eq_test_consumer(void *arg)
 {
-	struct daos_event	**evpps;
+	struct daos_event	**evpps = NULL;
 	struct timeval		then;
 	int			total;
 	int			rc = 0;
 
 	EQ_TEST_BARRIER("EQ Consumer started\n", out);
 
-	evpps = malloc(EQT_EV_COUNT * sizeof(*evpps));
+	D_ALLOC_ARRAY_NZ(evpps, EQT_EV_COUNT);
 	if (evpps == NULL) {
 		rc = ENOMEM;
 		goto out;
@@ -547,6 +530,7 @@ eq_test_consumer(void *arg)
 	rc = 0;
 	EQ_TEST_BARRIER("\tConsumer get all events\n", out);
 out:
+	D_FREE(evpps);
 	EQ_TEST_DONE(rc);
 	pthread_exit((void *)0);
 }
@@ -563,12 +547,14 @@ eq_test_4()
 	DAOS_TEST_ENTRY("4", "Producer & Consumer");
 
 	for (i = 0; i < EQT_EV_COUNT * 3; i++) {
-		events[i] = malloc(sizeof(*events[i]));
+		D_ALLOC_PTR_NZ(events[i]);
 		if (events[i] == NULL) {
 			rc = -ENOMEM;
-			goto out;
+			goto free;
 		}
-		daos_event_init(events[i], my_eqh, NULL);
+		rc = daos_event_init(events[i], my_eqh, NULL);
+		if (rc != 0)
+			goto free;
 	}
 
 	pthread_cond_init(&epc_data.epc_cond, NULL);
@@ -638,17 +624,21 @@ eq_test_4()
 	EQ_TEST_BARRIER("\tProducer is waiting for EQ draining\n", out);
 	EQ_TEST_CHECK_EMPTY(my_eqh, rc, out);
 
+	rc = pthread_join(thread, NULL);
+	if (rc != 0)
+		printf("Failed to join consumer thread\n");
+
 out:
 	EQ_TEST_DONE(rc);
 	DAOS_TEST_EXIT(rc);
 
 	D_MUTEX_DESTROY(&epc_data.epc_mutex);
 	pthread_cond_destroy(&epc_data.epc_cond);
-
+free:
 	for (i = 0; i < EQT_EV_COUNT * 3; i++) {
 		if (events[i] != NULL) {
 			daos_event_fini(events[i]);
-			free(events[i]);
+			D_FREE(events[i]);
 		}
 	}
 
@@ -667,7 +657,7 @@ eq_test_5()
 	DAOS_TEST_ENTRY("5", "Event Test & Poll");
 
 	for (i = 0; i < EQT_EV_COUNT; i++) {
-		events[i] = malloc(sizeof(*events[i]));
+		D_ALLOC_PTR_NZ(events[i]);
 		if (events[i] == NULL) {
 			rc = -ENOMEM;
 			goto out;
@@ -763,7 +753,7 @@ out:
 				daos_event_complete(events[i], 0);
 				rc = daos_event_fini(events[i]);
 			}
-			free(events[i]);
+			D_FREE(events[i]);
 		}
 	}
 	DAOS_TEST_EXIT(rc);
@@ -791,7 +781,7 @@ eq_test_6()
 		}
 
 		for (j = 0; j < EQT_EV_COUNT; j++) {
-			events[i][j] = malloc(sizeof(*events[i][j]));
+			D_ALLOC_PTR_NZ(events[i][j]);
 			if (events[i][j] == NULL) {
 				rc = -ENOMEM;
 				goto out_eq;
@@ -880,7 +870,7 @@ out_ev:
 					daos_event_complete(events[i][j], 0);
 					rc = daos_event_fini(events[i][j]);
 				}
-				free(events[i][j]);
+				D_FREE(events[i][j]);
 			}
 		}
 	}
@@ -905,10 +895,10 @@ eq_test_7()
 
 	print_message("Initialize & launch parent and child events.\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
-		events[i] = malloc(sizeof(*events[i]));
+		D_ALLOC_PTR_NZ(events[i]);
 		if (events[i] == NULL)
 			return -ENOMEM;
-		child_events[i] = malloc(sizeof(*child_events[i]));
+		D_ALLOC_PTR_NZ(child_events[i]);
 		if (child_events[i] == NULL)
 			return -ENOMEM;
 
@@ -978,11 +968,11 @@ out_free:
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		if (child_events[i] != NULL) {
 			daos_event_fini(child_events[i]);
-			free(child_events[i]);
+			D_FREE(child_events[i]);
 		}
 		if (events[i] != NULL) {
 			daos_event_fini(events[i]);
-			free(events[i]);
+			D_FREE(events[i]);
 		}
 	}
 	DAOS_TEST_EXIT(rc);
@@ -1005,7 +995,7 @@ eq_test_8()
 {
 	struct daos_event	*ep;
 	struct daos_event	ev;
-	int			*udata;
+	int			*udata = NULL;
 	int			rc = 0;
 
 	DAOS_TEST_ENTRY("8", "Event Completion Callback");
@@ -1048,6 +1038,7 @@ eq_test_8()
 
 	daos_event_fini(&ev);
 out:
+	D_FREE(udata);
 	DAOS_TEST_EXIT(rc);
 	return rc;
 }

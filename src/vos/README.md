@@ -23,9 +23,11 @@ This document contains the following sections:
     - <a href="#724">Internal Data Structures</a>
 - <a href="#73">Key Array Stores</a>
 - <a href="#82">Conditional Update and MVCC</a>
-    - <a href="#821">Read Timestamps</a>
-    - <a href="#822">Write Timestamps</a>
-    - <a href="#823">MVCC Rules</a>
+    - <a href="#821">VOS Timestamp Cache</a>
+    - <a href="#822">Read Timestamps</a>
+    - <a href="#823">Write Timestamps</a>
+    - <a href="#824">MVCC Rules</a>
+    - <a href="#825">Punch Propagation</a>
 - <a href="#74">Epoch Based Operations</a>
     - <a href="#741">VOS Discard</a>
     - <a href="#742">VOS Aggregate</a>
@@ -446,38 +448,57 @@ following operations are supported:
 These operations provide atomic operations enabling certain use cases that
 require such.  Conditional operations are implemented using a combination of
 existence checks and read timestamps.   The read timestamps enable limited
-MVCC to prevent read/write races and provide atomicity guarantees.
+MVCC to prevent read/write races and provide serializability guarantees.
 
-<a id="821"></a>
-### Read Timestamps
+<a id="821"><a>
+### VOS Timestamp Cache
 
-VOS tracks multiple read timestamps for containers, objects, dkeys, and akeys
-for the express purpose of supporting conditional operations and
-distributed transactions from individual clients.  These timestamps are
-allocated from an array for each type using an LRU algorithm.  Each entry
-is associated with the runtime location of the corresponding metadata
-for the container, object, dkey, or akey.
+VOS maintains an in-memory cache of read and write timestamps in order to
+enforce MVCC semantics.  The timestamp cache itself consists of two parts:
 
-For example, when a key is accessed, it is looked up by the stored
-index.  If it's still in cache, the timestamps are used.   If it isn't
-in cache, or upon creation, it is pulled into cache by evicting the LRU
-entry for the type.   This provides an O(1) lookup for timestamps
-associated with each entity.  Two read timestamps for each entity: 1. A low
-timestamp (entity.low) indicating that _all_ nodes in the subtree rooted at the
-entity have been read at entity.low and 2. A high timestamp (entity.high)
-indicating that _at least_ one node in the subtree rooted at the entity has
-been read at entity.high. For any leaf node (i.e., akey), low == high; for any
-non-leaf node, low <= high.
-
-For some operations, the actual entity does not exist so there is nothing
-in the VOS trees with which to associate the timestamp. A global, per-type array
-is used to associate timestamps with such non-existent entries.  Each entry in
-the negative cache is indexed by a hash of the key or oid as well as the index
-of the parent entry in the negative cache.  This approach balances
-performance and accuracy to avoid most, but not all, false conflicts on common
-operations such as conditional updates on a non-existent entry.
+1. Negative entry cache. A global array per target for each type of entity
+including objects, dkeys, and akeys.  The index at each level is determined by
+the combination of the index of the parent entity, or 0 in the case of
+containers, and the hash of the entity in question.   If two different keys map
+to the same index, they share timestamp entries.   This will result in some
+false conflicts but does not affect correctness so long as progress can be made.
+The purpose of this array is to store timestamps for entries that do not exist
+in the VOS tree.   Once an entry is created, it will use the mechanism described
+in #2 below.  Note that multiple pools in the same target use this shared
+cache so it is also possible for false conflicts across pools before an
+entity exists.  These entries are initialized at startup using the global
+time of the starting server.   This ensures that any updates at an earlier
+time are forced to restart to ensure we maintain automicity since timestamp
+data is lost when a server goes down.
+2. Positive entry cache. An LRU cache per target for existing containers,
+objects, dkeys, and akeys.  One LRU array is used for each level such that
+containers, objects, dkeys, and akeys only conflict with cache entries of the
+same type.  Some accuracy is lost when existing items are evicted from the cache
+as the values will be merged with the corresponding negative entry described in
+#1 above until such time as the entry is brought back into cache.   The index of
+the cached entry is stored in the VOS tree though it is only valid at runtime.
+On server restarts, the LRU cache is initialized from the global time when the
+restart occurs and all entries are automatically invalidated.  When a new entry
+is brought into the LRU, it is initialized using the corresponding negative
+entry.  The index of the LRU entry is stored in the VOS tree providing O(1)
+lookup on subsequent accesses.
 
 <a id="822"></a>
+### Read Timestamps
+
+Each entry in the timestamp cache contains two read timestamps in order to
+provide serializability guarantees for DAOS operations.  These timestamps are
+
+1. A low timestamp (entity.low) indicating that _all_ nodes in the subtree
+rooted at the entity have been read at entity.low
+2. A high timestamp (entity.high) indicating that _at least_ one node in the
+subtree rooted at the entity has been read at entity.high.
+
+For any leaf node (i.e., akey), low == high; for any non-leaf node, low <= high.
+
+The usage of these timestamps is described <a href="#824">below</a>
+
+<a id="823"></a>
 ### Write Timestamps
 
 In order to detect epoch uncertainty violations, VOS also maintains a pair of
@@ -497,7 +518,7 @@ the corresponding key or object.
 
 ![../../doc/graph/uncertainty.png](../../doc/graph/uncertainty.png "Scenarios illustrating utility of write timestamp cache")
 
-<a id="823"></a>
+<a id="824"></a>
 ### MVCC Rules
 
 Every DAOS I/O operation belongs to a transaction. If a user does not associate
@@ -508,12 +529,17 @@ check passes, an update, or punch operation.
 
 Every transaction gets an epoch. Single-operation transactions and conditional
 updates get their epochs from the redundancy group servers they access,
-snapshot read transactions get their epoch from the snapshot records and other
-transactions get their epochs from the initiating clients' HLC. A transaction
-performs all operations using its epoch.
+snapshot read transactions get their epoch from the snapshot records and every
+other transaction gets its epoch from the HLC of the first server it accesses.
+(Earlier implementations use client HLCs to choose epochs in the last case. To
+relax the clock synchronization requirement for clients, later implementations
+have moved to use server HLCs to choose epochs, while introducing client HLC
+Trackers that track the highest server HLC timestamps clients have heard of.) A
+transaction performs all operations using its epoch.
 
 The MVCC rules ensure that transactions execute as if they are serialized in
-their epoch order while complying with external consistency, as long as the
+their epoch order while ensuring that every transaction observes all
+conflicting transactions commit before it opens, as long as the
 system clock offsets are always within the expected maximum system clock offset
 (epsilon). For convenience, the rules classify the I/O operations into reads
 and writes:
@@ -601,8 +627,23 @@ such edges together, causing a contradiction that a reading transaction cannot
 block other transactions. Deadlocks are, therefore, not a concern.
 
 If an entity keeps getting reads with increasing epochs, writes to this entity
-may keep being rejected due to the entity's ever-increasing read timestamps. A
-solution to starvation problems like this is a work in progress.
+may keep being rejected due to the entity's ever-increasing read timestamps.
+Exponential backoffs with randomizations (see d_backoff_seq) have been
+introduced during daos_tx_restart calls. These are effective for dfs_move
+workloads, where readers also write.
+
+<a id="825"></a>
+### Punch propagation
+
+Since conditional operations rely on an emptiness semantic, VOS read
+operations, particularly listing can be very expensive because they would
+require potentially reading the subtree to see if the entity is empty or not.
+In order to alieviate this problem, VOS instead does punch propagation.
+On a punch operation, the parent tree is read to see if the punch
+causes it to be empty.  If it does, the parent tree is punched as well.
+Propagation presently stops at the dkey level, meaning the object will
+not be punched. Punch propagation only applies when punching keys, not
+values.
 
 <a id="74"></a>
 
@@ -718,45 +759,58 @@ overhead and complexity.  DAOS instead uses an optimized two-phase commit
 transaction to guarantee consistency among replicas.
 
 <a id="811"></a>
-### DAOS Two-Phase Commit (DTX)
+### Single redundancy group based DAOS Two-Phase Commit (DTX)
 
-When an application wants to modify (update or punch) an object with multiple
-replicas, the client sends the modification RPC to the leader replica (Via
-<a href="#812">DTX Leader Election</a> algorithm discussed below).  The leader
-dispatches the RPC to the other replicas, and each replica makes its
-modification in parallel.  Bulk transfers are not forwarded by the leader but
-rather transferred directly from the client, improving load balance and
+When an application wants to modify (update or punch) a multiple replicated
+object or EC object, the client sends the modification RPC to the leader shard
+(via <a href="#812">DTX Leader Election</a> algorithm discussed below). The
+leader dispatches the RPC to the other related shards, and each shard makes
+its modification in parallel.  Bulk transfers are not forwarded by the leader
+but rather transferred directly from the client, improving load balance and
 decreasing latency by utilizing the full client-server bandwidth.
 
-Before modifications are made, a local transaction, called 'DTX', is started on
-each replica with a client selected DTX identifier that is unique for the
-current RPC within the container.  All modifications in a DTX are logged in a
-DTX transaction table and back references to the table are kept in each modified
-record.  After local modifications are done, each non-leader replica marks the
-DTX state as 'prepared' and replies to the leader replica.  The leader sets the
-DTX state to 'committable' as soon as it has completed its modifications and
-has received successful replies from all replicas.  If any replica(s) failed to
-execute the modification, it will reply to the leader with failure, and the
-leader will ask remaining replicas to 'abort' the DTX.   Once the DTX is set
-by the leader to 'committable' or 'abort', it replies to the client with the
-appropriate status.
+Before modifications are made, a local transaction, called 'DTX', is started
+on each related shard (both leader and non-leaders) with a client generated
+DTX identifier that is unique for the modification within the container. All
+the modifications in a DTX are logged in the DTX transaction table and back
+references to the table are kept in related modified record.  After local
+modifications are done, each non-leader marks the DTX state as 'prepared' and
+replies to the leader. The leader sets the DTX state to 'committable' as soon
+as it has completed its modifications and has received successful replies from
+all non-leaders.  If any shard(s) fail to execute the modification, it will
+reply to the leader with failure, and the leader will globally abort the DTX.
+Once the DTX is set by the leader to 'committable' or 'aborted', it replies to
+the client with the appropriate status.
 
 The client may consider a modification complete as soon as it receives a
 successful reply from the leader, regardless of whether the DTX is actually
-'committed' or not.   It is the responsibility of the leader replica to commit
-the 'committable' DTX asynchronously, when the 'committable' DTX count exceeds
-some threshold or piggybacked via dispatched RPCs due to potential conflict with
-subsequent modifications.
+'committed' or not. It is the responsibility of the leader to commit the
+'committable' DTX asynchronously. This can happen if the 'committable' count
+or DTX age exceed some thresholds or the DTX is piggybacked via other
+dispatched RPCs due to potential conflict with subsequent modifications.
 
 When an application wants to read something from an object with multiple
-replicas, the client can send the RPC to any replica.  On the server side, if
-the related DTX has been committed or is committable, the record can be returned to.
-If the DTX state is prepared, and the replica is not the leader, it will reply
-to the client telling it to send the RPC to the leader instead.  If it is the
-leader and is in any state other than 'committed' or 'committable', the entry
-is ignored, and the latest committed modification is returned to the client.
+replicas, the client can send the RPC to any replica.  On the server side,
+if the related DTX has been committed or is committable, the record can be
+returned to. If the DTX state is prepared, and the replica is not the leader,
+it will reply to the client telling it to send the RPC to the leader instead.
+If it is the leader and is in the state 'committed' or 'committable', then
+such entry is visible to the application. Otherwise, if the DTX on the leader
+is also 'prepared', then for transactional read, ask the client to wait and
+retry via returning -DER_INPROGRESS; for non-transactional read, related entry
+is ignored and the latest committed modification is returned to the client.
 
-The DTX model is built inside a DAOS container.  Each container maintains its own
+If the read operation refers to an EC object and the data read from a data
+shard (non-leader) has a 'prepared' DTX, the data may be 'committable' on the
+leader due to the aforementioned asynchronous batched commit mechanism.
+In such case, the non-leader will refresh related DTX status with the leader.
+If the DTX status after refresh is 'committed', then related data can be
+returned to the client; otherwise, if the DTX state is still 'prepared', then
+for transactional read, ask the client to wait and retry via returning
+-DER_INPROGRESS; for non-transactional read, related entry is ignored and the
+latest committed modification is returned to the client.
+
+The DTX model is built inside a DAOS container. Each container maintains its own
 DTX table that is organized as two B+trees in SCM: one for active DTXs and the
 other for committed DTXs.
 The following diagram represents the modification of a replicated object under
@@ -768,20 +822,10 @@ the DTX model.
 
 <a id="812"></a>
 
-### DTX Leader Election
+### Single redundancy group based DTX Leader Election
 
-In the DTX model, the leader is a special replica that does more work than other
-replicas, including:
-
-1. All modification RPCs are sent to the leader.  The leader performs necessary
-sanity checks before dispatching modifications to other replicas.
-
-2. Non-leader replicas tell the client to redirect reads in 'prepared' DTX state to
-the leader replica.  The leader, therefore, may handle a heavier load on reads
-than non-leaders.
-
-To avoid general load imbalance, the leader selection is done for each object or
-dkey following these general guidelines:
+In single redundancy group based DTX model, the leader selection is done for
+each object or dkey following these general guidelines:
 
 R1: When different replicated objects share the same redundancy group, the same
 leader should not be used for each object.
@@ -792,3 +836,6 @@ servers.
 
 R3: Servers that fail frequently should be avoided in leader selection to avoid
 frequent leader migration.
+
+R4: For EC object, the leader will be one of the parity nodes within current
+redundancy group.

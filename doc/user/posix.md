@@ -12,6 +12,13 @@ bottlenecks by delivering full OS bypass for POSIX read/write operations.
 
 ![../graph/posix.png](../graph/posix.png "POSIX I/O Support")
 
+The performance is going to be best generally when using the DFS API directly.
+Using the IO interception library with dfuse should yield the same performance
+for IO operations (read/write) as the DFS API with minimal overhead. Performance
+of metadata operations (file creation, deletion, rename, etc.) over dfuse will
+be much slower than the DFS API since there is no interception to bypass the
+fuse/kernel layer.
+
 ## libdfs
 
 The DAOS File System (DFS) is implemented in the `libdfs` library, 
@@ -19,27 +26,85 @@ and allows a DAOS container to be accessed as a hierarchical POSIX namespace.
 `libdfs` supports files, directories, and symbolic links, but not hard links. 
 Access permissions are inherited from
 the parent pool and are not implemented on a per-file or per-directory basis.
-`setuid()` and `setgid()` programs, as well as supplementary groups, 
-are currently not supported.
+
+The DFS API closely represents the POSIX API. The API includes operations to:
+* Mount: create/open superblock and root object
+* Un-mount: release open handles
+* Lookup: traverse a path and return an open file/dir handle
+* IO: read & write with an iovec
+* Stat: retrieve attributes of an entry
+* Mkdir: create a dir
+* Readdir: enumerate all entries under a directory
+* Open: create/Open a file/dir
+* Remove: unlink a file/dir
+* Move: rename
+* Release: close an open handle of a file/dir
+* Extended Attributes: set, get, list, remove
+
+The following features from POSIX will not be supported:
+* Hard links
+* mmap support with MAP_SHARED will be consistent from single client only. Note
+  that this is supported through DFUSE only (i.e. not through the DFS API).
+* Char devices, block devices, sockets and pipes
+* User/group quotas
+* setuid(), setgid() programs, supplementary groups, ACLs are not supported
+  within the DFS namespace.
+* [access/change/modify] time not updated appropriately, potentially on close only.
+* Flock (maybe at dfuse local node level only)
+* Block size in stat buf is not accurate (no account for holes, extended attributes)
+* Various parameters reported via statfs like number of blocks, files,
+  free/available space
+* POSIX permissions inside an encapsulated namespace
+  * Still enforced at the DAOS pool/container level
+  * Effectively means that all files belong to the same “project”
+
 
 It is possible to use `libdfs` in a parallel application from multiple nodes.
-When the same POSIX container is mounted concurrently by multiple
-processes, a few limitations exist in DAOS v1.0. In particular:
+DFS provides two modes that offer different levels of consistency. The modes can
+be set on container creation time:
 
-* Unlinking a file in one process while another process has the same file
-  open: This may or may not cause an I/O error on the open file.
-* The atomicity of rename operations is not guaranteed.
+1) Relaxed mode for well-behaved applications that generate conflict-free
+operations for which a very high level of concurrency will be supported.
 
-These corner cases will be addressed in a future DAOS release. 
+2) Balanced mode for applications that require stricter consistency at the cost
+of performance. This mode is currently not fully supported and DFS by default
+will use the relaxed mode.
+
+On container access, if the container is created with balanced mode, it can be
+accessed in balanced mode only. If the container was created with relaxed mode,
+it can be accessed in relaxed or balanced mode. In either mode, there is a
+consistency semantic issue that is not properly handled:
+
+* Open-unlink semantics: This occurs when a client obtains an open handle on an
+  object (file or directory), and accesses that object (reads/writes data or
+  create other files), while another client removes that object that the other
+  client has opened from under it. In DAOS, we don’t track object open handles
+  as that would be very expensive, and so in such conflicting cases, the worst
+  case scenario is the lost/leaked space that is written to those orphan objects
+  that have been unlinked from the namespace.
+
+Other consistency issues are handled differently between the two consistency mode:
+
+* Same Operation Executed Concurrently (Supported in both Relaxed and Balanced
+  Mode): For example, clients try to create or remove the same file
+  concurrently, one should succeed and others will fail.
+* Create/Unlink/Rename Conflicts (Supported in Balanced Mode only): For example,
+  a client renames a file, but another unlinks the old file at the same time.
+* Operation Atomicity (Supported only in Balanced mode): If a client crashes in
+  the middle of the rename, the state of the container should be consistent as
+  if the operation never happened.
+* Visibility (Supported in Balanced and Relaxed mode): A write from one client
+  should be visible to another client with a simple coordination between the
+  clients.
 
 ## DFuse
 
 DFuse provides DAOS File System access through the standard libc/kernel/VFS
 POSIX infrastructure.  This allows existing applications to use DAOS without
 modification, and provides a path to upgrade those applications to native DAOS
-support.  Additionally, DFuse provides an Interception Library `libioil` to transparently
-allow POSIX clients to talk directly to DAOS servers, providing OS-Bypass for
-I/O without modifying or recompiling of the application.
+support.  Additionally, DFuse provides an Interception Library `libioil` to
+transparently allow POSIX clients to talk directly to DAOS servers, providing
+OS-Bypass for I/O without modifying or recompiling of the application.
 
 DFuse builds heavily on DFS. Data written via DFuse can be accessed by DFS and
 vice versa.
@@ -87,7 +152,6 @@ There are two mandatory command-line options, these are:
 
 | **Command-line Option**  | **Description**     |
 | ------------------------ | ------------------- |
-| --svc=<ranks\>           | service replicas    |
 | --mountpoint=<path\>     | path to mount dfuse |
 
 The mount point specified should be an empty directory on the local node that
@@ -143,7 +207,7 @@ To create a new container and link it into the namespace of an existing one,
 use the following command.
 
 ```bash
-$ daos container create --svc <svc> --type POSIX --pool <pool uuid> --path <path to entry point>
+$ daos container create --type POSIX --pool <pool uuid> --path <path to entry point>
 ```
 
 The pool uuid should already exist, and the path should specify a location
@@ -155,7 +219,7 @@ not supplied, it will be created.
 To destroy a container again, the following command should be used.
 
 ```bash
-$ daos container destroy --svc --path <path to entry point>
+$ daos container destroy --path <path to entry point>
 ```
 
 This will both remove the link between the containers and remove the container
@@ -168,18 +232,16 @@ Information about a container, for example, the presence of an entry point betwe
 containers, or the pool and container uuids of the container linked to can be
 read with the following command.
 ```bash
-$ daos container info --svc --path <path to entry point>
+$ daos container info --path <path to entry point>
 ```
 
-### Enabling Caching
+### Caching
 
-DFuse in normal mode simply provides a communication path between the kernel and
-DAOS. However, this can come with a performance impact. To help alleviate this
-it is possible to turn on caching, both within dfuse itself and by allowing the
-kernel to cache certain data.  Where and when data is cached, there is no attempt
-made to invalidate the caches based on changes to DAOS, other than simple timeouts.
+For performance reasons caching will be enabled by default in DFuse, including both
+data and metadata caching.  It is possible to tune these settings both at a high level
+on the DFuse command line and fine grained control via container attributes.
 
-Enabling this option will turn on the following features:
+The following types of data will be cached by default.
 
 * Kernel caching of dentries
 * Kernel caching of negative dentries
@@ -188,10 +250,47 @@ Enabling this option will turn on the following features:
 * Readahead in dfuse and inserting data into kernel cache
 * MMAP write optimization
 
-To turn on caching use the `--enable-caching` command-line option for dfuse. This
-will enable the feature for all accessed containers.  When this option is used,
-the containers accessed should only be accessed from one node, so it may
-be necessary to create a container per node in this model.
+!note
+Caching is enabled by default in dfuse. This might cause some parallel
+applications to fail. Please disable caching if you experience this or want
+up to date data sharing between nodes.
+
+To selectively control caching within a container the following container
+attributes should be used, if any attribute is set then the rest are assumed
+to be set to 0 or off, except dentry-dir-time which defaults to dentry-time
+
+| **Attribute name**    | **Description**                                                  |
+| --------------------- | ---------------------------------------------------------------- |
+| dfuse-attr-time       | How long file attributes are cached                              |
+| dfuse-dentry-time     | How long directory entries are cached                            |
+| dfuse-dentry-dir-time | How long dentries are cached, if the entry is itself a directory |
+| dfuse-ndentry-time    | How long negative dentries are cached                            |
+| dfuse-data-cache      | Data caching enabled for this file ("on"/"off")                  |
+| dfuse-direct-io-disable | Force use of page cache for this container ("on"/"off")        |
+
+For metadata caching attributes specify the duration that the cache should be
+valid for, specified in seconds, and allowing 'S' or 'M' suffix.
+
+dfuse-data-cache should be set to "on", or "off" if set, any other value will
+log an error, and result in the cache being off.  The O_DIRECT flag for open files will be
+honoured with this option enabled, files which do not set O_DIRECT will be cached.
+
+dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,
+however if this is set to "on" then the O_DIRECT flag will be ignored, and all files
+will use the page cache.  This default value for this is "off".
+
+With no options specified attr and dentry timeouts will be 1 second, dentry-dir
+and ndentry timeouts will be 5 seconds, and data caching will be enabled.
+
+These are two command line options to control the DFuse process itself.
+
+| **Command line option | **Description**           |
+| --------------------- | ------------------------- |
+| --disable-caching     | Disables all caching      |
+| --disable-wb-caching  | Disables write-back cache |
+
+These will affect all containers accessed via DFuse, regardless of any
+container attributes.
 
 ### Stopping DFuse
 

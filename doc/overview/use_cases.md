@@ -64,7 +64,7 @@ We consider the workflow represented in the <a href="#6a">figure</a> below.
 ![../graph/Fig_007.png](../graph/Fig_007.png "Example of a Scientific Workflow")
 
 Each green box represents a different container. All containers are stored 
-in the same DAOS pool represented by the grey box. The simulation reads data 
+in the same DAOS pool represented by the gray box. The simulation reads data 
 from the input container and writes raw timesteps to another container. 
 It also regularly dumps checkpoints to a dedicated ckpt container. 
 The down-sample job reads the raw timesteps and generates sampled timesteps 
@@ -128,7 +128,7 @@ individual tasks, but not committed, are automatically rolled back.
 In the previous <a href="6a">figure</a>, we have two examples of 
 producer/consumer. The down-sample job consumes raw timesteps generated 
 by the simulation job and produces sampled timesteps analyzed by the 
-post-process job. The DAOS stack provides specific mechanims for 
+post-process job. The DAOS stack provides specific mechanisms for
 producer/consumer workflow which even allows the consumer to dumps the 
 result of its analysis into the same container as the producer.
 

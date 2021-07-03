@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #define D_LOGFAC	DD_FAC(tests)
@@ -60,7 +43,7 @@ dedup_is_nvme_enabled(test_arg_t *arg)
 
 	pinfo.pi_bits = DPI_ALL;
 	rc = test_pool_get_info(arg, &pinfo);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;
 }
@@ -167,16 +150,16 @@ setup_cont_obj(struct dedup_test_ctx *ctx,
 	props->dpp_entries[2].dpe_val = dedup_threshold;
 
 	rc = daos_cont_create(ctx->poh, ctx->uuid, props, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 	daos_prop_free(props);
 
 	rc = daos_cont_open(ctx->poh, ctx->uuid, DAOS_COO_RW,
 			    &ctx->coh, &ctx->info, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
-	ctx->oid = dts_oid_gen(oclass, 0, 1);
+	ctx->oid = daos_test_oid_gen(ctx->coh, oclass, 0, 0, 1);
 	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 }
 
 static void
@@ -356,11 +339,11 @@ run_daos_dedup_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	if (rank == 0) {
 		if (sub_tests_size == 0) {
-			rc = cmocka_run_group_tests_name("DAOS Checksum Tests",
+			rc = cmocka_run_group_tests_name("DAOS_Checksum",
 							 dedup_tests, setup,
 							 test_teardown);
 		} else {
-			rc = run_daos_sub_tests("DAOS Checksum Tests",
+			rc = run_daos_sub_tests("DAOS_Checksum",
 						dedup_tests,
 						ARRAY_SIZE(dedup_tests),
 						sub_tests,

@@ -1,26 +1,12 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 package io.daos.fs.hadoop;
 
 import io.daos.dfs.DaosFsClient;
 import io.daos.dfs.DaosUns;
-import io.daos.dfs.DaosUtils;
+import io.daos.DaosUtils;
 import io.daos.dfs.DunsInfo;
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -47,7 +33,7 @@ import static org.mockito.Mockito.*;
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore("javax.management.*")
 @PrepareForTest({DaosFsClient.DaosFsClientBuilder.class, DaosFileSystem.class, DaosUns.class})
-@SuppressStaticInitializationFor("io.daos.dfs.DaosFsClient")
+@SuppressStaticInitializationFor({"io.daos.dfs.DaosFsClient", "io.daos.DaosClient"})
 public class DaosFileSystemTest {
 
   private static AtomicInteger unsId = new AtomicInteger(1);
@@ -82,10 +68,11 @@ public class DaosFileSystemTest {
     fs3.close();
 
     String path = "/file/abc";
-    DunsInfo info = new DunsInfo("123", "56", "POSIX", Constants.DAOS_POOL_SVC + "=0");
+    DunsInfo info = new DunsInfo("123", "56", "POSIX", Constants.DAOS_POOL_SVC + "=0",
+        path);
     PowerMockito.mockStatic(DaosUns.class);
     when(DaosUns.getAccessInfo(anyString(), eq(Constants.UNS_ATTR_NAME_HADOOP),
-        eq(io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
+        eq(io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
     URI uri = URI.create("daos://" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();
@@ -97,7 +84,7 @@ public class DaosFileSystemTest {
       eie = e;
     }
     Assert.assertNotNull(eie);
-    Assert.assertTrue(eie.getMessage().contains("No FileSystem for scheme: daosss"));
+    Assert.assertTrue(eie.getMessage().contains("No FileSystem for scheme \"daosss\""));
   }
 
   @Test
@@ -124,10 +111,10 @@ public class DaosFileSystemTest {
     sb.append(Constants.DAOS_POOL_FLAGS).append("=").append("4").append(":");
     sb.append(Constants.DAOS_READ_BUFFER_SIZE).append("=").append("4194304").append(":");
     DunsInfo info = new DunsInfo("123", "56", "POSIX",
-        sb.toString());
+        sb.toString(), path);
     PowerMockito.mockStatic(DaosUns.class);
     when(DaosUns.getAccessInfo(anyString(), eq(Constants.UNS_ATTR_NAME_HADOOP),
-        eq(io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
+        eq(io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
     URI uri = URI.create("daos://" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();
@@ -246,33 +233,6 @@ public class DaosFileSystemTest {
   }
 
   @Test
-  public void testBufferedReadConfigurationKey() throws Exception {
-    PowerMockito.mockStatic(DaosFsClient.class);
-    DaosFsClient.DaosFsClientBuilder builder = mock(DaosFsClient.DaosFsClientBuilder.class);
-    DaosFsClient client = mock(DaosFsClient.class);
-    Configuration conf = new Configuration();
-
-    PowerMockito.whenNew(DaosFsClient.DaosFsClientBuilder.class).withNoArguments().thenReturn(builder);
-    when(builder.poolId(anyString())).thenReturn(builder);
-    when(builder.containerId(anyString())).thenReturn(builder);
-    when(builder.ranks(anyString())).thenReturn(builder);
-    when(builder.build()).thenReturn(client);
-    conf.set(Constants.DAOS_POOL_UUID, "123");
-    conf.set(Constants.DAOS_CONTAINER_UUID, "123");
-    conf.set(Constants.DAOS_POOL_SVC, "0");
-
-    DaosFileSystem fs = new DaosFileSystem();
-    fs.initialize(URI.create("daos://1234:56"), conf);
-    Assert.assertTrue(fs.isPreloadEnabled());
-    fs.close();
-    // if not set, should be default
-    conf.setInt(Constants.DAOS_PRELOAD_SIZE, 0);
-    fs.initialize(URI.create("daos://1234:56"), conf);
-    Assert.assertFalse(fs.isPreloadEnabled());
-    fs.close();
-  }
-
-  @Test
   public void testLoadingConfig() throws Exception {
     Configuration cfg = new Configuration(false);
     cfg.addResource("daos-site.xml");
@@ -328,5 +288,13 @@ public class DaosFileSystemTest {
     String s = "daos://uns:" + unsId.getAndIncrement() + "/tmp/uns_path#";
     Path p6 = new Path(s + path2.toString());
     System.out.println(p6);
+  }
+
+  @Test
+  public void testURIValid() throws Exception {
+    String path = "daos://abc$xyz/";
+    Path p = new Path(path);
+    URI uri = p.toUri();
+    System.out.println(uri.getAuthority());
   }
 }

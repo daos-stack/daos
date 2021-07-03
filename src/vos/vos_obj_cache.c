@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Object cache for VOS OI table.
@@ -199,7 +182,7 @@ vos_obj_cache_evict(struct daos_lru_cache *cache, struct vos_container *cont)
 struct daos_lru_cache *
 vos_obj_cache_current(void)
 {
-	return vos_get_obj_cache();
+	return vos_obj_cache_get();
 }
 
 void
@@ -241,7 +224,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	visible_only = flags & VOS_OBJ_VISIBLE;
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
-		" create=%s epr="DF_U64"-"DF_U64"\n",
+		" create=%s epr="DF_X64"-"DF_X64"\n",
 		DP_UUID(cont->vc_id), DP_UOID(oid),
 		create ? "true" : "false", epr->epr_lo, epr->epr_hi);
 
@@ -271,6 +254,9 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	if (obj->obj_df) {
 		D_DEBUG(DB_TRACE, "looking up object ilog");
+		if (create || intent == DAOS_INTENT_PUNCH)
+			vos_ilog_ts_ignore(vos_obj2umm(obj),
+					   &obj->obj_df->vo_ilog);
 		tmprc = vos_ilog_ts_add(ts_set, &obj->obj_df->vo_ilog,
 					&oid, sizeof(oid));
 		D_ASSERT(tmprc == 0); /* Non-zero only valid for akey */
@@ -278,7 +264,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 	 /* newly cached object */
-	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_U64"-"DF_U64"\n",
+	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_X64"-"DF_X64"\n",
 		create ? "find/create" : "find", DP_UOID(oid), epr->epr_lo,
 		epr->epr_hi);
 
@@ -307,8 +293,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 check_object:
-	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH ||
-	    intent == DAOS_INTENT_COS)
+	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
 	if (!create) {
@@ -365,8 +350,8 @@ out:
 		obj->obj_sync_epoch = obj->obj_df->vo_sync;
 
 	if (obj->obj_df != NULL && epr->epr_hi <= obj->obj_sync_epoch &&
-	    (intent == DAOS_INTENT_COS || (vos_dth_get() != NULL &&
-	     (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)))) {
+	    vos_dth_get() != NULL &&
+	    (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)) {
 		/* If someone has synced the object against the
 		 * obj->obj_sync_epoch, then we do not allow to modify the
 		 * object with old epoch. Let's ask the caller to retry with

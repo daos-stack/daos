@@ -1,30 +1,15 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 package bdev
 
 import (
 	"fmt"
 	"os"
+	"os/user"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -34,13 +19,31 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestBdevRunnerPrepare(t *testing.T) {
+func mockRun(log logging.Logger, env []string, cmdStr string, args ...string) (string, error) {
+	log.Debugf("running: %s", cmdStr+" "+strings.Join(args, " "))
+	return "", nil
+}
+
+func mockScriptRunner(log logging.Logger) *spdkSetupScript {
+	return &spdkSetupScript{
+		log:    log,
+		runCmd: mockRun,
+	}
+}
+
+func defaultBackendWithMockRunner(log logging.Logger) *spdkBackend {
+	return newBackend(log, mockScriptRunner(log))
+}
+
+func TestRunner_Prepare(t *testing.T) {
 	const (
-		testNrHugePages  = 42
-		testTargetUser   = "amos"
-		testPciWhitelist = "a,b,c"
-		testPciBlacklist = "x,y,z"
+		testNrHugePages       = 42
+		nonexistentTargetUser = "nonexistentTargetUser"
+		testPciAllowlist      = "a,b,c"
+		testPciBlocklist      = "x,y,z"
 	)
+	usrCurrent, _ := user.Current()
+	username := usrCurrent.Username
 
 	for name, tc := range map[string]struct {
 		req    PrepareRequest
@@ -49,67 +52,85 @@ func TestBdevRunnerPrepare(t *testing.T) {
 		expErr error
 	}{
 		"prepare reset fails": {
-			req: PrepareRequest{},
+			req: PrepareRequest{
+				TargetUser: username,
+			},
 			mbc: &MockBackendConfig{
 				PrepareResetErr: errors.New("reset failed"),
 			},
 			expErr: errors.New("reset failed"),
 		},
 		"prepare fails": {
-			req: PrepareRequest{},
+			req: PrepareRequest{
+				TargetUser: username,
+			},
 			mbc: &MockBackendConfig{
 				PrepareErr: errors.New("prepare failed"),
 			},
 			expErr: errors.New("prepare failed"),
 		},
 		"defaults": {
-			req: PrepareRequest{},
+			req: PrepareRequest{
+				TargetUser: username,
+			},
 			expEnv: []string{
 				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 				fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
-				fmt.Sprintf("%s=", targetUserEnv),
+				fmt.Sprintf("%s=%s", targetUserEnv, username),
 			},
 		},
 		"user-specified values": {
 			req: PrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    testTargetUser,
-				PCIWhitelist:  testPciWhitelist,
-				DisableVFIO:   true,
+				HugePageCount:         testNrHugePages,
+				DisableCleanHugePages: true,
+				TargetUser:            username,
+				PCIAllowlist:          testPciAllowlist,
+				DisableVFIO:           true,
 			},
 			expEnv: []string{
 				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 				fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
-				fmt.Sprintf("%s=%s", targetUserEnv, testTargetUser),
-				fmt.Sprintf("%s=%s", pciWhiteListEnv, testPciWhitelist),
+				fmt.Sprintf("%s=%s", targetUserEnv, username),
+				fmt.Sprintf("%s=%s", pciAllowListEnv, testPciAllowlist),
 				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 			},
 		},
-		"blacklist": {
+		"blocklist": {
 			req: PrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    testTargetUser,
-				PCIBlacklist:  testPciBlacklist,
-				DisableVFIO:   true,
+				HugePageCount:         testNrHugePages,
+				DisableCleanHugePages: true,
+				TargetUser:            username,
+				PCIBlocklist:          testPciBlocklist,
+				DisableVFIO:           true,
 			},
 			expEnv: []string{
 				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 				fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
-				fmt.Sprintf("%s=%s", targetUserEnv, testTargetUser),
-				fmt.Sprintf("%s=%s", pciBlackListEnv, testPciBlacklist),
+				fmt.Sprintf("%s=%s", targetUserEnv, username),
+				fmt.Sprintf("%s=%s", pciBlockListEnv, testPciBlocklist),
 				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 			},
 		},
-		"blacklist whitelist fails": {
+		"blocklist allowlist fails": {
 			req: PrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    testTargetUser,
-				PCIBlacklist:  testPciBlacklist,
-				PCIWhitelist:  testPciWhitelist,
-				DisableVFIO:   true,
+				HugePageCount:         testNrHugePages,
+				DisableCleanHugePages: true,
+				TargetUser:            username,
+				PCIBlocklist:          testPciBlocklist,
+				PCIAllowlist:          testPciAllowlist,
+				DisableVFIO:           true,
 			},
 			expErr: errors.New(
-				"bdev_include and bdev_exclude can't be used together"),
+				"bdev_include and bdev_exclude can not be used together"),
+		},
+		"unknown target user fails": {
+			req: PrepareRequest{
+				DisableCleanHugePages: true,
+				TargetUser:            nonexistentTargetUser,
+				DisableVFIO:           true,
+			},
+			expErr: errors.New(
+				"lookup on local host: user: unknown user nonexistentTargetUser"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -1,25 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. 8F-30005.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from cont_security_test_base import ContSecurityTestBase
 from security_test_base import generate_acl_file
@@ -33,7 +16,6 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
     :avocado: recursive
     """
-
     def test_container_basics(self):
         """Test basic container create/destroy/open/close/query.
 
@@ -46,7 +28,8 @@ class CreateContainterACLTest(ContSecurityTestBase):
                file passed.
             7. Remove all files created
 
-        :avocado: tags=all,pr,security,container_acl,cont_create_acl
+        :avocado: tags=all,daily_regression,security,container_acl
+        :avocado: tags=cont_create_acl
         """
         acl_args = {"tmp_dir": self.tmp,
                     "user": self.current_user,
@@ -56,9 +39,9 @@ class CreateContainterACLTest(ContSecurityTestBase):
         ## Getting the default ACL list
         expected_acl = generate_acl_file("default", acl_args)
 
-        ## 1. Create a pool and obtain its UUID and SVC
+        ## 1. Create a pool and obtain its UUID
         self.log.info("===> Creating a pool with no ACL file passed")
-        self.pool_uuid, self.pool_svc = self.create_pool_with_dmg()
+        self.pool_uuid = self.create_pool_with_dmg()
 
         ## 2. Create a container with no ACL file passed
         self.log.info("===> Creating a container with no ACL file passed")

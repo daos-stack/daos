@@ -4,46 +4,75 @@ This section will be expanded in a future revision.
 
 ## Network Performance
 
-The DAOS CART layer can validate and benchmark network communications in the
-same context as an application and using the same networks/tuning options as
-regular DAOS.
+The DAOS [CaRT][1] layer can validate and benchmark network communications in
+the same context as an application and using the same networks/tuning options
+as regular DAOS.
 
-The CART `self_test` can run against the DAOS servers in a production environment
-in a non-destructive manner. CART `self_test` supports different message sizes,
+The CaRT `self_test` can run against the DAOS servers in a production environment
+in a non-destructive manner. CaRT `self_test` supports different message sizes,
 bulk transfers, multiple targets, and the following test scenarios:
 
 -   **Selftest client to servers** - where `self_test` issues RPCs directly
-    to a list of servers
+    to a list of servers.
 
 -   **Cross-servers** - where `self_test` sends instructions to the different
     servers that will issue cross-server RPCs. This model supports a
     many to many communication model.
 
-Instructions to run CaRT `self_test` with test_group as the target server are as follows.
+### Building CaRT self_test
+
+The CaRT `self_test` and its tests are delivered as part of the daos_client
+and daos_tests [distribution packages][2]. It can also be built from scratch.
 
 ```bash
-$ git clone https://github.com/daos-stack/daos.git
+$ git clone --recurse-submodules https://github.com/daos-stack/daos.git
 $ cd daos
-$ git submodule init
-$ git submodule update
 $ scons --build-deps=yes install
-$ cd install/TESTING
+$ cd install
 ```
 
-**Prepare srvhostfile and clihostfile**
+For detailed information, please refer to the [DAOS build documentation][3]
+section.
 
--   srvhostfile contains a list of nodes from which servers will launch
+### Running CaRT self_test
 
--   clihostfile contains node from which `self_test` will launch
+Instructions to run CaRT `self_test` are as follows.
+
+**Start DAOS server**
+
+`self_test` requires DAOS server to be running before attempt running
+`self_test`. For detailed instruction on how to start DAOS server, please refer
+to the [server startup][4] documentation.
+
+**Dump system attachinfo**
+
+`self_test` will use the address information in `daos_server.attach_info_tmp`
+file. To create such file, run the following command:
+
+```bash
+./bin/daos_agent dump-attachinfo -o ./daos_server.attach_info_tmp
+```
+
+**Prepare hostfile**
+
+The list of nodes from which `self_test` will run can be specified in a
+hostfile (referred to as ${hostfile}). Hostfile used here is the same as the
+ones used by OpenMPI. For additional details, please refer to the
+[mpirun documentation][5].
+
+**Run CaRT self_test**
 
 The example below uses an Ethernet interface and Sockets provider.
 In the `self_test` commands:
 
--   (client-to-servers) Replace the argument for `--endpoint` accordingly.
+-   **Selftest client to servers** - Replace the argument for `--endpoint`
+    accordingly.
 
--   (cross-servers)     Replace the argument for `--endpoint` and `--master-endpoint` accordingly.
+-   **Cross-servers** - Replace the argument for `--endpoint` and
+    `--master-endpoint` accordingly.
 
--   For example, if you have 8 servers, you would specify `--endpoint 0-7:0` (and `--master-endpoint 0-7:0`)
+For example, if you have 8 servers, you would specify `--endpoint 0-7:0` and
+`--master-endpoint 0-7:0`
 
 The commands below will run `self_test` benchmark using the following message sizes:
 ```bash
@@ -56,53 +85,34 @@ i2048 0      2Kb iovec Input only
 ```
 
 For a full description of `self_test` usage, run:
-```bash
-$ ../bin/self_test --help
-```
 
-**To start test_group server:**
 ```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile srvhostfile --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/test_group_srv.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
-  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
-  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16 \
-  ../bin/crt_launch -e tests/test_group_np_srv --name self_test_srv_grp --cfg_path=. &
+$ ./bin/self_test --help
 ```
 
 **To run self_test in client-to-servers mode:**
 ```bash
 $ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile clihostfile --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
-  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
-  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  \
-  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 \
-    --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
-    --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+  --hostfile ${hostfile} --output-filename testLogs/ \
+  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 \
+  -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
+  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16 \
+  ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
+  --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
+  --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
 ```
 
 **To run self_test in cross-servers mode:**
 ```bash
 $ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile clihostfile --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
-  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
+  --hostfile ${hostfile} --output-filename testLogs/ \
+  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 \
+  -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
   -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  \
-  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 --master-endpoint 0-<MAX_SERVER-1>:0 \
-    --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
-    --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
-```
-
-**To shutdown test_group server:**
-```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 \
-  --hostfile clihostfile --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/test_group_cli.log \
-  -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
-  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
-  -x CRT_CTX_SHARE_ADDR=0 \
-  tests/test_group_np_cli --name client-group --attach_to self_test_srv_grp --shut_only --cfg_path=.
+  ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
+  --master-endpoint 0-<MAX_SERVER-1>:0 \
+  --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
+  --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
 ```
 
 ## Benchmarking DAOS
@@ -111,35 +121,79 @@ DAOS can be benchmarked using several widely used IO benchmarks like IOR,
 mdtest, and FIO. There are several backends that can be used with those
 benchmarks.
 
-IOR (https://github.com/hpc/ior) with the following backends:
+### ior
 
--   POSIX, MPIIO & HDF5 drivers over dfuse and the interception library.
+IOR (<https://github.com/hpc/ior>) with the following backends:
 
--   MPI-IO plugin with the ROMIO DAOS ADIO driver to bypass POSIX and dfuse. The
-    MPIIO driver is available in the upstream MPICH repository.
+-   The IOR APIs POSIX, MPIIO and HDF5 can be used with DAOS POSIX containers that
+    are accessed over dfuse. This works without or with the I/O interception library
+    (`libioil`). Performance is significantly better when using `libioil`.
 
--   HDF5 plugin with the HDF5 DAOS connector (under development). This maps the
-    HDF5 data model directly to the DAOS model bypassing POSIX.
+-   A custom DFS (DAOS File System) plugin for DAOS can be used by building IOR
+    with DAOS support, and selecting API=DFS. This integrates IOR directly with the
+    DAOS File System (`libdfs`), without requiring FUSE or an interception library.
 
--   A custom DFS (DAOS File System) plugin, integrating IOR directly with libfs
-    without requiring FUSE or an interception library
+-   When using the IOR API=MPIIO, the ROMIO ADIO driver for DAOS can be used by
+    providing the `daos://` prefix to the filename. This ADIO driver bypasses `dfuse`
+    and directly invkes the `libdfs` calls to perform I/O to a DAOS POSIX container.
+    The DAOS-enabled MPIIO driver is available in the upstream MPICH repository
+    (MPICH 3.4.1 or higher).
 
--   A custom DAOS plugin, integrating IOR directly with the native DAOS
-    array API.
+-   An HDF5 VOL connector for DAOS is under development. This maps the HDF5 data model
+    directly to the DAOS data model, and works in conjunction with DAOS containers of
+    `--type=HDF5` (in contrast to DAOS container of `--type=POSIX` that are used for
+    the other IOR APIs).
+
+### mdtest
 
 mdtest is released in the same repository as IOR. The corresponding backends that are
 listed above support mdtest, except for the MPI-IO and HDF5 backends that were
 only designed to support IOR.
 
-FIO can also be used to benchmark DAOS performance using dfuse and the
-interception library with all the POSIX based engines like sync and libaio. We
-do, however, provide a native DFS engine for FIO similar to what we do for
-IOR. That engine is available on GitHub: https://github.com/daos-stack/dfio
+### FIO
 
-Finally, DAOS provides a tool called daos_perf which allows benchmarking to the
+A DAOS engine is integrated into FIO and available upstream.
+To build it, just run:
+
+```bash
+$ git clone http://git.kernel.dk/fio.git
+$ cd fio
+$ ./configure
+$ make install
+```
+
+If DAOS is installed via packages, it should be automatically detected.
+If not, please specific the path to the DAOS library and headers to configure
+as follows:
+```
+$ CFLAGS="-I/path/to/daos/install/include" LDFLAGS="-L/path/to/daos/install/lib64" ./configure
+```
+
+Once successfully build, once can run the default example:
+```bash
+$ export POOL= # your pool UUID
+$ export CONT= # your container UUID
+$ fio ./examples/dfs.fio
+```
+
+Please note that DAOS does not transfer data (i.e. zeros) over the network
+when reading a hole in a sparse POSIX file. Very high read bandwidth can
+thus be reported if fio reads unallocated extents in a file. It is thus
+a good practice to start fio with a first write phase.
+
+FIO can also be used to benchmark DAOS performance using dfuse and the
+interception library with all the POSIX based engines like sync and libaio.
+
+### daos_perf
+
+Finally, DAOS provides a tool called `daos_perf` which allows benchmarking to the
 DAOS object API directly or to the internal VOS API, which bypasses the client
 and network stack and reports performance accessing the storage directly using
-VOS.
+VOS. For a full description of `daos_perf` usage, run:
+
+```bash
+$ daos_perf --help
+```
 
 ## Client Performance Tuning
 
@@ -200,5 +254,20 @@ into the configuration problem.
 The default configuration enables the Agent GetAttachInfo cache.  If it is
 desired, the cache may be disabled prior to DAOS Agent startup by setting the
 Agent's environment variable `DAOS_AGENT_DISABLE_CACHE=true`.  The cache is
-loaded only at Agent startup.  If the network configuration changes while the
-Agent is running, it must be restarted to gain visibility to these changes.
+loaded only at Agent startup. The following debug message will be found in the
+Agent's log:
+```
+GetAttachInfo agent caching has been disabled
+```
+
+If the network configuration changes while the Agent is running, it must be
+restarted to gain visibility to these changes. For additional information,
+please refer to the [System Deployment: Agent Startup][6] documentation
+section.
+
+[1]: <https://github.com/daos-stack/daos/tree/master/src/cart> (Collective and RPC Transport)
+[2]: <https://github.com/daos-stack/daos/blob/master/doc/admin/installation.md#distribution-packages> (DAOS distribution packages)
+[3]: <https://github.com/daos-stack/daos/blob/master/doc/admin/installation.md#building-daos--dependencies> (DAOS build documentation)
+[4]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#server-startup> (DAOS server startup documentation)
+[5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
+[6]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)

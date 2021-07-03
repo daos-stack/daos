@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(vos)
 
@@ -171,9 +154,9 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 		goto out;
 
 out:
-	if (!daos_handle_is_inval(free_btr))
+	if (daos_handle_is_valid(free_btr))
 		dbtree_close(free_btr);
-	if (!daos_handle_is_inval(vec_btr))
+	if (daos_handle_is_valid(vec_btr))
 		dbtree_close(vec_btr);
 
 	/* Commit/Abort transaction on success/error */
@@ -188,19 +171,19 @@ vea_unload(struct vea_space_info *vsi)
 	unload_space_info(vsi);
 
 	/* Destroy the in-memory free extent tree */
-	if (!daos_handle_is_inval(vsi->vsi_free_btr)) {
+	if (daos_handle_is_valid(vsi->vsi_free_btr)) {
 		dbtree_destroy(vsi->vsi_free_btr, NULL);
 		vsi->vsi_free_btr = DAOS_HDL_INVAL;
 	}
 
 	/* Destroy the in-memory extent vector tree */
-	if (!daos_handle_is_inval(vsi->vsi_vec_btr)) {
+	if (daos_handle_is_valid(vsi->vsi_vec_btr)) {
 		dbtree_destroy(vsi->vsi_vec_btr, NULL);
 		vsi->vsi_vec_btr = DAOS_HDL_INVAL;
 	}
 
 	/* Destroy the in-memory aggregation tree */
-	if (!daos_handle_is_inval(vsi->vsi_agg_btr)) {
+	if (daos_handle_is_valid(vsi->vsi_agg_btr)) {
 		dbtree_destroy(vsi->vsi_agg_btr, NULL);
 		vsi->vsi_agg_btr = DAOS_HDL_INVAL;
 	}

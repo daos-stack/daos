@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Incarnation log wrappers for fetching the log and checking existence
@@ -216,7 +199,8 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
 int
 vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 		   const daos_epoch_range_t *epr, bool discard,
-		   daos_epoch_t punched, struct vos_ilog_info *info);
+		   const struct vos_punch_record *parent_punch,
+		   struct vos_ilog_info *info);
 
 /* #define ILOG_TRACE */
 #ifdef ILOG_TRACE
@@ -279,7 +263,7 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 		(bound), (leaf));					\
 	__rc = vos_ilog_punch_(cont, ilog, epr, bound, parent, info,	\
 			       ts_set, leaf, replay);			\
-	D_DEBUG(DB_TRACE, "vos_ilog_punch: returned " DF_RC"\n",	\
+	D_DEBUG(DB_TRACE, "vos_ilog_punch: returned "DF_RC"\n",		\
 		DP_RC(__rc));						\
 	__rc;								\
 })
@@ -304,6 +288,17 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 })
 
 #endif
+
+static inline void
+vos_ilog_ts_ignore(struct umem_instance *umm, struct ilog_df *ilog)
+{
+	if (!DAOS_ON_VALGRIND)
+		return;
+
+	umem_tx_xadd_ptr(umm, ilog_ts_idx_get(ilog), sizeof(int),
+			 POBJ_XADD_NO_SNAPSHOT);
+}
+
 
 /** Check if the timestamps associated with the ilog are in cache.  If so,
  *  add them to the set.
@@ -333,5 +328,8 @@ vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog);
  */
 void
 vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type);
+
+void
+vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc);
 
 #endif /* __VOS_ILOG_H__ */

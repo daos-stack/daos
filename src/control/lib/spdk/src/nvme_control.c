@@ -1,24 +1,7 @@
 /**
-* (C) Copyright 2018-2020 Intel Corporation.
+* (C) Copyright 2018-2021 Intel Corporation.
 *
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*    http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*
-* GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-* The Government's rights to use, modify, reproduce, release, perform, display,
-* or disclose this software are subject to the terms of the Apache License as
-* provided in Contract No. 8F-30005.
-* Any reproduction of computer software, computer software documentation, or
-* portions thereof marked with this legend must also reproduce the markings.
+* SPDX-License-Identifier: BSD-2-Clause-Patent
 */
 
 #include <spdk/stdinc.h>
@@ -34,10 +17,10 @@ enum lba0_write_result {
 	LBA0_WRITE_FAIL		= 0x2,
 };
 
+/** data structure passed to NVMe cmd completion */
 struct lba0_data {
 	struct ns_entry		*ns_entry;
-	char			*buf;
-	enum lba0_write_result	 write_result;
+	enum lba0_write_result	 result;
 };
 
 static void
@@ -56,6 +39,12 @@ get_health_logs(struct spdk_nvme_ctrlr *ctrlr, struct health_entry *health)
 {
 	struct spdk_nvme_health_information_page hp;
 	int					 rc = 0;
+
+	/** NVMe SSDs on GCP do not support this */
+	if (!spdk_nvme_ctrlr_is_log_page_supported(ctrlr,
+					SPDK_NVME_LOG_HEALTH_INFORMATION))
+		/** not much we can do, just skip */
+		return 0;
 
 	health->inflight++;
 	rc = spdk_nvme_ctrlr_cmd_get_log_page(ctrlr,
@@ -81,52 +70,20 @@ nvme_discover(void)
 	return _discover(&spdk_nvme_probe, true, &get_health_logs);
 }
 
-static void
-read_complete(void *arg, const struct spdk_nvme_cpl *completion)
-{
-	struct lba0_data *data = arg;
-
-	spdk_free(data->buf);
-
-	if (spdk_nvme_cpl_is_success(completion)) {
-		data->write_result = LBA0_WRITE_SUCCESS;
-		return;
-	}
-
-	spdk_nvme_qpair_print_completion(data->ns_entry->qpair,
-					 (struct spdk_nvme_cpl *)completion);
-	fprintf(stderr, "I/O error status: %s\n",
-		spdk_nvme_cpl_get_status_string(&completion->status));
-	fprintf(stderr, "Read I/O failed, aborting run\n");
-	data->write_result = LBA0_WRITE_FAIL;
-}
-
+/** callback for write command completion when wiping out a ns */
 static void
 write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 {
-	struct lba0_data	*data = arg;
-	struct ns_entry		*ns_entry = data->ns_entry;
-	int			 rc;
+	struct lba0_data *data = arg;
 
 	if (spdk_nvme_cpl_is_success(completion)) {
-		rc = spdk_nvme_ns_cmd_read(ns_entry->ns, ns_entry->qpair,
-					   data->buf, 0, 1, read_complete,
-					   (void *)data, 0);
-		if (rc != 0) {
-			fprintf(stderr, "starting read I/O failed (%d)\n", rc);
-			data->write_result = LBA0_WRITE_FAIL;
-		}
-		return;
+		data->result = LBA0_WRITE_SUCCESS;
+	} else {
+		fprintf(stderr, "I/O error status: %s\n",
+			spdk_nvme_cpl_get_status_string(&completion->status));
+		fprintf(stderr, "Write I/O failed, aborting run\n");
+		data->result = LBA0_WRITE_FAIL;
 	}
-
-	spdk_nvme_qpair_print_completion(data->ns_entry->qpair,
-					 (struct spdk_nvme_cpl *)completion);
-	fprintf(stderr, "I/O error status: %s\n",
-		spdk_nvme_cpl_get_status_string(&completion->status));
-	fprintf(stderr, "Read I/O failed, aborting run\n");
-	data->write_result = LBA0_WRITE_FAIL;
-
-	spdk_free(data->buf);
 }
 
 static struct wipe_res_t *
@@ -135,60 +92,74 @@ wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
 	struct lba0_data	 data;
 	struct wipe_res_t	*res = NULL, *tmp = NULL;
 	int			 rc;
+	struct spdk_nvme_qpair	*qpair;
+	char			*buf;
 
+	res = init_wipe_res();
+
+	/** convert pci addr to string */
+	rc = spdk_pci_addr_fmt(res->ctrlr_pci_addr, sizeof(res->ctrlr_pci_addr),
+			       &centry->pci_addr);
+	if (rc != 0) {
+		res->rc = -NVMEC_ERR_PCI_ADDR_FMT;
+		return res;
+	}
+
+	/** allocate NVMe queue pair for the controller */
+	qpair = spdk_nvme_ctrlr_alloc_io_qpair(centry->ctrlr, NULL, 0);
+	if (qpair == NULL) {
+		snprintf(res->info, sizeof(res->info),
+			 "spdk_nvme_ctrlr_alloc_io_qpair()\n");
+		res->rc = -1;
+		return res;
+	}
+
+	/** allocate a 4K page, with 4K alignment */
+	buf =  spdk_dma_zmalloc(4096, 4096, NULL);
+	if (buf == NULL) {
+		snprintf(res->info, sizeof(res->info),
+			 "spdk_dma_zmalloc()\n");
+		res->rc = -1;
+		spdk_nvme_ctrlr_free_io_qpair(qpair);
+		return res;
+	}
+
+	/** iterate over the namespaces and wipe them out individually */
 	while (nentry != NULL) {
-		res = init_wipe_res();
-		res->next = tmp;
-		tmp = res;
+		uint32_t sector_size;
 
+		if (tmp == NULL) {
+			/** first iteration */
+			tmp = res;
+		} else {
+			/** allocate new res */
+			res = init_wipe_res();
+			res->next = tmp;
+			tmp = res;
+		}
+
+		/** retrieve namespace ID and sector size */
 		res->ns_id = spdk_nvme_ns_get_id(nentry->ns);
+		sector_size = spdk_nvme_ns_get_sector_size(nentry->ns);
 
-		rc = spdk_pci_addr_fmt(res->ctrlr_pci_addr,
-				       sizeof(res->ctrlr_pci_addr),
-				       &centry->pci_addr);
-		if (rc != 0) {
-			res->rc = -NVMEC_ERR_PCI_ADDR_FMT;
-			return res;
-		}
-
-		nentry->qpair = spdk_nvme_ctrlr_alloc_io_qpair(centry->ctrlr,
-							       NULL, 0);
-		if (nentry->qpair == NULL) {
-			snprintf(res->info, sizeof(res->info),
-				 "spdk_nvme_ctrlr_alloc_io_qpair()\n");
-			res->rc = -1;
-			return res;
-		}
-
-		data.buf = spdk_zmalloc(0x1000, 0x1000, NULL,
-					SPDK_ENV_SOCKET_ID_ANY,
-					SPDK_MALLOC_DMA);
-		if (data.buf == NULL) {
-			snprintf(res->info, sizeof(res->info),
-				 "spdk_zmalloc()\n");
-			res->rc = -1;
-			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
-			return res;
-		}
-		data.write_result = LBA0_WRITE_PENDING;
+		data.result = LBA0_WRITE_PENDING;
 		data.ns_entry = nentry;
 
-		rc = spdk_nvme_ns_cmd_write(nentry->ns, nentry->qpair,
-					    data.buf, 0, /* LBA start */
-					    1, /* number of LBAs */
+		/** zero out the first 4K block */
+		rc = spdk_nvme_ns_cmd_write(nentry->ns, qpair,
+					    buf, 0 /** LBA start */,
+					    4096 / sector_size /** #LBAS */,
 					    write_complete, &data, 0);
 		if (rc != 0) {
 			snprintf(res->info, sizeof(res->info),
 				 "spdk_nvme_ns_cmd_write() (%d)\n", rc);
 			res->rc = -1;
-			spdk_free(data.buf);
-			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
-			return res;
+			break;
 		}
 
-		while (data.write_result == LBA0_WRITE_PENDING) {
-			rc = spdk_nvme_qpair_process_completions(nentry->qpair,
-								 0);
+		/** wait for command completion */
+		while (data.result == LBA0_WRITE_PENDING) {
+			rc = spdk_nvme_qpair_process_completions(qpair, 0);
 			if (rc < 0) {
 				fprintf(stderr,
 					"process completions returns %d\n", rc);
@@ -196,17 +167,19 @@ wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
 			}
 		}
 
-		if (data.write_result != LBA0_WRITE_SUCCESS) {
+		/** check command result */
+		if (data.result != LBA0_WRITE_SUCCESS) {
 			snprintf(res->info, sizeof(res->info),
-				 "spdk_nvme_ns_cmd_write() callback\n");
+				 "spdk_nvme_ns_cmd_write() failed\n");
 			res->rc = -1;
-			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
-			return res;
+			break;
 		}
 
-		spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 		nentry = nentry->next;
 	}
+
+	spdk_free(buf);
+	spdk_nvme_ctrlr_free_io_qpair(qpair);
 
 	return res;
 }
@@ -251,10 +224,10 @@ nvme_wipe_namespaces(void)
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
-	 *  for each NVMe controller found, giving our application a choice on
-	 *  whether to attach to each controller.  attach_cb will then be
-	 *  called for each controller after the SPDK NVMe driver has completed
-	 *  initializing the controller we chose to attach.
+	 * for each NVMe controller found, giving our application a choice on
+	 * whether to attach to each controller.  attach_cb will then be
+	 * called for each controller after the SPDK NVMe driver has completed
+	 * initializing the controller we chose to attach.
 	 */
 	rc = spdk_nvme_probe(NULL, NULL, probe_cb, attach_cb, NULL);
 	if (rc < 0) {
@@ -421,3 +394,97 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	ret->rc = rc;
 	return ret;
 }
+
+static int
+is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
+		     int num_whitelist_devices)
+{
+	int			i;
+	struct spdk_pci_addr    tmp;
+
+	if (spdk_pci_addr_parse(&tmp, pci_addr) != 0) {
+		fprintf(stderr, "invalid address %s\n", pci_addr);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < num_whitelist_devices; i++) {
+		if (spdk_pci_addr_compare(&tmp, &whitelist[i]) == 0) {
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+/** Add PCI address to spdk_env_opts whitelist, ignoring any duplicates. */
+static int
+opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
+		  char *traddr)
+{
+	int			rc;
+	size_t			count = opts->num_pci_addr;
+	struct spdk_pci_addr   *tmp = *list;
+
+	rc = is_addr_in_whitelist(traddr, *list, count);
+	if (rc < 0)
+		return rc;
+	if (rc == 1)
+		return 0;
+
+	tmp = realloc(tmp, sizeof(*tmp) * (count + 1));
+	if (tmp == NULL) {
+		fprintf(stderr, "realloc error\n");
+		return -ENOMEM;
+	}
+
+	*list = tmp;
+	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
+		fprintf(stderr, "Invalid address %s\n", traddr);
+		return -EINVAL;
+	}
+
+	opts->num_pci_addr++;
+	return 0;
+}
+
+struct ret_t *
+daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
+{
+	struct ret_t		*ret = init_ret();
+	struct spdk_env_opts	 opts = {};
+	int			 rc, i;
+
+	spdk_env_opts_init(&opts);
+
+	if (mem_sz > 0)
+		opts.mem_size = mem_sz;
+	if (env_ctx != NULL)
+		opts.env_context = env_ctx;
+	if (nr_pcil > 0) {
+		for (i = 0; i < nr_pcil; i++) {
+			fprintf(stderr, "spdk env adding pci: %s\n", pcil[i]);
+
+			rc = opts_add_pci_addr(&opts, &opts.pci_allowed,
+					       pcil[i]);
+			if (rc < 0) {
+				fprintf(stderr, "spdk env add pci: %d\n", rc);
+				sprintf(ret->info, "DAOS SPDK add pci failed");
+				goto out;
+			}
+		}
+		opts.num_pci_addr = nr_pcil;
+	}
+	opts.name = "daos_admin";
+	opts.shm_id = getpid();
+
+	rc = spdk_env_init(&opts);
+	if (rc < 0) {
+		fprintf(stderr, "spdk env init: %d\n", rc);
+		sprintf(ret->info, "DAOS SPDK init failed");
+	}
+
+out:
+	ret->rc = rc;
+	return ret;
+}
+

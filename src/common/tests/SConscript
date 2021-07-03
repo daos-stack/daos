@@ -1,39 +1,44 @@
 """Build daos common tests"""
 import daos_build
-from prereq_tools import GitRepoRetriever
 
-def define_checksum_timing(build, env, prereqs):
+def define_checksum_timing(build, env):
     """Define the Checksum Timing build"""
     checksum_timing_libs = ['daos_common', 'gurt']
     build.test(env, 'checksum_timing', 'checksum_timing.c',
                LIBS=checksum_timing_libs)
 
+def define_compress_timing(build, env):
+    """Define the Compress Timing build"""
+    compress_timing_libs = ['daos_common', 'gurt']
+    build.test(env, 'compress_timing', 'compress_timing.c',
+               LIBS=compress_timing_libs)
 
 def scons():
     """Execute build"""
-    Import('tenv', 'prereqs')
+    Import('tenv')
 
     common_test_utils = tenv.SharedObject(['test_mocks.c', 'test_utils.c'])
     Export('common_test_utils')
+    tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
 
     utest_utils = tenv.SharedObject('utest_common.c')
     Export('utest_utils')
 
     daos_build.test(tenv, 'btree', ['btree.c', utest_utils],
-                    LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
+                    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(tenv, 'umem_test', ['umem_test.c', utest_utils],
-                    LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
+                    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(tenv, 'btree_direct', ['btree_direct.c', utest_utils],
-                    LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
+                    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(tenv, 'other', 'other.c',
-                    LIBS=['daos_common', 'gurt', 'cart'])
+                    LIBS=['daos_common_pmem', 'gurt', 'cart'])
     common_test = daos_build.test(tenv, 'common_test',
-                    ['common_test.c', 'checksum_tests.c', 'compress_tests.c',
-                    'misc_tests.c'],
-                    LIBS=['daos_common', 'daos_tests', 'gurt', 'cart',
-                          'cmocka'])
+                                  ['common_test.c', 'checksum_tests.c',
+                                   'compress_tests.c', 'misc_tests.c'],
+                                  LIBS=['daos_common', 'daos_tests',
+                                        'gurt', 'cart', 'cmocka'])
     daos_build.test(tenv, 'lru', 'lru.c',
-                    LIBS=['daos_common', 'gurt', 'cart'])
+                    LIBS=['daos_common_pmem', 'gurt', 'cart'])
     daos_build.test(tenv, 'sched', 'sched.c',
                     LIBS=['daos_common', 'gurt', 'cart', 'cmocka'])
     daos_build.test(tenv, 'abt_perf', 'abt_perf.c',
@@ -42,7 +47,10 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'cmocka'])
     daos_build.test(tenv, 'prop_tests', 'prop_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
-    define_checksum_timing(daos_build, tenv, prereqs)
+    daos_build.test(tenv, 'fault_domain_tests', 'fault_domain_tests.c',
+                    LIBS=['daos_common', 'gurt', 'cmocka'])
+    define_checksum_timing(daos_build, tenv)
+    define_compress_timing(daos_build, tenv)
 
     tenv.Install('$PREFIX/bin/', [common_test])
 

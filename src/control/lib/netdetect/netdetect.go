@@ -1,26 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
-//
-// +build linux,amd64
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package netdetect
@@ -300,8 +281,8 @@ func Init(parent context.Context) (context.Context, error) {
 	}
 
 	ndc.deviceScanCfg, err = initDeviceScan(ndc.topology)
-	log.Debugf("initDeviceScan completed.  Depth %d, numObj %d, systemDeviceNames %v, hwlocDeviceNames %v",
-		ndc.deviceScanCfg.depth, ndc.deviceScanCfg.numObj, ndc.deviceScanCfg.systemDeviceNames, ndc.deviceScanCfg.hwlocDeviceNames)
+	log.Debugf("network detection, system names: %v, hwloc names %v",
+		ndc.deviceScanCfg.systemDeviceNames, ndc.deviceScanCfg.hwlocDeviceNames)
 	if err != nil {
 		cleanUp(ndc.topology)
 		return nil, err
@@ -929,7 +910,6 @@ func convertLibFabricToMercury(provider string) (string, error) {
 // that are either not known or static in the test environment
 func ValidateProviderStub(ctx context.Context, device string, provider string) error {
 	// Call the full function to get the results without generating any hard errors
-	log.Debugf("Calling ValidateProviderConfig with %s, %s", device, provider)
 	err := ValidateProviderConfig(ctx, device, provider)
 	if err != nil {
 		log.Debugf("ValidateProviderConfig (device: %s, provider %s) returned error: %v", device, provider, err)
@@ -980,7 +960,6 @@ func ValidateProviderConfig(ctx context.Context, device string, provider string)
 		return errors.New("device required")
 	}
 
-	log.Debugf("Input provider string: %s", provider)
 	// convert the Mercury provider string into a libfabric provider string
 	// to aid in matching it against the libfabric providers
 	libfabricProviderList, err := convertMercuryToLibFabric(provider)
@@ -1011,7 +990,6 @@ func ValidateProviderConfig(ctx context.Context, device string, provider string)
 	}
 
 	hfiDeviceCount := getHFIDeviceCount(ndc.deviceScanCfg.hwlocDeviceNames)
-	log.Debugf("There are %d hfi1 devices in the system", hfiDeviceCount)
 
 	// iterate over the libfabric records that match this provider
 	// and look for one that has a matching device name
@@ -1089,7 +1067,6 @@ func ValidateNUMAStub(ctx context.Context, device string, numaNode uint) error {
 func ValidateNUMAConfig(ctx context.Context, device string, numaNode uint) error {
 	var err error
 
-	log.Debugf("Validate network config for numaNode: %d", numaNode)
 	if device == "" {
 		return errors.New("device required")
 	}
@@ -1118,7 +1095,6 @@ func ValidateNUMAConfig(ctx context.Context, device string, numaNode uint) error
 	if deviceAffinity.NUMANode != numaNode {
 		return errors.Errorf("The NUMA node for device %s does not match the provided value %d.", device, numaNode)
 	}
-	log.Debugf("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
 	return nil
 }
 
@@ -1251,6 +1227,7 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*Fa
 						if err != nil {
 							continue
 						}
+						log.Debugf("scan result: %v\n", devScanResults)
 						ScanResults = append(ScanResults, devScanResults)
 						devCount++
 					}

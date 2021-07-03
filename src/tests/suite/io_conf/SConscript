@@ -5,7 +5,7 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
+    libraries = ['daos_common_pmem', 'daos', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid']
     libraries += ['cmocka', 'json-c']
 

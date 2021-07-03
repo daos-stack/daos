@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
@@ -40,26 +23,20 @@ class DaosCoreBase(TestWithServers):
     :avocado: recursive
     """
 
-    TEST_PATH = "/run/daos_tests/Tests/*"
-
     def __init__(self, *args, **kwargs):
         """Initialize the DaosCoreBase object."""
-        super(DaosCoreBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.subtest_name = None
-
-        test_timeout = self.params.get("test_timeout", self.TEST_PATH)
-        if test_timeout:
-            self.timeout = test_timeout
 
     def setUp(self):
         """Set up before each test."""
-        self.subtest_name = self.params.get("test_name", self.TEST_PATH)
+        self.subtest_name = self.get_test_param("test_name")
         self.subtest_name = self.subtest_name.replace(" ", "_")
 
         # obtain separate logs
         self.update_log_file_names(self.subtest_name)
 
-        super(DaosCoreBase, self).setUp()
+        super().setUp()
 
         # if no client specified update self.hostlist_clients to local host
         # and create a new self.hostfile_clients.
@@ -68,53 +45,80 @@ class DaosCoreBase(TestWithServers):
             self.hostfile_clients = write_host_file.write_host_file(
                 self.hostlist_clients, self.workdir, None)
 
+    def get_test_param(self, name, default=None):
+        """Get the test-specific test yaml parameter value.
+
+        Args:
+            name (str): name of the test yaml parameter to get
+            default (object): value to return if a value is not found
+
+        Returns:
+            object: the test-specific test yaml parameter value
+
+        """
+        path = "/".join(["/run/daos_tests", name, "*"])
+        return self.params.get(self.get_test_name(), path, default)
+
     @fail_on(CommandFailure)
-    def start_server_managers(self):
+    def start_server_managers(self, force=False):
         """Start the daos_server processes on each specified list of hosts.
 
         Enable scalable endpoint if requested with a test-specific
         'scalable_endpoint' yaml parameter.
+
+        Args:
+            force (bool, optional): whether or not to force starting the
+                servers. Defaults to False.
+
+        Returns:
+            bool: whether or not to force the starting of the agents
+
         """
         # Enable scalable endpoint (if requested) prior to starting the servers
-        scalable_endpoint = self.params.get("scalable_endpoint", self.TEST_PATH)
+        scalable_endpoint = self.get_test_param("scalable_endpoint")
         if scalable_endpoint:
             for server_mgr in self.server_managers:
-                for server_params in server_mgr.manager.job.yaml.server_params:
+                for engine_params in server_mgr.manager.job.yaml.engine_params:
                     # Number of CaRT contexts should equal or be greater than
                     # the number of DAOS targets
-                    targets = server_params.get_value("targets")
+                    targets = engine_params.get_value("targets")
 
                     # Convert the list of variable assignments into a dictionary
                     # of variable names and their values
-                    env_vars = server_params.get_value("env_vars")
+                    env_vars = engine_params.get_value("env_vars")
                     env_dict = {
                         item.split("=")[0]: item.split("=")[1]
                         for item in env_vars}
                     env_dict["CRT_CTX_SHARE_ADDR"] = "1"
+                    env_dict["COVFILE"] = "/tmp/test.cov"
                     if "CRT_CTX_NUM" not in env_dict or \
                             int(env_dict["CRT_CTX_NUM"]) < int(targets):
                         env_dict["CRT_CTX_NUM"] = str(targets)
-                    server_params.set_value("crt_ctx_share_addr", 1)
-                    server_params.set_value(
+                    engine_params.set_value("crt_ctx_share_addr", 1)
+                    engine_params.set_value(
                         "env_vars",
-                        ["=".join(items) for items in env_dict.items()]
+                        ["=".join(items) for items in list(env_dict.items())]
                     )
 
         # Start the servers
-        super(DaosCoreBase, self).start_server_managers()
+        return super().start_server_managers(force=force)
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
-        subtest = self.params.get("daos_test", self.TEST_PATH)
-        num_clients = self.params.get("num_clients", self.TEST_PATH)
+        subtest = self.get_test_param("daos_test")
+        num_clients = self.get_test_param("num_clients")
         if num_clients is None:
-            num_clients = self.params.get("num_clients",
-                                          '/run/daos_tests/num_clients/*')
+            num_clients = self.params.get("num_clients", '/run/daos_tests/*')
         scm_size = self.params.get("scm_size", '/run/pool/*')
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
-        args = self.params.get("args", self.TEST_PATH, "")
+        args = self.get_test_param("args", "")
+        stopped_ranks = self.get_test_param("stopped_ranks", [])
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
+        if self.hostlist_clients:
+            dmg.copy_certificates(
+                get_log_file("daosCA/certs"), self.hostlist_clients)
+            dmg.copy_configuration(self.hostlist_clients)
         self.client_mca += " --mca btl_tcp_if_include eth0"
 
         cmd = " ".join(
@@ -126,6 +130,7 @@ class DaosCoreBase(TestWithServers):
                 "-x", "=".join(["D_LOG_FILE", get_log_file(self.client_log)]),
                 "--map-by node", "-x", "D_LOG_MASK=DEBUG",
                 "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
+                "-x", "COVFILE=/tmp/test.cov",
                 self.daos_test,
                 "-n", dmg_config_file,
                 "".join(["-", subtest]),
@@ -134,7 +139,8 @@ class DaosCoreBase(TestWithServers):
         )
 
         env = {}
-        env['CMOCKA_XML_FILE'] = os.path.join(self.outputdir, "%g_results.xml")
+        env['CMOCKA_XML_FILE'] = os.path.join(self.outputdir,
+                                              "%g_cmocka_results.xml")
         env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
         env['POOL_SCM_SIZE'] = "{}".format(scm_size)
         if not nvme_size:
@@ -143,6 +149,20 @@ class DaosCoreBase(TestWithServers):
 
         if not load_mpi("openmpi"):
             self.fail("Failed to load openmpi")
+
+        # Update the expected status for each ranks that will be stopped by this
+        # test to avoid a false failure during tearDown().
+        if "random" in stopped_ranks:
+            # Set each expected rank state to be either stopped or running
+            for manager in self.server_managers:
+                manager.update_expected_states(
+                    None, ["Joined", "Stopped", "Excluded"])
+        else:
+            # Set the specific expected rank state to stopped
+            for rank in stopped_ranks:
+                for manager in self.server_managers:
+                    manager.update_expected_states(
+                        rank, ["Stopped", "Excluded"])
 
         try:
             process.run(cmd, env=env)
@@ -176,6 +196,7 @@ class DaosCoreBase(TestWithServers):
 <![CDATA[{2}]]>
     </system-err>
   </testcase>
-</testsuite>'''.format(testname, result.result.stdout, result.result.stderr))
+</testsuite>'''.format(
+    testname, result.result.stdout_text, result.result.stderr_text))
         except IOError as error:
             self.log.error("Error creating %s: %s", filename, error)

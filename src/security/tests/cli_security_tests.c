@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -29,6 +12,7 @@
 #include <stdlib.h>
 #include <setjmp.h>
 #include <cmocka.h>
+#include <daos/tests_lib.h>
 #include <daos_types.h>
 #include <daos_errno.h>
 #include <daos/common.h>
@@ -43,30 +27,21 @@
 #include "../auth.pb-c.h"
 #include "drpc_mocks.h"
 
-/*
- * Mocks
- */
-
-static char *getenv_return; /* value to be returned */
-static const char *getenv_name; /* saved input */
-char *getenv(const char *name)
-{
-	getenv_name = name;
-	return getenv_return;
-}
-
 /* unpacked content of response body */
-static Auth__Credential *drpc_call_resp_return_auth_credential;
+static Auth__Credential *drpc_call_resp_return_auth_cred;
 char *dc_agent_sockpath;
 
 static void
 init_default_drpc_resp_auth_credential(void)
 {
-	D_ALLOC_PTR(drpc_call_resp_return_auth_credential);
-	auth__credential__init(drpc_call_resp_return_auth_credential);
+	D_ALLOC_PTR(drpc_call_resp_return_auth_cred);
+	auth__credential__init(drpc_call_resp_return_auth_cred);
 
-	D_ALLOC_PTR(drpc_call_resp_return_auth_credential->token);
-	auth__token__init(drpc_call_resp_return_auth_credential->token);
+	D_ALLOC_PTR(drpc_call_resp_return_auth_cred->token);
+	auth__token__init(drpc_call_resp_return_auth_cred->token);
+
+	D_ALLOC_PTR(drpc_call_resp_return_auth_cred->verifier);
+	auth__token__init(drpc_call_resp_return_auth_cred->verifier);
 }
 
 static void
@@ -82,13 +57,13 @@ static void
 init_drpc_resp_with_default_cred(void)
 {
 	init_default_drpc_resp_auth_credential();
-	init_drpc_resp_with_cred(drpc_call_resp_return_auth_credential);
+	init_drpc_resp_with_cred(drpc_call_resp_return_auth_cred);
 }
 
 void
 free_drpc_call_resp_auth_credential()
 {
-	auth__credential__free_unpacked(drpc_call_resp_return_auth_credential,
+	auth__credential__free_unpacked(drpc_call_resp_return_auth_cred,
 					NULL);
 }
 
@@ -100,8 +75,6 @@ static int
 setup_security_mocks(void **state)
 {
 	/* Initialize mock values to something sane */
-	getenv_return = NULL;
-	getenv_name = NULL;
 	dc_agent_sockpath = DEFAULT_DAOS_AGENT_DRPC_SOCK;
 
 	mock_drpc_connect_setup();
@@ -132,7 +105,7 @@ teardown_security_mocks(void **state)
 static void
 test_request_credentials_fails_with_null_creds(void **state)
 {
-	assert_int_equal(dc_sec_request_creds(NULL), -DER_INVAL);
+	assert_rc_equal(dc_sec_request_creds(NULL), -DER_INVAL);
 }
 
 static void
@@ -142,7 +115,7 @@ test_request_credentials_succeeds_with_good_values(void **state)
 
 	memset(&creds, 0, sizeof(d_iov_t));
 
-	assert_int_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
+	assert_rc_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
 
 	daos_iov_free(&creds);
 }
@@ -155,7 +128,7 @@ test_request_credentials_fails_if_drpc_connect_fails(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	free_drpc_connect_return(); /* drpc_connect returns NULL on failure */
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_BADPATH);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_BADPATH);
 
 	daos_iov_free(&creds);
 }
@@ -183,7 +156,7 @@ test_request_credentials_fails_if_drpc_call_fails(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	drpc_call_return = -DER_BUSY;
 
-	assert_int_equal(dc_sec_request_creds(&creds),
+	assert_rc_equal(dc_sec_request_creds(&creds),
 			drpc_call_return);
 
 	daos_iov_free(&creds);
@@ -257,7 +230,7 @@ test_request_credentials_fails_if_reply_null(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	drpc_call_resp_return_ptr = NULL;
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_NOREPLY);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_NOREPLY);
 
 	daos_iov_free(&creds);
 }
@@ -270,7 +243,7 @@ test_request_credentials_fails_if_reply_status_failure(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	drpc_call_resp_return_content.status = DRPC__STATUS__FAILURE;
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_MISC);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_MISC);
 
 	daos_iov_free(&creds);
 }
@@ -285,7 +258,7 @@ test_request_credentials_fails_if_reply_body_malformed(void **state)
 	D_ALLOC(drpc_call_resp_return_content.body.data, 1);
 	drpc_call_resp_return_content.body.len = 1;
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_PROTO);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_PROTO);
 
 	daos_iov_free(&creds);
 }
@@ -298,7 +271,7 @@ test_request_credentials_fails_if_reply_cred_missing(void **state)
 	memset(&creds, 0, sizeof(d_iov_t));
 	init_drpc_resp_with_cred(NULL);
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_PROTO);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_PROTO);
 
 	daos_iov_free(&creds);
 }
@@ -309,16 +282,31 @@ test_request_credentials_fails_if_reply_token_missing(void **state)
 	d_iov_t creds;
 
 	memset(&creds, 0, sizeof(d_iov_t));
-	auth__token__free_unpacked(drpc_call_resp_return_auth_credential->token,
+	auth__token__free_unpacked(drpc_call_resp_return_auth_cred->token,
 				   NULL);
-	drpc_call_resp_return_auth_credential->token = NULL;
-	init_drpc_resp_with_cred(drpc_call_resp_return_auth_credential);
+	drpc_call_resp_return_auth_cred->token = NULL;
+	init_drpc_resp_with_cred(drpc_call_resp_return_auth_cred);
+
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_PROTO);
+
+	daos_iov_free(&creds);
+}
+
+static void
+test_request_cred_fails_if_reply_verifier_missing(void **state)
+{
+	d_iov_t creds;
+
+	memset(&creds, 0, sizeof(d_iov_t));
+	auth__token__free_unpacked(drpc_call_resp_return_auth_cred->verifier,
+				   NULL);
+	drpc_call_resp_return_auth_cred->verifier = NULL;
+	init_drpc_resp_with_cred(drpc_call_resp_return_auth_cred);
 
 	assert_int_equal(dc_sec_request_creds(&creds), -DER_PROTO);
 
 	daos_iov_free(&creds);
 }
-
 static void
 test_request_credentials_fails_if_reply_cred_status(void **state)
 {
@@ -329,7 +317,7 @@ test_request_credentials_fails_if_reply_cred_status(void **state)
 	pack_get_cred_resp_in_drpc_call_resp_body(&resp);
 	memset(&creds, 0, sizeof(d_iov_t));
 
-	assert_int_equal(dc_sec_request_creds(&creds), -DER_UNKNOWN);
+	assert_rc_equal(dc_sec_request_creds(&creds), -DER_UNKNOWN);
 }
 
 static void
@@ -345,12 +333,12 @@ test_request_credentials_returns_raw_bytes(void **state)
 	 * Credential bytes == raw bytes of the packed Auth__Credential
 	 */
 	expected_len = auth__credential__get_packed_size(
-			drpc_call_resp_return_auth_credential);
+			drpc_call_resp_return_auth_cred);
 	D_ALLOC(expected_data, expected_len);
-	auth__credential__pack(drpc_call_resp_return_auth_credential,
+	auth__credential__pack(drpc_call_resp_return_auth_cred,
 			expected_data);
 
-	assert_int_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
+	assert_rc_equal(dc_sec_request_creds(&creds), DER_SUCCESS);
 
 	assert_int_equal(creds.iov_buf_len, expected_len);
 	assert_int_equal(creds.iov_len, expected_len);
@@ -396,12 +384,15 @@ main(void)
 		SECURITY_UTEST(
 			test_request_credentials_fails_if_reply_cred_missing),
 		SECURITY_UTEST(
+			test_request_cred_fails_if_reply_verifier_missing),
+		SECURITY_UTEST(
 			test_request_credentials_fails_if_reply_cred_status),
 		SECURITY_UTEST(
 			test_request_credentials_returns_raw_bytes),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("security_cli_security",
+					   tests, NULL, NULL);
 }
 
 #undef SECURITY_UTEST

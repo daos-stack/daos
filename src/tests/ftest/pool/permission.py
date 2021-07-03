@@ -1,32 +1,15 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from avocado.core.exceptions import TestFail
 from test_utils_pool import TestPool
 
-RESULT_PASS = "PASS"
+RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
 
 
@@ -40,24 +23,27 @@ class Permission(TestWithServers):
     :avocado: recursive
     """
 
+    # Cancel any tests with tickets already assigned
+    CANCEL_FOR_TICKET = [
+        ["DAOS-3442", "mode", 73],
+        ["DAOS-3442", "mode", 146, "perm", 0],
+        ["DAOS-3442", "mode", 146, "perm", 2],
+        ["DAOS-3442", "mode", 292],
+    ]
+
     def test_connectpermission(self):
         """Test ID: DAOS-???.
 
         Test Description:
             Test pool connections with specific permissions.
 
-        :avocado: tags=pool,permission,connectpermission
+        :avocado: tags=all,daily_regression,pool,permission,connectpermission
         """
         # parameter used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
 
         # parameter used for pool connect
         permissions = self.params.get("perm", '/run/createtests/permissions/*')
-
-        if createmode == 73 or \
-           (createmode == 146 and permissions != 1) or \
-           (createmode == 292 and permissions != 3):
-            self.cancelForTicket("DAOS-3442")
 
         if createmode == 73:
             expected_result = RESULT_FAIL
@@ -102,7 +88,7 @@ class Permission(TestWithServers):
             Test whether file modification happens as expected under different
             permission levels.
 
-        :avocado: tags=pool,permission,filemodification
+        :avocado: tags=all,daily_regression,pool,permission,filemodification
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
@@ -122,6 +108,7 @@ class Permission(TestWithServers):
         self.test_log.debug("Pool initialization successful")
         self.pool.get_params(self)
         self.pool.mode.value = createmode
+        self.pool.create()
         self.test_log.debug("Pool Creation successful")
 
         try:
@@ -149,10 +136,10 @@ class Permission(TestWithServers):
             self.container.open()
             self.test_log.debug("Container open successful")
 
-            thedata = "a string that I want to stuff into an object"
+            thedata = b"a string that I want to stuff into an object"
             size = 45
-            dkey = "this is the dkey"
-            akey = "this is the akey"
+            dkey = b"this is the dkey"
+            akey = b"this is the akey"
 
             self.container.write_an_obj(thedata, size, dkey, akey)
             self.test_log.debug("Container write successful")

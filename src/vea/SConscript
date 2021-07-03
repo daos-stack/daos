@@ -7,12 +7,17 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
+    if not prereqs.server_requested():
+        return
+
     denv = env.Clone()
     prereqs.require(denv, 'pmdk')
 
-    denv.Library('vea', Glob('*.c'), LIBS=['daos_common', 'gurt'])
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    denv.Library('vea', Glob('*.c'), LIBS=['daos_common_pmem', 'gurt'])
 
-    SConscript('tests/SConscript', exports='denv')
+    if prereqs.test_requested():
+        SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
     scons()

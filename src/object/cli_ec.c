@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS client erasure-coded object IO handling.
@@ -81,8 +64,8 @@ obj_ec_recxs_fini(struct obj_ec_recx_array *recxs)
 {
 	if (recxs == NULL)
 		return;
-	if (recxs->oer_recxs != NULL)
-		D_FREE(recxs->oer_recxs);
+
+	D_FREE(recxs->oer_recxs);
 	recxs->oer_nr = 0;
 	recxs->oer_stripe_total = 0;
 	obj_ec_pbuf_fini(recxs);
@@ -150,6 +133,9 @@ obj_ec_seg_sorter_init(struct obj_ec_seg_sorter *sorter, uint32_t tgt_nr,
 void
 obj_ec_seg_sorter_fini(struct obj_ec_seg_sorter *sorter)
 {
+	if (sorter == NULL)
+		return;
+
 	D_FREE(sorter->ess_tgts);
 }
 
@@ -294,7 +280,8 @@ obj_ec_recov_tgt_recx_nrs(struct obj_reasb_req *reasb_req,
 		if (tgt_nr == obj_ec_data_tgt_nr(oca))
 			break;
 	}
-	D_ASSERT(tgt_nr == obj_ec_data_tgt_nr(oca));
+	D_ASSERTF(tgt_nr == obj_ec_data_tgt_nr(oca), "%d != %d",
+		  tgt_nr, obj_ec_data_tgt_nr(oca));
 }
 
 /** scan the iod to find the full_stripe recxs and some help info */
@@ -339,7 +326,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 						tgt_recx_nrs, j, update);
 			/* replica with one segment on each parity cell */
 			if (update) {
-				if (!frag_seg_counted) {
+				if (!frag_seg_counted && sgl) {
 					seg_nr += oca->u.ec.e_p * sgl->sg_nr;
 					frag_seg_counted = true;
 				} else {
@@ -398,7 +385,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 			ec_parity_tgt_recx_nrs(oca, tgt_recx_nrs, j,
 					       partial_nr);
 			/* replica to each parity cell */
-			if (!frag_seg_counted) {
+			if (!frag_seg_counted && sgl) {
 				seg_nr += oca->u.ec.e_p * sgl->sg_nr *
 						partial_nr;
 				frag_seg_counted = true;
@@ -435,7 +422,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 	if (rc)
 		goto out;
 	/* init the reassembled sgl and seg sorter with max possible sg_nr */
-	if (!punch) {
+	if (!punch && sgl != NULL) {
 		rc = d_sgl_init(&reasb_req->orr_sgls[iod_idx],
 				   seg_nr + sgl->sg_nr);
 		if (rc)
@@ -546,8 +533,8 @@ codec_get(struct obj_reasb_req *reasb_req, daos_obj_id_t oid)
  * struct obj_ec_recx_array::oer_pbufs.
  */
 static int
-obj_ec_recx_encode(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
-		   struct daos_oclass_attr *oca, struct obj_ec_codec *codec,
+obj_ec_recx_encode(struct obj_ec_codec *codec, struct daos_oclass_attr *oca,
+		   daos_iod_t *iod, d_sg_list_t *sgl,
 		   struct obj_ec_recx_array *recx_array)
 {
 	struct obj_ec_recx	*ec_recx;
@@ -575,14 +562,6 @@ obj_ec_recx_encode(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 		recx_nr = recx_array->oer_nr;
 	}
 	stripe_bytes = cell_bytes * oca->u.ec.e_k;
-	if (codec == NULL) {
-		codec = obj_ec_codec_get(daos_obj_id2class(oid));
-		if (codec == NULL) {
-			D_ERROR(DF_OID" failed to get ec codec.\n",
-				DP_OID(oid));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-	}
 
 	/* calculate EC parity for each full_stripe */
 	for (i = 0; i < recx_nr; i++) {
@@ -945,8 +924,8 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 	tgt_recx_nrs = ec_recx_array->oer_tgt_recx_nrs;
 	tgt_recx_idxs = ec_recx_array->oer_tgt_recx_idxs;
 	D_PRINT("================ reasb req %d ================\n", i);
-	D_PRINT("iod, akey %s, iod_size "DF_U64", iod_nr %d\n",
-		(char *)iod->iod_name.iov_buf, iod->iod_size,
+	D_PRINT("iod, akey "DF_KEY", iod_size "DF_U64", iod_nr %d\n",
+		DP_KEY(&iod->iod_name), iod->iod_size,
 		iod->iod_nr);
 	D_PRINT("recxs per target [daos_idx, nr]:\n");
 	for (tgt = 0; tgt < obj_ec_tgt_nr(oca); tgt++) {
@@ -1088,7 +1067,7 @@ static int
 obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		  struct daos_oclass_attr *oca,
 		  struct obj_reasb_req *reasb_req, uint32_t iod_idx,
-		  bool update)
+		  bool update, int *valid_tgt_nr)
 {
 	struct obj_ec_recx_array	*ec_recx_array =
 						&reasb_req->orr_recxs[iod_idx];
@@ -1112,8 +1091,8 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	daos_recx_t			*recx, *full_recx, tmp_recx;
 	d_iov_t				*iovs = NULL;
 	uint32_t			 i, j, k, idx, last;
-	uint32_t			 tgt_nr, empty_nr, valid_tgt_nr;
-	uint32_t			 iov_idx = 0, iov_nr = sgl->sg_nr;
+	uint32_t			 tgt_nr, empty_nr;
+	uint32_t			 iov_idx = 0, iov_nr = 0;
 	uint64_t			 iov_off = 0, recx_end, full_end;
 	uint64_t			 rec_nr, iod_size = iod->iod_size;
 	bool				 with_full_stripe;
@@ -1121,12 +1100,15 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	int				 rc = 0;
 
 	D_ASSERT(cell_rec_nr > 0);
-	if (iov_nr <= EC_INLINE_IOVS) {
-		iovs = iov_inline;
-	} else {
-		D_ALLOC_ARRAY(iovs, iov_nr);
-		if (iovs == NULL)
-			return -DER_NOMEM;
+	if (sgl != NULL) {
+		iov_nr = sgl->sg_nr;
+		if (iov_nr <= EC_INLINE_IOVS) {
+			iovs = iov_inline;
+		} else {
+			D_ALLOC_ARRAY(iovs, iov_nr);
+			if (iovs == NULL)
+				return -DER_NOMEM;
+		}
 	}
 	punch = (update && iod->iod_size == DAOS_REC_ANY);
 
@@ -1134,7 +1116,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		recx = &iod->iod_recxs[i];
 		with_full_stripe = recx_with_full_stripe(i, ec_recx_array,
 							 &full_ec_recx);
-		if (!with_full_stripe || !update) {
+		if (punch || !with_full_stripe || !update) {
 			if (reasb_req->orr_recov) {
 				D_ASSERT(!update);
 				D_ASSERT(iod->iod_nr == 1);
@@ -1146,6 +1128,8 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 			if (!reasb_req->orr_size_fetched)
 				ec_data_recx_add(recx, riod->iod_recxs, ridx,
 						 tgt_recx_idxs, oca, update);
+			if (punch)
+				continue;
 			if (!reasb_req->orr_size_fetch) {
 				/* After size query, server returns as zero
 				 * iod_size (Empty tree or all holes, DAOS array
@@ -1175,9 +1159,9 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 				  "bad recx\n");
 			ec_data_recx_add(&tmp_recx, riod->iod_recxs, ridx,
 					 tgt_recx_idxs, oca, true);
-			ec_data_seg_add(&tmp_recx, iod_size, sgl, &iov_idx,
-					&iov_off, oca, iovs, iov_nr, sorter,
-					true);
+			ec_data_seg_add(&tmp_recx, iod_size,
+					sgl, &iov_idx, &iov_off, oca,
+					iovs, iov_nr, sorter, true);
 		}
 		ec_data_recx_add(full_recx, riod->iod_recxs, ridx,
 				 tgt_recx_idxs, oca, false);
@@ -1197,7 +1181,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		}
 	}
 
-	if (update) {
+	if (update && !punch) {
 		for (i = 0; i < ec_recx_array->oer_nr; i++) {
 			full_ec_recx = &ec_recx_array->oer_recxs[i];
 			full_recx = &full_ec_recx->oer_recx;
@@ -1245,11 +1229,11 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		last = tgt_recx_idxs[i] + tgt_recx_nrs[i];
 	}
 	oiod->oiod_nr = idx;
-	valid_tgt_nr = 0;
+	*valid_tgt_nr = 0;
 	for (i = 0, rec_nr = 0, last = 0; i < tgt_nr; i++) {
 		if (tgt_recx_nrs[i] == 0)
 			continue;
-		valid_tgt_nr++;
+		(*valid_tgt_nr)++;
 		siod = &oiod->oiod_siods[tidx[i]];
 		siod->siod_tgt_idx = i;
 		siod->siod_idx = tgt_recx_idxs[i];
@@ -1261,8 +1245,6 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		}
 		last = tgt_recx_idxs[i] + tgt_recx_nrs[i];
 	}
-	D_ASSERT(valid_tgt_nr >= 1);
-	reasb_req->orr_single_tgt = (valid_tgt_nr == 1);
 
 #if EC_DEBUG
 	obj_reasb_req_dump(reasb_req, sgl, oca, stripe_rec_nr, iod_idx);
@@ -1331,11 +1313,11 @@ obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 }
 
 int
-obj_ec_singv_split(daos_obj_id_t oid, uint32_t shard, daos_size_t iod_size,
-		   struct daos_oclass_attr *oca, d_sg_list_t *sgl)
+obj_ec_singv_split(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
+		   daos_size_t iod_size, d_sg_list_t *sgl)
 {
 	uint64_t c_bytes = obj_ec_singv_cell_bytes(iod_size, oca);
-	uint32_t shard_idx = shard % obj_ec_data_tgt_nr(oca);
+	uint32_t shard_idx = oid.id_shard % obj_ec_data_tgt_nr(oca);
 	char	*data = sgl->sg_iovs[0].iov_buf;
 
 	D_ASSERT(iod_size != DAOS_REC_ANY);
@@ -1343,14 +1325,12 @@ obj_ec_singv_split(daos_obj_id_t oid, uint32_t shard, daos_size_t iod_size,
 		memmove(data, data + shard_idx * c_bytes, c_bytes);
 
 	sgl->sg_iovs[0].iov_len = c_bytes;
-
 	return 0;
 }
 
 static int
-obj_ec_singv_encode(daos_obj_id_t oid, daos_iod_t *iod,
-		    struct daos_oclass_attr *oca,
-		    struct obj_ec_codec *codec, d_sg_list_t *sgl,
+obj_ec_singv_encode(struct obj_ec_codec *codec, struct daos_oclass_attr *oca,
+		    daos_iod_t *iod, d_sg_list_t *sgl,
 		    struct obj_ec_recx_array *recxs)
 {
 	uint64_t c_bytes;
@@ -1362,23 +1342,22 @@ obj_ec_singv_encode(daos_obj_id_t oid, daos_iod_t *iod,
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = obj_ec_recx_encode(oid, iod, sgl, oca, codec, recxs);
+	rc = obj_ec_recx_encode(codec, oca, iod, sgl, recxs);
 	if (rc) {
-		D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
-			DP_OID(oid), rc);
+		D_ERROR("obj_ec_recx_encode failed %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-
 out:
 	return rc;
 }
 
 int
-obj_ec_singv_encode_buf(daos_obj_id_t oid, int p_shard, daos_iod_t *iod,
-			struct daos_oclass_attr *oca,
-			d_sg_list_t *sgl, d_iov_t *e_iov)
+obj_ec_singv_encode_buf(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
+			daos_iod_t *iod, d_sg_list_t *sgl, d_iov_t *e_iov)
 {
 	struct obj_ec_recx_array recxs = { 0 };
+	struct obj_ec_codec *codec;
+	int p_shard; /* parity shard */
 	int idx;
 	int rc;
 
@@ -1390,11 +1369,13 @@ obj_ec_singv_encode_buf(daos_obj_id_t oid, int p_shard, daos_iod_t *iod,
 	recxs.oer_k = obj_ec_data_tgt_nr(oca);
 	recxs.oer_p = obj_ec_parity_tgt_nr(oca);
 	recxs.oer_stripe_total = 1;
-	rc = obj_ec_singv_encode(oid, iod, oca, NULL, sgl, &recxs);
+
+	codec = obj_ec_codec_get(daos_obj_id2class(oid.id_pub));
+	rc = obj_ec_singv_encode(codec, oca, iod, sgl, &recxs);
 	if (rc)
 		D_GOTO(out, rc);
 
-	p_shard = p_shard % obj_ec_tgt_nr(oca);
+	p_shard = oid.id_shard % obj_ec_tgt_nr(oca);
 	D_ASSERT(p_shard >= obj_ec_data_tgt_nr(oca));
 	idx = p_shard - obj_ec_data_tgt_nr(oca);
 	D_ASSERT(e_iov->iov_buf_len >=
@@ -1434,7 +1415,7 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 
 	ec_recx_array->oer_k = oca->u.ec.e_k;
 	ec_recx_array->oer_p = oca->u.ec.e_p;
-	if (obj_ec_singv_one_tgt(iod, sgl, oca)) {
+	if (obj_ec_singv_one_tgt(iod->iod_size, sgl, oca)) {
 		/* small singv stores on one target and replicates to all
 		 * parity targets.
 		 */
@@ -1516,8 +1497,7 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
-		rc = obj_ec_singv_encode(oid, iod, oca, codec, sgl,
-					 ec_recx_array);
+		rc = obj_ec_singv_encode(codec, oca, iod, sgl, ec_recx_array);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -1536,12 +1516,17 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 				  ec_recx_array->oer_pbufs[idx], cell_bytes);
 		r_sgl->sg_nr = iov_nr + obj_ec_parity_tgt_nr(oca);
 	} else {
-		/* copy the sgl */
-		rc = d_sgl_init(r_sgl, sgl->sg_nr);
-		if (rc)
-			goto out;
-		memcpy(r_sgl->sg_iovs, sgl->sg_iovs,
-		       sizeof(*sgl->sg_iovs) * sgl->sg_nr);
+		if (sgl != NULL) {
+			/* copy the sgl */
+			rc = d_sgl_init(r_sgl, sgl->sg_nr);
+			if (rc)
+				goto out;
+			memcpy(r_sgl->sg_iovs, sgl->sg_iovs,
+			       sizeof(*sgl->sg_iovs) * sgl->sg_nr);
+		} else {
+			r_sgl->sg_iovs = NULL;
+			r_sgl->sg_nr = 0;
+		}
 	}
 
 #if EC_DEBUG
@@ -1567,11 +1552,10 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 	}
 
 	for (i = 0; i < reasb_req->orr_iod_nr; i++) {
-		rc = obj_ec_recx_encode(reasb_req->orr_oid,
+		rc = obj_ec_recx_encode(codec,
+					reasb_req->orr_oca,
 					&reasb_req->orr_uiods[i],
 					&reasb_req->orr_usgls[i],
-					reasb_req->orr_oca,
-					codec,
 					&reasb_req->orr_recxs[i]);
 		if (rc) {
 			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
@@ -1590,6 +1574,7 @@ obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 {
 	bool	singv_only = true;
 	int	i, rc = 0;
+	int	valid_tgt_nr = 0;
 
 	reasb_req->orr_oid = oid;
 	reasb_req->orr_iod_nr = iod_nr;
@@ -1602,9 +1587,8 @@ obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 	 * request to server to query it, and then retry the IO request to do
 	 * the real fetch. If only with single-value, need not size_fetch ahead.
 	 */
-	if (reasb_req->orr_size_fetch) {
+	if (reasb_req->orr_size_fetched) {
 		reasb_req->orr_size_fetch = 0;
-		reasb_req->orr_size_fetched = 1;
 		iods = reasb_req->orr_uiods;
 	} else if (!update) {
 		for (i = 0; i < iod_nr; i++) {
@@ -1614,13 +1598,16 @@ obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 				singv_only = false;
 		}
 		/* if only with single-value, need not size_fetch */
-		if (singv_only)
+		if (singv_only && sgls != NULL)
 			reasb_req->orr_size_fetch = 0;
 	}
 
 	for (i = 0; i < iod_nr; i++) {
+		int tgt_nr = 0;
+
 		if (iods[i].iod_type == DAOS_IOD_SINGLE) {
-			rc = obj_ec_singv_req_reasb(oid, &iods[i], &sgls[i],
+			rc = obj_ec_singv_req_reasb(oid, &iods[i],
+						    sgls ? &sgls[i] : NULL,
 						    oca, reasb_req, i, update);
 			if (rc) {
 				D_ERROR(DF_OID" singv_req_reasb failed %d.\n",
@@ -1632,23 +1619,25 @@ obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 
 		singv_only = false;
 		/* For array EC obj, scan/encode/reasb for each iod */
-		rc = obj_ec_recx_scan(&iods[i], &sgls[i], oca, reasb_req, i,
-				      update);
+		rc = obj_ec_recx_scan(&iods[i], sgls ? &sgls[i] : NULL, oca,
+				      reasb_req, i, update);
 		if (rc) {
 			D_ERROR(DF_OID" obj_ec_recx_scan failed %d.\n",
 				DP_OID(oid), rc);
 			goto out;
 		}
 
-		rc = obj_ec_recx_reasb(&iods[i], &sgls[i], oca, reasb_req, i,
-				       update);
+		rc = obj_ec_recx_reasb(&iods[i], sgls ? &sgls[i] : NULL, oca,
+				       reasb_req, i, update, &tgt_nr);
 		if (rc) {
 			D_ERROR(DF_OID" obj_ec_recx_reasb failed %d.\n",
 				DP_OID(oid), rc);
 			goto out;
 		}
+		valid_tgt_nr = max(valid_tgt_nr, tgt_nr);
 	}
 
+	reasb_req->orr_single_tgt = valid_tgt_nr == 1;
 	reasb_req->orr_singv_only = singv_only;
 	rc = obj_ec_encode(reasb_req);
 	if (rc) {
@@ -1689,8 +1678,9 @@ out:
 void
 obj_ec_update_iod_size(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 {
-	daos_iod_t	*u_iods = reasb_req->orr_uiods;
-	daos_iod_t	*re_iods = reasb_req->orr_iods;
+	daos_iod_t		*u_iods = reasb_req->orr_uiods;
+	daos_iod_t		*re_iods = reasb_req->orr_iods;
+	struct obj_ec_fail_info *fail_info = reasb_req->orr_fail;
 	int i;
 
 	if (re_iods == NULL || u_iods == re_iods)
@@ -1699,6 +1689,17 @@ obj_ec_update_iod_size(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 	for (i = 0; i < iod_nr; i++) {
 		D_ASSERT(re_iods[i].iod_type == u_iods[i].iod_type);
 		u_iods[i].iod_size = re_iods[i].iod_size;
+	}
+
+	/* Set back the size if it is recovery task */
+	if (unlikely(fail_info != NULL)) {
+		for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
+			if (fail_info->efi_recov_tasks[i].ert_iod.iod_type !=
+							DAOS_IOD_SINGLE)
+				continue;
+			fail_info->efi_recov_tasks[i].ert_oiod->iod_size =
+				fail_info->efi_recov_tasks[i].ert_iod.iod_size;
+		}
 	}
 }
 
@@ -1872,7 +1873,7 @@ obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 static void
 obj_ec_recov_codec_free(struct obj_reasb_req *reasb_req)
 {
-	if (reasb_req->orr_fail && reasb_req->orr_fail->efi_recov_codec)
+	if (reasb_req->orr_fail)
 		D_FREE(reasb_req->orr_fail->efi_recov_codec);
 }
 
@@ -2154,7 +2155,7 @@ obj_ec_recov_task_fini(struct obj_reasb_req *reasb_req)
 
 	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
 		d_sgl_fini(&fail_info->efi_recov_tasks[i].ert_sgl, false);
-		if (!daos_handle_is_inval(fail_info->efi_recov_tasks[i].ert_th))
+		if (daos_handle_is_valid(fail_info->efi_recov_tasks[i].ert_th))
 			dc_tx_local_close(fail_info->efi_recov_tasks[i].ert_th);
 	}
 	D_FREE(fail_info->efi_recov_tasks);
@@ -2185,13 +2186,21 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 	if (fail_info->efi_stripe_sgls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	fail_info->efi_uiods = reasb_req->orr_uiods;
 	recx_ep_nr = 0;
 	for (i = 0; i < iod_nr; i++) {
 		stripe_list = &stripe_lists[i];
 		if (!reasb_req->orr_singv_only && stripe_list->re_nr == 0)
 			continue;
+
 		iod = &iods[i];
+		if (iod->iod_size == 0) {
+			/* If IOD size has be reset to 0 in the initial try,
+			 * let's reset it to the original iod_size to
+			 * satisfy the iod/sgl valid check in recover task.
+			 */
+			iod->iod_size = reasb_req->orr_uiods[i].iod_size;
+		}
+
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			buf_sz = daos_sgl_buf_size(&reasb_req->orr_usgls[i]);
 			buf_sz = max(iod->iod_size, buf_sz);
@@ -2266,6 +2275,7 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 			}
 			D_ASSERT(tidx < fail_info->efi_recov_ntasks);
 			rtask = &fail_info->efi_recov_tasks[tidx++];
+			rtask->ert_oiod = iod;
 			rtask->ert_iod.iod_name = iod->iod_name;
 			rtask->ert_iod.iod_type = iod->iod_type;
 			rtask->ert_iod.iod_size = recx_ep == NULL ?
@@ -2545,6 +2555,7 @@ obj_ec_recov_data(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		sgl = &sgls[i];
 		singv = (iod->iod_type == DAOS_IOD_SINGLE);
 		stripe_sgl = &stripe_sgls[i];
+		iod->iod_size = reasb_req->orr_iods[i].iod_size;
 		cell_sz = singv ? obj_ec_singv_cell_bytes(iod->iod_size, oca) :
 				  obj_ec_cell_rec_nr(oca) * iod->iod_size;
 		stripe_total_sz = cell_sz * obj_ec_tgt_nr(oca);
@@ -2553,7 +2564,8 @@ obj_ec_recov_data(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		for (j = 0; j < recx_nr; j++) {
 			if (singv) {
 				stripe_nr = 1;
-				if (obj_ec_singv_one_tgt(iod, sgl, oca))
+				if (obj_ec_singv_one_tgt(iod->iod_size,
+							 sgl, oca))
 					continue;
 			} else {
 				recx_ep = &stripe_list->re_items[j];
@@ -2791,8 +2803,11 @@ obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 		}
 	}
 
-	if (total == 0)
+	if (total == 0) {
+		D_FREE(*recxs_p);
+		*iod_nr = 0;
 		return 0;
+	}
 
 	D_ALLOC_ARRAY(tgt_recxs, total);
 	if (tgt_recxs == NULL)

@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -31,6 +14,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
@@ -89,9 +73,15 @@ func TestServer_getFaultDomain(t *testing.T) {
 	tmpDir, cleanup := common.CreateTestDir(t)
 	defer cleanup()
 
-	validFaultDomain := "/rack0/pdu1/node1"
+	validFaultDomain := "/host0"
 	cbScriptPath := filepath.Join(tmpDir, "cb.sh")
 	createFaultCBScriptFile(t, cbScriptPath, 0755, validFaultDomain)
+
+	oldConfigDir := build.ConfigDir
+	build.ConfigDir = tmpDir // overwrite for these tests
+	defer func() {
+		build.ConfigDir = oldConfigDir
+	}()
 
 	for name, tc := range map[string]struct {
 		cfg       *config.Server
@@ -112,6 +102,18 @@ func TestServer_getFaultDomain(t *testing.T) {
 				FaultPath: "junk",
 			},
 			expErr: config.FaultConfigFaultDomainInvalid,
+		},
+		"root-only path is not valid": {
+			cfg: &config.Server{
+				FaultPath: "/",
+			},
+			expErr: config.FaultConfigFaultDomainInvalid,
+		},
+		"too many layers": { // TODO DAOS-6353: change when multiple layers supported
+			cfg: &config.Server{
+				FaultPath: "/rack1/host0",
+			},
+			expErr: config.FaultConfigTooManyLayersInFaultDomain,
 		},
 		"cfg fault callback": {
 			cfg: &config.Server{
@@ -184,13 +186,35 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 	tmpDir, cleanup := common.CreateTestDir(t)
 	defer cleanup()
 
-	validFaultDomain := "/my/fault/domain"
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	relTmpDir, err := filepath.Rel(workingDir, tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	validFaultDomain := "/myfaultdomain"
 
 	goodScriptPath := filepath.Join(tmpDir, "good.sh")
 	createFaultCBScriptFile(t, goodScriptPath, 0755, validFaultDomain)
+	relScriptPath, err := filepath.Rel(workingDir, goodScriptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	badPermsScriptPath := filepath.Join(tmpDir, "noPerms.sh")
+	noPermsScriptPath := filepath.Join(tmpDir, "noPerms.sh")
+	createFaultCBScriptFile(t, noPermsScriptPath, 0000, validFaultDomain)
+
+	badPermsScriptPath := filepath.Join(tmpDir, "noExecPerms.sh")
 	createFaultCBScriptFile(t, badPermsScriptPath, 0600, validFaultDomain)
+
+	setuidScriptPath := filepath.Join(tmpDir, "setuid.sh")
+	createFaultCBScriptFile(t, setuidScriptPath, 0755|os.ModeSetuid, validFaultDomain)
+
+	tooLaxScriptPath := filepath.Join(tmpDir, "toolax.sh")
+	createFaultCBScriptFile(t, tooLaxScriptPath, 0666, validFaultDomain)
 
 	errorScriptPath := filepath.Join(tmpDir, "fail.sh")
 	createErrorScriptFile(t, errorScriptPath)
@@ -204,53 +228,114 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 	invalidScriptPath := filepath.Join(tmpDir, "invalid.sh")
 	createFaultCBScriptFile(t, invalidScriptPath, 0755, "some junk")
 
+	multiLayerScriptPath := filepath.Join(tmpDir, "multilayer.sh")
+	createFaultCBScriptFile(t, multiLayerScriptPath, 0755, "/one/two")
+
+	rootScriptPath := filepath.Join(tmpDir, "rootdomain.sh")
+	createFaultCBScriptFile(t, rootScriptPath, 0755, "/")
+
+	symlinkPath := filepath.Join(tmpDir, "symlink.sh")
+	if err := os.Symlink(goodScriptPath, symlinkPath); err != nil {
+		t.Fatal(err)
+	}
+
 	for name, tc := range map[string]struct {
-		input     string
-		expResult string
-		expErr    error
+		scriptPath  string
+		callbackDir string
+		expResult   string
+		expErr      error
 	}{
 		"empty path": {
 			expErr: errors.New("no callback path supplied"),
 		},
 		"success": {
-			input:     goodScriptPath,
-			expResult: validFaultDomain,
+			scriptPath: goodScriptPath,
+			expResult:  validFaultDomain,
 		},
 		"script does not exist": {
-			input:  filepath.Join(tmpDir, "notarealfile"),
-			expErr: config.FaultConfigFaultCallbackNotFound,
+			scriptPath: filepath.Join(tmpDir, "notarealfile"),
+			expErr:     config.FaultConfigFaultCallbackNotFound,
 		},
-		"script has bad permissions": {
-			input:  badPermsScriptPath,
-			expErr: config.FaultConfigFaultCallbackBadPerms,
+		"script without read permissions": {
+			scriptPath: noPermsScriptPath,
+			expErr:     config.FaultConfigFaultCallbackBadPerms,
+		},
+		"script without exec permissions": {
+			scriptPath: badPermsScriptPath,
+			expErr:     config.FaultConfigFaultCallbackBadPerms,
 		},
 		"error within the script": {
-			input:  errorScriptPath,
-			expErr: config.FaultConfigFaultCallbackFailed(errors.New("exit status 2")),
+			scriptPath: errorScriptPath,
+			expErr:     config.FaultConfigFaultCallbackFailed(errors.New("exit status 2")),
 		},
 		"script returned no output": {
-			input:  emptyScriptPath,
-			expErr: config.FaultConfigFaultCallbackEmpty,
+			scriptPath: emptyScriptPath,
+			expErr:     config.FaultConfigFaultCallbackEmpty,
 		},
 		"script returned only whitespace": {
-			input:  whitespaceScriptPath,
-			expErr: config.FaultConfigFaultCallbackEmpty,
+			scriptPath: whitespaceScriptPath,
+			expErr:     config.FaultConfigFaultCallbackEmpty,
 		},
 		"script returned invalid fault domain": {
-			input:  invalidScriptPath,
-			expErr: config.FaultConfigFaultDomainInvalid,
+			scriptPath: invalidScriptPath,
+			expErr:     config.FaultConfigFaultDomainInvalid,
+		},
+		"script returned root fault domain": {
+			scriptPath: rootScriptPath,
+			expErr:     config.FaultConfigFaultDomainInvalid,
+		},
+		"script returned fault domain with too many layers": { // TODO DAOS-6353: change when multiple layers supported
+			scriptPath: multiLayerScriptPath,
+			expErr:     config.FaultConfigTooManyLayersInFaultDomain,
 		},
 		"no arbitrary shell commands allowed": {
-			input:  "echo \"my dog has fleas\"",
-			expErr: config.FaultConfigFaultCallbackNotFound,
+			scriptPath: "echo \"my dog has fleas\"",
+			expErr:     config.FaultConfigFaultCallbackInsecure(tmpDir),
 		},
 		"no command line parameters allowed": {
-			input:  fmt.Sprintf("%s arg", goodScriptPath),
-			expErr: config.FaultConfigFaultCallbackNotFound,
+			scriptPath: fmt.Sprintf("%s arg", goodScriptPath),
+			expErr:     config.FaultConfigFaultCallbackNotFound,
+		},
+		"no symlink allowed": {
+			scriptPath: symlinkPath,
+			expErr:     config.FaultConfigFaultCallbackInsecure(tmpDir),
+		},
+		"no setuid bit allowed": {
+			scriptPath: setuidScriptPath,
+			expErr:     config.FaultConfigFaultCallbackInsecure(tmpDir),
+		},
+		"permissions too lax": {
+			scriptPath: tooLaxScriptPath,
+			expErr:     config.FaultConfigFaultCallbackInsecure(tmpDir),
+		},
+		"script not in right directory": {
+			scriptPath:  goodScriptPath,
+			callbackDir: "/root",
+			expErr:      config.FaultConfigFaultCallbackInsecure("/root"),
+		},
+		"script is in a directory below correct dir": {
+			scriptPath:  goodScriptPath,
+			callbackDir: filepath.Dir(tmpDir),
+			expResult:   validFaultDomain,
+		},
+		"relative required callback dir": {
+			scriptPath:  goodScriptPath,
+			callbackDir: relTmpDir,
+			expResult:   validFaultDomain,
+		},
+		"relative script path": {
+			scriptPath:  relScriptPath,
+			callbackDir: tmpDir,
+			expResult:   validFaultDomain,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result, err := getFaultDomainFromCallback(tc.input)
+			cbDir := tc.callbackDir
+			if cbDir == "" {
+				cbDir = tmpDir
+			}
+
+			result, err := getFaultDomainFromCallback(tc.scriptPath, cbDir)
 
 			common.CmpErr(t, tc.expErr, err)
 			assertFaultDomainEqualStr(t, tc.expResult, result)

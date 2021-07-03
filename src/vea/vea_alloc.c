@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #define D_LOGFAC	DD_FAC(vos)
@@ -86,7 +69,7 @@ reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 	d_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
 	d_iov_set(&val, NULL, 0);
 
-	D_ASSERT(!daos_handle_is_inval(vsi->vsi_free_btr));
+	D_ASSERT(daos_handle_is_valid(vsi->vsi_free_btr));
 	rc = dbtree_fetch(vsi->vsi_free_btr, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
 			  &key, NULL, &val);
 	if (rc)
@@ -349,7 +332,7 @@ reserve_vector(struct vea_space_info *vsi, uint32_t blk_cnt,
 int
 persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 {
-	struct vea_free_extent *found, frag;
+	struct vea_free_extent *found, frag = {0};
 	daos_handle_t btr_hdl;
 	d_iov_t key_in, key_out, val;
 	uint64_t *blk_off, found_end, vfe_end;
@@ -361,7 +344,7 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	D_ASSERT(vfe->vfe_blk_cnt > 0);
 
 	btr_hdl = vsi->vsi_md_free_btr;
-	D_ASSERT(!daos_handle_is_inval(btr_hdl));
+	D_ASSERT(daos_handle_is_valid(btr_hdl));
 
 	D_DEBUG(DB_IO, "Persistent alloc ["DF_U64", %u]\n",
 		vfe->vfe_blk_off, vfe->vfe_blk_cnt);

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 package io.daos.fs.hadoop;
@@ -50,6 +33,9 @@ public final class Constants {
   // daos container
   public static final String DAOS_CONTAINER_UUID = "fs.daos.container.uuid";
 
+  public static final String DAOS_IO_ASYNC = "fs.daos.io.async";
+  public static final boolean DEFAULT_DAOS_IO_ASYNC = true;
+
   // the minimum and default daos chunk size, maximum size
   public static final String DAOS_CHUNK_SIZE = "fs.daos.chunk.size";
   public static final int DEFAULT_DAOS_CHUNK_SIZE = 1024 * 1024;
@@ -60,18 +46,15 @@ public final class Constants {
 
   // the minimum and default internal read buffer size, maximum size
   public static final String DAOS_READ_BUFFER_SIZE = "fs.daos.read.buffer.size";
-  public static final int DEFAULT_DAOS_READ_BUFFER_SIZE = 8 * 1024 * 1024;
+  public static final int DEFAULT_DAOS_READ_BUFFER_SIZE = 1 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_READ_BUFFER_SIZE = Integer.MAX_VALUE;
   public static final int MINIMUM_DAOS_READ_BUFFER_SIZE = 64 * 1024;
 
-  // the minimum and default preload size, maximum size
-  public static final String DAOS_PRELOAD_SIZE = "fs.daos.preload.size";
-  public static final int DEFAULT_DAOS_PRELOAD_SIZE = 4 * 1024 * 1024;
-  public static final int MAXIMUM_DAOS_PRELOAD_SIZE = Integer.MAX_VALUE;
+  public static final String DAOS_READ_MINIMUM_SIZE = "fs.daos.read.min.size";
 
   // the minimum and default internal write buffer size, maximum size
   public static final String DAOS_WRITE_BUFFER_SIZE = "fs.daos.write.buffer.size";
-  public static final int DEFAULT_DAOS_WRITE_BUFFER_SIZE = 8 * 1024 * 1024;
+  public static final int DEFAULT_DAOS_WRITE_BUFFER_SIZE = 1 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_WRITE_BUFFER_SIZE = Integer.MAX_VALUE;
   public static final int MINIMUM_DAOS_WRITE_BUFFER_SIZE = 64 * 1024;
 
@@ -82,5 +65,8 @@ public final class Constants {
   // minimum and maximum file block size
   public static final int MINIMUM_DAOS_BLOCK_SIZE = 16 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_BLOCK_SIZE = Integer.MAX_VALUE;
+
+  public static final String UNS_PATH_SEARCH_RECURSIVE = "fs.daos.uns.search.recursive";
+  public static final boolean DEFAULT_UNS_PATH_SEARCH_RECURSIVE = false;
 
 }
