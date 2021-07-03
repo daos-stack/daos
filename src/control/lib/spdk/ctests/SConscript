@@ -19,15 +19,9 @@ def scons():
     # spdk/lib/nvme to expose normally opaque types during tests
     unit_env.AppendUnique(CPPPATH=[nvme_lib_src, spdk_incl_src])
 
-    # SPDK related libs
-    libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']
-    libs += ['rte_mempool', 'rte_mempool_ring', 'rte_bus_pci']
-    libs += ['rte_pci', 'rte_ring', 'rte_mbuf', 'rte_eal', 'rte_kvargs']
-    libs += ['spdk_bdev_aio', 'spdk_bdev_nvme', 'spdk_bdev_malloc']
-    libs += ['spdk_conf', 'spdk_blob', 'spdk_nvme', 'spdk_util']
-    libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
-    libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
-    libs += ['spdk_vmd']
+    # Explicitly link RTE & SPDK libs for CGO access
+    libs = ['spdk_env_dpdk', 'spdk_nvme', 'spdk_vmd', 'rte_mempool']
+    libs += ['rte_mempool_ring', 'rte_bus_pci', 'nvme_control']
 
     # Other libs
     libs += ['numa', 'dl', 'isal', 'cmocka', 'pthread']

@@ -2136,7 +2136,8 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
-		agg_reset_pos(type, agg_entry);
+		if (!(*acts & VOS_ITER_CB_SKIP))
+			agg_reset_pos(type, agg_entry);
 		D_DEBUG(DB_EPC, "EC aggregation yield type %d.\n", type);
 		if (ec_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
