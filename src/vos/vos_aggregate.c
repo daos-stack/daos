@@ -2045,6 +2045,9 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (agg_param->ap_credits > agg_param->ap_credits_max ||
 	    (DAOS_FAIL_CHECK(DAOS_VOS_AGG_RANDOM_YIELD) && (rand() % 2))) {
+		D_DEBUG(DB_EPC, "Credits exhausted, type:%u, acts:%u\n",
+			type, *acts);
+
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
 
@@ -2052,8 +2055,14 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		 * Reset position if we yield while iterating in object, dkey
 		 * or akey level, so that subtree won't be skipped mistakenly,
 		 * see the comment in vos_agg_obj().
+		 *
+		 * If current object/dkey/akey has been marked as processed,
+		 * don't reset the position, otherwise, iterator will reprobe
+		 * the same item and process it again.
 		 */
-		reset_agg_pos(type, agg_param);
+		if (!(*acts & VOS_ITER_CB_SKIP))
+			reset_agg_pos(type, agg_param);
+
 		if (vos_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
 			return 1;
@@ -2108,7 +2117,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (rc == 1) {
 		/* Reprobe flag is set */
-		*acts |= VOS_ITER_CB_YIELD;
+		*acts |= VOS_ITER_CB_DELETE;
 		rc = 0;
 	} else if (rc != 0) {
 		D_ERROR("VOS aggregation failed: %d\n", rc);
