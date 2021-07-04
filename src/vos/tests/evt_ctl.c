@@ -470,7 +470,7 @@ ts_find_rect(void)
 	struct evt_filter	 filter = {0};
 	bio_addr_t		 addr;
 	struct evt_rect		 rect;
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	int			 rc;
 	bool			 should_pass;
 	char			*arg;
@@ -489,12 +489,12 @@ ts_find_rect(void)
 	filter.fr_epr.epr_hi = rect.rc_epc;
 	filter.fr_epoch = filter.fr_epr.epr_hi;
 	filter.fr_ex = rect.rc_ex;
-	evt_ent_array_init(&ent_array);
-	rc = evt_find(ts_toh, &filter, &ent_array);
+	evt_ent_array_init(ent_array, 0);
+	rc = evt_find(ts_toh, &filter, ent_array);
 	if (rc != 0)
 		D_FATAL("Add rect failed "DF_RC"\n", DP_RC(rc));
 
-	evt_ent_array_for_each(ent, &ent_array) {
+	evt_ent_array_for_each(ent, ent_array) {
 		bool punched;
 		addr = ent->en_addr;
 
@@ -507,7 +507,7 @@ ts_find_rect(void)
 								 addr.ba_off));
 	}
 
-	evt_ent_array_fini(&ent_array);
+	evt_ent_array_fini(ent_array);
 }
 
 static void
@@ -1368,7 +1368,7 @@ test_evt_find_internal(void **state)
 	struct evt_entry_in	 entry = {0};
 	struct evt_entry	 *ent;
 	struct evt_filter	 filter = {0};
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	bio_addr_t		 addr;
 	int			 rc;
 	int			 epoch;
@@ -1430,11 +1430,11 @@ test_evt_find_internal(void **state)
 		filter.fr_ex.ex_hi = epoch + 9;
 		filter.fr_epr.epr_hi = epoch;
 		filter.fr_epoch = filter.fr_epr.epr_hi;
-		evt_ent_array_init(&ent_array);
-		rc = evt_find(toh, &filter, &ent_array);
+		evt_ent_array_init(ent_array, 1);
+		rc = evt_find(toh, &filter, ent_array);
 		if (rc != 0)
 			D_FATAL("Find rect failed "DF_RC"\n", DP_RC(rc));
-		evt_ent_array_for_each(ent, &ent_array) {
+		evt_ent_array_for_each(ent, ent_array) {
 			bool punched;
 			static char buf[10];
 
@@ -1479,7 +1479,7 @@ test_evt_find_internal(void **state)
 		assert_int_equal(rc, 0);
 		rc = utest_sync_mem_status(arg->ta_utx);
 		assert_int_equal(rc, 0);
-		evt_ent_array_fini(&ent_array);
+		evt_ent_array_fini(ent_array);
 	}
 	rc = utest_check_mem_initial_status(arg->ta_utx);
 	assert_int_equal(rc, 0);
@@ -1624,7 +1624,7 @@ test_evt_various_data_size_internal(void **state)
 					D_256M_SIZE};
 	uint64_t		data_size;
 	char                     *data;
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	struct evt_entry	 *ent;
 	bio_addr_t		 addr;
 	struct evt_filter	 filter = {0};
@@ -1676,16 +1676,16 @@ test_evt_various_data_size_internal(void **state)
 			rc = utest_sync_mem_status(arg->ta_utx);
 			assert_int_equal(rc, 0);
 			if (epoch == 1) {
-				evt_ent_array_init(&ent_array);
+				evt_ent_array_init(ent_array, 0);
 				filter.fr_ex.ex_lo = epoch;
 				filter.fr_ex.ex_hi = epoch + data_size - 1;
 				filter.fr_epr.epr_hi = epoch;
 				filter.fr_epoch = filter.fr_epr.epr_hi;
-				rc = evt_find(toh, &filter, &ent_array);
+				rc = evt_find(toh, &filter, ent_array);
 				if (rc != 0)
 					D_FATAL("Find rect failed "DF_RC"\n",
 						DP_RC(rc));
-				evt_ent_array_for_each(ent, &ent_array) {
+				evt_ent_array_for_each(ent, ent_array) {
 					static char *actual;
 
 					D_ALLOC(actual, data_size);
@@ -1703,7 +1703,7 @@ test_evt_various_data_size_internal(void **state)
 					}
 					D_FREE(actual);
 				}
-				evt_ent_array_fini(&ent_array);
+				evt_ent_array_fini(ent_array);
 			}
 			/* Delete a record*/
 			if (epoch % 10 == 0) {
