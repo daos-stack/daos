@@ -374,9 +374,12 @@ class TestPool(TestDaosApiBase):
         Sets the self.info attribute.
         """
         if self.pool:
+            self.log.debug("## get_info() calling pool_query")
             self.connect()
             self._call_method(self.pool.pool_query, {})
             self.info = self.pool.pool_info
+        else:
+            self.log.debug("## get_info() self.pool is None")
 
     def check_pool_info(self, pi_uuid=None, pi_ntargets=None, pi_nnodes=None,
                         pi_ndisabled=None, pi_map_ver=None, pi_leader=None,
