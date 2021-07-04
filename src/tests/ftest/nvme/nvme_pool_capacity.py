@@ -199,10 +199,12 @@ class NvmePoolCapacity(TestWithServers):
                      or (self.out_queue.get() != "FAIL" and test[4] == "FAIL"):
                     self.fail("FAIL")
 
-            for pool in self.pool:
-                display_string = "Pool {} space at the End".format(pool.uuid)
-                pool.display_pool_daos_space(display_string)
-                pool.destroy()
+            while self.pool:
+                display_string = "Pool {} space at the End".format(
+                    self.pool[-1].uuid)
+                self.pool[-1].display_pool_daos_space(display_string)
+                self.pool[-1].destroy()
+                self.pool.pop()
 
     def test_nvme_pool_capacity(self):
         """Jira ID: DAOS-2085.
