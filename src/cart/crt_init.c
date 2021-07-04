@@ -423,6 +423,9 @@ do_init:
 				set_sep = true;
 			max_num_ctx = opt->cio_ctx_max_num;
 		} else {
+			share_addr = false;
+			ctx_num = 0;
+
 			d_getenv_bool("CRT_CTX_SHARE_ADDR",
 				      &share_addr);
 			if (share_addr)
