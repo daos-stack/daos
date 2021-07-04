@@ -188,7 +188,7 @@ modules_load(void)
 		else if (strcmp(mod, "vos") == 0)
 			mod = "vos_srv";
 		else if (strcmp(mod, "bio") == 0)
-			mod = "bio_srv";
+			mod = "bio";
 
 		rc = dss_module_load(mod);
 		if (rc != 0) {

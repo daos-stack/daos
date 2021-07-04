@@ -25,26 +25,6 @@
 #define NVME_MONITOR_PERIOD	    (60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 #define NVME_MONITOR_SHORT_PERIOD   (3ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 
-/**
- * BIO TLS
- */
-
-struct bio_tls {
-	struct d_tm_node_t *btl_dma_buf;
-};
-
-extern struct dss_module_key bio_module_key;
-
-static inline struct bio_tls *
-bio_tls_get(void)
-{
-#ifdef BIO_STANDALONE
-	return NULL;
-#else
-	return dss_module_key_get(dss_tls_get(), &bio_module_key);
-#endif
-}
-
 struct bio_bulk_args {
 	void		*ba_bulk_ctxt;
 	unsigned int	 ba_bulk_perm;
@@ -168,7 +148,7 @@ struct bio_dma_buffer {
 	  "shutdowns", D_TM_COUNTER)					\
 	X(bdh_temp, "temp/current",					\
 	  "Current SSD temperature",					\
-	  "kelvin", D_TM_GAUGE)						\
+	  "kelvins", D_TM_GAUGE)					\
 	X(bdh_temp_warn, "temp/warn",					\
 	  "Set to 1 if temperature is above threshold",			\
 	  "", D_TM_GAUGE)						\

@@ -62,8 +62,8 @@ bio_mod_fini(void)
 	return 0;
 }
 
-struct dss_module bio_srv_module =  {
-	.sm_name	= "bio_srv",
+struct dss_module bio_module =  {
+	.sm_name	= "bio",
 	.sm_mod_id	= DAOS_BIO_MODULE,
 	.sm_ver		= 1,
 	.sm_init	= bio_mod_init,
