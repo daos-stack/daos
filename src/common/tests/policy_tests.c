@@ -16,8 +16,10 @@
 static void
 reset_policy_desc(struct policy_desc_t *desc)
 {
+	int i;
+
 	desc->policy = 0;
-	for (int i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
+	for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
 		desc->params[i] = 0;
 }
 
@@ -25,10 +27,12 @@ bool
 are_policy_descs_equal(const struct policy_desc_t *left,
 		       const struct policy_desc_t *right)
 {
+	int i;
+
 	if (left->policy != right->policy)
 		return false;
 
-	for (int i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
+	for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
 		if (left->params[i] != right->params[i])
 			return false;
 
