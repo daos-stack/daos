@@ -131,14 +131,17 @@ class NvmePoolCapacity(TestWithServers):
                     cont[cont_val] = TestContainer(self.pool[-1])
 
             m_leak = 0
-            for pool in self.pool:
-                display_string = "Pool {} space at the End".format(pool.uuid)
-                pool.display_pool_daos_space(display_string)
+            while self.pool:
+                display_string = "Pool {} space at the End".format(
+                    self.pool[-1].uuid)
+                self.pool[-1].display_pool_daos_space(display_string)
 
-                nvme_size_end = pool.get_pool_free_space("NVME")
-                pool.destroy()
+                nvme_size_end = self.pool[-1].get_pool_free_space("NVME")
+                self.pool[-1].destroy()
+                self.pool.pop()
                 if (nvme_size_begin != nvme_size_end) and (m_leak == 0):
                     m_leak = val + 1
+
             # After destroying pools, check memory leak for each test loop.
             if m_leak != 0:
                 self.fail("Memory leak : iteration {0} \n".format(m_leak))
