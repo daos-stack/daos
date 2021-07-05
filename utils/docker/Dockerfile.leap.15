@@ -6,7 +6,7 @@
 #
 
 # Pull base image
-FROM opensuse/leap:15.2
+FROM opensuse/leap:15.3
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -76,8 +76,6 @@ RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
         clang \
         cmake \
         cunit-devel \
-        curl \
-        doxygen \
         flex \
         fuse3-devel \
         gcc \
@@ -105,13 +103,11 @@ RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
         libyaml-devel \
         lua-lmod \
         make \
-        man \
         maven \
         meson \
-        nasm \
+        numactl \
         ninja \
         openmpi3-devel \
-        pandoc \
         patch \
         patchelf \
         pciutils \
