@@ -346,10 +346,45 @@ two  100 GB 80%  12%       8/64
 				},
 			},
 			expPrintStr: `
-Pool     Size   Used Imbalance Disabled 
-----     ----   ---- --------- -------- 
-00000001 6.0 TB 83%  12%       0/16     
-two      6.0 TB 83%  12%       8/64     
+Query on pool "two" unsuccessful, error: "stats unavailable"
+
+Pool Size   Used Imbalance Disabled 
+---- ----   ---- --------- -------- 
+one  6.0 TB 83%  12%       0/16     
+
+`,
+		},
+		"three pools; one failed query; one query bad status": {
+			resp: &control.ListPoolsResp{
+				Pools: []*control.Pool{
+					{
+						Label:           "one",
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{0, 1, 2},
+						Usage:           exampleUsage,
+						TargetsTotal:    16,
+						TargetsDisabled: 0,
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{3, 4, 5},
+						QueryErrorMsg:   "stats unavailable",
+					},
+					{
+						Label:           "three",
+						UUID:            common.MockUUID(3),
+						ServiceReplicas: []system.Rank{3, 4, 5},
+						QueryStatusMsg:  "DER_UNINIT",
+					},
+				},
+			},
+			expPrintStr: `
+Query on pool "00000002" unsuccessful, error: "stats unavailable"
+Query on pool "three" unsuccessful, status: "DER_UNINIT"
+
+Pool Size   Used Imbalance Disabled 
+---- ----   ---- --------- -------- 
+one  6.0 TB 83%  12%       0/16     
 
 `,
 		},
@@ -413,7 +448,9 @@ two   00000002-0002-0002-0002-000000000002 [3-5]   100 GB   80 GB    12%        
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
 
-			err := PrintListPoolsResponse(&bld, tc.resp, tc.verbose)
+			// pass the same io writer to standard and error stream
+			// parameters to mimic combined output seen on terminal
+			err := PrintListPoolsResponse(&bld, &bld, tc.resp, tc.verbose)
 			common.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return

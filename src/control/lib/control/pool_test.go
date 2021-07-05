@@ -956,7 +956,9 @@ func TestControl_ListPools(t *testing.T) {
 							},
 						},
 					}),
-					MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{Status: -1}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+						Status: int32(drpc.DaosNotInit),
+					}),
 					MockMSResponse("host1", nil, queryResp(2)),
 				},
 			},
@@ -965,7 +967,7 @@ func TestControl_ListPools(t *testing.T) {
 					{
 						UUID:            common.MockUUID(1),
 						ServiceReplicas: []system.Rank{1, 3, 5, 8},
-						QueryStatus:     -1,
+						QueryStatusMsg:  "DER_UNINIT(-1015): Device or resource not initialized",
 					},
 					{
 						UUID:            common.MockUUID(2),

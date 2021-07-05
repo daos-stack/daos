@@ -731,11 +731,11 @@ type (
 		// TargetsDisabled is the number of inactive targets in pool.
 		TargetsDisabled uint32 `json:"targets_disabled"`
 
-		// QueryError reports an RPC error returned from a query.
+		// QueryErrorMsg reports an RPC error returned from a query.
 		QueryErrorMsg string `json:"query_error_msg"`
-		// QueryStatus reports any DAOS error returned from a query
-		// operation.
-		QueryStatus int32 `json:"query_status"`
+		// QueryStatusMsg reports any DAOS error returned from a query
+		// operation converted into human readable message.
+		QueryStatusMsg string `json:"query_status_msg"`
 
 		// Usage contains pool usage statistics for each storage tier.
 		Usage []*PoolTierUsage `json:"usage"`
@@ -770,7 +770,7 @@ func (p *Pool) setUsage(pqr *PoolQueryResp) {
 
 // HasErrors indicates whether a pool query operation failed on this pool.
 func (p *Pool) HasErrors() bool {
-	return p.QueryErrorMsg != "" || p.QueryStatus != 0
+	return p.QueryErrorMsg != "" || p.QueryStatusMsg != ""
 }
 
 // ListPoolsReq contains the inputs for the list pools command.
@@ -819,7 +819,10 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			continue
 		}
 		if resp.Status != 0 {
-			p.QueryStatus = resp.Status
+			p.QueryStatusMsg = drpc.DaosStatus(resp.Status).Error()
+			if p.QueryStatusMsg == "" {
+				p.QueryStatusMsg = "unknown error"
+			}
 			continue
 		}
 		if resp.Scm == nil {
