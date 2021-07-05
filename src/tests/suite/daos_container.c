@@ -109,8 +109,8 @@ co_attribute(void **state)
 				strlen(in_values[0]),
 				strlen(in_values[1]),
 	};
-	int			 n = (int) ARRAY_SIZE(names);
-	int			 m = (int) ARRAY_SIZE(names_get);
+	int			 n = (int)ARRAY_SIZE(names);
+	int			 m = (int)ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
@@ -152,7 +152,7 @@ co_attribute(void **state)
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
 	assert_string_equal(out_buf, names[1]);
 
-	total_size = 10*BUFSIZE;
+	total_size = 10 * BUFSIZE;
 	rc = daos_cont_list_attr(arg->coh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
@@ -1968,7 +1968,7 @@ co_owner_implicit_access(void **state)
 	print_message("- Verify set-prop denied\n");
 	tmp_prop = daos_prop_alloc(1);
 	tmp_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(tmp_prop->dpp_entries[0].dpe_str, "My_Label", 16);
+	D_STRNDUP_S(tmp_prop->dpp_entries[0].dpe_str, "My_Label");
 	rc = daos_cont_set_prop(arg->coh, tmp_prop, NULL);
 	assert_rc_equal(rc, -DER_NO_PERM);
 	daos_prop_free(tmp_prop);
@@ -2446,7 +2446,6 @@ delet_container_during_aggregation(void **state)
 	/* Run Pool query at the end */
 	pool_storage_info(state, &pinfo);
 }
-
 
 static int
 co_setup_sync(void **state)
