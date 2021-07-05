@@ -115,6 +115,13 @@ func (sb *spdkBackend) writeNvmeConfig(req *storage.BdevWriteNvmeConfigRequest) 
 		return errors.New("no output config directory set in request")
 	}
 
-	sb.log.Debugf("write nvme output json config: %+v", req)
-	return writeJsonConfig(sb.log, !sb.IsVMDDisabled(), req)
+	for _, tierProp := range req.TierProps {
+		if tierProp.Class != storage.ClassNvme || len(tierProp.DeviceList) > 0 {
+			sb.log.Debugf("write nvme output json config: %+v", req)
+			return writeJsonConfig(sb.log, !sb.IsVMDDisabled(), req)
+		}
+	}
+
+	sb.log.Debug("skip write nvme conf for empty device list")
+	return nil
 }
