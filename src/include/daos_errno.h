@@ -253,7 +253,10 @@ extern "C" {
 	       Shards overlap)						\
 	/** #failures exceed RF(Redundancy Factor), data possibly lost */ \
 	ACTION(DER_RF,			(DER_ERR_DAOS_BASE + 31),	\
-	       Failures exceed RF)
+	       Failures exceed RF)					\
+	/** Hit uncertain DTX, may need to try with other replica. */	\
+	ACTION(DER_TX_UNCERTAIN,	(DER_ERR_DAOS_BASE + 32),	\
+	       TX status is uncertaion)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
