@@ -51,7 +51,6 @@ enum daos_module_id {
 	DAOS_RDBT_MODULE	= 8, /** rdb test */
 	DAOS_SEC_MODULE		= 9, /** security framework */
 	DAOS_DTX_MODULE		= 10, /** DTX */
-	DAOS_BIO_MODULE		= 11, /** bio */
 	DAOS_MAX_MODULE		= 64, /** Size of uint64_t see dmg profile */
 };
 
