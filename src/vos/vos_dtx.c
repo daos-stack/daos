@@ -367,9 +367,12 @@ dtx_cmt_ent_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rec->rec_off = umem_ptr2off(&tins->ti_umm, dce);
 	if (!cont->vc_reindex_cmt_dtx || dce->dce_reindex) {
+		struct vos_tls *tls = vos_tls_get();
+
 		d_list_add_tail(&dce->dce_committed_link,
 				&cont->vc_dtx_committed_list);
 		cont->vc_dtx_committed_count++;
+		d_tm_inc_gauge(tls->vtl_committed, 1);
 	} else {
 		d_list_add_tail(&dce->dce_committed_link,
 				&cont->vc_dtx_committed_tmp_list);
@@ -391,10 +394,14 @@ dtx_cmt_ent_free(struct btr_instance *tins, struct btr_record *rec,
 
 	rec->rec_off = UMOFF_NULL;
 	d_list_del(&dce->dce_committed_link);
-	if (!cont->vc_reindex_cmt_dtx || dce->dce_reindex)
+	if (!cont->vc_reindex_cmt_dtx || dce->dce_reindex) {
+		struct vos_tls *tls = vos_tls_get();
+
 		cont->vc_dtx_committed_count--;
-	else
+		d_tm_dec_gauge(tls->vtl_committed, 1);
+	} else {
 		cont->vc_dtx_committed_tmp_count--;
+	}
 	D_FREE_PTR(dce);
 
 	return 0;
@@ -2531,10 +2538,14 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 
 out:
 	if (rc > 0) {
+		struct vos_tls *tls = vos_tls_get();
+
 		d_list_splice_init(&cont->vc_dtx_committed_tmp_list,
 				   &cont->vc_dtx_committed_list);
 		cont->vc_dtx_committed_count +=
 				cont->vc_dtx_committed_tmp_count;
+		d_tm_inc_gauge(tls->vtl_committed,
+			       cont->vc_dtx_committed_tmp_count);
 		cont->vc_dtx_committed_tmp_count = 0;
 		cont->vc_reindex_cmt_dtx = 0;
 	}

@@ -354,7 +354,7 @@ crt_provider_domain_get(int provider)
 	return prov_data->cpg_na_ofi_config.noc_domain;
 }
 
-static char*
+char *
 crt_provider_name_get(int provider)
 {
 	return crt_na_dict[provider].nad_str;

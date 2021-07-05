@@ -13,6 +13,8 @@
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
 #include <daos/btree.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /*
  * RPC operation codes
@@ -91,6 +93,25 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  * older ages than this threshold will be cleanup.
  */
 #define DTX_CLEANUP_THRESHOLD_AGE_LOWER	45
+
+struct dtx_pool_metrics {
+	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT];
+};
+
+/*
+ * DTX TLS
+ */
+struct dtx_tls {
+	struct d_tm_node_t	*dt_committable;
+};
+
+extern struct dss_module_key dtx_module_key;
+
+static inline struct dtx_tls *
+dtx_tls_get(void)
+{
+	return dss_module_key_get(dss_tls_get(), &dtx_module_key);
+}
 
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;

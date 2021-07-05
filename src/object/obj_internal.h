@@ -265,6 +265,20 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
  */
 #define NR_LATENCY_BUCKETS 16
 
+struct obj_pool_metrics {
+	/** Count number of total per-opcode requests (type = counter) */
+	struct d_tm_node_t	*opm_total[OBJ_PROTO_CLI_COUNT];
+	/** Total number of bytes fetched (type = counter) */
+	struct d_tm_node_t	*opm_fetch_bytes;
+	/** Total number of bytes updated (type = counter) */
+	struct d_tm_node_t	*opm_update_bytes;
+
+	/** Total number of silently restarted updates (type = counter) */
+	struct d_tm_node_t	*opm_update_restart;
+	/** Total number of resent update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_resent;
+};
+
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
@@ -273,22 +287,10 @@ struct obj_tls {
 	struct d_tm_node_t	*ot_op_lat[OBJ_PROTO_CLI_COUNT];
 	/** Count number of per-opcode active requests (type = gauge) */
 	struct d_tm_node_t	*ot_op_active[OBJ_PROTO_CLI_COUNT];
-	/** Count number of total per-opcode requests (type = counter) */
-	struct d_tm_node_t	*ot_op_total[OBJ_PROTO_CLI_COUNT];
 
 	/** Measure update/fetch latency based on I/O size (type = gauge) */
 	struct d_tm_node_t	*ot_update_lat[NR_LATENCY_BUCKETS];
 	struct d_tm_node_t	*ot_fetch_lat[NR_LATENCY_BUCKETS];
-
-	/** Total number of bytes fetched (type = counter) */
-	struct d_tm_node_t	*ot_fetch_bytes;
-	/** Total number of bytes updated (type = counter) */
-	struct d_tm_node_t	*ot_update_bytes;
-
-	/** Total number of silently restarted updates (type = counter) */
-	struct d_tm_node_t	*ot_update_restart;
-	/** Total number of resent update operations (type = counter) */
-	struct d_tm_node_t	*ot_update_resent;
 };
 
 struct obj_ec_parity {
