@@ -1846,7 +1846,7 @@ parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 	path_len = strlen(path) + 1;
 
 	if (strcmp(path, "/") == 0) {
-		D_STRNDUP(*_cont_name, "/", 2);
+		D_STRNDUP_S(*_cont_name, "/");
 		if (*_cont_name == NULL)
 			return ENOMEM;
 		*_obj_name = NULL;
@@ -2862,6 +2862,13 @@ dm_connect(struct cmd_args_s *ap,
 		}
 	}
 
+	/* set cont_layout to POSIX type if the source is not in DAOS, if the
+	 * destination is DAOS, and no destination container exists yet,
+	 * then it knows to create a POSIX container
+	 */
+	if (src_file_dfs->type == POSIX)
+		ca->cont_layout = DAOS_PROP_CO_LAYOUT_POSIX;
+
 	/* only need to query if source is not POSIX, since
 	 * this connect call is used by the filesystem and clone
 	 * tools
@@ -2989,7 +2996,7 @@ dm_connect(struct cmd_args_s *ap,
 					"%d\n", rc);
 				D_GOTO(err_dst_root, rc);
 			}
-			fprintf(stdout, "Successfully created container: "
+			fprintf(stdout, "Successfully created container "
 				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
 			fprintf(ap->errstream, "failed to open container: "

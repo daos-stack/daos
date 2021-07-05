@@ -338,8 +338,9 @@ struct evt_list_entry {
 
 #define EVT_EMBEDDED_NR 16
 /**
- * list head of \a evt_entry, it contains a few embedded entries to support
- * lightweight allocation of entries.
+ * list head of \a evt_entry.  Do not use directly.  Instead, allocate
+ * on the stack using the EVT_ENT_ARRAY_*_PTR macros below.  This
+ * will allocate some embedded entries to reduce some allocations.
  */
 struct evt_entry_array {
 	/** Array of allocated entries */
@@ -353,8 +354,31 @@ struct evt_entry_array {
 	/** Number of bytes per index */
 	uint32_t			 ea_inob;
 	/* Small array of embedded entries */
-	struct evt_list_entry		 ea_embedded_ents[EVT_EMBEDDED_NR];
+	struct evt_list_entry		 ea_embedded_ents[0];
 };
+
+struct evt_entry_array_lg {
+	struct evt_entry_array		 ea_data;
+	struct evt_list_entry		 ea_embedded[EVT_EMBEDDED_NR];
+};
+
+struct evt_entry_array_sm {
+	struct evt_entry_array		 ea_data;
+	struct evt_list_entry		 ea_embedded[1];
+};
+
+#define EVT_ENT_ARRAY_LG_PTR(name)					\
+	struct evt_entry_array_lg	 name##_alloc;			\
+	struct evt_entry_array		*name
+
+#define EVT_ENT_ARRAY_SM_PTR(name)					\
+	struct evt_entry_array_sm	 name##_alloc;			\
+	struct evt_entry_array		*name
+
+D_CASSERT(offsetof(struct evt_entry_array_lg, ea_embedded) ==
+	  offsetof(struct evt_entry_array, ea_embedded_ents));
+D_CASSERT(offsetof(struct evt_entry_array_sm, ea_embedded) ==
+	  offsetof(struct evt_entry_array, ea_embedded_ents));
 
 static inline char
 evt_debug_print_visibility(const struct evt_entry *ent)
@@ -421,8 +445,17 @@ evt_entry_selected_offset(const struct evt_entry *entry)
 
 #define evt_ent_array_empty(ea)		(ea->ea_ent_nr == 0)
 
-void evt_ent_array_init(struct evt_entry_array *ent_array);
-void evt_ent_array_fini(struct evt_entry_array *ent_array);
+/** Passing max of 0 tells evtree functions to calculate the maximum size */
+#define evt_ent_array_init(basename, max)							\
+	do {											\
+		(basename) = &basename##_alloc.ea_data;						\
+		evt_ent_array_init_(basename, ARRAY_SIZE(basename##_alloc.ea_embedded), max);	\
+	} while (0)
+void evt_ent_array_init_(struct evt_entry_array *ent_array, int embedded_nr,
+			int max);
+#define evt_ent_array_fini(basename)	\
+	evt_ent_array_fini_(basename, ARRAY_SIZE(basename##_alloc.ea_embedded))
+void evt_ent_array_fini_(struct evt_entry_array *ent_array, int embedded);
 
 struct evt_context;
 

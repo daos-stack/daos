@@ -122,8 +122,8 @@ func (sb *spdkBackend) IsVMDDisabled() bool {
 // Scan discovers NVMe controllers accessible by SPDK.
 func (sb *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
 	restoreOutput, err := sb.binding.init(sb.log, &spdk.EnvOptions{
-		PciIncludeList: req.DeviceList,
-		DisableVMD:     sb.IsVMDDisabled(),
+		PciAllowList: req.DeviceList,
+		DisableVMD:   sb.IsVMDDisabled(),
 	})
 	if err != nil {
 		return nil, err
@@ -204,8 +204,8 @@ func (sb *spdkBackend) formatNvme(req *FormatRequest) (*FormatResponse, error) {
 	}
 
 	spdkOpts := &spdk.EnvOptions{
-		PciIncludeList: req.DeviceList,
-		DisableVMD:     sb.IsVMDDisabled(),
+		PciAllowList: req.DeviceList,
+		DisableVMD:   sb.IsVMDDisabled(),
 	}
 
 	restoreOutput, err := sb.binding.init(sb.log, spdkOpts)
