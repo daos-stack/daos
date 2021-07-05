@@ -11,10 +11,18 @@ from command_utils_base import CommandFailure
 from general_utils import DaosTestError
 
 
-class PoolFaultInjection(TestWithServers):
+class PoolServicesFaultInjection(TestWithServers):
     """Test class Fault domains
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a PoolServicesFaultInjection object."""
+        super().__init__(*args, **kwargs)
+        self.failed_requests = 0
+        self.object_class = self.params.get("object_class", "/run/*")
+        self.container_namespace = self.params.get("container", "/run/*")
+        self.number_servers = len(self.hostlist_servers) - 1
 
     def look_missed_request(self, cmd_stderr, msg=b"MS request error"):
         """ Read dmg_stderr for the msg string
@@ -105,12 +113,8 @@ class PoolFaultInjection(TestWithServers):
         dmg_command = self.get_dmg_command()
         pool_namespace = self.params.get("pool", "/run/*")
         number_pools = self.params.get("number_pools", "/run/*")
-        self.failed_requests = 0
-        self.object_class = self.params.get("object_class", "/run/*")
-        self.container_namespace = self.params.get("container", "/run/*")
-        self.number_servers = len(self.hostlist_servers) - 1
 
-        for index in range(number_pools):
+        for _ in range(number_pools):
             try:
                 # Create pool
                 self.pool = self.get_pool(namespace=pool_namespace)
@@ -145,3 +149,77 @@ class PoolFaultInjection(TestWithServers):
         self.log.info(end_message)
         assert failed_commands == 0, "Execution of command(s) failed."
         assert self.failed_requests > 0, "No faults detected."
+
+    def manual_test_create_containers_while_blocking_daos_using_iptables(self):
+        """ This is a manual test.
+
+        Using CaRT as test pool services is a good way to add noise to the
+        tools, however there are other ways to simulate a flaky network
+        connection.
+
+        The happy path steps are:
+            Backup iptables rules
+            Block network access to the interface used by daos
+            Attempt to create containers
+            Create containers fail
+            Restore iptables rules
+
+        Simulating a failing network connection:
+            Backup iptables rules
+            Block network access to the interface used by daos
+            Attempt to create containers
+            While the previous command is running,  Restore iptables rules
+            Daos tool should create container
+
+        Why this test is not being automated:
+
+            1) Not all fabric hardware support IPoIB
+            2) If there is no fabric hw, at least 2 ethernet devices are
+               required, this is to avoid losing connection to the host.
+
+        Details and how to:
+
+        First of all, a backup of the current iptables rules is required:
+
+            sudo iptables-save > savedrules.txt
+
+        To restore the backup:
+
+            sudo iptables-restore < savedrules.txt
+
+        If ib0 interface is not enabled:
+            1) Make sure the fabric hardware supports IPoIB
+            2) sudo modprobe ib_ipoib
+            3) Verify the ibX interface is listed: ip -a
+            4) Use the IPV4 ip to be used to block the network traffic
+
+        How to block the access:
+
+            sudo iptables -A INPUT -s 192.168.100.64 -j DROP
+
+            Where:
+                192.168.100.64 is the ib0 network interface
+                It could be an ethernet interface, just make sure it is not the
+                same interface used for remote connection. If there is access
+                through serial console, you may as well use a single eth device.
+
+            Note:
+                Blocking using ip port did not prevent daos to create conts:
+                sudo iptables -A INPUT -s 192.168.100.64 -p tcp
+                              --destination-port 10001 -j DROP
+
+                    The rules for OUTPUT, tcp and udp combinations were also
+                    tried.
+
+        Once iptables has the traffic blocked, attempt to create containers.
+        It should fail.
+
+        Afterwards, the idea is to turn on and off the iptable rules to simulate
+        a failing network connection, daos tool should re-attempt the failed
+        request. This could be coded as:
+            A thread/process turning on and off the iptable rules
+            A thread/process creating containers
+
+        The test can be extended to other dmg/daos operations.
+        """
+        raise NotImplementedError()
