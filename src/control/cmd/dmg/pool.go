@@ -189,15 +189,18 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		return cmd.outputJSON(resp, nil)
 	}
 
-	var out strings.Builder
-	if err := pretty.PrintListPoolsResponse(&out, resp, cmd.Verbose); err != nil {
+	var out, outErr strings.Builder
+	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
 		return err
+	}
+	if outErr.String() != "" {
+		cmd.log.Error(outErr.String())
 	}
 	// Infof prints raw string and doesn't try to expand "%"
 	// preserving column formatting in txtfmt table
 	cmd.log.Infof("%s", out.String())
 
-	return nil
+	return resp.Errors()
 }
 
 type PoolID struct {

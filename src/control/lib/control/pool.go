@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -773,6 +774,16 @@ func (p *Pool) HasErrors() bool {
 	return p.QueryErrorMsg != "" || p.QueryStatusMsg != ""
 }
 
+// GetPool retrieves effective name for pool from either label or UUID.
+func (p *Pool) GetName() string {
+	name := p.Label
+	if name == "" {
+		// use short version of uuid if no label
+		name = strings.Split(p.UUID, "-")[0]
+	}
+	return name
+}
+
 // ListPoolsReq contains the inputs for the list pools command.
 type ListPoolsReq struct {
 	unaryRequest
@@ -784,6 +795,51 @@ type ListPoolsReq struct {
 type ListPoolsResp struct {
 	Status int32   `json:"status"`
 	Pools  []*Pool `json:"pools"`
+}
+
+// Validate returns error if response contents are unexpected, string of
+// warnings if pool queries have failed or nil values if contents are expected.
+func (lpr *ListPoolsResp) Validate() (string, error) {
+	var numTiers int
+	out := new(strings.Builder)
+
+	for i, p := range lpr.Pools {
+		if p.UUID == "" {
+			return "", errors.Errorf("pool with index %d has no uuid", i)
+		}
+		if p.QueryErrorMsg != "" {
+			fmt.Fprintf(out, "Query on pool %q unsuccessful, error: %q\n",
+				p.GetName(), p.QueryErrorMsg)
+			continue // no usage stats expected
+		}
+		if p.QueryStatusMsg != "" {
+			fmt.Fprintf(out, "Query on pool %q unsuccessful, status: %q\n",
+				p.GetName(), p.QueryStatusMsg)
+			continue // no usage stats expected
+		}
+		if len(p.Usage) == 0 {
+			return "", errors.Errorf("pool %s has no usage info", p.UUID)
+		}
+		if numTiers != 0 && len(p.Usage) != numTiers {
+			return "", errors.Errorf("pool %s has %d storage tiers, want %d",
+				p.UUID, len(p.Usage), numTiers)
+		}
+		numTiers = len(p.Usage)
+	}
+
+	return out.String(), nil
+}
+
+// Errors returns summary of response errors including pool query failures.
+func (lpr *ListPoolsResp) Errors() error {
+	warn, err := lpr.Validate()
+	if err != nil {
+		return err
+	}
+	if warn != "" {
+		return errors.New(warn)
+	}
+	return nil
 }
 
 // ListPools fetches the list of all pools and their service replicas from the

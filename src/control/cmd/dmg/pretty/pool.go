@@ -9,7 +9,6 @@ package pretty
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -88,15 +87,6 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	return err
 }
 
-func getPoolName(pool *control.Pool) string {
-	name := pool.Label
-	if name == "" {
-		// use short version of uuid if no label
-		name = strings.Split(pool.UUID, "-")[0]
-	}
-	return name
-}
-
 func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 	// display size of the largest non-empty tier
 	var size uint64
@@ -127,7 +117,7 @@ func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 	}
 
 	row := txtfmt.TableRow{
-		"Pool":      getPoolName(pool),
+		"Pool":      pool.GetName(),
 		"Size":      fmt.Sprintf("%s", humanize.Bytes(size)),
 		"Used":      fmt.Sprintf("%d%%", used),
 		"Imbalance": fmt.Sprintf("%d%%", imbalance),
@@ -221,49 +211,16 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 	return nil
 }
 
-func validateListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
-	var numTiers int
-	var outputWritten bool
-
-	for i, p := range resp.Pools {
-		if p.UUID == "" {
-			return errors.Errorf("pool with index %d has no uuid", i)
-		}
-		if p.QueryErrorMsg != "" {
-			fmt.Fprintf(out, "Query on pool %q unsuccessful, error: %q\n",
-				getPoolName(p), p.QueryErrorMsg)
-			outputWritten = true
-			continue // no usage stats expected
-		}
-		if p.QueryStatusMsg != "" {
-			fmt.Fprintf(out, "Query on pool %q unsuccessful, status: %q\n",
-				getPoolName(p), p.QueryStatusMsg)
-			outputWritten = true
-			continue // no usage stats expected
-		}
-		if len(p.Usage) == 0 {
-			return errors.Errorf("pool %s has no usage info", p.UUID)
-		}
-		if numTiers != 0 && len(p.Usage) != numTiers {
-			return errors.Errorf("pool %s has %d storage tiers, want %d",
-				p.UUID, len(p.Usage), numTiers)
-		}
-		numTiers = len(p.Usage)
-	}
-
-	if outputWritten {
-		fmt.Fprintln(out, "")
-	}
-
-	return nil
-}
-
 // PrintListPoolsResponse generates a human-readable representation of the
 // supplied ListPoolsResp struct and writes it to the supplied io.Writer.
 // Additional columns for pool UUID and service replicas if verbose is set.
 func PrintListPoolsResponse(o, e io.Writer, r *control.ListPoolsResp, v bool) error {
-	if err := validateListPoolsResp(e, r); err != nil {
+	warn, err := r.Validate()
+	if err != nil {
 		return err
+	}
+	if warn != "" {
+		fmt.Fprintln(e, warn)
 	}
 
 	if v {
