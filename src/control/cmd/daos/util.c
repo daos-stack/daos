@@ -3,8 +3,6 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(client)
-
 #include "util.h"
 
 static int
