@@ -1968,7 +1968,7 @@ co_owner_implicit_access(void **state)
 	print_message("- Verify set-prop denied\n");
 	tmp_prop = daos_prop_alloc(1);
 	tmp_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP_S(tmp_prop->dpp_entries[0].dpe_str, "My Label");
+	D_STRNDUP_S(tmp_prop->dpp_entries[0].dpe_str, "My_Label");
 	rc = daos_cont_set_prop(arg->coh, tmp_prop, NULL);
 	assert_rc_equal(rc, -DER_NO_PERM);
 	daos_prop_free(tmp_prop);
@@ -2286,7 +2286,8 @@ co_rf_simple(void **state)
 
 	if (arg->myrank == 0) {
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_DISABLE, 0, NULL);
+				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS,
+				      0, NULL);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, 5);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
