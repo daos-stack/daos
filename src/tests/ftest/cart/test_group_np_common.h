@@ -303,7 +303,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		break;
 	case TEST_OPC_SHUTDOWN:
 		DBG_PRINT("Received TEST_OPC_SHUTDOWN.\n");
-		tc_progress_stop();
+		crtu_progress_stop();
 		sem_post(&test_g.t_token_to_proceed);
 		break;
 	default:
@@ -321,7 +321,7 @@ test_shutdown_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
-	tc_progress_stop();
+	crtu_progress_stop();
 	DBG_PRINT("tier1 test_srver set shutdown flag.\n");
 }
 

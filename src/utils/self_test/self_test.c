@@ -12,7 +12,7 @@
 #include <string.h>
 #include <math.h>
 
-#include "tests_common.h"
+#include "crt_utils.h"
 #include "daos_errno.h"
 
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
@@ -91,7 +91,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	int		 ret;
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(0, attach_retries, false, false);
+	crtu_test_init(0, attach_retries, false, false);
 
 	if (listen)
 		init_flags |= CRT_FLAG_BIT_SERVER;
@@ -163,8 +163,8 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	 * 5 - ping timeout
 	 * 150 - total timeout
 	 */
-	ret = tc_wait_for_ranks(*crt_ctx, *srv_grp, rank_list,
-				0, 1, 5, 150);
+	ret = crtu_wait_for_ranks(*crt_ctx, *srv_grp, rank_list,
+				  0, 1, 5, 150);
 	D_ASSERTF(ret == 0, "wait_for_ranks() failed; ret=%d\n", ret);
 
 	max_rank = rank_list->rl_ranks[0];
