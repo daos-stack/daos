@@ -917,7 +917,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	}
 
 	/* Need to refresh the local pool map. */
-	if (tx->tx_pm_ver < oco->oco_map_version) {
+	if (tx->tx_pm_ver < oco->oco_map_version || obj_retry_error(rc)) {
 		struct daos_cpd_sub_req		*dcsr;
 
 		dcsr = &tx->tx_req_cache[dc_tx_leftmost_req(tx, false)];
@@ -965,19 +965,23 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 
 			D_GOTO(out, rc = rc1);
 		}
-	} else {
-		rc1 = dc_task_resched(task);
-		if (rc1 != 0) {
-			D_ERROR("Failed to re-init task (%p): "
-				DF_RC", original error: "DF_RC"\n",
-				task, DP_RC(rc1), DP_RC(rc));
-			tx->tx_status = TX_ABORTED;
-
-			D_GOTO(out, rc = rc1);
-		}
 	}
 
-	D_GOTO(out, rc = 0);
+	rc1 = dc_task_resched(task);
+	if (rc1 != 0) {
+		D_ERROR("Failed to re-init task (%p): "DF_RC", original error: "
+			DF_RC"\n", task, DP_RC(rc1), DP_RC(rc));
+		if (pool_task != NULL)
+			dc_task_decref(pool_task);
+		tx->tx_status = TX_ABORTED;
+
+		D_GOTO(out, rc = rc1);
+	}
+
+	if (pool_task != NULL)
+		dc_task_schedule(pool_task, true);
+
+	rc = 0;
 
 out:
 	if (locked)
