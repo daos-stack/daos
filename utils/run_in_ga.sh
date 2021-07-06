@@ -61,17 +61,3 @@ echo ::endgroup::
 echo ::group::Fi test
 ./utils/node_local_test.py --no-root fi
 echo ::endgroup::
-
-#echo ::group::All tests
-#./utils/node_local_test.py --no-root --memcheck no --test all
-#echo ::endgroup::
-
-x=1
-while [ $x -le 40 ]
-do
-    echo ::group::Container copy test$x
-    ./utils/node_local_test.py --no-root --memcheck no --test cont_copy
-    echo ::endgroup::
-
-    x=$(( $x + 1 ))
-done
