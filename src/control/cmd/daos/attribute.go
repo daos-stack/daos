@@ -17,7 +17,7 @@ import (
 )
 
 /*
-#include <daos.h>
+#include "util.h"
 */
 import "C"
 
