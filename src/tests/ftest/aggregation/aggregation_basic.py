@@ -55,7 +55,7 @@ class DaosAggregationBasic(IorTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=aggregate,daosio,mpich
+        :avocado: tags=aggregate,daosio,ior
         :avocado: tags=aggregatebasic
         :avocado: tags=DAOS_5610
         """

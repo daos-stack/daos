@@ -1052,10 +1052,9 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 				 DAOS_PROP_LABEL_MAX_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_label,
 				  DAOS_PROP_LABEL_MAX_LEN);
-			if (prop_entry->dpe_str)
-				label_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			label_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			prop_entry->dpe_val = iv_prop->cip_layout_type;
@@ -1117,20 +1116,18 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_owner,
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str)
-				owner_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			owner_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_CO_OWNER_GROUP:
 			D_ASSERT(strlen(iv_prop->cip_owner_grp) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_owner_grp,
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str)
-				owner_grp_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			owner_grp_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_CO_ROOTS:
 			roots = &iv_prop->cip_roots;
@@ -1243,8 +1240,7 @@ cont_iv_prop_fetch_ult(void *data)
 out:
 	if (pool != NULL)
 		ds_pool_put(pool);
-	if (iv_entry != NULL)
-		D_FREE(iv_entry);
+	D_FREE(iv_entry);
 	if (prop_fetch != NULL)
 		daos_prop_free(prop_fetch);
 	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
