@@ -196,8 +196,8 @@ enum {
  * It is put here because it's almost used by everyone.
  */
 typedef struct {
-	uint64_t	lo;	/**< reserved for DAOS */
-	uint64_t	hi;	/**< user provided */
+	uint64_t	lo;
+	uint64_t	hi;
 } daos_obj_id_t;
 
 #if defined(__cplusplus)
