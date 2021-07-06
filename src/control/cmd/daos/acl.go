@@ -7,11 +7,7 @@
 package main
 
 /*
-#include <daos.h>
-#include <gurt/common.h>
-
-#include "daos_hdlr.h"
-#include "property.h"
+#include "util.h"
 
 void
 free_strings(char **str, size_t str_count)

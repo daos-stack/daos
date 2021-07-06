@@ -1668,8 +1668,8 @@ cont_create_hdlr(struct cmd_args_s *ap)
 	}
 
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to create container: %s (%d)\n",
-			d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to create container: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -1783,8 +1783,9 @@ cont_query_hdlr(struct cmd_args_s *ap)
 
 		dfs_query(dfs, &attr);
 		daos_oclass_id2name(attr.da_oclass_id, oclass);
-		printf("Object Class:\t%s\n", oclass);
-		printf("Chunk Size:\t%zu\n", attr.da_chunk_size);
+		fprintf(ap->outstream, "Object Class:\t%s\n", oclass);
+		fprintf(ap->outstream,
+			"Chunk Size:\t%zu\n", attr.da_chunk_size);
 
 		rc = dfs_umount(dfs);
 		if (rc) {
@@ -1844,7 +1845,7 @@ parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name)
 	path_len = strlen(path) + 1;
 
 	if (strcmp(path, "/") == 0) {
-		D_STRNDUP(*_cont_name, "/", 2);
+		D_STRNDUP_S(*_cont_name, "/");
 		if (*_cont_name == NULL)
 			return ENOMEM;
 		*_obj_name = NULL;
@@ -1985,10 +1986,8 @@ out:
 				dir_name, rc);
 		}
 	}
-	if (name != NULL)
-		D_FREE(name);
-	if (dir_name != NULL)
-		D_FREE(dir_name);
+	D_FREE(name);
+	D_FREE(dir_name);
 	return rc;
 }
 
@@ -2074,7 +2073,6 @@ mkdir_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path,
 		/* continue if directory exists, fail otherwise */
 		fprintf(ap->errstream, "dfs_mkdir %s failed, %s\n",
 			name, strerror(rc));
-
 	}
 out:
 	if (parent != NULL) {
@@ -2242,10 +2240,8 @@ out:
 				dir_name, rc);
 		}
 	}
-	if (name != NULL)
-		D_FREE(name);
-	if (dir_name != NULL)
-		D_FREE(dir_name);
+	D_FREE(name);
+	D_FREE(dir_name);
 	return rc;
 }
 
@@ -2440,10 +2436,8 @@ chmod_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file,
 				dir_name, rc);
 		}
 	}
-	if (name != NULL)
-		D_FREE(name);
-	if (dir_name != NULL)
-		D_FREE(dir_name);
+	D_FREE(name);
+	D_FREE(dir_name);
 	return rc;
 }
 
@@ -2713,7 +2707,8 @@ fs_copy(struct cmd_args_s *ap,
 		if (S_ISDIR(dst_stat.st_mode)) {
 			copy_into_dst = true;
 		} else if S_ISDIR(src_stat.st_mode) {
-			fprintf(stderr, "Destination is not a directory.\n");
+			fprintf(ap->errstream,
+				"Destination is not a directory.\n");
 			D_GOTO(out, rc = EINVAL);
 		}
 	}
@@ -2722,7 +2717,8 @@ fs_copy(struct cmd_args_s *ap,
 		/* Get the dirname and basename */
 		rc = parse_filename_dfs(src_path, &tmp_name, &tmp_dir);
 		if (rc != 0) {
-			printf("Failed to parse path %s\n", src_path);
+			fprintf(ap->errstream,
+				"Failed to parse path %s\n", src_path);
 			D_GOTO(out, rc);
 		}
 
@@ -2749,7 +2745,8 @@ fs_copy(struct cmd_args_s *ap,
 			(*num_dirs)++;
 		break;
 	default:
-		fprintf(stderr, "Only files and directories are supported\n");
+		fprintf(ap->errstream,
+			"Only files and directories are supported\n");
 		D_GOTO(out, rc = ENOTSUP);
 	}
 
@@ -2779,7 +2776,6 @@ set_dm_args_default(struct dm_args *dm)
 	dm->cont_prop_layout = DAOS_PROP_CO_LAYOUT_TYPE;
 	dm->cont_layout = DAOS_PROP_CO_LAYOUT_UNKOWN;
 	dm->cont_oid = 0;
-
 }
 
 static int
@@ -2867,6 +2863,13 @@ dm_connect(struct cmd_args_s *ap,
 			}
 		}
 	}
+
+	/* set cont_layout to POSIX type if the source is not in DAOS, if the
+	 * destination is DAOS, and no destination container exists yet,
+	 * then it knows to create a POSIX container
+	 */
+	if (src_file_dfs->type == POSIX)
+		ca->cont_layout = DAOS_PROP_CO_LAYOUT_POSIX;
 
 	/* only need to query if source is not POSIX, since
 	 * this connect call is used by the filesystem and clone
@@ -2995,13 +2998,13 @@ dm_connect(struct cmd_args_s *ap,
 					"%d\n", rc);
 				D_GOTO(err_dst_root, rc);
 			}
-			fprintf(stdout, "Successfully created container: "
+			fprintf(ap->outstream,
+				"Successfully created container: "
 				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
 			fprintf(ap->errstream, "failed to open container: "
 				"%d\n", rc);
 			D_GOTO(err_dst_root, rc);
-
 		}
 		if (is_posix_copy) {
 			rc = dfs_mount(ca->dst_poh, ca->dst_coh, O_RDWR,
@@ -3183,7 +3186,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 
 	src_str_len = strlen(ap->src);
 	if (src_str_len == 0) {
-		fprintf(stderr, "Source path required.\n");
+		fprintf(ap->errstream, "Source path required.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	D_STRNDUP(src_str, ap->src, src_str_len);
@@ -3201,7 +3204,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 
 	dst_str_len = strlen(ap->dst);
 	if (dst_str_len == 0) {
-		fprintf(stderr, "Destinaton path required.\n");
+		fprintf(ap->errstream, "Destinaton path required.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	D_STRNDUP(dst_str, ap->dst, dst_str_len);
@@ -3241,8 +3244,8 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		fprintf(ap->outstream, "Successfully copied to POSIX: %s\n",
 			dst_str);
 	}
-	fprintf(stdout, "    Directories: %lu\n", num_dirs);
-	fprintf(stdout, "    Files:       %lu\n", num_files);
+	fprintf(ap->outstream, "    Directories: %lu\n", num_dirs);
+	fprintf(ap->outstream, "    Files:       %lu\n", num_files);
 
 out_disconnect:
 	/* umount dfs, close conts, and disconnect pools */

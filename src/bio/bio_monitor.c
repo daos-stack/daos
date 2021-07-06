@@ -8,7 +8,7 @@
 #include <spdk/nvme.h>
 #include <spdk/bdev.h>
 #include <spdk/blob.h>
-#include <spdk/io_channel.h>
+#include <spdk/thread.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
