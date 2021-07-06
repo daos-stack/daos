@@ -67,9 +67,9 @@ step_print(const char *status, const char *comment, va_list ap)
 	fprintf(autotest_ap->outstream, "  %s    ", status);
 	sprintf(timing, "%03.3f", duration());
 	for (i = strlen(timing); i < 7; i++)
-		printf(" ");
+		fprintf(autotest_ap->outstream, " ");
 	fprintf(autotest_ap->outstream, "%s  ", timing);
-	vprintf(comment, ap);
+	vfprintf(autotest_ap->outstream, comment, ap);
 	fprintf(autotest_ap->outstream, "\n");
 }
 
@@ -101,7 +101,6 @@ step_new(int step, char *msg)
 	fprintf(autotest_ap->outstream, "%3d  %s", step, msg);
 	for (i = strlen(msg); i < 25; i++)
 		fprintf(autotest_ap->outstream, " ");
-	fflush(stdout);
 	start = clock();
 }
 

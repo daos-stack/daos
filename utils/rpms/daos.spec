@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.102
-Release:       4%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -76,7 +76,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 20, spdk-devel < 21
+BuildRequires: spdk-devel >= 21.04
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -153,7 +153,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools
+Requires: spdk-tools >= 21.04
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -234,6 +234,7 @@ This is the package needed to run the DAOS test suite
 %if (0%{?suse_version} >= 1500)
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 %endif
+Requires: libuuid-devel
 Summary: The DAOS development libraries and headers
 
 %description devel
@@ -464,10 +465,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Wed Jun 30 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.102-4
+* Wed Jun 30 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.102-6
 - Update to mercury release v2.0.1
 
-* Wed Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
+* Wed Jun 30 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.102-5
+- Update to spdk 21.04 and (indirectly) dpdk 21.05
+
+* Fri Jun 25 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.102-4
+- Add libuuid-devel back as a requirement of daos-devel
+
+* Mon Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
 - Update raft to pick up Pre-Vote
 
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
