@@ -21,7 +21,7 @@ class IorIntercept(IorTestBase):
     :avocado: recursive
     """
 
-#    @skipForTicket("DAOS-5857")
+    @skipForTicket("DAOS-5857")
     def test_ior_intercept(self):
         """Jira ID: DAOS-3498.
 
