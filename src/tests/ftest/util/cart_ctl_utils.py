@@ -83,8 +83,4 @@ class CartCtl(CartCtlCommand):
         """
         self.log.info('Starting CartCtl')
 
-        os.environ['OFI_INTERFACE'] = "eth0"
-
         super().run()
-
-        del os.environ['OFI_INTERFACE']
