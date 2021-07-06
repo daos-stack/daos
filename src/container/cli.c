@@ -2564,6 +2564,11 @@ dc_cont_get_attr(tse_task_t *task)
 			D_GOTO(out, rc);
 	}
 
+	rc = tse_task_register_comp_cb(task, free_name, &new_names,
+				       sizeof(char *));
+	if (rc)
+		D_GOTO(out, rc);
+
 	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
 			      (size_t *)args->sizes, daos_task2ctx(task),
 			      CRT_BULK_RW, &in->cagi_bulk);
@@ -2639,6 +2644,11 @@ dc_cont_set_attr(tse_task_t *task)
 		if (rc)
 			D_GOTO(out, rc);
 	}
+
+	rc = tse_task_register_comp_cb(task, free_name, &new_names,
+				       sizeof(char *));
+	if (rc)
+		D_GOTO(out, rc);
 
 	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
 			      (size_t *)args->sizes, daos_task2ctx(task),
