@@ -58,7 +58,6 @@ RUN apt-get -y update && \
         pkg-config \
         python3-dev \
         python3-distro \
-        python3-distutils \
         python3-junit.xml \
         python3-pyelftools \
         python3-pyxattr \
