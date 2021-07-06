@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import socket
-import tempfile
 import re
 import os
 from getpass import getuser
