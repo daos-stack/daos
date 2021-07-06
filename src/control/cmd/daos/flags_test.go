@@ -253,7 +253,7 @@ func TestFlags_ConsModeFlag(t *testing.T) {
 			arg: "relaxed",
 			expFlag: &ConsModeFlag{
 				Set:  true,
-				Mode: 0,
+				Mode: 4,
 			},
 			expString: "relaxed",
 		},
@@ -261,7 +261,7 @@ func TestFlags_ConsModeFlag(t *testing.T) {
 			arg: "balanced",
 			expFlag: &ConsModeFlag{
 				Set:  true,
-				Mode: 4,
+				Mode: 0,
 			},
 			expString: "balanced",
 		},
