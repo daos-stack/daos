@@ -12,9 +12,7 @@ import (
 )
 
 /*
-#include <daos.h>
-
-#include "daos_hdlr.h"
+#include "util.h"
 */
 import "C"
 
@@ -27,25 +25,25 @@ type objectCmd struct {
 type objBaseCmd struct {
 	existingContainerCmd
 
-	ObjectIDFlag oidFlag `long:"oid" short:"i" description:"DAOS object id (deprecated; use positional arg)"`
+	ObjectIDFlag OidFlag `long:"oid" short:"i" description:"DAOS object id (deprecated; use positional arg)"`
 	Args         struct {
-		ObjectID oidFlag `positional-arg-name:"<DAOS object id (HI.LO)>"`
+		ObjectID OidFlag `positional-arg-name:"<DAOS object id (HI.LO)>"`
 	} `positional-args:"yes"`
 }
 
 func (cmd *objBaseCmd) getOid() (C.daos_obj_id_t, error) {
-	if cmd.ObjectIDFlag.set && cmd.Args.ObjectID.set {
+	if cmd.ObjectIDFlag.Set && cmd.Args.ObjectID.Set {
 		return C.daos_obj_id_t{}, errors.New("can't specify --oid and positional argument")
 	}
-	if cmd.ObjectIDFlag.set {
-		cmd.Args.ObjectID.set = true
-		cmd.Args.ObjectID.oid = cmd.ObjectIDFlag.oid
+	if cmd.ObjectIDFlag.Set {
+		cmd.Args.ObjectID.Set = true
+		cmd.Args.ObjectID.Oid = cmd.ObjectIDFlag.Oid
 	}
-	if !cmd.Args.ObjectID.set {
+	if !cmd.Args.ObjectID.Set {
 		return C.daos_obj_id_t{}, &flags.Error{flags.ErrRequired, "OID is a required argument"}
 	}
 
-	return cmd.Args.ObjectID.oid, nil
+	return cmd.Args.ObjectID.Oid, nil
 }
 
 type objQueryCmd struct {

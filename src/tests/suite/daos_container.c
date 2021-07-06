@@ -2286,7 +2286,8 @@ co_rf_simple(void **state)
 
 	if (arg->myrank == 0) {
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_DISABLE, 0, NULL);
+				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS,
+				      0, NULL);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, 5);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
