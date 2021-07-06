@@ -609,13 +609,13 @@ dtx_dti_classify(struct ds_pool *pool, daos_handle_t tree,
  */
 int
 dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	   int count, bool drop_cos)
+	   struct dtx_cos_key *dcks, int count)
 {
 	struct dtx_req_args	 dra;
 	struct dtx_req_rec	*drr;
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct dtx_id		*dti = NULL;
-	struct dtx_cos_key	*dcks = NULL;
+	bool			*rm_cos = NULL;
 	struct umem_attr	 uma;
 	struct btr_root		 tree_root = { 0 };
 	daos_handle_t		 tree_hdl = DAOS_HDL_INVAL;
@@ -646,25 +646,27 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 			goto out;
 	}
 
-	if (drop_cos) {
-		D_ALLOC_ARRAY(dcks, count);
-		if (dcks == NULL)
+	if (dcks != NULL) {
+		D_ALLOC_ARRAY(rm_cos, count);
+		if (rm_cos == NULL)
 			D_GOTO(out, rc1 = -DER_NOMEM);
 	}
 
-	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count, dcks);
-
-	if (rc1 >= 0 && drop_cos) {
+	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count, rm_cos);
+	if (rc1 >= 0 && rm_cos != NULL) {
 		int	i;
 
 		for (i = 0; i < count; i++) {
-			if (!daos_oid_is_null(dcks[i].oid.id_pub))
+			if (rm_cos[i]) {
+				D_ASSERT(!daos_oid_is_null(dcks[i].oid.id_pub));
+
 				dtx_del_cos(cont, &dti[i], &dcks[i].oid,
 					    dcks[i].dkey_hash);
+			}
 		}
 	}
 
-	D_FREE(dcks);
+	D_FREE(rm_cos);
 
 	/* -DER_NONEXIST may be caused by race or repeated commit, ignore it. */
 	if (rc1 == -DER_NONEXIST)
@@ -1009,7 +1011,7 @@ next:
 
 	/* Handle the entries whose leaders are on current server. */
 	d_list_for_each_entry_safe(dsp, tmp, &self, dsp_link) {
-		struct dtx_entry	 dte;
+		struct dtx_entry	dte;
 
 		d_list_del(&dsp->dsp_link);
 
@@ -1023,8 +1025,11 @@ next:
 		switch (rc) {
 		case DSHR_NEED_COMMIT: {
 			struct dtx_entry	*pdte = &dte;
+			struct dtx_cos_key	 dck;
 
-			rc = dtx_commit(cont, &pdte, 1, true);
+			dck.oid = dsp->dsp_oid;
+			dck.dkey_hash = dsp->dsp_dkey_hash;
+			rc = dtx_commit(cont, &pdte, &dck, 1);
 			if (rc < 0 && rc != -DER_NONEXIST && cmt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, cmt_list);
 			else
