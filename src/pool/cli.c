@@ -2004,7 +2004,7 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 
 			return -DER_INVAL;
 		}
-		if (strlen(names[i]) > DAOS_ATTR_NAME_MAX) {
+		if (strnlen(names[i], DAOS_ATTR_NAME_MAX + 1) > DAOS_ATTR_NAME_MAX) {
 			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX",
 				i);
 			return -DER_INVAL;
