@@ -465,7 +465,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Wed Jun 30 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.102-6
+* Tue Jul 6 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.102-6
 - Update to mercury release v2.0.1
 
 * Wed Jun 30 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.102-5
