@@ -1967,6 +1967,7 @@ struct dc_cont_glob {
 	uint32_t	dcg_csum_chunksize;
 	uint32_t        dcg_dedup_th;
 	uint32_t	dcg_redun_fac;
+	uint32_t	dcg_ec_cell_sz;
 	/** minimal required pool map version, as a fence to make sure after
 	 * cont_open/g2l client-side pm_ver >= pm_ver@cont_create.
 	 */
@@ -2046,6 +2047,7 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_compress_type	= cont->dc_props.dcp_compress_type;
 	cont_glob->dcg_encrypt_type	= cont->dc_props.dcp_encrypt_type;
 	cont_glob->dcg_redun_fac	= cont->dc_props.dcp_redun_fac;
+	cont_glob->dcg_ec_cell_sz	= cont->dc_props.dcp_ec_cell_sz;
 	cont_glob->dcg_min_ver		= cont->dc_min_ver;
 
 	dc_pool_put(pool);
@@ -2131,6 +2133,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_props.dcp_compress_type = cont_glob->dcg_compress_type;
 	cont->dc_props.dcp_encrypt_type	 = cont_glob->dcg_encrypt_type;
 	cont->dc_props.dcp_redun_fac	 = cont_glob->dcg_redun_fac;
+	cont->dc_props.dcp_ec_cell_sz	 = cont_glob->dcg_ec_cell_sz;
 	cont->dc_min_ver		 = cont_glob->dcg_min_ver;
 	rc = dc_cont_props_init(cont);
 	if (rc != 0)
