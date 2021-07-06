@@ -30,6 +30,7 @@ import stack_analyzer
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
                  '-Wno-ignored-attributes',
+                 '-fstack-usage',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',

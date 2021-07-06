@@ -19,7 +19,6 @@ class analyzer():
         self.base_dir = basedir
         self.cutoff = 0
         self.parse_args(arg)
-        env.AppendIfSupported(CCFLAGS=['-fstack-usage'])
         if not '-fstack-usage' in env["CCFLAGS"]:
             print("Stack analysis not supported with this compiler")
             Exit(1)
