@@ -134,7 +134,7 @@ enum {
 	D_TM_TIMER_SNAPSHOT		= 0x008,
 	D_TM_DURATION			= 0x010,
 	D_TM_GAUGE			= 0x020,
-	D_TM_GAUGE_STATS		= 0x040,
+	D_TM_STATS_GAUGE		= 0x040,
 	D_TM_CLOCK_REALTIME		= 0x080,
 	D_TM_CLOCK_PROCESS_CPUTIME	= 0x100,
 	D_TM_CLOCK_THREAD_CPUTIME	= 0x200,
@@ -145,7 +145,7 @@ enum {
 					   D_TM_TIMER_SNAPSHOT | \
 					   D_TM_DURATION | \
 					   D_TM_GAUGE | \
-					   D_TM_GAUGE_STATS | \
+					   D_TM_STATS_GAUGE | \
 					   D_TM_LINK)
 };
 

@@ -74,11 +74,11 @@ func TestTelemetry_GetGauge(t *testing.T) {
 	}
 }
 
-func TestTelemetry_GetGaugeStats(t *testing.T) {
+func TestTelemetry_GetStatsGauge(t *testing.T) {
 	testCtx, testMetrics := setupTestMetrics(t)
 	defer cleanupTestMetrics(testCtx, t)
 
-	realGauge, ok := testMetrics[MetricTypeGaugeStats]
+	realGauge, ok := testMetrics[MetricTypeStatsGauge]
 	if !ok {
 		t.Fatal("real gauge not in metrics set")
 	}
@@ -112,7 +112,7 @@ func TestTelemetry_GetGaugeStats(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result, err := GetGaugeStats(tc.ctx, tc.metricName)
+			result, err := GetStatsGauge(tc.ctx, tc.metricName)
 
 			common.CmpErr(t, tc.expErr, err)
 
@@ -122,7 +122,7 @@ func TestTelemetry_GetGaugeStats(t *testing.T) {
 				}
 
 				testMetricBasics(t, tc.expResult, result)
-				common.AssertEqual(t, result.Type(), MetricTypeGaugeStats, "bad type")
+				common.AssertEqual(t, result.Type(), MetricTypeStatsGauge, "bad type")
 				common.AssertEqual(t, result.Value(), uint64(tc.expResult.Cur), "bad value")
 				common.AssertEqual(t, result.FloatValue(), tc.expResult.Cur, "bad float value")
 

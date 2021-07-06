@@ -36,7 +36,7 @@ const (
 	MetricTypeCounter    MetricType = C.D_TM_COUNTER
 	MetricTypeDuration   MetricType = C.D_TM_DURATION
 	MetricTypeGauge      MetricType = C.D_TM_GAUGE
-	MetricTypeGaugeStats MetricType = C.D_TM_GAUGE_STATS
+	MetricTypeStatsGauge MetricType = C.D_TM_STATS_GAUGE
 	MetricTypeSnapshot   MetricType = C.D_TM_TIMER_SNAPSHOT
 	MetricTypeTimestamp  MetricType = C.D_TM_TIMESTAMP
 
@@ -319,8 +319,8 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 		}
 	case cType == C.D_TM_GAUGE:
 		out <- newGauge(hdl, path, &name, node)
-	case cType == C.D_TM_GAUGE_STATS:
-		out <- newGaugeStats(hdl, path, &name, node)
+	case cType == C.D_TM_STATS_GAUGE:
+		out <- newStatsGauge(hdl, path, &name, node)
 	case cType == C.D_TM_COUNTER:
 		out <- newCounter(hdl, path, &name, node)
 	case cType == C.D_TM_TIMESTAMP:

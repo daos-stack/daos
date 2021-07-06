@@ -80,7 +80,7 @@ func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
 			Name: "simple/gauge1",
 			Cur:  1,
 		},
-		telemetry.MetricTypeGaugeStats: &telemetry.TestMetric{
+		telemetry.MetricTypeStatsGauge: &telemetry.TestMetric{
 			Name: "stats/gauge2",
 			Cur:  100.5,
 		},

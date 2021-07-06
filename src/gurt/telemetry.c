@@ -1228,7 +1228,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 			stats_printed = true;
 		break;
 	case D_TM_GAUGE:
-	case D_TM_GAUGE_STATS:
+	case D_TM_STATS_GAUGE:
 		rc = d_tm_get_gauge(ctx, &val, &stats, node);
 		if (rc != DER_SUCCESS) {
 			fprintf(stream, "Error on gauge read: %d\n", rc);
@@ -1687,7 +1687,7 @@ is_gauge(struct d_tm_node_t *metric)
 		return false;
 
 	return (metric->dtn_type == D_TM_GAUGE ||
-		metric->dtn_type == D_TM_GAUGE_STATS);
+		metric->dtn_type == D_TM_STATS_GAUGE);
 }
 
 static bool
@@ -1697,7 +1697,7 @@ has_stats(struct d_tm_node_t *metric)
 		return false;
 
 	return (metric->dtn_type & D_TM_DURATION ||
-		metric->dtn_type == D_TM_GAUGE_STATS);
+		metric->dtn_type == D_TM_STATS_GAUGE);
 }
 
 /**

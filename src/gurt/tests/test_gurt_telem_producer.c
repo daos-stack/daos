@@ -236,7 +236,7 @@ test_gauge_stats(void **state)
 	struct d_tm_stats_t	stats;
 	uint64_t		val;
 
-	rc = d_tm_add_metric(&gauge, D_TM_GAUGE_STATS, NULL, NULL, path);
+	rc = d_tm_add_metric(&gauge, D_TM_STATS_GAUGE, NULL, NULL, path);
 	assert_rc_equal(rc, 0);
 
 	rc = d_tm_add_metric(&gauge_no_stats, D_TM_GAUGE, NULL, NULL,
@@ -464,7 +464,7 @@ test_gauge_with_histogram_multiplier_1(void **state)
 
 	path = "gurt/tests/telem/test_gauge_m1";
 
-	rc = d_tm_add_metric(&gauge, D_TM_GAUGE_STATS,
+	rc = d_tm_add_metric(&gauge, D_TM_STATS_GAUGE,
 			     "A gauge with a histogram multiplier 1",
 			     D_TM_GIGABYTE, path);
 	assert_rc_equal(rc, DER_SUCCESS);
@@ -577,7 +577,7 @@ test_gauge_with_histogram_multiplier_2(void **state)
 
 	path = "gurt/tests/telem/test_gauge_m2";
 
-	rc = d_tm_add_metric(&gauge, D_TM_GAUGE_STATS,
+	rc = d_tm_add_metric(&gauge, D_TM_STATS_GAUGE,
 			     "A gauge with a histogram multiplier 2",
 			     D_TM_TERABYTE, path);
 	assert_rc_equal(rc, DER_SUCCESS);
@@ -1157,7 +1157,7 @@ test_verify_object_count(void **state)
 	num = d_tm_count_metrics(cli_ctx, node, D_TM_GAUGE);
 	assert_int_equal(num, exp_num_gauge);
 
-	num = d_tm_count_metrics(cli_ctx, node, D_TM_GAUGE_STATS);
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_STATS_GAUGE);
 	assert_int_equal(num, exp_num_gauge_stats);
 
 	num = d_tm_count_metrics(cli_ctx, node, D_TM_DURATION);

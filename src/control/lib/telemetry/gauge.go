@@ -82,23 +82,23 @@ func GetGauge(ctx context.Context, name string) (*Gauge, error) {
 	return newGauge(hdl, name, &name, node), nil
 }
 
-// GaugeStats is a gauge with statistics gathered.
-type GaugeStats struct {
+// StatsGauge is a gauge with statistics gathered.
+type StatsGauge struct {
 	statsMetric
 }
 
 // Type returns the type of the gauge with stats.
-func (g *GaugeStats) Type() MetricType {
-	return MetricTypeGaugeStats
+func (g *StatsGauge) Type() MetricType {
+	return MetricTypeStatsGauge
 }
 
 // FloatValue returns the gauge value as a float.
-func (g *GaugeStats) FloatValue() float64 {
+func (g *StatsGauge) FloatValue() float64 {
 	return float64(g.Value())
 }
 
 // Value returns the gauge value as an unsigned integer.
-func (g *GaugeStats) Value() uint64 {
+func (g *StatsGauge) Value() uint64 {
 	if g.handle == nil || g.node == nil {
 		return BadUintVal
 	}
@@ -113,8 +113,8 @@ func (g *GaugeStats) Value() uint64 {
 	return BadUintVal
 }
 
-func newGaugeStats(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t) *GaugeStats {
-	g := &GaugeStats{
+func newStatsGauge(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t) *StatsGauge {
+	g := &StatsGauge{
 		statsMetric: statsMetric{
 			metricBase: metricBase{
 				handle: hdl,
@@ -130,8 +130,8 @@ func newGaugeStats(hdl *handle, path string, name *string, node *C.struct_d_tm_n
 	return g
 }
 
-// GetGaugeStats finds the gauge with statistics with the given name in the telemetry tree.
-func GetGaugeStats(ctx context.Context, name string) (*GaugeStats, error) {
+// GetStatsGauge finds the gauge with statistics with the given name in the telemetry tree.
+func GetStatsGauge(ctx context.Context, name string) (*StatsGauge, error) {
 	hdl, err := getHandle(ctx)
 	if err != nil {
 		return nil, err
@@ -142,9 +142,9 @@ func GetGaugeStats(ctx context.Context, name string) (*GaugeStats, error) {
 		return nil, err
 	}
 
-	if node.dtn_type != C.D_TM_GAUGE_STATS {
+	if node.dtn_type != C.D_TM_STATS_GAUGE {
 		return nil, fmt.Errorf("metric %q is not a gauge with stats", name)
 	}
 
-	return newGaugeStats(hdl, name, &name, node), nil
+	return newStatsGauge(hdl, name, &name, node), nil
 }
