@@ -3588,7 +3588,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 
 	evt_ent_array_init(ent_array, 0);
 
-	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE,
 				&filter, &rect, ent_array);
 	if (rc != 0)
 		goto done;
