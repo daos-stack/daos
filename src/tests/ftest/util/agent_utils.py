@@ -179,7 +179,7 @@ class DaosAgentManager(SubprocessManager):
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
-            outputdir (str, optional): path to avocado test outputdir. Defaults 
+            outputdir (str, optional): path to avocado test outputdir. Defaults
                 to None.
         """
         agent_command = get_agent_command(
