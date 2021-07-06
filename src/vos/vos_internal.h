@@ -167,6 +167,12 @@ struct vos_pool {
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
+	/* The handle for committed DTX table */
+	daos_handle_t		vp_dtx_committed_hdl;
+	/** The root of the B+ tree for committed DTXs. */
+	struct btr_root		vp_dtx_committed_btr;
+	/* The count of committed DTXs. */
+	uint32_t		vp_dtx_committed_count;
 };
 
 /**
@@ -185,20 +191,14 @@ struct vos_container {
 	struct lru_array	*vc_dtx_array;
 	/* The handle for active DTX table */
 	daos_handle_t		vc_dtx_active_hdl;
-	/* The handle for committed DTX table */
-	daos_handle_t		vc_dtx_committed_hdl;
 	/** The root of the B+ tree for active DTXs. */
 	struct btr_root		vc_dtx_active_btr;
-	/** The root of the B+ tree for committed DTXs. */
-	struct btr_root		vc_dtx_committed_btr;
 	/* The global list for committed DTXs. */
 	d_list_t		vc_dtx_committed_list;
 	/* The temporary list for committed DTXs during re-index. */
 	d_list_t		vc_dtx_committed_tmp_list;
 	/* The list for active DTXs, roughly ordered in time. */
 	d_list_t		vc_dtx_act_list;
-	/* The count of committed DTXs. */
-	uint32_t		vc_dtx_committed_count;
 	/* The items count in vc_dtx_committed_tmp_list. */
 	uint32_t		vc_dtx_committed_tmp_count;
 	/** Index for timestamp lookup */
@@ -309,7 +309,7 @@ do {						\
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
 struct vos_dtx_cmt_ent {
-	/* Link into vos_conter::vc_dtx_committed_list */
+	/* Link into vos_container::vc_dtx_committed_list */
 	d_list_t			 dce_committed_link;
 	struct vos_dtx_cmt_ent_df	 dce_base;
 
@@ -486,6 +486,8 @@ void
 vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 			  uint32_t entry, daos_epoch_t epoch,
 			  umem_off_t record);
+
+void vos_dtx_cmt_destroy(struct vos_container *cont);
 
 /**
  * Mark the DTX as prepared locally.
